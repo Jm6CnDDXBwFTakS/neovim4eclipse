@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+    <artifactId>EclipseNeovim</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <!-- Tycho requires artifactId == Bundle-SymbolicName. -->
+  <artifactId>io.github.jm6cnddxbwftaks.eclipseneovim.tests</artifactId>
+  <packaging>eclipse-test-plugin</packaging>
+  <name>Eclipse Neovim UI Tests</name>
+
+  <!-- Workbench tests: tycho-surefire starts a real Eclipse (the IDE workbench, with a window) with
+       this fragment and the plug-in installed, and runs the JUnit 5 tests on the UI thread.
+       They need a display: on a headless Linux machine run the build under xvfb-run.
+       Skip them with -DskipTests. The end-to-end tests also need nvim (they are skipped without it);
+       -Dnvim.path=/path/to/nvim selects one. -->
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>target-platform-configuration</artifactId>
+        <configuration>
+          <dependency-resolution>
+            <extraRequirements>
+              <!-- Everything an IDE workbench needs at test time: the IDE application, text editors,
+                   resources. The plug-in itself only requires the bundles it compiles against. -->
+              <requirement>
+                <type>eclipse-feature</type>
+                <id>org.eclipse.platform</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+            </extraRequirements>
+          </dependency-resolution>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-surefire-plugin</artifactId>
+        <version>${tycho.version}</version>
+        <configuration>
+          <useUIHarness>true</useUIHarness>
+          <useUIThread>true</useUIThread>
+          <application>org.eclipse.ui.ide.workbench</application>
+          <systemProperties>
+            <nvim.path>${nvim.path}</nvim.path>
+          </systemProperties>
+          <!-- Each run gets a fresh workspace under target/. -->
+          <deleteOsgiDataDirectory>true</deleteOsgiDataDirectory>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <properties>
+    <!-- Empty: use the plug-in's own default (nvim on PATH or in the usual install folders). -->
+    <nvim.path></nvim.path>
+  </properties>
+</project>

@@ -1,0 +1,34 @@
+# EditorConfig (https://editorconfig.org): basic whitespace rules that most editors and IDEs apply
+# automatically, Eclipse with the "EditorConfig" plug-in from the Marketplace. Line endings are also
+# enforced by .gitattributes; Java formatting details are in releng/eclipse-formatter.xml.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{xml,yml,yaml}]
+indent_size = 2
+
+# plugin.xml and feature.xml use Eclipse PDE's own 3-space layout.
+[{plugin.xml,feature.xml,category.xml}]
+indent_size = 3
+
+[*.md]
+# Two trailing spaces are a Markdown line break.
+trim_trailing_whitespace = false
+
+[*.{cmd,bat}]
+end_of_line = crlf
+
+[MANIFEST.MF]
+# Continuation lines start with exactly one space; never reformat.
+indent_size = 1
+
+[LICENSE]
+# The official license text, kept byte for byte.
+trim_trailing_whitespace = false

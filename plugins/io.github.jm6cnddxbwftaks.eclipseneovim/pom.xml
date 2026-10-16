@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+    <artifactId>EclipseNeovim</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>io.github.jm6cnddxbwftaks.eclipseneovim</artifactId>
+  <packaging>eclipse-plugin</packaging>
+
+  <name>Eclipse Neovim Plug-in</name>
+
+  <build>
+    <plugins>
+      <!-- Embedded third-party jars. Versions come from the root pom.xml's dependencyManagement;
+           file names carry no version so MANIFEST.MF's Bundle-ClassPath never changes on upgrade.
+           lib/ is generated (git-ignored). BundleClassPathConsistencyTest keeps this list, the
+           manifest and the root versions in step. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <?m2e execute onConfiguration?>
+            <id>embed-libraries</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.basedir}/lib</outputDirectory>
+              <stripVersion>true</stripVersion>
+              <!-- Copy a jar only when the repository's copy is newer (a version upgrade), never an
+                   unchanged one: on Windows Eclipse keeps lib/*.jar open, and overwriting an open
+                   file fails ("being used by another process") on every m2e build. -->
+              <overWriteReleases>false</overWriteReleases>
+              <overWriteIfNewer>true</overWriteIfNewer>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>com.ensarsarajcic.neovim.java</groupId>
+                  <artifactId>neovim-api</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.ensarsarajcic.neovim.java</groupId>
+                  <artifactId>core-rpc</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.ensarsarajcic.neovim.java</groupId>
+                  <artifactId>reactive-core-rpc</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.ensarsarajcic.neovim.java</groupId>
+                  <artifactId>handler-annotations</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.ensarsarajcic.neovim.java</groupId>
+                  <artifactId>neovim-notifications</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>org.msgpack</groupId>
+                  <artifactId>msgpack-core</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>org.msgpack</groupId>
+                  <artifactId>jackson-dataformat-msgpack</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.fasterxml.jackson.core</groupId>
+                  <artifactId>jackson-databind</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.fasterxml.jackson.core</groupId>
+                  <artifactId>jackson-core</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.fasterxml.jackson.core</groupId>
+                  <artifactId>jackson-annotations</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>org.slf4j</groupId>
+                  <artifactId>slf4j-api</artifactId>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>org.slf4j</groupId>
+                  <artifactId>slf4j-simple</artifactId>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <version>3.4.0</version>
+        <configuration>
+          <filesets>
+            <fileset>
+              <directory>lib</directory>
+              <includes>
+                <include>*.jar</include>
+              </includes>
+            </fileset>
+          </filesets>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

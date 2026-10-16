@@ -1,0 +1,182 @@
+// SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+// SPDX-License-Identifier: EPL-2.0
+
+package io.github.jm6cnddxbwftaks.eclipseneovim.util;
+
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * Resolves the Neovim executable and builds the {@code --embed} command line.
+ *
+ * <p>The preference value may be blank (use the default), a bare command name resolved through
+ * {@code PATH} (e.g. {@code nvim}), or an absolute path.
+ *
+ * <h2>Why search outside {@code PATH}</h2>
+ * A program inherits {@code PATH} from whatever started it. Eclipse started from the macOS Dock or
+ * Finder, from a Linux desktop menu, or from a PDE launch inside another Eclipse, gets a minimal
+ * system {@code PATH} instead of the one your shell sets up, so package managers' folders such as
+ * Homebrew's {@code /opt/homebrew/bin} are missing. A bare name that is not on {@code PATH} is
+ * therefore also looked for in the usual install folders ({@link #fallbackDirectories}).
+ */
+public final class NvimExecutable {
+
+    private NvimExecutable() {
+    }
+
+    /**
+     * Turns the configured preference value into a token {@link ProcessBuilder} can launch.
+     *
+     * <p>Only <em>absolute</em> paths are checked against the file system. A relative name such
+     * as {@code nvim} is deliberately left alone so it is looked up on {@code PATH}; otherwise a
+     * file called {@code nvim} in Eclipse's working directory would silently win.
+     *
+     * @param configured preference value; may be {@code null} or blank
+     * @return the absolute path, the trimmed command name, or {@link #defaultCommandName()}
+     */
+    public static String resolve(String configured) {
+        return resolve(configured, System.getenv("PATH"), PlatformUtil.isWindows(), fallbackDirectories());
+    }
+
+    /**
+     * Testable core of {@link #resolve(String)}.
+     *
+     * @param pathEnv      value of the {@code PATH} variable; may be {@code null}
+     * @param windows      whether Windows rules apply ({@code nvim.exe}, {@code ;} separators, suffixes)
+     * @param fallbackDirs folders searched, in order, when a bare name is not on {@code PATH}
+     * @return an absolute path, or the command name when it is on {@code PATH} or found nowhere (the
+     *         OS then reports the failure when the process is started)
+     */
+    static String resolve(String configured, String pathEnv, boolean windows, List<Path> fallbackDirs) {
+        String name = configured == null || configured.isBlank()
+                ? (windows ? "nvim.exe" : "nvim")
+                : configured.strip();
+        File file = new File(name);
+        if (file.isAbsolute()) {
+            return file.isFile() ? file.getAbsolutePath() : name;
+        }
+        if (name.contains("/") || name.contains(File.separator) || isAvailable(name, pathEnv, windows)) {
+            return name;
+        }
+        for (Path dir : fallbackDirs) {
+            for (String candidate : candidates(name, windows)) {
+                Path path = dir.resolve(candidate);
+                if (Files.isRegularFile(path)) {
+                    return path.toAbsolutePath().toString();
+                }
+            }
+        }
+        return name;
+    }
+
+    /**
+     * Folders where Neovim is commonly installed, for when they are not on {@code PATH}. macOS and
+     * Linux: Homebrew (Apple silicon macOS; Intel macOS; Linux system-wide and per-user), MacPorts,
+     * user-local installs, snap. Windows: the official installer, Scoop and Chocolatey. Folders that
+     * do not exist on a platform are simply skipped by the search.
+     */
+    static List<Path> fallbackDirectories() {
+        String home = System.getProperty("user.home", "");
+        List<Path> dirs = new ArrayList<>();
+        if (PlatformUtil.isWindows()) {
+            addIfSet(dirs, System.getenv("ProgramFiles"), "Neovim", "bin");
+            addIfSet(dirs, home, "scoop", "shims");
+            addIfSet(dirs, System.getenv("ProgramData"), "chocolatey", "bin");
+        } else {
+            dirs.add(Path.of("/opt/homebrew/bin"));
+            dirs.add(Path.of("/usr/local/bin"));
+            dirs.add(Path.of("/home/linuxbrew/.linuxbrew/bin"));
+            addIfSet(dirs, home, ".linuxbrew", "bin");
+            dirs.add(Path.of("/opt/local/bin"));
+            addIfSet(dirs, home, ".local", "bin");
+            addIfSet(dirs, home, "bin");
+            dirs.add(Path.of("/snap/bin"));
+        }
+        return dirs;
+    }
+
+    private static void addIfSet(List<Path> dirs, String base, String... more) {
+        if (base != null && !base.isBlank()) {
+            dirs.add(Path.of(base, more));
+        }
+    }
+
+    /** {@code nvim.exe} on Windows, {@code nvim} elsewhere. */
+    public static String defaultCommandName() {
+        return PlatformUtil.isWindows() ? "nvim.exe" : "nvim";
+    }
+
+    /**
+     * Builds {@code <nvim> --embed [extraArgs...]}. Null/blank extra args are skipped.
+     *
+     * @param configured preference path or command name
+     * @param extraArgs  optional extra arguments, e.g. {@code --clean}; may be {@code null}
+     */
+    public static List<String> embedCommand(String configured, List<String> extraArgs) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(resolve(configured));
+        cmd.add("--embed");
+        if (extraArgs != null) {
+            for (String arg : extraArgs) {
+                if (arg != null && !arg.isBlank()) {
+                    cmd.add(arg);
+                }
+            }
+        }
+        return cmd;
+    }
+
+    /** Best-effort check that the configured executable exists, searching the real {@code PATH}. */
+    public static boolean looksAvailable(String configured) {
+        return isAvailable(resolve(configured), System.getenv("PATH"), PlatformUtil.isWindows());
+    }
+
+    /**
+     * Testable core of {@link #looksAvailable}.
+     *
+     * @param command command name or absolute path (already resolved)
+     * @param pathEnv value of the {@code PATH} variable; may be {@code null}
+     * @param windows whether to use {@code ;} separators and try Windows executable suffixes
+     */
+    static boolean isAvailable(String command, String pathEnv, boolean windows) {
+        if (new File(command).isAbsolute()) {
+            return Files.isRegularFile(Path.of(command));
+        }
+        if (pathEnv == null || pathEnv.isBlank()) {
+            return false;
+        }
+        String separator = windows ? ";" : ":";
+        for (String dir : pathEnv.split(separator)) {
+            if (dir.isBlank()) {
+                continue;
+            }
+            for (String candidate : candidates(command, windows)) {
+                if (Files.isRegularFile(Path.of(dir, candidate))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The file names a command can have: on Windows also with {@code .exe}, {@code .cmd}, {@code .bat}. */
+    private static List<String> candidates(String command, boolean windows) {
+        List<String> candidates = new ArrayList<>();
+        candidates.add(command);
+        if (windows && !hasWindowsExecutableSuffix(command)) {
+            for (String ext : new String[] { ".exe", ".cmd", ".bat" }) {
+                candidates.add(command + ext);
+            }
+        }
+        return candidates;
+    }
+
+    private static boolean hasWindowsExecutableSuffix(String command) {
+        String lower = command.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat");
+    }
+}
