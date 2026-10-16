@@ -1,0 +1,80 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# Builds the plug-in and the installable ZIP on every push and pull request to main, and on
+# demand: Actions tab > Build > Run workflow. The update-site ZIP is attached to the run as it is
+# (EclipseNeovim-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software >
+# Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
+# included, inside a virtual X display (xvfb-run) with a pinned Neovim.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run that is still going.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same Neovim as the developer machine; bump together with docs/PLATFORM.md.
+  NVIM_VERSION: v0.12.4
+
+jobs:
+  build:
+    name: Build, unit and UI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven   # caches ~/.m2/repository, keyed on the pom.xml files
+      # Ubuntu's packaged Neovim is too old, so use the official release tarball.
+      - name: Install Neovim ${{ env.NVIM_VERSION }}
+        run: |
+          curl -fsSL -o nvim.tar.gz \
+            "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-x86_64.tar.gz"
+          tar -xzf nvim.tar.gz -C "$RUNNER_TEMP"
+      # verify = compile, unit tests, UI tests, feature, p2 repository and the ZIP (see README
+      # "Build and test"). The UI tests open Eclipse windows, so they need an X display: xvfb-run
+      # provides a virtual one.
+      - run: >
+          xvfb-run -a ./mvnw -B -ntp verify
+          -Dnvim.path=$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim
+      - uses: actions/upload-artifact@v7
+        with:
+          # archive: false (upload-artifact v7+) uploads the single file as it is, instead of
+          # wrapping it in a ZIP of its own; the artifact is then named after the file.
+          archive: false
+          path: releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/EclipseNeovim-*.zip
+          if-no-files-found: error
+
+  integration:
+    name: Integration tests (real Neovim)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Ubuntu's packaged Neovim is too old, so use the official release tarball.
+      - name: Install Neovim ${{ env.NVIM_VERSION }}
+        run: |
+          curl -fsSL -o nvim.tar.gz \
+            "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-x86_64.tar.gz"
+          tar -xzf nvim.tar.gz -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim" --version | head -1
+      - run: >
+          ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration
+          -Dnvim.path=$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim

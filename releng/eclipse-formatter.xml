@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<!-- Java formatter profile for this project.
+     Import: Window > Preferences > Java > Code Style > Formatter > Import..., then select
+     "EclipseNeovim" (for this workspace) or set it per project.
+     Only the settings that differ from Eclipse's built-in profile are listed:
+     - spaces, 4 per level; continuation lines +8 (two levels);
+     - lines up to 120 characters;
+     - comments are NOT reformatted: the explanatory Javadoc uses hand-made layout (<pre> trees,
+       tables, lists) that automatic re-wrapping would destroy;
+     - wrapped lines are kept as written. -->
+<profiles version="23">
+  <profile kind="CodeFormatterProfile" name="EclipseNeovim" version="23">
+    <setting id="org.eclipse.jdt.core.formatter.tabulation.char" value="space"/>
+    <setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
+    <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
+    <setting id="org.eclipse.jdt.core.formatter.continuation_indentation" value="2"/>
+    <setting id="org.eclipse.jdt.core.formatter.continuation_indentation_for_array_initializer" value="2"/>
+    <setting id="org.eclipse.jdt.core.formatter.lineSplit" value="120"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.line_length" value="120"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_javadoc_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_line_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.join_wrapped_lines" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.join_lines_in_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.blank_lines_before_first_class_body_declaration" value="1"/>
+    <setting id="org.eclipse.jdt.core.formatter.insert_new_line_at_end_of_file_if_missing" value="insert"/>
+    <setting id="org.eclipse.jdt.core.formatter.use_on_off_tags" value="true"/>
+  </profile>
+</profiles>

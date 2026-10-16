@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Plain jar module, part of the root reactor; also runs alone:
+       mvn test -f tests/unit/pom.xml
+       Library versions come from the root pom.xml (dependencyManagement). -->
+  <parent>
+    <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+    <artifactId>EclipseNeovim</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>eclipse-neovim-unit-tests</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Eclipse Neovim Unit Tests</name>
+  <description>
+    Platform-neutral unit tests for util/ and core/ (no SWT, no Eclipse runtime).
+    Sources under test come from the plug-in project; there is no second copy.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>neovim-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>core-rpc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>reactive-core-rpc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>handler-annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>neovim-notifications</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.msgpack</groupId>
+      <artifactId>msgpack-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.msgpack</groupId>
+      <artifactId>jackson-dataformat-msgpack</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>add-plugin-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>21</release>
+          <includes>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/util/**</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/core/**</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+        <configuration>
+          <excludedGroups>integration</excludedGroups>
+          <systemPropertyVariables>
+            <nvim.path>${nvim.path}</nvim.path>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>integration</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>integration</groups>
+              <excludedGroups combine.self="override"/>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>
