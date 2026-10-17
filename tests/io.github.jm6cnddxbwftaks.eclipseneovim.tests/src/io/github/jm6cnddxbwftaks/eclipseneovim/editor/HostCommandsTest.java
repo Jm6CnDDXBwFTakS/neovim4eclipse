@@ -23,10 +23,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link EclipseFileCommands}: Vim's write commands carried out by Eclipse. Neovim is not involved
- * (auto-attach is off), so the documents are edited directly and only the saving is tested.
+ * {@link HostCommands}: Vim's file and tab commands carried out by Eclipse. Neovim is not involved
+ * (auto-attach is off), so the documents are edited directly and only Eclipse's side is tested.
  */
-class EclipseFileCommandsTest {
+class HostCommandsTest {
 
     private static final long TIMEOUT_MS = 10_000;
 
@@ -63,7 +63,7 @@ class EclipseFileCommandsTest {
 
     @Test
     void writeAllSavesEveryModifiedEditor() throws Exception {
-        assertTrue(EclipseFileCommands.tryHandleEx("wa", first));
+        assertTrue(HostCommands.tryHandleEx("wa", first));
 
         waitUntil("both editors saved", TIMEOUT_MS, () -> !first.isDirty() && !second.isDirty());
         assertEquals("one changed\n", contentsOf(project.getFile("one.txt")));
@@ -72,11 +72,64 @@ class EclipseFileCommandsTest {
 
     @Test
     void writeSavesOnlyTheCurrentEditor() throws Exception {
-        assertTrue(EclipseFileCommands.tryHandleEx("w", first));
+        assertTrue(HostCommands.tryHandleEx("w", first));
 
         waitUntil("first editor saved", TIMEOUT_MS, () -> !first.isDirty());
         assertTrue(second.isDirty());
         assertEquals("two\n", contentsOf(project.getFile("two.txt")));
+    }
+
+    @Test
+    void quitAllClosesEveryEditor() {
+        assertTrue(HostCommands.tryHandleEx("qa!", first));
+
+        waitUntil("all editors closed", TIMEOUT_MS, () -> page().getEditorReferences().length == 0);
+    }
+
+    @Test
+    void writeQuitAllSavesThenClosesEveryEditor() throws Exception {
+        assertTrue(HostCommands.tryHandleEx("xa", first));
+
+        waitUntil("all editors closed", TIMEOUT_MS, () -> page().getEditorReferences().length == 0);
+        assertEquals("one changed\n", contentsOf(project.getFile("one.txt")));
+        assertEquals("two changed\n", contentsOf(project.getFile("two.txt")));
+    }
+
+    @Test
+    void editOpensAFileNextToTheCurrentOne() throws Exception {
+        createFile("three.txt", "three\n");
+        assertTrue(HostCommands.tryHandleEx("e three.txt", first));
+
+        waitUntil("three.txt to be the active editor", TIMEOUT_MS,
+                () -> page().getActiveEditor() != null && "three.txt".equals(page().getActiveEditor().getTitle()));
+    }
+
+    @Test
+    void editBangRevertsAndPlainEditRefusesWithChanges() {
+        assertTrue(HostCommands.tryHandleEx("e", first));
+        UiTestSupport.spin(100);
+        assertTrue(first.isDirty(), ":e must not drop changes (E37)");
+
+        assertTrue(HostCommands.tryHandleEx("e!", first));
+        waitUntil("first editor reverted", TIMEOUT_MS, () -> !first.isDirty());
+        assertEquals("one\n", first.getDocumentProvider().getDocument(first.getEditorInput()).get());
+    }
+
+    @Test
+    void tabCommandsMoveBetweenTheEditorTabs() {
+        ITextEditor start = (ITextEditor) page().getActiveEditor();
+        assertTrue(HostCommands.tryHandleEx("tabn", start));
+        waitUntil("the other tab to be active", TIMEOUT_MS, () -> page().getActiveEditor() != start);
+
+        ITextEditor other = (ITextEditor) page().getActiveEditor();
+        assertTrue(HostCommands.tryHandleEx("tabp", other));
+        waitUntil("back at the first tab", TIMEOUT_MS, () -> page().getActiveEditor() == start);
+
+        assertTrue(HostCommands.tryHandleEx("tablast", start));
+        UiTestSupport.spin(100);
+        ITextEditor last = (ITextEditor) page().getActiveEditor();
+        assertTrue(HostCommands.tryHandleEx("tabfirst", last));
+        waitUntil("a different tab for :tabfirst than :tablast", TIMEOUT_MS, () -> page().getActiveEditor() != last);
     }
 
     private IFile createFile(String name, String text) throws Exception {

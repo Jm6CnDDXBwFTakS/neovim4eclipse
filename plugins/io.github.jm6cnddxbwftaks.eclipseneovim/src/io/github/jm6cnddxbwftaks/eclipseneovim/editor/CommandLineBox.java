@@ -44,8 +44,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand;
  *   <li>{@code :} typed while a command's output is shown opens the box below that output; the output
  *       stays until the new command is run or canceled.</li>
  *   <li>{@code :} in visual mode first leaves visual mode and pre-fills {@code '<,'>}, as Vim does.</li>
- *   <li>{@code :w}, {@code :wa}, {@code :q}, {@code :wq}, {@code :x} are executed by Eclipse
- *       ({@link EclipseFileCommands}). Commands that only display something ({@code :ls},
+ *   <li>File and tab commands ({@code :w}, {@code :wa}, {@code :q}, {@code :e}, {@code :tabn}, ...)
+ *       are executed by Eclipse ({@link HostCommands}). Commands that only display something ({@code :ls},
  *       {@code :marks}, ... see {@link ListingCommand}) are run with output capture and their output is
  *       shown in an {@link OutputPopup}. Everything else is typed into Neovim.</li>
  * </ul>
@@ -280,7 +280,7 @@ final class CommandLineBox {
     private void run(Submission submission) {
         try {
             if (submission.kind() == Kind.EX) {
-                if (editor != null && EclipseFileCommands.tryHandleEx(submission.body(), editor)) {
+                if (editor != null && HostCommands.tryHandleEx(submission.body(), editor)) {
                     LOG.info("Ex handled by Eclipse: " + submission.body());
                     return;
                 }

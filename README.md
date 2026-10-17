@@ -24,7 +24,7 @@ release process; see [Known limitations](#known-limitations).
 |----------------------------|---------------------------|
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
 | Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode |
-| `:w` `:wa` `:q` `:wq` `:x` `ZZ` `ZQ` (saves/closes the Eclipse editor; `:wa` saves all) | All other `:` commands, e.g. `:%s/a/b/g` |
+| File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:e file`, `:e!`, `:tabn` `:tabp` | All other `:` commands, e.g. `:%s/a/b/g` |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | Copying yanked text to the OS clipboard (one way; skipped if your config sets `clipboard=unnamedplus`, because Neovim then does it itself) | `p` / `P` / `.` / counts, from Neovim's own registers |
 
@@ -132,9 +132,23 @@ Neovim gives through its status-message and error variables; messages from `:ech
 `:`, `/` and `?` open a single text box near the bottom edge of the editor, as wide as the editor
 minus a small padding and in the editor's font. Enter runs it; Esc or Backspace on the
 empty box cancels; clicking elsewhere also cancels it; Up/Down browse a history (kept separately for commands and
-searches). `:` from visual mode leaves visual mode and pre-fills `:'<,'>`. `:w`, `:q`, `:wq`, `:x` are carried
-out by Eclipse, everything else by Neovim. While the box has focus the Vim `Ctrl` bindings are off, so
-`Ctrl-V` pastes into it.
+searches). `:` from visual mode leaves visual mode and pre-fills `:'<,'>`. While the box has focus the
+Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it.
+
+File and tab commands are carried out by Eclipse, everything else by Neovim.
+
+| Command | Eclipse does |
+|---------|--------------|
+| `:w`, `:up[date]` | save the editor (`:w file` ignores the name) |
+| `:wa[ll]` | *File > Save All* |
+| `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
+| `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
+| `:wq`, `:x[it]`, `:exi[t]` | save, then close |
+| `:wqa[ll]`, `:xa[ll]` | save all, then close all |
+| `:e[dit] file` | open `file`, looked for next to the current file, then in its project; `~` and absolute paths work |
+| `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
+| `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
+| `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 
 Commands that only display something (`:ls`, `:buffers`, `:jumps`, `:marks`, `:registers`, `:changes`,
 `:messages`, `:pwd`, `:echo`, `:set opt?` ...) show their output in a read-only box in the same place.
@@ -228,7 +242,9 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Not handled as host commands:** `:wqa`, `:xa`, `:e`. `:w <otherfile>` saves the current editor and ignores the path.
+3. **Host commands are a fixed set** (table under *Command line*). `:w <otherfile>` saves the current editor and ignores
+   the name; `:e` cannot create a new file and does not expand `%` or wildcards; tab commands only move
+   within the current editor stack (one half of a split editor area).
 4. **No clipboard paste from the OS into Neovim**; use Eclipse's paste in insert mode.
 5. **No empty last line without a final newline.** A file that does not end with a line break
    cannot show a trailing empty line (the text would be identical to a file that does). This only

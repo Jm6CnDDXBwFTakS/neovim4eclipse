@@ -5,7 +5,10 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Set;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand.Kind;
 
@@ -19,49 +22,92 @@ class HostExCommandTest {
         assertEquals(force, cmd.force(), raw + " (force)");
     }
 
+    private static void expectAll(Kind kind, String... commands) {
+        for (String c : commands) {
+            expect(c, kind, false);
+            expect(c + "!", kind, true);
+        }
+    }
+
     @Test
     void writeCommands() {
-        for (String c : new String[] { "w", "write", "update", "up", ":w", "  :w  ", ":W", "%w", "w file.txt" }) {
+        for (String c : new String[] { "w", "wr", "write", "up", "update", ":w", "  :w  ", ":W", "%w", "w file.txt" }) {
             expect(c, Kind.WRITE, false);
         }
         expect("w!", Kind.WRITE, true);
     }
 
     @Test
+    void writeAllCommands() {
+        expectAll(Kind.WRITE_ALL, "wa", "wal", "wall", ":wa", "%wa");
+        expect("  :WA ", Kind.WRITE_ALL, false);
+    }
+
+    @Test
     void quitCommands() {
-        for (String c : new String[] { "q", "quit", "qa", "quita", ":q" }) {
-            expect(c, Kind.QUIT, false);
-        }
-        for (String c : new String[] { "q!", "quit!", "qa!", "quita!" }) {
-            expect(c, Kind.QUIT, true);
-        }
+        expectAll(Kind.QUIT, "q", "qu", "quit", ":q");
+    }
+
+    @Test
+    void quitAllCommands() {
+        expectAll(Kind.QUIT_ALL, "qa", "qal", "qall", "quita", "quitall", ":qa");
     }
 
     @Test
     void writeQuitCommands() {
-        for (String c : new String[] { "wq", "x", "exit", "xit", "wq file", ":wq" }) {
-            expect(c, Kind.WRITE_QUIT, false);
-        }
-        for (String c : new String[] { "wq!", "x!", "exit!" }) {
-            expect(c, Kind.WRITE_QUIT, true);
-        }
+        expectAll(Kind.WRITE_QUIT, "wq", "x", "xi", "xit", "exi", "exit", ":wq");
+        expect("wq file", Kind.WRITE_QUIT, false);
     }
 
     @Test
-    void writeAllCommands() {
-        for (String c : new String[] { "wa", "wall", ":wa", "  :WA ", "%wa" }) {
-            expect(c, Kind.WRITE_ALL, false);
-        }
-        expect("wa!", Kind.WRITE_ALL, true);
-        expect("wall!", Kind.WRITE_ALL, true);
+    void writeQuitAllCommands() {
+        expectAll(Kind.WRITE_QUIT_ALL, "wqa", "wqal", "wqall", "xa", "xal", "xall", ":xa");
+    }
+
+    @Test
+    void editKeepsTheArgumentAsTyped() {
+        HostExCommand edit = HostExCommand.parse(":e  src/Main.java ");
+        assertEquals(Kind.EDIT, edit.kind());
+        assertEquals("src/Main.java", edit.argument());
+        assertFalse(edit.force());
+
+        HostExCommand revert = HostExCommand.parse("e!");
+        assertEquals(Kind.EDIT, revert.kind());
+        assertTrue(revert.force());
+        assertEquals("", revert.argument());
+
+        assertEquals("~/My File.txt", HostExCommand.parse("edit! ~/My File.txt").argument());
+    }
+
+    @Test
+    void tabCommandsTakeAnOptionalCount() {
+        expect("tabn", Kind.TAB_NEXT, false);
+        expect("tabnext", Kind.TAB_NEXT, false);
+        expect("tabp", Kind.TAB_PREVIOUS, false);
+        expect("tabprevious", Kind.TAB_PREVIOUS, false);
+        expect("tabN", Kind.TAB_PREVIOUS, false); // capital N: previous, unlike tabn
+        expect("tabNext", Kind.TAB_PREVIOUS, false);
+        expect("tabfir", Kind.TAB_FIRST, false);
+        expect("tabrewind", Kind.TAB_FIRST, false);
+        expect("tabl", Kind.TAB_LAST, false);
+
+        assertEquals(3, HostExCommand.parse("tabn 3").count());
+        assertEquals(0, HostExCommand.parse("tabn").count());
+        assertEquals(2, HostExCommand.parse("tabp 2").count());
     }
 
     @Test
     void everythingElseGoesToNeovim() {
-        for (String c : new String[] { "%s/a/b/g", "s/a/b/", "set number", "e foo", "wa foo", "wqa", "xa", "wal",
-                "w!x", "q foo", "write2", "g/x/d", "", "   ", ":", null }) {
+        for (String c : new String[] { "%s/a/b/g", "s/a/b/", "set number", "w!x", "q foo", "qa foo", "write2",
+                "g/x/d", "tabnew", "tabn x", "tabn -1", "tabl 2", "u", "ec 1", "", "   ", ":", "!", null }) {
             assertFalse(HostExCommand.parse(c).isHostCommand(), String.valueOf(c));
         }
+    }
+
+    @Test
+    void abbreviationsRunFromTheShortestToTheFullName() {
+        assertEquals(Set.of("wa", "wal", "wall"), HostExCommand.abbrev("wa", "wall"));
+        assertThrows(IllegalArgumentException.class, () -> HostExCommand.abbrev("x", "wall"));
     }
 
     @Test

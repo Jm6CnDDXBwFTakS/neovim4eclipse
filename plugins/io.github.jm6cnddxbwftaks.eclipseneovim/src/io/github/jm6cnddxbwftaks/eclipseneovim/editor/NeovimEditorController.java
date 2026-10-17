@@ -118,7 +118,7 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
-        session.setHostExHandler(cmd -> EclipseFileCommands.tryHandleEx(cmd, editor));
+        session.setHostExHandler(cmd -> HostCommands.tryHandleEx(cmd, editor));
         session.setLeaveInsertPush(() -> {
             try {
                 synchronizer.pushDocumentToNeovim();
@@ -302,6 +302,18 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         keyContext.update();
         return neovimModeActive;
+    }
+
+    /**
+     * Makes Neovim's buffer equal to the document again, keeping the caret. For changes Eclipse
+     * made to the document by itself, such as reverting it ({@code :e!}). UI thread.
+     */
+    void pushDocumentToNeovim() {
+        if (closed || styledText.isDisposed()) {
+            return;
+        }
+        int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), styledText.getCaretOffset());
+        pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
     }
 
     /** Command, message or statusline text changed: show it in the status bar item. */

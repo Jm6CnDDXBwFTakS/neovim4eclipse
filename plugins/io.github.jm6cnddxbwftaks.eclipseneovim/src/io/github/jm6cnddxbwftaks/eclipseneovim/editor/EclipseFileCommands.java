@@ -3,24 +3,37 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.filesystem.EFS;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
-import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.EditPath;
 
 /**
- * Maps Neovim write/quit semantics onto Eclipse save/close.
+ * Vim's file commands carried out by Eclipse: save, close, open and revert. Which command means
+ * what is decided by {@link io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand}; the
+ * dispatching is done by {@link HostCommands}.
  *
- * <p>The embedded buffer is a scratch buffer with no file, so Neovim's own {@code :w} fails
- * (E382). Those commands are therefore handled by the host: the IDE owns the real file. Which commands count is decided by {@link HostExCommand}.
+ * <p>Why Eclipse: Neovim's buffers are copies the plug-in keeps in step with Eclipse's documents;
+ * the IDE owns the files. A Neovim {@code :w} would write the copy, behind Eclipse's back.
+ *
+ * <p>UI thread only.
  */
 public final class EclipseFileCommands {
 
@@ -29,40 +42,9 @@ public final class EclipseFileCommands {
     private EclipseFileCommands() {
     }
 
-    /**
-     * @return {@code true} if the ex command was handled here and must not reach Neovim
-     */
-    public static boolean tryHandleEx(String raw, ITextEditor editor) {
-        if (editor == null) {
-            return false;
-        }
-        HostExCommand cmd = HostExCommand.parse(raw);
-        LOG.fine(() -> "tryHandleEx [" + raw + "] -> " + cmd);
-        switch (cmd.kind()) {
-            case WRITE:
-                runOnUi(() -> save(editor));
-                return true;
-            case QUIT:
-                runOnUi(() -> close(editor, cmd.force()));
-                return true;
-            case WRITE_ALL:
-                runOnUi(EclipseFileCommands::saveAll);
-                return true;
-            case WRITE_QUIT:
-                runOnUi(() -> {
-                    if (save(editor) || cmd.force()) {
-                        close(editor, true);
-                    }
-                });
-                return true;
-            default:
-                return false;
-        }
-    }
-
     /** {@code ZZ}: write if needed, then quit. */
     public static void zz(ITextEditor editor) {
-        runOnUi(() -> {
+        HostCommands.runOnUi(() -> {
             save(editor);
             close(editor, true);
         });
@@ -70,10 +52,10 @@ public final class EclipseFileCommands {
 
     /** {@code ZQ}: quit without writing. */
     public static void zq(ITextEditor editor) {
-        runOnUi(() -> close(editor, true));
+        HostCommands.runOnUi(() -> close(editor, true));
     }
 
-    /** @return {@code true} if the editor is clean afterward */
+    /** {@code :w}. @return {@code true} if the editor is clean afterward */
     static boolean save(ITextEditor editor) {
         try {
             IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
@@ -105,6 +87,8 @@ public final class EclipseFileCommands {
     }
 
     /**
+     * {@code :q}.
+     *
      * @param force {@code true} closes without prompting to save (discarding changes);
      *              {@code false} lets Eclipse ask
      */
@@ -119,15 +103,104 @@ public final class EclipseFileCommands {
         }
     }
 
-    private static void runOnUi(Runnable r) {
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
+    /**
+     * {@code :qa}: closes every editor of the editor's window.
+     *
+     * @param force {@code true} closes without prompting (discarding changes); {@code false} lets
+     *              Eclipse ask about each modified one, as Vim refuses to quit with changes
+     */
+    static void closeAll(ITextEditor editor, boolean force) {
+        try {
+            IWorkbenchPage page = editor.getEditorSite().getPage();
+            if (page != null) {
+                page.closeAllEditors(!force);
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Eclipse close all failed", e);
+        }
+    }
+
+    /**
+     * {@code :e[!] [file]}.
+     * <ul>
+     *   <li>With a file name: opens it (see {@link EditPath} for where it is looked for).</li>
+     *   <li>{@code :e!}: reverts the editor to the saved file, discarding changes.</li>
+     *   <li>{@code :e}: reloads the saved file, refused (as in Vim, E37) while there are changes.</li>
+     * </ul>
+     *
+     * @param afterRevert run after a revert, to give Neovim the reloaded text
+     */
+    static void edit(ITextEditor editor, String argument, boolean force, Runnable afterRevert) {
+        if (argument.isEmpty()) {
+            IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
+            if (part.isDirty() && !force) {
+                HostCommands.showError(editor, "E37: No write since last change (add ! to override)");
+                return;
+            }
+            editor.doRevertToSaved();
+            afterRevert.run();
             return;
         }
-        if (display.getThread() == Thread.currentThread()) {
-            r.run();
-        } else {
-            display.asyncExec(r);
+        Path file = findFile(editor, argument);
+        if (file == null) {
+            HostCommands.showError(editor, "Can't find file \"" + argument + "\"");
+            return;
         }
+        if (Files.isDirectory(file)) {
+            HostCommands.showError(editor, "\"" + argument + "\" is a directory");
+            return;
+        }
+        open(editor.getEditorSite().getPage(), file);
+    }
+
+    /** The first existing {@link EditPath#candidates} entry, or {@code null}. */
+    private static Path findFile(ITextEditor editor, String argument) {
+        Path current = pathOf(editor.getEditorInput());
+        List<Path> bases = new ArrayList<>();
+        bases.add(current == null ? null : current.getParent());
+        bases.add(projectRootOf(editor.getEditorInput()));
+        for (Path candidate : EditPath.candidates(argument, Path.of(System.getProperty("user.home")), bases)) {
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Opens {@code file} in its default editor: through the workspace if it belongs to a project
+     * (so that the editor knows its project, builders, markers), else as an outside file.
+     */
+    private static void open(IWorkbenchPage page, Path file) {
+        try {
+            IFile[] inWorkspace = ResourcesPlugin.getWorkspace().getRoot().findFilesForLocationURI(file.toUri());
+            for (IFile candidate : inWorkspace) {
+                if (candidate.isAccessible()) {
+                    IDE.openEditor(page, candidate, true);
+                    return;
+                }
+            }
+            IDE.openEditorOnFileStore(page, EFS.getLocalFileSystem().getStore(file.toUri()));
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Could not open " + file, e);
+        }
+    }
+
+    /** The file shown by an editor input, or {@code null} (an untitled or remote input). */
+    private static Path pathOf(IEditorInput input) {
+        String name = EditorAttachManager.bufferName(input);
+        try {
+            Path path = Path.of(name);
+            return path.isAbsolute() ? path : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** The root folder of the workspace project the input's file is in, or {@code null}. */
+    private static Path projectRootOf(IEditorInput input) {
+        IFile file = input == null ? null : input.getAdapter(IFile.class);
+        IPath location = file == null || file.getProject() == null ? null : file.getProject().getLocation();
+        return location == null ? null : Path.of(location.toOSString());
     }
 }
