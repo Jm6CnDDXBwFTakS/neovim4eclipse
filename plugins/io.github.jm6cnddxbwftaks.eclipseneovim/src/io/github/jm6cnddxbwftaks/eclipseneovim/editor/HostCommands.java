@@ -58,8 +58,7 @@ public final class HostCommands {
                     EclipseFileCommands.closeAll(editor, true);
                 }
             });
-            case EDIT -> runOnUi(() -> EclipseFileCommands.edit(editor, cmd.argument(), force,
-                    () -> resyncNeovim(editor)));
+            case EDIT -> runOnUi(() -> EclipseFileCommands.edit(editor, cmd.argument(), force));
             case TAB_NEXT -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.NEXT, cmd.count()));
             case TAB_PREVIOUS -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.PREVIOUS, cmd.count()));
             case TAB_FIRST -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.FIRST, 0));
@@ -81,14 +80,6 @@ public final class HostCommands {
             status.setErrorMessage(message);
         } catch (Exception e) {
             LOG.log(Level.FINE, "Could not show: " + message, e);
-        }
-    }
-
-    /** After Eclipse replaced the document's text (a revert), pushes it to Neovim. */
-    private static void resyncNeovim(ITextEditor editor) {
-        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
-        if (controller != null && controller.getEditor() == editor) {
-            controller.pushDocumentToNeovim();
         }
     }
 

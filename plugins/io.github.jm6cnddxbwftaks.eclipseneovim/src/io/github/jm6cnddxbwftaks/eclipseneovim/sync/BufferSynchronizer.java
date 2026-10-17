@@ -5,13 +5,16 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.sync;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.jface.text.BadLocationException;
+import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
+import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.swt.widgets.Display;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
@@ -28,9 +31,11 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.TextDiff;
  * <p>Direction of flow:
  * <ul>
  *   <li><b>Eclipse to Neovim</b>: only whole-document pushes ({@link #pushDocumentToNeovim()}),
- *       on attach, when Neovim mode is re-enabled, and when leaving insert mode. While in insert
- *       mode Eclipse owns typing and Neovim learns about it at the push. A push changes only the
- *       lines that differ, so the buffer's undo history and marks survive it.</li>
+ *       on attach, when Neovim mode is re-enabled, when leaving insert mode, and after a change
+ *       Eclipse makes by itself outside insert mode ({@link #pushLocalChanges}: a format, a
+ *       refactoring, Eclipse's undo, a revert). While in insert mode Eclipse owns typing and Neovim
+ *       learns about it at the push. A push changes only the lines that differ, so the buffer's
+ *       undo history and marks survive it.</li>
  *   <li><b>Neovim to Eclipse</b>: line-range events from {@code nvim_buf_lines_event}, applied as
  *       minimal edits on the UI thread. A full buffer ({@code lastLine == -1}) is applied as the
  *       smallest edit that makes the texts equal.</li>
@@ -56,6 +61,20 @@ public final class BufferSynchronizer implements AutoCloseable {
     private volatile boolean closed;
     /** Called on the UI thread after each remote mutation, to put the caret back where Neovim has it. */
     private volatile Runnable caretRestorer;
+    /** When Eclipse's own document changes are pushed (see {@link #pushLocalChanges}); {@code null}: never. */
+    private volatile BooleanSupplier localPushGate;
+    /** A push of Eclipse's own changes is queued and has not read the document yet. */
+    private final AtomicBoolean localPushPending = new AtomicBoolean(false);
+    private final IDocumentListener localChangeListener = new IDocumentListener() {
+        @Override
+        public void documentAboutToBeChanged(DocumentEvent event) {
+        }
+
+        @Override
+        public void documentChanged(DocumentEvent event) {
+            onLocalChange();
+        }
+    };
 
     public BufferSynchronizer(IDocument document, NeovimSession session) {
         this.document = document;
@@ -69,6 +88,50 @@ public final class BufferSynchronizer implements AutoCloseable {
     /** @return {@code true} while a Neovim-originated change is being written into the document */
     public boolean isApplyingRemote() {
         return applyingRemote.get();
+    }
+
+    /**
+     * Pushes every change Eclipse makes to the document by itself to Neovim, while {@code when} is
+     * true. Without this, a format (Ctrl+Shift+F) or a refactoring in normal mode would leave
+     * Neovim's buffer behind, and Neovim's next edit would be applied at stale line numbers.
+     *
+     * <p>Changes applied from Neovim are not pushed back ({@link #isApplyingRemote()}). Several
+     * changes in a row (a refactoring makes many) are coalesced: one push is queued on the session's
+     * input thread, and it reads the document when it runs. Being queued there also orders it
+     * before any key typed afterward.
+     *
+     * @param when evaluated on the UI thread at each change; the editor passes "Neovim mode is on and
+     *             Neovim is not in insert mode" (typing in insert mode is pushed when it ends)
+     */
+    public void pushLocalChanges(BooleanSupplier when) {
+        localPushGate = when;
+        document.addDocumentListener(localChangeListener);
+    }
+
+    private void onLocalChange() {
+        BooleanSupplier gate = localPushGate;
+        if (closed || applyingRemote.get() || gate == null || !gate.getAsBoolean()) {
+            return;
+        }
+        if (!localPushPending.compareAndSet(false, true)) {
+            return; // the queued push has not read the document yet: it will include this change
+        }
+        session.runAsync("push Eclipse's change", () -> {
+            localPushPending.set(false); // before reading: a change from now on queues another push
+            if (closed) {
+                return;
+            }
+            // Neovim echoes the push as line events; applying them could undo a newer Eclipse change.
+            boolean wasListening = listening;
+            stopRemoteListening();
+            try {
+                pushDocumentToNeovim();
+            } finally {
+                if (wasListening) {
+                    startRemoteListening();
+                }
+            }
+        });
     }
 
     /** Starts applying Neovim to Eclipse changes. Call only after the initial push. */
@@ -263,5 +326,6 @@ public final class BufferSynchronizer implements AutoCloseable {
         closed = true;
         listening = false;
         session.removeBufferChangeListener(bufferChangeListener);
+        document.removeDocumentListener(localChangeListener);
     }
 }
