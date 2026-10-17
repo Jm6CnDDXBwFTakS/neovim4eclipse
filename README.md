@@ -16,6 +16,7 @@ release process; see [Known limitations](#known-limitations).
 - [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, the rules the code relies on, and style.
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
+- [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
 
 ## How it behaves
 
@@ -104,8 +105,8 @@ plugins/io.github.jm6cnddxbwftaks.eclipseneovim/
 tests/unit/   JUnit 5 tests for util + core (sources come from the plug-in; no copies)
 features/     feature project (Tycho eclipse-feature)
 releng/       p2 category / update-site (Tycho eclipse-repository)
-docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM
-.github/      GitHub Actions workflows (build, release)
+docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING
+.github/      GitHub Actions workflows (build, release), Dependabot, issue templates
 pom.xml       Maven/Tycho parent (aggregator)
 ```
 

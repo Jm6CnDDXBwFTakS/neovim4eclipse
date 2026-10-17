@@ -45,7 +45,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `features/...feature` | the installable feature |
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
-| `docs/` | learning guide, architecture, keys, packaging, platform notes |
+| `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
 
 ## Rules the code relies on
 
@@ -74,6 +74,9 @@ text that tests do not always catch.
 - [docs/LEARNING.md](docs/LEARNING.md), part 4, has recipes: adding a preference, a Neovim event, an
   Eclipse-side `:` command.
 - Update the documentation (README, `docs/`, Javadoc) when behavior changes.
+- To change a version (JDK, Eclipse, a library, a build tool, Neovim), follow
+  [docs/UPGRADING.md](docs/UPGRADING.md); `VersionConsistencyTest` lists any copy left behind.
+- `AGENTS.md` (read by Claude Code through `CLAUDE.md`) gives AI assistants the same rules in short.
 
 ## Style
 
