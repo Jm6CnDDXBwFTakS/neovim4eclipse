@@ -154,7 +154,7 @@ public final class EclipseFileCommands {
 
     /** The first existing {@link EditPath#candidates} entry, or {@code null}. */
     private static Path findFile(ITextEditor editor, String argument) {
-        Path current = pathOf(editor.getEditorInput());
+        Path current = EditorAttachManager.fileOf(editor.getEditorInput());
         List<Path> bases = new ArrayList<>();
         bases.add(current == null ? null : current.getParent());
         bases.add(projectRootOf(editor.getEditorInput()));
@@ -182,17 +182,6 @@ public final class EclipseFileCommands {
             IDE.openEditorOnFileStore(page, EFS.getLocalFileSystem().getStore(file.toUri()));
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not open " + file, e);
-        }
-    }
-
-    /** The file shown by an editor input, or {@code null} (an untitled or remote input). */
-    private static Path pathOf(IEditorInput input) {
-        String name = EditorAttachManager.bufferName(input);
-        try {
-            Path path = Path.of(name);
-            return path.isAbsolute() ? path : null;
-        } catch (Exception e) {
-            return null;
         }
     }
 

@@ -420,23 +420,40 @@ public final class EditorAttachManager {
         if (input == null) {
             return "";
         }
+        Path file = fileOf(input);
+        if (file != null) {
+            return file.toString();
+        }
+        if (input instanceof IURIEditorInput uriInput && uriInput.getURI() != null) {
+            return uriInput.getURI().toString(); // a remote or virtual file: no local path
+        }
+        return input.getName();
+    }
+
+    /**
+     * The local file an editor input shows, or {@code null} (an untitled document, a remote file, a
+     * class file inside a jar). Workspace files are resolved to their location on disk.
+     */
+    static Path fileOf(IEditorInput input) {
+        if (input == null) {
+            return null;
+        }
         try {
             IFile file = input.getAdapter(IFile.class);
             if (file != null && file.getLocation() != null) {
-                return file.getLocation().toOSString();
+                return Path.of(file.getLocation().toOSString());
             }
             if (input instanceof IPathEditorInput pathInput) {
-                return pathInput.getPath().toOSString();
+                return Path.of(pathInput.getPath().toOSString());
             }
-            if (input instanceof IURIEditorInput uriInput && uriInput.getURI() != null) {
-                return "file".equals(uriInput.getURI().getScheme())
-                        ? Path.of(uriInput.getURI()).toString()
-                        : uriInput.getURI().toString();
+            if (input instanceof IURIEditorInput uriInput && uriInput.getURI() != null
+                    && "file".equals(uriInput.getURI().getScheme())) {
+                return Path.of(uriInput.getURI());
             }
         } catch (Exception e) {
             LOG.log(Level.FINE, "No path for editor input " + input.getName(), e);
         }
-        return input.getName();
+        return null;
     }
 
     public synchronized void detachQuietly() {
