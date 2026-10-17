@@ -118,7 +118,7 @@ final class KeyInput {
 
     private void inputKey(String keys) throws Exception {
         LOG.fine(() -> "input(" + keys + ") mode=" + session.getMode());
-        session.clearMessage(); // a message stays visible until the next key
+        session.status().clearMessage(); // a message stays visible until the next key
 
         if (NvimKeys.isEnter(keys) && tryHostCommandLine()) {
             return;
@@ -146,7 +146,7 @@ final class KeyInput {
             // a buffer request would not be answered until the next key arrives.
             session.setSuppressBufferEvents(false);
             macroRegisterPending = "@".equals(keys) && !wasTyping;
-            session.showPendingKey(keys);
+            session.status().showPendingKey(keys);
             return;
         }
         if (startsMacro) {

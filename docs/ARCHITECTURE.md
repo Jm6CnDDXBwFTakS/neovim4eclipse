@@ -278,6 +278,8 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
 | Key-input pipeline | `core/KeyInput` | `NeovimSessionIntegrationTest` (needs nvim) |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
+| Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
+| Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
 | Session facade, state publishing | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Overlay colors | `util/OverlayColors` | `OverlayColorsTest` |
 | Ctrl-key ids and defaults | `util/VimCtrlKeys` | `VimCtrlKeysTest`, `PluginXmlConsistencyTest` |

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.CursorPos;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 
@@ -228,7 +228,7 @@ class NeovimSessionIntegrationTest {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("a", "b", "c", "d"));
             keys(s, "g", "g", "q", "a", "A", "!", "<Esc>", "j", "q");
-            List<NeovimSession.BufferChange> changes = new CopyOnWriteArrayList<>();
+            List<BufferChange> changes = new CopyOnWriteArrayList<>();
             s.addBufferChangeListener(changes::add);
             keys(s, "3", "@", "a");
             Thread.sleep(200); // let any stray notifications arrive
@@ -342,10 +342,10 @@ class NeovimSessionIntegrationTest {
     void blockwiseSelectionIsReportedWithBothCorners() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("abcd", "efgh", "ijkl"));
-            List<NeovimSession.VisualSelection> seen = new CopyOnWriteArrayList<>();
+            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
             s.addSelectionListener(seen::add);
             keys(s, "g", "g", "<C-v>", "j", "l");
-            NeovimSession.VisualSelection last = seen.get(seen.size() - 1);
+            VisualSelection last = seen.get(seen.size() - 1);
             assertTrue(last.isBlockWise(), "mode=" + last.mode());
             assertEquals(1, last.startLine1Based());
             assertEquals(0, last.startCol0Based());
@@ -359,7 +359,7 @@ class NeovimSessionIntegrationTest {
     void dollarMakesTheBlockExtendToEndOfLine() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("abcd", "ef", "ijklmn"));
-            List<NeovimSession.VisualSelection> seen = new CopyOnWriteArrayList<>();
+            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
             s.addSelectionListener(seen::add);
             keys(s, "g", "g", "<C-v>", "j", "$");
             assertTrue(seen.get(seen.size() - 1).toEndOfLine());
@@ -422,7 +422,7 @@ class NeovimSessionIntegrationTest {
     void bufferChangeListenerSeesDeletion() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("a", "b", "c"));
-            List<NeovimSession.BufferChange> changes = new CopyOnWriteArrayList<>();
+            List<BufferChange> changes = new CopyOnWriteArrayList<>();
             s.addBufferChangeListener(changes::add);
             s.input("d");
             s.input("d");

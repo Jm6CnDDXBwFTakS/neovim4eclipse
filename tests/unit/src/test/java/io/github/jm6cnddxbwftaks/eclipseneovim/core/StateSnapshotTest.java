@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.VisualSelection;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 
 import org.junit.jupiter.api.Test;
 
@@ -69,7 +69,7 @@ class StateSnapshotTest {
 
     @Test
     void snapshotCursorIsTakenFromTheFirstTwoElements() {
-        NeovimSession.CursorPos pos = StateSnapshot.cursor(List.of(7, 3, 1, 1, 1, 1, "n"));
+        CursorPos pos = StateSnapshot.cursor(List.of(7, 3, 1, 1, 1, 1, "n"));
         assertEquals(7, pos.line1Based());
         assertEquals(3, pos.col0Based());
     }

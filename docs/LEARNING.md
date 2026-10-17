@@ -259,7 +259,7 @@ one thread (`eclipse-neovim-input`), which keeps keys in order and keeps blockin
 ### 2.7 Buffers and line events
 
 - `nvim_create_buf(listed, scratch)` makes a buffer; `nvim_set_current_buf` shows it in the window.
-  This plug-in gives every Eclipse document its own buffer (`NeovimSession.DocumentBuffer`).
+  This plug-in gives every Eclipse document its own buffer (`DocumentBuffer`).
 - `nvim_buf_set_lines(buf, start, end, strict, lines)` replaces lines `[start, end)`. Indexes are
   0-based and the end is exclusive; `-1` means "the end".
 - `nvim_buf_attach(buf, ...)` subscribes to changes. Neovim then sends

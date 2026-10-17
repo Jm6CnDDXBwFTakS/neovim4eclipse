@@ -1,0 +1,70 @@
+// SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+// SPDX-License-Identifier: EPL-2.0
+
+package io.github.jm6cnddxbwftaks.eclipseneovim.core;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
+
+/** {@link StatusTracker}: what the status bar shows, without a Neovim process. */
+class StatusTrackerTest {
+
+    private final StatusTracker tracker = new StatusTracker();
+    private final List<StatusInfo> seen = new ArrayList<>();
+
+    StatusTrackerTest() {
+        tracker.setItems(EnumSet.allOf(StatusItem.class));
+        tracker.addStatusListener(seen::add);
+    }
+
+    @Test
+    void aMessageStaysUntilClearedEvenIfTheNextSnapshotHasNone() {
+        tracker.publish(new StatusInfo("", "", "3 lines yanked"));
+        tracker.publish(new StatusInfo("", "", ""));
+        assertEquals("3 lines yanked", seen.get(seen.size() - 1).message());
+
+        tracker.clearMessage();
+        tracker.publish(new StatusInfo("", "", ""));
+        assertEquals("", seen.get(seen.size() - 1).message());
+    }
+
+    @Test
+    void pendingKeysAreAppendedToTheLastShowcmd() {
+        tracker.publish(new StatusInfo("", "2", ""));
+        tracker.showPendingKey("f");
+        assertEquals("2f", seen.get(seen.size() - 1).cmd());
+    }
+
+    @Test
+    void pendingKeysAreIgnoredWhenTheCommandPartIsHidden() {
+        tracker.setItems(EnumSet.noneOf(StatusItem.class));
+        tracker.showPendingKey("f");
+        assertTrue(seen.isEmpty());
+    }
+
+    @Test
+    void anUnchangedStatusIsNotFiredAgain() {
+        tracker.publish(new StatusInfo("sl", "", ""));
+        tracker.publish(new StatusInfo("sl", "", ""));
+        assertEquals(1, seen.size());
+    }
+
+    @Test
+    void recordingListenersHearStartAndStopOnce() {
+        List<String> registers = new ArrayList<>();
+        tracker.addRecordingListener(registers::add);
+        tracker.updateRecording("a");
+        tracker.updateRecording("a");
+        tracker.updateRecording("");
+        assertEquals(List.of("a", ""), registers);
+        assertEquals("", tracker.recordingRegister());
+    }
+}

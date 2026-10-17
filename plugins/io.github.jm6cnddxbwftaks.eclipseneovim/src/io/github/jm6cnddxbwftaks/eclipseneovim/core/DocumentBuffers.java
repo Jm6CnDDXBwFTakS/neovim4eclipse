@@ -14,7 +14,7 @@ import java.util.logging.Logger;
 import com.ensarsarajcic.neovim.java.api.NeovimApi;
 import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
 import com.ensarsarajcic.neovim.java.api.types.api.DeleteBufferOptions;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 
 /**
  * The Neovim buffers that mirror Eclipse documents, and which of them is <em>attached</em>.
