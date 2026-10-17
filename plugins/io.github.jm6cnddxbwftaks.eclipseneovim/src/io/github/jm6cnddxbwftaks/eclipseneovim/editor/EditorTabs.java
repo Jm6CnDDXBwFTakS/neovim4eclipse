@@ -40,7 +40,9 @@ final class EditorTabs {
     }
 
     /**
-     * Activates the tab that {@code action} with {@code count} leads to.
+     * Activates the tab that {@code action} with {@code count} leads to. When the tabs cannot be
+     * found, says so in the status line: the command was taken from Neovim, so silence would look
+     * like a key that does nothing.
      *
      * @return {@code false} if the tabs could not be found (nothing changed)
      */
@@ -53,6 +55,7 @@ final class EditorTabs {
             EPartService partService = site.getService(EPartService.class);
             if (current == null || partService == null || current.getParent() == null) {
                 LOG.fine("No E4 model for the editor's tab; tab command ignored");
+                HostCommands.showError(editor, "Cannot switch tabs from this editor");
                 return false;
             }
             List<MPart> tabs = visibleParts(current.getParent());
@@ -64,6 +67,7 @@ final class EditorTabs {
             return true;
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Tab command " + action + " failed", e);
+            HostCommands.showError(editor, "Switching tabs failed: " + e.getMessage());
             return false;
         }
     }
