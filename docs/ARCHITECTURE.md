@@ -160,7 +160,7 @@ to the box, which (via the focus listener in the controller) also deactivates th
 - `:` in visual mode sends `<Esc>` and pre-fills `:'<,'>` (also required because typing `:` in visual mode
   makes Neovim insert its own range, which would precede `:silent` and be rejected).
 - Pure logic is in `util/CommandLine` (kinds, prefill, parsing) and `util/CommandHistory`, both unit tested;
-  host commands go through `util/HostExCommand` as before.
+  host commands are classified by `util/HostExCommand` and carried out by `editor/HostCommands`.
 
 ## Macros
 
@@ -271,7 +271,8 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 |---------|-------|-------|
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
-| `:w/:wa/:q/:wq` classification | `util/HostExCommand` | `HostExCommandTest` |
+| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand`, `editor/HostCommands` | `HostExCommandTest`, UI `HostCommandsTest` |
+| Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |

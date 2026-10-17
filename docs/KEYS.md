@@ -14,7 +14,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Insert mode started from blockwise visual (`Ctrl+V` then `I`, `A`, `c`), or while recording a macro | Neovim, so it sees every key |
 | Keys typed within milliseconds of entering insert mode, before Eclipse has Neovim's text | Neovim, for the rest of that insert, so nothing is lost |
 | `:`, `/`, `?` in normal mode | the plug-in's command box at the bottom of the editor |
-| `ZZ`, `ZQ`, and `:w`, `:wa`, `:q`, `:wq`, `:x` | Eclipse's save, Save All and close |
+| `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
 | Eclipse mode (the *NVIM* toolbar button) | Eclipse, always |
 
 ## `Ctrl` keys
