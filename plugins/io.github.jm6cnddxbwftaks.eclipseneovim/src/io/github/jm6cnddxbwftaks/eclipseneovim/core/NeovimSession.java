@@ -23,6 +23,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimKeys;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.OutputCapture;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.SearchCommand;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
@@ -112,6 +113,12 @@ public final class NeovimSession implements AutoCloseable {
      * {@code /} or {@code ?} to Neovim as the argument instead of opening a prompt.
      */
     private volatile boolean waitingForArgument;
+
+    /**
+     * Whether a {@code :redir} typed by the user is collecting output (from {@code :redir @a} until
+     * {@code :redir END}); no output capture is done meanwhile. Input thread only.
+     */
+    private boolean userRedirActive;
 
     /** Asked before a {@code :} command line is executed on Enter (used for host-side {@code :w}/{@code :q}). */
     private volatile Predicate<String> hostExHandler;
@@ -489,15 +496,25 @@ public final class NeovimSession implements AutoCloseable {
      */
     public void commandAsync(String cmd, Consumer<String> onOutput) {
         submit("command " + cmd, Level.WARNING, () -> {
+            // While the user's own :redir runs, a capture would take it over (see OutputCapture).
+            OutputCapture.Redir redir = OutputCapture.redirOf(cmd);
+            boolean capture = onOutput != null && redir == OutputCapture.Redir.NONE && !userRedirActive;
+            if (redir != OutputCapture.Redir.NONE) {
+                userRedirActive = redir == OutputCapture.Redir.START;
+            }
             String output = "";
-            await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
+            if (capture) {
+                await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
+            }
             try {
                 await(api.input(NvimKeys.exCommand(cmd)));
                 if (isBlocked()) {
                     await(api.input("<Esc>")); // a "press Enter" prompt: dismiss it
                 }
             } finally {
-                output = stopOutputCapture();
+                if (capture) {
+                    output = stopOutputCapture();
+                }
             }
             syncBufferFromNeovim();
             syncModeAndCursorFromNeovim();
