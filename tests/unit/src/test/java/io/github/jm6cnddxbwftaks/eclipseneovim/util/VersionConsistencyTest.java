@@ -57,10 +57,13 @@ class VersionConsistencyTest {
     private static final List<String> DOCS = List.of(
             "README.md", "CONTRIBUTING.md", "docs/HOWTO_ECLIPSE.md", "docs/LEARNING.md");
 
-    /** "JDK 21", "Java 21", "JavaSE-21" (but not "Java 21+" ranges written differently). */
+    /** "JDK 21", "Java 21", "Java 21+", "JavaSE-21": the number is the first group. */
     private static final Pattern JAVA_MENTION = Pattern.compile("\\b(?:JDK|Java|JavaSE-) ?(\\d+)\\b");
-    /** An Eclipse simultaneous release name such as 2024-12. */
-    private static final Pattern ECLIPSE_RELEASE = Pattern.compile("\\b(20\\d\\d-\\d\\d)\\b");
+    /**
+     * An Eclipse simultaneous release name such as 2024-12: releases come out in March, June,
+     * September and December. A full date ("2026-12-01") is not a release name.
+     */
+    private static final Pattern ECLIPSE_RELEASE = Pattern.compile("\\b(20\\d\\d-(?:03|06|09|12))\\b(?!-\\d)");
 
     // ---- Java ----
 
@@ -135,6 +138,18 @@ class VersionConsistencyTest {
                 }
             }
         }
+    }
+
+    @Test
+    void releasePatternIgnoresDates() {
+        assertFalse(ECLIPSE_RELEASE.matcher("moves on 2026-10-19").find());
+        assertFalse(ECLIPSE_RELEASE.matcher("on 2026-12-01").find());
+        Matcher release = ECLIPSE_RELEASE.matcher("Eclipse 2025-06 (4.36)");
+        assertTrue(release.find());
+        assertEquals("2025-06", release.group(1));
+        Matcher java = JAVA_MENTION.matcher("running on Java 21+");
+        assertTrue(java.find());
+        assertEquals("21", java.group(1));
     }
 
     // ---- helpers ----
