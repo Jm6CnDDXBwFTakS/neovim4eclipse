@@ -233,6 +233,16 @@ class NeovimSessionIntegrationTest {
     }
 
     @Test
+    void shellCommandOutputIsShownWithoutTheEchoedCommand() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> outputs = new CopyOnWriteArrayList<>();
+            s.commandAsync("!echo shellout", outputs::add);
+            waitFor(() -> !outputs.isEmpty(), "the shell command's output");
+            assertEquals(List.of("shellout"), outputs);
+        }
+    }
+
+    @Test
     void aTypedRedirKeepsRedirecting() throws Exception {
         try (NeovimSession s = start()) {
             List<String> outputs = new CopyOnWriteArrayList<>();

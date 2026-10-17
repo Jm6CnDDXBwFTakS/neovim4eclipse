@@ -185,14 +185,22 @@ final class LuaScripts {
     /**
      * Ends the capture started by {@link #START_OUTPUT_CAPTURE} and returns what was printed, or ""
      * when nothing was, or when it was only the error message (which the status bar already shows
-     * through {@code v:errmsg}). The capture starts with empty lines (where the command line was
-     * drawn); those and trailing blanks are removed, the indentation of the first line is kept
-     * ({@code "  tabstop=8"}).
+     * through {@code v:errmsg}). Cleaned up for the popup:
+     * <ul>
+     *   <li>the empty lines it starts with (where the command line was drawn) and trailing blanks are
+     *       removed; the indentation of the first line is kept ({@code "  tabstop=8"});</li>
+     *   <li>carriage returns are removed (shell output arrives with {@code \r\n});</li>
+     *   <li>for {@code :!cmd}, the echo of the shell command ({@code :!ls}) that Neovim prints first
+     *       is removed: the popup's title already shows it.</li>
+     * </ul>
      */
     static final String STOP_OUTPUT_CAPTURE = """
             pcall(vim.cmd, 'redir END')
-            local out = (vim.g.eclipse_neovim_output or ''):gsub('^[\\r\\n]+', ''):gsub('%s+$', '')
+            local out = (vim.g.eclipse_neovim_output or ''):gsub('\\r', '')
             vim.g.eclipse_neovim_output = nil
+            out = out:gsub('^\\n+', '')
+            out = out:gsub('^:![^\\n]*\\n*', '')
+            out = out:gsub('%s+$', '')
             if out:match('^%s*$') or out == vim.v.errmsg then
               return ''
             end
