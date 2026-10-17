@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Same Neovim as the developer machine; bump together with docs/PLATFORM.md.
+  # Same Neovim as the developer machine. To change it, see docs/UPGRADING.md.
   NVIM_VERSION: v0.12.4
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven   # caches ~/.m2/repository, keyed on the pom.xml files
       # Ubuntu's packaged Neovim is too old, so use the official release tarball.
       - name: Install Neovim ${{ env.NVIM_VERSION }}
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven
       # Ubuntu's packaged Neovim is too old, so use the official release tarball.
       - name: Install Neovim ${{ env.NVIM_VERSION }}

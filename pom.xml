@@ -40,10 +40,26 @@
     <module>releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite</module>
   </modules>
 
+  <!-- Versions: see docs/UPGRADING.md before changing any of them. VersionConsistencyTest
+       (tests/unit) fails the build when a copy outside this file disagrees. -->
   <properties>
-    <tycho.version>5.0.4</tycho.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <!-- Java: the release the code is compiled for and the minimum JRE it runs on. Copies that
+         Maven cannot fill in (MANIFEST.MF, build.properties, .java-version) are checked by
+         VersionConsistencyTest. -->
+    <java.release>21</java.release>
+
+    <!-- Eclipse: the oldest supported release, which the plug-in is compiled and tested against. -->
     <eclipse-repo.url>https://download.eclipse.org/releases/2024-12</eclipse-repo.url>
+
+    <!-- Build tools. -->
+    <tycho.version>5.0.4</tycho.version>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+    <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
+    <maven-dependency-plugin.version>3.8.1</maven-dependency-plugin.version>
+    <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
+    <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
 
     <!-- Third-party library versions: the ONLY place they are defined. The plug-in build copies
          the jars into plugins/.../lib/ (version-less names, see its pom.xml) and the unit tests
@@ -187,7 +203,7 @@
           <artifactId>target-platform-configuration</artifactId>
           <version>${tycho.version}</version>
           <configuration>
-            <executionEnvironment>JavaSE-21</executionEnvironment>
+            <executionEnvironment>JavaSE-${java.release}</executionEnvironment>
           </configuration>
         </plugin>
         <plugin>
@@ -201,7 +217,7 @@
           <version>${tycho.version}</version>
           <configuration>
             <useProjectSettings>false</useProjectSettings>
-            <release>21</release>
+            <release>${java.release}</release>
           </configuration>
         </plugin>
         <plugin>
@@ -215,6 +231,32 @@
           <groupId>org.eclipse.tycho</groupId>
           <artifactId>tycho-versions-plugin</artifactId>
           <version>${tycho.version}</version>
+        </plugin>
+        <!-- Plain Maven plug-ins: versions here only, so that child POMs never declare one. -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${maven-surefire-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${maven-dependency-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>${maven-clean-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>build-helper-maven-plugin</artifactId>
+          <version>${build-helper-maven-plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
