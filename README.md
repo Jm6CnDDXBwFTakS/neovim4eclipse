@@ -157,7 +157,7 @@ Commands that only display something (`:ls`, `:buffers`, `:jumps`, `:marks`, `:r
 These commands are not recorded into a macro (they change nothing). Any other command is typed into
 Neovim, and whatever it prints (`:!ls`, `:echo` inside a longer command, a `:s` report) is collected with
 `:redir` and shown in the same box. Errors appear in the status bar only. Messages printed later, by a
-timer or an autocmd, are not shown.
+timer or an autocmd, are not shown, and nothing is collected while your own `:redir` is running.
 
 ## Macros (`q`)
 

@@ -232,6 +232,21 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    @Test
+    void aTypedRedirKeepsRedirecting() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> outputs = new CopyOnWriteArrayList<>();
+            s.commandAsync("redir => g:mine", outputs::add);
+            s.commandAsync("echo 'kept'", outputs::add); // not captured: it would take the redirection over
+            s.commandAsync("redir END", outputs::add);
+            s.commandAsync("echo 'after'", outputs::add); // captured again
+            waitFor(() -> outputs.contains("after"), "the output after redir END");
+            assertEquals(List.of("after"), outputs);
+            assertTrue(String.valueOf(s.lua("return vim.g.mine")).contains("kept"),
+                    "the user's :redir must have collected the echo");
+        }
+    }
+
     // ---- macros ----
 
     private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws Exception {
