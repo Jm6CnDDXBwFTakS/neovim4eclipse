@@ -11,7 +11,9 @@
  *       the workbench (part listeners) and attaches Neovim to the active text editor.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.NeovimEditorController}: one per attached
  *       editor. Wires the editor's viewer and widget to the shared
- *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession}.</li>
+ *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession}, through one helper per
+ *       concern: {@code CaretSync} (caret and cursor), {@code EditorKeyContext} (when the Vim
+ *       Ctrl-key bindings are active), {@code VisualSelectionView}, {@code InsertTracker}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.KeyInterceptor}: decides for each key
  *       whether Neovim or Eclipse handles it.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.SendKeyHandler},

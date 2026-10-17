@@ -7,26 +7,16 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextViewerExtension;
-import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
-import org.eclipse.swt.events.FocusEvent;
-import org.eclipse.swt.events.FocusListener;
-import org.eclipse.swt.events.MouseAdapter;
-import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.IEditorSite;
-import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
@@ -35,12 +25,23 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimCtrlKeys;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 
 /**
  * Binds one {@link ITextEditor} to a {@link NeovimSession}.
  * Neovim owns keys; Eclipse shows mode status, caret style, visual selection, and buffer text.
+ *
+ * <p>This class is the wiring: it creates one helper per concern, connects each to the session's
+ * listeners, and switches them together between Neovim mode and Eclipse mode. The helpers:
+ * <ul>
+ *   <li>{@link KeyInterceptor}: which keys go to Neovim;</li>
+ *   <li>{@link BufferSynchronizer}: document text, both directions;</li>
+ *   <li>{@link CaretSync}: caret and cursor, both directions;</li>
+ *   <li>{@link EditorKeyContext}: when the Vim Ctrl-key bindings are active;</li>
+ *   <li>{@link VisualSelectionView}, {@link CursorStyleController}, {@link ModeStatusContribution},
+ *       {@link CommandLineBox}: what is drawn;</li>
+ *   <li>{@link InsertTracker}: what was typed in insert mode, for {@code .}.</li>
+ * </ul>
  *
  * <h2>Columns</h2>
  * Neovim columns are UTF-8 <em>byte</em> offsets; Eclipse columns are UTF-16 chars. Every
@@ -54,13 +55,6 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 public final class NeovimEditorController implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(NeovimEditorController.class.getName());
-
-    /**
-     * Key-binding context active while Neovim owns the keys and is not in insert mode. Below it, one
-     * context per Vim {@code Ctrl} key (plugin.xml) that Eclipse would otherwise consume first: for
-     * example {@code Ctrl-V} is Paste in Eclipse but starts blockwise visual in Vim.
-     */
-    static final String KEY_CONTEXT_ID = VimCtrlKeys.NORMAL_CONTEXT_ID;
 
     private final ITextEditor editor;
     private final NeovimSession session;
@@ -79,24 +73,13 @@ public final class NeovimEditorController implements AutoCloseable {
     private final CursorStyleController cursorStyle;
     /** Neovim's visual selection shown in the widget (native selection or blockwise overlay). */
     private final VisualSelectionView selectionView;
+    /** When the Vim Ctrl-key bindings are active for this editor. */
+    private final EditorKeyContext keyContext;
+    /** Caret and Neovim cursor, kept in the same place. */
+    private final CaretSync caretSync;
     private volatile boolean closed;
-    /** Suppress mouse/caret feedback while applying Neovim cursor. */
-    private volatile boolean applyingCaretFromNvim;
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
-    /** Workbench-wide activation of {@link #KEY_CONTEXT_ID} and the Ctrl-letter contexts. UI thread only. */
-    private final VimKeyContexts keyContexts = new VimKeyContexts();
-    private final FocusListener focusListener = new FocusListener() {
-        @Override
-        public void focusGained(FocusEvent e) {
-            updateKeyContext(session.getMode());
-        }
-
-        @Override
-        public void focusLost(FocusEvent e) {
-            updateKeyContext(session.getMode());
-        }
-    };
 
     private final Consumer<String> modeListener = this::onModeChanged;
     private final Consumer<CursorPos> cursorListener = this::onCursorChanged;
@@ -111,9 +94,11 @@ public final class NeovimEditorController implements AutoCloseable {
         this.buffer = buffer;
         this.styledText = styledText;
         this.keyInterceptor = new KeyInterceptor(session);
-        this.keyInterceptor.setCtrlKeyFilter(NeovimEditorController::isCtrlKeyToNeovim);
+        this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session);
-        this.synchronizer.setCaretRestorer(() -> applyCaret(session.getLastCursor()));
+        this.caretSync = new CaretSync(styledText, session, () -> documentOf(editor),
+                this::isNeovimModeActive, synchronizer::isApplyingRemote);
+        this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution();
         this.cursorStyle = new CursorStyleController(styledText);
@@ -127,19 +112,12 @@ public final class NeovimEditorController implements AutoCloseable {
         } else {
             styledText.addVerifyKeyListener(keyInterceptor);
         }
-        this.selectionView = new VisualSelectionView(styledText, this::runAsCaretFromNeovim);
-        styledText.addFocusListener(focusListener);
+        this.selectionView = new VisualSelectionView(styledText, caretSync::runAsFromNeovim);
+        this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
         this.commandLine = new CommandLineBox(styledText, session, editor);
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
-        styledText.addCaretListener(e -> onEclipseCaretMoved());
-        styledText.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseDown(MouseEvent e) {
-                onEclipseCaretMoved();
-            }
-        });
         session.setHostExHandler(cmd -> EclipseFileCommands.tryHandleEx(cmd, editor));
         session.setLeaveInsertPush(() -> {
             try {
@@ -155,7 +133,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addRecordingListener(recordingListener);
         session.addStatusListener(statusListener);
 
-        installStatusLine();
+        modeStatus.addTo(editor.getEditorSite());
 
         int caretOffset = styledText.getCaretOffset();
         int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), caretOffset);
@@ -209,36 +187,6 @@ public final class NeovimEditorController implements AutoCloseable {
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Document push could not be scheduled", e);
             synchronizer.startRemoteListening();
-        }
-    }
-
-    private void installStatusLine() {
-        try {
-            IEditorSite site = editor.getEditorSite();
-            if (site == null) {
-                return;
-            }
-            IStatusLineManager mgr = site.getActionBars().getStatusLineManager();
-            if (mgr.find(ModeStatusContribution.ID) == null) {
-                mgr.add(modeStatus);
-                mgr.update(true);
-            }
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "Could not install mode status line", e);
-        }
-    }
-
-    private void uninstallStatusLine() {
-        try {
-            IEditorSite site = editor.getEditorSite();
-            if (site == null) {
-                return;
-            }
-            IStatusLineManager mgr = site.getActionBars().getStatusLineManager();
-            mgr.remove(ModeStatusContribution.ID);
-            mgr.update(true);
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "Could not remove mode status line", e);
         }
     }
 
@@ -352,7 +300,7 @@ public final class NeovimEditorController implements AutoCloseable {
             selectionView.clearBlock();
             LOG.info("Mode → ECLIPSE (keys to IDE)");
         }
-        updateKeyContext(session.getMode());
+        keyContext.update();
         return neovimModeActive;
     }
 
@@ -397,71 +345,9 @@ public final class NeovimEditorController implements AutoCloseable {
         }
     }
 
-    /**
-     * Activates the Vim key-binding context while Neovim owns normal/visual keys <em>and</em> this
-     * editor's text widget has focus; deactivates it in insert mode, in Eclipse mode, on focus loss
-     * and on close, so Eclipse shortcuts (paste, content assist, other views) are untouched there.
-     *
-     * <p>The activation is workbench-wide (the standard, well-trodden path) and the focus check keeps
-     * it from leaking into other parts. Must run on the UI thread.
-     */
-    private void updateKeyContext(String mode) {
-        boolean wanted = !closed && neovimModeActive && !VimModes.isTyping(mode)
-                && !styledText.isDisposed() && styledText.isFocusControl();
-        try {
-            IContextService service = PlatformUI.getWorkbench().getService(IContextService.class);
-            if (service == null) {
-                LOG.warning("No workbench IContextService; Vim Ctrl keys cannot be enabled");
-                return;
-            }
-            if (wanted && !keyContexts.isActive()) {
-                keyContexts.activate(service, NeovimEditorController::isCtrlKeyToNeovim);
-                LOG.info("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
-                // Report what the workbench would run for Ctrl-V now; see KeyContextDiagnostics.
-                Display.getDefault().asyncExec(() -> KeyContextDiagnostics.logResolution("CTRL+V"));
-            } else if (!wanted && keyContexts.isActive()) {
-                keyContexts.deactivate(service);
-                LOG.fine("Neovim key context deactivated");
-            }
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Neovim key context update failed", e);
-        }
-    }
-
-    /**
-     * Re-applies the Ctrl-key preferences: the active letter contexts are dropped and, if Neovim
-     * still owns the keys, activated again with the current choice of letters.
-     */
+    /** Re-applies the Ctrl-key preferences (see {@link EditorKeyContext#refresh()}). */
     void refreshKeyContext() {
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
-            return;
-        }
-        display.asyncExec(() -> {
-            IContextService service = PlatformUI.getWorkbench().getService(IContextService.class);
-            if (service != null) {
-                keyContexts.deactivate(service);
-            }
-            updateKeyContext(session.getMode());
-        });
-    }
-
-    /** Whether {@code Ctrl+letter} goes to Neovim; all letters do while the preferences are unavailable. */
-    static boolean isCtrlKeyToNeovim(char letter) {
-        Activator activator = Activator.getDefault();
-        return activator == null || activator.isCtrlKeyToNeovim(letter);
-    }
-
-    private void updateKeyContextOnUi(String mode) {
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
-            return;
-        }
-        if (display.getThread() == Thread.currentThread()) {
-            updateKeyContext(mode);
-        } else {
-            display.asyncExec(() -> updateKeyContext(mode));
-        }
+        keyContext.refresh();
     }
 
     private void onModeChanged(String mode) {
@@ -472,7 +358,7 @@ public final class NeovimEditorController implements AutoCloseable {
         if (!neovimModeActive) {
             return; // status shows ECLIPSE until user toggles back
         }
-        updateKeyContextOnUi(mode);
+        keyContext.updateFromAnyThread(mode);
         if (!VimModes.isTyping(mode)) {
             insertTracker.reset(); // an insert ended (or never started): drop any stale snapshot
         }
@@ -492,43 +378,7 @@ public final class NeovimEditorController implements AutoCloseable {
         if (VimModes.isVisual(session.getMode())) {
             return;
         }
-        applyCaret(pos);
-    }
-
-    private void applyCaret(CursorPos pos) {
-        if (pos == null || closed) {
-            return;
-        }
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
-            return;
-        }
-        Runnable apply = () -> {
-            if (closed || styledText.isDisposed()) {
-                return;
-            }
-            applyingCaretFromNvim = true;
-            try {
-                IDocument doc = documentOf(editor);
-                if (doc == null || doc.getNumberOfLines() <= 0) {
-                    return;
-                }
-                int offset = Math.min(DocumentPositions.byteColToOffset(doc, pos.line1Based(), pos.col0Based()), doc.getLength());
-                styledText.setCaretOffset(offset);
-                styledText.showSelection();
-            } catch (Exception e) {
-                LOG.log(Level.FINE, "Cursor apply failed", e);
-            } finally {
-                applyingCaretFromNvim = false;
-            }
-        };
-        // If already on UI (e.g. after a document edit), apply immediately so nothing
-        // can interleave and leave the caret at 0.
-        if (display.getThread() == Thread.currentThread()) {
-            apply.run();
-        } else {
-            display.asyncExec(apply);
-        }
+        caretSync.showNeovimCursor(pos);
     }
 
     private void onVisualSelection(VisualSelection sel) {
@@ -551,32 +401,6 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
-    /** Runs a caret change that comes from Neovim, so {@link #onEclipseCaretMoved} does not echo it back. */
-    private void runAsCaretFromNeovim(Runnable change) {
-        applyingCaretFromNvim = true;
-        try {
-            change.run();
-        } finally {
-            applyingCaretFromNvim = false;
-        }
-    }
-
-    /** User clicked or moved the caret in Eclipse: push the position to Neovim. */
-    private void onEclipseCaretMoved() {
-        // document.set resets caret to 0 and fires this — must NOT push 1:1 back into Neovim
-        if (closed || applyingCaretFromNvim || styledText.isDisposed() || !neovimModeActive
-                || synchronizer.isApplyingRemote()) {
-            return;
-        }
-        try {
-            int offset = styledText.getCaretOffset();
-            int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offset);
-            session.setCursorAsync(lineCol[0], lineCol[1]);
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "Eclipse→Neovim cursor failed", e);
-        }
-    }
-
     @Override
     public void close() {
         if (closed) {
@@ -593,6 +417,7 @@ public final class NeovimEditorController implements AutoCloseable {
             LOG.log(Level.FINE, "remove listeners", e);
         }
         try {
+            caretSync.dispose();
             commandLine.dispose();
             selectionView.dispose();
             if (keyViewer != null) {
@@ -600,20 +425,17 @@ public final class NeovimEditorController implements AutoCloseable {
             } else {
                 styledText.removeVerifyKeyListener(keyInterceptor);
             }
-            if (!styledText.isDisposed()) {
-                styledText.removeFocusListener(focusListener);
-            }
         } catch (Exception e) {
             LOG.log(Level.FINE, "removeVerifyKeyListener", e);
         }
-        updateKeyContext(session.getMode()); // closed == true: deactivates the key context
+        keyContext.dispose(); // deactivates the Vim key contexts
         try {
             synchronizer.close();
             insertTracker.dispose();
         } catch (Exception e) {
             LOG.log(Level.FINE, "synchronizer.close", e);
         }
-        uninstallStatusLine();
+        modeStatus.removeFrom(editor.getEditorSite());
         modeStatus.dispose();
         cursorStyle.dispose();
         LOG.info("Detached Neovim from editor: " + editor.getTitle());
