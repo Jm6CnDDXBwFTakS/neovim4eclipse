@@ -8,11 +8,7 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.commands.NotHandledException;
-import org.eclipse.jface.bindings.Binding;
-import org.eclipse.jface.bindings.keys.KeySequence;
-import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.IHandlerService;
-import org.eclipse.ui.keys.IBindingService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 
@@ -59,10 +55,7 @@ final class IdeActions {
     /** The id of the command the workbench would run for {@code key} right now, or {@code null}. */
     private static String commandBoundTo(String key) {
         try {
-            IBindingService bindings = PlatformUI.getWorkbench().getService(IBindingService.class);
-            Binding binding = bindings == null ? null : bindings.getPerfectMatch(KeySequence.getInstance(key));
-            return binding == null || binding.getParameterizedCommand() == null
-                    ? null : binding.getParameterizedCommand().getId();
+            return KeyBindings.commandIdFor(key);
         } catch (Exception e) {
             LOG.log(Level.FINE, "Key binding lookup for " + key + " failed", e);
             return null;

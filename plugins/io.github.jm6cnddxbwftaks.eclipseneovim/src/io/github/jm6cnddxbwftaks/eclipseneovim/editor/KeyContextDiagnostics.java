@@ -6,11 +6,7 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.eclipse.jface.bindings.Binding;
-import org.eclipse.jface.bindings.keys.KeySequence;
 import org.eclipse.jface.util.Util;
-import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.keys.IBindingService;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimCtrlKeys;
 
@@ -37,14 +33,7 @@ final class KeyContextDiagnostics {
     static void logResolution(String sequence) {
         String text = Util.isMac() ? "M4+V" : "M1+V";
         try {
-            IBindingService bindings = PlatformUI.getWorkbench().getService(IBindingService.class);
-            if (bindings == null) {
-                LOG.warning("No IBindingService; cannot check the key binding for " + text);
-                return;
-            }
-            Binding winner = bindings.getPerfectMatch(KeySequence.getInstance(text));
-            String commandId = winner == null || winner.getParameterizedCommand() == null
-                    ? null : winner.getParameterizedCommand().getId();
+            String commandId = KeyBindings.commandIdFor(text);
             if (VimCtrlKeys.isCtrlKeyCommand(commandId)) {
                 LOG.info("Ctrl-V (" + text + ") resolves to the Neovim Ctrl-key command "
                         + "(context is active and the binding wins)");
