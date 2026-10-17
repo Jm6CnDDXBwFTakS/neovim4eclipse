@@ -44,6 +44,12 @@ and *then* `<Esc>` is sent. A push replaces only the lines that differ (`LineDif
 undo step when nothing changed and keeps the marks of untouched lines. A few keys (`p P x X s ~ . u <C-r>`) and every `:` command are followed by
 a full re-sync instead of trusting line events alone (`NvimKeys.isBufferMutating`).
 
+Changes **Eclipse makes by itself outside insert mode** (a format, a refactoring, Organize Imports,
+Eclipse's undo, a revert or `:e!`) are pushed too (`BufferSynchronizer.pushLocalChanges`): a document
+listener queues one push on the input thread, coalescing a burst of edits, and ignores the changes the
+plug-in itself applies from Neovim. Without it, Neovim's next edit would be applied at stale line
+numbers. Remote listening is paused during that push, so Neovim's echo cannot undo a newer Eclipse edit.
+
 ### 2. Ordered async input
 
 `VerifyKeyListener` must return quickly. Keys are enqueued on a **single-thread executor** so sequences like `ciw` stay ordered without blocking SWT.

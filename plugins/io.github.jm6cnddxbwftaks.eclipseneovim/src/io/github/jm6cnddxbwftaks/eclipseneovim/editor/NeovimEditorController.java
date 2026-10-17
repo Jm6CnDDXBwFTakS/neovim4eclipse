@@ -101,6 +101,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync = new CaretSync(styledText, session, () -> documentOf(editor),
                 this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
+        this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode());
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution();
         this.cursorStyle = new CursorStyleController(styledText);
@@ -305,18 +306,6 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         keyContext.update();
         return neovimModeActive;
-    }
-
-    /**
-     * Makes Neovim's buffer equal to the document again, keeping the caret. For changes Eclipse
-     * made to the document by itself, such as reverting it ({@code :e!}). UI thread.
-     */
-    void pushDocumentToNeovim() {
-        if (closed || styledText.isDisposed()) {
-            return;
-        }
-        int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), styledText.getCaretOffset());
-        pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
     }
 
     /** A key mapped in Neovim ({@code gd}, {@code gt}, ...) asks Eclipse to act. Session thread. */

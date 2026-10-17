@@ -127,10 +127,10 @@ public final class EclipseFileCommands {
      *   <li>{@code :e!}: reverts the editor to the saved file, discarding changes.</li>
      *   <li>{@code :e}: reloads the saved file, refused (as in Vim, E37) while there are changes.</li>
      * </ul>
-     *
-     * @param afterRevert run after a revert, to give Neovim the reloaded text
+     * A revert reaches Neovim like any other change Eclipse makes (see
+     * {@code BufferSynchronizer.pushLocalChanges}).
      */
-    static void edit(ITextEditor editor, String argument, boolean force, Runnable afterRevert) {
+    static void edit(ITextEditor editor, String argument, boolean force) {
         if (argument.isEmpty()) {
             IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
             if (part.isDirty() && !force) {
@@ -138,7 +138,6 @@ public final class EclipseFileCommands {
                 return;
             }
             editor.doRevertToSaved();
-            afterRevert.run();
             return;
         }
         Path file = findFile(editor, argument);

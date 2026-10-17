@@ -460,7 +460,17 @@ public final class NeovimSession implements AutoCloseable {
 
     /** Runs attach-time setup (document push, initial cursor) on the input thread. */
     public void runAttachSetup(Runnable work) {
-        submit("attach setup", Level.WARNING, work::run);
+        runAsync("attach setup", work);
+    }
+
+    /**
+     * Runs {@code work} on the input thread, after every key and command queued before it. For
+     * blocking calls from editor code, such as pushing the document.
+     *
+     * @param what short description for the log, should {@code work} fail
+     */
+    public void runAsync(String what, Runnable work) {
+        submit(what, Level.WARNING, work::run);
     }
 
     /** Queues one key (Neovim notation) for ordered processing. */

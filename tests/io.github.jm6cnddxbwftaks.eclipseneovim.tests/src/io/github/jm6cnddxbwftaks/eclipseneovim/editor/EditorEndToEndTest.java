@@ -181,6 +181,19 @@ class EditorEndToEndTest {
         page.closeEditor(otherEditor, false);
     }
 
+    /**
+     * A change Eclipse makes by itself in normal mode (here: what a formatter or refactoring would
+     * do) must reach Neovim. Otherwise {@code Gdd} would delete Neovim's stale last line, "gamma",
+     * and its line event would remove "beta" from the document instead.
+     */
+    @Test
+    void eclipsesOwnChangesInNormalModeReachNeovim() throws Exception {
+        document.replace(0, 0, "zeta\n");
+        type(widget, "G");
+        type(widget, "dd");
+        expectText("zeta\nalpha\nbeta\n");
+    }
+
     @Test
     void undoRevertsNeovimsChange() {
         type(widget, "ggdd");

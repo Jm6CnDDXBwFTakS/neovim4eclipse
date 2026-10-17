@@ -30,7 +30,7 @@ By default every letter goes to Neovim **except these three**:
 |-----|--------------------------|-----|---------------------------|
 | `Ctrl+S` | Save | nothing in normal mode | Saving with the usual shortcut matters more than a key Vim does not use. |
 | `Ctrl+W` | Close editor | window commands (`Ctrl+W s`, `Ctrl+W q`, ...) | The embedded Neovim has a single window that Eclipse draws, so splits and window moves have no visible effect, and `Ctrl+W q` would quit the embedded Neovim (a new one starts on the next attach, losing undo history and registers). Closing the editor is the useful action. |
-| `Ctrl+Z` | Undo | suspend Neovim | Suspending makes no sense for an embedded Neovim, and Vim's undo is `u`. Eclipse's undo also undoes Neovim's changes, because they are applied to the Eclipse document. |
+| `Ctrl+Z` | Undo | suspend Neovim | Suspending makes no sense for an embedded Neovim, and Vim's undo is `u`. Eclipse's undo also undoes Neovim's changes, because they are applied to the Eclipse document, and the result is pushed back to Neovim. |
 
 Tick any of them to send it to Neovim instead.
 
