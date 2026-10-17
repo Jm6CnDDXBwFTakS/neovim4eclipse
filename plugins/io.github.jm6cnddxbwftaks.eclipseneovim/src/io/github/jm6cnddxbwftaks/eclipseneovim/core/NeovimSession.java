@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -62,6 +63,10 @@ public final class NeovimSession implements AutoCloseable {
      * request, a keystroke should cost a fraction of a second, not {@value #RPC_TIMEOUT_SEC}s.
      */
     private static final long STATE_TIMEOUT_MS = 750;
+    /** How long a typed {@code :} command may run before its output capture gives up. */
+    private static final long COMMAND_TIMEOUT_SEC = 60;
+    /** How often a running command is checked for a prompt that waits for a key. */
+    private static final long CAPTURE_POLL_MS = 250;
 
     // ---- connection ----
 
@@ -457,16 +462,67 @@ public final class NeovimSession implements AutoCloseable {
 
     /** Runs an ex command, then refreshes buffer, mode and cursor in Eclipse. */
     public void commandAsync(String cmd) {
+        commandAsync(cmd, null);
+    }
+
+    /**
+     * Runs an ex command, then refreshes buffer, mode and cursor in Eclipse, and passes what the
+     * command printed ({@code :echo}, {@code :set ts?}, {@code :!ls}) to {@code onOutput}, on a
+     * session thread. Nothing is passed when it printed nothing, or only an error (the status bar
+     * shows errors).
+     *
+     * <p>The command is typed, not run with {@code nvim_command}: Neovim then records it in a macro
+     * being recorded and knows it for {@code @:} and the history. Its output is collected with
+     * {@code :redir} around the typed command ({@link LuaScripts#START_OUTPUT_CAPTURE}).
+     *
+     * @param onOutput receives the printed text; {@code null} to ignore it
+     */
+    public void commandAsync(String cmd, Consumer<String> onOutput) {
         submit("command " + cmd, Level.WARNING, () -> {
-            // Typed, not nvim_command: Neovim then records it in a macro being recorded, and knows it
-            // for @: and the command history.
-            await(api.input(NvimKeys.exCommand(cmd)));
-            if (isBlocked()) {
-                await(api.input("<Esc>")); // a "press Enter" prompt: dismiss it
+            String output = "";
+            await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
+            try {
+                await(api.input(NvimKeys.exCommand(cmd)));
+                if (isBlocked()) {
+                    await(api.input("<Esc>")); // a "press Enter" prompt: dismiss it
+                }
+            } finally {
+                output = stopOutputCapture();
             }
             syncBufferFromNeovim();
             syncModeAndCursorFromNeovim();
+            if (onOutput != null && !output.isBlank()) {
+                onOutput.accept(output);
+            }
         });
+    }
+
+    /**
+     * Ends the {@code :redir} capture and returns what it collected.
+     *
+     * <p>Neovim answers this request only once the typed command has finished, which can take a
+     * while ({@code :!make}). While waiting, the mode is checked every {@value #CAPTURE_POLL_MS} ms
+     * (Neovim answers that at once): if Neovim is stuck at a prompt, an Esc dismisses it. So the
+     * capture is never left running, and a slow command is waited for up to
+     * {@value #COMMAND_TIMEOUT_SEC} s.
+     */
+    private String stopOutputCapture() throws Exception {
+        CompletableFuture<Object> stop = api.executeLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(COMMAND_TIMEOUT_SEC);
+        while (true) {
+            try {
+                Object raw = stop.get(CAPTURE_POLL_MS, TimeUnit.MILLISECONDS);
+                return raw == null ? "" : String.valueOf(raw);
+            } catch (TimeoutException e) {
+                if (System.nanoTime() > deadline) {
+                    throw e;
+                }
+                if (isBlocked()) {
+                    LOG.fine("command left Neovim at a prompt; sending Esc");
+                    await(api.input("<Esc>"));
+                }
+            }
+        }
     }
 
     /**

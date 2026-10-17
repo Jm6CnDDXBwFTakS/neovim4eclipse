@@ -153,8 +153,10 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 Commands that only display something (`:ls`, `:buffers`, `:jumps`, `:marks`, `:registers`, `:changes`,
 `:messages`, `:pwd`, `:echo`, `:set opt?` ...) show their output in a read-only box in the same place.
 `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys scroll it; any other key or a click closes it.
-These commands are not recorded into a macro (they change nothing). Other commands' output stays hidden;
-only errors appear in the status bar.
+These commands are not recorded into a macro (they change nothing). Any other command is typed into
+Neovim, and whatever it prints (`:!ls`, `:echo` inside a longer command, a `:s` report) is collected with
+`:redir` and shown in the same box. Errors appear in the status bar only. Messages printed later, by a
+timer or an autocmd, are not shown.
 
 ## Macros (`q`)
 

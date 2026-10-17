@@ -183,6 +183,25 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    // ---- command output ----
+
+    @Test
+    void typedCommandsReportWhatTheyPrint() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> outputs = new CopyOnWriteArrayList<>();
+            s.commandAsync("echo 'hello from' 'neovim'", outputs::add);
+            s.commandAsync("set tabstop?", outputs::add);
+            s.commandAsync("nosuchcommand", outputs::add); // an error: shown in the status bar only
+            s.commandAsync("let g:x = 1", outputs::add); // prints nothing
+            s.commandAsync("echo 'done'", outputs::add);
+            waitFor(() -> outputs.contains("done"), "the last command's output");
+            assertEquals(List.of("hello from neovim", "  tabstop=8", "done"), outputs);
+            assertEquals("1", String.valueOf(s.lua("return vim.g.x")));
+            assertEquals("silent echo 'done'", String.valueOf(s.lua("return vim.fn.histget(':', -1)")),
+                    "the command is typed, so it is in the history");
+        }
+    }
+
     // ---- macros ----
 
     private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws Exception {
