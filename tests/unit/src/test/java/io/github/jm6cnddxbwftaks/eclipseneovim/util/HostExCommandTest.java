@@ -48,8 +48,17 @@ class HostExCommandTest {
     }
 
     @Test
+    void writeAllCommands() {
+        for (String c : new String[] { "wa", "wall", ":wa", "  :WA ", "%wa" }) {
+            expect(c, Kind.WRITE_ALL, false);
+        }
+        expect("wa!", Kind.WRITE_ALL, true);
+        expect("wall!", Kind.WRITE_ALL, true);
+    }
+
+    @Test
     void everythingElseGoesToNeovim() {
-        for (String c : new String[] { "%s/a/b/g", "s/a/b/", "set number", "e foo", "wa", "wqa", "xa",
+        for (String c : new String[] { "%s/a/b/g", "s/a/b/", "set number", "e foo", "wa foo", "wqa", "xa", "wal",
                 "w!x", "q foo", "write2", "g/x/d", "", "   ", ":", null }) {
             assertFalse(HostExCommand.parse(c).isHostCommand(), String.valueOf(c));
         }

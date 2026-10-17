@@ -9,7 +9,9 @@ import java.util.logging.Logger;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand;
@@ -42,6 +44,9 @@ public final class EclipseFileCommands {
                 return true;
             case QUIT:
                 runOnUi(() -> close(editor, cmd.force()));
+                return true;
+            case WRITE_ALL:
+                runOnUi(EclipseFileCommands::saveAll);
                 return true;
             case WRITE_QUIT:
                 runOnUi(() -> {
@@ -79,6 +84,22 @@ public final class EclipseFileCommands {
             return !part.isDirty();
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Eclipse save failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * {@code :wa}: saves every modified editor in every workbench window, without asking, as Vim
+     * writes every changed buffer. This is Eclipse's own <em>File &gt; Save All</em>.
+     *
+     * @return {@code true} if nothing is left unsaved (an editor can refuse, e.g. on a write error)
+     */
+    static boolean saveAll() {
+        try {
+            IWorkbench workbench = PlatformUI.getWorkbench();
+            return workbench.saveAllEditors(false); // false: no "Save resources?" confirmation
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Eclipse save all failed", e);
             return false;
         }
     }

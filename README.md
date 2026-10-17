@@ -23,7 +23,7 @@ release process; see [Known limitations](#known-limitations).
 |----------------------------|---------------------------|
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
 | Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode |
-| `:w` `:q` `:wq` `:x` `ZZ` `ZQ` (saves/closes the Eclipse editor) | All other `:` commands, e.g. `:%s/a/b/g` |
+| `:w` `:wa` `:q` `:wq` `:x` `ZZ` `ZQ` (saves/closes the Eclipse editor; `:wa` saves all) | All other `:` commands, e.g. `:%s/a/b/g` |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | Copying yanked text to the OS clipboard (one way; skipped if your config sets `clipboard=unnamedplus`, because Neovim then does it itself) | `p` / `P` / `.` / counts, from Neovim's own registers |
 
@@ -151,7 +151,7 @@ the plugin makes sure everything you do is seen by Neovim as keys:
   macro contains exactly what you typed, including arrow keys and Backspace. Eclipse's content assist and
   IME composition are therefore unavailable *while recording*.
 - **`:` commands and `/` searches** from the command line are typed into Neovim (`:silent <cmd>`), so they are
-  recorded and `@:` works. `:w`, `:q`, `:wq`, `:x` are still handled by Eclipse and are **not** recorded; a
+  recorded and `@:` works. `:w`, `:wa`, `:q`, `:wq`, `:x` are still handled by Eclipse and are **not** recorded; a
   `:w` inside a macro would be run by Neovim and fail, which stops the macro.
 - **Playback** is applied to the editor as one change when the macro finishes, which is much faster than
   replaying each step and avoids half-finished states. Very long macros are given up to 60 seconds.
@@ -227,7 +227,7 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Not handled as host commands:** `:wa`, `:wqa`, `:xa`, `:e`, `:w <otherfile>`.
+3. **Not handled as host commands:** `:wqa`, `:xa`, `:e`. `:w <otherfile>` saves the current editor and ignores the path.
 4. **No clipboard paste from the OS into Neovim**; use Eclipse's paste in insert mode.
 5. **No empty last line without a final newline.** A file that does not end with a line break
    cannot show a trailing empty line (the text would be identical to a file that does). This only
