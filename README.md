@@ -247,3 +247,6 @@ Copyright (c) 2026 Jm6CnDDXBwFTakS.
 
 Licensed under the [Eclipse Public License 2.0](LICENSE), the license of the Eclipse Platform
 itself. Each source file carries a short [SPDX](https://spdx.dev/) header that says the same thing.
+
+See [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md) for the project whose design this one follows and for
+the embedded libraries.
