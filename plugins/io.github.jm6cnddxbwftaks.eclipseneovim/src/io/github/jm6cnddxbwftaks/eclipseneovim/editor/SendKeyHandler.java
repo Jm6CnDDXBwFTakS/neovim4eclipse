@@ -14,7 +14,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimCtrlKeys;
 /**
  * Sends one Vim {@code Ctrl} key (for example {@code <C-v>}) to the attached Neovim.
  *
- * <p>Bound in plugin.xml, in the {@link NeovimEditorController#KEY_CONTEXT_ID} context, to the
+ * <p>Bound in plugin.xml, in the {@link EditorKeyContext#KEY_CONTEXT_ID} context, to the
  * {@code Ctrl} keys that Eclipse would otherwise handle itself before the editor sees them (the
  * workbench dispatches key bindings ahead of the widget's key listeners). There is one command per
  * key, and the key is derived from the command id ({@link VimCtrlKeys#keyFor}); command parameters

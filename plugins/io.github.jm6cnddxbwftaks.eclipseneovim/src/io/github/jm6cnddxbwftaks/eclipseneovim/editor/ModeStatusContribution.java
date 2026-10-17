@@ -4,8 +4,11 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.jface.action.ContributionItem;
+import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.jface.action.StatusLineLayoutData;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
@@ -13,6 +16,7 @@ import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.ui.IEditorSite;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
@@ -27,11 +31,13 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
  * each editor reaches through its site ({@code getEditorSite().getActionBars()}). Anything shown
  * there is a {@link ContributionItem}: the manager calls {@link #fill(Composite)} to let the item
  * create its widgets, and calls it again when the status line is rebuilt. The controller adds this
- * item on attach and removes it on detach.
+ * item on attach ({@link #addTo}) and removes it on detach ({@link #removeFrom}).
  */
 public final class ModeStatusContribution extends ContributionItem {
 
     public static final String ID = "io.github.jm6cnddxbwftaks.eclipseneovim.modeStatus";
+
+    private static final Logger LOG = Logger.getLogger(ModeStatusContribution.class.getName());
 
     private CLabel label;
     private String modeText = "-- NORMAL --";
@@ -43,6 +49,41 @@ public final class ModeStatusContribution extends ContributionItem {
 
     public ModeStatusContribution() {
         super(ID);
+    }
+
+    /**
+     * Adds this item to the status line of the editor's window, unless an item with the same id is
+     * already there (another editor of this plug-in put it there and has not removed it yet).
+     *
+     * @param site the editor's site; {@code null} (an editor that is not fully created) does nothing
+     */
+    public void addTo(IEditorSite site) {
+        try {
+            if (site == null) {
+                return;
+            }
+            IStatusLineManager manager = site.getActionBars().getStatusLineManager();
+            if (manager.find(ID) == null) {
+                manager.add(this);
+                manager.update(true);
+            }
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Could not install mode status line", e);
+        }
+    }
+
+    /** Removes the item with this id from the status line of the editor's window. */
+    public void removeFrom(IEditorSite site) {
+        try {
+            if (site == null) {
+                return;
+            }
+            IStatusLineManager manager = site.getActionBars().getStatusLineManager();
+            manager.remove(ID);
+            manager.update(true);
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Could not remove mode status line", e);
+        }
     }
 
     @Override
