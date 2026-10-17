@@ -271,7 +271,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 |---------|-------|-------|
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
-| `:w/:q/:wq` classification | `util/HostExCommand` | `HostExCommandTest` |
+| `:w/:wa/:q/:wq` classification | `util/HostExCommand` | `HostExCommandTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |

@@ -13,8 +13,11 @@ import java.util.Set;
  * (E382). File operations are therefore mapped onto Eclipse save/close. Everything else
  * (e.g. {@code :%s/a/b/g}) is left to Neovim.
  *
- * <p>Not handled (goes to Neovim, and will fail or do nothing useful): {@code :wa}, {@code :wqa},
- * {@code :xa}, {@code :e}, {@code :w otherfile} (the path is ignored and the current editor is saved).
+ * <p>Examples: {@code :w} saves the editor, {@code :wa} saves every modified editor in the workbench
+ * (Eclipse's <em>File &gt; Save All</em>), {@code :wq} saves and closes the editor.
+ *
+ * <p>Not handled (goes to Neovim, and will fail or do nothing useful): {@code :wqa}, {@code :xa},
+ * {@code :e}. {@code :w otherfile} is handled, but the path is ignored and the current editor is saved.
  */
 public record HostExCommand(Kind kind, boolean force) {
 
@@ -26,13 +29,17 @@ public record HostExCommand(Kind kind, boolean force) {
         /** {@code :q}, {@code :quit}, {@code :qa}. */
         QUIT,
         /** {@code :wq}, {@code :x}, {@code :exit}. */
-        WRITE_QUIT
+        WRITE_QUIT,
+        /** {@code :wa}, {@code :wall}: save every modified editor. */
+        WRITE_ALL
     }
 
     private static final HostExCommand NOT_HOST = new HostExCommand(Kind.NONE, false);
 
     private static final Set<String> WRITE = Set.of("w", "w!", "write", "write!", "update", "update!", "up", "up!");
     private static final Set<String> QUIT = Set.of("q", "q!", "quit", "quit!", "qa", "qa!", "quita", "quita!");
+    /** {@code !} changes nothing: Eclipse has no read-only buffers for it to override. */
+    private static final Set<String> WRITE_ALL = Set.of("wa", "wa!", "wall", "wall!");
     private static final Set<String> WRITE_QUIT = Set.of("wq", "wq!", "x", "x!", "exit", "exit!", "xi", "xit", "xit!");
 
     /** @return {@code true} if Eclipse should handle the command instead of Neovim */
@@ -60,6 +67,9 @@ public record HostExCommand(Kind kind, boolean force) {
 
         if (WRITE.contains(head)) {
             return new HostExCommand(Kind.WRITE, force);
+        }
+        if (WRITE_ALL.contains(head) && !hasArgument) {
+            return new HostExCommand(Kind.WRITE_ALL, force);
         }
         if (WRITE_QUIT.contains(head)) {
             return new HostExCommand(Kind.WRITE_QUIT, force);
