@@ -27,7 +27,8 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.release>21</maven.compiler.release>
+    <!-- Same Java release as the plug-in (root pom.xml). -->
+    <maven.compiler.release>${java.release}</maven.compiler.release>
   </properties>
 
   <dependencies>
@@ -84,7 +85,6 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
-        <version>3.6.0</version>
         <executions>
           <execution>
             <id>add-plugin-sources</id>
@@ -103,9 +103,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
         <configuration>
-          <release>21</release>
           <includes>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/util/**</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/core/**</include>
@@ -115,7 +113,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.2</version>
         <configuration>
           <excludedGroups>integration</excludedGroups>
           <systemPropertyVariables>
