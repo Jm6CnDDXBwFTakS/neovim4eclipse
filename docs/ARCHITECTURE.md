@@ -279,6 +279,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Mode strings | `util/VimModes` | `VimModesTest` |
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand`, `editor/HostCommands` | `HostExCommandTest`, UI `HostCommandsTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
+| `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |

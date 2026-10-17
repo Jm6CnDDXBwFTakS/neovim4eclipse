@@ -122,6 +122,7 @@ public final class NeovimSession implements AutoCloseable {
     private final ListenerList<BufferChange> bufferChangeListeners = new ListenerList<>("buffer change", Level.WARNING);
     private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
+    private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
 
     /** Single thread that performs all blocking RPC, preserving key order. */
     private final InputThread inputThread = new InputThread();
@@ -346,6 +347,15 @@ public final class NeovimSession implements AutoCloseable {
 
     public void removeSelectionListener(Consumer<VisualSelection> listener) {
         selectionListeners.remove(listener);
+    }
+
+    /** Notified (on an RPC thread) when a key mapped in Neovim asks the IDE to act; see {@link IdeAction}. */
+    public void addIdeActionListener(Consumer<IdeAction> listener) {
+        ideActionListeners.add(listener);
+    }
+
+    public void removeIdeActionListener(Consumer<IdeAction> listener) {
+        ideActionListeners.remove(listener);
     }
 
     // ---- per-document buffers (see DocumentBuffers) ----
@@ -774,6 +784,12 @@ public final class NeovimSession implements AutoCloseable {
             if (!nvimManagesClipboard) {
                 clipboard.copyToSystem(lines, linewise);
             }
+        }
+
+        @Override
+        public void onIdeAction(IdeAction action) {
+            LOG.fine(() -> "IDE action " + action);
+            ideActionListeners.fire(action);
         }
     }
 

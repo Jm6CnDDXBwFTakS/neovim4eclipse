@@ -25,6 +25,8 @@ final class LuaScripts {
      *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number),
      *       {@code eclipse_buf_enter} and {@code eclipse_yank} notifications handled by
      *       {@link NotificationBridge}.</li>
+     *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
+     *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
      * </ul>
      */
     static final String SETUP = """
@@ -79,6 +81,20 @@ final class LuaScripts {
                 end
               end
             })
+            -- Keys only the IDE can carry out (see IdeAction). This runs after the user's init.lua,
+            -- so it wins over their own mappings of these keys; `vim.g.eclipse_ide_keys = 0` in
+            -- init.lua keeps Neovim's meaning instead. vim.v.count is the count typed before the key.
+            if vim.g.eclipse_ide_keys ~= 0 then
+              local function ide(action, key, desc)
+                vim.keymap.set('n', key, function()
+                  vim.rpcnotify(0, 'eclipse_action', action, vim.v.count)
+                end, { desc = 'Eclipse: ' .. desc })
+              end
+              ide('definition', 'gd', 'Open Declaration')
+              ide('hover', 'K', 'Show Tooltip Description')
+              ide('next_tab', 'gt', 'next editor tab')
+              ide('previous_tab', 'gT', 'previous editor tab')
+            end
             """;
 
     /**

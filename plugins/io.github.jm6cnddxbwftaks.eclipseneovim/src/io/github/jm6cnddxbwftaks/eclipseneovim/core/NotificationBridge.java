@@ -51,6 +51,9 @@ public final class NotificationBridge {
 
         /** @param linewise {@code true} when the register type is {@code V} */
         void onYank(List<String> lines, boolean linewise);
+
+        /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
+        void onIdeAction(IdeAction action);
     }
 
     private final Sink sink;
@@ -95,6 +98,16 @@ public final class NotificationBridge {
         if (args != null && !args.isEmpty() && args.get(0) != null) {
             boolean linewise = args.size() >= 2 && "V".equals(String.valueOf(args.get(1)));
             sink.onYank(toStringList(args.get(0)), linewise);
+        }
+    }
+
+    /** Payload: {@code [name, count]} (see {@link IdeAction}). */
+    @NeovimNotificationHandler("eclipse_action")
+    public void onAction(NotificationMessage message) {
+        List<?> args = message.getArguments();
+        if (args != null && !args.isEmpty() && args.get(0) != null) {
+            Integer count = args.size() >= 2 ? toInt(args.get(1)) : null;
+            sink.onIdeAction(new IdeAction(String.valueOf(args.get(0)), count == null ? 0 : Math.max(0, count)));
         }
     }
 

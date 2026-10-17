@@ -15,6 +15,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Keys typed within milliseconds of entering insert mode, before Eclipse has Neovim's text | Neovim, for the rest of that insert, so nothing is lost |
 | `:`, `/`, `?` in normal mode | the plug-in's command box at the bottom of the editor |
 | `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
+| `gd`, `K`, `gt`, `gT` in normal mode | Neovim first, which hands them to Eclipse (below) |
 | Eclipse mode (the *NVIM* toolbar button) | Eclipse, always |
 
 ## `Ctrl` keys
@@ -54,9 +55,30 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,
   arrows, `Home`, `End`, unbound function keys as `<F5>` and so on.
 
+## Keys Neovim hands to Eclipse: `gd`, `K`, `gt`, `gT`
+
+Some normal-mode keys mean something only the IDE can do. The plug-in maps them in Neovim to a small
+Lua function that sends an `eclipse_action` notification back to Eclipse (`core/IdeAction`), so Neovim
+still handles counts and the `g` prefix:
+
+| Key | Eclipse runs |
+|-----|--------------|
+| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor), else Open Hyperlink |
+| `K` | Show Tooltip Description (`F2`): the hover information |
+| `gt`, `{N}gt` | next editor tab, or tab N |
+| `gT`, `{N}gT` | previous editor tab, or N tabs back |
+
+These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys.
+To keep Neovim's meaning instead, put this in `init.lua`:
+
+```lua
+vim.g.eclipse_ide_keys = 0
+```
+
 ## Where this lives in the code
 
 - `util/VimCtrlKeys`: the letters, their defaults (`ECLIPSE_BY_DEFAULT`), and what each does in Vim.
 - `prefs/CtrlKeysPreferencePage`: the check boxes.
+- `core/LuaScripts` (`SETUP`) and `editor/IdeActions`: the keys handed to Eclipse.
 - `editor/VimKeyContexts`: activates the contexts of the letters sent to Neovim.
 - `editor/KeyInterceptor`: routes every other key.
