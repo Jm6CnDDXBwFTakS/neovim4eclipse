@@ -3,8 +3,10 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.util;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -64,21 +66,14 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
 
     private static final HostExCommand NOT_HOST = new HostExCommand(Kind.NONE, false, "");
 
-    // Each command can be shortened down to the part Vim's documentation shows outside brackets:
-    // ":wa[ll]" is written abbrev("wa", "wall").
-    private static final Set<String> WRITE = names(abbrev("w", "write"), abbrev("up", "update"));
-    private static final Set<String> WRITE_ALL = abbrev("wa", "wall");
-    private static final Set<String> QUIT = abbrev("q", "quit");
-    private static final Set<String> QUIT_ALL = names(abbrev("qa", "qall"), abbrev("quita", "quitall"));
-    private static final Set<String> WRITE_QUIT = names(Set.of("wq"), abbrev("x", "xit"), abbrev("exi", "exit"));
-    private static final Set<String> WRITE_QUIT_ALL = names(abbrev("wqa", "wqall"), abbrev("xa", "xall"));
-    private static final Set<String> EDIT = abbrev("e", "edit");
-    private static final Set<String> TAB_NEXT = abbrev("tabn", "tabnext");
-    private static final Set<String> TAB_PREVIOUS = abbrev("tabp", "tabprevious");
+    /**
+     * Every name Eclipse handles, lowercase, with its kind. Each command can be shortened down to
+     * the part Vim's documentation shows outside brackets: ":wa[ll]" is {@code abbrev("wa", "wall")}.
+     * Building the map fails on a name listed twice, so overlapping abbreviations cannot slip in.
+     */
+    private static final Map<String, Kind> KINDS = buildKinds();
     /** {@code :tabN[ext]}: matched before lowercasing, because {@code :tabn} means the opposite. */
     private static final Set<String> TAB_PREVIOUS_CAPITAL_N = abbrev("tabN", "tabNext");
-    private static final Set<String> TAB_FIRST = names(abbrev("tabfir", "tabfirst"), abbrev("tabr", "tabrewind"));
-    private static final Set<String> TAB_LAST = abbrev("tabl", "tablast");
 
     public HostExCommand {
         argument = argument == null ? "" : argument;
@@ -117,48 +112,12 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
         if (name.isEmpty()) {
             return NOT_HOST;
         }
-        Kind kind = TAB_PREVIOUS_CAPITAL_N.contains(name) ? Kind.TAB_PREVIOUS : kindOf(name.toLowerCase(Locale.ROOT));
+        Kind kind = TAB_PREVIOUS_CAPITAL_N.contains(name) ? Kind.TAB_PREVIOUS
+                : KINDS.getOrDefault(name.toLowerCase(Locale.ROOT), Kind.NONE);
         if (!acceptsArgument(kind, argument)) {
             return NOT_HOST;
         }
         return kind == Kind.NONE ? NOT_HOST : new HostExCommand(kind, force, argument);
-    }
-
-    private static Kind kindOf(String name) {
-        if (WRITE.contains(name)) {
-            return Kind.WRITE;
-        }
-        if (WRITE_ALL.contains(name)) {
-            return Kind.WRITE_ALL;
-        }
-        if (QUIT.contains(name)) {
-            return Kind.QUIT;
-        }
-        if (QUIT_ALL.contains(name)) {
-            return Kind.QUIT_ALL;
-        }
-        if (WRITE_QUIT.contains(name)) {
-            return Kind.WRITE_QUIT;
-        }
-        if (WRITE_QUIT_ALL.contains(name)) {
-            return Kind.WRITE_QUIT_ALL;
-        }
-        if (EDIT.contains(name)) {
-            return Kind.EDIT;
-        }
-        if (TAB_NEXT.contains(name)) {
-            return Kind.TAB_NEXT;
-        }
-        if (TAB_PREVIOUS.contains(name)) {
-            return Kind.TAB_PREVIOUS;
-        }
-        if (TAB_FIRST.contains(name)) {
-            return Kind.TAB_FIRST;
-        }
-        if (TAB_LAST.contains(name)) {
-            return Kind.TAB_LAST;
-        }
-        return Kind.NONE;
     }
 
     /**
@@ -213,12 +172,31 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
         return Set.copyOf(names);
     }
 
+    private static Map<String, Kind> buildKinds() {
+        Map<String, Kind> kinds = new HashMap<>();
+        add(kinds, Kind.WRITE, abbrev("w", "write"), abbrev("up", "update"));
+        add(kinds, Kind.WRITE_ALL, abbrev("wa", "wall"));
+        add(kinds, Kind.QUIT, abbrev("q", "quit"));
+        add(kinds, Kind.QUIT_ALL, abbrev("qa", "qall"), abbrev("quita", "quitall"));
+        add(kinds, Kind.WRITE_QUIT, Set.of("wq"), abbrev("x", "xit"), abbrev("exi", "exit"));
+        add(kinds, Kind.WRITE_QUIT_ALL, abbrev("wqa", "wqall"), abbrev("xa", "xall"));
+        add(kinds, Kind.EDIT, abbrev("e", "edit"));
+        add(kinds, Kind.TAB_NEXT, abbrev("tabn", "tabnext"));
+        add(kinds, Kind.TAB_PREVIOUS, abbrev("tabp", "tabprevious"));
+        add(kinds, Kind.TAB_FIRST, abbrev("tabfir", "tabfirst"), abbrev("tabr", "tabrewind"));
+        add(kinds, Kind.TAB_LAST, abbrev("tabl", "tablast"));
+        return Map.copyOf(kinds);
+    }
+
     @SafeVarargs
-    private static Set<String> names(Set<String>... sets) {
-        Set<String> all = new HashSet<>();
-        for (Set<String> set : sets) {
-            all.addAll(set);
+    private static void add(Map<String, Kind> kinds, Kind kind, Set<String>... nameSets) {
+        for (Set<String> names : nameSets) {
+            for (String name : names) {
+                Kind previous = kinds.put(name, kind);
+                if (previous != null) {
+                    throw new IllegalStateException(":" + name + " is both " + previous + " and " + kind);
+                }
+            }
         }
-        return Set.copyOf(all);
     }
 }
