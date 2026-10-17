@@ -529,9 +529,14 @@ public final class NeovimSession implements AutoCloseable {
      *
      * <p>Neovim answers this request only once the typed command has finished, which can take a
      * while ({@code :!make}). While waiting, the mode is checked every {@value #CAPTURE_POLL_MS} ms
-     * (Neovim answers that at once): if Neovim is stuck at a prompt, an Esc dismisses it. So the
-     * capture is never left running, and a slow command is waited for up to
-     * {@value #COMMAND_TIMEOUT_SEC} s.
+     * (Neovim answers that at once): if Neovim is stuck at a prompt, an Esc dismisses it.
+     *
+     * <p>A command still running after {@value #COMMAND_TIMEOUT_SEC} s is not waited for any longer:
+     * its output is dropped and the editor is refreshed. The request stays queued in Neovim, which
+     * handles requests in order, so {@code redir END} still runs when the command finishes, before
+     * any later capture starts; the redirection is never left on.
+     *
+     * @return the collected text, or "" when the command did not finish in time
      */
     private String stopOutputCapture() throws Exception {
         CompletableFuture<Object> stop = api.executeLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
@@ -542,7 +547,9 @@ public final class NeovimSession implements AutoCloseable {
                 return raw == null ? "" : String.valueOf(raw);
             } catch (TimeoutException e) {
                 if (System.nanoTime() > deadline) {
-                    throw e;
+                    LOG.warning("':' command still running after " + COMMAND_TIMEOUT_SEC
+                            + " s; its output is not shown");
+                    return "";
                 }
                 if (isBlocked()) {
                     LOG.fine("command left Neovim at a prompt; sending Esc");
