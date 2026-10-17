@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# Dependabot opens pull requests when a newer version of something pinned here is released.
+# GitHub reads this file from the default branch (main) only.
+#
+# What it covers:
+#   - maven: the <properties> in the root pom.xml (libraries, Tycho, Maven plug-ins, JUnit).
+#   - github-actions: the uses: lines in .github/workflows/.
+# What it does not cover (update by hand, see docs/UPGRADING.md): the JDK (.java-version), the
+# Eclipse release (eclipse-repo.url, a p2 site Dependabot cannot read), Neovim (NVIM_VERSION) and
+# the Maven wrapper.
+#
+# Each pull request still runs the Build workflow, so a broken update shows up as a red check.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request for all the Maven build plug-ins and Tycho, which usually move together.
+      build-tools:
+        patterns:
+          - "org.apache.maven.plugins:*"
+          - "org.codehaus.mojo:*"
+          - "org.eclipse.tycho:*"
+    ignore:
+      # Major versions of the embedded libraries change APIs (SLF4J 2 changed how bindings are
+      # found, for example) and need a deliberate upgrade; see docs/UPGRADING.md.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
