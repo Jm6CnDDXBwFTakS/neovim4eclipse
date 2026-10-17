@@ -24,7 +24,8 @@ release process; see [Known limitations](#known-limitations).
 |----------------------------|---------------------------|
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
 | Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode |
-| File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:e file`, `:e!`, `:tabn` `:tabp` | All other `:` commands, e.g. `:%s/a/b/g` |
+| File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:e file`, `:e!`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
+| `gd` (Open Declaration) and `K` (hover information), through the editor's own commands | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | Copying yanked text to the OS clipboard (one way; skipped if your config sets `clipboard=unnamedplus`, because Neovim then does it itself) | `p` / `P` / `.` / counts, from Neovim's own registers |
 

@@ -183,7 +183,37 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    // ---- command output ----
+    // ---- keys handed to the IDE, command output ----
+
+    @Test
+    void ideKeysAreHandedToTheIdeWithTheirCount() throws Exception {
+        try (NeovimSession s = start()) {
+            List<IdeAction> actions = new CopyOnWriteArrayList<>();
+            s.addIdeActionListener(actions::add);
+            s.setBufferLines(List.of("a", "b"));
+            keys(s, "g", "t");
+            keys(s, "3", "g", "T");
+            keys(s, "g", "d");
+            keys(s, "K");
+            waitFor(() -> actions.size() == 4, "four IDE actions");
+            assertEquals(List.of(new IdeAction(IdeAction.NEXT_TAB, 0), new IdeAction(IdeAction.PREVIOUS_TAB, 3),
+                    new IdeAction(IdeAction.DEFINITION, 0), new IdeAction(IdeAction.HOVER, 0)), actions);
+            keys(s, "g", "g", "j", "d", "d"); // the g prefix still works for Neovim's own commands
+            assertEquals(List.of("a"), s.getBufferLines());
+        }
+    }
+
+    @Test
+    void ideKeysCanBeLeftToNeovim() throws Exception {
+        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:eclipse_ide_keys = 0"))) {
+            List<IdeAction> actions = new CopyOnWriteArrayList<>();
+            s.addIdeActionListener(actions::add);
+            keys(s, "g", "t"); // Neovim's own gt: there is only one tab page, so nothing happens
+            s.getBufferLines(); // a round trip: any notification sent before it has arrived
+            assertTrue(actions.isEmpty(), "no IDE action expected: " + actions);
+        }
+    }
 
     @Test
     void typedCommandsReportWhatTheyPrint() throws Exception {

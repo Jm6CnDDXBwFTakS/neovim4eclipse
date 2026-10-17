@@ -19,6 +19,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.IdeAction;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
@@ -86,6 +87,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<VisualSelection> selectionListener = this::onVisualSelection;
     private final Consumer<String> recordingListener = this::onRecordingChanged;
     private final Consumer<StatusInfo> statusListener = this::onStatusChanged;
+    private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
             DocumentBuffer buffer, boolean takeNeovimCursor) {
@@ -132,6 +134,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addSelectionListener(selectionListener);
         session.addRecordingListener(recordingListener);
         session.addStatusListener(statusListener);
+        session.addIdeActionListener(ideActionListener);
 
         modeStatus.addTo(editor.getEditorSite());
 
@@ -316,6 +319,18 @@ public final class NeovimEditorController implements AutoCloseable {
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
     }
 
+    /** A key mapped in Neovim ({@code gd}, {@code gt}, ...) asks Eclipse to act. Session thread. */
+    private void onIdeAction(IdeAction action) {
+        if (closed || !neovimModeActive) {
+            return;
+        }
+        HostCommands.runOnUi(() -> {
+            if (!closed && !styledText.isDisposed()) {
+                IdeActions.run(action, editor);
+            }
+        });
+    }
+
     /** Command, message or statusline text changed: show it in the status bar item. */
     private void onStatusChanged(StatusInfo info) {
         modeStatus.setStatusInfo(info);
@@ -425,6 +440,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeSelectionListener(selectionListener);
             session.removeRecordingListener(recordingListener);
             session.removeStatusListener(statusListener);
+            session.removeIdeActionListener(ideActionListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }

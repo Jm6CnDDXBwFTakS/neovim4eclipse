@@ -37,11 +37,22 @@ class NotificationBridgeTest {
             @Override public void onYank(List<String> lines, boolean linewise) {
                 events.add("yank:" + lines + (linewise ? ":line" : ":char"));
             }
+            @Override public void onIdeAction(IdeAction action) {
+                events.add("action:" + action.name() + ":" + action.count());
+            }
         });
     }
 
     private static NotificationMessage msg(String name, Object... args) {
         return new NotificationMessage(name, new ArrayList<>(Arrays.asList(args)));
+    }
+
+    @Test
+    void ideActionCarriesNameAndCount() {
+        bridge.onAction(msg("eclipse_action", "next_tab", 3));
+        bridge.onAction(msg("eclipse_action", "definition"));
+        bridge.onAction(msg("eclipse_action"));
+        assertEquals(List.of("action:next_tab:3", "action:definition:0"), events);
     }
 
     @Test

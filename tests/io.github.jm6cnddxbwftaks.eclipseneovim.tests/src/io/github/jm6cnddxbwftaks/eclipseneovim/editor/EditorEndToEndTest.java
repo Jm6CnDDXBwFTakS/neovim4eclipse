@@ -162,6 +162,25 @@ class EditorEndToEndTest {
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
     }
 
+    /** {@code gt} is mapped in Neovim to an IDE action: the whole chain from key to tab switch. */
+    @Test
+    void gtSwitchesToTheNextEditorTab() throws Exception {
+        IFile other = project.getFile("other.txt");
+        other.create(new ByteArrayInputStream("other\n".getBytes(StandardCharsets.UTF_8)), true, null);
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor otherEditor = (ITextEditor) IDE.openEditor(page, other, "org.eclipse.ui.DefaultTextEditor", true);
+        StyledText otherWidget = (StyledText) otherEditor.getAdapter(Control.class);
+        waitUntil("Neovim to attach to other.txt", TIMEOUT_MS, () -> {
+            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
+            return c != null && c.getEditor() == otherEditor;
+        });
+        UiTestSupport.spin(300);
+
+        type(otherWidget, "gt");
+        waitUntil("the other tab to be active", TIMEOUT_MS, () -> page.getActiveEditor() != otherEditor);
+        page.closeEditor(otherEditor, false);
+    }
+
     @Test
     void undoRevertsNeovimsChange() {
         type(widget, "ggdd");
