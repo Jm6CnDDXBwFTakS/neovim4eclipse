@@ -35,7 +35,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach

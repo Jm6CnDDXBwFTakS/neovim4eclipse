@@ -19,8 +19,14 @@
  *         <li>{@code KeyInput}: what happens when a key is sent (pending commands, insert replay,
  *             macros, host {@code :} commands);</li>
  *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, and which is attached;</li>
- *         <li>{@code StateSnapshot}: reading the per-key state answer.</li>
+ *         <li>{@code StateSnapshot}: reading the per-key state answer;</li>
+ *         <li>{@code StatusTracker}: status bar parts (showcmd, message, statusline) and macro
+ *             recording, fired to listeners only when they change;</li>
+ *         <li>{@code InputThread}: the single thread for all blocking RPC, which keeps keys in order;</li>
+ *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call.</li>
  *       </ul></li>
+ *   <li>Value types passed to listeners: {@code CursorPos}, {@code VisualSelection},
+ *       {@code BufferChange}; and {@code DocumentBuffer}, the handle of one document's buffer.</li>
  *   <li>{@code LuaScripts}: every Lua chunk run inside Neovim, with comments.</li>
  *   <li>{@code NotificationBridge}: decodes the msgpack-rpc notifications Neovim sends (buffer line
  *       events and the plug-in's own {@code eclipse_*} events).</li>

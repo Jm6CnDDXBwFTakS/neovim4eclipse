@@ -7,16 +7,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.ensarsarajcic.neovim.java.api.NeovimApi;
 import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
@@ -38,7 +33,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
  * <h2>Threading (important)</h2>
  * <ul>
  *   <li>Every blocking RPC ({@code await}) must run on the single <em>input thread</em>
- *       ({@link #inputExecutor}), never on the SWT UI thread: a stalled call would freeze the IDE.
+ *       ({@link InputThread}), never on the SWT UI thread: a stalled call would freeze the IDE.
  *       The {@code *Async} methods queue work onto that thread, which also keeps multi-key
  *       sequences such as {@code ciw} in order.</li>
  *   <li>Listener callbacks run on the input thread or an RPC thread; listeners must hop to the UI
@@ -60,9 +55,6 @@ public final class NeovimSession implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
-    /** A Vim error message ({@code E94: No matching buffer}) inside a longer RPC error text. */
-    private static final Pattern VIM_ERROR = Pattern.compile("E\\d+: .*");
-
     /** Upper bound for any single RPC round trip. */
     private static final long RPC_TIMEOUT_SEC = Rpc.TIMEOUT_SEC;
     /**
@@ -70,95 +62,6 @@ public final class NeovimSession implements AutoCloseable {
      * request, a keystroke should cost a fraction of a second, not {@value #RPC_TIMEOUT_SEC}s.
      */
     private static final long STATE_TIMEOUT_MS = 750;
-    // ---- value types ----
-
-    /** Cursor: 1-based line, 0-based column. The column is a UTF-8 <em>byte</em> offset (Neovim convention). */
-    public record CursorPos(int line1Based, int col0Based) {
-    }
-
-    /**
-     * Visual selection in Neovim coordinates: 1-based lines, 0-based <em>byte</em> columns
-     * (convert with {@code Utf8Columns} before using them with Eclipse offsets).
-     * {@code active == false} means "clear the Eclipse selection". {@code toEndOfLine} and
-     * {@code tabstop} matter for blockwise selections only (see {@code BlockSelection}).
-     */
-    public record VisualSelection(
-            boolean active,
-            String mode,
-            int startLine1Based,
-            int startCol0Based,
-            int endLine1Based,
-            int endCol0Based,
-            boolean toEndOfLine,
-            int tabstop) {
-
-        /** Selection without block extras ({@code $} not active, tab width 8). */
-        public VisualSelection(boolean active, String mode, int startLine1Based, int startCol0Based,
-                int endLine1Based, int endCol0Based) {
-            this(active, mode, startLine1Based, startCol0Based, endLine1Based, endCol0Based, false, 8);
-        }
-
-        public static VisualSelection none() {
-            return new VisualSelection(false, "", 1, 0, 1, 0);
-        }
-
-        /** Linewise visual ({@code V}). */
-        public boolean isLineWise() {
-            return mode != null && mode.startsWith("V");
-        }
-
-        /** Blockwise visual ({@code Ctrl-V}). */
-        public boolean isBlockWise() {
-            return VimModes.isBlockVisual(mode);
-        }
-    }
-
-    /**
-     * A change to the Neovim buffer: lines {@code [firstLine, lastLine)} (0-based, exclusive end)
-     * are replaced by {@code newLines}. {@code lastLine == -1} means "the whole buffer is
-     * {@code newLines}" (used for full re-syncs).
-     *
-     * @param afterApply run by the listener that applies the change to the Eclipse document, on the
-     *                   UI thread, right after applying it; {@code null} for none
-     */
-    public record BufferChange(int firstLine, int lastLine, List<String> newLines, Runnable afterApply) {
-
-        public BufferChange(int firstLine, int lastLine, List<String> newLines) {
-            this(firstLine, lastLine, newLines, null);
-        }
-    }
-
-    /**
-     * The Neovim buffer that mirrors one Eclipse document, so that each file keeps its own undo
-     * history and marks. Created on first {@link #showBuffer}; belongs to that session only (a
-     * restarted Neovim creates a new one). Discard it with {@link #closeBufferAsync}.
-     */
-    public static final class DocumentBuffer {
-        final String name;
-        /** The registry that created the buffer; {@code null} before first use and after wiping. */
-        volatile DocumentBuffers owner;
-        volatile int bufnr = NotificationBridge.UNKNOWN_BUFFER;
-
-        /** @param name buffer name shown by {@code :ls} and {@code %f}, normally the file path; may be empty */
-        public DocumentBuffer(String name) {
-            this.name = name == null ? "" : name;
-        }
-
-        /** Neovim's buffer number, or {@link NotificationBridge#UNKNOWN_BUFFER} before first use. */
-        public int bufnr() {
-            return bufnr;
-        }
-
-        /** Whether the buffer exists in {@code session} (not yet created, or from a restarted Neovim, if not). */
-        public boolean isOpenIn(NeovimSession session) {
-            return session.buffers.owns(this);
-        }
-    }
-
-    @FunctionalInterface
-    private interface ThrowingRunnable {
-        void run() throws Exception;
-    }
 
     // ---- connection ----
 
@@ -172,6 +75,8 @@ public final class NeovimSession implements AutoCloseable {
 
     /** The key-input pipeline. */
     private final KeyInput keyInput;
+    /** Status bar parts and macro recording, published to listeners. */
+    private final StatusTracker status = new StatusTracker();
 
     /** One Neovim buffer per Eclipse document, and which one is attached. */
     private final DocumentBuffers buffers;
@@ -196,21 +101,12 @@ public final class NeovimSession implements AutoCloseable {
     private volatile boolean suppressBufferEvents;
     /** See {@link #isEclipseTypingReady()}. Set on the UI thread, cleared on any thread. */
     private volatile boolean eclipseTypingReady;
-    /** Register of the macro being recorded ({@code qa} ... {@code q}), or "" if none. */
-    private volatile String recordingRegister = "";
     /**
      * True while Neovim waits for one more character after {@code f}, {@code r}, {@code @}, {@code q}
      * ... (as of the last {@code nvim_get_mode}). The key listener then forwards a typed {@code :},
      * {@code /} or {@code ?} to Neovim as the argument instead of opening a prompt.
      */
     private volatile boolean waitingForArgument;
-    /** Which optional status bar parts to ask Neovim for (see {@link #setStatusItems}). */
-    private volatile Set<StatusItem> statusItems = StatusItem.defaults();
-    /** The message shown in the status bar: kept until the next key is processed. */
-    private volatile String currentMessage = "";
-    /** Last {@code showcmd} text read from Neovim (extended by keys that leave Neovim waiting). */
-    private volatile String lastShowcmd = "";
-    private volatile StatusInfo lastStatus = StatusInfo.EMPTY;
 
     /** Asked before a {@code :} command line is executed on Enter (used for host-side {@code :w}/{@code :q}). */
     private volatile Predicate<String> hostExHandler;
@@ -221,15 +117,9 @@ public final class NeovimSession implements AutoCloseable {
     private final ListenerList<BufferChange> bufferChangeListeners = new ListenerList<>("buffer change", Level.WARNING);
     private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
-    private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
-    private final ListenerList<StatusInfo> statusListeners = new ListenerList<>("status", Level.FINE);
 
     /** Single thread that performs all blocking RPC, preserving key order. */
-    private final ExecutorService inputExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "eclipse-neovim-input");
-        t.setDaemon(true);
-        return t;
-    });
+    private final InputThread inputThread = new InputThread();
 
     private NeovimSession(NeovimConnection connection, NeovimBufferApi homeBuffer, ClipboardPort clipboard) {
         this.connection = connection;
@@ -318,7 +208,7 @@ public final class NeovimSession implements AutoCloseable {
         closed = true;
 
         connection.requestQuit();
-        inputExecutor.shutdownNow();
+        inputThread.shutdown();
         connection.close();
         LOG.info("NeovimSession closed");
     }
@@ -377,11 +267,11 @@ public final class NeovimSession implements AutoCloseable {
 
     /** Register being recorded into, or "" when not recording. */
     public String getRecordingRegister() {
-        return recordingRegister;
+        return status.recordingRegister();
     }
 
     public boolean isRecording() {
-        return !recordingRegister.isEmpty();
+        return !status.recordingRegister().isEmpty();
     }
 
     /** Whether Neovim is waiting for the argument character of a command ({@code f}, {@code @}, ...). */
@@ -391,11 +281,11 @@ public final class NeovimSession implements AutoCloseable {
 
     /** Notified (on a session thread) when the command, message or statusline text changes. */
     public void addStatusListener(Consumer<StatusInfo> listener) {
-        statusListeners.add(listener);
+        status.addStatusListener(listener);
     }
 
     public void removeStatusListener(Consumer<StatusInfo> listener) {
-        statusListeners.remove(listener);
+        status.removeStatusListener(listener);
     }
 
     /**
@@ -404,7 +294,7 @@ public final class NeovimSession implements AutoCloseable {
      * to apply it immediately.
      */
     public void setStatusItems(Set<StatusItem> items) {
-        this.statusItems = Set.copyOf(items);
+        status.setItems(items);
     }
 
     /** Re-reads mode, cursor and status bar parts from Neovim (e.g. after the preference changed). */
@@ -414,11 +304,11 @@ public final class NeovimSession implements AutoCloseable {
 
     /** Notified with the register name when recording starts, and with "" when it stops. */
     public void addRecordingListener(Consumer<String> listener) {
-        recordingListeners.add(listener);
+        status.addRecordingListener(listener);
     }
 
     public void removeRecordingListener(Consumer<String> listener) {
-        recordingListeners.remove(listener);
+        status.removeRecordingListener(listener);
     }
 
     public void addModeListener(Consumer<String> listener) {
@@ -591,21 +481,10 @@ public final class NeovimSession implements AutoCloseable {
                 Object raw = await(api.executeLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
                 output = raw == null ? "" : String.valueOf(raw);
             } catch (Exception e) {
-                output = errorMessage(e);
+                output = Rpc.errorMessage(e);
             }
             onOutput.accept(output.startsWith("\n") ? output.substring(1) : output);
         });
-    }
-
-    /** Neovim's message for a failed call (e.g. {@code E94: No matching buffer}), without Java wrapping. */
-    static String errorMessage(Throwable e) {
-        Throwable cause = e;
-        while (cause.getCause() != null && cause.getCause() != cause) {
-            cause = cause.getCause();
-        }
-        String message = cause.getMessage() == null ? cause.toString() : cause.getMessage();
-        Matcher vimError = VIM_ERROR.matcher(message);
-        return vimError.find() ? vimError.group() : message;
     }
 
     /** Runs a search ({@code /} or {@code ?}) and moves the cursor to the match. */
@@ -635,18 +514,8 @@ public final class NeovimSession implements AutoCloseable {
         submit("leave insert mode", Level.WARNING, () -> keyInput.leaveInsertMode(replay));
     }
 
-    private void submit(String what, Level failureLevel, ThrowingRunnable work) {
-        try {
-            inputExecutor.execute(() -> {
-                try {
-                    work.run();
-                } catch (Exception e) {
-                    LOG.log(failureLevel, what + " failed", e);
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            LOG.log(Level.FINE, "Input executor shut down; dropped: " + what);
-        }
+    private void submit(String what, Level failureLevel, InputThread.Task work) {
+        inputThread.submit(what, failureLevel, work);
     }
 
     // ---- key input (see KeyInput) ----
@@ -702,7 +571,7 @@ public final class NeovimSession implements AutoCloseable {
     void publishState() {
         String mode = currentMode;
         try {
-            Set<StatusItem> items = statusItems;
+            Set<StatusItem> items = status.items();
             Object raw = api.executeLua(LuaScripts.STATE_SNAPSHOT, List.of(
                     flag(items.contains(StatusItem.STATUSLINE)),
                     flag(items.contains(StatusItem.CMD)),
@@ -720,8 +589,8 @@ public final class NeovimSession implements AutoCloseable {
                         ? StateSnapshot.selection(raw, mode)
                         : VisualSelection.none());
             }
-            updateRecording(StateSnapshot.recording(raw));
-            publishStatus(StateSnapshot.status(raw));
+            status.updateRecording(StateSnapshot.recording(raw));
+            status.publish(StateSnapshot.status(raw));
         } catch (Exception e) {
             LOG.log(Level.FINE, "state snapshot failed", e);
         }
@@ -729,41 +598,6 @@ public final class NeovimSession implements AutoCloseable {
 
     private static String flag(boolean enabled) {
         return enabled ? "1" : "0";
-    }
-
-    private void publishStatus(StatusInfo parsed) {
-        if (!parsed.message().isEmpty()) {
-            currentMessage = parsed.message();
-        }
-        lastShowcmd = parsed.cmd();
-        fireStatus(new StatusInfo(parsed.statusline(), parsed.cmd(), currentMessage));
-    }
-
-    /**
-     * Neovim is waiting for the rest of a command, so no API call can be made to ask for
-     * {@code showcmd}; the status bar instead shows what is known: the previous pending text plus the
-     * key just sent ({@code 2} then {@code f} shows {@code 2f}).
-     */
-    void showPendingKey(String keys) {
-        if (keys.length() == 1 && statusItems.contains(StatusItem.CMD)) {
-            lastShowcmd = lastShowcmd + keys;
-            fireStatus(new StatusInfo(lastStatus.statusline(), lastShowcmd, currentMessage));
-        }
-    }
-
-    private void fireStatus(StatusInfo info) {
-        if (!info.equals(lastStatus)) {
-            lastStatus = info;
-            statusListeners.fire(info);
-        }
-    }
-
-    private void updateRecording(String register) {
-        if (!register.equals(recordingRegister)) {
-            recordingRegister = register;
-            LOG.fine(() -> register.isEmpty() ? "macro recording stopped" : "recording macro into @" + register);
-            recordingListeners.fire(register);
-        }
     }
 
     /**
@@ -794,9 +628,14 @@ public final class NeovimSession implements AutoCloseable {
 
     // ---- hooks for KeyInput (package-private) ----
 
-    /** Clears the status bar message: a message stays visible until the next key. */
-    void clearMessage() {
-        currentMessage = "";
+    /** The status bar state (message, pending keys), shared with {@link KeyInput}. */
+    StatusTracker status() {
+        return status;
+    }
+
+    /** The per-document buffer registry, for {@link DocumentBuffer#isOpenIn}. */
+    DocumentBuffers buffers() {
+        return buffers;
     }
 
     /**

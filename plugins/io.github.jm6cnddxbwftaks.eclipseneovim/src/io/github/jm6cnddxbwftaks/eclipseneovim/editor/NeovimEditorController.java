@@ -27,10 +27,10 @@ import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.CursorPos;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.DocumentBuffer;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.VisualSelection;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;

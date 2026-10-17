@@ -18,7 +18,7 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.VisualSelection;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.BlockSelection.LineRange;
 

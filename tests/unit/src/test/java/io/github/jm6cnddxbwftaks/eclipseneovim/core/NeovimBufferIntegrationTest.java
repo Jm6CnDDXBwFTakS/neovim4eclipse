@@ -17,8 +17,8 @@ import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.BufferChange;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 
 /** One Neovim buffer per Eclipse document, against a real {@code nvim} (skipped when none is found). */

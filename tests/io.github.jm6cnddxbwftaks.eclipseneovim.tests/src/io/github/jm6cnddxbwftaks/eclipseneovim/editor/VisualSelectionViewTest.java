@@ -19,7 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.VisualSelection;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 
 /** Neovim's visual selections shown in a real StyledText. */
 class VisualSelectionViewTest {

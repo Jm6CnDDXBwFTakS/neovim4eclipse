@@ -15,7 +15,7 @@ import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.swt.widgets.Display;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession.BufferChange;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.Edit;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.LineSource;
