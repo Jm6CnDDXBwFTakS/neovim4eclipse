@@ -161,6 +161,12 @@ to the box, which (via the focus listener in the controller) also deactivates th
   makes Neovim insert its own range, which would precede `:silent` and be rejected).
 - Pure logic is in `util/CommandLine` (kinds, prefill, parsing) and `util/CommandHistory`, both unit tested;
   host commands are classified by `util/HostExCommand` and carried out by `editor/HostCommands`.
+- **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
+  are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
+  `redir => g:eclipse_neovim_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
+  non-empty result that is not just the error message is shown in the `OutputPopup`. Full
+  `ext_messages` support was considered and not chosen: it needs `ext_linegrid`, i.e. grid redraw
+  traffic on every key, and a redraw-event parser.
 
 ## Macros
 

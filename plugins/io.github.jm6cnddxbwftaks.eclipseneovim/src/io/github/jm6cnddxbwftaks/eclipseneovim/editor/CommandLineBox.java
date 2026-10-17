@@ -47,7 +47,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand;
  *   <li>File and tab commands ({@code :w}, {@code :wa}, {@code :q}, {@code :e}, {@code :tabn}, ...)
  *       are executed by Eclipse ({@link HostCommands}). Commands that only display something ({@code :ls},
  *       {@code :marks}, ... see {@link ListingCommand}) are run with output capture and their output is
- *       shown in an {@link OutputPopup}. Everything else is typed into Neovim.</li>
+ *       shown in an {@link OutputPopup}. Everything else is typed into Neovim; whatever it prints
+ *       ({@code :echo}, {@code :set ts?}) is shown in the same popup.</li>
  * </ul>
  *
  * <h2>Implementation notes</h2>
@@ -289,7 +290,8 @@ final class CommandLineBox {
                     session.captureOutputAsync(submission.body(), text -> showOutput(title, text));
                     return;
                 }
-                session.commandAsync(submission.body());
+                String title = ":" + submission.body();
+                session.commandAsync(submission.body(), text -> showOutput(title, text));
             } else {
                 session.search(submission.body(), submission.kind() == Kind.SEARCH_BACKWARD);
             }
@@ -298,7 +300,7 @@ final class CommandLineBox {
         }
     }
 
-    /** Called on a session thread with what a listing command printed. */
+    /** Called on a session thread with what a command printed. */
     private void showOutput(String title, String text) {
         Display display = host.isDisposed() ? null : host.getDisplay();
         if (display != null && !display.isDisposed()) {

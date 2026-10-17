@@ -155,6 +155,34 @@ final class LuaScripts {
             return vim.api.nvim_exec(cmd, true)
             """;
 
+    /**
+     * Starts collecting everything Neovim prints into {@code g:eclipse_neovim_output}, with
+     * {@code :redir}. It keeps collecting while the next typed command runs, also under
+     * {@code :silent} (the classic idiom {@code redir => x | silent ls | redir END}), until
+     * {@link #STOP_OUTPUT_CAPTURE}.
+     */
+    static final String START_OUTPUT_CAPTURE = """
+            vim.g.eclipse_neovim_output = ''
+            vim.cmd('redir => g:eclipse_neovim_output')
+            """;
+
+    /**
+     * Ends the capture started by {@link #START_OUTPUT_CAPTURE} and returns what was printed, or ""
+     * when nothing was, or when it was only the error message (which the status bar already shows
+     * through {@code v:errmsg}). The capture starts with empty lines (where the command line was
+     * drawn); those and trailing blanks are removed, the indentation of the first line is kept
+     * ({@code "  tabstop=8"}).
+     */
+    static final String STOP_OUTPUT_CAPTURE = """
+            pcall(vim.cmd, 'redir END')
+            local out = (vim.g.eclipse_neovim_output or ''):gsub('^[\\r\\n]+', ''):gsub('%s+$', '')
+            vim.g.eclipse_neovim_output = nil
+            if out:match('^%s*$') or out == vim.v.errmsg then
+              return ''
+            end
+            return out
+            """;
+
     /** The user's {@code 'clipboard'} option (e.g. {@code unnamedplus}), evaluated after their init file ran. */
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
 
