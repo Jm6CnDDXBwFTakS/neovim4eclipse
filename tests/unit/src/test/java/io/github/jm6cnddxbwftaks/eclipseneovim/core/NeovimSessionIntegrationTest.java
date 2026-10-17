@@ -206,12 +206,14 @@ class NeovimSessionIntegrationTest {
     @Test
     void ideKeysCanBeLeftToNeovim() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:eclipse_ide_keys = 0"))) {
-            List<IdeAction> actions = new CopyOnWriteArrayList<>();
-            s.addIdeActionListener(actions::add);
-            keys(s, "g", "t"); // Neovim's own gt: there is only one tab page, so nothing happens
-            s.getBufferLines(); // a round trip: any notification sent before it has arrived
-            assertTrue(actions.isEmpty(), "no IDE action expected: " + actions);
+        for (String value : List.of("0", "v:false")) {
+            try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:eclipse_ide_keys = " + value))) {
+                List<IdeAction> actions = new CopyOnWriteArrayList<>();
+                s.addIdeActionListener(actions::add);
+                keys(s, "g", "t"); // Neovim's own gt: there is only one tab page, so nothing happens
+                s.getBufferLines(); // a round trip: any notification sent before it has arrived
+                assertTrue(actions.isEmpty(), "no IDE action expected with " + value + ": " + actions);
+            }
         }
     }
 

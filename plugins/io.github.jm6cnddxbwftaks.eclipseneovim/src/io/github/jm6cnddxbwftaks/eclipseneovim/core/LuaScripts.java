@@ -82,9 +82,11 @@ final class LuaScripts {
               end
             })
             -- Keys only the IDE can carry out (see IdeAction). This runs after the user's init.lua,
-            -- so it wins over their own mappings of these keys; `vim.g.eclipse_ide_keys = 0` in
-            -- init.lua keeps Neovim's meaning instead. vim.v.count is the count typed before the key.
-            if vim.g.eclipse_ide_keys ~= 0 then
+            -- so it wins over their own mappings of these keys; `vim.g.eclipse_ide_keys = 0` (or
+            -- false, v:false in Vim script) in init.lua keeps Neovim's meaning instead. vim.v.count
+            -- is the count typed before the key.
+            local ide_keys = vim.g.eclipse_ide_keys
+            if ide_keys ~= 0 and ide_keys ~= false then
               local function ide(action, key, desc)
                 vim.keymap.set('n', key, function()
                   vim.rpcnotify(0, 'eclipse_action', action, vim.v.count)

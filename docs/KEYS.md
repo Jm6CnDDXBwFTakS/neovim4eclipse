@@ -72,7 +72,7 @@ These mappings are made after your `init.lua` runs, so they replace your own map
 To keep Neovim's meaning instead, put this in `init.lua`:
 
 ```lua
-vim.g.eclipse_ide_keys = 0
+vim.g.eclipse_ide_keys = 0   -- or false
 ```
 
 ## Where this lives in the code
