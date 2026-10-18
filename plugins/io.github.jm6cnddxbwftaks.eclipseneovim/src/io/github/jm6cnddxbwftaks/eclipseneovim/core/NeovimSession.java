@@ -19,6 +19,7 @@ import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
 import com.ensarsarajcic.neovim.java.api.types.api.VimCoords;
 import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
 import com.ensarsarajcic.neovim.java.api.window.NeovimWindowApi;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
@@ -437,13 +438,20 @@ public final class NeovimSession implements AutoCloseable {
     }
 
     /**
-     * Makes Neovim's {@code 'tabstop'} equal to the editor's tab width, so that the block selection
-     * Neovim computes in screen columns lines up with what Eclipse draws. Blocking: input thread only.
+     * Sets the attached buffer's tab and indent options. {@code 'tabstop'} is the editor's tab width,
+     * so that the block selection Neovim computes in screen columns lines up with what Eclipse draws;
+     * the indent options make {@code o}, {@code O}, {@code >>} indent like the code around them (see
+     * {@link Indentation}). Blocking: input thread only.
+     *
+     * @param tabWidth the editor's displayed tab width
      */
-    public void setTabstop(int tabWidth) throws Exception {
-        if (tabWidth >= 1 && tabWidth <= 64) {
-            await(api.executeLua("vim.bo.tabstop = " + tabWidth, List.of()));
-        }
+    public void setIndentation(int tabWidth, Indentation indentation) throws Exception {
+        await(api.executeLua(LuaScripts.SET_INDENTATION, List.of(
+                String.valueOf(tabWidth),
+                flag(indentation.useTabs()),
+                String.valueOf(indentation.width()),
+                flag(indentation.braces()),
+                indentation.cinoptions())));
     }
 
     /** Evaluates Lua in Neovim and returns its result. For tests that inspect Neovim's state. */

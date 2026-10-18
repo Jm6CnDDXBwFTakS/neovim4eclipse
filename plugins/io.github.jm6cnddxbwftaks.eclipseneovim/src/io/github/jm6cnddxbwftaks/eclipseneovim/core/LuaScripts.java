@@ -209,6 +209,28 @@ final class LuaScripts {
             return out
             """;
 
+    /**
+     * Sets the current buffer's indentation options (arguments: tabstop, "1" to indent with tabs,
+     * indent width, "1" to follow braces, cinoptions). See {@code util/Indentation} for why.
+     * {@code 'shiftwidth'} is one indent level, used by {@code >>}, {@code o} and {@code cindent};
+     * {@code 'softtabstop'} 0 makes Tab and Backspace in Neovim's insert mode work per character.
+     */
+    static final String SET_INDENTATION = """
+            local tabstop, use_tabs, width, braces, cinoptions = ...
+            tabstop = tonumber(tabstop)
+            if tabstop >= 1 and tabstop <= 64 then
+              vim.bo.tabstop = tabstop
+            end
+            vim.bo.expandtab = use_tabs ~= '1'
+            vim.bo.shiftwidth = tonumber(width)
+            vim.bo.softtabstop = 0
+            vim.bo.autoindent = true
+            vim.bo.cindent = braces == '1'
+            if braces == '1' then
+              vim.bo.cinoptions = cinoptions
+            end
+            """;
+
     /** The user's {@code 'clipboard'} option (e.g. {@code unnamedplus}), evaluated after their init file ran. */
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
 

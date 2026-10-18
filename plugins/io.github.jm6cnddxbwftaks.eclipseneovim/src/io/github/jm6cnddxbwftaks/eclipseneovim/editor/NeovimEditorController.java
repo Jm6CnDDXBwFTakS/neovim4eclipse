@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -15,6 +16,8 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
@@ -25,6 +28,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 
@@ -161,6 +165,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private void pushDocumentAndCursorAsync(int line1, int col0, boolean takeNeovimCursor) {
         synchronizer.stopRemoteListening();
         final int tabWidth = styledText.isDisposed() ? 0 : styledText.getTabs();
+        final Indentation indentation = indentationOf(tabWidth);
         try {
             session.runAttachSetup(() -> {
                 try {
@@ -170,11 +175,11 @@ public final class NeovimEditorController implements AutoCloseable {
                     return; // pushing now would overwrite another document's buffer
                 }
                 try {
-                    // Blockwise selections are measured in screen columns, so tabs must be as wide in
-                    // Neovim as in the editor.
-                    session.setTabstop(tabWidth);
+                    // Tabs as wide as in the editor (block selections are measured in screen columns),
+                    // and new lines indented like the code around them.
+                    session.setIndentation(tabWidth, indentation);
                 } catch (Exception e) {
-                    LOG.log(Level.WARNING, "Could not set Neovim tabstop", e);
+                    LOG.log(Level.WARNING, "Could not set Neovim's tab and indent options", e);
                 }
                 synchronizer.pushDocumentToNeovim();
                 synchronizer.startRemoteListening();
@@ -194,6 +199,18 @@ public final class NeovimEditorController implements AutoCloseable {
             LOG.log(Level.WARNING, "Document push could not be scheduled", e);
             synchronizer.startRemoteListening();
         }
+    }
+
+    /**
+     * The document's indentation style (read from its text), for Neovim's indent options. A file
+     * with no indented lines yet uses the "Insert spaces for tabs" text editor preference. UI thread.
+     */
+    private Indentation indentationOf(int tabWidth) {
+        IDocument doc = documentOf(editor);
+        boolean spaces = EditorsUI.getPreferenceStore()
+                .getBoolean(AbstractDecoratedTextEditorPreferenceConstants.EDITOR_SPACES_FOR_TABS);
+        List<String> lines = doc == null ? List.of() : BufferSynchronizer.documentToLines(doc);
+        return Indentation.detect(editor.getEditorInput().getName(), lines, Math.max(1, tabWidth), spaces);
     }
 
     /**

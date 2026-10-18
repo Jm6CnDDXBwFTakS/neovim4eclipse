@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 
@@ -256,6 +257,35 @@ class NeovimSessionIntegrationTest {
             assertEquals(List.of("after"), outputs);
             assertTrue(String.valueOf(s.lua("return vim.g.mine")).contains("kept"),
                     "the user's :redir must have collected the echo");
+        }
+    }
+
+    // ---- indentation ----
+
+    @Test
+    void oAndOIndentInsideBracesWithTabs() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setIndentation(4, new Indentation(true, 4, true));
+            s.setBufferLines(List.of("class A {", "\tvoid f() {", "\t}", "}"));
+            s.setCursor(2, 0);
+            keys(s, "o", "x", "(", ")", ";", "<Esc>");
+            assertEquals(List.of("class A {", "\tvoid f() {", "\t\tx();", "\t}", "}"), s.getBufferLines());
+            s.setCursor(4, 0); // the method's closing brace
+            keys(s, "O", "y", ";", "<Esc>");
+            assertEquals("\t\ty;", s.getBufferLines().get(3));
+        }
+    }
+
+    @Test
+    void oIndentsWithTheDetectedSpaceWidth() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setIndentation(4, new Indentation(false, 2, true));
+            s.setBufferLines(List.of("function f() {", "  if (a) {", "  }", "}"));
+            s.setCursor(2, 0);
+            keys(s, "o", "g", "(", ")", ";", "<Esc>");
+            assertEquals("    g();", s.getBufferLines().get(2));
+            keys(s, ">", ">");
+            assertEquals("      g();", s.getBufferLines().get(2), ">> shifts by one detected level");
         }
     }
 

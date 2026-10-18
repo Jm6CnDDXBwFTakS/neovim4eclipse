@@ -159,6 +159,21 @@ Neovim, and whatever it prints (`:!ls`, `:echo` inside a longer command, a `:s` 
 `:redir` and shown in the same box. Errors appear in the status bar only. Messages printed later, by a
 timer or an autocmd, are not shown, and nothing is collected while your own `:redir` is running.
 
+## Indentation (`o`, `O`, `>>`)
+
+Neovim indents the lines it creates. When a document is attached, the plug-in sets that buffer's
+options to match the file:
+
+- **Tabs or spaces, and the width of one level**, are read from the document's own indented lines.
+  A file with none yet uses *Preferences › General › Editors › Text Editors › Insert spaces for tabs*.
+  `'tabstop'` is always the editor's tab width.
+- **Brace languages** (Java, C/C++, C#, JavaScript/TypeScript, Kotlin, Go, Rust, CSS, JSON, ...) get
+  `'cindent'`: `o` on a line ending in `{` and `O` on a line starting with `}` start one level in.
+  Other files keep `'autoindent'` (the new line copies the current line's indent).
+
+These options replace any your `init.lua` sets for the buffer. Filetype detection is not used, so
+your filetype plugins (and language servers they may start) do not run in the embedded Neovim.
+
 ## Macros (`q`)
 
 `qa` starts recording into register `a` (the status line shows `recording @a`), `q` stops. Play back with

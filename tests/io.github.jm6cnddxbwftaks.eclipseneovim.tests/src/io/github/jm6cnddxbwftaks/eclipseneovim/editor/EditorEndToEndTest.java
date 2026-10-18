@@ -194,6 +194,33 @@ class EditorEndToEndTest {
         expectText("zeta\nalpha\nbeta\n");
     }
 
+    /** {@code o} after a line ending in a brace starts one level further in, like the Eclipse formatter. */
+    @Test
+    void oIndentsTheFirstLineOfABlock() throws Exception {
+        IFile file = project.getFile("Brace.java");
+        file.create(new ByteArrayInputStream("class A {\n\tvoid f() {\n\t}\n}\n".getBytes(StandardCharsets.UTF_8)),
+                true, null);
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor braceEditor = (ITextEditor) IDE.openEditor(page, file, "org.eclipse.ui.DefaultTextEditor", true);
+        StyledText braceWidget = (StyledText) braceEditor.getAdapter(Control.class);
+        IDocument braceDocument = braceEditor.getDocumentProvider().getDocument(braceEditor.getEditorInput());
+        waitUntil("Neovim to attach to Brace.java", TIMEOUT_MS, () -> {
+            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
+            return c != null && c.getEditor() == braceEditor;
+        });
+        UiTestSupport.spin(300);
+
+        type(braceWidget, "j");
+        type(braceWidget, 'o');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(braceWidget, "x();");
+        escape(braceWidget);
+        waitUntil("the indented line", TIMEOUT_MS,
+                () -> "class A {\n\tvoid f() {\n\t\tx();\n\t}\n}\n".equals(braceDocument.get()),
+                () -> "; it reads " + braceDocument.get().replace("\n", "\\n").replace("\t", "\\t"));
+        page.closeEditor(braceEditor, false);
+    }
+
     @Test
     void undoRevertsNeovimsChange() {
         type(widget, "ggdd");
