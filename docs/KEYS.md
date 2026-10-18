@@ -34,6 +34,13 @@ By default every letter goes to Neovim **except these three**:
 
 Tick any of them to send it to Neovim instead.
 
+**"Keybinding conflicts occurred" in the Error Log.** Eclipse warns about this when a Java editor opens:
+`Ctrl+I`, `Ctrl+O` and `Ctrl+T` have bindings of the Java editor (Correct Indentation, Quick Outline,
+Quick Type Hierarchy) and of the plug-in, in contexts where neither is the parent of the other, so
+Eclipse picks no command. The key then reaches the editor widget, and the plug-in sends it to Neovim
+as usual: `Ctrl+O` still jumps back. The warning is harmless. Clearing a letter's check box removes
+its conflict and gives the key back to Java.
+
 ### macOS
 
 The bindings use the physical **Control** key on macOS, while Eclipse's shortcuts use **Command**
@@ -63,7 +70,7 @@ still handles counts and the `g` prefix:
 
 | Key | Eclipse runs |
 |-----|--------------|
-| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor); in an editor without one (a `.txt` file), Neovim's own `gd` (the word's first use); hyperlinks are not followed (use Ctrl+click) |
+| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor); in an editor without one (the plain Text Editor), Neovim's own `gd` (the word's first use). The Generic Editor binds `F3` to Open Hyperlink, which is also how Language Server files go to a definition, so there `gd` does what `F3` does, including its hyperlink chooser |
 | `K` | Show Tooltip Description (`F2`): the hover information |
 | `gt`, `{N}gt` | next editor tab, or tab N |
 | `gT`, `{N}gT` | previous editor tab, or N tabs back |
