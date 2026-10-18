@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Random;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.Edit;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.LineSource;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,40 +20,8 @@ import org.junit.jupiter.api.Test;
  */
 class LineRangeEditTest {
 
-    /** Eclipse-like document over a plain string. */
-    private static final class StringDoc implements LineSource {
-        private final String text;
-        private final List<Integer> starts = new ArrayList<>();
-        private final List<Integer> contentLengths = new ArrayList<>();
-
-        StringDoc(String text) {
-            this.text = text;
-            int start = 0;
-            int i = 0;
-            while (i < text.length()) {
-                char c = text.charAt(i);
-                if (c == '\n' || c == '\r') {
-                    starts.add(start);
-                    contentLengths.add(i - start);
-                    i += c == '\r' && i + 1 < text.length() && text.charAt(i + 1) == '\n' ? 2 : 1;
-                    start = i;
-                } else {
-                    i++;
-                }
-            }
-            starts.add(start); // last line; empty when the text ends with a delimiter (the phantom line)
-            contentLengths.add(text.length() - start);
-        }
-
-        @Override public int lineCount() { return starts.size(); }
-        @Override public int lineOffset(int line) { return starts.get(line); }
-        @Override public int lineContentLength(int line) { return contentLengths.get(line); }
-        @Override public int length() { return text.length(); }
-        @Override public String text(int offset, int length) { return text.substring(offset, offset + length); }
-    }
-
     private static String apply(String doc, int first, int last, List<String> newLines, String delim) {
-        Edit edit = LineRangeEdit.compute(new StringDoc(doc), first, last, newLines, delim);
+        Edit edit = LineRangeEdit.compute(new StringLineSource(doc), first, last, newLines, delim);
         if (edit == null) {
             return doc;
         }
@@ -75,8 +42,8 @@ class LineRangeEditTest {
 
     @Test
     void identicalContentIsANoOp() {
-        assertNull(LineRangeEdit.compute(new StringDoc("a\nb\n"), 0, 1, List.of("a"), "\n"));
-        assertNull(LineRangeEdit.compute(new StringDoc("a\nb\n"), 0, 2, List.of("a", "b"), "\n"));
+        assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 1, List.of("a"), "\n"));
+        assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 2, List.of("a", "b"), "\n"));
     }
 
     @Test
@@ -233,14 +200,14 @@ class LineRangeEditTest {
     @Test
     void aChangedWordIsReplacedAloneNotItsWholeLine() {
         String doc = "a\n  int count = 1;\nb\n";
-        Edit edit = LineRangeEdit.compute(new StringDoc(doc), 1, 2, List.of("  int  = 1;"), "\n");
+        Edit edit = LineRangeEdit.compute(new StringLineSource(doc), 1, 2, List.of("  int  = 1;"), "\n");
         assertEquals(new Edit(8, 5, ""), edit);
     }
 
     /** Deleting a line still removes the line and its line break, and nothing else. */
     @Test
     void aDeletedLineIsStillOneEdit() {
-        Edit edit = LineRangeEdit.compute(new StringDoc("a\nb\nc\n"), 1, 2, List.of(), "\n");
+        Edit edit = LineRangeEdit.compute(new StringLineSource("a\nb\nc\n"), 1, 2, List.of(), "\n");
         assertEquals(new Edit(2, 2, ""), edit);
     }
 }

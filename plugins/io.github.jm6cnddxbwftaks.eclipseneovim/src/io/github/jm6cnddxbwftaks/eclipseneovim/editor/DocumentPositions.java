@@ -60,20 +60,6 @@ final class DocumentPositions {
         return line.getOffset() + Utf8Columns.byteToCharIndex(content, byteCol0);
     }
 
-    /**
-     * A visual-selection corner as an offset. Linewise selections ({@code V}) cover whole lines, so
-     * the column is ignored: the start corner is the line start, the end corner the line end.
-     */
-    static int visualToOffset(IDocument doc, int line1, int byteCol0, boolean lineWise, boolean isStart)
-            throws BadLocationException {
-        if (!lineWise) {
-            return byteColToOffset(doc, line1, byteCol0);
-        }
-        int line0 = Math.max(0, Math.min(line1 - 1, doc.getNumberOfLines() - 1));
-        IRegion line = doc.getLineInformation(line0);
-        return isStart ? line.getOffset() : line.getOffset() + line.getLength();
-    }
-
     /** {@link BlockSelection.Lines} view of an {@link IDocument}. */
     static final class DocumentLines implements BlockSelection.Lines {
         private final IDocument doc;

@@ -74,6 +74,18 @@ final class FakeCaret implements EditorCaret {
     }
 
     @Override
+    public boolean select(int anchor, int caretOffset) {
+        if (hidden) {
+            return false;
+        }
+        selectionStart = Math.min(anchor, caretOffset);
+        selectionLength = Math.abs(caretOffset - anchor);
+        caret = caretOffset;
+        fireMoved();
+        return true;
+    }
+
+    @Override
     public void addMoveListener(Runnable onMove) {
         listeners.add(onMove);
     }

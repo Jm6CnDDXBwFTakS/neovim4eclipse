@@ -36,6 +36,16 @@ interface EditorCaret {
      */
     boolean moveCaret(int offset);
 
+    /**
+     * Selects from {@code anchor} to {@code caret} (document offsets, either order) with the caret at
+     * {@code caret}, unfolding code that hides either end, and scrolls it into view.
+     * {@code select(o, o)} clears the selection and puts the caret at {@code o}. Notifies the move
+     * listeners when the caret moves.
+     *
+     * @return {@code false} if an end stays hidden in folded code and nothing changed
+     */
+    boolean select(int anchor, int caret);
+
     /** {@code onMove} runs whenever the caret moves or the user clicks in the text. */
     void addMoveListener(Runnable onMove);
 
