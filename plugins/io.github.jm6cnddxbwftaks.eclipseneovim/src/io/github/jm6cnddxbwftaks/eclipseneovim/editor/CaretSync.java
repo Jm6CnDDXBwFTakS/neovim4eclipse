@@ -9,11 +9,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.jface.text.IDocument;
-import org.eclipse.swt.custom.CaretListener;
-import org.eclipse.swt.custom.StyledText;
-import org.eclipse.swt.events.MouseAdapter;
-import org.eclipse.swt.events.MouseEvent;
-import org.eclipse.swt.events.MouseListener;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPort;
@@ -36,20 +31,19 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.UiExecutor;
  * recognized by {@code applyingRemoteChange}.
  *
  * <p>Neovim columns are UTF-8 bytes, Eclipse columns UTF-16 chars; {@link DocumentPositions}
- * converts between them. The widget's caret offset is first turned into a document offset
- * ({@link WidgetOffsets}), because folded code is missing from the widget. Created and disposed on
- * the UI thread.
+ * converts between them. The caret is seen through {@link EditorCaret}, in document offsets (the
+ * widget's own offsets leave out folded code), so this class is tested without a widget. Created
+ * and disposed on the UI thread.
  */
 final class CaretSync {
 
     private static final Logger LOG = Logger.getLogger(CaretSync.class.getName());
 
-    private final StyledText widget;
+    private final EditorCaret caret;
     private final CursorPort session;
     private final UiExecutor ui;
     /** The editor's current document (may be {@code null}). */
     private final Supplier<IDocument> document;
-    private final WidgetOffsets offsets;
     /** Whether caret moves in Eclipse should reach Neovim (Neovim mode on). */
     private final BooleanSupplier followEclipseCaret;
     /** True while the synchronizer applies a change from Neovim to the document. */
@@ -59,25 +53,17 @@ final class CaretSync {
     /** Set while a caret change from Neovim is applied, so the listener does not echo it back. */
     private volatile boolean applyingFromNeovim;
 
-    private final CaretListener caretListener = e -> onEclipseCaretMoved();
-    private final MouseListener mouseListener = new MouseAdapter() {
-        @Override
-        public void mouseDown(MouseEvent e) {
-            onEclipseCaretMoved();
-        }
-    };
+    private final Runnable moveListener = this::onEclipseCaretMoved;
 
-    CaretSync(StyledText widget, WidgetOffsets offsets, CursorPort session, UiExecutor ui,
-            Supplier<IDocument> document, BooleanSupplier followEclipseCaret, BooleanSupplier applyingRemoteChange) {
-        this.widget = widget;
-        this.offsets = offsets;
+    CaretSync(EditorCaret caret, CursorPort session, UiExecutor ui, Supplier<IDocument> document,
+            BooleanSupplier followEclipseCaret, BooleanSupplier applyingRemoteChange) {
+        this.caret = caret;
         this.session = session;
         this.ui = ui;
         this.document = document;
         this.followEclipseCaret = followEclipseCaret;
         this.applyingRemoteChange = applyingRemoteChange;
-        widget.addCaretListener(caretListener);
-        widget.addMouseListener(mouseListener);
+        caret.addMoveListener(moveListener);
     }
 
     /**
@@ -99,7 +85,7 @@ final class CaretSync {
     }
 
     private void applyOnUi(CursorPos pos) {
-        if (disposed || widget.isDisposed()) {
+        if (disposed || caret.isDisposed()) {
             return;
         }
         runAsFromNeovim(() -> {
@@ -110,11 +96,7 @@ final class CaretSync {
                 }
                 int offset = Math.min(DocumentPositions.byteColToOffset(doc, pos.line1Based(), pos.col0Based()),
                         doc.getLength());
-                int widgetOffset = offsets.toWidgetRevealing(offset); // unfolds code the cursor moved into
-                if (widgetOffset >= 0) {
-                    widget.setCaretOffset(widgetOffset);
-                    widget.showSelection();
-                }
+                caret.moveCaret(offset); // unfolds code the cursor moved into
             } catch (Exception e) {
                 LOG.log(Level.FINE, "Cursor apply failed", e);
             }
@@ -133,7 +115,7 @@ final class CaretSync {
 
     /** The user clicked or moved the caret in Eclipse: push the position to Neovim. */
     private void onEclipseCaretMoved() {
-        if (disposed || applyingFromNeovim || widget.isDisposed() || !followEclipseCaret.getAsBoolean()
+        if (disposed || applyingFromNeovim || caret.isDisposed() || !followEclipseCaret.getAsBoolean()
                 || applyingRemoteChange.getAsBoolean()) {
             return;
         }
@@ -152,8 +134,7 @@ final class CaretSync {
      * cursor on the restored line. UI thread.
      */
     private int cursorModelOffset() {
-        return widget.getSelectionCount() > 0 ? offsets.toModel(widget.getSelectionRange().x)
-                : offsets.caretModelOffset();
+        return caret.selectionLength() > 0 ? caret.selectionStart() : caret.caretOffset();
     }
 
     /**
@@ -170,7 +151,7 @@ final class CaretSync {
         int[][] lineCol = new int[1][];
         ui.syncExec(() -> {
             IDocument doc = document.get();
-            if (!disposed && !widget.isDisposed() && doc != null) {
+            if (!disposed && !caret.isDisposed() && doc != null) {
                 lineCol[0] = DocumentPositions.offsetToLineCol(doc, cursorModelOffset());
             }
         });
@@ -187,9 +168,8 @@ final class CaretSync {
     /** Stops both directions. UI thread. */
     void dispose() {
         disposed = true;
-        if (!widget.isDisposed()) {
-            widget.removeCaretListener(caretListener);
-            widget.removeMouseListener(mouseListener);
+        if (!caret.isDisposed()) {
+            caret.removeMoveListener(moveListener);
         }
     }
 }

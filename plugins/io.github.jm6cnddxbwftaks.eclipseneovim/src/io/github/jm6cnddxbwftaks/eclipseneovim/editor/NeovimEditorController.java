@@ -105,8 +105,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session, SwtUiExecutor.INSTANCE);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
-        this.caretSync = new CaretSync(styledText, offsets, session, SwtUiExecutor.INSTANCE, () -> documentOf(editor),
-                this::isNeovimModeActive, synchronizer::isApplyingRemote);
+        this.caretSync = new CaretSync(new StyledTextCaret(styledText, offsets), session, SwtUiExecutor.INSTANCE,
+                () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);

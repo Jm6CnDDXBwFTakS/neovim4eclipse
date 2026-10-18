@@ -12,7 +12,8 @@
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.NeovimEditorController}: one per attached
  *       editor. Wires the editor's viewer and widget to the shared
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession}, through one helper per
- *       concern: {@code CaretSync} (caret and cursor), {@code EditorKeyContext} (when the Vim
+ *       concern: {@code CaretSync} (caret and cursor, seeing the caret through
+ *       {@code EditorCaret} so it is tested without a widget), {@code EditorKeyContext} (when the Vim
  *       Ctrl-key bindings are active), {@code VisualSelectionView}, {@code InsertTracker}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.KeyInterceptor}: the key listener; it
  *       asks {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.KeyRouter} whether Neovim or Eclipse
