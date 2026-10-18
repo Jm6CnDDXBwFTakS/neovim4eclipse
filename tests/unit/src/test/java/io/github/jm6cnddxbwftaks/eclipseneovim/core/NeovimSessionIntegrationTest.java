@@ -260,6 +260,22 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** As above, for the display-only commands the command line runs without typing ({@code :echo}, {@code :ls}). */
+    @Test
+    void aTypedRedirAlsoCollectsDisplayOnlyCommands() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> outputs = new CopyOnWriteArrayList<>();
+            s.commandAsync("redir => g:mine", outputs::add);
+            s.captureOutputAsync("echo 'kept'", outputs::add); // no popup: the user's :redir gets it
+            s.commandAsync("redir END", outputs::add);
+            s.captureOutputAsync("echo 'after'", outputs::add); // shown again
+            waitFor(() -> outputs.contains("after"), "the output after redir END");
+            assertEquals(List.of("after"), outputs);
+            assertTrue(String.valueOf(s.lua("return vim.g.mine")).contains("kept"),
+                    "the user's :redir must have collected the echo");
+        }
+    }
+
     // ---- indentation ----
 
     @Test
