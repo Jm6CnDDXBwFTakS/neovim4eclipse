@@ -46,6 +46,21 @@ class NeovimBufferIntegrationTest {
         return ((Number) s.lua("return vim.api.nvim_get_current_buf()")).intValue();
     }
 
+    /** Loading the file is not an undo step; later pushes (a format, Eclipse's undo) are. */
+    @Test
+    void undoRightAfterOpeningKeepsTheLoadedText() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            s.showBuffer(doc);
+            s.setBufferLines(List.of("x", "y"));
+            s.input("u");
+            assertEquals(List.of("x", "y"), s.getBufferLines());
+            s.setBufferLines(List.of("x", "z"));
+            s.input("u");
+            assertEquals(List.of("x", "y"), s.getBufferLines());
+        }
+    }
+
     @Test
     void eachDocumentKeepsItsOwnUndoHistory() throws Exception {
         try (NeovimSession s = start()) {

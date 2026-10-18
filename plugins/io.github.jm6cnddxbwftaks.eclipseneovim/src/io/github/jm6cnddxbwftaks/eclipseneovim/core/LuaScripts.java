@@ -231,6 +231,23 @@ final class LuaScripts {
             end
             """;
 
+    /**
+     * Replaces the current buffer's text without an undo step (arguments: the lines, one each). Setting
+     * {@code 'undolevels'} to -1 for one change is Vim's documented way to do that (see
+     * {@code :help clear-undo}); it also clears any earlier history. The buffer-local value is put
+     * back afterwards, which may be "use the global value" (-123456).
+     */
+    static final String LOAD_WITHOUT_UNDO = """
+            local lines = { ... }
+            local saved = vim.bo.undolevels
+            vim.bo.undolevels = -1
+            local ok, err = pcall(vim.api.nvim_buf_set_lines, 0, 0, -1, false, lines)
+            vim.bo.undolevels = saved
+            if not ok then
+              error(err)
+            end
+            """;
+
     /** The user's {@code 'clipboard'} option (e.g. {@code unnamedplus}), evaluated after their init file ran. */
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
 

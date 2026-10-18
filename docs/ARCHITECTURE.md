@@ -50,6 +50,9 @@ listener queues one push on the input thread, coalescing a burst of edits, and i
 plug-in itself applies from Neovim. Without it, Neovim's next edit would be applied at stale line
 numbers. Remote listening is paused during that push, so Neovim's echo cannot undo a newer Eclipse edit.
 
+The **first push into a new buffer** loads the file and is not an undo step (`LuaScripts.LOAD_WITHOUT_UNDO`,
+Vim's `:help clear-undo`), so `u` right after opening a file does nothing, as in Vim.
+
 ### 2. Ordered async input
 
 `VerifyKeyListener` must return quickly. Keys are enqueued on a **single-thread executor** so sequences like `ciw` stay ordered without blocking SWT.
