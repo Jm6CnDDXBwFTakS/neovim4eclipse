@@ -14,7 +14,8 @@
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession}, through one helper per
  *       concern: {@code CaretSync} (caret and cursor, seeing the caret through
  *       {@code EditorCaret} so it is tested without a widget), {@code EditorKeyContext} (when the Vim
- *       Ctrl-key bindings are active), {@code VisualSelectionView}, {@code InsertTracker}.</li>
+ *       Ctrl-key bindings are active), {@code VisualSelectionView} (with {@code BlockOverlay} for
+ *       the blockwise rectangle), {@code InsertTracker}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.KeyInterceptor}: the key listener; it
  *       asks {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.KeyRouter} whether Neovim or Eclipse
  *       handles each key.</li>

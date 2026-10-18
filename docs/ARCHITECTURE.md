@@ -248,7 +248,7 @@ the replay early.
 - **Geometry:** `util/BlockSelection` converts Neovim's two corners (line + UTF-8 byte column) into per-line
   character ranges using virtual columns (tabs, wide characters, `$`). Tested without Eclipse.
 - **Display:** SWT's block selection is pixel based, so the native selection is cleared and the rectangle
-  is painted as an overlay by `editor/VisualSelectionView` (visible lines only).
+  is painted as an overlay by `editor/BlockOverlay` (visible lines only).
 - **Tab width:** `NeovimEditorController` sets Neovim's `tabstop` to the editor's tab width on attach, so
   Neovim's block commands and the overlay use the same columns.
 - **Keys:** the workbench dispatches key bindings *before* widget key listeners, so `Ctrl-V` etc. would never
@@ -315,6 +315,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | UI `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |
 | Visual `v`/`V` selection: corner order, inclusive end, caret end | `util/VisualSelectionGeometry` (applied by `editor/VisualSelectionView` through `EditorCaret`) | `VisualSelectionGeometryTest`, UI `VisualSelectionViewTest` |
+| Blockwise overlay painting | `editor/BlockOverlay` | UI `BlockOverlayTest` (paints into an image) |
 | Caret and Neovim cursor in step | `editor/CaretSync` (caret seen through `editor/EditorCaret`, on the widget `StyledTextCaret`) | UI `CaretSyncTest` (in-memory `FakeCaret`), `StyledTextCaretTest` |
 | Test text with caret and selection markers | UI test helper `VimText` (`"al\|pha"`, `«selected»`, `VimText.SAMPLE`) | `VimTextTest`; used by `CaretSyncTest`, `DocumentPositionsTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
