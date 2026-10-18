@@ -124,7 +124,8 @@ public final class NeovimEditorController implements AutoCloseable {
         } else {
             styledText.addVerifyKeyListener(keyInterceptor);
         }
-        this.selectionView = new VisualSelectionView(styledText, offsets, caret, caretSync::runAsFromNeovim);
+        this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
+                caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
         this.commandLine = new CommandLineBox(styledText, session, editor);
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);

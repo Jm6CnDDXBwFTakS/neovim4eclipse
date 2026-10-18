@@ -29,6 +29,7 @@ class VisualSelectionViewTest {
     private Shell shell;
     private StyledText widget;
     private IDocument doc;
+    private BlockOverlay overlay;
     private VisualSelectionView view;
     private final List<String> caretChanges = new ArrayList<>();
 
@@ -39,7 +40,8 @@ class VisualSelectionViewTest {
         widget.setText(TEXT);
         doc = new Document(TEXT);
         WidgetOffsets offsets = new WidgetOffsets(widget, null);
-        view = new VisualSelectionView(widget, offsets, new StyledTextCaret(widget, offsets), change -> {
+        overlay = new BlockOverlay(widget, offsets);
+        view = new VisualSelectionView(new StyledTextCaret(widget, offsets), overlay, change -> {
             caretChanges.add("from Neovim");
             change.run();
         });
@@ -101,5 +103,13 @@ class VisualSelectionViewTest {
         assertEquals(0, widget.getSelectionCount());
         assertEquals(13, widget.getCaretOffset()); // line 3, col 2
         assertEquals(List.of("from Neovim"), caretChanges);
+        assertEquals(3, overlay.ranges().size()); // one painted range per line
+    }
+
+    @Test
+    void leavingBlockwiseRemovesTheOverlay() throws Exception {
+        view.show(doc, new VisualSelection(true, "\u0016", 1, 1, 3, 2));
+        view.show(doc, VisualSelection.none());
+        assertEquals(List.of(), overlay.ranges());
     }
 }
