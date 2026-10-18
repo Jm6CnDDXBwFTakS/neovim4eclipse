@@ -406,9 +406,18 @@ public final class NeovimSession implements AutoCloseable {
      * Makes the attached buffer's text equal to {@code lines}. Only the differing line range is
      * replaced, and nothing at all when the text is equal, so that pushing the document does not add
      * undo steps or delete the marks of unchanged lines.
+     *
+     * <p>The first push into a new buffer loads the file: like Vim reading a file, it is not an undo
+     * step ({@link LuaScripts#LOAD_WITHOUT_UNDO}), so {@code u} right after opening does nothing.
      */
     public void setBufferLines(List<String> lines) throws Exception {
         List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
+        DocumentBuffer document = buffers.attachedDocument();
+        if (document != null && !document.loaded) {
+            await(api.executeLua(LuaScripts.LOAD_WITHOUT_UNDO, target));
+            document.loaded = true;
+            return;
+        }
         LineDiff.Change change = LineDiff.between(getBufferLines(), target);
         if (change != null) {
             await(buffers.attached().setLines(change.start(), change.end(), false, change.replacement()));

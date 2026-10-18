@@ -46,6 +46,8 @@ final class DocumentBuffers {
     /** Changed on the input thread only; read from any thread. */
     private volatile NeovimBufferApi attached;
     private volatile int attachedBufnr;
+    /** The document mirrored into the attached buffer; {@code null} for the home buffer. */
+    private volatile DocumentBuffer attachedDocument;
     /** Buffers created by {@link #show}, by number. */
     private final Map<Integer, NeovimBufferApi> created = new ConcurrentHashMap<>();
     /** Called with the number of a document buffer Neovim switched to by itself. */
@@ -71,6 +73,11 @@ final class DocumentBuffers {
         return attachedBufnr;
     }
 
+    /** The document mirrored into the attached buffer, or {@code null} when the home buffer is attached. */
+    DocumentBuffer attachedDocument() {
+        return attachedDocument;
+    }
+
     /**
      * Whether an event for {@code bufnr} concerns the attached document. Events whose buffer is
      * unknown are accepted, as they always were before buffers were per document.
@@ -91,10 +98,12 @@ final class DocumentBuffers {
             target = create(buffer.name);
             buffer.bufnr = bufnr(target);
             buffer.owner = this;
+            buffer.loaded = false;
         }
         // Attach first: the BufEnter this switch causes is then recognized as Eclipse's own.
         attached = target;
         attachedBufnr = buffer.bufnr;
+        attachedDocument = buffer;
         await(api.setCurrentBuffer(target.get()));
     }
 
@@ -129,6 +138,7 @@ final class DocumentBuffers {
         if (attachedBufnr == buffer.bufnr) {
             attached = home;
             attachedBufnr = bufnr(home);
+            attachedDocument = null;
         }
         // Leave the buffer first: wiping the window's buffer makes Neovim enter some other one,
         // which Eclipse would follow by activating that editor.

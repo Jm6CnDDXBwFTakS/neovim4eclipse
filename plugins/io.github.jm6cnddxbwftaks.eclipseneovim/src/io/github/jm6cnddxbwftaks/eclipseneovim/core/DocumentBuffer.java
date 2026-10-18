@@ -13,6 +13,11 @@ public final class DocumentBuffer {
     /** The registry that created the buffer; {@code null} before first use and after wiping. */
     volatile DocumentBuffers owner;
     volatile int bufnr = NotificationBridge.UNKNOWN_BUFFER;
+    /**
+     * Whether the document's text is in the buffer yet. The first load is kept out of the undo
+     * history, so that {@code u} in a freshly opened file does not empty it.
+     */
+    volatile boolean loaded;
 
     /** @param name buffer name shown by {@code :ls} and {@code %f}, normally the file path; may be empty */
     public DocumentBuffer(String name) {
