@@ -80,15 +80,17 @@ final class VisualSelectionView {
             return;
         }
         setBlockRanges(List.of());
-        int start = DocumentPositions.visualToOffset(doc, sel.startLine1Based(), sel.startCol0Based(),
-                sel.isLineWise(), true);
-        int end = DocumentPositions.visualToOffset(doc, sel.endLine1Based(), sel.endCol0Based(),
-                sel.isLineWise(), false);
-        if (start > end) {
-            int tmp = start;
-            start = end;
-            end = tmp;
-        }
+        // Neovim reports the anchor ('v') first and the cursor second, so after "V" then "k" the
+        // start is below the end. Order the corners before converting: a linewise start becomes the
+        // beginning of its line and the end the end of its line, which only works top to bottom.
+        boolean anchorFirst = sel.startLine1Based() < sel.endLine1Based()
+                || (sel.startLine1Based() == sel.endLine1Based() && sel.startCol0Based() <= sel.endCol0Based());
+        int topLine = anchorFirst ? sel.startLine1Based() : sel.endLine1Based();
+        int topCol = anchorFirst ? sel.startCol0Based() : sel.endCol0Based();
+        int bottomLine = anchorFirst ? sel.endLine1Based() : sel.startLine1Based();
+        int bottomCol = anchorFirst ? sel.endCol0Based() : sel.startCol0Based();
+        int start = DocumentPositions.visualToOffset(doc, topLine, topCol, sel.isLineWise(), true);
+        int end = DocumentPositions.visualToOffset(doc, bottomLine, bottomCol, sel.isLineWise(), false);
         // Neovim's visual selection includes the character under the cursor; SWT's end is exclusive.
         if (!sel.isLineWise() && end < doc.getLength()) {
             end++;

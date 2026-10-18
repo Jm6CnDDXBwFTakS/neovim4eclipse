@@ -70,6 +70,13 @@ class VisualSelectionViewTest {
     }
 
     @Test
+    void linewiseSelectionUpwardsCoversWholeLines() throws Exception {
+        // V on "gamma", then k: the anchor (line 3) comes before the cursor (line 2)
+        view.show(doc, new VisualSelection(true, "V", 3, 0, 2, 2));
+        assertEquals(new Point(6, 16), widget.getSelection());
+    }
+
+    @Test
     void inactiveSelectionClearsTheWidgetSelection() throws Exception {
         widget.setSelection(0, 5);
         view.show(doc, VisualSelection.none());
