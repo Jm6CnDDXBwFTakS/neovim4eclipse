@@ -214,7 +214,7 @@ keys* and to keep the editor in step with playback.
 
 ## Handing typing over to Eclipse
 
-Entering insert mode is followed by a full buffer sync from Neovim (`KeyInput`), which the editor applies
+Entering insert mode is followed by a full buffer sync from Neovim (`KeyInput`, decided by `util/ModeTransition`), which the editor applies
 asynchronously on the UI thread. Text Eclipse typed before that sync landed would be overwritten by it. So
 Eclipse types only once the sync has been applied: the sync's `BufferChange` carries an `afterApply` action,
 run by `BufferSynchronizer` after applying it, which sets `NeovimSession.isEclipseTypingReady()`. A key that
@@ -321,6 +321,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
 | Key-input pipeline | `core/KeyInput` | `NeovimSessionIntegrationTest` (needs nvim) |
+| Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
