@@ -17,7 +17,7 @@ import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.swt.widgets.Display;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferPort;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.Edit;
@@ -53,7 +53,7 @@ public final class BufferSynchronizer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(BufferSynchronizer.class.getName());
 
     private final IDocument document;
-    private final NeovimSession session;
+    private final BufferPort session;
     private final AtomicBoolean applyingRemote = new AtomicBoolean(false);
     /** Document changes seen while one Neovim change was applied (more than 1: see {@link #applyChange}). */
     private int changesWhileApplying;
@@ -89,7 +89,7 @@ public final class BufferSynchronizer implements AutoCloseable {
         }
     };
 
-    public BufferSynchronizer(IDocument document, NeovimSession session) {
+    public BufferSynchronizer(IDocument document, BufferPort session) {
         this.document = document;
         this.session = session;
     }

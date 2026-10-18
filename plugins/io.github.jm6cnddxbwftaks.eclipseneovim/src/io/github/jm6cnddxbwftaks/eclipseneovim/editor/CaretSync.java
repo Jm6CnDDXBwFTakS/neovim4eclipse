@@ -17,7 +17,7 @@ import org.eclipse.swt.events.MouseListener;
 import org.eclipse.swt.widgets.Display;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPort;
 
 /**
  * Keeps the editor's caret and Neovim's cursor in the same place, in both directions:
@@ -45,7 +45,7 @@ final class CaretSync {
     private static final Logger LOG = Logger.getLogger(CaretSync.class.getName());
 
     private final StyledText widget;
-    private final NeovimSession session;
+    private final CursorPort session;
     /** The editor's current document (may be {@code null}). */
     private final Supplier<IDocument> document;
     private final WidgetOffsets offsets;
@@ -66,7 +66,7 @@ final class CaretSync {
         }
     };
 
-    CaretSync(StyledText widget, WidgetOffsets offsets, NeovimSession session, Supplier<IDocument> document,
+    CaretSync(StyledText widget, WidgetOffsets offsets, CursorPort session, Supplier<IDocument> document,
             BooleanSupplier followEclipseCaret, BooleanSupplier applyingRemoteChange) {
         this.widget = widget;
         this.offsets = offsets;
