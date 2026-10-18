@@ -27,7 +27,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.BlockSelection.LineRange;
  *
  * <ul>
  *   <li>Characterwise ({@code v}) and linewise ({@code V}) selections become the widget's own
- *       selection ({@link StyledText#setSelection(int, int)}).</li>
+ *       selection ({@link StyledText#setSelection(int, int)}), with the caret at the end where
+ *       Neovim's cursor is (after {@code o} it moves to the other end).</li>
  *   <li>A blockwise selection ({@code Ctrl-V}) cannot be expressed that way: SWT's block selection
  *       works in pixels, not in Vim's screen columns (tabs, wide characters, {@code $}). The native
  *       selection is cleared, the caret is put on Neovim's cursor corner, and the rectangle is
@@ -98,10 +99,21 @@ final class VisualSelectionView {
         // Document offsets; the widget leaves folded code out, so convert (unfolding what is selected).
         int widgetStart = offsets.toWidgetRevealing(start);
         int widgetEnd = offsets.toWidgetRevealing(end);
-        if (widgetStart >= 0 && widgetEnd >= 0) {
-            styledText.setSelection(widgetStart, widgetEnd);
-            styledText.showSelection();
+        if (widgetStart < 0 || widgetEnd < 0) {
+            return;
         }
+        // The caret goes to the end Neovim's cursor is on, so "o" visibly jumps to the other end.
+        // SWT puts the caret at the first argument when it is the larger one. Marked as coming
+        // from Neovim: otherwise the caret listener would send the caret back and move the cursor.
+        boolean cursorOnTop = !anchorFirst;
+        asCaretFromNeovim.accept(() -> {
+            if (cursorOnTop) {
+                styledText.setSelection(widgetEnd, widgetStart);
+            } else {
+                styledText.setSelection(widgetStart, widgetEnd);
+            }
+            styledText.showSelection();
+        });
     }
 
     private void showBlock(IDocument doc, VisualSelection sel) throws BadLocationException {

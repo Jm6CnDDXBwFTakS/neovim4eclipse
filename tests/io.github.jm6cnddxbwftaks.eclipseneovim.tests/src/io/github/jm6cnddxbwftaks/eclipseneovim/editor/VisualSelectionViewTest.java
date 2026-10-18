@@ -77,6 +77,16 @@ class VisualSelectionViewTest {
     }
 
     @Test
+    void theCaretIsAtTheCursorEndAndNotEchoedToNeovim() throws Exception {
+        view.show(doc, new VisualSelection(true, "v", 1, 1, 2, 1)); // cursor below the anchor
+        assertEquals(8, widget.getCaretOffset());
+        view.show(doc, new VisualSelection(true, "v", 2, 1, 1, 1)); // after "o": cursor above
+        assertEquals(new Point(1, 8), widget.getSelection());
+        assertEquals(1, widget.getCaretOffset());
+        assertEquals(List.of("from Neovim", "from Neovim"), caretChanges);
+    }
+
+    @Test
     void inactiveSelectionClearsTheWidgetSelection() throws Exception {
         widget.setSelection(0, 5);
         view.show(doc, VisualSelection.none());
