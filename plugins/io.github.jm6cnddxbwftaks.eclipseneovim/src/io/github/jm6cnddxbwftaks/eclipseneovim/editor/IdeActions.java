@@ -8,7 +8,6 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.commands.NotHandledException;
-import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
@@ -26,9 +25,9 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.TabNavigation;
  * editor activates "Editing Java Source", which binds F3 to Java's Open Declaration), so asking
  * the binding service "what does F3 run here?" finds the right command for any editor.
  * <ul>
- *   <li>{@code gd}: the command bound to F3; if none (a plain text file), Open Hyperlink when a
- *       link is under the cursor ({@link HyperlinkProbe}), else Neovim's own {@code gd} (jump to the
- *       word's first use, its "local declaration").</li>
+ *   <li>{@code gd}: the command bound to F3; if none (a plain text file), Neovim's own {@code gd}
+ *       (jump to the word's first use, its "local declaration"). Hyperlinks are not followed: that
+ *       is Ctrl+click, or Open Hyperlink.</li>
  *   <li>{@code K}: Show Tooltip Description (F2), the hover information of the text editor.</li>
  * </ul>
  *
@@ -44,18 +43,14 @@ final class IdeActions {
     /**
      * Runs {@code action} in {@code editor}; an unknown action name is logged and ignored.
      *
-     * @param caret       the caret as a document offset, for the hyperlink check of {@code gd}
-     * @param viewer      the editor's text viewer, or {@code null}
-     * @param neovimGd    runs Neovim's own {@code gd}, bypassing the plug-in's mapping
+     * @param neovimGd runs Neovim's own {@code gd}, bypassing the plug-in's mapping
      */
-    static void run(IdeAction action, ITextEditor editor, ITextViewer viewer, int caret, Runnable neovimGd) {
+    static void run(IdeAction action, ITextEditor editor, Runnable neovimGd) {
         switch (action.name()) {
             case IdeAction.DEFINITION -> {
                 String bound = commandBoundTo("F3");
                 if (bound != null) {
                     execute(editor, bound, "gd");
-                } else if (viewer != null && HyperlinkProbe.isAt(editor, viewer, caret)) {
-                    execute(editor, ITextEditorActionDefinitionIds.OPEN_HYPERLINK, "gd");
                 } else {
                     neovimGd.run();
                 }

@@ -8,7 +8,6 @@ import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
@@ -19,7 +18,6 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
-import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.link.LinkedModeModel;
 import org.eclipse.jface.text.link.LinkedPosition;
 import org.eclipse.jface.text.link.LinkedPositionGroup;
@@ -355,15 +353,6 @@ class EditorEndToEndTest {
                 () -> "; caret " + widget.getCaretOffset());
         type(widget, 'x');
         expectText("int  = 1;\ny = x;\n");
-    }
-
-    /** {@code gd} opens a link only where there is one; elsewhere it must not show Eclipse's dialog. */
-    @Test
-    void hyperlinksAreFoundOnlyWhereThereIsOne() {
-        document.set("see https://example.com now\n");
-        ITextViewer viewer = (ITextViewer) editor.getAdapter(ITextOperationTarget.class);
-        assertTrue(HyperlinkProbe.isAt(editor, viewer, 8), "the URL is a link");
-        assertFalse(HyperlinkProbe.isAt(editor, viewer, 1), "\"see\" is not");
     }
 
     @Test
