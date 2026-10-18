@@ -204,7 +204,7 @@ keys* and to keep the editor in step with playback.
 - **Playback (`@x`):** `@` is a pending-character command (see "Pending commands"). The next key starts the
   playback: buffer events are suppressed (`suppressBufferEvents`), and when Neovim is idle the whole buffer is
   fetched once (timeout 60 s) and applied as one minimal edit (`syncBufferAfterMacro`).
-- **Arguments vs prompts:** after `f F t T r @ m ' \` " q` the next key is an argument, so `KeyInterceptor`
+- **Arguments vs prompts:** after `f F t T r @ m ' \` " q` the next key is an argument, so `KeyRouter`
   forwards it to Neovim instead of opening the `:` or `/` prompt (`NvimKeys.takesArgument`, plus Neovim's own
   `blocking` flag as reported by `nvim_get_mode`). `q` while recording stops it and takes no argument.
 
@@ -303,6 +303,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Concern | Class | Tests |
 |---------|-------|-------|
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
+| Which key goes to Neovim or Eclipse | `core/KeyRouter` (SWT glue: `editor/KeyInterceptor`) | `KeyRouterTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand`, `editor/HostCommands` | `HostExCommandTest`, UI `HostCommandsTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |

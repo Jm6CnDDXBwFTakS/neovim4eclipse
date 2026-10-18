@@ -9,7 +9,7 @@ Suggested reading order of the code, once you have read parts 1 and 2:
 1. `META-INF/MANIFEST.MF`, `plugin.xml`, `build.properties` (the plug-in's "shape")
 2. `Activator`, `EarlyStartup` (start-up)
 3. `editor/EditorAttachManager` (which editor gets Neovim)
-4. `editor/NeovimEditorController` (one attached editor), `editor/KeyInterceptor` (keys)
+4. `editor/NeovimEditorController` (one attached editor), `editor/KeyInterceptor` and `core/KeyRouter` (keys)
 5. `core/NeovimSession`, `core/LuaScripts`, `core/NotificationBridge` (talking to Neovim)
 6. `sync/BufferSynchronizer` and the `util` classes it uses (keeping text in step)
 
@@ -308,8 +308,9 @@ popup for `:ls` and similar uses it (`LuaScripts.CAPTURE_OUTPUT`).
 
 ### 3.2 One normal-mode key: `x`
 
-1. `KeyInterceptor.verifyKey` (UI thread) maps the event to `"x"`, sets `event.doit = false` so the
-   widget does nothing, and calls `session.inputAsync("x")`, which only queues work.
+1. `KeyInterceptor.verifyKey` (UI thread) maps the event to `"x"` and asks `KeyRouter.route`, which
+   calls `session.inputAsync("x")` (it only queues work) and answers "consumed"; the interceptor then
+   sets `event.doit = false` so the widget does nothing.
 2. On the input thread: `nvim_input("x")`, then `nvim_get_mode`, then (if not blocking) the
    `STATE_SNAPSHOT` Lua call.
 3. Neovim deletes the character and sends `nvim_buf_lines_event` for that line.

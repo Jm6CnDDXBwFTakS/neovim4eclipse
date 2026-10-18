@@ -88,4 +88,5 @@ vim.g.eclipse_ide_keys = 0   -- or false
 - `prefs/CtrlKeysPreferencePage`: the check boxes.
 - `core/LuaScripts` (`SETUP`) and `editor/IdeActions`: the keys handed to Eclipse.
 - `editor/VimKeyContexts`: activates the contexts of the letters sent to Neovim.
-- `editor/KeyInterceptor`: routes every other key.
+- `core/KeyRouter`: decides who handles every other key (unit-tested in `KeyRouterTest`);
+  `editor/KeyInterceptor` is the SWT listener that feeds it.

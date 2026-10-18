@@ -27,6 +27,9 @@
  *       </ul></li>
  *   <li>Value types passed to listeners: {@code CursorPos}, {@code VisualSelection},
  *       {@code BufferChange}; and {@code DocumentBuffer}, the handle of one document's buffer.</li>
+ *   <li>{@code KeyRouter}: whether each key goes to Neovim or stays with Eclipse; the SWT listener
+ *       ({@code editor/KeyInterceptor}) only feeds it. {@code NeovimSession} implements its small
+ *       {@code KeyRouter.Neovim} interface, so tests use a fake session.</li>
  *   <li>{@code LuaScripts}: every Lua chunk run inside Neovim, with comments.</li>
  *   <li>{@code NotificationBridge}: decodes the msgpack-rpc notifications Neovim sends (buffer line
  *       events and the plug-in's own {@code eclipse_*} events).</li>
