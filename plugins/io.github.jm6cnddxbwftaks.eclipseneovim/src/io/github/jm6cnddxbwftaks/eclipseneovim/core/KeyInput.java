@@ -14,6 +14,7 @@ import java.util.logging.Logger;
 import com.ensarsarajcic.neovim.java.api.NeovimApi;
 import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.ModeTransition;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimKeys;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 
@@ -154,20 +155,16 @@ final class KeyInput {
             session.publishState();
             return;
         }
-        boolean nowTyping = session.isTypingMode();
-        if (!wasTyping && nowTyping) {
-            // Eclipse types in insert mode, except after a block selection (Vim repeats the text on
-            // every line at Esc) and while recording (the macro must contain every typed key). Only
-            // ever set here, never cleared: the key listener may already have made this insert
-            // Neovim-driven (a key typed before the sync below reached the editor).
-            if (VimModes.isBlockVisual(modeBefore) || session.isRecording()) {
-                neovimDrivenInsert = true;
-            }
-            session.syncBufferFromNeovim(); // entering insert (o/O/cc ...): make Eclipse match first
-        } else if (wasTyping && !nowTyping && neovimDrivenInsert) {
-            neovimDrivenInsert = false;
-            session.syncBufferFromNeovim(); // Esc just repeated the typed text on every line of the block
-        } else if (!nowTyping && NvimKeys.isBufferMutating(keys)) {
+        ModeTransition transition = ModeTransition.after(modeBefore, session.getMode(), neovimDrivenInsert,
+                session.isRecording(), keys);
+        switch (transition) {
+            case ENTER_NEOVIM_INSERT -> neovimDrivenInsert = true;
+            case LEAVE_NEOVIM_INSERT -> neovimDrivenInsert = false;
+            // ENTER_INSERT leaves the flag alone, never clears it: the key listener may already have
+            // made this insert Neovim-driven (a key typed before the sync below reached the editor).
+            case ENTER_INSERT, TEXT_CHANGED, NONE -> { }
+        }
+        if (transition.syncsBuffer()) {
             session.syncBufferFromNeovim();
         }
         session.publishState();
