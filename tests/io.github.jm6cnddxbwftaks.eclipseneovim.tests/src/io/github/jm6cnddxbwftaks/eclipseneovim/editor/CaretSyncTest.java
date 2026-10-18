@@ -95,6 +95,21 @@ class CaretSyncTest {
     }
 
     @Test
+    void aSelectionSendsItsStartWhereverTheCaretIs() {
+        VimText marked = VimText.parse("alpha\n«be|ta»\n"); // caret inside the selection
+        IDocument doc = marked.document();
+        FakeCaret placed = marked.fakeCaret(doc);
+        RecordingCursor cursor = new RecordingCursor();
+        CaretSync other = new CaretSync(placed, cursor, UiExecutor.IMMEDIATE, () -> doc, () -> true, () -> false);
+        try {
+            other.sendEclipseCaretNow();
+            assertEquals(List.of("now 2:0"), cursor.moves);
+        } finally {
+            other.dispose();
+        }
+    }
+
+    @Test
     void nothingIsSentWhileNeovimModeIsOff() {
         neovimModeOn = false;
         caret.userMovesTo(2, 0);

@@ -39,6 +39,25 @@ class DocumentPositionsTest {
     }
 
     @Test
+    void byteColumnsRoundTripOnTextWithTabsAndWideCharacters() throws Exception {
+        IDocument sample = VimText.parse(VimText.SAMPLE).document();
+        String text = sample.get();
+        for (int offset = 0; offset <= sample.getLength(); offset++) {
+            if (offset > 0 && Character.isHighSurrogate(text.charAt(offset - 1))) {
+                continue; // between the two halves of 😀: not a place a caret can be
+            }
+            int[] lineCol = DocumentPositions.offsetToLineCol(sample, offset);
+            assertEquals(offset, DocumentPositions.byteColToOffset(sample, lineCol[0], lineCol[1]), "offset " + offset);
+        }
+    }
+
+    @Test
+    void anEmojiIsFourBytes() {
+        VimText t = VimText.parse("smile 😀| end");
+        assertArrayEquals(new int[] { 1, 10 }, DocumentPositions.offsetToLineCol(t.document(), t.caret()));
+    }
+
+    @Test
     void linewiseVisualCornersCoverWholeLines() throws Exception {
         assertEquals(5, DocumentPositions.visualToOffset(doc, 2, 3, true, true));
         assertEquals(10, DocumentPositions.visualToOffset(doc, 2, 0, true, false));

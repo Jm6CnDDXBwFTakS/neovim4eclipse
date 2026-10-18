@@ -25,6 +25,18 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 start an Eclipse workbench, which opens a window for a few seconds; on a headless Linux machine run
 `xvfb-run -a ./mvnw verify`.
 
+### Test helpers and fakes
+
+No mocking framework is used; tests use real JFace objects and small hand-written fakes:
+
+- `VimText` (UI tests): a real `Document` from marked text. `VimText.parse("al|pha")` puts the caret
+  before `pha`, `«beta»` selects `beta`, and `VimText.SAMPLE` holds tabs, multi-byte characters and
+  an empty line.
+- `FakeCaret` (UI tests): an in-memory caret and selection with `assertCaretPosition(line, col)` and
+  `assertSelectionRange(start, length)`.
+- Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`) and `UiExecutor`
+  (`IMMEDIATE`, or one that holds work back) are defined next to the tests that use them.
+
 Avoid `clean` while a runtime Eclipse launched from the IDE is running: it deletes the plug-in's
 `lib/*.jar`, which that Eclipse is using.
 

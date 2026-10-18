@@ -100,6 +100,13 @@ final class FakeCaret implements EditorCaret {
         fireMoved();
     }
 
+    /** Sets the caret and selection without notifying anyone, as the starting state of a test. */
+    void place(int caretOffset, int start, int length) {
+        caret = caretOffset;
+        selectionStart = start;
+        selectionLength = length;
+    }
+
     /** The editor's widget is disposed (the editor closed). */
     void dispose() {
         disposed = true;
