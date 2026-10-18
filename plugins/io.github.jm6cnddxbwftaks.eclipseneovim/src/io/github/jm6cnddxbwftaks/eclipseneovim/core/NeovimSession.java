@@ -618,6 +618,19 @@ public final class NeovimSession implements AutoCloseable {
         });
     }
 
+    /**
+     * Runs normal-mode {@code keys} without mappings ({@code :normal!}), then refreshes Eclipse.
+     * Used for Neovim's own meaning of a key the plug-in maps to an IDE action, for example
+     * {@code gd} in a file that has no Open Declaration.
+     */
+    public void normalAsync(String keys) {
+        submit("normal! " + keys, Level.WARNING, () -> {
+            await(api.executeLua(LuaScripts.NORMAL_WITHOUT_MAPPINGS, List.of(keys)));
+            syncBufferFromNeovim();
+            syncModeAndCursorFromNeovim();
+        });
+    }
+
     /** Runs a search ({@code /} or {@code ?}) and moves the cursor to the match. */
     public void search(String pattern, boolean backward) {
         if (pattern == null || pattern.isEmpty()) {

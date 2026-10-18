@@ -8,6 +8,7 @@ import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
@@ -18,6 +19,7 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.link.LinkedModeModel;
 import org.eclipse.jface.text.link.LinkedPosition;
 import org.eclipse.jface.text.link.LinkedPositionGroup;
@@ -340,6 +342,28 @@ class EditorEndToEndTest {
         IWorkbenchPage page = editor.getSite().getPage();
         waitUntil("the editor to close", TIMEOUT_MS, () -> page.findEditor(editor.getEditorInput()) == null);
         editor = null; // closed already: nothing for closeEditor() to do
+    }
+
+    /** In a text file, which has no Open Declaration, {@code gd} is Neovim's own: to the word's first use. */
+    @Test
+    void gdInATextFileJumpsToTheFirstUseOfTheWord() {
+        document.set("int x = 1;\ny = x;\n");
+        UiTestSupport.spin(300); // Eclipse's own change is pushed to Neovim
+        type(widget, "G$h"); // on the x of "y = x;"
+        type(widget, "gd");
+        waitUntil("the caret on the first x", TIMEOUT_MS, () -> widget.getCaretOffset() == 4,
+                () -> "; caret " + widget.getCaretOffset());
+        type(widget, 'x');
+        expectText("int  = 1;\ny = x;\n");
+    }
+
+    /** {@code gd} opens a link only where there is one; elsewhere it must not show Eclipse's dialog. */
+    @Test
+    void hyperlinksAreFoundOnlyWhereThereIsOne() {
+        document.set("see https://example.com now\n");
+        ITextViewer viewer = (ITextViewer) editor.getAdapter(ITextOperationTarget.class);
+        assertTrue(HyperlinkProbe.isAt(editor, viewer, 8), "the URL is a link");
+        assertFalse(HyperlinkProbe.isAt(editor, viewer, 1), "\"see\" is not");
     }
 
     @Test
