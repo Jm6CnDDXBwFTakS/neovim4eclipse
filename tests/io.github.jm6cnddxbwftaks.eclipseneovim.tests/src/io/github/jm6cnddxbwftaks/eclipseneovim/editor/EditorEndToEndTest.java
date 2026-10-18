@@ -221,6 +221,50 @@ class EditorEndToEndTest {
         page.closeEditor(braceEditor, false);
     }
 
+    /**
+     * {@code o} in visual mode moves the cursor to the other end of the selection. Drawing the
+     * selection moves the Eclipse caret, which must not be sent back to Neovim: that would put the
+     * cursor back where it was. Here {@code o} then {@code j} shrinks the selection to "beta".
+     */
+    @Test
+    void oInVisualLineModeMovesTheCursorToTheOtherEnd() {
+        typeSlowly("ggVjoj");
+        type(widget, 'd');
+        expectText("alpha\ngamma\n");
+    }
+
+    /** As above, characterwise: after {@code o} the cursor is on "a" of "alpha", {@code l} moves it on. */
+    @Test
+    void oInVisualModeMovesTheCursorToTheOtherEnd() {
+        typeSlowly("ggvjol");
+        type(widget, 'd');
+        expectText("aeta\ngamma\n");
+    }
+
+    /**
+     * Blockwise: {@code o} goes to the opposite corner, {@code O} to the other corner on the same
+     * line. Ctrl-V is sent to Neovim directly (synthetic Ctrl keys miss the workbench bindings).
+     */
+    @Test
+    void oAndCapitalOInVisualBlockModeMoveTheCursorToAnotherCorner() {
+        type(widget, "gg");
+        session.inputAsync("<C-v>");
+        waitUntil("visual block mode", TIMEOUT_MS, () -> "\u0016".equals(session.getMode()));
+        typeSlowly("jlo"); // cursor on "a" of "alpha", anchor on "e" of "beta"
+        typeSlowly("O"); // cursor on "l", anchor on "b"
+        typeSlowly("j"); // block: column 0-1 of "beta" only
+        type(widget, 'd');
+        expectText("alpha\nta\ngamma\n");
+    }
+
+    /** Types one key at a time, letting each selection update reach the widget before the next key. */
+    private void typeSlowly(String keys) {
+        for (char key : keys.toCharArray()) {
+            type(widget, key);
+            UiTestSupport.spin(200);
+        }
+    }
+
     @Test
     void undoRevertsNeovimsChange() {
         type(widget, "ggdd");
