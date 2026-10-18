@@ -54,7 +54,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
  * marks survive switching editors. Exactly one of them is <em>attached</em> at a time: its events
  * reach the listeners, events of other buffers are dropped.
  */
-public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim {
+public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
