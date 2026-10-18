@@ -54,6 +54,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - Build the UI test fragment with the whole reactor, never `-pl ... -am`: Maven cannot see its
   dependency on the plug-in (declared in `MANIFEST.MF`) and would test a stale copy from `~/.m2`.
 - Stale classes in `tests/.../target/classes` survive deleting their source; remove them by hand.
+- After changing a constructor or method signature, callers whose source did not change are not
+  recompiled and fail at run time with `NoSuchMethodError` (in UI tests: every attach times out).
+  Delete `plugins/.../target/classes` (not `clean`) and build again.
 - Synthetic SWT key events in UI tests need `event.doit = true`.
 
 ## Conventions
