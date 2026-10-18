@@ -116,6 +116,10 @@ is wiped (`closeBufferAsync`).
 
 Never call `await` on the UI thread for key handling.
 
+`BufferSynchronizer` and `CaretSync` hand work to the UI thread through `core/UiExecutor`, not
+`Display` directly: the editor passes `editor/SwtUiExecutor`, tests pass `UiExecutor.IMMEDIATE`
+or a fake that holds the work back (for example, to close the editor while a Neovim change waits).
+
 ## Dependency stack
 
 - **neovim-java** (`neovim-api`, `core-rpc`, `reactive-core-rpc`, handlers; version in the root `pom.xml`)
@@ -309,7 +313,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
-| Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`) | UI `BufferSynchronizerTest` (fake port, real `Document`) |
+| Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | UI `BufferSynchronizerTest` (fake port, real `Document`) |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |

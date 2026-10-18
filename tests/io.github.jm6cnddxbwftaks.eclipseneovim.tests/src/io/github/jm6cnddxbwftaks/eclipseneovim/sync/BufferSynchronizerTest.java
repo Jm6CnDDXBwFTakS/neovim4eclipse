@@ -17,13 +17,14 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferPort;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.UiExecutor;
 
 /**
  * {@link BufferSynchronizer} against a real JFace {@link Document} and a fake {@link BufferPort}: no
  * Neovim process. The fake keeps queued work until the test runs it, the way the session's input
  * thread would run it later; Neovim's changes are delivered by calling the registered listeners.
- *
- * <p>Runs on the UI thread (the synchronizer applies Neovim's changes there).
+ * The UI thread is {@link UiExecutor#IMMEDIATE}, or {@link HeldUi} to act as if Neovim's change
+ * came from a session thread and is still waiting for the UI thread.
  */
 class BufferSynchronizerTest {
 
@@ -66,9 +67,41 @@ class BufferSynchronizerTest {
         }
     }
 
+    /** A UI thread that is never the caller's: work waits until {@link #runHeld()}. */
+    static final class HeldUi implements UiExecutor {
+        final List<Runnable> held = new ArrayList<>();
+        boolean available = true;
+
+        @Override
+        public boolean isAvailable() {
+            return available;
+        }
+
+        @Override
+        public boolean isUiThread() {
+            return false;
+        }
+
+        @Override
+        public void asyncExec(Runnable work) {
+            held.add(work);
+        }
+
+        @Override
+        public void syncExec(Runnable work) {
+            held.add(work); // a real syncExec would wait; the test decides when the UI thread gets to it
+        }
+
+        void runHeld() {
+            List<Runnable> work = new ArrayList<>(held);
+            held.clear();
+            work.forEach(Runnable::run);
+        }
+    }
+
     private final IDocument document = new Document("alpha\nbeta\n");
     private final FakeBufferPort neovim = new FakeBufferPort();
-    private final BufferSynchronizer sync = new BufferSynchronizer(document, neovim);
+    private final BufferSynchronizer sync = new BufferSynchronizer(document, neovim, UiExecutor.IMMEDIATE);
 
     @AfterEach
     void close() {
@@ -114,5 +147,39 @@ class BufferSynchronizerTest {
         assertEquals(1, neovim.listeners.size());
         sync.close();
         assertTrue(neovim.listeners.isEmpty());
+    }
+
+    @Test
+    void aNeovimChangeFromASessionThreadIsAppliedOnTheUiThread() {
+        HeldUi ui = new HeldUi();
+        try (BufferSynchronizer offThread = new BufferSynchronizer(document, neovim, ui)) {
+            offThread.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("ALPHA")));
+            assertEquals("alpha\nbeta\n", document.get()); // not on the session thread
+            ui.runHeld();
+            assertEquals("ALPHA\nbeta\n", document.get());
+        }
+    }
+
+    @Test
+    void aChangeStillWaitingForTheUiThreadWhenTheEditorClosesIsDropped() {
+        HeldUi ui = new HeldUi();
+        BufferSynchronizer offThread = new BufferSynchronizer(document, neovim, ui);
+        offThread.startRemoteListening();
+        neovim.neovimChanged(new BufferChange(0, 1, List.of("ALPHA")));
+        offThread.close();
+        ui.runHeld();
+        assertEquals("alpha\nbeta\n", document.get());
+    }
+
+    @Test
+    void withoutAUiNeovimsChangesAreDropped() {
+        HeldUi ui = new HeldUi();
+        ui.available = false;
+        try (BufferSynchronizer offThread = new BufferSynchronizer(document, neovim, ui)) {
+            offThread.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("ALPHA")));
+            assertTrue(ui.held.isEmpty());
+        }
     }
 }
