@@ -38,7 +38,7 @@ class VisualSelectionViewTest {
         widget = new StyledText(shell, SWT.MULTI);
         widget.setText(TEXT);
         doc = new Document(TEXT);
-        view = new VisualSelectionView(widget, change -> {
+        view = new VisualSelectionView(widget, new WidgetOffsets(widget, null), change -> {
             caretChanges.add("from Neovim");
             change.run();
         });

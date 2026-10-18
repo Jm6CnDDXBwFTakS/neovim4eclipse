@@ -36,7 +36,9 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
  * recognized by {@code applyingRemoteChange}.
  *
  * <p>Neovim columns are UTF-8 bytes, Eclipse columns UTF-16 chars; {@link DocumentPositions}
- * converts between them. Created and disposed on the UI thread.
+ * converts between them. The widget's caret offset is first turned into a document offset
+ * ({@link WidgetOffsets}), because folded code is missing from the widget. Created and disposed on
+ * the UI thread.
  */
 final class CaretSync {
 
@@ -46,6 +48,7 @@ final class CaretSync {
     private final NeovimSession session;
     /** The editor's current document (may be {@code null}). */
     private final Supplier<IDocument> document;
+    private final WidgetOffsets offsets;
     /** Whether caret moves in Eclipse should reach Neovim (Neovim mode on). */
     private final BooleanSupplier followEclipseCaret;
     /** True while the synchronizer applies a change from Neovim to the document. */
@@ -63,9 +66,10 @@ final class CaretSync {
         }
     };
 
-    CaretSync(StyledText widget, NeovimSession session, Supplier<IDocument> document,
+    CaretSync(StyledText widget, WidgetOffsets offsets, NeovimSession session, Supplier<IDocument> document,
             BooleanSupplier followEclipseCaret, BooleanSupplier applyingRemoteChange) {
         this.widget = widget;
+        this.offsets = offsets;
         this.session = session;
         this.document = document;
         this.followEclipseCaret = followEclipseCaret;
@@ -105,8 +109,11 @@ final class CaretSync {
                 }
                 int offset = Math.min(DocumentPositions.byteColToOffset(doc, pos.line1Based(), pos.col0Based()),
                         doc.getLength());
-                widget.setCaretOffset(offset);
-                widget.showSelection();
+                int widgetOffset = offsets.toWidgetRevealing(offset); // unfolds code the cursor moved into
+                if (widgetOffset >= 0) {
+                    widget.setCaretOffset(widgetOffset);
+                    widget.showSelection();
+                }
             } catch (Exception e) {
                 LOG.log(Level.FINE, "Cursor apply failed", e);
             }
@@ -130,7 +137,7 @@ final class CaretSync {
             return;
         }
         try {
-            int[] lineCol = DocumentPositions.offsetToLineCol(document.get(), widget.getCaretOffset());
+            int[] lineCol = DocumentPositions.offsetToLineCol(document.get(), offsets.caretModelOffset());
             session.setCursorAsync(lineCol[0], lineCol[1]);
         } catch (Exception e) {
             LOG.log(Level.FINE, "Eclipse→Neovim cursor failed", e);

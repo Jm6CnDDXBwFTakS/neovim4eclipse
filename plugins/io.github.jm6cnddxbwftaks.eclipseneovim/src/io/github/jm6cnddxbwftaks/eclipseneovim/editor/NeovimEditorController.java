@@ -78,6 +78,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final EditorKeyContext keyContext;
     /** Caret and Neovim cursor, kept in the same place. */
     private final CaretSync caretSync;
+    /** Widget offsets to document offsets and back (folded code is not in the widget). */
+    private final WidgetOffsets offsets;
     private volatile boolean closed;
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
@@ -98,7 +100,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.keyInterceptor = new KeyInterceptor(session);
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session);
-        this.caretSync = new CaretSync(styledText, session, () -> documentOf(editor),
+        this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
+        this.caretSync = new CaretSync(styledText, offsets, session, () -> documentOf(editor),
                 this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode());
@@ -115,7 +118,7 @@ public final class NeovimEditorController implements AutoCloseable {
         } else {
             styledText.addVerifyKeyListener(keyInterceptor);
         }
-        this.selectionView = new VisualSelectionView(styledText, caretSync::runAsFromNeovim);
+        this.selectionView = new VisualSelectionView(styledText, offsets, caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
         this.commandLine = new CommandLineBox(styledText, session, editor);
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);
@@ -139,8 +142,7 @@ public final class NeovimEditorController implements AutoCloseable {
 
         modeStatus.addTo(editor.getEditorSite());
 
-        int caretOffset = styledText.getCaretOffset();
-        int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), caretOffset);
+        int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offsets.caretModelOffset());
 
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
 
@@ -213,14 +215,16 @@ public final class NeovimEditorController implements AutoCloseable {
 
     /** The editor's text viewer, if it supports ordered key listeners (all JFace source viewers do). */
     private static ITextViewerExtension viewerExtensionOf(ITextEditor editor) {
-        if (editor.getAdapter(ITextViewer.class) instanceof ITextViewerExtension extension) {
-            return extension;
+        return viewerOf(editor) instanceof ITextViewerExtension extension ? extension : null;
+    }
+
+    /** The editor's text viewer, or {@code null}. */
+    private static ITextViewer viewerOf(ITextEditor editor) {
+        if (editor.getAdapter(ITextViewer.class) instanceof ITextViewer viewer) {
+            return viewer;
         }
         // AbstractTextEditor answers its source viewer as the text operation target.
-        if (editor.getAdapter(ITextOperationTarget.class) instanceof ITextViewerExtension extension) {
-            return extension;
-        }
-        return null;
+        return editor.getAdapter(ITextOperationTarget.class) instanceof ITextViewer viewer ? viewer : null;
     }
 
     /**
@@ -292,7 +296,7 @@ public final class NeovimEditorController implements AutoCloseable {
         if (active) {
             // Eclipse may have edited the document while Neovim mode was off: resync into Neovim.
             // Must not block here (this runs on the UI thread).
-            int offset = styledText.isDisposed() ? 0 : styledText.getCaretOffset();
+            int offset = styledText.isDisposed() ? 0 : offsets.caretModelOffset();
             int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offset);
             pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
             modeStatus.setMode(session.getMode());
@@ -350,7 +354,7 @@ public final class NeovimEditorController implements AutoCloseable {
 
     /** Called by the key listener at Esc, on the UI thread. */
     private InsertReplay.Plan consumeInsertReplayPlan() {
-        return styledText.isDisposed() ? null : insertTracker.consumePlan(styledText.getCaretOffset());
+        return styledText.isDisposed() ? null : insertTracker.consumePlan(offsets.caretModelOffset());
     }
 
     /** Sends one key (Neovim notation) to Neovim; used by the key-binding command for Vim Ctrl keys. */

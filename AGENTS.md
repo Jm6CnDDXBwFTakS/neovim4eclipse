@@ -41,6 +41,7 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - No blocking Neovim RPC on the SWT UI thread; queue work through the session's `*Async` methods.
 - Neovim columns are UTF-8 bytes, Eclipse columns UTF-16 chars; convert with `Utf8Columns` /
   `DocumentPositions`.
+- `StyledText` offsets are not document offsets when code is folded; convert with `WidgetOffsets`.
 - `util/` and `core/` must not import `org.eclipse.*` (they are compiled and unit-tested without
   Eclipse).
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse

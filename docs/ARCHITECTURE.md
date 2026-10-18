@@ -276,6 +276,9 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
   paste arrives as a pure line insertion, which `LineRangeEdit` handles.
 - **Columns:** Neovim cursor/visual columns are UTF-8 byte offsets. `editor/DocumentPositions` converts
   them with `util/Utf8Columns` in both directions.
+- **Folding:** the widget of an editor with folding (the Java editor folds imports) leaves collapsed
+  lines out, so a `StyledText` offset is not a document offset. `editor/WidgetOffsets` converts every
+  caret and selection offset (`ITextViewerExtension5`) and unfolds code Neovim's cursor moves into.
 
 ## Where logic lives (and how it is tested)
 

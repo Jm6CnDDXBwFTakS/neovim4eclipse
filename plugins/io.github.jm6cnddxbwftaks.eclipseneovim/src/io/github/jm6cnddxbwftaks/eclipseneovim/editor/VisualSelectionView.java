@@ -46,6 +46,7 @@ final class VisualSelectionView {
     private static final int BLOCK_ALPHA = 110;
 
     private final StyledText styledText;
+    private final WidgetOffsets offsets;
     /** Runs caret changes so that the controller does not echo them back to Neovim as user moves. */
     private final Consumer<Runnable> asCaretFromNeovim;
     private IDocument document;
@@ -56,8 +57,9 @@ final class VisualSelectionView {
     /**
      * @param asCaretFromNeovim runs the given caret change marked as coming from Neovim
      */
-    VisualSelectionView(StyledText styledText, Consumer<Runnable> asCaretFromNeovim) {
+    VisualSelectionView(StyledText styledText, WidgetOffsets offsets, Consumer<Runnable> asCaretFromNeovim) {
         this.styledText = styledText;
+        this.offsets = offsets;
         this.asCaretFromNeovim = asCaretFromNeovim;
         styledText.addPaintListener(blockPainter);
     }
@@ -91,19 +93,26 @@ final class VisualSelectionView {
         if (!sel.isLineWise() && end < doc.getLength()) {
             end++;
         }
-        styledText.setSelection(start, end);
-        styledText.showSelection();
+        // Document offsets; the widget leaves folded code out, so convert (unfolding what is selected).
+        int widgetStart = offsets.toWidgetRevealing(start);
+        int widgetEnd = offsets.toWidgetRevealing(end);
+        if (widgetStart >= 0 && widgetEnd >= 0) {
+            styledText.setSelection(widgetStart, widgetEnd);
+            styledText.showSelection();
+        }
     }
 
     private void showBlock(IDocument doc, VisualSelection sel) throws BadLocationException {
         List<LineRange> ranges = BlockSelection.compute(new DocumentPositions.DocumentLines(doc),
                 sel.startLine1Based(), sel.startCol0Based(), sel.endLine1Based(), sel.endCol0Based(),
                 sel.toEndOfLine(), sel.tabstop());
-        int caret = Math.min(DocumentPositions.byteColToOffset(doc, sel.endLine1Based(), sel.endCol0Based()),
-                doc.getLength());
+        int caret = offsets.toWidgetRevealing(Math.min(
+                DocumentPositions.byteColToOffset(doc, sel.endLine1Based(), sel.endCol0Based()), doc.getLength()));
         asCaretFromNeovim.accept(() -> {
-            styledText.setSelection(caret); // clears any native selection and places the caret
-            styledText.showSelection();
+            if (caret >= 0) {
+                styledText.setSelection(caret); // clears any native selection and places the caret
+                styledText.showSelection();
+            }
         });
         setBlockRanges(ranges);
     }
@@ -138,13 +147,22 @@ final class VisualSelectionView {
             gc.setBackground(styledText.getDisplay().getSystemColor(SWT.COLOR_LIST_SELECTION));
             gc.setAlpha(BLOCK_ALPHA);
             for (LineRange range : ranges) {
-                if (range.line0() < firstVisible || range.line0() > lastVisible
-                        || range.line0() >= doc.getNumberOfLines()) {
+                if (range.line0() >= doc.getNumberOfLines()) {
                     continue;
                 }
+                // Ranges are in document lines; folded lines have no widget offset and are skipped.
                 int lineOffset = doc.getLineOffset(range.line0());
-                Point from = styledText.getLocationAtOffset(lineOffset + range.startChar());
-                Point to = styledText.getLocationAtOffset(lineOffset + range.endChar());
+                int fromOffset = offsets.toWidget(lineOffset + range.startChar());
+                int toOffset = offsets.toWidget(lineOffset + range.endChar());
+                if (fromOffset < 0 || toOffset < 0) {
+                    continue;
+                }
+                int widgetLine = styledText.getLineAtOffset(fromOffset);
+                if (widgetLine < firstVisible || widgetLine > lastVisible) {
+                    continue;
+                }
+                Point from = styledText.getLocationAtOffset(fromOffset);
+                Point to = styledText.getLocationAtOffset(toOffset);
                 if (to.x > from.x) {
                     gc.fillRectangle(from.x, from.y, to.x - from.x, lineHeight);
                 }
