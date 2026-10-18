@@ -224,7 +224,10 @@ editor has focus; in insert mode and in Eclipse mode (toggle with the toolbar bu
 shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
 the system Paste.
 
-**If `Ctrl-V` does nothing**, look in the Eclipse Error Log (or the console of the launched Eclipse) for:
+**If `Ctrl-V` does nothing**, look for these lines in the console of the Eclipse process: the
+terminal you started Eclipse from, or the Console view of the Eclipse that launched a runtime Eclipse.
+The first three are written when Neovim mode turns on in an editor, not when you press `Ctrl-V`.
+The warnings (the third and the last line) also appear in the Error Log (*Window › Show View › Error Log*).
 
 | Log line | Meaning |
 |----------|---------|

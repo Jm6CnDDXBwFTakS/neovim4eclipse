@@ -355,9 +355,11 @@ without Eclipse jars, so an `org.eclipse` import there fails the build.
 
 - **Launch a runtime Eclipse** from the plug-in project (*Run As > Eclipse Application*, see
   [HOWTO_ECLIPSE.md](HOWTO_ECLIPSE.md)). Breakpoints work in the plug-in code.
-- **Logs**: the plug-in logs with `java.util.logging` to the launching Eclipse's console.
-  `KeyContextDiagnostics` reports which command the workbench resolves for `Ctrl+V`; the README lists
-  what its messages mean.
+- **Logs**: the plug-in logs with `java.util.logging`, which writes to the console of the Eclipse
+  process (the launching Eclipse's Console view, or the terminal Eclipse was started from).
+  Warnings and errors also go to the Error Log view (*Window > Show View > Error Log*), through
+  `ErrorLogHandler`. `KeyContextDiagnostics` reports which command the workbench resolves for
+  `Ctrl+V`; the README lists what its messages mean.
 - **Key bindings**: *Window > Preferences > General > Keys* shows each binding with its context
   ("When"). The *Ctrl Keys* page decides which of this plug-in's letter contexts are active.
 - **Inside Neovim**: `:messages`, `:ls`, `:set option?` all work through the `:` box. `vim.g.eclipse`

@@ -41,11 +41,15 @@ public class Activator extends AbstractUIPlugin {
 
     private NeovimSession session;
     private IPropertyChangeListener preferenceListener;
+    /** Copies the plug-in's JUL warnings and errors to the Error Log. */
+    private ErrorLogHandler errorLogHandler;
 
     @Override
     public void start(BundleContext context) throws Exception {
         super.start(context);
         plugin = this;
+        errorLogHandler = new ErrorLogHandler(getLog());
+        errorLogHandler.install(PLUGIN_ID);
         EditorAttachManager.getInstance().installWorkbenchListeners();
 
         preferenceListener = event -> {
@@ -72,6 +76,10 @@ public class Activator extends AbstractUIPlugin {
         EditorAttachManager.getInstance().detachQuietly();
         shutdownSession();
         plugin = null;
+        if (errorLogHandler != null) {
+            errorLogHandler.uninstall();
+            errorLogHandler = null;
+        }
         super.stop(context);
     }
 
