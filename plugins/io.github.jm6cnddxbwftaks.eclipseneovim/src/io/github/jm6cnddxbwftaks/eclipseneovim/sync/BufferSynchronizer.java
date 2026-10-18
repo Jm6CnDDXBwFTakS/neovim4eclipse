@@ -63,6 +63,8 @@ public final class BufferSynchronizer implements AutoCloseable {
     private volatile Runnable caretRestorer;
     /** When Eclipse's own document changes are pushed (see {@link #pushLocalChanges}); {@code null}: never. */
     private volatile BooleanSupplier localPushGate;
+    /** Runs on the session's input thread after each such push (see {@link #pushLocalChanges}). */
+    private volatile Runnable afterLocalPush;
     /** A push of Eclipse's own changes is queued and has not read the document yet. */
     private final AtomicBoolean localPushPending = new AtomicBoolean(false);
     private final IDocumentListener localChangeListener = new IDocumentListener() {
@@ -100,11 +102,17 @@ public final class BufferSynchronizer implements AutoCloseable {
      * input thread, and it reads the document when it runs. Being queued there also orders it
      * before any key typed afterward.
      *
-     * @param when evaluated on the UI thread at each change; the editor passes "Neovim mode is on and
-     *             Neovim is not in insert mode" (typing in insert mode is pushed when it ends)
+     * <p>After the push, {@code afterPush} runs on the input thread. The editor uses it to move
+     * Neovim's cursor to Eclipse's caret: Eclipse's undo puts the caret on the line it brings back,
+     * but inserting that line above Neovim's cursor moves the cursor one line down.
+     *
+     * @param when      evaluated on the UI thread at each change; the editor passes "Neovim mode is on
+     *                  and Neovim is not in insert mode" (typing in insert mode is pushed when it ends)
+     * @param afterPush run on the session's input thread after each push; may block on RPC
      */
-    public void pushLocalChanges(BooleanSupplier when) {
+    public void pushLocalChanges(BooleanSupplier when, Runnable afterPush) {
         localPushGate = when;
+        afterLocalPush = afterPush;
         document.addDocumentListener(localChangeListener);
     }
 
@@ -129,6 +137,14 @@ public final class BufferSynchronizer implements AutoCloseable {
             } finally {
                 if (wasListening) {
                     startRemoteListening();
+                }
+            }
+            Runnable after = afterLocalPush;
+            if (after != null && !closed) {
+                try {
+                    after.run();
+                } catch (Exception e) {
+                    LOG.log(Level.FINE, "after-push action failed", e);
                 }
             }
         });

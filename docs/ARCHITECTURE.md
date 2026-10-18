@@ -49,6 +49,9 @@ Eclipse's undo, a revert or `:e!`) are pushed too (`BufferSynchronizer.pushLocal
 listener queues one push on the input thread, coalescing a burst of edits, and ignores the changes the
 plug-in itself applies from Neovim. Without it, Neovim's next edit would be applied at stale line
 numbers. Remote listening is paused during that push, so Neovim's echo cannot undo a newer Eclipse edit.
+After the push Neovim's cursor is moved to Eclipse's caret, or to the start of Eclipse's selection:
+Eclipse's undo selects the line it brings back, and inserting that line above Neovim's cursor would
+otherwise leave the cursor one line too low.
 
 The **first push into a new buffer** loads the file and is not an undo step (`LuaScripts.LOAD_WITHOUT_UNDO`,
 Vim's `:help clear-undo`), so `u` right after opening a file does nothing, as in Vim.
