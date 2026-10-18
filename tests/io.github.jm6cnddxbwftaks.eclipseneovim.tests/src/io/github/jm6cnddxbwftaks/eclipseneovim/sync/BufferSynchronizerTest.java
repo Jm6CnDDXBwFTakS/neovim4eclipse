@@ -300,6 +300,87 @@ class BufferSynchronizerTest {
         assertEquals(List.of(), neovim.pushed);
     }
 
+    // ---- threads: the push reads the document on the UI thread ----
+
+    /** A UI thread elsewhere that runs {@code syncExec} work at once, and tells when it does. */
+    static final class OtherThreadUi implements UiExecutor {
+        boolean available = true;
+        boolean running;
+
+        @Override
+        public boolean isAvailable() {
+            return available;
+        }
+
+        @Override
+        public boolean isUiThread() {
+            return running;
+        }
+
+        @Override
+        public void asyncExec(Runnable work) {
+            syncExec(work);
+        }
+
+        @Override
+        public void syncExec(Runnable work) {
+            running = true;
+            try {
+                work.run();
+            } finally {
+                running = false;
+            }
+        }
+    }
+
+    /** A document that records, for each read of its text, whether the UI thread was reading. */
+    private static IDocument documentRecordingReads(String text, OtherThreadUi ui, List<Boolean> readsOnUi) {
+        return new Document(text) {
+            @Override
+            public String get() {
+                readsOnUi.add(ui.isUiThread());
+                return super.get();
+            }
+        };
+    }
+
+    @Test
+    void aPushFromTheInputThreadReadsTheDocumentOnTheUiThread() {
+        OtherThreadUi ui = new OtherThreadUi();
+        List<Boolean> readsOnUi = new ArrayList<>();
+        IDocument doc = documentRecordingReads("alpha\nbeta\n", ui, readsOnUi);
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, ui)) {
+            s.pushDocumentToNeovim(); // the test thread plays the session's input thread
+            assertEquals(List.of(List.of("alpha", "beta")), neovim.pushed);
+            assertEquals(List.of(true), readsOnUi);
+        }
+    }
+
+    @Test
+    void aQueuedPushAfterAnEclipseChangeAlsoReadsOnTheUiThread() throws Exception {
+        OtherThreadUi ui = new OtherThreadUi();
+        List<Boolean> readsOnUi = new ArrayList<>();
+        IDocument doc = documentRecordingReads("alpha\n", ui, readsOnUi);
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, ui)) {
+            s.pushLocalChanges(() -> true, null);
+            ui.syncExec(() -> replace(doc, 0, 5, "gamma")); // Eclipse's edit, on the UI thread
+            readsOnUi.clear();
+            neovim.runQueued(); // on the input thread
+            assertEquals(List.of(List.of("gamma")), neovim.pushed);
+            assertEquals(List.of(true), readsOnUi);
+        }
+    }
+
+    @Test
+    void withoutAUiThereIsNoPush() {
+        OtherThreadUi ui = new OtherThreadUi();
+        ui.available = false;
+        try (BufferSynchronizer s = new BufferSynchronizer(document, neovim, ui)) {
+            s.pushDocumentToNeovim();
+            assertEquals(List.of(), neovim.pushed);
+        }
+    }
+
     /** Once: when the first word changes, copies it to {@code mirrorAt}, as linked mode would. */
     private static void mirrorFirstWordInto(IDocument doc, int mirrorAt) {
         doc.addDocumentListener(new IDocumentListener() {
