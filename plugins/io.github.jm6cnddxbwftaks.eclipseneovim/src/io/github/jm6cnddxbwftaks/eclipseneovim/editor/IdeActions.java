@@ -25,9 +25,10 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.TabNavigation;
  * editor activates "Editing Java Source", which binds F3 to Java's Open Declaration), so asking
  * the binding service "what does F3 run here?" finds the right command for any editor.
  * <ul>
- *   <li>{@code gd}: the command bound to F3; if none (a plain text file), Neovim's own {@code gd}
- *       (jump to the word's first use, its "local declaration"). Hyperlinks are not followed: that
- *       is Ctrl+click, or Open Hyperlink.</li>
+ *   <li>{@code gd}: the command bound to F3; if none (the plain Text Editor), Neovim's own
+ *       {@code gd} (jump to the word's first use, its "local declaration"). The Generic Editor binds
+ *       F3 to Open Hyperlink, which Language Server files use for go to definition, so {@code gd}
+ *       runs it there too, the same as F3.</li>
  *   <li>{@code K}: Show Tooltip Description (F2), the hover information of the text editor.</li>
  * </ul>
  *
