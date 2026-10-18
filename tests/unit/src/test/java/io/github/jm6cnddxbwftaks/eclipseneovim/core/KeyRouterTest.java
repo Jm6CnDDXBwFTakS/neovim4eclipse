@@ -248,6 +248,22 @@ class KeyRouterTest {
     }
 
     @Test
+    void aZTypedAsAnArgumentDoesNotStartZZ() {
+        type("f", "Z", "Z"); // fZ jumps to the next Z; the second Z only starts a new pending Z
+        assertEquals(List.of("f", "Z"), neovim.sent);
+        assertEquals(List.of(), fileCommands);
+        type("Z");
+        assertEquals(List.of("ZZ"), fileCommands);
+    }
+
+    @Test
+    void aCommandAfterZIsNotWaitingForAnArgument() {
+        type("Z", "f", ":"); // Zf is replayed as two keys; the f there does not take ":" as its argument
+        assertEquals(List.of("Z", "f"), neovim.sent);
+        assertEquals(List.of(":"), prompts);
+    }
+
+    @Test
     void resetForgetsAPendingArgumentAndZ() {
         type("f");
         router.reset();

@@ -66,6 +66,23 @@ public final class KeyRouter {
         void close();
     }
 
+    /**
+     * A key that needs the next one before anything can happen. At most one at a time, which is why
+     * this is one value rather than two flags.
+     */
+    private enum Pending {
+        NONE,
+        /** A {@code Z} was typed and the next key decides between {@code ZZ} and {@code ZQ}. */
+        Z,
+        /**
+         * The previous key was a command that takes one more character ({@code f}, {@code @},
+         * {@code q} ...), so the next key is that argument: {@code f/}, {@code @:} and {@code qa} must
+         * reach Neovim instead of opening the prompt. Tracked here as well as in the session because
+         * keys can arrive faster than Neovim's answer about its state.
+         */
+        ARGUMENT
+    }
+
     private final Neovim neovim;
     private volatile Predicate<String> promptHandler;
     private volatile FileCommands fileCommands;
@@ -73,15 +90,7 @@ public final class KeyRouter {
     private volatile Supplier<InsertReplay.Plan> insertReplaySupplier;
     /** Whether a {@code Ctrl+letter} goes to Neovim; letters it rejects are left to Eclipse. */
     private volatile Predicate<Character> ctrlKeyFilter = letter -> true;
-    /** A {@code Z} was typed and the next key decides between {@code ZZ} and {@code ZQ}. */
-    private volatile boolean pendingZ;
-    /**
-     * The previous key was a command that takes one more character ({@code f}, {@code @}, {@code q}
-     * ...), so the next key is that argument: {@code f/}, {@code @:} and {@code qa} must reach Neovim
-     * instead of opening the prompt. Tracked here as well as in the session because keys can arrive
-     * faster than Neovim's answer about its state.
-     */
-    private volatile boolean argumentPending;
+    private volatile Pending pending = Pending.NONE;
 
     public KeyRouter(Neovim neovim) {
         this.neovim = neovim;
@@ -112,8 +121,7 @@ public final class KeyRouter {
 
     /** Forget a half-typed command; called when a key reaches Neovim by another route (Ctrl-key bindings). */
     public void reset() {
-        argumentPending = false;
-        pendingZ = false;
+        pending = Pending.NONE;
     }
 
     /**
@@ -132,14 +140,14 @@ public final class KeyRouter {
         }
 
         if (neovim.isNeovimDrivenInsert()) {
-            pendingZ = false;
+            pending = Pending.NONE;
             neovim.inputAsync(nvimKey);
             return true;
         }
 
         if (neovim.isTypingMode()) {
             if ("<Esc>".equals(nvimKey)) {
-                pendingZ = false;
+                pending = Pending.NONE;
                 Supplier<InsertReplay.Plan> supplier = insertReplaySupplier;
                 neovim.leaveInsertModeAsync(supplier == null ? null : supplier.get());
                 return true;
@@ -147,16 +155,15 @@ public final class KeyRouter {
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }
 
-        if (argumentPending || neovim.isWaitingForArgument()) {
-            argumentPending = false;
-            pendingZ = false;
+        if (pending == Pending.ARGUMENT || neovim.isWaitingForArgument()) {
+            pending = Pending.NONE;
             neovim.inputAsync(nvimKey); // the argument of f/F/t/T/r/@/m/'/`/"/q, whatever the key is
             return true;
         }
 
         Predicate<String> prompt = promptHandler;
         if (isPromptKey(nvimKey) && prompt != null) {
-            pendingZ = false;
+            pending = Pending.NONE;
             if (prompt.test(nvimKey)) {
                 return true;
             }
@@ -169,11 +176,11 @@ public final class KeyRouter {
 
         char ctrlLetter = VimCtrlKeys.letterOf(nvimKey);
         if (ctrlLetter != 0 && !ctrlKeyFilter.test(ctrlLetter)) {
-            pendingZ = false;
+            pending = Pending.NONE;
             return false; // the user gave this Ctrl key to Eclipse (Window > Preferences > Neovim > Ctrl Keys)
         }
 
-        argumentPending = NvimKeys.takesArgument(nvimKey, neovim.isRecording());
+        pending = NvimKeys.takesArgument(nvimKey, neovim.isRecording()) ? Pending.ARGUMENT : Pending.NONE;
         neovim.inputAsync(nvimKey);
         return true;
     }
@@ -189,20 +196,20 @@ public final class KeyRouter {
      * @return {@code true} if the key was consumed here
      */
     private boolean handleZZ(FileCommands files, String nvimKey) {
-        if (pendingZ) {
-            pendingZ = false;
-            if ("Z".equals(nvimKey)) {
-                files.saveAndClose();
-            } else if ("Q".equals(nvimKey) || "q".equals(nvimKey)) {
-                files.close();
-            } else {
-                neovim.inputAsync("Z");
-                neovim.inputAsync(nvimKey);
+        if (pending == Pending.Z) {
+            pending = Pending.NONE;
+            switch (nvimKey) {
+                case "Z" -> files.saveAndClose();
+                case "Q", "q" -> files.close();
+                default -> {
+                    neovim.inputAsync("Z");
+                    neovim.inputAsync(nvimKey);
+                }
             }
             return true;
         }
         if ("Z".equals(nvimKey)) {
-            pendingZ = true;
+            pending = Pending.Z;
             return true;
         }
         return false;
