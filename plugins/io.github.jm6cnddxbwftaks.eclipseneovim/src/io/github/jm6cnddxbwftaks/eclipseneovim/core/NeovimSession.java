@@ -534,10 +534,7 @@ public final class NeovimSession implements AutoCloseable {
                 await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
             }
             try {
-                await(api.input(NvimKeys.exCommand(cmd)));
-                if (isBlocked()) {
-                    await(api.input("<Esc>")); // a "press Enter" prompt: dismiss it
-                }
+                typeCommand(cmd);
             } finally {
                 if (capture) {
                     output = stopOutputCapture();
@@ -549,6 +546,14 @@ public final class NeovimSession implements AutoCloseable {
                 onOutput.accept(output);
             }
         });
+    }
+
+    /** Types {@code :cmd<CR>} into Neovim and dismisses a "press Enter" prompt it leaves. Input thread. */
+    private void typeCommand(String cmd) throws Exception {
+        await(api.input(NvimKeys.exCommand(cmd)));
+        if (isBlocked()) {
+            await(api.input("<Esc>"));
+        }
     }
 
     /**
@@ -590,9 +595,18 @@ public final class NeovimSession implements AutoCloseable {
      * Runs an ex command that only displays information (see {@code ListingCommand}) and passes what
      * it printed, or its error message, to {@code onOutput} on a session thread. Not typed into
      * Neovim, so a macro being recorded does not include it (it changes nothing anyway).
+     *
+     * <p>While the user's own {@code :redir} runs, the command is typed instead and nothing is
+     * passed: {@code nvim_exec2} would keep the output from that redirection, and in Vim the
+     * redirection gets it ({@code :redir @a}, {@code :echo 'x'}, {@code :redir END} puts "x" in a).
      */
     public void captureOutputAsync(String cmd, Consumer<String> onOutput) {
         submit("capture " + cmd, Level.WARNING, () -> {
+            if (userRedirActive) {
+                typeCommand(cmd);
+                syncModeAndCursorFromNeovim();
+                return;
+            }
             String output;
             try {
                 Object raw = await(api.executeLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
