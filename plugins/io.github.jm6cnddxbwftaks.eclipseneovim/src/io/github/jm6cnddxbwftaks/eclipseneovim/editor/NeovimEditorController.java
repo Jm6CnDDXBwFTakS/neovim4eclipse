@@ -108,7 +108,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync = new CaretSync(styledText, offsets, session, () -> documentOf(editor),
                 this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
-        this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode());
+        this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
+                caretSync::sendEclipseCaretNow);
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution();
         this.cursorStyle = new CursorStyleController(styledText);

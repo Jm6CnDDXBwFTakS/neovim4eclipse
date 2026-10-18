@@ -25,7 +25,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
  *   <li><b>Neovim to Eclipse</b> ({@link #showNeovimCursor}): after {@code j}, {@code w},
  *       {@code gg} ... the caret moves to where Neovim put the cursor.</li>
  *   <li><b>Eclipse to Neovim</b>: a mouse click or any other caret move in the widget moves
- *       Neovim's cursor.</li>
+ *       Neovim's cursor (to the start of the selection when Eclipse selected text).</li>
  * </ul>
  *
  * <p><b>The echo problem.</b> Moving the caret from Neovim's side fires the widget's caret listener,
@@ -137,10 +137,50 @@ final class CaretSync {
             return;
         }
         try {
-            int[] lineCol = DocumentPositions.offsetToLineCol(document.get(), offsets.caretModelOffset());
+            int[] lineCol = DocumentPositions.offsetToLineCol(document.get(), cursorModelOffset());
             session.setCursorAsync(lineCol[0], lineCol[1]);
         } catch (Exception e) {
             LOG.log(Level.FINE, "Eclipse→Neovim cursor failed", e);
+        }
+    }
+
+    /**
+     * Where Neovim's cursor belongs, as a document offset: the start of Eclipse's selection when
+     * there is one, else the caret. Eclipse's undo selects the text it brings back, with the caret
+     * after it (on the next line when a whole line comes back), while Vim's {@code u} puts the
+     * cursor on the restored line. UI thread.
+     */
+    private int cursorModelOffset() {
+        return widget.getSelectionCount() > 0 ? offsets.toModel(widget.getSelectionRange().x)
+                : offsets.caretModelOffset();
+    }
+
+    /**
+     * Moves Neovim's cursor to {@link #cursorModelOffset()} now: a push of Eclipse's change can move
+     * Neovim's cursor (lines inserted above it push it down) without moving Eclipse's caret.
+     * Blocking: the session's input thread only. The caret is read on the UI thread, which waits
+     * until Eclipse has finished what it is doing (an undo changes the document first and selects
+     * after).
+     */
+    void sendEclipseCaretNow() {
+        Display display = Display.getDefault();
+        if (disposed || display == null || display.isDisposed()) {
+            return;
+        }
+        int[][] lineCol = new int[1][];
+        display.syncExec(() -> {
+            IDocument doc = document.get();
+            if (!disposed && !widget.isDisposed() && doc != null) {
+                lineCol[0] = DocumentPositions.offsetToLineCol(doc, cursorModelOffset());
+            }
+        });
+        if (lineCol[0] == null) {
+            return;
+        }
+        try {
+            session.setCursor(lineCol[0][0], lineCol[0][1]);
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Eclipse→Neovim cursor after a push failed", e);
         }
     }
 

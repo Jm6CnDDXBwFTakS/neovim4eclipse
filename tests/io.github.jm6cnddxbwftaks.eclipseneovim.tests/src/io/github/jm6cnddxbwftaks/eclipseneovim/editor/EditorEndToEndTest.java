@@ -17,6 +17,7 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.IWorkbenchPage;
@@ -192,6 +193,23 @@ class EditorEndToEndTest {
         type(widget, "G");
         type(widget, "dd");
         expectText("zeta\nalpha\nbeta\n");
+    }
+
+    /**
+     * After Eclipse's undo brings back a deleted line, Neovim's cursor is where Eclipse's caret is,
+     * on that line. Otherwise inserting the line above Neovim's cursor would push the cursor one
+     * line down, and {@code j dd} would delete the wrong line.
+     */
+    @Test
+    void afterEclipsesUndoNeovimsCursorIsOnTheRestoredLine() {
+        type(widget, "ggdd");
+        expectText("beta\ngamma\n");
+        ITextOperationTarget target = editor.getAdapter(ITextOperationTarget.class);
+        target.doOperation(ITextOperationTarget.UNDO);
+        expectText("alpha\nbeta\ngamma\n");
+        UiTestSupport.spin(300); // let the push reach Neovim
+        type(widget, "jdd");
+        expectText("alpha\ngamma\n");
     }
 
     /** {@code o} after a line ending in a brace starts one level further in, like the Eclipse formatter. */
