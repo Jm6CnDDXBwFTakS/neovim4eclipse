@@ -18,6 +18,9 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
+import org.eclipse.jface.text.link.LinkedModeModel;
+import org.eclipse.jface.text.link.LinkedPosition;
+import org.eclipse.jface.text.link.LinkedPositionGroup;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.IWorkbenchPage;
@@ -210,6 +213,48 @@ class EditorEndToEndTest {
         UiTestSupport.spin(300); // let the push reach Neovim
         type(widget, "jdd");
         expectText("alpha\ngamma\n");
+    }
+
+    /**
+     * Linked editing, as in a local rename (Alt+Shift+R): both "foo" are linked, so an edit of one is
+     * copied to the other. Neovim's {@code ciw} must arrive as a change of the name only (a change of
+     * the whole line would end linked mode), and the copies must reach Neovim.
+     */
+    @Test
+    void ciwInALinkedRenameChangesEveryOccurrence() throws Exception {
+        linkTwoFoos();
+        type(widget, "gg0");
+        type(widget, "ciw");
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, "bar");
+        escape(widget);
+        expectText("bar = bar;\n");
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        type(widget, "$x"); // Neovim's next edit: it must see the renamed line
+        expectText("bar = bar\n");
+    }
+
+    /** Normal-mode edits in linked mode: {@code x} on one name is copied to the other, in Neovim too. */
+    @Test
+    void xInALinkedRenameChangesEveryOccurrence() throws Exception {
+        linkTwoFoos();
+        type(widget, "gg0x");
+        expectText("oo = oo;\n");
+        UiTestSupport.spin(300); // let the copy reach Neovim
+        type(widget, "$x");
+        expectText("oo = oo\n");
+    }
+
+    /** Makes the document "foo = foo;" with both names linked, the way a rename does. */
+    private void linkTwoFoos() throws Exception {
+        document.set("foo = foo;\n");
+        UiTestSupport.spin(300); // Eclipse's own change is pushed to Neovim
+        LinkedPositionGroup group = new LinkedPositionGroup();
+        group.addPosition(new LinkedPosition(document, 0, 3));
+        group.addPosition(new LinkedPosition(document, 6, 3));
+        LinkedModeModel model = new LinkedModeModel();
+        model.addGroup(group);
+        model.forceInstall();
     }
 
     /** {@code o} after a line ending in a brace starts one level further in, like the Eclipse formatter. */

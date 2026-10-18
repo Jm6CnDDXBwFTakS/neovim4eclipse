@@ -36,7 +36,10 @@ What the plug-in does and why. For the Eclipse and Neovim concepts it is built o
 ### 1. Neovim owns the buffer (except while typing)
 
 In normal, visual and operator-pending mode every key goes to Neovim and is swallowed; Neovim mutates
-its buffer and Eclipse applies `nvim_buf_lines_event` as minimal edits (`LineRangeEdit`).
+its buffer and Eclipse applies `nvim_buf_lines_event` as minimal edits (`LineRangeEdit`). Neovim
+reports whole lines, but the edit is trimmed to the characters that change: Eclipse features that
+track positions need that. In a linked rename (Alt+Shift+R), `ciw` on the name must arrive as
+"replace the name"; "replace the line" would end the rename.
 
 In **insert/replace mode Eclipse inserts the characters itself** (no flicker, content assist and IME
 keep working). On `Esc` the document is pushed to Neovim (`BufferSynchronizer.pushDocumentToNeovim`)
@@ -52,6 +55,12 @@ numbers. Remote listening is paused during that push, so Neovim's echo cannot un
 After the push Neovim's cursor is moved to Eclipse's caret, or to the start of Eclipse's selection:
 Eclipse's undo selects the line it brings back, and inserting that line above Neovim's cursor would
 otherwise leave the cursor one line too low.
+
+Eclipse can also change the document **in reaction to a change applied from Neovim**: in a linked
+rename, `x` on the name is copied to every other occurrence, inside the same `IDocument.replace`.
+`BufferSynchronizer` counts the document changes while it applies one; more than one means Neovim
+is behind, so the result is pushed, and Neovim's full-text syncs are skipped until then (they would
+undo the copies).
 
 The **first push into a new buffer** loads the file and is not an undo step (`LuaScripts.LOAD_WITHOUT_UNDO`,
 Vim's `:help clear-undo`), so `u` right after opening a file does nothing, as in Vim.

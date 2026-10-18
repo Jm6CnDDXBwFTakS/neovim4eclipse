@@ -55,6 +55,13 @@ public final class BufferSynchronizer implements AutoCloseable {
     private final IDocument document;
     private final NeovimSession session;
     private final AtomicBoolean applyingRemote = new AtomicBoolean(false);
+    /** Document changes seen while one Neovim change was applied (more than 1: see {@link #applyChange}). */
+    private int changesWhileApplying;
+    /**
+     * Eclipse changed the document in reaction to a Neovim change, and Neovim has not been sent
+     * the result yet. Until then, Neovim's full-text syncs are out of date and are not applied.
+     */
+    private volatile boolean neovimBehind;
     private final Consumer<BufferChange> bufferChangeListener = this::onNeovimBufferChange;
 
     private volatile boolean listening;
@@ -74,6 +81,10 @@ public final class BufferSynchronizer implements AutoCloseable {
 
         @Override
         public void documentChanged(DocumentEvent event) {
+            if (applyingRemote.get()) {
+                changesWhileApplying++;
+                return;
+            }
             onLocalChange();
         }
     };
@@ -118,7 +129,7 @@ public final class BufferSynchronizer implements AutoCloseable {
 
     private void onLocalChange() {
         BooleanSupplier gate = localPushGate;
-        if (closed || applyingRemote.get() || gate == null || !gate.getAsBoolean()) {
+        if (closed || gate == null || !gate.getAsBoolean()) {
             return;
         }
         if (!localPushPending.compareAndSet(false, true)) {
@@ -183,6 +194,7 @@ public final class BufferSynchronizer implements AutoCloseable {
         try {
             List<String> lines = documentToLines(document);
             session.setBufferLines(lines);
+            neovimBehind = false;
             LOG.fine(() -> "Pushed " + lines.size() + " lines to Neovim");
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "Failed to push document to Neovim", e);
@@ -211,8 +223,11 @@ public final class BufferSynchronizer implements AutoCloseable {
             return;
         }
         applyingRemote.set(true);
+        changesWhileApplying = 0;
         try {
-            Edit edit = change.lastLine() < 0 ? fullBufferEdit(change.newLines()) : rangeEdit(change);
+            boolean fullBuffer = change.lastLine() < 0;
+            Edit edit = fullBuffer && neovimBehind ? null
+                    : fullBuffer ? fullBufferEdit(change.newLines()) : rangeEdit(change);
             if (edit != null) {
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
@@ -221,6 +236,15 @@ public final class BufferSynchronizer implements AutoCloseable {
         } finally {
             applyingRemote.set(false);
             restoreCaret();
+        }
+        // More than one change: Eclipse reacted to Neovim's edit with edits of its own, inside the
+        // same replace. In a linked rename (Alt+Shift+R), "x" on the name is copied to every other
+        // occurrence; Neovim must get those copies, or its next edit would hit stale text. The
+        // full-text sync Neovim sends after the key would also undo them, so those are skipped
+        // until the push (in insert mode, the one when insert mode ends).
+        if (changesWhileApplying > 1) {
+            neovimBehind = true;
+            onLocalChange();
         }
         if (change.afterApply() != null) {
             change.afterApply().run(); // e.g. the session lets Eclipse type once insert mode's sync has landed
