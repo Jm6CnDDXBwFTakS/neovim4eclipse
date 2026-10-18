@@ -15,6 +15,7 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbench;
@@ -42,17 +43,30 @@ public final class EclipseFileCommands {
     private EclipseFileCommands() {
     }
 
-    /** {@code ZZ}: write if needed, then quit. */
+    /** {@code ZZ}: write if needed, then quit. Call from the key event; see {@link #afterKeyEvent}. */
     public static void zz(ITextEditor editor) {
-        HostCommands.runOnUi(() -> {
+        afterKeyEvent(() -> {
             save(editor);
             close(editor, true);
         });
     }
 
-    /** {@code ZQ}: quit without writing. */
+    /** {@code ZQ}: quit without writing. Call from the key event; see {@link #afterKeyEvent}. */
     public static void zq(ITextEditor editor) {
-        HostCommands.runOnUi(() -> close(editor, true));
+        afterKeyEvent(() -> close(editor, true));
+    }
+
+    /**
+     * Runs {@code r} on the UI thread once the current event is over, even when called on it.
+     * {@code ZZ} and {@code ZQ} arrive in the widget's key event, and the editor's own key listeners
+     * run after the plug-in's: closing the editor right away would leave them a disposed editor (the
+     * Java editor then fails with "getViewer() is null").
+     */
+    private static void afterKeyEvent(Runnable r) {
+        Display display = Display.getDefault();
+        if (display != null && !display.isDisposed()) {
+            display.asyncExec(r);
+        }
     }
 
     /** {@code :w}. @return {@code true} if the editor is clean afterward */
