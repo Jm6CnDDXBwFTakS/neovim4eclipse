@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.sync;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
@@ -189,19 +190,49 @@ public final class BufferSynchronizer implements AutoCloseable {
     /**
      * Makes the Neovim buffer equal to the Eclipse document, changing only the lines that differ.
      * Blocking RPC: not for the UI thread.
+     *
+     * <p>The document's text is read on the UI thread ({@link #documentLinesOnUi()}), the buffer
+     * written here. A JFace document is not thread-safe: read from this thread while the UI thread
+     * edits it (linked mode, a formatter, save actions), it could return torn text or throw.
      */
     public void pushDocumentToNeovim() {
         if (closed) {
             return;
         }
         try {
-            List<String> lines = documentToLines(document);
+            List<String> lines = documentLinesOnUi();
+            if (lines == null) {
+                return; // the UI is gone or the editor closed meanwhile
+            }
             session.setBufferLines(lines);
             neovimBehind = false;
             LOG.fine(() -> "Pushed " + lines.size() + " lines to Neovim");
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "Failed to push document to Neovim", e);
         }
+    }
+
+    /**
+     * A snapshot of the document's lines, taken on the UI thread, between two of its events, so never
+     * in the middle of an edit. Waits for the UI thread when called from another one; the UI thread
+     * never waits for the session's threads, so this cannot deadlock.
+     *
+     * @return the lines, or {@code null} if there is no UI any more or the synchronizer was closed
+     */
+    private List<String> documentLinesOnUi() {
+        if (ui.isUiThread()) {
+            return documentToLines(document);
+        }
+        if (!ui.isAvailable()) {
+            return null;
+        }
+        List<List<String>> snapshot = new ArrayList<>(1);
+        ui.syncExec(() -> {
+            if (!closed) {
+                snapshot.add(documentToLines(document));
+            }
+        });
+        return snapshot.isEmpty() ? null : snapshot.get(0);
     }
 
     /**

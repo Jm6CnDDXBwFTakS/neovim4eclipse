@@ -110,7 +110,7 @@ is wiped (`closeBufferAsync`).
 
 | Thread | Allowed |
 |--------|---------|
-| SWT UI | Widget updates, `VerifyKeyListener`, the command-line box, all `IDocument` edits |
+| SWT UI | Widget updates, `VerifyKeyListener`, the command-line box, all `IDocument` edits and reads (a push from the input thread takes its snapshot of the text with `syncExec`) |
 | input executor | All neovim-java `await(...)` RPC |
 | RPC listener | Dispatch to listeners; schedule UI work with `Display.asyncExec` |
 
