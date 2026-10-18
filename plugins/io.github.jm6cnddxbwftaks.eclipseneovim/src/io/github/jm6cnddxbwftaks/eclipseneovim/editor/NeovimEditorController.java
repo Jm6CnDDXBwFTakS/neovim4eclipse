@@ -105,7 +105,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session, SwtUiExecutor.INSTANCE);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
-        this.caretSync = new CaretSync(new StyledTextCaret(styledText, offsets), session, SwtUiExecutor.INSTANCE,
+        EditorCaret caret = new StyledTextCaret(styledText, offsets);
+        this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
@@ -123,7 +124,7 @@ public final class NeovimEditorController implements AutoCloseable {
         } else {
             styledText.addVerifyKeyListener(keyInterceptor);
         }
-        this.selectionView = new VisualSelectionView(styledText, offsets, caretSync::runAsFromNeovim);
+        this.selectionView = new VisualSelectionView(styledText, offsets, caret, caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
         this.commandLine = new CommandLineBox(styledText, session, editor);
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);

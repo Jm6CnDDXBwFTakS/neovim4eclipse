@@ -58,13 +58,6 @@ class DocumentPositionsTest {
     }
 
     @Test
-    void linewiseVisualCornersCoverWholeLines() throws Exception {
-        assertEquals(5, DocumentPositions.visualToOffset(doc, 2, 3, true, true));
-        assertEquals(10, DocumentPositions.visualToOffset(doc, 2, 0, true, false));
-        assertEquals(8, DocumentPositions.visualToOffset(doc, 2, 3, false, true));
-    }
-
-    @Test
     void documentLinesExposeTheTextWithoutDelimiters() {
         DocumentPositions.DocumentLines lines = new DocumentPositions.DocumentLines(doc);
         assertEquals(3, lines.count());

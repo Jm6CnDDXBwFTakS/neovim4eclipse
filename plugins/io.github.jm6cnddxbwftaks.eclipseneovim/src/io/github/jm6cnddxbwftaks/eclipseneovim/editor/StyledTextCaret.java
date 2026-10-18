@@ -69,6 +69,20 @@ final class StyledTextCaret implements EditorCaret {
     }
 
     @Override
+    public boolean select(int anchor, int caret) {
+        int widgetAnchor = offsets.toWidgetRevealing(anchor);
+        int widgetCaret = offsets.toWidgetRevealing(caret);
+        if (widgetAnchor < 0 || widgetCaret < 0) {
+            return false;
+        }
+        // StyledText puts the caret at its second argument, also when that is the smaller one (a
+        // selection made leftward): setSelection(8, 1) selects 1..8 with the caret at 1.
+        widget.setSelection(widgetAnchor, widgetCaret);
+        widget.showSelection();
+        return true;
+    }
+
+    @Override
     public void addMoveListener(Runnable onMove) {
         CaretListener caretListener = e -> onMove.run();
         MouseListener mouseListener = new MouseAdapter() {

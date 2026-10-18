@@ -22,7 +22,6 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.Edit;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.LineSource;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineTextUtil;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.TextDiff;
 
@@ -293,54 +292,8 @@ public final class BufferSynchronizer implements AutoCloseable {
     }
 
     private Edit rangeEdit(BufferChange change) {
-        return LineRangeEdit.compute(new DocumentLines(document), change.firstLine(), change.lastLine(),
+        return LineRangeEdit.compute(new DocumentLineSource(document), change.firstLine(), change.lastLine(),
                 change.newLines(), lineDelimiter(document));
-    }
-
-    /** {@link LineSource} view of an {@link IDocument}. */
-    private static final class DocumentLines implements LineSource {
-        private final IDocument doc;
-
-        DocumentLines(IDocument doc) {
-            this.doc = doc;
-        }
-
-        @Override
-        public int lineCount() {
-            return doc.getNumberOfLines();
-        }
-
-        @Override
-        public int lineOffset(int line) {
-            try {
-                return doc.getLineOffset(line);
-            } catch (BadLocationException e) {
-                throw new IllegalStateException(e);
-            }
-        }
-
-        @Override
-        public int lineContentLength(int line) {
-            try {
-                return doc.getLineInformation(line).getLength();
-            } catch (BadLocationException e) {
-                throw new IllegalStateException(e);
-            }
-        }
-
-        @Override
-        public int length() {
-            return doc.getLength();
-        }
-
-        @Override
-        public String text(int offset, int length) {
-            try {
-                return doc.get(offset, length);
-            } catch (BadLocationException e) {
-                throw new IllegalStateException(e);
-            }
-        }
     }
 
     private void restoreCaret() {

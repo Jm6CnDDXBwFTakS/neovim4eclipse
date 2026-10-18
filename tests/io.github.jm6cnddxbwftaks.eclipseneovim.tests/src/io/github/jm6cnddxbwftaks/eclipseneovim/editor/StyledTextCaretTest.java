@@ -11,6 +11,7 @@ import java.util.List;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
@@ -76,6 +77,26 @@ class StyledTextCaretTest {
         widget.setCaretOffset(4);
         assertEquals(4, caret.selectionStart());
         assertEquals(0, caret.selectionLength());
+    }
+
+    @Test
+    void selectPutsTheCaretAtTheCaretEndInEitherDirection() {
+        assertTrue(caret.select(1, 8)); // made downward
+        assertEquals(new Point(1, 8), widget.getSelection());
+        assertEquals(8, widget.getCaretOffset());
+        assertTrue(caret.select(8, 1)); // made upward, as after Vim's o
+        assertEquals(new Point(1, 8), widget.getSelection());
+        assertEquals(1, widget.getCaretOffset());
+        assertEquals(1, caret.selectionStart());
+        assertEquals(7, caret.selectionLength());
+    }
+
+    @Test
+    void selectingAnEmptyRangeClearsTheSelection() {
+        widget.setSelection(0, 5);
+        caret.select(3, 3);
+        assertEquals(0, caret.selectionLength());
+        assertEquals(3, caret.caretOffset());
     }
 
     @Test
