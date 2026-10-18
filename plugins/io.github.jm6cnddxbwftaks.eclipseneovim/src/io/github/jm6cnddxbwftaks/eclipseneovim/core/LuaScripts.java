@@ -248,6 +248,21 @@ final class LuaScripts {
             end
             """;
 
+    /**
+     * Runs normal-mode keys without mappings (argument: the keys), like {@code :normal! keys}. An
+     * error ({@code gd} on a blank: "E348: No string under cursor") is shown as Neovim shows it when
+     * typed, as an error message, instead of failing the request.
+     */
+    static final String NORMAL_WITHOUT_MAPPINGS = """
+            local keys = ...
+            local ok, err = pcall(vim.cmd.normal, { keys, bang = true })
+            if not ok then
+              local msg = tostring(err):gsub('^.-(E%d+:)', '%1')
+              vim.v.errmsg = msg
+              vim.api.nvim_echo({ { msg, 'ErrorMsg' } }, true, {})
+            end
+            """;
+
     /** The user's {@code 'clipboard'} option (e.g. {@code unnamedplus}), evaluated after their init file ran. */
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
 

@@ -204,6 +204,26 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** Neovim's own gd, for files without Open Declaration: the mapping is bypassed. */
+    @Test
+    void neovimsOwnGdJumpsToTheFirstUseOfTheWord() throws Exception {
+        try (NeovimSession s = start()) {
+            List<IdeAction> actions = new CopyOnWriteArrayList<>();
+            s.addIdeActionListener(actions::add);
+            s.setBufferLines(List.of("int x = 1;", "y = x;"));
+            s.setCursor(2, 4); // on the x of "y = x;"
+            s.normalAsync("gd");
+            waitFor(() -> {
+                try {
+                    return s.getCursor().equals(new CursorPos(1, 4));
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "the cursor on the first x");
+            assertTrue(actions.isEmpty(), "the plug-in's gd mapping must not run: " + actions);
+        }
+    }
+
     @Test
     void ideKeysCanBeLeftToNeovim() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");

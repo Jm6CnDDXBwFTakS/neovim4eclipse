@@ -63,7 +63,7 @@ still handles counts and the `g` prefix:
 
 | Key | Eclipse runs |
 |-----|--------------|
-| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor), else Open Hyperlink |
+| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor); in an editor without one (a `.txt` file), Open Hyperlink when a link is under the cursor, else Neovim's own `gd` (the word's first use) |
 | `K` | Show Tooltip Description (`F2`): the hover information |
 | `gt`, `{N}gt` | next editor tab, or tab N |
 | `gT`, `{N}gT` | previous editor tab, or N tabs back |
