@@ -15,9 +15,9 @@ import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentListener;
-import org.eclipse.swt.widgets.Display;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferPort;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineRangeEdit.Edit;
@@ -54,6 +54,7 @@ public final class BufferSynchronizer implements AutoCloseable {
 
     private final IDocument document;
     private final BufferPort session;
+    private final UiExecutor ui;
     private final AtomicBoolean applyingRemote = new AtomicBoolean(false);
     /** Document changes seen while one Neovim change was applied (more than 1: see {@link #applyChange}). */
     private int changesWhileApplying;
@@ -89,9 +90,11 @@ public final class BufferSynchronizer implements AutoCloseable {
         }
     };
 
-    public BufferSynchronizer(IDocument document, BufferPort session) {
+    /** @param ui the UI thread, where the document is changed ({@code SwtUiExecutor} in the editor) */
+    public BufferSynchronizer(IDocument document, BufferPort session, UiExecutor ui) {
         this.document = document;
         this.session = session;
+        this.ui = ui;
     }
 
     public void setCaretRestorer(Runnable caretRestorer) {
@@ -346,14 +349,13 @@ public final class BufferSynchronizer implements AutoCloseable {
      * range event would be applied against stale line numbers.
      */
     private void runOnUi(Runnable r) {
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
+        if (!ui.isAvailable()) {
             return;
         }
-        if (display.getThread() == Thread.currentThread()) {
+        if (ui.isUiThread()) {
             r.run();
         } else {
-            display.syncExec(() -> {
+            ui.syncExec(() -> {
                 if (!closed) {
                     r.run();
                 }

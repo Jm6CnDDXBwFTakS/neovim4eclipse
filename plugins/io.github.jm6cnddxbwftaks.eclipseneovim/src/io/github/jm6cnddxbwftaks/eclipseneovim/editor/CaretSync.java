@@ -14,10 +14,10 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
-import org.eclipse.swt.widgets.Display;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPort;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.UiExecutor;
 
 /**
  * Keeps the editor's caret and Neovim's cursor in the same place, in both directions:
@@ -46,6 +46,7 @@ final class CaretSync {
 
     private final StyledText widget;
     private final CursorPort session;
+    private final UiExecutor ui;
     /** The editor's current document (may be {@code null}). */
     private final Supplier<IDocument> document;
     private final WidgetOffsets offsets;
@@ -66,11 +67,12 @@ final class CaretSync {
         }
     };
 
-    CaretSync(StyledText widget, WidgetOffsets offsets, CursorPort session, Supplier<IDocument> document,
-            BooleanSupplier followEclipseCaret, BooleanSupplier applyingRemoteChange) {
+    CaretSync(StyledText widget, WidgetOffsets offsets, CursorPort session, UiExecutor ui,
+            Supplier<IDocument> document, BooleanSupplier followEclipseCaret, BooleanSupplier applyingRemoteChange) {
         this.widget = widget;
         this.offsets = offsets;
         this.session = session;
+        this.ui = ui;
         this.document = document;
         this.followEclipseCaret = followEclipseCaret;
         this.applyingRemoteChange = applyingRemoteChange;
@@ -86,14 +88,13 @@ final class CaretSync {
         if (pos == null || disposed) {
             return;
         }
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
+        if (!ui.isAvailable()) {
             return;
         }
-        if (display.getThread() == Thread.currentThread()) {
+        if (ui.isUiThread()) {
             applyOnUi(pos);
         } else {
-            display.asyncExec(() -> applyOnUi(pos));
+            ui.asyncExec(() -> applyOnUi(pos));
         }
     }
 
@@ -163,12 +164,11 @@ final class CaretSync {
      * after).
      */
     void sendEclipseCaretNow() {
-        Display display = Display.getDefault();
-        if (disposed || display == null || display.isDisposed()) {
+        if (disposed || !ui.isAvailable()) {
             return;
         }
         int[][] lineCol = new int[1][];
-        display.syncExec(() -> {
+        ui.syncExec(() -> {
             IDocument doc = document.get();
             if (!disposed && !widget.isDisposed() && doc != null) {
                 lineCol[0] = DocumentPositions.offsetToLineCol(doc, cursorModelOffset());
