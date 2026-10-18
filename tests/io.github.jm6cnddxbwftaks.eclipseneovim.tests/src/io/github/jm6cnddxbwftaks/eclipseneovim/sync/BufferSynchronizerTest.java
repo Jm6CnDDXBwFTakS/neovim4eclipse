@@ -11,13 +11,17 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IDocumentExtension;
+import org.eclipse.jface.text.IDocumentListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferChange;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.BufferPort;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.UiExecutor;
+import io.github.jm6cnddxbwftaks.eclipseneovim.editor.VimText;
 
 /**
  * {@link BufferSynchronizer} against a real JFace {@link Document} and a fake {@link BufferPort}: no
@@ -33,10 +37,13 @@ class BufferSynchronizerTest {
         final List<List<String>> pushed = new ArrayList<>();
         final List<Runnable> queued = new ArrayList<>();
         final List<Consumer<BufferChange>> listeners = new ArrayList<>();
+        /** Runs inside each push, as if things happened while the input thread was writing the buffer. */
+        Runnable duringPush = () -> { };
 
         @Override
         public void setBufferLines(List<String> lines) {
             pushed.add(List.copyOf(lines));
+            duringPush.run();
         }
 
         @Override
@@ -180,6 +187,150 @@ class BufferSynchronizerTest {
             offThread.startRemoteListening();
             neovim.neovimChanged(new BufferChange(0, 1, List.of("ALPHA")));
             assertTrue(ui.held.isEmpty());
+        }
+    }
+
+    // ---- bursts: several edits in a row, from either side ----
+
+    @Test
+    void aBurstOfEclipseEditsQueuesOnePushWithTheFinalText() throws Exception {
+        sync.pushLocalChanges(() -> true, null);
+        for (int i = 0; i < 20; i++) {
+            document.replace(0, 0, "x"); // e.g. a formatter making many small edits
+        }
+        assertEquals(1, neovim.queued.size());
+        neovim.runQueued();
+        assertEquals(List.of(List.of("x".repeat(20) + "alpha", "beta")), neovim.pushed);
+    }
+
+    @Test
+    void anEditWhileAPushRunsQueuesOneMore() throws Exception {
+        sync.pushLocalChanges(() -> true, null);
+        neovim.duringPush = () -> {
+            neovim.duringPush = () -> { };
+            replace(0, 5, "gamma"); // Eclipse changes the document while the push is on its way
+        };
+        document.replace(0, 5, "omega");
+        neovim.runQueued();
+        assertEquals(1, neovim.queued.size(), "the later edit must not be lost");
+        neovim.runQueued();
+        assertEquals(List.of(List.of("omega", "beta"), List.of("gamma", "beta")), neovim.pushed);
+        assertTrue(neovim.queued.isEmpty(), "no push loop");
+    }
+
+    @Test
+    void manyNeovimChangesInARowApplyInOrderWithoutEchoes() {
+        sync.pushLocalChanges(() -> true, null);
+        sync.startRemoteListening();
+        for (int i = 1; i <= 50; i++) {
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("line " + i))); // e.g. a macro's steps
+        }
+        assertEquals("line 50\nbeta\n", document.get());
+        assertTrue(neovim.queued.isEmpty());
+    }
+
+    @Test
+    void neovimChangesAddingAndRemovingLinesKeepTheRestInPlace() {
+        IDocument doc = VimText.parse(VimText.SAMPLE).document();
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(1, 1, List.of("new", "lines"))); // o, twice
+            neovim.neovimChanged(new BufferChange(0, 1, List.of()));              // dd on line 1
+            neovim.neovimChanged(new BufferChange(3, 4, List.of("aé ü!")));       // A! on "aé ü"
+            assertEquals("new\nlines\n\tindented with a tab\naé ü!\nsmile 😀 end\n\nlast\n", doc.get());
+        }
+    }
+
+    @Test
+    void anEditMadeInReactionToNeovimsChangeIsPushedBack() {
+        // Linked mode (a rename) mirrors each change into the other occurrences with a
+        // post-notification replace, inside Neovim's own change. Neovim must learn about the mirror.
+        IDocument doc = new Document("foo = foo\n");
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushLocalChanges(() -> true, null);
+            s.startRemoteListening();
+            mirrorFirstWordInto(doc, 6);
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("bar = foo")));
+            assertEquals("bar = bar\n", doc.get());
+            assertEquals(1, neovim.queued.size());
+
+            // Before the push runs, Neovim's own full re-sync arrives, still without the mirror. It is
+            // stale: applying it would undo the mirror.
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("bar = foo")));
+            assertEquals("bar = bar\n", doc.get());
+
+            neovim.runQueued();
+            assertEquals(List.of(List.of("bar = bar")), neovim.pushed);
+            assertTrue(neovim.queued.isEmpty(), "no push loop");
+
+            // After the push Neovim is up to date again, so full re-syncs apply.
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("baz = baz")));
+            assertEquals("baz = baz\n", doc.get());
+        }
+    }
+
+    @Test
+    void thePushesOwnEchoIsNotApplied() throws Exception {
+        sync.pushLocalChanges(() -> true, null);
+        sync.startRemoteListening();
+        neovim.duringPush = () -> neovim.neovimChanged(new BufferChange(0, -1, List.of("stale")));
+        document.replace(0, 5, "gamma");
+        neovim.runQueued();
+        assertEquals("gamma\nbeta\n", document.get());
+        assertEquals(1, neovim.listeners.size(), "listening resumes after the push");
+    }
+
+    @Test
+    void closingInsideADocumentEventDropsTheQueuedPushWithoutErrors() throws Exception {
+        sync.pushLocalChanges(() -> true, null);
+        document.addDocumentListener(new IDocumentListener() {
+            @Override
+            public void documentAboutToBeChanged(DocumentEvent event) {
+            }
+
+            @Override
+            public void documentChanged(DocumentEvent event) {
+                sync.close(); // the editor closes while listeners are being notified
+            }
+        });
+        document.replace(0, 5, "gamma");
+        document.replace(0, 5, "delta"); // after close: nothing queued
+        assertEquals(1, neovim.queued.size());
+        neovim.runQueued();
+        assertEquals(List.of(), neovim.pushed);
+    }
+
+    /** Once: when the first word changes, copies it to {@code mirrorAt}, as linked mode would. */
+    private static void mirrorFirstWordInto(IDocument doc, int mirrorAt) {
+        doc.addDocumentListener(new IDocumentListener() {
+            private boolean done;
+
+            @Override
+            public void documentAboutToBeChanged(DocumentEvent event) {
+            }
+
+            @Override
+            public void documentChanged(DocumentEvent event) {
+                if (done || event.getOffset() >= mirrorAt) {
+                    return;
+                }
+                done = true;
+                String word = event.getText();
+                ((IDocumentExtension) doc).registerPostNotificationReplace(this,
+                        (document, owner) -> replace(document, mirrorAt, word.length(), word));
+            }
+        });
+    }
+
+    private void replace(int offset, int length, String text) {
+        replace(document, offset, length, text);
+    }
+
+    private static void replace(IDocument doc, int offset, int length, String text) {
+        try {
+            doc.replace(offset, length, text);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
     }
 }
