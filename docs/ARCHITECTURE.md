@@ -313,7 +313,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
-| Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | UI `BufferSynchronizerTest` (fake port, real `Document`) |
+| Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | UI `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |
 | Caret and Neovim cursor in step | `editor/CaretSync` (caret seen through `editor/EditorCaret`, on the widget `StyledTextCaret`) | UI `CaretSyncTest` (in-memory `FakeCaret`), `StyledTextCaretTest` |
 | Test text with caret and selection markers | UI test helper `VimText` (`"al\|pha"`, `«selected»`, `VimText.SAMPLE`) | `VimTextTest`; used by `CaretSyncTest`, `DocumentPositionsTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
