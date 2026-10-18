@@ -328,6 +328,20 @@ class EditorEndToEndTest {
         }
     }
 
+    /**
+     * {@code ZQ} closes the editor only after the key event is over. Eclipse's own key listeners
+     * run after the plug-in's and use the editor; closed during the event, the Java editor fails
+     * with a NullPointerException ("getViewer() is null").
+     */
+    @Test
+    void zqClosesTheEditorAfterTheKeyEvent() {
+        type(widget, "ZQ");
+        assertFalse(widget.isDisposed(), "the editor must still exist while its key event runs");
+        IWorkbenchPage page = editor.getSite().getPage();
+        waitUntil("the editor to close", TIMEOUT_MS, () -> page.findEditor(editor.getEditorInput()) == null);
+        editor = null; // closed already: nothing for closeEditor() to do
+    }
+
     @Test
     void undoRevertsNeovimsChange() {
         type(widget, "ggdd");
