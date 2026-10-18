@@ -11,6 +11,7 @@ import java.util.List;
  *
  * <p>This is the trickiest piece of the Neovim to Eclipse sync, so it is kept free of Eclipse
  * types and covered by randomized tests. The document is accessed through {@link LineSource}.
+ * The edit is as small as possible: unchanged text at either end of the lines is left out.
  *
  * <h2>Conventions</h2>
  * <ul>
@@ -68,7 +69,7 @@ public final class LineRangeEdit {
         int lastLine = last < 0 ? count : Math.max(firstLine, Math.min(last, count));
 
         // Fast path: one existing line replaced by one line. Touch only its content so the
-        // delimiter, later lines and (mostly) the caret are left alone.
+        // delimiter and later lines are left alone.
         if (lines.size() == 1 && firstLine < count && lastLine == firstLine + 1) {
             return diff(doc, doc.lineOffset(firstLine), doc.lineContentLength(firstLine), lines.get(0));
         }
@@ -95,11 +96,15 @@ public final class LineRangeEdit {
         return diff(doc, start, end - start, replacement.toString());
     }
 
+    /**
+     * The replacement of {@code [offset, offset + length)}, trimmed to the characters that really
+     * change. Neovim reports whole lines, but Eclipse features that track text positions need the
+     * small edit: in a linked rename (Alt+Shift+R) an edit that reaches outside the name ends the
+     * rename, so {@code ciw} on the name must arrive as "replace the name", not "replace the line".
+     */
     private static Edit diff(LineSource doc, int offset, int length, String replacement) {
-        if (doc.text(offset, length).equals(replacement)) {
-            return null;
-        }
-        return new Edit(offset, length, replacement);
+        Edit inSpan = TextDiff.minimalEdit(doc.text(offset, length), replacement);
+        return inSpan == null ? null : new Edit(offset + inSpan.offset(), inSpan.length(), inSpan.text());
     }
 
     private static boolean endsWithLineBreak(LineSource doc) {

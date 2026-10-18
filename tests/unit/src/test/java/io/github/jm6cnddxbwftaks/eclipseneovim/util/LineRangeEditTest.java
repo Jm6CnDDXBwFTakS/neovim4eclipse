@@ -228,4 +228,19 @@ class LineRangeEditTest {
     private static String escape(String s) {
         return s.replace("\r", "\\r").replace("\n", "\\n");
     }
+
+    /** {@code ciw} on "count": the edit covers only the word, so a linked rename around it survives. */
+    @Test
+    void aChangedWordIsReplacedAloneNotItsWholeLine() {
+        String doc = "a\n  int count = 1;\nb\n";
+        Edit edit = LineRangeEdit.compute(new StringDoc(doc), 1, 2, List.of("  int  = 1;"), "\n");
+        assertEquals(new Edit(8, 5, ""), edit);
+    }
+
+    /** Deleting a line still removes the line and its line break, and nothing else. */
+    @Test
+    void aDeletedLineIsStillOneEdit() {
+        Edit edit = LineRangeEdit.compute(new StringDoc("a\nb\nc\n"), 1, 2, List.of(), "\n");
+        assertEquals(new Edit(2, 2, ""), edit);
+    }
 }
