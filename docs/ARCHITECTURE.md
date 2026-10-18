@@ -276,6 +276,9 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
   paste arrives as a pure line insertion, which `LineRangeEdit` handles.
 - **Columns:** Neovim cursor/visual columns are UTF-8 byte offsets. `editor/DocumentPositions` converts
   them with `util/Utf8Columns` in both directions.
+- **Indentation:** buffers have no filetype, so `util/Indentation` decides the indent options per
+  document (tabs or spaces and width detected from its lines, `cindent` for brace languages by file
+  extension) and `NeovimSession.setIndentation` applies them at attach, together with `'tabstop'`.
 - **Folding:** the widget of an editor with folding (the Java editor folds imports) leaves collapsed
   lines out, so a `StyledText` offset is not a document offset. `editor/WidgetOffsets` converts every
   caret and selection offset (`ITextViewerExtension5`) and unfolds code Neovim's cursor moves into.
@@ -287,6 +290,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand`, `editor/HostCommands` | `HostExCommandTest`, UI `HostCommandsTest` |
+| Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
