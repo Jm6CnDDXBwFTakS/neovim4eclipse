@@ -30,11 +30,14 @@
 
   <!-- tests/unit is a plain jar module (no OSGi); it runs in this reactor and also alone:
        mvn test -f tests/unit/pom.xml
+       tests/text is the same kind of module for code that uses Eclipse's text model (IDocument)
+       but no widgets: mvn test -f tests/text/pom.xml
        tests/...eclipseneovim.tests is a test fragment that runs inside a real Eclipse workbench
        (needs a display; -DskipTests skips it). -->
   <modules>
     <module>plugins/io.github.jm6cnddxbwftaks.eclipseneovim</module>
     <module>tests/unit</module>
+    <module>tests/text</module>
     <module>tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests</module>
     <module>features/io.github.jm6cnddxbwftaks.eclipseneovim.feature</module>
     <module>releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite</module>
@@ -73,6 +76,12 @@
     <jackson.version>2.14.2</jackson.version>
     <slf4j.version>1.7.36</slf4j.version>
     <junit.version>5.11.4</junit.version>
+    <!-- Eclipse's text model jars, for tests/text only (the plug-in gets them from the Eclipse
+         release above). They are the versions inside that release: when <eclipse-repo.url>
+         changes, change these too (docs/UPGRADING.md, "Eclipse release"). -->
+    <eclipse.text.version>3.14.200</eclipse.text.version>
+    <eclipse.equinox.common.version>3.19.200</eclipse.equinox.common.version>
+    <eclipse.core.commands.version>3.12.200</eclipse.core.commands.version>
   </properties>
 
   <dependencyManagement>
@@ -141,6 +150,41 @@
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
         <version>${junit.version}</version>
+      </dependency>
+      <!-- org.eclipse.text's own POM also asks for core.runtime and equinox.preferences (and so OSGi),
+           which Document never uses; excluded so that tests/text stays plain Java. -->
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.text</artifactId>
+        <version>${eclipse.text.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.equinox.common</artifactId>
+        <version>${eclipse.equinox.common.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.core.commands</artifactId>
+        <version>${eclipse.core.commands.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
     </dependencies>
   </dependencyManagement>

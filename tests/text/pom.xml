@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Plain jar module, part of the root reactor; also runs alone:
+       mvn test -f tests/text/pom.xml
+
+       Tests of the code that works on Eclipse's text model (IDocument and DocumentEvent) but never
+       on a widget: sync/ (BufferSynchronizer) and a few editor/ classes (CaretSync,
+       DocumentPositions, EditorCaret). The text model is the org.eclipse.text jar, which needs
+       neither SWT, nor a display, nor OSGi, so these tests run as plain JUnit in milliseconds
+       instead of inside a started Eclipse workbench (tests/...eclipseneovim.tests).
+
+       The compiler enforces the boundary: only org.eclipse.text (and the two small jars it needs)
+       is on the classpath, so a class listed below that starts to use SWT or the workbench fails
+       to compile here. Move such a class's test back to the UI tests, or put the widget work
+       behind an interface (see docs/LEARNING.md, "Ports and fakes").
+
+       Sources under test come from the plug-in project; there is no second copy. -->
+  <parent>
+    <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+    <artifactId>EclipseNeovim</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>eclipse-neovim-text-tests</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Eclipse Neovim Text-Model Tests</name>
+  <description>
+    Tests of sync/ and editor/ code that uses Eclipse's text model (org.eclipse.text) but no
+    widgets: plain JUnit, no workbench, no display.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>${java.release}</maven.compiler.release>
+    <jacoco.dataFile>${project.build.directory}/jacoco.exec</jacoco.dataFile>
+  </properties>
+
+  <dependencies>
+    <!-- Text model jars, versions from the root pom.xml (they must match the Eclipse release the
+         plug-in is built against; see docs/UPGRADING.md). -->
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.text</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.equinox.common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.core.commands</artifactId>
+    </dependency>
+    <!-- core/ is compiled here too (sync/ and editor/ use its ports), so it needs its libraries. -->
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>neovim-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>core-rpc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>reactive-core-rpc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>handler-annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ensarsarajcic.neovim.java</groupId>
+      <artifactId>neovim-notifications</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.msgpack</groupId>
+      <artifactId>msgpack-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.msgpack</groupId>
+      <artifactId>jackson-dataformat-msgpack</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>add-plugin-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- The classes under test, listed one by one in editor/ (the package also holds SWT code);
+               util/ and core/ because they use them. -->
+          <includes>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/util/**</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/core/**</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/sync/**</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/CaretSync.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/DocumentPositions.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/EditorCaret.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <!-- Coverage, as in tests/unit; the report is target/site/jacoco/index.html. Only sync/ and
+           editor/ are reported: util/ and core/ are compiled here as dependencies and are covered
+           by tests/unit. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>coverage-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <configuration>
+              <destFile>${jacoco.dataFile}</destFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>coverage-report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+            <configuration>
+              <dataFile>${jacoco.dataFile}</dataFile>
+              <includes>
+                <include>io/github/jm6cnddxbwftaks/eclipseneovim/sync/**</include>
+                <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/**</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

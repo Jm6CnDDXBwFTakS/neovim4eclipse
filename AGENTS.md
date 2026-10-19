@@ -18,6 +18,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ./mvnw verify -Dnvim.path=/usr/bin/nvim          # everything: plug-in, unit + UI tests, feature, ZIP
 ./mvnw verify -DskipTests                         # build only
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
+./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)
 ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/usr/bin/nvim   # real Neovim
 xvfb-run -a ./mvnw verify                         # on a machine without a display
 ```
@@ -46,7 +47,10 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   `DocumentPositions`.
 - `StyledText` offsets are not document offsets when code is folded; convert with `WidgetOffsets`.
 - `util/` and `core/` must not import `org.eclipse.*` (they are compiled and unit-tested without
-  Eclipse).
+  Eclipse). `sync/` and the `editor/` classes listed in `tests/text/pom.xml` may use only the text
+  model (`org.eclipse.jface.text` types from the `org.eclipse.text` jar), no SWT or workbench.
+- Put each test in the cheapest module that can run it: `tests/unit`, then `tests/text`, then the UI
+  tests (see CONTRIBUTING.md, "Which module a test belongs in").
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse
   classes as thin glue. Large classes are split by concern (see `core/package-info.java`).
 
