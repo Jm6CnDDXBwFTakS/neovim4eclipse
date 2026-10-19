@@ -37,6 +37,44 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
 - Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`, `CommandRunner.Neovim`, `StateSync.Neovim`, `KeyInput.Neovim`) and `UiExecutor`
   (`IMMEDIATE`, or one that holds work back) are defined next to the tests that use them.
 
+### Code coverage
+
+Every test run also measures coverage with [JaCoCo](https://www.jacoco.org/jacoco/): a Java agent
+records which lines and branches the tests execute, and a report shows them per package, class and
+source line (green: run, yellow: a branch only partly taken, red: never run). Open the report in a
+browser:
+
+| Tests | Report |
+|-------|--------|
+| Unit tests (`./mvnw verify` or `./mvnw test -f tests/unit/pom.xml`) | `tests/unit/target/site/jacoco/index.html` |
+| Unit tests against real Neovim (`-Pintegration`) | `tests/unit/target/site/jacoco-integration/index.html` |
+| UI tests (`./mvnw verify`) | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests/target/site/jacoco/index.html` |
+
+**Why one report per kind of test, not one merged report.** JaCoCo matches what it recorded to class
+files by a checksum of their bytecode. The unit tests compile their own copy of `core/` and `util/`
+with `javac`, while Tycho compiles the plug-in with the Eclipse compiler (ecj), so the same source
+gives different bytecode and the two recordings cannot be added up. To see the combined picture for
+one class, open it in both reports. (Merging would need the unit tests to run against the plug-in's
+own class files, which would also let `core/` import Eclipse classes without the compiler noticing.)
+
+**How to read it.** Coverage says which code *no* test runs; it does not say the tests check the
+right thing (a line can run without any assertion looking at its result). Use it to find untested
+logic and to check that moving a test from one module to another did not lose anything. There is no
+minimum percentage: a threshold rewards tests written for the number.
+
+Baseline on 2026-10-18 (lines covered; before the text-model tests moved out of the UI tests):
+
+| Package | Unit tests | UI tests |
+|---------|-----------|----------|
+| `util` | 98% (808/823) | 67% |
+| `core` | 59% (539/919; the rest needs Neovim) | 78% (with real Neovim) |
+| `sync` | not compiled | 87% (131/151) |
+| `editor` | not compiled | 68% (1013/1498) |
+| `prefs` | not compiled | 74% |
+| All | 77% of 1742 lines | 71% of 3660 lines |
+
+The integration profile alone covers 49% of `core` and `util`.
+
 Avoid `clean` while a runtime Eclipse launched from the IDE is running: it deletes the plug-in's
 `lib/*.jar`, which that Eclipse is using.
 

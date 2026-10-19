@@ -29,6 +29,7 @@ The safe loop for any upgrade:
 | Embedded libraries | `<neovim.java.version>`, `<msgpack.version>`, `<jackson.version>`, `<slf4j.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
 | Tycho | `<tycho.version>` in the root `pom.xml` | none |
+| JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself | `distributionUrl` in `.mvn/wrapper/maven-wrapper.properties` | none |
 | Neovim used by CI | `NVIM_VERSION` in `.github/workflows/build.yml` | not checked |
@@ -118,6 +119,9 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 - **Maven**: `./mvnw -N wrapper:wrapper -Dmaven=3.9.16` rewrites
   `.mvn/wrapper/maven-wrapper.properties` (use the version you want). Stay on the 3.9 line until
   Tycho supports Maven 4 releases.
+- **JaCoCo**: change `<jacoco.version>`. A JaCoCo release supports class files only up to the Java
+  version it knows: when the build JDK gets newer than that, the agent fails while the tests start
+  ("Unsupported class file major version"), so upgrade JaCoCo together with the JDK.
 - **JUnit**: change `<junit.version>`. The UI tests use the JUnit from the Eclipse target instead.
 
 ## Neovim
