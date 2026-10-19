@@ -79,7 +79,7 @@
     <msgpack.version>0.9.3</msgpack.version>
     <jackson.version>2.14.2</jackson.version>
     <slf4j.version>1.7.36</slf4j.version>
-    <junit.version>5.11.4</junit.version>
+    <junit.version>5.14.4</junit.version>
     <!-- Eclipse's text model jars, for tests/text only (the plug-in gets them from the Eclipse
          release above). They are the versions inside that release: when <eclipse-repo.url>
          changes, change these too (docs/UPGRADING.md, "Eclipse release"). -->
