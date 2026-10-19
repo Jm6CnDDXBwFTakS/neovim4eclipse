@@ -15,10 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
 import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
@@ -253,14 +255,17 @@ class KeyInputTest {
 
     @Test
     void aFailedReplayFallsBackToPushThenEscAndResumesBufferEvents() throws Exception {
-        nvim.failingKey = "abc";
+        try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
+            nvim.failingKey = "abc";
 
-        keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2));
+            keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2));
 
-        assertEquals(List.of("setCursor 1:0", "type abc", "push document", "type <Esc>", "snapshot"),
-                nvim.calls);
-        state.dispatchBufferChange(0, 1, List.of("later"));
-        assertEquals(List.of("mode n", "buffer [later]"), heard);
+            assertEquals(List.of("setCursor 1:0", "type abc", "push document", "type <Esc>", "snapshot"),
+                    nvim.calls);
+            state.dispatchBufferChange(0, 1, List.of("later"));
+            assertEquals(List.of("mode n", "buffer [later]"), heard);
+            log.assertLogged(Level.WARNING, "replaying typed text into Neovim failed");
+        }
     }
 
     // ---- Enter on Neovim's own : command line ----
@@ -321,14 +326,17 @@ class KeyInputTest {
 
     @Test
     void aMacroThatDoesNotFinishInTimeStillResumesBufferEvents() throws Exception {
-        nvim.after.put("@", new VimMode("n", true));
-        nvim.after.put("a", new VimMode("n", false));
-        nvim.bufferLinesFail = true;
-        type("@", "a");
+        try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
+            nvim.after.put("@", new VimMode("n", true));
+            nvim.after.put("a", new VimMode("n", false));
+            nvim.bufferLinesFail = true;
+            type("@", "a");
 
-        state.dispatchBufferChange(0, 1, List.of("later"));
+            state.dispatchBufferChange(0, 1, List.of("later"));
 
-        assertTrue(heard.contains("buffer [later]"), heard.toString());
+            assertTrue(heard.contains("buffer [later]"), heard.toString());
+            log.assertLogged(Level.WARNING, "buffer sync after macro failed");
+        }
     }
 
     @Test

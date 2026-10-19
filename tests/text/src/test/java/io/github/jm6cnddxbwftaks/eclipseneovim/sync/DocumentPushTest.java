@@ -8,9 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 
 /**
@@ -121,22 +123,28 @@ class DocumentPushTest {
 
     @Test
     void aFailedBufferSwitchPushesNothingButListensAgain() {
-        fake.failing = "showBuffer";
-        push.start(4, INDENT, 2, 3, false);
-        fake.runQueued();
+        try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) {
+            fake.failing = "showBuffer";
+            push.start(4, INDENT, 2, 3, false);
+            fake.runQueued();
 
-        // No push: it would overwrite the buffer Neovim is in, another file's.
-        assertEquals(List.of("stop listening", "queue", "showBuffer", "start listening"), fake.calls);
+            // No push: it would overwrite the buffer Neovim is in, another file's.
+            assertEquals(List.of("stop listening", "queue", "showBuffer", "start listening"), fake.calls);
+            log.assertLogged(Level.SEVERE, "Could not switch Neovim to the document's buffer");
+        }
     }
 
     @Test
     void aFailedIndentSettingDoesNotStopThePush() {
-        fake.failing = "indent";
-        push.start(4, INDENT, 2, 3, false);
-        fake.runQueued();
+        try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) {
+            fake.failing = "indent";
+            push.start(4, INDENT, 2, 3, false);
+            fake.runQueued();
 
-        assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "push", "start listening",
-                "cursor 2:3"), fake.calls);
+            assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "push", "start listening",
+                    "cursor 2:3"), fake.calls);
+            log.assertLogged(Level.WARNING, "Could not set Neovim's tab and indent options");
+        }
     }
 
     @Test
@@ -151,18 +159,24 @@ class DocumentPushTest {
 
     @Test
     void aFailedCursorMoveIsOnlyLogged() {
-        fake.failing = "cursor";
-        push.start(4, INDENT, 2, 3, false);
-        fake.runQueued();
+        try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) {
+            fake.failing = "cursor";
+            push.start(4, INDENT, 2, 3, false);
+            fake.runQueued();
 
-        assertEquals("cursor 2:3", fake.calls.get(fake.calls.size() - 1));
+            assertEquals("cursor 2:3", fake.calls.get(fake.calls.size() - 1));
+            log.assertLogged(Level.WARNING, "Failed to set Neovim cursor after push");
+        }
     }
 
     @Test
     void whenThePushCannotBeQueuedListeningResumesAtOnce() {
-        fake.failing = "queue";
-        push.start(4, INDENT, 2, 3, false);
+        try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) {
+            fake.failing = "queue";
+            push.start(4, INDENT, 2, 3, false);
 
-        assertEquals(List.of("stop listening", "queue", "start listening"), fake.calls);
+            assertEquals(List.of("stop listening", "queue", "start listening"), fake.calls);
+            log.assertLogged(Level.WARNING, "Document push could not be scheduled");
+        }
     }
 }

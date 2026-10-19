@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
 import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
 /**
@@ -256,11 +258,14 @@ class StateSyncTest {
 
     @Test
     void aFailedBufferReadPublishesNothing() {
-        nvim.lines = null;
+        try (ExpectedLog log = ExpectedLog.of(StateSync.class)) {
+            nvim.lines = null;
 
-        state.syncBuffer();
+            state.syncBuffer();
 
-        assertEquals(List.of(), listeners.heard);
+            assertEquals(List.of(), listeners.heard);
+            log.assertLogged(Level.WARNING, "buffer sync failed");
+        }
     }
 
     @Test
