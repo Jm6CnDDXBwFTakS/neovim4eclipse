@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -20,8 +21,8 @@ import com.ensarsarajcic.neovim.java.api.types.api.ClientVersionInfo;
 import com.ensarsarajcic.neovim.java.api.types.api.UiOptions;
 import com.ensarsarajcic.neovim.java.api.util.ObjectMappers;
 import com.ensarsarajcic.neovim.java.corerpc.client.ProcessRpcConnection;
+import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
 import com.ensarsarajcic.neovim.java.corerpc.client.RpcClient;
-import com.ensarsarajcic.neovim.java.corerpc.client.RpcConnection;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcClient;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamer;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamerWrapper;
@@ -35,7 +36,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
  * <h2>The layers (bottom to top)</h2>
  * <pre>
  *   Process                 nvim --embed; msgpack-rpc on its stdin/stdout
- *   ProcessRpcConnection    the two streams
+ *   ProcessRpcConnection    the two streams; wrapped in QuittingConnection, so that Neovim
+ *                           exiting at shutdown is not logged as an error
  *   RpcClient               encodes requests, decodes responses and notifications (Jackson + msgpack)
  *   ReactiveRpcStreamer     turns each request into a CompletableFuture
  *   NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), ...
@@ -77,15 +79,17 @@ final class NeovimConnection implements AutoCloseable {
 
     /** Upper bound for the requests made while opening. */
     private static final long OPEN_TIMEOUT_SEC = 5;
+    /** How long {@link #requestQuit} waits for Neovim to exit after {@code :qa!} (it takes milliseconds). */
+    private static final long QUIT_TIMEOUT_MS = 1500;
 
     private final Process process;
-    private final RpcConnection streams;
+    private final QuittingConnection streams;
     private final RpcClient rpcClient;
     /** Per-connection pool for RPC reads and response waits; see {@link #open}. */
     private final ExecutorService rpcExecutor;
     private final NeovimApi api;
 
-    private NeovimConnection(Process process, RpcConnection streams, RpcClient rpcClient,
+    private NeovimConnection(Process process, QuittingConnection streams, RpcClient rpcClient,
             ExecutorService rpcExecutor, NeovimApi api) {
         this.process = process;
         this.streams = streams;
@@ -109,7 +113,9 @@ final class NeovimConnection implements AutoCloseable {
         Process process = pb.start();
         LOG.info(() -> "Started Neovim pid=" + process.pid() + " cmd=" + cmd);
 
-        RpcConnection streams = new ProcessRpcConnection(process, true); // true: kill process on close
+        // true: kill the process on close. Wrapped so that Neovim exiting at shutdown is not logged as
+        // an error by neovim-java (see QuittingConnection).
+        QuittingConnection streams = new QuittingConnection(new ProcessRpcConnection(process, true));
         // Library defaults are JVM-wide: RpcClient uses a static pool that rpcClient.stop() shuts
         // down (every later open() then fails), and the reactive wrapper blocks response waits on
         // ForkJoinPool.commonPool() (shared with the whole IDE). Give each connection its own pool.
@@ -179,16 +185,33 @@ final class NeovimConnection implements AutoCloseable {
     }
 
     /**
-     * Asks Neovim to exit, so that the pipe closes cleanly; otherwise the RPC library logs a
-     * {@code JsonEOFException} at ERROR level on the dead pipe. Waits at most 1.5 s.
+     * Asks Neovim to exit ({@code :qa!}) and waits until it has, at most {@value #QUIT_TIMEOUT_MS} ms.
+     *
+     * <p>It waits for the <em>process</em>, not for an answer: Neovim exits while running
+     * {@code :qa!} and never answers. (Waiting for an answer used to cost the full timeout on every
+     * close, 1.5 s per session.) So the command is sent as a msgpack-rpc <em>notification</em>, a
+     * message that expects no answer. Sent as a request, a thread would wait for the answer until
+     * {@link #close()} interrupts it, and neovim-java would print that interruption as an error.
+     * The connection is also told first that the end of Neovim's output is expected now, so
+     * neovim-java does not log that as an error either.
      */
     void requestQuit() {
+        streams.quitting();
+        if (!isAlive()) {
+            return;
+        }
         try {
-            if (isAlive()) {
-                api.executeCommand("qa!").get(1500, TimeUnit.MILLISECONDS);
+            rpcClient.send(new NotificationMessage.Builder("nvim_command").addArgument("qa!").build());
+        } catch (IOException e) {
+            LOG.log(Level.FINE, "Could not send :qa! (Neovim already gone?); close() ends the process", e);
+            return;
+        }
+        try {
+            if (!process.waitFor(QUIT_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                LOG.fine("Neovim did not exit after :qa!; close() ends the process");
             }
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "nvim qa! on shutdown (often normal)", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

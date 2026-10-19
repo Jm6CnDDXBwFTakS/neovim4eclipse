@@ -15,7 +15,9 @@
  *       Sends keys and requests, and publishes mode, cursor, selection and text changes to listeners.
  *       It delegates to:
  *       <ul>
- *         <li>{@code NeovimConnection}: the {@code nvim --embed} process and the RPC layers;</li>
+ *         <li>{@code NeovimConnection}: the {@code nvim --embed} process and the RPC layers, and
+ *             closing them: {@code :qa!}, then waiting for the process ({@code QuittingConnection}
+ *             keeps the expected end of Neovim's output from being logged as an error);</li>
  *         <li>{@code KeyInput}: what happens when a key is sent (pending commands, insert replay,
  *             macros, host {@code :} commands). It does not know the session: it is given
  *             {@code StateSync}, {@code StatusTracker} and its own small {@code KeyInput.Neovim}
