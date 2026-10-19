@@ -61,7 +61,7 @@ import org.msgpack.core.MessageUnpacker;
  * <p>Logging: {@code java.util.logging}; at FINEST every message in and out is traced, which is the
  * way to study the traffic ({@code docs/LEARNING.md}).
  */
-public final class RpcChannel implements AutoCloseable {
+public final class RpcChannel implements RpcRequests, AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(RpcChannel.class.getName());
 
@@ -121,6 +121,7 @@ public final class RpcChannel implements AutoCloseable {
      * @param params the arguments, of the types {@link MsgpackValues} accepts
      * @throws IllegalArgumentException if a parameter cannot be encoded (nothing is sent)
      */
+    @Override
     public CompletableFuture<Object> request(String method, Object... params) {
         long id = nextId.getAndIncrement() & 0xFFFF_FFFFL;
         CompletableFuture<Object> answer = new CompletableFuture<>();

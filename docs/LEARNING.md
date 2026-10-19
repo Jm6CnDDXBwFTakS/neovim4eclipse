@@ -250,7 +250,10 @@ buffers and windows as plain `Handle(kind, id)` records instead of neovim-java's
 is the first half of the *strangler* pattern for replacing a library: put your own interface in
 front of it, move every caller to the interface, then write a second implementation and swap
 (`docs/RPC_CLIENT.md` is the plan; the second implementation is our own msgpack-rpc client).
-Until the swap, only `NeovimConnection` and the adapter import neovim-java's API.
+Until the swap, only `NeovimConnection` and the adapter import neovim-java's API. The second
+implementation, `core/rpc/MsgpackNeovimApi` over `core/rpc/RpcChannel`, already exists, and
+`NeovimApiContractTest` runs the same checks against a real Neovim through both: a *contract test*,
+which is how a replacement proves it behaves like the original before anything depends on it.
 
 neovim-java also has annotations for handlers (`@NeovimNotificationHandler`,
 `@NeovimRequestHandler`), found by reflection. The plug-in used them for notifications, but the

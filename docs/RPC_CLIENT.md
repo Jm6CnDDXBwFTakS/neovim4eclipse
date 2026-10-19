@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–5. Next: step 6.
+Status: **accepted** (option A), in progress. Done: steps 1–6. Next: step 7.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -258,7 +258,20 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      which threads are alive). `ExpectedLog` gained `assertNothingAtOrAbove`.
 6. **`MsgpackNeovimApi`**, our implementation of the interface over `RpcChannel`, with
    `NeovimApiTest`. Make `NeovimBufferIntegrationTest` (or a new small contract test) run against
-   both implementations, so a difference shows up before the switch.
+   both implementations, so a difference shows up before the switch. *Done.* As built:
+   - `MsgpackNeovimApi` takes `RpcRequests`, a one-method interface (`request(method, params)`)
+     that `RpcChannel` implements, so `NeovimApiTest` records calls with a lambda: no pipes.
+   - An answer of the wrong shape fails with `UnexpectedAnswerException` (extends
+     `NeovimExceptionBase`); Neovim's own error passes through as `NeovimErrorException`.
+   - `NeovimApiContractTest` (integration) runs 15 checks against a real Neovim through each
+     implementation (`@Nested` classes `NeovimJava` and `OwnClient`), comparing answers with
+     numbers normalized to `Long` (neovim-java gives `Integer`). Both agree.
+   - Found while writing it: our client must also send `nvim_ui_attach`, or Neovim does not process
+     `nvim_input` reliably under `--embed` (the "blocking" check fails without it); step 7 adds it
+     with `nvim_set_client_info` to `NeovimApi`. And `blocking` is true after `f` (Neovim waits
+     inside the command), not after `d` (an operator returns to the main loop as mode `no`).
+   - Surefire's `.txt` summary counts the `@Nested` classes' tests as 0; their results are in the
+     XML report and the console.
 7. **Switch.** `NeovimConnection.open` builds an `RpcChannel` over the process streams and a
    `MsgpackNeovimApi`; `requestQuit` uses `channel.closing()` and `channel.notify("nvim_command",
    "qa!")`. Delete `QuittingConnection` and its test, `NeovimJavaApi`, the executor and the SLF4J
