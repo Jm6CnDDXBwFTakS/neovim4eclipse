@@ -81,6 +81,24 @@ public final class ExpectedLog implements AutoCloseable {
         fail("expected a " + level + " log containing \"" + messagePart + "\"; logged: " + seen);
     }
 
+    /**
+     * Fails if anything was logged at {@code level} or above. Example: a normal shutdown must log
+     * nothing at {@code WARNING}, only at {@code FINE}.
+     */
+    public void assertNothingAtOrAbove(Level level) {
+        List<String> seen = new ArrayList<>();
+        synchronized (records) {
+            for (LogRecord logRecord : records) {
+                if (logRecord.getLevel().intValue() >= level.intValue()) {
+                    seen.add(logRecord.getLevel() + " " + logRecord.getMessage());
+                }
+            }
+        }
+        if (!seen.isEmpty()) {
+            fail("expected nothing logged at " + level + " or above; logged: " + seen);
+        }
+    }
+
     /** Stops capturing; the logger prints to the console again. */
     @Override
     public void close() {

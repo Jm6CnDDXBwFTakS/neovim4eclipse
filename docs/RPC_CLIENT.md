@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–4. Next: step 5.
+Status: **accepted** (option A), in progress. Done: steps 1–5. Next: step 6.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -126,7 +126,7 @@ Sizes are estimates including Javadoc in the project's explanatory style.
 |---|---|---|
 | `MsgpackValues` | ~120 | Java ↔ MessagePack for the values the API uses: `null`, `Boolean`, `Long`/`Integer`, `Double`, `String`, `List`, `Map`, `Handle`. Decodes integers as `Long`, maps as `LinkedHashMap`, extension types 0/1/2 as `Handle`. |
 | `Handle` | ~30 | `record Handle(Kind kind, long id)` with `Kind { BUFFER, WINDOW, TABPAGE }`; replaces `Buffer`, `BaseCustomIdType`, `MessagePackExtensionType`. |
-| `NeovimError` | ~20 | An `Exception` carrying Neovim's error type and message, so `Rpc.errorMessage` still finds `E94: ...` in it. |
+| `NeovimErrorException` | ~20 | A `util/NeovimExceptionBase` (unchecked) carrying Neovim's error type and message, so `Rpc.errorMessage` still finds `E94: ...` in it. |
 | `RpcChannel` | ~220 | The connection: a reader thread, request ids, pending responses, writing, dispatching Neovim's notifications and requests, closing. Details below. |
 | `NeovimApi` (ours) | ~150 | The functions of 1.2 as thin typed methods, each one line over `RpcChannel.request`, using `Mode(String mode, boolean blocking)` (step 1) and `WinCursor(int row, int col)` (step 2). Only the functions we use; adding one is a line. |
 
@@ -153,7 +153,7 @@ final class RpcChannel implements AutoCloseable {
   message. Any thread may call `request` or `notify`.
 - **Reading:** one daemon thread per channel (`eclipse-neovim-rpc`), no pool. For each message it
   - completes the matching future (`complete(result)`, or `completeExceptionally(new
-    NeovimError(...))`); an unknown id is logged at FINE and ignored;
+    NeovimErrorException(...))`); an unknown id is logged at FINE and ignored;
   - calls `incoming.notification(...)`;
   - calls `incoming.request(...)` and writes exactly one response: the result, or `[0, message]`
     when it threw.
@@ -243,7 +243,19 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      packs each message into a buffer before sending it.
    - msgpack-core reports truncated input (also a stream that ends, when Neovim exits) with
      unchecked `MessagePackException`s, not `IOException`, so step 5's reader loop must catch both.
-5. **`RpcChannel`** with its unit tests. Not used yet.
+5. **`RpcChannel`** with its unit tests. *Done.* Not used yet. As built:
+   - `start()` starts the reader thread, separate from the constructor.
+   - A pending request is removed when its future completes in any way, a caller's `cancel`
+     included; a late answer is logged at FINE and dropped.
+   - Exceptions: every exception class of the plug-in extends the abstract, unchecked
+     `util/NeovimExceptionBase`. Neovim's error answer is `NeovimErrorException` (its type and
+     message; replaces the planned `NeovimError`); a request that cannot be answered because the
+     connection ended fails with `NeovimConnectionClosedException` (not `IOException`), and so does
+     `notify` after the end. `QuittingConnection.Quit` extends the base too until step 7.
+   - Messages are packed into a buffer and then written whole under a lock; msgids are uint32 and
+     wrap. A reply to Neovim's request that cannot be encoded becomes an error reply.
+   - `RpcChannelTest` plays Neovim over two `java.nio` pipes (not `PipedInputStream`, which checks
+     which threads are alive). `ExpectedLog` gained `assertNothingAtOrAbove`.
 6. **`MsgpackNeovimApi`**, our implementation of the interface over `RpcChannel`, with
    `NeovimApiTest`. Make `NeovimBufferIntegrationTest` (or a new small contract test) run against
    both implementations, so a difference shows up before the switch.

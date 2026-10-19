@@ -181,6 +181,10 @@ text that tests do not always catch.
 - [`.editorconfig`](.editorconfig) sets indentation and line endings for other files.
 - Comments explain *why*, and name the Eclipse or Neovim concept involved, so that the code teaches
   how it works.
+- An exception class of our own extends `util/NeovimExceptionBase` (abstract, unchecked), so that
+  `catch (NeovimExceptionBase e)` catches everything the plug-in raises itself. Examples:
+  `core/rpc/NeovimErrorException` (Neovim refused a call), `NeovimConnectionClosedException`
+  (Neovim is gone).
 - Every source file starts with the SPDX header:
 
   ```java

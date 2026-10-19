@@ -78,6 +78,7 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - License EPL-2.0. Every source file starts with the two-line SPDX header
   (`SPDX-FileCopyrightText` and `SPDX-License-Identifier: EPL-2.0`); Markdown files have none.
 - American spelling (behavior, color, license).
+- Every exception class the plug-in defines extends `util/NeovimExceptionBase` (abstract, unchecked).
 - Comments and docs in an explanatory style: say why, give an example, link the concept.
 - Add or update tests with every behavior change; update README and `docs/` when behavior changes.
 - One commit per logical change. Do not push, and never to `main`, unless the maintainer asks.
