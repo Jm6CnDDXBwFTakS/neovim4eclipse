@@ -10,7 +10,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,15 +21,13 @@ import com.ensarsarajcic.neovim.java.api.types.api.UiOptions;
 import com.ensarsarajcic.neovim.java.api.util.ObjectMappers;
 import com.ensarsarajcic.neovim.java.corerpc.client.ProcessRpcConnection;
 import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
-import com.ensarsarajcic.neovim.java.corerpc.message.RequestMessage;
 import com.ensarsarajcic.neovim.java.corerpc.message.ResponseMessage;
 import com.ensarsarajcic.neovim.java.corerpc.message.RpcError;
 import com.ensarsarajcic.neovim.java.corerpc.client.RpcClient;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcClient;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamer;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamerWrapper;
-import com.ensarsarajcic.neovim.java.handler.NeovimHandlerManager;
-import com.ensarsarajcic.neovim.java.handler.NeovimHandlerProxy;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimJavaApi;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
@@ -184,34 +181,37 @@ final class NeovimConnection implements AutoCloseable {
     }
 
     /**
-     * Routes notifications from Neovim to the {@code @NeovimNotificationHandler} methods of
-     * {@code handler} (found by reflection, so they must be public).
+     * Delivers everything Neovim sends on its own to {@code incoming}: notifications and requests
+     * ({@code vim.rpcnotify}, {@code vim.rpcrequest}, buffer line events). Call once, before Neovim
+     * has reason to send any.
      *
-     * <p>Only notifications: the manager's proxy is added as a notification callback rather than
-     * with {@code attachToStream}, which would also make it answer every request. In neovim-java
-     * 0.5.0 that answer is always "No handler found": {@code @NeovimRequestHandler} methods are
-     * stored in one map and looked up in another. Requests go to {@link #setRequestHandler} instead.
-     */
-    void addNotificationHandler(Object handler) {
-        NeovimHandlerProxy proxy = new NeovimHandlerProxy();
-        new NeovimHandlerManager(proxy).registerNeovimHandler(handler);
-        rpcClient.addNotificationCallback(proxy);
-    }
-
-    /**
-     * Answers the requests Neovim sends ({@code vim.rpcrequest}): {@code handler} returns the result
-     * for a request, or throws to answer with an error. Neovim waits for every request until it is
-     * answered, so each one gets exactly one answer, an error included.
+     * <p>Notifications: one raw callback on the {@code RpcClient}, which receives all of them, and
+     * {@link Incoming#notification} picks by name. A handler that throws is logged here and the message
+     * dropped, so that one bad message is reported once, by us, and does not reach the library.
      *
-     * <p>neovim-java calls this on the thread that reads Neovim's output, the same thread and in the
-     * same order as notifications; while the handler runs, no other message from Neovim is read.
+     * <p>Requests: each gets exactly one answer, the return value or, if
+     * {@link Incoming#request} throws, an error response; Neovim waits for every request until it is
+     * answered. Not neovim-java's {@code @NeovimRequestHandler}: in 0.5.0 its proxy stores those
+     * handlers in one map and looks them up in another, so every request was answered "No handler
+     * found".
+     *
+     * <p>neovim-java calls both on the thread that reads Neovim's output, in arrival order (the same
+     * thread for notifications and requests); while one runs, no other message from Neovim is read.
      */
-    void setRequestHandler(Function<RequestMessage, Object> handler) {
+    void setIncoming(Incoming incoming) {
+        rpcClient.addNotificationCallback(notification -> {
+            try {
+                incoming.notification(notification.getName(), arguments(notification.getArguments()));
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "Notification " + notification.getName() + " from Neovim failed", e);
+            }
+        });
         rpcClient.addRequestCallback(request -> {
             ResponseMessage response;
             try {
-                response = new ResponseMessage(request.getId(), null, handler.apply(request));
-            } catch (RuntimeException e) {
+                response = new ResponseMessage(request.getId(), null,
+                        incoming.request(request.getMethod(), arguments(request.getArguments())));
+            } catch (Exception e) {
                 LOG.log(Level.WARNING, "Request " + request.getMethod() + " from Neovim failed", e);
                 response = new ResponseMessage(request.getId(), RpcError.exception(String.valueOf(e.getMessage())), null);
             }
@@ -221,6 +221,11 @@ final class NeovimConnection implements AutoCloseable {
                 LOG.log(Level.FINE, "Answering " + request.getMethod() + " failed (Neovim gone?)", e);
             }
         });
+    }
+
+    /** A message's arguments; never {@code null}, as {@link Incoming} promises. */
+    private static List<?> arguments(List<?> raw) {
+        return raw == null ? List.of() : raw;
     }
 
     boolean isAlive() {

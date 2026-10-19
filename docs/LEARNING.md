@@ -232,7 +232,8 @@ ReactiveRpcStreamer     turns each request into a CompletableFuture
 NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), buffer.setLines(...)
 NeovimJavaApi           our own interface over it, core/rpc/NeovimApi: api.input("dd"),
                         api.bufSetLines(buffer, ...); the only layer the rest of the plug-in sees
-NeovimHandlerManager    routes notifications to @NeovimNotificationHandler methods (NotificationBridge)
+RpcClient callbacks     every notification and request, handed to core/rpc/Incoming
+                        (NotificationBridge picks the handler by name with a switch)
 ```
 
 The plug-in calls neovim-java through an interface of its own, `core/rpc/NeovimApi`: the 16
@@ -244,10 +245,13 @@ front of it, move every caller to the interface, then write a second implementat
 (`docs/RPC_CLIENT.md` is the plan; the second implementation is our own msgpack-rpc client).
 Until the swap, only `NeovimConnection` and the adapter import neovim-java's API.
 
-neovim-java also has a `@NeovimRequestHandler` annotation for answering Neovim's requests, but in
-version 0.5.0 it never fires: the manager stores those handlers in one map and looks them up in
-another, so every request gets "No handler found". `NeovimConnection.setRequestHandler` answers
-requests itself, straight from the `RpcClient`, and the manager is attached for notifications only.
+neovim-java also has annotations for handlers (`@NeovimNotificationHandler`,
+`@NeovimRequestHandler`), found by reflection. The plug-in used them for notifications, but the
+request one never fires in version 0.5.0: the manager stores those handlers in one map and looks
+them up in another, so every request gets "No handler found". So `NeovimConnection.setIncoming`
+takes both kinds straight from the `RpcClient` and hands them to `Incoming`'s two methods, and
+`NotificationBridge` dispatches with a `switch` on the name: every name in one place, no
+reflection.
 A library's documented feature can be broken; a small integration test against the real program
 (here `ClipboardIntegrationTest`) is what finds it.
 
@@ -337,7 +341,7 @@ Every column crossing the boundary goes through `util/Utf8Columns`.
 
 - **Setup**: options and *autocommands* (`ModeChanged`, `CursorMoved`, `BufEnter`, `TextYankPost`)
   whose callbacks call `vim.rpcnotify(0, 'eclipse_mode', ...)`. Those notifications arrive at the
-  matching `@NeovimNotificationHandler` method in `NotificationBridge`. Setup also makes Eclipse
+  matching `case` of `NotificationBridge.notification`. Setup also makes Eclipse
   Neovim's clipboard provider (`g:clipboard`, see `:help clipboard`), whose functions are Lua
   closures that notify or ask Eclipse.
 - **Snapshots**: `STATE_SNAPSHOT` returns cursor, visual selection, mode, recording register and
@@ -475,15 +479,16 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `Activator`'s property-change listener.
 
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
-`vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `@NeovimNotificationHandler("eclipse_<name>")` method to
-`NotificationBridge` and a method to its `Sink`; implement it in `NeovimSession.EventSink`. If the
+`vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `case "eclipse_<name>"` to
+`NotificationBridge.notification` (with a private method that reads the arguments) and a method to
+its `Sink`; implement it in `NeovimSession.EventSink`. If the
 event changes state the session keeps (like mode or cursor), record it in `StateSync` and give it a
 listener list in `SessionEvents`.
 
 **Answer a question from Neovim.** In Lua, call `vim.rpcrequest(chan, 'eclipse_<name>', ...)`, where
 `chan` is the channel number `LuaScripts.SETUP` receives as its argument and keeps in
 `g:eclipse_channel` (Neovim waits for the answer,
-so keep the Java side quick and bounded); add a case to `NotificationBridge.onRequest` and a method to
+so keep the Java side quick and bounded); add a case to `NotificationBridge.request` and a method to
 its `Sink`; implement it in `NeovimSession.EventSink`. The value returned is the answer; Lua sees Java
 lists as tables. `eclipse_clipboard_paste` and `eclipse_write` are the examples; the second shows the
 UI-thread hop with a bounded wait (`EditorAttachManager.saveForNeovim`).

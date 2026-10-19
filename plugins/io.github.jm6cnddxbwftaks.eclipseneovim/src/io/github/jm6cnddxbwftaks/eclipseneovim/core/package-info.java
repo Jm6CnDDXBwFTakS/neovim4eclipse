@@ -60,7 +60,8 @@
  *       events and the plug-in's own {@code eclipse_*} events), and answers its two requests, the
  *       clipboard paste and the save of a document Neovim writes.</li>
  *   <li>Subpackage {@code core/rpc}: the plug-in's own interface to the Neovim API
- *       ({@code NeovimApi}) and its types ({@code Handle}, {@code Mode}, {@code WinCursor}), used
+ *       ({@code NeovimApi}), what Neovim sends on its own ({@code Incoming}) and their types
+ *       ({@code Handle}, {@code Mode}, {@code WinCursor}), used
  *       instead of neovim-java's, so the library can be replaced ({@code docs/RPC_CLIENT.md}).</li>
  * </ul>
  *

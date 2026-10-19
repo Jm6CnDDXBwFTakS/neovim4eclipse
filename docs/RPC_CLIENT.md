@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–2. Next: step 3.
+Status: **accepted** (option A), in progress. Done: steps 1–3. Next: step 4.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -93,7 +93,7 @@ with a script from `LuaScripts`, whose results the plug-in parses itself from pl
 |---|---|
 | `QuittingConnection` (100 lines + `QuittingConnectionTest`) | neovim-java logs the end of Neovim's output at ERROR with a stack trace ("Listening to messages failed!"), so every normal shutdown printed an error. The wrapper turns the expected EOF into an unchecked exception that ends the reader thread silently. |
 | The per-connection `ExecutorService` in `NeovimConnection.open` | `RpcClient`'s default pool is static: `rpcClient.stop()` shuts it down for the whole JVM, and every later session fails to open. The reactive wrapper blocks on `ForkJoinPool.commonPool()`, shared with the whole IDE. |
-| `setRequestHandler` instead of `@NeovimRequestHandler` | In 0.5.0 (and still on neovim-java's `main` branch) `NeovimHandlerProxy` stores request handlers in one map (`requestCallbacks`) and looks them up in another (`requestHandlers`), so every request is answered "No handler found". `addNotificationHandler` therefore attaches the proxy for notifications only. |
+| `setRequestHandler` instead of `@NeovimRequestHandler` (since step 3: `setIncoming`, for both kinds) | In 0.5.0 (and still on neovim-java's `main` branch) `NeovimHandlerProxy` stores request handlers in one map (`requestCallbacks`) and looks them up in another (`requestHandlers`), so every request is answered "No handler found". `addNotificationHandler` therefore attaches the proxy for notifications only. |
 | The `org.slf4j.simpleLogger.defaultLogLevel` system property set in a static block of `NeovimConnection` | slf4j-simple logs every RPC message at INFO, several lines per key. It must be a JVM-wide system property set before the first neovim-java class loads, because slf4j-simple cannot find a properties file through OSGi's class loaders. Setting a JVM-wide property also affects any other bundle that happens to use slf4j-simple. |
 
 ## 2. The replacement
@@ -137,11 +137,7 @@ executor and SLF4J setup in `NeovimConnection` (about 40 lines) and `QuittingCon
 
 ```java
 final class RpcChannel implements AutoCloseable {
-    interface Incoming {
-        void notification(String method, List<Object> params);
-        Object request(String method, List<Object> params) throws Exception; // throw = error answer
-    }
-
+    // core/rpc/Incoming (since step 3): notification(method, params), request(method, params)
     RpcChannel(InputStream in, OutputStream out, Incoming incoming, String threadName);
     CompletableFuture<Object> request(String method, Object... params);
     void notify(String method, Object... params) throws IOException;
@@ -222,12 +218,20 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
 
    After this commit `com.ensarsarajcic` is imported only by `NeovimConnection`, the adapter,
    `NotificationBridge` (step 3) and `QuittingConnection` (step 7).
-3. **Plain notification and request handlers.** `NotificationBridge` implements
-   `RpcChannel.Incoming`-shaped methods (`notification(String, List<Object>)` dispatching by name
-   with a `switch`, `request(String, List<Object>)`) instead of annotated methods taking
-   `NotificationMessage`/`RequestMessage`. `NeovimConnection` registers one raw notification
-   callback and the existing request callback that call them. Drops the annotation scanning and the
-   need for `public` handler methods. `bufferNumber` still accepts both extension forms here.
+3. **Plain notification and request handlers.** *Done.* `NotificationBridge` implements
+   `core/rpc/Incoming` (`notification(String, List<?>)` dispatching by name with a `switch`,
+   `request(String, List<?>)`) instead of annotated methods taking
+   `NotificationMessage`/`RequestMessage`. `NeovimConnection.setIncoming` registers one raw
+   notification callback and the request callback that call them. Drops the annotation scanning
+   and the need for `public` handler methods. `bufferNumber` still accepts both extension forms here.
+   As built:
+   - `Incoming` is in `core/rpc` already, not nested in `RpcChannel`, so step 5 uses it unchanged.
+   - `NotificationBridge` and its `Sink` are package-private now.
+   - Unknown notification names (`redraw`, `nvim_buf_changedtick_event`, ...) are ignored and
+     logged at FINEST, as neovim-java's proxy ignored them. A notification handler that throws is
+     logged at WARNING in `setIncoming`; a request that throws is answered with an error, as before.
+   - `NeovimHandlerManager` and `NeovimHandlerProxy` are no longer used; their jars
+     (`handler-annotations`, `neovim-notifications`) go in step 8 with the others.
 4. **`MsgpackValues`** with its unit tests (`Handle` exists since step 2). Not used yet.
 5. **`RpcChannel`** with its unit tests. Not used yet.
 6. **`MsgpackNeovimApi`**, our implementation of the interface over `RpcChannel`, with

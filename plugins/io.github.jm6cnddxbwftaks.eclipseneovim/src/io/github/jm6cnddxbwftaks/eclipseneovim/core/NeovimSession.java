@@ -176,8 +176,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         NeovimSession session = new NeovimSession(connection, homeBuffer, clipboard);
         NotificationBridge bridge = new NotificationBridge(session.new EventSink());
-        connection.addNotificationHandler(bridge);
-        connection.setRequestHandler(bridge::onRequest);
+        connection.setIncoming(bridge);
 
         // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
         int channel = await(api.getChannelId());

@@ -141,9 +141,10 @@ into `"+`/`"*` (the provider already wrote them) and all yanks when `'clipboard'
 (then every yank goes to the provider). One writer per yank: two would race, and a linewise yank
 could come back charwise.
 
-Requests reach `NotificationBridge.onRequest` through `NeovimConnection.setRequestHandler`, not
-neovim-java's `@NeovimRequestHandler` annotation, which does not work in neovim-java 0.5.0 (see
-`NeovimConnection.addNotificationHandler`).
+Notifications and requests both reach `NotificationBridge` (`notification`, `request`, the two
+methods of `core/rpc/Incoming`) through `NeovimConnection.setIncoming`, which pick the handler by
+name. Not through neovim-java's handler annotations: its `@NeovimRequestHandler` does not work in
+neovim-java 0.5.0 (see `NeovimConnection.setIncoming`).
 
 ## Ideas for future work
 
