@@ -388,6 +388,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `StateSync.Neovim`, `StateSync.Listeners` | `core/StateSync` | adapter inside `NeovimSession`; `SessionEvents` |
 | `UiExecutor` | `BufferSynchronizer`, `CaretSync` | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests) |
 | `EditorCaret` | `CaretSync`, `VisualSelectionView` | `editor/StyledTextCaret` (`FakeCaret` in tests) |
+| `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
 | `ClipboardPort` | `NeovimSession` | `editor/ClipboardBridge` (`ClipboardPort.NONE` in tests) |
 
 When *not* to add one: glue code that only passes values through (an adapter, `KeyInterceptor`) has no

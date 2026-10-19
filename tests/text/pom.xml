@@ -11,8 +11,9 @@
 
        Tests of the code that works on Eclipse's text model (IDocument and DocumentEvent) but never
        on a widget: sync/ (BufferSynchronizer) and a few editor/ classes (CaretSync,
-       DocumentPositions, EditorCaret). The text model is the org.eclipse.text jar, which needs
-       neither SWT, nor a display, nor OSGi, so these tests run as plain JUnit in milliseconds
+       DocumentPositions, EditorCaret, VisualSelectionView and its BlockHighlight). The text
+       model is the org.eclipse.text jar, which needs neither SWT, nor a display, nor OSGi, so
+       these tests run as plain JUnit in milliseconds
        instead of inside a started Eclipse workbench (tests/...eclipseneovim.tests).
 
        The compiler enforces the boundary: only org.eclipse.text (and the two small jars it needs)
@@ -135,6 +136,8 @@
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/CaretSync.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/DocumentPositions.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/EditorCaret.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/BlockHighlight.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/VisualSelectionView.java</include>
           </includes>
         </configuration>
       </plugin>

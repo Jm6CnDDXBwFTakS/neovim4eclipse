@@ -23,23 +23,24 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VisualSelectionGeometry;
  *       the other end). Which offsets those are is decided by {@link VisualSelectionGeometry}; the
  *       selection is set through {@link EditorCaret}.</li>
  *   <li>A blockwise selection ({@code Ctrl-V}) cannot be an editor selection: the native selection
- *       is cleared, the caret is put on Neovim's cursor corner, and {@link BlockOverlay} paints the
- *       rectangle that {@link BlockSelection} computes.</li>
+ *       is cleared, the caret is put on Neovim's cursor corner, and a {@link BlockHighlight}
+ *       ({@link BlockOverlay} in the editor) shows the rectangle that {@link BlockSelection} computes.</li>
  * </ul>
  *
- * <p>Decides only; the widget work is in {@link EditorCaret} and {@link BlockOverlay}. UI thread only.
+ * <p>Decides only; the widget work is behind {@link EditorCaret} and {@link BlockHighlight}, so it is
+ * tested without SWT ({@code tests/text}). UI thread only.
  */
 final class VisualSelectionView {
 
     private final EditorCaret caret;
-    private final BlockOverlay overlay;
+    private final BlockHighlight overlay;
     /** Runs caret changes so that the controller does not echo them back to Neovim as user moves. */
     private final Consumer<Runnable> asCaretFromNeovim;
 
     /**
      * @param asCaretFromNeovim runs the given caret change marked as coming from Neovim
      */
-    VisualSelectionView(EditorCaret caret, BlockOverlay overlay, Consumer<Runnable> asCaretFromNeovim) {
+    VisualSelectionView(EditorCaret caret, BlockHighlight overlay, Consumer<Runnable> asCaretFromNeovim) {
         this.caret = caret;
         this.overlay = overlay;
         this.asCaretFromNeovim = asCaretFromNeovim;
