@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,44 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay.Plan;
 import org.junit.jupiter.api.Test;
 
 class InsertReplayTest {
+
+    // ---- tracksChange: which document changes are typing to replay at Esc ----
+
+    @Test
+    void plainInsertModeTypingIsTracked() {
+        assertTrue(InsertReplay.tracksChange(true, false, "i", false));
+        assertTrue(InsertReplay.tracksChange(true, false, "ic", false)); // completion menu open
+    }
+
+    @Test
+    void eclipseModeOrAClosedEditorIsNotTracked() {
+        assertFalse(InsertReplay.tracksChange(false, false, "i", false));
+    }
+
+    @Test
+    void neovimsOwnChangeBeingAppliedIsNotTracked() {
+        assertFalse(InsertReplay.tracksChange(true, true, "i", false));
+    }
+
+    @Test
+    void replaceModeIsNotTrackedBecauseEclipseInsertsWhereVimOverwrites() {
+        assertFalse(InsertReplay.tracksChange(true, false, "R", false));
+    }
+
+    @Test
+    void otherModesAndAnUnknownModeAreNotTracked() {
+        for (String mode : new String[] {"n", "v", "V", "\u0016", "c", "no"}) {
+            assertFalse(InsertReplay.tracksChange(true, false, mode, false), mode);
+        }
+        assertFalse(InsertReplay.tracksChange(true, false, null, false));
+    }
+
+    @Test
+    void aNeovimDrivenInsertIsNotTrackedBecauseNeovimAlreadyHasTheKeys() {
+        assertFalse(InsertReplay.tracksChange(true, false, "i", true));
+    }
+
+    // ---- plan ----
 
     // ---- insertedText ----
 

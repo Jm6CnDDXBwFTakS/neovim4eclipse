@@ -234,7 +234,9 @@ Eclipse types in insert mode, so Neovim's redo buffer would only hold the entry 
 repeat an empty insert. At Esc `KeyInterceptor` asks the controller for a replay plan:
 
 1. `InsertTracker` (an `IDocumentListener`) snapshots the document text and offset at the *first* change of
-   the insert. At that moment the text equals Neovim's buffer.
+   the insert. At that moment the text equals Neovim's buffer. Which changes count is decided by
+   `util/InsertReplay.tracksChange`: typing in insert mode only, not Neovim's own changes, replace mode or
+   a Neovim-driven insert.
 2. `util/InsertReplay.plan` checks that the final text is that snapshot plus one plain insertion at that
    offset, and converts the inserted text to Neovim keys (`<` as `<lt>`, newline as `<CR>`, ...).
 3. `NeovimSession.leaveInsertModeAsync(plan)` (input thread) moves Neovim's cursor to the insertion point,

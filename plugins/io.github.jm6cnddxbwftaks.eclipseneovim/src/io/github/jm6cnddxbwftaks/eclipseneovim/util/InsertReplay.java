@@ -47,6 +47,26 @@ public final class InsertReplay {
     }
 
     /**
+     * Whether a document change right now is the user typing in a plain Eclipse-driven insert, the
+     * only kind whose text is replayed into Neovim at Esc ({@link #plan}). Excluded, and why:
+     * <ul>
+     *   <li>the editor is closed, or in Eclipse mode ({@code editorActive} false): no Vim insert;</li>
+     *   <li>the change is Neovim's own, being applied to the document ({@code applyingNeovimChange}):
+     *       Neovim already has it;</li>
+     *   <li>any mode but insert ({@code "i"}, {@code "ic"}, {@code "ix"}). Replace mode
+     *       ({@code "R"}) too: Eclipse inserts where Vim would overwrite, so the replay would differ;</li>
+     *   <li>a Neovim-driven insert (after a block selection, while recording): Neovim already sees
+     *       every key, a replay would type the text twice.</li>
+     * </ul>
+     *
+     * @param mode Neovim's current mode; {@code null} if not known yet
+     */
+    public static boolean tracksChange(boolean editorActive, boolean applyingNeovimChange, String mode,
+            boolean neovimDrivenInsert) {
+        return editorActive && !applyingNeovimChange && mode != null && mode.startsWith("i") && !neovimDrivenInsert;
+    }
+
+    /**
      * @param before        document text when the first change of the insert happened (equals Neovim's buffer)
      * @param after         document text now, at Esc
      * @param baseOffset    offset of that first change in {@code before}
