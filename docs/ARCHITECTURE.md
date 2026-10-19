@@ -185,7 +185,8 @@ to the box, which (via the focus listener in the controller) also deactivates th
 - `:` in visual mode sends `<Esc>` and pre-fills `:'<,'>` (also required because typing `:` in visual mode
   makes Neovim insert its own range, which would precede `:silent` and be rejected).
 - Pure logic is in `util/CommandLine` (kinds, prefill, parsing) and `util/CommandHistory`, both unit tested;
-  host commands are classified by `util/HostExCommand` and carried out by `editor/HostCommands`.
+  host commands are classified by `util/HostExCommand`, turned into IDE calls by `util/HostCommandRunner`
+  (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
   `redir => g:eclipse_neovim_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
@@ -311,7 +312,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
 | Which key goes to Neovim or Eclipse | `core/KeyRouter` (SWT glue: `editor/KeyInterceptor`) | `KeyRouterTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
-| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand`, `editor/HostCommands` | `HostExCommandTest`, UI `HostCommandsTest` |
+| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), UI `HostCommandsTest` (one real path per operation) |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |

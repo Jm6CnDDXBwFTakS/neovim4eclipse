@@ -388,6 +388,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `StateSync.Neovim`, `StateSync.Listeners` | `core/StateSync` | adapter inside `NeovimSession`; `SessionEvents` |
 | `UiExecutor` | `BufferSynchronizer`, `CaretSync` | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests) |
 | `EditorCaret` | `CaretSync`, `VisualSelectionView` | `editor/StyledTextCaret` (`FakeCaret` in tests) |
+| `HostCommandRunner.Ide` | `util/HostCommandRunner` | a record inside `editor/HostCommands` |
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
 | `ClipboardPort` | `NeovimSession` | `editor/ClipboardBridge` (`ClipboardPort.NONE` in tests) |
 
@@ -416,7 +417,9 @@ existing indexes stay valid), add a reader for the new element to `StateSnapshot
 `StateSnapshotTest`), and use it in `StateSync.publishState`.
 
 **Handle an Ex command in Eclipse instead of Neovim.** Classify it in `util/HostExCommand` (unit-test
-it), then perform it in `editor/EclipseFileCommands`.
+it); say what it does in `util/HostCommandRunner`, adding a method to its `Ide` interface if the IDE
+must do something new (unit-test that in `HostCommandRunnerTest` with the fake `Ide`); then implement
+the method in `editor/HostCommands` with Eclipse's API (`editor/EclipseFileCommands`, `EditorTabs`).
 
 **Put a decision where it can be tested.** If logic does not need SWT or Eclipse, put it in `util`
 (or `core` for Neovim logic) and test it in `tests/unit`. That module compiles `util` and `core`
