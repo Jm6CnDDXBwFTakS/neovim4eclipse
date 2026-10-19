@@ -150,14 +150,14 @@ class StateSyncTest {
 
     @Test
     void whileNeovimWaitsForTheRestOfACommandNothingIsPublished() {
-        nvim.mode = new VimMode("no", true); // after "d", waiting for the motion
+        nvim.mode = new VimMode("n", true); // after "f", waiting for the character
 
         state.syncModeAndCursor();
 
         assertEquals(List.of(), listeners.heard);
         assertNull(nvim.snapshotFlags, "no snapshot is requested while Neovim is blocked");
         assertTrue(state.isWaitingForArgument());
-        assertEquals("no", state.mode());
+        assertEquals("n", state.mode());
     }
 
     @Test
