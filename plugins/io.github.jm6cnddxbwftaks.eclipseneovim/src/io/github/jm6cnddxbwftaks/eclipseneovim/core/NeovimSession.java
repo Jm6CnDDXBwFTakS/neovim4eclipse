@@ -23,7 +23,6 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 
 /**
  * Façade over one embedded {@code nvim --embed} process, using
@@ -44,7 +43,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
  * <h2>State flow</h2>
  * Neovim owns the buffer. Text changes arrive through {@code nvim_buf_lines_event}; mode, cursor
  * and yanks arrive through the autocmds in {@link LuaScripts#SETUP}. After each key the session
- * also polls mode, cursor and visual selection, because notifications can lag a key behind.
+ * also polls mode, cursor and visual selection, because notifications can lag a key behind. Both
+ * paths go through {@link StateSync}.
  *
  * <p>Each Eclipse document has its own Neovim buffer ({@link DocumentBuffer}), so undo history and
  * marks survive switching editors. Exactly one of them is <em>attached</em> at a time: its events
@@ -82,8 +82,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     // ---- state ----
 
-    private volatile String currentMode = "n";
-    private volatile CursorPos lastCursor = new CursorPos(1, 0);
+    /** Mode, cursor and typing state, and reading them from Neovim. */
+    private final StateSync state;
     private volatile boolean closed;
     /**
      * True when the user's config makes Neovim read/write the OS clipboard itself
@@ -92,21 +92,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * and pastes a whole-line yank ({@code yyP}) as characters at the cursor.
      */
     private volatile boolean nvimManagesClipboard;
-    /**
-     * While true, Neovim's own buffer events are not forwarded to listeners. Used while text that
-     * Eclipse already contains is re-typed into Neovim, where applying those events to the document
-     * would insert the text twice, and during macro playback (see {@link KeyInput}).
-     */
-    private volatile boolean suppressBufferEvents;
-    /** See {@link #isEclipseTypingReady()}. Set on the UI thread, cleared on any thread. */
-    private volatile boolean eclipseTypingReady;
-    /**
-     * True while Neovim waits for one more character after {@code f}, {@code r}, {@code @}, {@code q}
-     * ... (as of the last {@code nvim_get_mode}). The key listener then forwards a typed {@code :},
-     * {@code /} or {@code ?} to Neovim as the argument instead of opening a prompt.
-     */
-    private volatile boolean waitingForArgument;
-
     /** Asked before a {@code :} command line is executed on Enter (used for host-side {@code :w}/{@code :q}). */
     private volatile Predicate<String> hostExHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -128,6 +113,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         this.api = connection.api();
         this.buffers = new DocumentBuffers(api, homeBuffer);
         this.keyInput = new KeyInput(this, api);
+        this.state = new StateSync(new StateSyncNeovim(), new StateListeners(), status, buffers::isAttached,
+                keyInput::onModeChanged);
         this.clipboard = clipboard;
     }
 
@@ -181,14 +168,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // Lets a user's init.lua detect the host: `if vim.g.eclipse == 1 then ... end`.
         await(api.setVariable("eclipse", 1));
 
-        try {
-            VimMode mode = await(api.getMode());
-            if (mode != null && mode.getMode() != null) {
-                session.currentMode = mode.getMode();
-            }
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "Could not read initial mode", e);
-        }
+        session.state.readMode();
         LOG.info("NeovimSession ready");
         return session;
     }
@@ -218,17 +198,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     // ---- state accessors and listeners ----
 
     public String getMode() {
-        return currentMode;
+        return state.mode();
     }
 
     /** Last cursor reported by Neovim (used to restore the caret after the document is rewritten). */
     public CursorPos getLastCursor() {
-        return lastCursor;
+        return state.lastCursor();
     }
 
     /** Insert/replace: printable keys are handled by Eclipse, not forwarded to Neovim. */
     public boolean isTypingMode() {
-        return VimModes.isTyping(currentMode);
+        return state.isTypingMode();
     }
 
     /**
@@ -239,14 +219,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return keyInput.isNeovimDrivenInsert() && isTypingMode();
     }
 
-    /**
-     * Whether Eclipse may type in the current insert mode. Entering insert mode is followed by a
-     * full buffer sync from Neovim; until the editor has applied it, text typed by Eclipse would be
-     * overwritten by that sync. So this becomes true only once a full sync has been applied while in
-     * insert mode, and false again when insert mode ends.
-     */
+    /** Whether Eclipse may type in the current insert mode. See {@link StateSync#isEclipseTypingReady()}. */
     public boolean isEclipseTypingReady() {
-        return eclipseTypingReady && isTypingMode();
+        return state.isEclipseTypingReady();
     }
 
     /**
@@ -278,7 +253,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Whether Neovim is waiting for the argument character of a command ({@code f}, {@code @}, ...). */
     public boolean isWaitingForArgument() {
-        return waitingForArgument;
+        return state.isWaitingForArgument();
     }
 
     /** Notified (on a session thread) when the command, message or statusline text changes. */
@@ -425,7 +400,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     public void setCursor(int line1Based, int col0Based) throws Exception {
         NeovimWindowApi win = await(api.getCurrentWindow());
         await(win.setCursor(new VimCoords(line1Based, col0Based)));
-        lastCursor = new CursorPos(line1Based, col0Based);
+        state.rememberCursor(new CursorPos(line1Based, col0Based));
     }
 
     public CursorPos getCursor() throws Exception {
@@ -449,6 +424,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 String.valueOf(indentation.width()),
                 flag(indentation.braces()),
                 indentation.cinoptions())));
+    }
+
+    /** A Lua script argument for a boolean: {@code "1"} or {@code "0"}. */
+    private static String flag(boolean enabled) {
+        return enabled ? "1" : "0";
     }
 
     /** Evaluates Lua in Neovim and returns its result. For tests that inspect Neovim's state. */
@@ -557,97 +537,38 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     // ---- synchronization from Neovim to listeners ----
 
     /**
-     * Reads the mode. {@code nvim_get_mode} is one of the few calls Neovim answers even while it is
-     * blocked waiting for input, which is why it is the gate for everything else.
+     * Reads the mode (and whether Neovim waits for an argument).
      *
      * @return the mode, or {@code null} if it could not be read
      */
     VimMode readMode() {
-        try {
-            VimMode mode = await(api.getMode());
-            if (mode != null && mode.getMode() != null) {
-                currentMode = mode.getMode();
-            }
-            waitingForArgument = mode != null && mode.isBlocking();
-            return mode;
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "getMode failed", e);
-            return null;
-        }
+        return state.readMode();
     }
 
     /** Whether Neovim is waiting for the rest of a command (and would defer most API calls). */
     private boolean isBlocked() {
-        VimMode mode = readMode();
-        return mode != null && mode.isBlocking();
+        return state.isBlocked();
     }
 
     /**
-     * Reads mode, cursor and visual selection from Neovim and notifies listeners. Does nothing while
-     * Neovim waits for the rest of a command; the next completed key will publish the state.
+     * Reads mode, cursor and visual selection from Neovim and notifies listeners, unless Neovim
+     * waits for the rest of a command. See {@link StateSync#syncModeAndCursor()}.
      */
     public void syncModeAndCursorFromNeovim() {
-        if (isBlocked()) {
-            return;
-        }
-        publishState();
+        state.syncModeAndCursor();
     }
 
-    /**
-     * Publishes mode, cursor and visual selection using a single RPC ({@link LuaScripts#STATE_SNAPSHOT}).
-     * Must only be called when Neovim is not blocked, and uses a short timeout as a safety net.
-     */
+    /** Publishes mode, cursor, selection and status bar parts. See {@link StateSync#publishState()}. */
     void publishState() {
-        String mode = currentMode;
-        try {
-            Set<StatusItem> items = status.items();
-            Object raw = api.executeLua(LuaScripts.STATE_SNAPSHOT, List.of(
-                    flag(items.contains(StatusItem.STATUSLINE)),
-                    flag(items.contains(StatusItem.CMD)),
-                    flag(items.contains(StatusItem.MSG))))
-                    .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            dispatchMode(mode);
-            int bufnr = StateSnapshot.buffer(raw);
-            // After a jump to another file the cursor is in a buffer the editor does not show (yet).
-            if (buffers.isAttached(bufnr)) {
-                CursorPos cursor = StateSnapshot.cursor(raw);
-                if (cursor != null) {
-                    dispatchCursor(cursor.line1Based(), cursor.col0Based());
-                }
-                selectionListeners.fire(VimModes.isVisual(mode)
-                        ? StateSnapshot.selection(raw, mode)
-                        : VisualSelection.none());
-            }
-            status.updateRecording(StateSnapshot.recording(raw));
-            status.publish(StateSnapshot.status(raw));
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "state snapshot failed", e);
-        }
-    }
-
-    private static String flag(boolean enabled) {
-        return enabled ? "1" : "0";
+        state.publishState();
     }
 
     /**
-     * Pulls the whole buffer and publishes it as a full-buffer change. Not for per-key use. Once the
-     * editor has applied it in insert mode, Eclipse may type ({@link #isEclipseTypingReady()}).
+     * Pulls the whole buffer and publishes it as a full-buffer change. Not for per-key use. See
+     * {@link StateSync#syncBuffer()}.
      */
     public void syncBufferFromNeovim() {
-        try {
-            List<String> lines = getBufferLines();
-            LOG.fine(() -> "full buffer sync: " + lines.size() + " lines");
-            dispatchBufferChange(0, -1, lines, this::markTypingReadyIfTyping);
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "buffer sync failed", e);
-        }
-    }
-
-    /** After-apply action of a full sync: the document now matches Neovim, so Eclipse may type. */
-    private void markTypingReadyIfTyping() {
-        if (isTypingMode()) {
-            eclipseTypingReady = true;
-        }
+        state.syncBuffer();
     }
 
     /** Whether a {@code 'clipboard'} option value makes Neovim use the OS clipboard for yank/put. */
@@ -667,12 +588,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return buffers;
     }
 
-    /**
-     * While true, Neovim's own buffer events are not forwarded to listeners (see
-     * {@link #suppressBufferEvents}).
-     */
+    /** While true, Neovim's own buffer events are not forwarded to listeners (see {@link StateSync}). */
     void setSuppressBufferEvents(boolean suppress) {
-        suppressBufferEvents = suppress;
+        state.setSuppressBufferEvents(suppress);
+    }
+
+    /** Publishes a buffer change, unless buffer events are suppressed. */
+    void dispatchBufferChange(int firstLine, int lastLine, List<String> newLines) {
+        state.dispatchBufferChange(firstLine, lastLine, newLines);
     }
 
     /** The handler asked before a {@code :} command runs, or {@code null}. */
@@ -685,45 +608,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return leaveInsertPush;
     }
 
-    // ---- dispatch (package-private for tests) ----
-
-    void dispatchMode(String mode) {
-        currentMode = mode;
-        if (!VimModes.isTyping(mode)) {
-            eclipseTypingReady = false;
-        }
-        keyInput.onModeChanged(mode);
-        modeListeners.fire(mode);
-    }
-
-    void dispatchCursor(int line1, int col0) {
-        CursorPos pos = new CursorPos(line1, col0);
-        lastCursor = pos;
-        cursorListeners.fire(pos);
-    }
-
-    void dispatchBufferChange(int firstLine, int lastLine, List<String> newLines) {
-        dispatchBufferChange(firstLine, lastLine, newLines, null);
-    }
-
-    void dispatchBufferChange(int firstLine, int lastLine, List<String> newLines, Runnable afterApply) {
-        if (suppressBufferEvents) {
-            return;
-        }
-        bufferChangeListeners.fire(new BufferChange(firstLine, lastLine, newLines, afterApply));
-    }
-
     /** Routes {@link NotificationBridge} events into this session. */
     private final class EventSink implements NotificationBridge.Sink {
         @Override
         public void onMode(String mode) {
-            dispatchMode(mode);
+            state.dispatchMode(mode);
         }
 
         @Override
         public void onCursor(int line1, int col0, int bufnr) {
             if (buffers.isAttached(bufnr)) {
-                dispatchCursor(line1, col0);
+                state.dispatchCursor(line1, col0);
             }
         }
 
@@ -731,7 +626,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         public void onBufferLines(int bufnr, int firstLine, int lastLine, List<String> newLines) {
             // Other buffers change too (e.g. one Neovim just jumped to); the document mirrors one only.
             if (buffers.isAttached(bufnr)) {
-                dispatchBufferChange(firstLine, lastLine, newLines);
+                state.dispatchBufferChange(firstLine, lastLine, newLines);
             }
         }
 
@@ -800,6 +695,49 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void syncModeAndCursor() {
             syncModeAndCursorFromNeovim();
+        }
+    }
+
+    /** Gives {@link StateSync} the Neovim calls it needs. */
+    private final class StateSyncNeovim implements StateSync.Neovim {
+        @Override
+        public VimMode getMode() throws Exception {
+            return await(api.getMode());
+        }
+
+        @Override
+        public Object stateSnapshot(boolean statusline, boolean showcmd, boolean message) throws Exception {
+            // Short timeout: see STATE_TIMEOUT_MS.
+            return api.executeLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(showcmd), flag(message)))
+                    .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public List<String> bufferLines() throws Exception {
+            return getBufferLines();
+        }
+    }
+
+    /** Fires the session's listener lists for {@link StateSync}. */
+    private final class StateListeners implements StateSync.Listeners {
+        @Override
+        public void mode(String mode) {
+            modeListeners.fire(mode);
+        }
+
+        @Override
+        public void cursor(CursorPos cursor) {
+            cursorListeners.fire(cursor);
+        }
+
+        @Override
+        public void selection(VisualSelection selection) {
+            selectionListeners.fire(selection);
+        }
+
+        @Override
+        public void bufferChange(BufferChange change) {
+            bufferChangeListeners.fire(change);
         }
     }
 }

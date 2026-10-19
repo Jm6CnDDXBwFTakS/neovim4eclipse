@@ -330,7 +330,8 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
 | `:` commands with output capture, listings, `:normal!`, search | `core/CommandRunner` (Neovim seen through `CommandRunner.Neovim`) | `CommandRunnerTest` (fake: capture around typing, user `:redir`, prompt Esc, timeout) |
-| Session facade, state publishing | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
+| Mode, cursor and typing state; reading it from Neovim and publishing it | `core/StateSync` (Neovim seen through `StateSync.Neovim`, listeners through `StateSync.Listeners`) | `StateSyncTest` (fake: blocked gate, unattached buffer, visual selection, when Eclipse may type, suppressed events) |
+| Session facade | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Overlay colors | `util/OverlayColors` | `OverlayColorsTest` |
 | Ctrl-key ids and defaults | `util/VimCtrlKeys` | `VimCtrlKeysTest`, `PluginXmlConsistencyTest` |
 | Eclipse glue | `editor/*`, `prefs/*` | UI test fragment `tests/...eclipseneovim.tests` (`OverlayFrameTest`, `VisualSelectionViewTest`, `VimKeyContextsTest`, `CtrlKeysPreferencePageTest`, ...) |
