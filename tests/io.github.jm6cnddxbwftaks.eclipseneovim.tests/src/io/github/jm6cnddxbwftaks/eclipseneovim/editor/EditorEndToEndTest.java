@@ -57,7 +57,7 @@ class EditorEndToEndTest {
 
     @BeforeEach
     void openEditor() throws Exception {
-        String nvimPath = System.getProperty("nvim.path", "");
+        String nvimPath = nvimPathProperty();
         if (!nvimPath.isBlank()) {
             Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, nvimPath);
         }
@@ -92,6 +92,16 @@ class EditorEndToEndTest {
         session.inputAsync("<Esc>");
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
         settle(); // let the initial document push and cursor placement finish
+    }
+
+    /**
+     * {@code -Dnvim.path}, or "" when it was not given. Without it the pom.xml passes an empty value,
+     * which tycho-surefire turns into the text {@code "null"}; taken as a path, that made every test
+     * here skip ("nvim not found") although nvim was on the PATH.
+     */
+    private static String nvimPathProperty() {
+        String value = System.getProperty("nvim.path", "");
+        return "null".equals(value) ? "" : value;
     }
 
     @AfterEach
