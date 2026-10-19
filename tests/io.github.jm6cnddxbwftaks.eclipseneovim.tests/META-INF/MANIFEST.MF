@@ -11,5 +11,4 @@ Require-Bundle: org.eclipse.ui.ide,
  org.eclipse.jface.text,
  org.eclipse.ui.editors,
  org.eclipse.ui.workbench.texteditor
-Import-Package: org.junit.jupiter.api;version="[5.0.0,6.0.0)",
- org.junit.jupiter.api.function;version="[5.0.0,6.0.0)"
+Import-Package: org.junit.jupiter.api;version="[5.0.0,6.0.0)"

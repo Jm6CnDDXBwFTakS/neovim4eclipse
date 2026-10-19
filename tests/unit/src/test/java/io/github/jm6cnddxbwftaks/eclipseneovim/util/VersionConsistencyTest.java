@@ -48,6 +48,7 @@ class VersionConsistencyTest {
             PLUGIN + "pom.xml",
             TEST_FRAGMENT + "pom.xml",
             "tests/unit/pom.xml",
+            "tests/text/pom.xml",
             "features/io.github.jm6cnddxbwftaks.eclipseneovim.feature/pom.xml",
             "releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/pom.xml");
     private static final List<String> WORKFLOWS = List.of(

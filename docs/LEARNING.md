@@ -339,8 +339,8 @@ can repeat it (see "Dot-repeat" in ARCHITECTURE.md).
 
 Much of the plug-in's logic is a decision: "should this key go to Neovim?", "should this command's
 output be captured?", "may Eclipse type yet?". Tested through the real thing, each decision needs a
-running Eclipse (UI tests, minutes) or a real `nvim` (integration tests, about a minute, and `nvim`
-must be installed). So the code that decides is kept apart from the code that talks to Eclipse or
+running Eclipse (UI tests: a workbench that takes seconds to start, and a display) or a real `nvim`
+(integration tests, about a minute, and `nvim` must be installed). So the code that decides is kept apart from the code that talks to Eclipse or
 Neovim, and the two meet at a *port*: a small interface listing only the calls the decision needs.
 
 In production the port is implemented by a thin *adapter* over the real API; in a test by a *fake*,

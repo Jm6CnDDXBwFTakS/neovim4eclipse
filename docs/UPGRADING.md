@@ -25,7 +25,7 @@ The safe loop for any upgrade:
 | What | Source of truth | Copies (checked by `VersionConsistencyTest` unless noted) |
 |------|-----------------|-----------------------------------------------------------|
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
-| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it |
+| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, and the text-model jar versions for `tests/text` (`<eclipse.text.version>` and the two next to it) |
 | Embedded libraries | `<neovim.java.version>`, `<msgpack.version>`, `<jackson.version>`, `<slf4j.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
 | Tycho | `<tycho.version>` in the root `pom.xml` | none |
@@ -74,7 +74,15 @@ To raise it (example: 2024-12 to 2025-12):
 2. Update the release name and its `4.x` number in README and CONTRIBUTING (each quarterly
    release adds 1 to the `4.x` number; check <https://projects.eclipse.org/projects/eclipse>).
 3. Check the Java that release needs; raise the Java release with it if required.
-4. Run everything, then try the ZIP in that Eclipse and in the newest one.
+4. Set `<eclipse.text.version>`, `<eclipse.equinox.common.version>` and
+   `<eclipse.core.commands.version>` to the versions in the new release. `tests/text` runs the
+   text-model tests against these jars from Maven Central (not the p2 site), so they should be the
+   ones the plug-in is built with. To find them: after a build, look in
+   `~/.m2/repository/p2/osgi/bundle/org.eclipse.text/` (the folder name is the version Tycho
+   resolved, for example `3.14.200.v20240915-0736` means `3.14.200`), or open the release's
+   `plugins/` folder on download.eclipse.org. Nothing checks this automatically: a mismatch only
+   means these tests run against a slightly different text model.
+5. Run everything, then try the ZIP in that Eclipse and in the newest one.
 
 `Require-Bundle` in `MANIFEST.MF` has no version ranges, so nothing else stops an install on an
 Eclipse older than the target; the target release is the promise.

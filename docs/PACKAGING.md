@@ -45,6 +45,10 @@ dependency is in `MANIFEST.MF`), build it with the whole reactor rather than wit
 otherwise Tycho may test against a stale copy of the plug-in in `~/.m2`. The plug-in exports its
 packages only to this fragment (`x-friends` in its `MANIFEST.MF`).
 
+Tests of code that uses only the text model (`IDocument`) are not here but in `tests/text`, a plain
+Maven module that compiles those classes against the `org.eclipse.text` jar from Maven Central and
+runs without a workbench.
+
 ## PDE (optional, for interactive development)
 
 You can still import the projects into Eclipse PDE and launch from `MANIFEST.MF`
