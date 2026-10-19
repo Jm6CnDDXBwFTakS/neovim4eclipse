@@ -10,7 +10,9 @@ Suggested reading order of the code, once you have read parts 1 and 2:
 2. `Activator`, `EarlyStartup` (start-up)
 3. `editor/EditorAttachManager` (which editor gets Neovim)
 4. `editor/NeovimEditorController` (one attached editor), `editor/KeyInterceptor` and `core/KeyRouter` (keys)
-5. `core/NeovimSession`, `core/LuaScripts`, `core/NotificationBridge` (talking to Neovim)
+5. `core/NeovimSession`, `core/LuaScripts`, `core/NotificationBridge` (talking to Neovim); the session
+   is a facade that hands most work to smaller classes (`KeyInput`, `StateSync`, `CommandRunner`, listed
+   in `core/package-info.java`), each of which is easier to read on its own
 6. `sync/BufferSynchronizer` and the `util` classes it uses (keeping text in step)
 
 ---
@@ -222,7 +224,8 @@ NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), buffer.se
 NeovimHandlerManager    routes notifications to @NeovimNotificationHandler methods (NotificationBridge)
 ```
 
-Every API call returns a `CompletableFuture`. `NeovimSession.await` waits for it with a timeout.
+Every API call returns a `CompletableFuture`. `Rpc.await` waits for it with a timeout (and
+`Rpc.errorMessage` turns a failed call into Neovim's own `E…:` text).
 Waiting is the blocking step that must never happen on the SWT thread.
 
 ### 2.4 Attaching as a UI
@@ -253,7 +256,10 @@ If the plug-in sent such a request and waited, it would wait for a key that is q
 call, and stall until the timeout.
 
 So after every key the session first calls `nvim_get_mode`. If the answer says `blocking: true`, it
-stops there (`NeovimSession`, see "Pending commands" in ARCHITECTURE.md). All requests also run on
+stops there: `StateSync.syncModeAndCursor` asks `isBlocked()` before it requests anything else (see
+"Pending commands" in ARCHITECTURE.md). Example: after `f` the answer is `{mode = "n", blocking = true}`,
+so no cursor is read; once the target character arrives, the next read publishes the new state. (After
+`d` Neovim is in operator-pending mode, `{mode = "no", blocking = false}`: it still answers requests.) All requests also run on
 one thread (`eclipse-neovim-input`), which keeps keys in order and keeps blocking off the UI thread.
 
 ### 2.7 Buffers and line events
@@ -311,13 +317,15 @@ popup for `:ls` and similar uses it (`LuaScripts.CAPTURE_OUTPUT`).
 1. `KeyInterceptor.verifyKey` (UI thread) maps the event to `"x"` and asks `KeyRouter.route`, which
    calls `session.inputAsync("x")` (it only queues work) and answers "consumed"; the interceptor then
    sets `event.doit = false` so the widget does nothing.
-2. On the input thread: `nvim_input("x")`, then `nvim_get_mode`, then (if not blocking) the
-   `STATE_SNAPSHOT` Lua call.
-3. Neovim deletes the character and sends `nvim_buf_lines_event` for that line.
-   `NotificationBridge` → `NeovimSession` → `BufferSynchronizer`, which hops to the UI thread and
-   applies the change to the `IDocument`.
-4. The snapshot's cursor reaches `NeovimEditorController`, which converts the byte column and moves
-   the caret. The mode reaches `ModeStatusContribution` (status bar) and `CursorStyleController` (block
+2. On the input thread (`KeyInput.input`): `nvim_input("x")`, then `nvim_get_mode`, then (if not
+   blocking) the `STATE_SNAPSHOT` Lua call, made by `StateSync.publishState`.
+3. Neovim deletes the character and sends `nvim_buf_lines_event` for that line. It travels
+   `NotificationBridge` (decodes it) → `NeovimSession.EventSink` (drops it unless the buffer is the
+   attached one) → `StateSync.dispatchBufferChange` (drops it while buffer events are suppressed) →
+   `SessionEvents` (the listener lists) → `BufferSynchronizer`, which hops to the UI thread and applies
+   the change to the `IDocument`.
+4. The snapshot's cursor takes the same route from `StateSync` through `SessionEvents` to
+   `NeovimEditorController`, which converts the byte column and moves the caret. The mode reaches `ModeStatusContribution` (status bar) and `CursorStyleController` (block
    caret).
 
 ### 3.3 Insert mode
@@ -326,6 +334,65 @@ popup for `:ls` and similar uses it (`LuaScripts.CAPTURE_OUTPUT`).
 From then on `KeyInterceptor` lets Eclipse insert characters itself, so content assist and auto
 indent work. On `Esc`, the typed text is replayed into Neovim and the document is pushed, so `.`
 can repeat it (see "Dot-repeat" in ARCHITECTURE.md).
+
+### 3.4 Ports and fakes: testing without Eclipse or Neovim
+
+Much of the plug-in's logic is a decision: "should this key go to Neovim?", "should this command's
+output be captured?", "may Eclipse type yet?". Tested through the real thing, each decision needs a
+running Eclipse (UI tests, minutes) or a real `nvim` (integration tests, about a minute, and `nvim`
+must be installed). So the code that decides is kept apart from the code that talks to Eclipse or
+Neovim, and the two meet at a *port*: a small interface listing only the calls the decision needs.
+
+In production the port is implemented by a thin *adapter* over the real API; in a test by a *fake*,
+a few lines that record calls and return canned answers. Example, from `core/CommandRunner`:
+
+```java
+// The port: what running a ':' command needs from Neovim, nothing more.
+interface Neovim {
+    void type(String keys) throws Exception;   // nvim_input
+    boolean isBlocked();                       // nvim_get_mode().blocking
+    void startCapture() throws Exception;      // :redir => ...
+    CompletableFuture<Object> stopCapture();   // :redir END, answered when the command ends
+    ...
+}
+
+// The adapter, inside NeovimSession: one line per call, no decisions.
+public void type(String keys) throws Exception {
+    await(api.input(keys));
+}
+
+// The fake, in CommandRunnerTest: records the call, so a test can check the order.
+public void type(String keys) {
+    calls.add("type " + keys);
+}
+```
+
+A test then reads as a sentence about behavior, and runs in milliseconds:
+
+```java
+runner.run("echo 'hello'", outputs::add);
+assertEquals(List.of("startCapture", "type :silent echo 'hello'<CR>", "stopCapture",
+        "syncBuffer", "syncModeAndCursor"), nvim.calls);
+```
+
+Why an interface per user rather than one big "Neovim" interface: each port shows exactly what a class
+depends on, and a fake only has to implement those few methods. The ports in this code base:
+
+| Port | Used by | Implemented by |
+|------|---------|----------------|
+| `KeyRouter.Neovim` | `core/KeyRouter` | `NeovimSession` |
+| `BufferPort` | `sync/BufferSynchronizer` | `NeovimSession` |
+| `CursorPort` | `editor/CaretSync` | `NeovimSession` |
+| `CommandRunner.Neovim` | `core/CommandRunner` | adapter inside `NeovimSession` |
+| `StateSync.Neovim`, `StateSync.Listeners` | `core/StateSync` | adapter inside `NeovimSession`; `SessionEvents` |
+| `UiExecutor` | `BufferSynchronizer`, `CaretSync` | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests) |
+| `EditorCaret` | `CaretSync`, `VisualSelectionView` | `editor/StyledTextCaret` (`FakeCaret` in tests) |
+| `ClipboardPort` | `NeovimSession` | `editor/ClipboardBridge` (`ClipboardPort.NONE` in tests) |
+
+When *not* to add one: glue code that only passes values through (an adapter, `KeyInterceptor`) has no
+decision to test, and a port would only add a layer to read through. The integration and UI tests
+still matter: a fake says what the code *asks for*, and only a real Neovim or Eclipse shows that
+asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where the fakes live.
 
 ---
 
@@ -338,17 +405,21 @@ can repeat it (see "Dot-repeat" in ARCHITECTURE.md).
 
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
 `vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `@NeovimNotificationHandler("eclipse_<name>")` method to
-`NotificationBridge` and a method to its `Sink`; implement it in `NeovimSession.EventSink`.
+`NotificationBridge` and a method to its `Sink`; implement it in `NeovimSession.EventSink`. If the
+event changes state the session keeps (like mode or cursor), record it in `StateSync` and give it a
+listener list in `SessionEvents`.
 
 **Ask Neovim for more state per key.** Extend `LuaScripts.STATE_SNAPSHOT` (append at the end so the
-existing indexes stay valid) and read the new element where the snapshot is parsed in `NeovimSession`.
+existing indexes stay valid), add a reader for the new element to `StateSnapshot` (and a case to
+`StateSnapshotTest`), and use it in `StateSync.publishState`.
 
 **Handle an Ex command in Eclipse instead of Neovim.** Classify it in `util/HostExCommand` (unit-test
 it), then perform it in `editor/EclipseFileCommands`.
 
 **Put a decision where it can be tested.** If logic does not need SWT or Eclipse, put it in `util`
 (or `core` for Neovim logic) and test it in `tests/unit`. That module compiles `util` and `core`
-without Eclipse jars, so an `org.eclipse` import there fails the build.
+without Eclipse jars, so an `org.eclipse` import there fails the build. If the logic needs to call
+Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
 
 ---
 
