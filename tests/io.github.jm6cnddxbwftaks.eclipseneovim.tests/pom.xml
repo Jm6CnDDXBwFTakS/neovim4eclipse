@@ -129,9 +129,11 @@
         <configuration>
           <useUIHarness>true</useUIHarness>
           <useUIThread>true</useUIThread>
-          <!-- The JaCoCo agent (prepare-agent above puts it into tycho.testArgLine) and, on macOS,
-               -XstartOnFirstThread (see the profile below). Tycho does not add the latter itself. -->
-          <argLine>${tycho.testArgLine} ${ui.jvmArgs}</argLine>
+          <!-- No <argLine> here on purpose: tycho-surefire's default is ${tycho.testArgLine}, read
+               when the tests start. By then jacoco:prepare-agent has put its agent there, in front of
+               what the macOS profile below puts there (-XstartOnFirstThread). An <argLine> written
+               here, or a tycho.testArgLine declared in <properties>, would be filled in when the POM
+               is read, before the agent is known, and the agent would be lost. -->
           <application>org.eclipse.ui.ide.workbench</application>
           <systemProperties>
             <nvim.path>${nvim.path}</nvim.path>
@@ -148,17 +150,14 @@
     <nvim.path></nvim.path>
     <!-- Default for the coverage report's skip flag; -DskipTests sets it to true. -->
     <skipTests>false</skipTests>
-    <!-- Filled in by jacoco:prepare-agent; empty here so that the argLine above is valid without it. -->
-    <tycho.testArgLine></tycho.testArgLine>
-    <!-- Extra JVM arguments for the test Eclipse; set by the macOS profile below. -->
-    <ui.jvmArgs></ui.jvmArgs>
   </properties>
 
   <profiles>
     <!-- macOS: Cocoa lets only the process's first thread create the SWT Display, and Java runs main()
          on another thread unless -XstartOnFirstThread is given. Without it the test Eclipse stops at
          start-up with "SWTException: Invalid thread access" (exit code 13). An installed Eclipse gets
-         the flag from its eclipse.ini; here it has to be passed by hand. -->
+         the flag from its eclipse.ini; here it has to be passed by hand. Tycho does not add it. It
+         goes into tycho.testArgLine, which jacoco:prepare-agent extends with its agent. -->
     <profile>
       <id>macos-first-thread</id>
       <activation>
@@ -167,7 +166,7 @@
         </os>
       </activation>
       <properties>
-        <ui.jvmArgs>-XstartOnFirstThread</ui.jvmArgs>
+        <tycho.testArgLine>-XstartOnFirstThread</tycho.testArgLine>
       </properties>
     </profile>
   </profiles>
