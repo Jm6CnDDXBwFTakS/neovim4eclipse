@@ -36,7 +36,7 @@ class WidgetOffsetsTest {
 
     @BeforeEach
     void foldLinesBToD() {
-        shell = new Shell(Display.getCurrent());
+        shell = new Shell(Display.getDefault());
         viewer = new ProjectionViewer(shell, null, null, false, SWT.NONE);
         viewer.setDocument(document, new AnnotationModel());
         viewer.enableProjection();

@@ -18,7 +18,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.BlockSelection.LineRange;
 /**
  * How Neovim's visual selections are shown, without a widget: the caret is a {@link FakeCaret} and
  * the block highlight a fake that keeps the ranges it was given. That the real {@code StyledText}
- * caret and the painted overlay do the same is tested in the UI tests ({@code StyledTextCaretTest},
+ * caret and the painted overlay do the same is tested with real widgets in {@code tests/swt} ({@code StyledTextCaretTest},
  * {@code BlockOverlayTest}).
  *
  * <p>Offsets in the text {@code "alpha\nbeta\ngamma"}: line 1 is 0-5, line 2 starts at 6, line 3 at 11.

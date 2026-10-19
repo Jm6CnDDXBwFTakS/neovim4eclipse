@@ -19,6 +19,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
+./mvnw test -f tests/swt/pom.xml                # SWT widget tests: a display, but no workbench
 ./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
 ```
 
@@ -33,11 +34,17 @@ start an Eclipse workbench, which opens a window for a few seconds; on a headles
    no workbench. Example: `BufferSynchronizer` applies Neovim's line changes to a real `Document`;
    its test needs the text model, not an editor. The class must also be listed in the compiler
    includes of `tests/text/pom.xml`.
-3. The UI tests only for what really needs a widget or the workbench: painting, `StyledText`
-   offsets, preference pages, key bindings, and the end-to-end tests.
+3. `tests/swt` when the code works on SWT widgets (a `StyledText`, painting, folded-code offsets)
+   but not on the workbench (no `ITextEditor`, `IWorkbenchPage`, preferences). These tests create
+   their own `Display` and `Shell` (`new Shell(Display.getDefault())`), so they run as plain JUnit,
+   without starting Eclipse; they still need a display (`xvfb-run` on a headless machine). Example:
+   `BlockOverlayTest` paints the overlay into an image and checks the pixels. List the class in
+   the compiler includes of `tests/swt/pom.xml`.
+4. The UI tests only for what really needs the workbench: editors and their commands, preference
+   pages, key bindings, and the end-to-end tests with Neovim.
 
-The compiler keeps 1 and 2 honest: those modules have no SWT or workbench jars, so a class that
-starts using them no longer compiles there.
+The compiler keeps 1 to 3 honest: each module has only the jars its tier may use (none, the text
+model, SWT and JFace), so a class that starts using more no longer compiles there.
 
 ### Test helpers and fakes
 
@@ -67,6 +74,7 @@ browser:
 | Unit tests (`./mvnw verify` or `./mvnw test -f tests/unit/pom.xml`) | `tests/unit/target/site/jacoco/index.html` |
 | Unit tests against real Neovim (`-Pintegration`) | `tests/unit/target/site/jacoco-integration/index.html` |
 | Text-model tests (`./mvnw verify` or `./mvnw test -f tests/text/pom.xml`) | `tests/text/target/site/jacoco/index.html` |
+| SWT tests (`./mvnw verify` or `./mvnw test -f tests/swt/pom.xml`) | `tests/swt/target/site/jacoco/index.html` |
 | UI tests (`./mvnw verify`) | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests/target/site/jacoco/index.html` |
 
 **Why one report per kind of test, not one merged report.** JaCoCo matches what it recorded to class
@@ -114,6 +122,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `plugins/io.github.jm6cnddxbwftaks.eclipseneovim` | the plug-in |
 | `tests/unit` | JUnit tests of `util` and `core`, without Eclipse |
 | `tests/text` | JUnit tests of code that uses Eclipse's text model but no widgets (`sync`, parts of `editor`), without a workbench |
+| `tests/swt` | JUnit tests of `editor` classes that use SWT widgets but not the workbench; need a display |
 | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` | workbench tests (a fragment of the plug-in) |
 | `features/...feature` | the installable feature |
 | `releng/...updatesite` | the p2 update site and its ZIP |
@@ -139,8 +148,8 @@ text that tests do not always catch.
 ## Making a change
 
 - Put decisions that need no Eclipse in `util` (or `core` for Neovim logic) with a unit test, and keep
-  the Eclipse class a thin caller. Code that needs only the text model gets a test in `tests/text`;
-  only widget and workbench glue gets a test in the UI test fragment.
+  the Eclipse class a thin caller. Code that needs only the text model gets a test in `tests/text`,
+  widget code in `tests/swt`; only workbench glue gets a test in the UI test fragment.
 - Library versions live only in the root `pom.xml`. A new library needs a `dependencyManagement` entry,
   an `artifactItem` in the plug-in's `pom.xml`, a `Bundle-ClassPath` entry in `MANIFEST.MF`
   (`BundleClassPathConsistencyTest` checks them) and its license in `plugins/.../licenses/` and

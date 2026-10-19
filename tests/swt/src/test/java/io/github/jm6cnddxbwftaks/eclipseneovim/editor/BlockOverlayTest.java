@@ -41,7 +41,7 @@ class BlockOverlayTest {
 
     @BeforeEach
     void create() {
-        shell = new Shell(Display.getCurrent());
+        shell = new Shell(Display.getDefault());
         widget = new StyledText(shell, SWT.MULTI);
         widget.setText(TEXT);
         widget.setSize(400, 200);

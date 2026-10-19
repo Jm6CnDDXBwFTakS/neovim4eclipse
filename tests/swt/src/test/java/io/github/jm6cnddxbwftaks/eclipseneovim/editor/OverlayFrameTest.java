@@ -27,7 +27,7 @@ class OverlayFrameTest {
 
     @BeforeEach
     void createHost() {
-        shell = new Shell(Display.getCurrent());
+        shell = new Shell(Display.getDefault());
         host = new StyledText(shell, SWT.MULTI);
         host.setBackground(new Color(0x1E, 0x1E, 0x1E));
         host.setForeground(new Color(0xD4, 0xD4, 0xD4));
