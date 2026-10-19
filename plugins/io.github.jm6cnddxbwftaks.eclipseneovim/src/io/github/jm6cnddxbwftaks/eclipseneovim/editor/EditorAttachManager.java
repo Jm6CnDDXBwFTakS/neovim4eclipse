@@ -46,7 +46,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
  * <p>Each open document has its own Neovim buffer (named after the file), kept while any editor on
  * it is open, so undo history and marks survive switching editors. When Neovim itself switches to
  * another document's buffer (Ctrl-O across files, {@code 'A}, {@code :b}), Eclipse follows by
- * activating that document's editor. Which editors share, find and give up a buffer is decided by
+ * activating that document's editor (only the last one, when a command such as {@code :bufdo}
+ * walks through many). Which editors share, find and give up a buffer is decided by
  * {@link EditorBuffers} (unit-tested without Eclipse); this class adds the workbench glue.
  */
 public final class EditorAttachManager {
@@ -348,6 +349,13 @@ public final class EditorAttachManager {
             }
             if (bufnr == session.getAttachedBufnr()) {
                 return; // Eclipse switched there itself in the meantime
+            }
+            if (bufnr != session.getEnteredBufnr()) {
+                // Neovim has entered another buffer since, whose own follow-up is queued behind this
+                // one. :bufdo, :argdo and :cdo enter every buffer in turn; following each would flick
+                // through all their editors (and attach to each), so only the last one is followed,
+                // and Eclipse ends where Vim ends.
+                return;
             }
             showing = documents.editorShowing(bufnr, buffer -> buffer.isOpenIn(session));
         }

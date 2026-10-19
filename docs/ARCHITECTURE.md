@@ -99,7 +99,10 @@ filetype detection runs). Only the attached buffer's line events and cursor repo
 
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is
 followed: its editor is activated and attached, keeping Neovim's cursor. When several editors show
-that document, the first one opened is chosen. A switch to any other
+that document, the first one opened is chosen. Commands such as `:bufdo`, `:argdo` and `:cdo` enter
+every buffer in turn; `DocumentBuffers` remembers the buffer entered last, and a queued follow-up for a
+buffer Neovim has left again is skipped, so Eclipse activates only the editor Vim ends in instead of
+flicking through all of them. A switch to any other
 buffer is undone (`returnToAttachedBufferAsync`). When a document's last editor closes, its buffer
 is wiped (`closeBufferAsync`).
 

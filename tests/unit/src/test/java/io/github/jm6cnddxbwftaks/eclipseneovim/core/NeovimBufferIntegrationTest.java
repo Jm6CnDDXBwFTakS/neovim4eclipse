@@ -143,6 +143,34 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * {@code :bufdo} enters every buffer. The handler hears of each, and {@code getEnteredBufnr}
+     * names the last one, so the editor can skip the buffers Neovim has already left.
+     */
+    @Test
+    void theLastBufferEnteredIsKnownWhenACommandWalksThroughSeveral() throws Exception {
+        try (NeovimSession s = start()) {
+            List<Integer> entered = new CopyOnWriteArrayList<>();
+            s.setBufferEnterHandler(entered::add);
+            DocumentBuffer a = new DocumentBuffer("");
+            DocumentBuffer b = new DocumentBuffer("");
+            DocumentBuffer c = new DocumentBuffer("");
+            s.showBuffer(a); // created in this order, so numbered a < b < c
+            s.showBuffer(b);
+            s.showBuffer(c);
+            s.showBuffer(b);
+            assertEquals(b.bufnr(), s.getEnteredBufnr(), "Eclipse's own switch");
+
+            s.command("bufdo let b:visited = 1"); // a, b, c in buffer-number order: ends in c
+            waitFor(() -> entered.size() >= 2, "the walk");
+            assertEquals(List.of(a.bufnr(), c.bufnr()), entered, "b is attached, so only a and c are reported");
+            assertEquals(c.bufnr(), s.getEnteredBufnr());
+
+            s.command("buffer " + a.bufnr());
+            waitFor(() -> s.getEnteredBufnr() == a.bufnr(), "the jump to a");
+        }
+    }
+
     @Test
     void enteringABufferThatIsNoDocumentSwitchesBack() throws Exception {
         try (NeovimSession s = start()) {
