@@ -336,7 +336,7 @@ public final class EditorAttachManager {
         entry.parts.add(editor);
         activeController = NeovimEditorController.attach(textEditor, session, entry.buffer, takeNeovimCursor);
         attachedPart = editor;
-        LOG.info("Attached Neovim to: " + textEditor.getTitle());
+        LOG.fine("Attached Neovim to: " + textEditor.getTitle());
         return activeController;
     }
 

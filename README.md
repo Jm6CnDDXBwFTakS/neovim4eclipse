@@ -230,6 +230,19 @@ terminal you started Eclipse from, or the Console view of the Eclipse that launc
 The first three are written when Neovim mode turns on in an editor, not when you press `Ctrl-V`.
 The warnings (the third and the last line) also appear in the Error Log (*Window › Show View › Error Log*).
 
+The first two are details (level FINE), hidden by default. To see them, create a file such as
+`vim-logging.properties` with
+
+```properties
+handlers = java.util.logging.ConsoleHandler
+java.util.logging.ConsoleHandler.level = FINE
+io.github.jm6cnddxbwftaks.eclipseneovim.level = FINE
+```
+
+and start Eclipse with `-Djava.util.logging.config.file=/path/to/vim-logging.properties` (after
+`-vmargs` in `eclipse.ini`, or in the *Arguments* tab of a runtime Eclipse launch). The plug-in's
+other details (each attach and detach, cursor pushes) then appear too.
+
 | Log line | Meaning |
 |----------|---------|
 | `Neovim key context activated` | the context is on; if absent, the editor did not have focus or Neovim mode is off/insert |

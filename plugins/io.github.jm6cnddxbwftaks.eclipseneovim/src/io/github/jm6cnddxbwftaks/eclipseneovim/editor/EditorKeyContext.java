@@ -90,7 +90,7 @@ final class EditorKeyContext {
             }
             if (wanted && !contexts.isActive()) {
                 contexts.activate(service, EditorKeyContext::isCtrlKeyToNeovim);
-                LOG.info("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
+                LOG.fine("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
                 // Report what the workbench would run for Ctrl-V now; see KeyContextDiagnostics.
                 Display.getDefault().asyncExec(() -> KeyContextDiagnostics.logResolution("CTRL+V"));
             } else if (!wanted && contexts.isActive()) {

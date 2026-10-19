@@ -158,7 +158,7 @@ public final class NeovimEditorController implements AutoCloseable {
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
 
         onModeChanged(session.getMode());
-        LOG.info("Attached Neovim to editor: " + editor.getTitle());
+        LOG.fine("Attached Neovim to editor: " + editor.getTitle());
     }
 
     /**
@@ -440,7 +440,7 @@ public final class NeovimEditorController implements AutoCloseable {
         modeStatus.removeFrom(editor.getEditorSite());
         modeStatus.dispose();
         cursorStyle.dispose();
-        LOG.info("Detached Neovim from editor: " + editor.getTitle());
+        LOG.fine("Detached Neovim from editor: " + editor.getTitle());
     }
 
     /** {@link DocumentPush.Neovim} on the session, for this editor's buffer. */

@@ -35,7 +35,7 @@ final class KeyContextDiagnostics {
         try {
             String commandId = KeyBindings.commandIdFor(text);
             if (VimCtrlKeys.isCtrlKeyCommand(commandId)) {
-                LOG.info("Ctrl-V (" + text + ") resolves to the Neovim Ctrl-key command "
+                LOG.fine("Ctrl-V (" + text + ") resolves to the Neovim Ctrl-key command "
                         + "(context is active and the binding wins)");
             } else {
                 LOG.warning("Ctrl-V (" + text + ") resolves to '" + commandId + "', not to a Neovim Ctrl-key command: "

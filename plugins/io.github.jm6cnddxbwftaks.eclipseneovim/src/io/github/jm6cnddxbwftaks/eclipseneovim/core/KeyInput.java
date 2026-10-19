@@ -266,7 +266,7 @@ final class KeyInput {
                 nvim.type("<Esc>");
                 state.syncBuffer();
                 state.publishState();
-                LOG.info("Host handled cmdline: " + text);
+                LOG.fine("Host handled cmdline: " + text);
                 return true;
             }
         } catch (Exception e) {
