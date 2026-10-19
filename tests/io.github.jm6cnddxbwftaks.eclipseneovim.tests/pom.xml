@@ -84,9 +84,19 @@
               <target>
                 <taskdef uri="antlib:org.jacoco.ant" resource="org/jacoco/ant/antlib.xml"
                          classpathref="maven.plugin.classpath"/>
+                <!-- The agent writes jacoco.exec when the test Eclipse exits. If it did not (the agent
+                     was not on its command line, or the process ended without running shutdown hooks),
+                     the report is still made, empty, and the build goes on: missing coverage numbers
+                     must not fail a build whose tests passed. -->
+                <condition property="coverage.missing">
+                  <not>
+                    <available file="${project.build.directory}/jacoco.exec"/>
+                  </not>
+                </condition>
+                <echo level="warning" message="No coverage data (target/jacoco.exec) from the UI tests: the report will be empty." if:set="coverage.missing" xmlns:if="ant:if"/>
                 <jacoco:report xmlns:jacoco="antlib:org.jacoco.ant">
                   <executiondata>
-                    <file file="${project.build.directory}/jacoco.exec"/>
+                    <fileset dir="${project.build.directory}" includes="jacoco.exec"/>
                   </executiondata>
                   <structure name="Eclipse Neovim plug-in (UI tests)">
                     <classfiles>
