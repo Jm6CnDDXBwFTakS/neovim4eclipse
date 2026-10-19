@@ -16,12 +16,10 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.ensarsarajcic.neovim.java.api.NeovimApi;
-import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
-import com.ensarsarajcic.neovim.java.api.types.api.VimCoords;
-import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
-import com.ensarsarajcic.neovim.java.api.window.NeovimWindowApi;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimApi;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
@@ -125,7 +123,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Runs submitted {@code :} commands, listings, searches and {@code :normal!}. */
     private final CommandRunner commands = new CommandRunner(new CommandRunnerNeovim());
 
-    private NeovimSession(NeovimConnection connection, NeovimBufferApi homeBuffer, ClipboardPort clipboard) {
+    private NeovimSession(NeovimConnection connection, Handle homeBuffer, ClipboardPort clipboard) {
         this.connection = connection;
         this.api = connection.api();
         this.buffers = new DocumentBuffers(api, homeBuffer);
@@ -171,10 +169,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         NeovimApi api = connection.api();
 
         // Until a document is shown, Neovim shows an unlisted scratch buffer (also what tests edit).
-        NeovimBufferApi homeBuffer = await(api.createBuffer(false, true));
-        await(api.setCurrentBuffer(homeBuffer.get()));
-        await(homeBuffer.attach(true, Map.of())); // line-change notifications
-        await(api.executeLua(LuaScripts.DELETE_STARTUP_BUFFER, List.of(String.valueOf(DocumentBuffers.bufnr(homeBuffer)))));
+        Handle homeBuffer = await(api.createBuf(false, true));
+        await(api.setCurrentBuf(homeBuffer));
+        await(api.bufAttach(homeBuffer, true)); // line-change notifications
+        await(api.execLua(LuaScripts.DELETE_STARTUP_BUFFER, List.of(String.valueOf(homeBuffer.id()))));
 
         NeovimSession session = new NeovimSession(connection, homeBuffer, clipboard);
         NotificationBridge bridge = new NotificationBridge(session.new EventSink());
@@ -182,16 +180,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         connection.setRequestHandler(bridge::onRequest);
 
         // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
-        int channel = await(api.getChannelInfo(0)).getId();
-        await(api.executeLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
-        Object clipboardOption = await(api.executeLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
+        int channel = await(api.getChannelId());
+        await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
+        Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
         LOG.info(() -> "Neovim 'clipboard' option = '" + clipboardOption + "'; "
                 + (session.nvimManagesClipboard ? "Neovim manages the OS clipboard, bridge disabled"
                         : "bridge copies yanks to the OS clipboard"));
         // Lets a user's init.lua detect the host: `if vim.g.eclipse == 1 then ... end`.
-        await(api.setVariable("eclipse", 1));
+        await(api.setVar("eclipse", 1));
 
         session.state.readMode();
         LOG.info("NeovimSession ready");
@@ -385,19 +383,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public boolean setDocumentBufferLines(DocumentBuffer buffer, List<String> lines) throws Exception {
-        NeovimBufferApi handle = buffers.handleOf(buffer);
+        Handle handle = buffers.handleOf(buffer);
         if (handle == null || !buffer.loaded) {
             return false;
         }
         List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
-        List<String> current = await(handle.getLines(0, -1, false));
+        List<String> current = await(api.bufGetLines(handle, 0, -1, false));
         LineDiff.Change change = LineDiff.between(current == null ? List.of() : current, target);
         if (change == null) {
             return true;
         }
         writingBufnr = buffer.bufnr;
         try {
-            await(handle.setLines(change.start(), change.end(), false, change.replacement()));
+            await(api.bufSetLines(handle, change.start(), change.end(), false, change.replacement()));
         } finally {
             writingBufnr = NotificationBridge.UNKNOWN_BUFFER;
         }
@@ -454,13 +452,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
         DocumentBuffer document = buffers.attachedDocument();
         if (document != null && !document.loaded) {
-            await(api.executeLua(LuaScripts.LOAD_WITHOUT_UNDO, target));
+            await(api.execLua(LuaScripts.LOAD_WITHOUT_UNDO, target));
             document.loaded = true;
             return;
         }
         LineDiff.Change change = LineDiff.between(getBufferLines(), target);
         if (change != null) {
-            await(buffers.attached().setLines(change.start(), change.end(), false, change.replacement()));
+            await(api.bufSetLines(buffers.attached(), change.start(), change.end(), false, change.replacement()));
         }
     }
 
@@ -469,21 +467,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     private List<String> getBufferLines(Duration timeout) throws Exception {
-        List<String> lines = buffers.attached().getLines(0, -1, false).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        List<String> lines = api.bufGetLines(buffers.attached(), 0, -1, false).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         return lines != null ? lines : List.of();
     }
 
     /** @param line1Based 1-based line; @param col0Based 0-based UTF-8 byte column */
     public void setCursor(int line1Based, int col0Based) throws Exception {
-        NeovimWindowApi win = await(api.getCurrentWindow());
-        await(win.setCursor(new VimCoords(line1Based, col0Based)));
+        Handle win = await(api.getCurrentWin());
+        await(api.winSetCursor(win, new WinCursor(line1Based, col0Based)));
         state.rememberCursor(new CursorPos(line1Based, col0Based));
     }
 
     public CursorPos getCursor() throws Exception {
-        NeovimWindowApi win = await(api.getCurrentWindow());
-        VimCoords coords = await(win.getCursor());
-        return coords == null ? new CursorPos(1, 0) : new CursorPos(coords.getRow(), coords.getCol());
+        Handle win = await(api.getCurrentWin());
+        WinCursor cursor = await(api.winGetCursor(win));
+        // WinCursor is the RPC layer's type, CursorPos the listeners' (see WinCursor): same meaning.
+        return cursor == null ? new CursorPos(1, 0) : new CursorPos(cursor.row(), cursor.col());
     }
 
     /**
@@ -495,7 +494,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * @param tabWidth the editor's displayed tab width
      */
     public void setIndentation(int tabWidth, Indentation indentation) throws Exception {
-        await(api.executeLua(LuaScripts.SET_INDENTATION, List.of(
+        await(api.execLua(LuaScripts.SET_INDENTATION, List.of(
                 String.valueOf(tabWidth),
                 flag(indentation.useTabs()),
                 String.valueOf(indentation.width()),
@@ -510,12 +509,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Evaluates Lua in Neovim and returns its result. For tests that inspect Neovim's state. */
     Object lua(String code) throws Exception {
-        return await(api.executeLua(code, List.of()));
+        return await(api.execLua(code, List.of()));
     }
 
     /** Runs an ex command (without the leading {@code :}). */
     public void command(String cmd) throws Exception {
-        await(api.executeCommand(cmd));
+        await(api.command(cmd));
     }
 
     // ---- asynchronous entry points (safe from the UI thread) ----
@@ -750,22 +749,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void startCapture() throws Exception {
-            await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
+            await(api.execLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
         }
 
         @Override
         public CompletableFuture<Object> stopCapture() {
-            return api.executeLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
+            return api.execLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
         }
 
         @Override
         public Object captureOutput(String cmd) throws Exception {
-            return await(api.executeLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
+            return await(api.execLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
         }
 
         @Override
         public void normalWithoutMappings(String keys) throws Exception {
-            await(api.executeLua(LuaScripts.NORMAL_WITHOUT_MAPPINGS, List.of(keys)));
+            await(api.execLua(LuaScripts.NORMAL_WITHOUT_MAPPINGS, List.of(keys)));
         }
 
         @Override
@@ -783,16 +782,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final class StateSyncNeovim implements StateSync.Neovim {
         @Override
         public Mode getMode() throws Exception {
-            // neovim-java's VimMode stays here, the one place it is read; the rest of core/ sees only
-            // our own Mode (docs/RPC_CLIENT.md, step 1).
-            VimMode read = await(api.getMode());
-            return read == null ? null : new Mode(read.getMode(), read.isBlocking());
+            return await(api.getMode());
         }
 
         @Override
         public Object stateSnapshot(boolean statusline, boolean showcmd, boolean message) throws Exception {
             // Short timeout: see STATE_TIMEOUT_MS.
-            return api.executeLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(showcmd), flag(message)))
+            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(showcmd), flag(message)))
                     .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 
@@ -811,17 +807,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void awaitKeysConsumed() throws Exception {
-            await(api.executeLua("return 0", List.of()));
+            await(api.execLua("return 0", List.of()));
         }
 
         @Override
         public String commandLineType() throws Exception {
-            return text(await(api.executeLua(LuaScripts.GET_CMDTYPE, List.of())));
+            return text(await(api.execLua(LuaScripts.GET_CMDTYPE, List.of())));
         }
 
         @Override
         public String commandLineText() throws Exception {
-            return text(await(api.executeLua(LuaScripts.GET_CMDLINE, List.of())));
+            return text(await(api.execLua(LuaScripts.GET_CMDLINE, List.of())));
         }
 
         @Override
