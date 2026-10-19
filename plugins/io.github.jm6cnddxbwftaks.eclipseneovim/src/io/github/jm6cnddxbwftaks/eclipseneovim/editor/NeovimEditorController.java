@@ -327,16 +327,10 @@ public final class NeovimEditorController implements AutoCloseable {
         modeStatus.setRecording(register);
     }
 
-    /**
-     * Whether a document change right now is the user typing in a plain Eclipse-driven insert (the
-     * only kind whose text is re-typed into Neovim at Esc). Excluded: changes the plug-in applies
-     * from Neovim, Eclipse mode, replace mode (Eclipse inserts where Vim would overwrite) and the
-     * Neovim-driven insert after a block selection (Neovim already sees those keys).
-     */
+    /** Whether a document change right now is typing to replay at Esc; see {@link InsertReplay#tracksChange}. */
     private boolean isTrackableInsertChange() {
-        String mode = session.getMode();
-        return !closed && neovimModeActive && !synchronizer.isApplyingRemote()
-                && mode != null && mode.startsWith("i") && !session.isNeovimDrivenInsert();
+        return InsertReplay.tracksChange(!closed && neovimModeActive, synchronizer.isApplyingRemote(),
+                session.getMode(), session.isNeovimDrivenInsert());
     }
 
     /** Called by the key listener at Esc, on the UI thread. */
