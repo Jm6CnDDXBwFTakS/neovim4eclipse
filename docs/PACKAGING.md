@@ -45,6 +45,11 @@ dependency is in `MANIFEST.MF`), build it with the whole reactor rather than wit
 otherwise Tycho may test against a stale copy of the plug-in in `~/.m2`. The plug-in exports its
 packages only to this fragment (`x-friends` in its `MANIFEST.MF`).
 
+On macOS the test Eclipse must run its UI on the process's first thread: the fragment's
+`macos-first-thread` profile (active on macOS only) passes `-XstartOnFirstThread`, which an installed
+Eclipse gets from its `eclipse.ini`. Without it the run stops at once with
+`SWTException: Invalid thread access` (exit code 13).
+
 Tests of code that uses only the text model (`IDocument`) are not here but in `tests/text`, a plain
 Maven module that compiles those classes against the `org.eclipse.text` jar from Maven Central and
 runs without a workbench. Widget tests that need SWT but not the workbench are in `tests/swt`, which
