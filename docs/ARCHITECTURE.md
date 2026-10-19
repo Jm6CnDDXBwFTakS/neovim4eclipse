@@ -79,7 +79,10 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 - **Mode status**: `ModeStatusContribution` on the editor status line.
 - **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`).
 - **Ex / search**: `:`, `/`, `?` open `CommandLineBox`, an inline `Text` child of the editor widget
-  (see "Command line" below); submitted commands use `commandAsync` / `search`, carried out by `core/CommandRunner`.
+  (see "Command line" below). A submitted line goes through its small `CommandLineBox.Commands`
+  interface (the IDE for file and tab commands, else the session's `commandAsync`,
+  `captureOutputAsync` or `search`, carried out by `core/CommandRunner`), so the box itself needs
+  only SWT and is tested in `tests/swt`.
 
 ### 5. Auto-attach
 

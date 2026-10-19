@@ -10,7 +10,8 @@
        mvn test -f tests/swt/pom.xml
 
        Tests of editor/ classes that work on SWT widgets (StyledText, painting, folded-code offsets)
-       but not on the workbench: StyledTextCaret, BlockOverlay, OverlayFrame, WidgetOffsets. They
+       but not on the workbench: StyledTextCaret, BlockOverlay, OverlayFrame, WidgetOffsets, and
+       CommandLineBox with OutputPopup (Neovim and the IDE behind its Commands interface). They
        need SWT and a display, like the UI tests, but not a started Eclipse: plain JUnit creates
        the SWT Display on its own thread, which saves the workbench start and lets them run in the
        IDE as ordinary JUnit tests. On a machine without a display run them under xvfb-run.
@@ -131,6 +132,8 @@
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/BlockHighlight.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/BlockOverlay.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OverlayFrame.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OutputPopup.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/CommandLineBox.java</include>
           </includes>
         </configuration>
       </plugin>

@@ -131,7 +131,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
-        this.commandLine = new CommandLineBox(styledText, session, editor);
+        this.commandLine = new CommandLineBox(styledText, new SessionCommands(session, editor));
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
@@ -441,6 +441,34 @@ public final class NeovimEditorController implements AutoCloseable {
         modeStatus.dispose();
         cursorStyle.dispose();
         LOG.fine("Detached Neovim from editor: " + editor.getTitle());
+    }
+
+    /** {@link CommandLineBox.Commands} on the session, with file and tab commands run by this editor. */
+    private record SessionCommands(NeovimSession session, ITextEditor editor) implements CommandLineBox.Commands {
+        @Override
+        public void leaveVisualMode() {
+            session.inputAsync("<Esc>");
+        }
+
+        @Override
+        public boolean runInIde(String exCommand) {
+            return HostCommands.tryHandleEx(exCommand, editor);
+        }
+
+        @Override
+        public void capture(String exCommand, Consumer<String> onOutput) {
+            session.captureOutputAsync(exCommand, onOutput);
+        }
+
+        @Override
+        public void run(String exCommand, Consumer<String> onOutput) {
+            session.commandAsync(exCommand, onOutput);
+        }
+
+        @Override
+        public void search(String pattern, boolean backward) {
+            session.search(pattern, backward);
+        }
     }
 
     /** {@link DocumentPush.Neovim} on the session, for this editor's buffer. */

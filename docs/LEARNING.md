@@ -400,6 +400,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `HostCommandRunner.Ide` | `util/HostCommandRunner` | a record inside `editor/HostCommands` |
 | `DocumentPush.Neovim`, `DocumentPush.Mirror` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer` |
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
+| `CommandLineBox.Commands` | `editor/CommandLineBox` | a record in `NeovimEditorController` (a fake that records "`:ls` captured, `:w` to the IDE" in tests) |
 | `ClipboardPort` | `NeovimSession` | `editor/ClipboardBridge` (`ClipboardPort.NONE` in tests) |
 
 A port is not the only way to keep Eclipse out of a class. When the class only *stores* Eclipse
