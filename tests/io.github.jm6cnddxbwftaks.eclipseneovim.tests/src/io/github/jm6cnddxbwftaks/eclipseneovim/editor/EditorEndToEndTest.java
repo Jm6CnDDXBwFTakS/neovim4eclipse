@@ -91,7 +91,7 @@ class EditorEndToEndTest {
         // One Neovim serves the whole IDE, so a previous test may have left it in another mode.
         session.inputAsync("<Esc>");
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
-        UiTestSupport.spin(300); // let the initial document push and cursor placement finish
+        settle(); // let the initial document push and cursor placement finish
     }
 
     @AfterEach
@@ -178,7 +178,7 @@ class EditorEndToEndTest {
             NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
             return c != null && c.getEditor() == otherEditor;
         });
-        UiTestSupport.spin(300);
+        settle();
 
         type(otherWidget, "gt");
         waitUntil("the other tab to be active", TIMEOUT_MS, () -> page.getActiveEditor() != otherEditor);
@@ -210,7 +210,7 @@ class EditorEndToEndTest {
         ITextOperationTarget target = editor.getAdapter(ITextOperationTarget.class);
         target.doOperation(ITextOperationTarget.UNDO);
         expectText("alpha\nbeta\ngamma\n");
-        UiTestSupport.spin(300); // let the push reach Neovim
+        settle(); // let the push reach Neovim
         type(widget, "jdd");
         expectText("alpha\ngamma\n");
     }
@@ -240,7 +240,7 @@ class EditorEndToEndTest {
         linkTwoFoos();
         type(widget, "gg0x");
         expectText("oo = oo;\n");
-        UiTestSupport.spin(300); // let the copy reach Neovim
+        settle(); // let the copy reach Neovim
         type(widget, "$x");
         expectText("oo = oo\n");
     }
@@ -248,7 +248,7 @@ class EditorEndToEndTest {
     /** Makes the document "foo = foo;" with both names linked, the way a rename does. */
     private void linkTwoFoos() throws Exception {
         document.set("foo = foo;\n");
-        UiTestSupport.spin(300); // Eclipse's own change is pushed to Neovim
+        settle(); // Eclipse's own change is pushed to Neovim
         LinkedPositionGroup group = new LinkedPositionGroup();
         group.addPosition(new LinkedPosition(document, 0, 3));
         group.addPosition(new LinkedPosition(document, 6, 3));
@@ -271,7 +271,7 @@ class EditorEndToEndTest {
             NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
             return c != null && c.getEditor() == braceEditor;
         });
-        UiTestSupport.spin(300);
+        settle();
 
         type(braceWidget, "j");
         type(braceWidget, 'o');
@@ -324,8 +324,16 @@ class EditorEndToEndTest {
     private void typeSlowly(String keys) {
         for (char key : keys.toCharArray()) {
             type(widget, key);
-            UiTestSupport.spin(200);
+            settle();
         }
+    }
+
+    /**
+     * Waits until Neovim has handled every key and push so far and the editor shows the result (see
+     * {@link UiTestSupport#settle}): no fixed sleep, so the test waits only as long as needed.
+     */
+    private void settle() {
+        UiTestSupport.settle(session, TIMEOUT_MS);
     }
 
     /**
@@ -346,7 +354,7 @@ class EditorEndToEndTest {
     @Test
     void gdInATextFileJumpsToTheFirstUseOfTheWord() {
         document.set("int x = 1;\ny = x;\n");
-        UiTestSupport.spin(300); // Eclipse's own change is pushed to Neovim
+        settle(); // Eclipse's own change is pushed to Neovim
         type(widget, "G$h"); // on the x of "y = x;"
         type(widget, "gd");
         waitUntil("the caret on the first x", TIMEOUT_MS, () -> widget.getCaretOffset() == 4,
