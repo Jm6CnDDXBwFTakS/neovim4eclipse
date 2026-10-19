@@ -63,6 +63,12 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   condition holds, and `settle(session, timeout)` waits until the session has handled everything
   queued so far and the UI thread has applied the result. Use these, not fixed sleeps: a sleep is
   either too short on a slow CI machine or wasted time on a fast one.
+- `ExpectedLog` (`tests/shared`, used by `tests/unit` and `tests/text`): for a test that makes the
+  code fail on purpose. `try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) { ... }` keeps
+  that class's log records off the console while the block runs, and
+  `log.assertLogged(Level.SEVERE, "Could not switch")` checks the failure was reported. Without it
+  such a test prints a warning and a stack trace into every build's output, where a real problem
+  then goes unnoticed. Everything else still logs to the console.
 - Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`, `CommandRunner.Neovim`, `StateSync.Neovim`, `KeyInput.Neovim`) and `UiExecutor`
   (`IMMEDIATE`, or one that holds work back) are defined next to the tests that use them.
 
@@ -127,6 +133,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `tests/unit` | JUnit tests of `util` and `core`, without Eclipse |
 | `tests/text` | JUnit tests of code that uses Eclipse's text model but no widgets (`sync`, parts of `editor`), without a workbench |
 | `tests/swt` | JUnit tests of `editor` classes that use SWT widgets but not the workbench; need a display |
+| `tests/shared` | test helpers shared by those modules (`ExpectedLog`); not a module of its own |
 | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` | workbench tests (a fragment of the plug-in) |
 | `features/...feature` | the installable feature |
 | `releng/...updatesite` | the p2 update site and its ZIP |

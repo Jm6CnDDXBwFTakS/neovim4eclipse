@@ -13,9 +13,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 
 /**
  * Command running without Neovim: a fake records the calls in order, so each test reads as "for
@@ -178,17 +181,20 @@ class CommandRunnerTest {
     @Test
     @Timeout(5) // without the timeout the runner would wait forever: fail instead of hanging the build
     void aCommandStillRunningAfterTheTimeoutGivesNoOutputButStillRefreshes() throws Exception {
-        CommandRunner quick = new CommandRunner(nvim, Duration.ofMillis(30), POLL);
-        nvim.stopAnswer = new CompletableFuture<>(); // never answers
+        try (ExpectedLog log = ExpectedLog.of(CommandRunner.class)) {
+            CommandRunner quick = new CommandRunner(nvim, Duration.ofMillis(30), POLL);
+            nvim.stopAnswer = new CompletableFuture<>(); // never answers
 
-        long start = System.nanoTime();
-        quick.run("!sleep 100", outputs::add);
-        long tookMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
+            long start = System.nanoTime();
+            quick.run("!sleep 100", outputs::add);
+            long tookMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
-        assertEquals(List.of(), outputs);
-        assertEquals(List.of("syncBuffer", "syncModeAndCursor"),
-                nvim.calls.subList(nvim.calls.size() - 2, nvim.calls.size()));
-        assertTrue(tookMs >= 30 && tookMs < TIMEOUT.toMillis(), "waited " + tookMs + " ms");
+            assertEquals(List.of(), outputs);
+            assertEquals(List.of("syncBuffer", "syncModeAndCursor"),
+                    nvim.calls.subList(nvim.calls.size() - 2, nvim.calls.size()));
+            assertTrue(tookMs >= 30 && tookMs < TIMEOUT.toMillis(), "waited " + tookMs + " ms");
+            log.assertLogged(Level.WARNING, "command still running");
+        }
     }
 
     // ---- capture: listing commands ----
