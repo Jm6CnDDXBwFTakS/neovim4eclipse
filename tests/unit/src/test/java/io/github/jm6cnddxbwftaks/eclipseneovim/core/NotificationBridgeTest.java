@@ -16,9 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.msgpack.jackson.dataformat.MessagePackExtensionType;
 
 import com.ensarsarajcic.neovim.java.api.types.msgpack.Buffer;
-import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
-import com.ensarsarajcic.neovim.java.corerpc.message.RequestMessage;
 
+/**
+ * {@link NotificationBridge} as the RPC layer calls it: {@code notification(name, args)} and
+ * {@code request(name, args)}, so each test also checks that the name reaches the right handler.
+ */
 class NotificationBridgeTest {
 
     /** Records every call as a readable string. */
@@ -62,45 +64,51 @@ class NotificationBridgeTest {
         });
     }
 
-    private static NotificationMessage msg(String name, Object... args) {
-        return new NotificationMessage(name, new ArrayList<>(Arrays.asList(args)));
+    /** Delivers a notification, as the RPC layer does. Arrays.asList: an argument may be null. */
+    private void notify(String name, Object... args) {
+        bridge.notification(name, Arrays.asList(args));
     }
 
-    private static RequestMessage request(Object... args) {
-        return new RequestMessage.Builder("eclipse_clipboard_paste", new ArrayList<>(Arrays.asList(args))).build();
+    /** Sends a request, as the RPC layer does, and returns the answer. */
+    private Object request(String name, Object... args) {
+        return bridge.request(name, Arrays.asList(args));
+    }
+
+    private Object paste(Object... args) {
+        return request("eclipse_clipboard_paste", args);
     }
 
     @Test
     void ideActionCarriesNameAndCount() {
-        bridge.onAction(msg("eclipse_action", "next_tab", 3));
-        bridge.onAction(msg("eclipse_action", "definition"));
-        bridge.onAction(msg("eclipse_action"));
+        notify("eclipse_action", "next_tab", 3);
+        notify("eclipse_action", "definition");
+        notify("eclipse_action");
         assertEquals(List.of("action:next_tab:3", "action:definition:0"), events);
     }
 
     @Test
     void modeNotification() {
-        bridge.onMode(msg("eclipse_mode", "i"));
+        notify("eclipse_mode", "i");
         assertEquals(List.of("mode:i"), events);
     }
 
     @Test
     void cursorNotificationAcceptsNumbersAndNumericStrings() {
-        bridge.onCursor(msg("eclipse_cursor", 3, 7L));
-        bridge.onCursor(msg("eclipse_cursor", "4", "2"));
+        notify("eclipse_cursor", 3, 7L);
+        notify("eclipse_cursor", "4", "2");
         assertEquals(List.of("cursor:3:7", "cursor:4:2"), events);
     }
 
     @Test
     void cursorNotificationCarriesTheBufferWhenGiven() {
-        bridge.onCursor(msg("eclipse_cursor", 3, 7, 5));
+        notify("eclipse_cursor", 3, 7, 5);
         assertEquals(List.of("cursor:3:7@5"), events);
     }
 
     @Test
     void bufferEnterNotification() {
-        bridge.onBufEnter(msg("eclipse_buf_enter", 4L));
-        bridge.onBufEnter(msg("eclipse_buf_enter"));
+        notify("eclipse_buf_enter", 4L);
+        notify("eclipse_buf_enter");
         assertEquals(List.of("enter:4"), events);
     }
 
@@ -115,98 +123,102 @@ class NotificationBridgeTest {
 
     @Test
     void yankNotificationWithLineList() {
-        bridge.onYank(msg("eclipse_yank", List.of("one", "two"), "V"));
+        notify("eclipse_yank", List.of("one", "two"), "V");
         assertEquals(List.of("yank:[one, two]:V"), events);
     }
 
     @Test
     void yankNotificationWithCharwiseType() {
-        bridge.onYank(msg("eclipse_yank", List.of("word"), "v"));
+        notify("eclipse_yank", List.of("word"), "v");
         assertEquals(List.of("yank:[word]:v"), events);
     }
 
     @Test
     void yankNotificationKeepsABlockTypeAndDefaultsToCharacters() {
-        bridge.onYank(msg("eclipse_yank", List.of("ab", "cd"), "\u00162"));
-        bridge.onYank(msg("eclipse_yank", List.of("x")));
+        notify("eclipse_yank", List.of("ab", "cd"), "\u00162");
+        notify("eclipse_yank", List.of("x"));
         assertEquals(List.of("yank:[ab, cd]:\u00162", "yank:[x]:v"), events);
     }
 
     @Test
     void clipboardCopyCarriesRegisterLinesAndType() {
-        bridge.onClipboardCopy(msg("eclipse_clipboard_copy", "+", List.of("line", ""), "V"));
-        bridge.onClipboardCopy(msg("eclipse_clipboard_copy", "*", List.of("w"), "v"));
-        bridge.onClipboardCopy(msg("eclipse_clipboard_copy", "+"));
+        notify("eclipse_clipboard_copy", "+", List.of("line", ""), "V");
+        notify("eclipse_clipboard_copy", "*", List.of("w"), "v");
+        notify("eclipse_clipboard_copy", "+");
         assertEquals(List.of("copy+:[line, ]:V", "copy*:[w]:v"), events);
     }
 
     @Test
     void clipboardPasteAnswersWithTheSinksValue() {
-        assertEquals(List.of(List.of("pasted"), "v"), bridge.onClipboardPaste(request("*")));
-        assertEquals(List.of(List.of("pasted"), "v"), bridge.onClipboardPaste(request()));
+        assertEquals(List.of(List.of("pasted"), "v"), paste("*"));
+        assertEquals(List.of(List.of("pasted"), "v"), paste());
         assertEquals(List.of("paste*", "paste+"), events, "no register given: the clipboard");
     }
 
     @Test
     void aFailingClipboardPastesNothingInsteadOfThrowingAtNeovim() {
-        assertEquals(List.of(), bridge.onClipboardPaste(request("!")));
+        assertEquals(List.of(), paste("!"));
     }
 
     @Test
     void requestsAreAnsweredByName() {
-        assertEquals(List.of(List.of("pasted"), "v"), bridge.onRequest(request("+")));
-        RequestMessage unknown = new RequestMessage.Builder("eclipse_unknown", new ArrayList<>()).build();
-        assertThrows(UnsupportedOperationException.class, () -> bridge.onRequest(unknown));
+        assertEquals(List.of(List.of("pasted"), "v"), paste("+"));
+        // Thrown, so the RPC layer answers Neovim with an error (Neovim waits for every request).
+        assertThrows(UnsupportedOperationException.class, () -> request("eclipse_unknown"));
     }
 
     /** The answer is what Neovim shows: "" for a save that worked, else the message. */
     @Test
     void writeRequestsAnswerWithTheErrorOrNothing() {
-        assertEquals("", bridge.onRequest(named("eclipse_write", 3)));
-        assertEquals("read-only", bridge.onRequest(named("eclipse_write", 7L)));
-        assertEquals("Eclipse could not save the file: workspace closed", bridge.onRequest(named("eclipse_write", 13)));
-        assertEquals("Eclipse got a write request without a buffer number", bridge.onRequest(named("eclipse_write")));
+        assertEquals("", request("eclipse_write", 3));
+        assertEquals("read-only", request("eclipse_write", 7L));
+        assertEquals("Eclipse could not save the file: workspace closed", request("eclipse_write", 13));
+        assertEquals("Eclipse got a write request without a buffer number", request("eclipse_write"));
         assertEquals(List.of("write@3", "write@7", "write@13"), events);
-    }
-
-    private static RequestMessage named(String method, Object... args) {
-        return new RequestMessage.Builder(method, new ArrayList<>(Arrays.asList(args))).build();
     }
 
     @Test
     void yankNotificationWithSingleString() {
-        bridge.onYank(msg("eclipse_yank", "solo", "v"));
+        notify("eclipse_yank", "solo", "v");
         assertEquals(List.of("yank:[solo]:v"), events);
     }
 
     @Test
     void bufferLinesEventUsesFirstLastAndLineData() {
         // [bufnr, changedtick, firstline, lastline, linedata, more]
-        bridge.onBufLines(msg("nvim_buf_lines_event", 1, 5, 2, 3, List.of("x", "y"), false));
+        notify("nvim_buf_lines_event", 1, 5, 2, 3, List.of("x", "y"), false);
         assertEquals(List.of("lines@1:2:3:[x, y]"), events);
     }
 
     @Test
     void bufferLinesEventWithEmptyLineDataIsADeletion() {
-        bridge.onBufLines(msg("nvim_buf_lines_event", 1, 5, 2, 3, List.of(), false));
+        notify("nvim_buf_lines_event", 1, 5, 2, 3, List.of(), false);
         assertEquals(List.of("lines@1:2:3:[]"), events);
     }
 
     @Test
     void initialAttachEventHasMinusOneLastLine() {
-        bridge.onBufLines(msg("nvim_buf_lines_event", 1, 0, 0, -1, List.of("a"), false));
+        notify("nvim_buf_lines_event", 1, 0, 0, -1, List.of("a"), false);
         assertEquals(List.of("lines@1:0:-1:[a]"), events);
     }
 
     @Test
+    void unknownNotificationsAreIgnored() {
+        // Neovim sends these too: redraw to every UI, changedtick events to nvim_buf_attach.
+        notify("redraw", List.of("flush"));
+        notify("nvim_buf_changedtick_event", 1, 5);
+        assertTrue(events.isEmpty(), events.toString());
+    }
+
+    @Test
     void malformedPayloadsAreIgnoredWithoutThrowing() {
-        bridge.onMode(msg("eclipse_mode"));
-        bridge.onCursor(msg("eclipse_cursor", 1));
-        bridge.onCursor(msg("eclipse_cursor", "x", "y"));
-        bridge.onYank(msg("eclipse_yank"));
-        bridge.onYank(msg("eclipse_yank", (Object) null));
-        bridge.onBufLines(msg("nvim_buf_lines_event", 1, 2));
-        bridge.onBufLines(msg("nvim_buf_lines_event", 1, 2, "a", "b", List.of()));
+        notify("eclipse_mode");
+        notify("eclipse_cursor", 1);
+        notify("eclipse_cursor", "x", "y");
+        notify("eclipse_yank");
+        notify("eclipse_yank", (Object) null);
+        notify("nvim_buf_lines_event", 1, 2);
+        notify("nvim_buf_lines_event", 1, 2, "a", "b", List.of());
         assertTrue(events.isEmpty(), events.toString());
     }
 }

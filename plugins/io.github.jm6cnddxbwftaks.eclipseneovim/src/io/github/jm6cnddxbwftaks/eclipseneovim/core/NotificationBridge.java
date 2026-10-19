@@ -13,15 +13,16 @@ import org.msgpack.core.MessageUnpacker;
 import org.msgpack.jackson.dataformat.MessagePackExtensionType;
 
 import com.ensarsarajcic.neovim.java.api.types.msgpack.BaseCustomIdType;
-import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
-import com.ensarsarajcic.neovim.java.corerpc.message.RequestMessage;
-import com.ensarsarajcic.neovim.java.handler.annotations.NeovimNotificationHandler;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Incoming;
 
 /**
  * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
  *
- * <p>Registered with neovim-java's {@code NeovimHandlerManager}, which finds the annotated
- * methods by reflection; hence this class and its handler methods must stay {@code public}.
+ * <p>The RPC layer hands every message to {@link #notification} or {@link #request} (see
+ * {@link Incoming}), which pick the handler by the message's name with a {@code switch}. Example:
+ * {@code notification("eclipse_mode", ["i"])} becomes {@code sink.onMode("i")}. (These used to be
+ * annotated methods that neovim-java found by reflection; a {@code switch} shows every name in one
+ * place and needs no {@code public} methods.)
  *
  * <p>The notifications come from two places: Neovim's built-in buffer-attach events
  * ({@code nvim_buf_lines_event}) and custom {@code vim.rpcnotify} calls made by the Lua autocmds
@@ -32,19 +33,18 @@ import com.ensarsarajcic.neovim.java.handler.annotations.NeovimNotificationHandl
  * Neovim goes on at once. A request ({@code vim.rpcrequest}) makes Neovim wait for the answer, so
  * it is used only where Neovim needs a value back: {@code eclipse_clipboard_paste}, asked when
  * Neovim pastes from the system clipboard, and {@code eclipse_write}, asked when Neovim writes a
- * document buffer (Neovim must know whether the save worked). Requests reach {@link #onRequest} through
- * {@code NeovimConnection.setRequestHandler} (not an annotation, see there), and its return value is
- * the answer.
+ * document buffer (Neovim must know whether the save worked). The return value of {@link #request}
+ * is the answer.
  */
-public final class NotificationBridge {
+final class NotificationBridge implements Incoming {
 
     private static final Logger LOG = Logger.getLogger(NotificationBridge.class.getName());
 
     /** Buffer number used when a notification does not say which buffer it is about. */
-    public static final int UNKNOWN_BUFFER = -1;
+    static final int UNKNOWN_BUFFER = -1;
 
     /** Typed destination for notifications. */
-    public interface Sink {
+    interface Sink {
         void onMode(String mode);
 
         /**
@@ -97,22 +97,36 @@ public final class NotificationBridge {
 
     private final Sink sink;
 
-    public NotificationBridge(Sink sink) {
+    NotificationBridge(Sink sink) {
         this.sink = sink;
     }
 
-    @NeovimNotificationHandler("eclipse_mode")
-    public void onMode(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        if (args != null && !args.isEmpty()) {
+    /**
+     * Dispatches a notification by name. Unknown names are ignored (see {@link Incoming}): Neovim
+     * sends {@code redraw} several times per key, so they are logged at FINEST only.
+     */
+    @Override
+    public void notification(String method, List<?> args) {
+        switch (method) {
+            case "eclipse_mode" -> onMode(args);
+            case "eclipse_cursor" -> onCursor(args);
+            case "eclipse_buf_enter" -> onBufEnter(args);
+            case "eclipse_yank" -> onYank(args);
+            case "eclipse_clipboard_copy" -> onClipboardCopy(args);
+            case "eclipse_action" -> onAction(args);
+            case "nvim_buf_lines_event" -> onBufLines(args);
+            default -> LOG.finest(() -> "Ignored notification " + method);
+        }
+    }
+
+    private void onMode(List<?> args) {
+        if (!args.isEmpty()) {
             sink.onMode(String.valueOf(args.get(0)));
         }
     }
 
-    @NeovimNotificationHandler("eclipse_cursor")
-    public void onCursor(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        if (args != null && args.size() >= 2) {
+    private void onCursor(List<?> args) {
+        if (args.size() >= 2) {
             Integer line = toInt(args.get(0));
             Integer col = toInt(args.get(1));
             Integer buf = args.size() >= 3 ? toInt(args.get(2)) : null;
@@ -122,30 +136,24 @@ public final class NotificationBridge {
         }
     }
 
-    @NeovimNotificationHandler("eclipse_buf_enter")
-    public void onBufEnter(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        Integer buf = args == null || args.isEmpty() ? null : toInt(args.get(0));
+    private void onBufEnter(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             sink.onBufferEnter(buf);
         }
     }
 
     /** Payload: {@code [regcontents, regtype]}; a missing type counts as characters. */
-    @NeovimNotificationHandler("eclipse_yank")
-    public void onYank(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        if (args != null && !args.isEmpty() && args.get(0) != null) {
+    private void onYank(List<?> args) {
+        if (!args.isEmpty() && args.get(0) != null) {
             String regtype = args.size() >= 2 && args.get(1) != null ? String.valueOf(args.get(1)) : "v";
             sink.onYank(toStringList(args.get(0)), regtype);
         }
     }
 
     /** Payload: {@code [register, lines, regtype]}, from the copy function of the clipboard provider. */
-    @NeovimNotificationHandler("eclipse_clipboard_copy")
-    public void onClipboardCopy(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        if (args != null && args.size() >= 3 && args.get(0) != null && args.get(1) != null) {
+    private void onClipboardCopy(List<?> args) {
+        if (args.size() >= 3 && args.get(0) != null && args.get(1) != null) {
             sink.onClipboardCopy(String.valueOf(args.get(0)), toStringList(args.get(1)),
                     String.valueOf(args.get(2)));
         }
@@ -156,14 +164,13 @@ public final class NotificationBridge {
      *
      * @throws UnsupportedOperationException for a request this bridge does not know (answered as an error)
      */
-    public Object onRequest(RequestMessage message) {
-        if ("eclipse_clipboard_paste".equals(message.getMethod())) {
-            return onClipboardPaste(message);
-        }
-        if ("eclipse_write".equals(message.getMethod())) {
-            return onWrite(message);
-        }
-        throw new UnsupportedOperationException("Unknown request: " + message.getMethod());
+    @Override
+    public Object request(String method, List<?> args) {
+        return switch (method) {
+            case "eclipse_clipboard_paste" -> onClipboardPaste(args);
+            case "eclipse_write" -> onWrite(args);
+            default -> throw new UnsupportedOperationException("Unknown request: " + method);
+        };
     }
 
     /**
@@ -171,9 +178,8 @@ public final class NotificationBridge {
      * blocked until this returns. Never throws: an exception would reach Neovim as an RPC error, and
      * an empty list (nothing to paste) is the friendlier answer.
      */
-    Object onClipboardPaste(RequestMessage message) {
-        List<?> args = message.getArguments();
-        String register = args != null && !args.isEmpty() && args.get(0) != null ? String.valueOf(args.get(0)) : "+";
+    private Object onClipboardPaste(List<?> args) {
+        String register = !args.isEmpty() && args.get(0) != null ? String.valueOf(args.get(0)) : "+";
         try {
             return sink.onClipboardPaste(register);
         } catch (RuntimeException e) {
@@ -187,9 +193,8 @@ public final class NotificationBridge {
      * message. Never throws, for the same reason as {@link #onClipboardPaste}: the message is what
      * Neovim shows the user, an RPC error would only show a stack trace.
      */
-    Object onWrite(RequestMessage message) {
-        List<?> args = message.getArguments();
-        Integer buf = args == null || args.isEmpty() ? null : toInt(args.get(0));
+    private Object onWrite(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf == null) {
             return "Eclipse got a write request without a buffer number";
         }
@@ -203,20 +208,16 @@ public final class NotificationBridge {
     }
 
     /** Payload: {@code [name, count]} (see {@link IdeAction}). */
-    @NeovimNotificationHandler("eclipse_action")
-    public void onAction(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        if (args != null && !args.isEmpty() && args.get(0) != null) {
+    private void onAction(List<?> args) {
+        if (!args.isEmpty() && args.get(0) != null) {
             Integer count = args.size() >= 2 ? toInt(args.get(1)) : null;
             sink.onIdeAction(new IdeAction(String.valueOf(args.get(0)), count == null ? 0 : Math.max(0, count)));
         }
     }
 
     /** Payload: {@code [bufnr, changedtick, firstline, lastline, linedata, more]}. */
-    @NeovimNotificationHandler("nvim_buf_lines_event")
-    public void onBufLines(NotificationMessage message) {
-        List<?> args = message.getArguments();
-        if (args == null || args.size() < 5) {
+    private void onBufLines(List<?> args) {
+        if (args.size() < 5) {
             return;
         }
         Integer first = toInt(args.get(2));

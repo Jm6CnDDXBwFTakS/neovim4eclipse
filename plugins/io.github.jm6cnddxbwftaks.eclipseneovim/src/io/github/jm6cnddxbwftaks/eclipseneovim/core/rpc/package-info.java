@@ -17,6 +17,8 @@
  *       the plug-in calls, one method each, named after Neovim's.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimJavaApi}: that interface
  *       implemented with neovim-java (temporary, an adapter).</li>
+ *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Incoming}: what Neovim sends on its
+ *       own (notifications and requests), implemented by {@code core/NotificationBridge}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle}: a buffer, window or tab
  *       page.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode}: the answer to
