@@ -18,7 +18,7 @@ import com.ensarsarajcic.neovim.java.corerpc.message.RequestMessage;
 import com.ensarsarajcic.neovim.java.handler.annotations.NeovimNotificationHandler;
 
 /**
- * Receives raw Neovim RPC notifications (and one request) and turns them into typed {@link Sink} calls.
+ * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
  *
  * <p>Registered with neovim-java's {@code NeovimHandlerManager}, which finds the annotated
  * methods by reflection; hence this class and its handler methods must stay {@code public}.
@@ -31,7 +31,8 @@ import com.ensarsarajcic.neovim.java.handler.annotations.NeovimNotificationHandl
  * <p><b>Notification or request.</b> A notification ({@code vim.rpcnotify}) is fire-and-forget:
  * Neovim goes on at once. A request ({@code vim.rpcrequest}) makes Neovim wait for the answer, so
  * it is used only where Neovim needs a value back: {@code eclipse_clipboard_paste}, asked when
- * Neovim pastes from the system clipboard. Requests reach {@link #onRequest} through
+ * Neovim pastes from the system clipboard, and {@code eclipse_write}, asked when Neovim writes a
+ * document buffer (Neovim must know whether the save worked). Requests reach {@link #onRequest} through
  * {@code NeovimConnection.setRequestHandler} (not an annotation, see there), and its return value is
  * the answer.
  */
@@ -81,6 +82,14 @@ public final class NotificationBridge {
          * @return the answer sent to Neovim: a list of lines, or {@code [lines, regtype]}
          */
         Object onClipboardPaste(String register);
+
+        /**
+         * Neovim writes buffer {@code bufnr} ({@code :w}, {@code :update}, {@code :wall}; see
+         * {@link LuaScripts#DOCUMENT_BUFFER}) and waits until Eclipse has saved it.
+         *
+         * @return {@code null} if the document was saved, else the error message Neovim shows
+         */
+        String onWrite(int bufnr);
 
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
@@ -151,6 +160,9 @@ public final class NotificationBridge {
         if ("eclipse_clipboard_paste".equals(message.getMethod())) {
             return onClipboardPaste(message);
         }
+        if ("eclipse_write".equals(message.getMethod())) {
+            return onWrite(message);
+        }
         throw new UnsupportedOperationException("Unknown request: " + message.getMethod());
     }
 
@@ -167,6 +179,26 @@ public final class NotificationBridge {
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Reading the system clipboard for Neovim failed", e);
             return List.of();
+        }
+    }
+
+    /**
+     * Payload: {@code [bufnr]}. Answers {@code ""} when the document was saved, else the error
+     * message. Never throws, for the same reason as {@link #onClipboardPaste}: the message is what
+     * Neovim shows the user, an RPC error would only show a stack trace.
+     */
+    Object onWrite(RequestMessage message) {
+        List<?> args = message.getArguments();
+        Integer buf = args == null || args.isEmpty() ? null : toInt(args.get(0));
+        if (buf == null) {
+            return "Eclipse got a write request without a buffer number";
+        }
+        try {
+            String error = sink.onWrite(buf);
+            return error == null ? "" : error;
+        } catch (RuntimeException e) {
+            LOG.log(Level.WARNING, "Saving buffer " + buf + " for Neovim failed", e);
+            return "Eclipse could not save the file: " + e.getMessage();
         }
     }
 

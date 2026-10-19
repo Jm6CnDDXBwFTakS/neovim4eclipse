@@ -210,8 +210,10 @@ Notifications are fire-and-forget: Neovim uses them for events, and Lua code can
 
 Requests go the other way too. `vim.rpcrequest(channel, name, ...)` sends one to a client and
 **Neovim waits** until the client answers; it needs a real channel number, not 0. The plug-in uses
-this once: when Neovim pastes from the system clipboard (`"+p`), it asks Eclipse for the text
-(`eclipse_clipboard_paste`, see `core/ClipboardRegisters`). Eclipse learns its own channel number by
+this twice: when Neovim pastes from the system clipboard (`"+p`), it asks Eclipse for the text
+(`eclipse_clipboard_paste`, see `core/ClipboardRegisters`); when Neovim writes a document's buffer
+(`:bufdo update`), it asks Eclipse to save the file and waits to hear whether that worked
+(`eclipse_write`, see `LuaScripts.DOCUMENT_BUFFER`). Eclipse learns its own channel number by
 calling `nvim_get_chan_info(0)` itself (0 is "the caller" in a direct API call) and passes it to the
 setup Lua: inside Lua run by `nvim_exec_lua`, `nvim_get_chan_info(0)` does not know who called.
 
@@ -468,10 +470,12 @@ event changes state the session keeps (like mode or cursor), record it in `State
 listener list in `SessionEvents`.
 
 **Answer a question from Neovim.** In Lua, call `vim.rpcrequest(chan, 'eclipse_<name>', ...)`, where
-`chan` is the channel number `LuaScripts.SETUP` receives as its argument (Neovim waits for the answer,
+`chan` is the channel number `LuaScripts.SETUP` receives as its argument and keeps in
+`g:eclipse_channel` (Neovim waits for the answer,
 so keep the Java side quick and bounded); add a case to `NotificationBridge.onRequest` and a method to
 its `Sink`; implement it in `NeovimSession.EventSink`. The value returned is the answer; Lua sees Java
-lists as tables. `eclipse_clipboard_paste` is the example.
+lists as tables. `eclipse_clipboard_paste` and `eclipse_write` are the examples; the second shows the
+UI-thread hop with a bounded wait (`EditorAttachManager.saveForNeovim`).
 
 **Ask Neovim for more state per key.** Extend `LuaScripts.STATE_SNAPSHOT` (append at the end so the
 existing indexes stay valid), add a reader for the new element to `StateSnapshot` (and a case to

@@ -94,8 +94,12 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 it) in a `core/EditorBuffers` (the bookkeeping, unit-tested without Eclipse) and passes it to the controller, whose attach push (`sync/DocumentPush`) calls
 `NeovimSession.showBuffer` first. If that fails, the document is not pushed (it would overwrite the
 buffer Neovim is in, another file's), but the editor listens for Neovim's changes again. Buffers are
-listed, named after the file path, and `buftype=nofile` (Neovim never writes or swaps them, and no
-filetype detection runs). Only the attached buffer's cursor reports reach Eclipse.
+listed, named after the file path, without a swap file or filetype detection, and `buftype=acwrite`:
+Neovim never writes them itself; a write (`:update` in `:bufdo`, `:wall`, a mapping's `:w`) runs their
+`BufWriteCmd` hook (`LuaScripts.DOCUMENT_BUFFER`), which sends the `eclipse_write` request and waits:
+`EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at most 30 s) and
+answers with nothing or an error message, which Neovim shows. A freshly loaded buffer is not
+`'modified'`, so `:update` skips files nobody changed. Only the attached buffer's cursor reports reach Eclipse.
 
 Neovim can change any of those buffers (`:bufdo %s/old/new/g`), and Eclipse can change a document
 whose editor is in the background (a rename refactoring). Every document with a buffer therefore has a
@@ -156,7 +160,7 @@ neovim-java's `@NeovimRequestHandler` annotation, which does not work in neovim-
 |--------|---------|
 | SWT UI | Widget updates, `VerifyKeyListener`, the command-line box, all `IDocument` edits and reads (a push from the input thread takes its snapshot of the text with `syncExec`) |
 | input executor | All neovim-java `await(...)` RPC |
-| RPC listener | Dispatch to listeners; schedule UI work with `Display.asyncExec`; answer Neovim's requests (a clipboard paste waits for the UI thread at most 2 s) |
+| RPC listener | Dispatch to listeners; schedule UI work with `Display.asyncExec`; answer Neovim's requests (a clipboard paste waits for the UI thread at most 2 s, a save at most 30 s) |
 
 Never call `await` on the UI thread for key handling.
 

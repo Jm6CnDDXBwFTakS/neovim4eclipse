@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
@@ -249,11 +251,80 @@ class NeovimBufferIntegrationTest {
             s.showBuffer(a);
             int buf = a.bufnr();
             assertEquals(name, s.lua("return vim.api.nvim_buf_get_name(" + buf + ")"));
-            assertEquals("nofile", s.lua("return vim.bo[" + buf + "].buftype"));
+            assertEquals("acwrite", s.lua("return vim.bo[" + buf + "].buftype"), "written only through Eclipse");
             assertEquals("", s.lua("return vim.bo[" + buf + "].filetype"));
             assertEquals(Boolean.TRUE, s.lua("return vim.bo[" + buf + "].buflisted"));
             // Only the document is listed: the empty start-up buffer is gone.
             assertEquals(1, ((Number) s.lua("return #vim.fn.getbufinfo({ buflisted = 1 })")).intValue());
+        }
+    }
+
+    /**
+     * A write by Neovim itself ({@code :update}, {@code :bufdo update}, a mapping's {@code :w}) asks
+     * Eclipse to save the document, and Neovim never writes the file. A freshly loaded document is
+     * not modified, so {@code :update} skips it, as for a file just read.
+     */
+    @Test
+    void neovimsWritesAskEclipseToSave() throws Exception {
+        try (NeovimSession s = start()) {
+            List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
+            s.setWriteHandler(document -> {
+                saved.add(document);
+                return null;
+            });
+            Path dir = Files.createTempDirectory("eclipse-neovim-write");
+            DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
+            DocumentBuffer b = new DocumentBuffer(dir.resolve("B.txt").toString());
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a"));
+            s.showBuffer(b);
+            s.setBufferLines(List.of("b"));
+            assertEquals(Boolean.FALSE, s.lua("return vim.bo.modified"), "just loaded");
+
+            s.lua("vim.api.nvim_buf_set_lines(" + a.bufnr() + ", 0, -1, false, {'A'})");
+            s.command("bufdo update");
+
+            assertEquals(List.of(a), saved, "only the modified one");
+            assertEquals(Boolean.FALSE, s.lua("return vim.bo[" + a.bufnr() + "].modified"), "saved");
+            assertFalse(Files.exists(dir.resolve("A.txt")), "Neovim never writes the file itself");
+        }
+    }
+
+    @Test
+    void aFailedSaveIsShownAndTheBufferStaysModified() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setWriteHandler(document -> "Eclipse could not save A.txt: read-only");
+            DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/eclipse-neovim-test/A.txt");
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a"));
+            s.input("x");
+
+            s.command("write");
+
+            assertEquals("Eclipse could not save A.txt: read-only", s.lua("return vim.v.errmsg"));
+            assertEquals(Boolean.TRUE, s.lua("return vim.bo.modified"), ":update tries again");
+        }
+    }
+
+    /** Eclipse saves a document only as its own file; {@code :w other.txt} is refused, nothing is written. */
+    @Test
+    void aWriteUnderAnotherNameIsRefused() throws Exception {
+        try (NeovimSession s = start()) {
+            List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
+            s.setWriteHandler(document -> {
+                saved.add(document);
+                return null;
+            });
+            Path dir = Files.createTempDirectory("eclipse-neovim-write");
+            DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a"));
+
+            s.command("write " + dir.resolve("other.txt"));
+
+            assertEquals(List.of(), saved);
+            assertTrue(String.valueOf(s.lua("return vim.v.errmsg")).contains("only under its own name"));
+            assertFalse(Files.exists(dir.resolve("other.txt")));
         }
     }
 
