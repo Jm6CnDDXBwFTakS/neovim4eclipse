@@ -10,7 +10,7 @@ import java.util.function.IntPredicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 
@@ -41,7 +41,7 @@ final class StateSync {
          * {@code nvim_get_mode}: one of the few calls Neovim answers even while it waits for the rest
          * of a command, which is why it is the gate for everything else.
          */
-        VimMode getMode() throws Exception;
+        Mode getMode() throws Exception;
 
         /**
          * Runs {@link LuaScripts#STATE_SNAPSHOT} (with a short timeout) and returns its raw answer,
@@ -147,13 +147,13 @@ final class StateSync {
      *
      * @return the mode, or {@code null} if it could not be read
      */
-    VimMode readMode() {
+    Mode readMode() {
         try {
-            VimMode read = nvim.getMode();
-            if (read != null && read.getMode() != null) {
-                mode = read.getMode();
+            Mode read = nvim.getMode();
+            if (read != null && read.mode() != null) {
+                mode = read.mode();
             }
-            waitingForArgument = read != null && read.isBlocking();
+            waitingForArgument = read != null && read.blocking();
             return read;
         } catch (Exception e) {
             LOG.log(Level.FINE, "getMode failed", e);
@@ -163,8 +163,8 @@ final class StateSync {
 
     /** Whether Neovim is waiting for the rest of a command (and would defer most API calls). */
     boolean isBlocked() {
-        VimMode read = readMode();
-        return read != null && read.isBlocking();
+        Mode read = readMode();
+        return read != null && read.blocking();
     }
 
     /**

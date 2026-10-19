@@ -19,7 +19,7 @@ import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
-import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
@@ -43,8 +43,8 @@ class KeyInputTest {
     private final class ScriptedNeovim implements KeyInput.Neovim, StateSync.Neovim {
         final List<String> calls = new ArrayList<>();
         /** Mode Neovim is in after each key; keys not listed leave the mode as it is. */
-        final Map<String, VimMode> after = new HashMap<>();
-        VimMode mode = new VimMode("n", false);
+        final Map<String, Mode> after = new HashMap<>();
+        Mode mode = new Mode("n", false);
         List<String> lines = List.of("text");
         String commandLineType = ":";
         String commandLineText = "";
@@ -96,7 +96,7 @@ class KeyInputTest {
         }
 
         @Override
-        public VimMode getMode() {
+        public Mode getMode() {
             return mode;
         }
 
@@ -187,7 +187,7 @@ class KeyInputTest {
         status.setItems(Set.of(StatusItem.CMD));
         List<String> showcmd = new ArrayList<>();
         status.addStatusListener(info -> showcmd.add(info.cmd()));
-        nvim.after.put("f", new VimMode("n", true)); // waiting for the character
+        nvim.after.put("f", new Mode("n", true)); // waiting for the character
 
         type("f");
 
@@ -199,7 +199,7 @@ class KeyInputTest {
 
     @Test
     void enteringInsertSyncsTheBufferAndEclipseMayTypeOnceItIsApplied() throws Exception {
-        nvim.after.put("i", new VimMode("i", false));
+        nvim.after.put("i", new Mode("i", false));
 
         type("i");
 
@@ -213,7 +213,7 @@ class KeyInputTest {
     void anInsertStartedWhileRecordingAMacroIsDrivenByNeovim() throws Exception {
         recording = "q";
         type("j"); // the snapshot reports the recording
-        nvim.after.put("i", new VimMode("i", false));
+        nvim.after.put("i", new Mode("i", false));
 
         type("i");
 
@@ -222,8 +222,8 @@ class KeyInputTest {
 
     @Test
     void leavingInsertModeEndsANeovimDrivenInsert() throws Exception {
-        nvim.after.put("i", new VimMode("i", false));
-        nvim.after.put("<Esc>", new VimMode("n", false));
+        nvim.after.put("i", new Mode("i", false));
+        nvim.after.put("<Esc>", new Mode("n", false));
         type("i");
         keys.driveFromNeovim(); // a key arrived before Eclipse could type
 
@@ -272,7 +272,7 @@ class KeyInputTest {
 
     @Test
     void enterOnAColonCommandLineIsOfferedToEclipseFirst() throws Exception {
-        nvim.mode = new VimMode("c", false);
+        nvim.mode = new Mode("c", false);
         nvim.commandLineText = " w ";
         List<String> offered = new ArrayList<>();
         hostHandler = text -> offered.add(text);
@@ -286,7 +286,7 @@ class KeyInputTest {
 
     @Test
     void aCommandEclipseDoesNotHandleIsTypedAsUsual() throws Exception {
-        nvim.mode = new VimMode("c", false);
+        nvim.mode = new Mode("c", false);
         nvim.commandLineText = "s/a/b/";
         hostHandler = text -> false;
 
@@ -297,7 +297,7 @@ class KeyInputTest {
 
     @Test
     void enterOnASearchLineIsNotOffered() throws Exception {
-        nvim.mode = new VimMode("c", false);
+        nvim.mode = new Mode("c", false);
         nvim.commandLineType = "/";
         nvim.commandLineText = "w";
         hostHandler = text -> {
@@ -313,8 +313,8 @@ class KeyInputTest {
 
     @Test
     void aMacroIsAppliedAsOneBufferChangeAfterItFinished() throws Exception {
-        nvim.after.put("@", new VimMode("n", true)); // waiting for the register name
-        nvim.after.put("a", new VimMode("n", false));
+        nvim.after.put("@", new Mode("n", true)); // waiting for the register name
+        nvim.after.put("a", new Mode("n", false));
         nvim.keyWithLineEvent = "a"; // the macro's own edits arrive as line events
         nvim.lines = List.of("after macro");
 
@@ -327,8 +327,8 @@ class KeyInputTest {
     @Test
     void aMacroThatDoesNotFinishInTimeStillResumesBufferEvents() throws Exception {
         try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
-            nvim.after.put("@", new VimMode("n", true));
-            nvim.after.put("a", new VimMode("n", false));
+            nvim.after.put("@", new Mode("n", true));
+            nvim.after.put("a", new Mode("n", false));
             nvim.bufferLinesFail = true;
             type("@", "a");
 
@@ -341,7 +341,7 @@ class KeyInputTest {
 
     @Test
     void aFailedKeyDuringMacroStartResumesBufferEvents() {
-        nvim.after.put("@", new VimMode("n", true));
+        nvim.after.put("@", new Mode("n", true));
         nvim.failingKey = "a";
 
         try {

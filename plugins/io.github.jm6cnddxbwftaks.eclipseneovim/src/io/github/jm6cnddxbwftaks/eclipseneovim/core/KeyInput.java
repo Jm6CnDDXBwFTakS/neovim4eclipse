@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.ModeTransition;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimKeys;
@@ -190,7 +190,7 @@ final class KeyInput {
         if (startsMacro) {
             state.setSuppressBufferEvents(true); // see syncBufferAfterMacro
         }
-        VimMode mode;
+        Mode mode;
         try {
             nvim.type(keys);
             mode = state.readMode();
@@ -198,7 +198,7 @@ final class KeyInput {
             state.setSuppressBufferEvents(false);
             throw e;
         }
-        if (mode != null && mode.isBlocking()) {
+        if (mode != null && mode.blocking()) {
             // Waiting for the rest of the command (see the method comment): nothing to sync yet, and
             // a buffer request would not be answered until the next key arrives.
             state.setSuppressBufferEvents(false);
@@ -254,9 +254,9 @@ final class KeyInput {
      */
     private boolean tryHostCommandLine() {
         try {
-            VimMode mode = state.readMode();
+            Mode mode = state.readMode();
             // Not on a command line (or Neovim is blocked and would not answer): nothing to intercept.
-            if (mode == null || mode.isBlocking() || !VimModes.isCmdline(mode.getMode())) {
+            if (mode == null || mode.blocking() || !VimModes.isCmdline(mode.mode())) {
                 return false;
             }
             String type = nvim.commandLineType();

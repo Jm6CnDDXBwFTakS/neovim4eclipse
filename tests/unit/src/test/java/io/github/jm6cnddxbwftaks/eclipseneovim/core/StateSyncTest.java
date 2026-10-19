@@ -16,7 +16,7 @@ import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
-import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
@@ -31,14 +31,14 @@ class StateSyncTest {
 
     /** Answers set per test; {@code null} for an answer means the request fails. */
     private static final class FakeNeovim implements StateSync.Neovim {
-        VimMode mode = new VimMode("n", false);
+        Mode mode = new Mode("n", false);
         Object snapshot = snapshot(1, 0, ATTACHED);
         List<String> lines = List.of("alpha");
         /** The status flags of the last snapshot request. */
         List<Boolean> snapshotFlags;
 
         @Override
-        public VimMode getMode() {
+        public Mode getMode() {
             if (mode == null) {
                 throw new IllegalStateException("no answer");
             }
@@ -141,7 +141,7 @@ class StateSyncTest {
 
     @Test
     void inVisualModeTheSelectionIsPublished() {
-        nvim.mode = new VimMode("v", false);
+        nvim.mode = new Mode("v", false);
         nvim.snapshot = visualSnapshot(1, 4, "v", 1, 1, 1, 5);
 
         state.syncModeAndCursor();
@@ -152,7 +152,7 @@ class StateSyncTest {
 
     @Test
     void whileNeovimWaitsForTheRestOfACommandNothingIsPublished() {
-        nvim.mode = new VimMode("n", true); // after "f", waiting for the character
+        nvim.mode = new Mode("n", true); // after "f", waiting for the character
 
         state.syncModeAndCursor();
 
