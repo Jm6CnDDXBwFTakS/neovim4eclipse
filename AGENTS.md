@@ -22,6 +22,9 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 xvfb-run -a ./mvnw verify                         # on a machine without a display
 ```
 
+Each test module writes a JaCoCo coverage report to `target/site/jacoco/index.html` (see
+CONTRIBUTING.md, "Code coverage"; one report per module, they cannot be merged).
+
 Use the Maven wrapper (`./mvnw`), not a system Maven.
 
 ## Changing versions (JDK, Eclipse, libraries, tools, Neovim)

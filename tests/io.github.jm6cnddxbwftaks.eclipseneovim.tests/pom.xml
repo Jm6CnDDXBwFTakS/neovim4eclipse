@@ -42,6 +42,76 @@
           </dependency-resolution>
         </configuration>
       </plugin>
+      <!-- Code coverage of the plug-in while the workbench tests run (see CONTRIBUTING.md, "Code
+           coverage"). prepare-agent puts the JaCoCo agent into tycho.testArgLine, the JVM arguments
+           tycho-surefire gives the test Eclipse. Only this project's classes are instrumented:
+           instrumenting all of Eclipse would slow its start-up for nothing. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>coverage-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <configuration>
+              <propertyName>tycho.testArgLine</propertyName>
+              <destFile>${project.build.directory}/jacoco.exec</destFile>
+              <includes>
+                <include>io.github.jm6cnddxbwftaks.*</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- The report. jacoco:report only knows its own module's classes, and the classes under test
+           here are the plug-in's (this module only holds the tests), so the JaCoCo Ant task is used:
+           it takes the plug-in's class and source folders explicitly. The report is
+           target/site/jacoco/index.html. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>coverage-report</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <skip>${skipTests}</skip>
+              <target>
+                <taskdef uri="antlib:org.jacoco.ant" resource="org/jacoco/ant/antlib.xml"
+                         classpathref="maven.plugin.classpath"/>
+                <jacoco:report xmlns:jacoco="antlib:org.jacoco.ant">
+                  <executiondata>
+                    <file file="${project.build.directory}/jacoco.exec"/>
+                  </executiondata>
+                  <structure name="Eclipse Neovim plug-in (UI tests)">
+                    <classfiles>
+                      <fileset dir="${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/target/classes"/>
+                    </classfiles>
+                    <sourcefiles encoding="UTF-8">
+                      <fileset dir="${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/src"/>
+                    </sourcefiles>
+                  </structure>
+                  <html destdir="${project.build.directory}/site/jacoco"/>
+                  <csv destfile="${project.build.directory}/site/jacoco/jacoco.csv"/>
+                  <xml destfile="${project.build.directory}/site/jacoco/jacoco.xml"/>
+                </jacoco:report>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+        <dependencies>
+          <dependency>
+            <groupId>org.jacoco</groupId>
+            <artifactId>org.jacoco.ant</artifactId>
+            <version>${jacoco.version}</version>
+          </dependency>
+        </dependencies>
+      </plugin>
       <plugin>
         <groupId>org.eclipse.tycho</groupId>
         <artifactId>tycho-surefire-plugin</artifactId>
@@ -63,5 +133,7 @@
   <properties>
     <!-- Empty: use the plug-in's own default (nvim on PATH or in the usual install folders). -->
     <nvim.path></nvim.path>
+    <!-- Default for the coverage report's skip flag; -DskipTests sets it to true. -->
+    <skipTests>false</skipTests>
   </properties>
 </project>

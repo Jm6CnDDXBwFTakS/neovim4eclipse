@@ -60,6 +60,10 @@
     <maven-dependency-plugin.version>3.8.1</maven-dependency-plugin.version>
     <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
     <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
+    <maven-antrun-plugin.version>3.1.0</maven-antrun-plugin.version>
+    <!-- Code coverage (see CONTRIBUTING.md, "Code coverage"). 0.8.14 or newer is needed to run on a
+         Java 25 JDK: an older agent cannot read the JDK's own class files and fails at start-up. -->
+    <jacoco.version>0.8.15</jacoco.version>
 
     <!-- Third-party library versions: the ONLY place they are defined. The plug-in build copies
          the jars into plugins/.../lib/ (version-less names, see its pom.xml) and the unit tests
@@ -257,6 +261,16 @@
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>build-helper-maven-plugin</artifactId>
           <version>${build-helper-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-antrun-plugin</artifactId>
+          <version>${maven-antrun-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
