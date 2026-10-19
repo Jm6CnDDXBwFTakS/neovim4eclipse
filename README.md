@@ -60,7 +60,8 @@ Things to try: `hjkl`, `diw`, `ci"`, `dd`, `u`, `v` + motion, `i … Esc`, `:` t
 ## Build and test
 
 ```bash
-./mvnw clean verify                          # plug-in + unit tests + UI tests + feature + p2 update site
+./mvnw clean verify                          # plug-in + unit, text-model and SWT tests + feature + p2 update site
+./mvnw clean verify -Pui                     # the same plus the UI tests, which open an Eclipse window
 ./mvnw verify -DskipTests                    # the same without any tests (no display needed)
 ./mvnw test -f tests/unit/pom.xml            # unit tests only (no Eclipse, no Neovim needed)
 ./mvnw test -f tests/unit/pom.xml -Pintegration   # needs `nvim` on PATH (or -Dnvim.path=...)
@@ -86,7 +87,7 @@ The p2 update site is produced under
 GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
 
 - **Build** runs on every push and pull request to `main`, or on demand (Actions tab > Build >
-  Run workflow). It runs `./mvnw verify` (UI tests under `xvfb-run`) and the integration tests against a pinned Neovim
+  Run workflow). It runs `./mvnw verify -Pui` (UI tests under `xvfb-run`) and the integration tests against a pinned Neovim
   release, and attaches the installable ZIP to the run as it is: `EclipseNeovim-<version>.zip`, ready for
   *Install New Software → Add → Archive* without unpacking.
 - **Release** runs when you push a tag such as `v0.1.0`. It builds that version (the tag replaces

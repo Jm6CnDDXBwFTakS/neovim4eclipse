@@ -15,7 +15,8 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ## Build and test
 
 ```bash
-./mvnw verify                                   # everything: plug-in, all tests, update-site ZIP
+./mvnw verify                                   # plug-in, unit/text/SWT tests, update-site ZIP
+./mvnw verify -Pui                              # ... and the UI tests (opens an Eclipse window)
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
@@ -23,9 +24,12 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
 ```
 
-`./mvnw verify` also runs the UI tests in `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests`. They
-start an Eclipse workbench, which opens a window for a few seconds; on a headless Linux machine run
-`xvfb-run -a ./mvnw verify`.
+The UI tests in `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` run only with `-Pui`. They
+start an Eclipse workbench, which opens a window for about 15 seconds, so a plain `./mvnw verify`
+leaves them out (it still compiles them). On a headless Linux machine run
+`xvfb-run -a ./mvnw verify -Pui`, which keeps the window on a virtual display. CI always runs them,
+but run `-Pui` yourself before you push a change to the editor, the session or the end-to-end
+behavior: CI only shows a failure after the push.
 
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 
@@ -75,7 +79,7 @@ browser:
 | Unit tests against real Neovim (`-Pintegration`) | `tests/unit/target/site/jacoco-integration/index.html` |
 | Text-model tests (`./mvnw verify` or `./mvnw test -f tests/text/pom.xml`) | `tests/text/target/site/jacoco/index.html` |
 | SWT tests (`./mvnw verify` or `./mvnw test -f tests/swt/pom.xml`) | `tests/swt/target/site/jacoco/index.html` |
-| UI tests (`./mvnw verify`) | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests/target/site/jacoco/index.html` |
+| UI tests (`./mvnw verify -Pui`) | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests/target/site/jacoco/index.html` |
 
 **Why one report per kind of test, not one merged report.** JaCoCo matches what it recorded to class
 files by a checksum of their bytecode. The unit tests compile their own copy of `core/` and `util/`

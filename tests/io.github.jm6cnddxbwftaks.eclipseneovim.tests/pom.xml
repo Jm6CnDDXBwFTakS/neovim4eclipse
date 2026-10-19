@@ -21,7 +21,11 @@
   <!-- Workbench tests: tycho-surefire starts a real Eclipse (the IDE workbench, with a window) with
        this fragment and the plug-in installed, and runs the JUnit 5 tests on the UI thread.
        They need a display: on a headless Linux machine run the build under xvfb-run.
-       Skip them with -DskipTests. The end-to-end tests also need nvim (they are skipped without it);
+
+       They only run with the "ui" profile: ./mvnw verify -Pui. A plain ./mvnw verify compiles them
+       (so a broken test still fails the build) but starts no Eclipse, so no window opens; the UI
+       tests are the only ones that open one. CI always passes -Pui. -Pui -DskipTests skips them
+       again. The end-to-end tests also need nvim (they are skipped without it);
        -Dnvim.path=/path/to/nvim selects one. -->
   <build>
     <plugins>
@@ -80,7 +84,7 @@
               <goal>run</goal>
             </goals>
             <configuration>
-              <skip>${skipTests}</skip>
+              <skip>${ui.skip}</skip>
               <target>
                 <taskdef uri="antlib:org.jacoco.ant" resource="org/jacoco/ant/antlib.xml"
                          classpathref="maven.plugin.classpath"/>
@@ -127,6 +131,9 @@
         <artifactId>tycho-surefire-plugin</artifactId>
         <version>${tycho.version}</version>
         <configuration>
+          <!-- Without -Pui: no test Eclipse is started at all (see the comment at the top). This is
+               skipTests, not skip: tycho-surefire 5.0.4 ignores a configured <skip>. -->
+          <skipTests>${ui.skip}</skipTests>
           <useUIHarness>true</useUIHarness>
           <useUIThread>true</useUIThread>
           <!-- No <argLine> here on purpose: tycho-surefire's default is ${tycho.testArgLine}, read
@@ -148,11 +155,20 @@
   <properties>
     <!-- Empty: use the plug-in's own default (nvim on PATH or in the usual install folders). -->
     <nvim.path></nvim.path>
-    <!-- Default for the coverage report's skip flag; -DskipTests sets it to true. -->
+    <!-- -DskipTests sets it to true; the ui profile passes it on to ui.skip. -->
     <skipTests>false</skipTests>
+    <!-- Whether the UI tests and their coverage report are skipped: yes, unless the ui profile is on. -->
+    <ui.skip>true</ui.skip>
   </properties>
 
   <profiles>
+    <!-- ./mvnw verify -Pui: start the test Eclipse and run the UI tests (unless -DskipTests). -->
+    <profile>
+      <id>ui</id>
+      <properties>
+        <ui.skip>${skipTests}</ui.skip>
+      </properties>
+    </profile>
     <!-- macOS: Cocoa lets only the process's first thread create the SWT Display, and Java runs main()
          on another thread unless -XstartOnFirstThread is given. Without it the test Eclipse stops at
          start-up with "SWTException: Invalid thread access" (exit code 13). An installed Eclipse gets

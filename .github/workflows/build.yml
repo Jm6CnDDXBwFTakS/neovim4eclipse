@@ -44,11 +44,11 @@ jobs:
           curl -fsSL -o nvim.tar.gz \
             "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-x86_64.tar.gz"
           tar -xzf nvim.tar.gz -C "$RUNNER_TEMP"
-      # verify = compile, unit tests, UI tests, feature, p2 repository and the ZIP (see README
-      # "Build and test"). The UI tests open Eclipse windows, so they need an X display: xvfb-run
-      # provides a virtual one.
+      # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
+      # test"); -Pui adds the UI tests, which are off by default because they open a window. They
+      # need an X display: xvfb-run provides a virtual one.
       - run: >
-          xvfb-run -a ./mvnw -B -ntp verify
+          xvfb-run -a ./mvnw -B -ntp verify -Pui
           -Dnvim.path=$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim
       - uses: actions/upload-artifact@v7
         with:
