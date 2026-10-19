@@ -17,7 +17,9 @@
  *       <ul>
  *         <li>{@code NeovimConnection}: the {@code nvim --embed} process and the RPC layers;</li>
  *         <li>{@code KeyInput}: what happens when a key is sent (pending commands, insert replay,
- *             macros, host {@code :} commands);</li>
+ *             macros, host {@code :} commands). It does not know the session: it is given
+ *             {@code StateSync}, {@code StatusTracker} and its own small {@code KeyInput.Neovim}
+ *             interface, so the session depends on it and not the other way round;</li>
  *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, and which is attached;</li>
  *         <li>{@code CommandRunner}: submitted {@code :} commands (with their output), listings,
  *             searches and {@code :normal!}; sees Neovim through its small {@code Neovim} interface;</li>

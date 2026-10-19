@@ -384,6 +384,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `BufferPort` | `sync/BufferSynchronizer` | `NeovimSession` |
 | `CursorPort` | `editor/CaretSync` | `NeovimSession` |
 | `CommandRunner.Neovim` | `core/CommandRunner` | adapter inside `NeovimSession` |
+| `KeyInput.Neovim` | `core/KeyInput` | adapter inside `NeovimSession` (`KeyInputTest` scripts it: "after `i` the mode is `i`") |
 | `StateSync.Neovim`, `StateSync.Listeners` | `core/StateSync` | adapter inside `NeovimSession`; `SessionEvents` |
 | `UiExecutor` | `BufferSynchronizer`, `CaretSync` | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests) |
 | `EditorCaret` | `CaretSync`, `VisualSelectionView` | `editor/StyledTextCaret` (`FakeCaret` in tests) |

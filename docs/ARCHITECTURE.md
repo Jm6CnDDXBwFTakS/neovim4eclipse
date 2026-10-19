@@ -324,7 +324,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
-| Key-input pipeline | `core/KeyInput` | `NeovimSessionIntegrationTest` (needs nvim) |
+| Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
