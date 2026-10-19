@@ -14,7 +14,7 @@ The safe loop for any upgrade:
    ```
 3. Run everything:
    ```bash
-   ./mvnw verify -Dnvim.path=/usr/bin/nvim                                    # plug-in, unit + UI tests, ZIP
+   ./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim                               # plug-in, all tests incl. UI, ZIP
    ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/usr/bin/nvim  # against a real Neovim
    ```
 4. Install the ZIP in a real Eclipse and try it (the tests cannot cover every editor); then commit

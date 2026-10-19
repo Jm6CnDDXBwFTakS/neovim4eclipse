@@ -5,8 +5,10 @@
 From the repository root:
 
 ```bash
-# Build plug-in, feature, p2 repository, and run unit tests
+# Build plug-in, feature, p2 repository, and run the unit, text-model and SWT tests
 ./mvnw clean verify
+# ... and the UI tests too (opens an Eclipse window)
+./mvnw clean verify -Pui
 ```
 
 Artifacts:
@@ -39,7 +41,8 @@ sources and runs JUnit 5. It does **not** need Eclipse or SWT.
 ### UI tests
 
 `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` runs inside a real Eclipse workbench as part of
-`./mvnw verify`. It needs a display (`xvfb-run -a ./mvnw verify` on a headless machine) and, for its
+`./mvnw verify -Pui` (only with the `ui` profile, because the workbench opens a window). It needs a
+display (`xvfb-run -a ./mvnw verify -Pui` on a headless machine) and, for its
 end-to-end tests, `nvim`. Because Maven cannot see that this fragment depends on the plug-in (the
 dependency is in `MANIFEST.MF`), build it with the whole reactor rather than with `-pl ... -am`;
 otherwise Tycho may test against a stale copy of the plug-in in `~/.m2`. The plug-in exports its

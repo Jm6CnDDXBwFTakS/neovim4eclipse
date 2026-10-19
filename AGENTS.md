@@ -15,16 +15,18 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ## Commands
 
 ```bash
-./mvnw verify -Dnvim.path=/usr/bin/nvim          # everything: plug-in, unit + UI tests, feature, ZIP
+./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # everything: plug-in, all tests incl. UI, feature, ZIP
+./mvnw verify                                     # the same without the UI tests (no Eclipse window)
 ./mvnw verify -DskipTests                         # build only
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
 ./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)
 ./mvnw test -f tests/swt/pom.xml                  # SWT widget tests (a display, no workbench)
 ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/usr/bin/nvim   # real Neovim
-xvfb-run -a ./mvnw verify                         # on a machine without a display
+xvfb-run -a ./mvnw verify -Pui                    # on a machine without a display
 ```
 
-Each test module writes a JaCoCo coverage report to `target/site/jacoco/index.html` (see
+The UI tests need `-Pui` (off by default because they open a window); run them after changing
+editor or session code. Each test module writes a JaCoCo coverage report to `target/site/jacoco/index.html` (see
 CONTRIBUTING.md, "Code coverage"; one report per module, they cannot be merged).
 
 Use the Maven wrapper (`./mvnw`), not a system Maven.

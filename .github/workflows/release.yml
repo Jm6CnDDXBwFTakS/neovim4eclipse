@@ -30,8 +30,9 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           # Tycho's own goal keeps POMs, MANIFEST.MF and feature.xml in step.
           ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
-      # The UI tests need a display (xvfb-run); without nvim their end-to-end part is skipped.
-      - run: xvfb-run -a ./mvnw -B -ntp verify
+      # -Pui: also the UI tests (off by default); they need a display (xvfb-run). Without nvim on the
+      # PATH their end-to-end part is skipped.
+      - run: xvfb-run -a ./mvnw -B -ntp verify -Pui
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
