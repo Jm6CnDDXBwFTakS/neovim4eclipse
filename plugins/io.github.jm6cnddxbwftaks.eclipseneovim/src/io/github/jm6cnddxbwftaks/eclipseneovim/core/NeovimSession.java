@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -49,9 +50,12 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
  *
  * <p>Each Eclipse document has its own Neovim buffer ({@link DocumentBuffer}), so undo history and
  * marks survive switching editors. Exactly one of them is <em>attached</em> at a time: its events
- * reach the listeners, events of other buffers are dropped.
+ * reach the listeners. Line events of the other document buffers go to that document's own listener
+ * ({@link DocumentBufferPort}), so {@code :bufdo} edits reach every file; cursor and mode events of
+ * other buffers are dropped.
  */
-public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort {
+public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort,
+        DocumentBufferPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
@@ -81,6 +85,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** One Neovim buffer per Eclipse document, and which one is attached. */
     private final DocumentBuffers buffers;
+    /** Who hears of Neovim's changes to each document buffer that is not attached. */
+    private final Map<DocumentBuffer, Consumer<BufferChange>> unattachedListeners = new ConcurrentHashMap<>();
+    /**
+     * The buffer {@link #setDocumentBufferLines} is writing, or {@link NotificationBridge#UNKNOWN_BUFFER}.
+     * Neovim sends a write's line events before its reply, so they are all read while this is set
+     * and can be dropped: they would echo the write back to the document it came from.
+     */
+    private volatile int writingBufnr = NotificationBridge.UNKNOWN_BUFFER;
 
     // ---- state ----
 
@@ -367,6 +379,37 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("return to attached buffer", Level.FINE, buffers::returnToAttached);
     }
 
+    @Override
+    public boolean setDocumentBufferLines(DocumentBuffer buffer, List<String> lines) throws Exception {
+        NeovimBufferApi handle = buffers.handleOf(buffer);
+        if (handle == null || !buffer.loaded) {
+            return false;
+        }
+        List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
+        List<String> current = await(handle.getLines(0, -1, false));
+        LineDiff.Change change = LineDiff.between(current == null ? List.of() : current, target);
+        if (change == null) {
+            return true;
+        }
+        writingBufnr = buffer.bufnr;
+        try {
+            await(handle.setLines(change.start(), change.end(), false, change.replacement()));
+        } finally {
+            writingBufnr = NotificationBridge.UNKNOWN_BUFFER;
+        }
+        return true;
+    }
+
+    @Override
+    public void addUnattachedChangeListener(DocumentBuffer buffer, Consumer<BufferChange> listener) {
+        unattachedListeners.put(buffer, listener);
+    }
+
+    @Override
+    public void removeUnattachedChangeListener(DocumentBuffer buffer, Consumer<BufferChange> listener) {
+        unattachedListeners.remove(buffer, listener);
+    }
+
     /** Number of the buffer mirrored into the attached document. */
     public int getAttachedBufnr() {
         return buffers.attachedBufnr();
@@ -608,9 +651,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void onBufferLines(int bufnr, int firstLine, int lastLine, List<String> newLines) {
-            // Other buffers change too (e.g. one Neovim just jumped to); the document mirrors one only.
+            if (bufnr != NotificationBridge.UNKNOWN_BUFFER && bufnr == writingBufnr) {
+                return; // the echo of Eclipse's own write (setDocumentBufferLines)
+            }
             if (buffers.isAttached(bufnr)) {
                 state.dispatchBufferChange(firstLine, lastLine, newLines);
+                return;
+            }
+            // Another document's buffer (:bufdo, :argdo, a plug-in), or one that is no document's
+            // (help, :enew), which Eclipse does not mirror.
+            DocumentBuffer document = buffers.documentOf(bufnr);
+            Consumer<BufferChange> listener = document == null ? null : unattachedListeners.get(document);
+            if (listener != null) {
+                try {
+                    listener.accept(new BufferChange(firstLine, lastLine, newLines));
+                } catch (RuntimeException e) {
+                    LOG.log(Level.WARNING, "Change of buffer " + bufnr + " not mirrored", e);
+                }
             }
         }
 

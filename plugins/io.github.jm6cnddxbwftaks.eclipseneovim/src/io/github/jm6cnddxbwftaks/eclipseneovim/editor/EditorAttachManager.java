@@ -5,7 +5,9 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -34,6 +36,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.EditorBuffers;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.eclipseneovim.sync.UnattachedDocumentSync;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach
@@ -49,6 +52,10 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
  * activating that document's editor (only the last one, when a command such as {@code :bufdo}
  * walks through many). Which editors share, find and give up a buffer is decided by
  * {@link EditorBuffers} (unit-tested without Eclipse); this class adds the workbench glue.
+ *
+ * <p>Neovim can also change documents that are not attached ({@code :bufdo}), and Eclipse can change
+ * documents whose editor is in the background (a rename refactoring). An
+ * {@link UnattachedDocumentSync} per document with a buffer carries those changes across.
  */
 public final class EditorAttachManager {
 
@@ -67,6 +74,13 @@ public final class EditorAttachManager {
     private final EditorBuffers<IDocument, IEditorPart> documents = new EditorBuffers<>();
     /** Guarded by {@code this}. The session whose buffer switches are followed. */
     private NeovimSession followedSession;
+    /**
+     * Guarded by {@code this}. Keeps each document with a buffer in {@link #followedSession} in step
+     * with it while it is not attached; created on the document's first attach.
+     */
+    private final Map<DocumentBuffer, UnattachedDocumentSync> unattachedSyncs = new HashMap<>();
+    /** Guarded by {@code this}. The buffer of the attached document, or {@code null}. */
+    private DocumentBuffer attachedBuffer;
     private volatile boolean autoAttach = true;
     /** Guarded by {@code this}. */
     private boolean listenersRegistered;
@@ -316,12 +330,22 @@ public final class EditorAttachManager {
         if (session != followedSession) { // first attach, or Neovim was restarted
             followedSession = session;
             session.setBufferEnterHandler(this::onNeovimEnteredBuffer);
+            // A new Neovim has none of the old buffers; each document gets a new one on its next attach.
+            unattachedSyncs.values().forEach(UnattachedDocumentSync::close);
+            unattachedSyncs.clear();
         }
         IDocument document = documentOf(textEditor);
         if (document == null) {
             throw new IllegalStateException("Editor has no document: " + editor.getTitle());
         }
         DocumentBuffer buffer = documents.add(document, editor, () -> bufferName(textEditor.getEditorInput()));
+        UnattachedDocumentSync sync = unattachedSyncs.computeIfAbsent(buffer, b -> {
+            UnattachedDocumentSync created = new UnattachedDocumentSync(document, b, session, SwtUiExecutor.INSTANCE);
+            created.start();
+            return created;
+        });
+        sync.setAttached(true); // before the controller's synchronizer takes over
+        attachedBuffer = buffer;
         activeController = NeovimEditorController.attach(textEditor, session, buffer, takeNeovimCursor);
         attachedPart = editor;
         LOG.fine("Attached Neovim to: " + textEditor.getTitle());
@@ -383,6 +407,12 @@ public final class EditorAttachManager {
         synchronized (this) {
             session = followedSession;
             unused = documents.remove(part);
+            for (DocumentBuffer buffer : unused) {
+                UnattachedDocumentSync sync = unattachedSyncs.remove(buffer);
+                if (sync != null) {
+                    sync.close();
+                }
+            }
         }
         if (session != null && session.isAlive()) {
             unused.forEach(session::closeBufferAsync);
@@ -448,6 +478,13 @@ public final class EditorAttachManager {
             activeController = null;
         }
         attachedPart = null;
+        if (attachedBuffer != null) {
+            UnattachedDocumentSync sync = unattachedSyncs.get(attachedBuffer);
+            if (sync != null) {
+                sync.setAttached(false); // after the synchronizer closed: from now on this one pushes
+            }
+            attachedBuffer = null;
+        }
     }
 
     public synchronized void detach() {

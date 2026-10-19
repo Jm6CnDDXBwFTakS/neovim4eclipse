@@ -30,7 +30,9 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
  *   <li>The <em>home</em> buffer is an unlisted scratch buffer, shown when no document is (at
  *       start-up, after the attached document's buffer was wiped).</li>
  *   <li>The <em>attached</em> buffer is the one mirrored into the attached editor: buffer reads and
- *       writes go to it, and only its line events and cursor positions reach Eclipse.</li>
+ *       writes go to it, and only its cursor positions reach Eclipse. Its line events go to the
+ *       attached editor; those of the other document buffers to their own documents
+ *       ({@link #documentOf}, {@link DocumentBufferPort}).</li>
  *   <li>When Neovim enters another buffer by itself, the enter handler decides: follow it (another
  *       open document) or switch back (help, {@code :e} of an unrelated file, a closed document).</li>
  * </ul>
@@ -50,6 +52,8 @@ final class DocumentBuffers {
     private volatile DocumentBuffer attachedDocument;
     /** Buffers created by {@link #show}, by number. */
     private final Map<Integer, NeovimBufferApi> created = new ConcurrentHashMap<>();
+    /** The documents mirrored into the buffers in {@link #created}, by number. */
+    private final Map<Integer, DocumentBuffer> documents = new ConcurrentHashMap<>();
     /** Called with the number of a document buffer Neovim switched to by itself. */
     private volatile Consumer<Integer> enterHandler;
     /**
@@ -106,6 +110,19 @@ final class DocumentBuffers {
         return buffer.owner == this && buffer.bufnr > 0;
     }
 
+    /**
+     * The document mirrored into buffer {@code bufnr}, or {@code null} for any other buffer (the
+     * home buffer, help, a buffer the user made with {@code :enew}, one already wiped).
+     */
+    DocumentBuffer documentOf(int bufnr) {
+        return documents.get(bufnr);
+    }
+
+    /** Neovim's handle on a document's buffer, or {@code null} while it does not exist in this session. */
+    NeovimBufferApi handleOf(DocumentBuffer buffer) {
+        return owns(buffer) ? created.get(buffer.bufnr) : null;
+    }
+
     /** Makes {@code buffer} the attached buffer and Neovim's current one, creating it on first use. */
     void show(DocumentBuffer buffer) throws Exception {
         NeovimBufferApi target = owns(buffer) ? created.get(buffer.bufnr) : null;
@@ -114,6 +131,7 @@ final class DocumentBuffers {
             buffer.bufnr = bufnr(target);
             buffer.owner = this;
             buffer.loaded = false;
+            documents.put(buffer.bufnr, buffer);
         }
         // Attach first: the BufEnter this switch causes is then recognized as Eclipse's own.
         attached = target;
@@ -146,6 +164,7 @@ final class DocumentBuffers {
             return;
         }
         NeovimBufferApi doomed = created.remove(buffer.bufnr);
+        documents.remove(buffer.bufnr);
         buffer.owner = null;
         if (doomed == null) {
             return;

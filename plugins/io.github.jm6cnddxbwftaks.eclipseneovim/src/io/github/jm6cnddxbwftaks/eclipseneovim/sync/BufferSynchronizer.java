@@ -263,7 +263,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         try {
             boolean fullBuffer = change.lastLine() < 0;
             Edit edit = fullBuffer && neovimBehind ? null
-                    : fullBuffer ? fullBufferEdit(change.newLines()) : rangeEdit(change);
+                    : fullBuffer ? fullBufferEdit(document, change.newLines()) : rangeEdit(document, change);
             if (edit != null) {
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
@@ -287,14 +287,19 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
     }
 
-    private Edit fullBufferEdit(List<String> newLines) {
+    /**
+     * The edit that makes {@code document} read {@code newLines} (Neovim's whole buffer), or
+     * {@code null} when it already does. Also used by {@link UnattachedDocumentSync}.
+     */
+    static Edit fullBufferEdit(IDocument document, List<String> newLines) {
         String current = document.get();
         String text = LineTextUtil.linesToDocumentText(newLines, lineDelimiter(document),
                 LineTextUtil.endsWithLineBreak(current)); // keep the document's final line break as it is
         return TextDiff.minimalEdit(current, text); // null when nothing changed: no spurious dirty flag
     }
 
-    private Edit rangeEdit(BufferChange change) {
+    /** The edit that applies Neovim's line-range change to {@code document}. */
+    static Edit rangeEdit(IDocument document, BufferChange change) {
         return LineRangeEdit.compute(new DocumentLineSource(document), change.firstLine(), change.lastLine(),
                 change.newLines(), lineDelimiter(document));
     }
@@ -310,7 +315,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
     }
 
-    private static String lineDelimiter(IDocument document) {
+    static String lineDelimiter(IDocument document) {
         if (document instanceof IDocumentExtension4 ext4) {
             String delim = ext4.getDefaultLineDelimiter();
             if (delim != null && !delim.isEmpty()) {

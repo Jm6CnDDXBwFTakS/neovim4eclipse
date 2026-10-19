@@ -10,5 +10,9 @@
  * {@code io.github.jm6cnddxbwftaks.eclipseneovim.util} ({@code LineRangeEdit}, {@code TextDiff},
  * {@code LineTextUtil}) where they are unit tested; see
  * {@link io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer} for the Eclipse glue.
+ *
+ * <p>That is for the attached document. Every other document with a buffer is kept in step by an
+ * {@link io.github.jm6cnddxbwftaks.eclipseneovim.sync.UnattachedDocumentSync}, both ways, so that
+ * {@code :bufdo} reaches every open file and a refactoring reaches every buffer.
  */
 package io.github.jm6cnddxbwftaks.eclipseneovim.sync;
