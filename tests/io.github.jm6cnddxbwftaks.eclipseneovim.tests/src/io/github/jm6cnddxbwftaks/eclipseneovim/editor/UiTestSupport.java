@@ -5,12 +5,15 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
+
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 
 /**
  * Helpers for tests that run on the SWT UI thread inside a workbench.
@@ -41,6 +44,53 @@ final class UiTestSupport {
             if (!display.readAndDispatch()) {
                 try {
                     Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    fail("interrupted");
+                }
+            }
+        }
+    }
+
+    /** How many empty event-loop turns in a row count as "the UI thread has nothing left to do". */
+    private static final int QUIET_TURNS = 3;
+
+    /**
+     * Waits until everything queued on the session before this call is done and the UI thread has
+     * applied what it produced. Use it instead of a fixed {@link #spin} after keys or a document push.
+     *
+     * <p>How it knows, in two steps:
+     * <ol>
+     *   <li>A no-op is queued on the session's input thread. That thread runs one task at a time in
+     *       order, and a key's task returns only after Neovim answered the requests that follow the
+     *       key ({@code nvim_get_mode}, and the state read when Neovim is not waiting for more). So
+     *       when the no-op runs, Neovim has handled every earlier key, and the notifications it sent
+     *       before those answers (buffer lines, mode) have arrived.</li>
+     *   <li>Those notifications reach the editor with {@code Display.asyncExec}. The event loop is run
+     *       until it has been empty for {@value #QUIET_TURNS} turns in a row, so the posted work has
+     *       been applied to the widget and the document.</li>
+     * </ol>
+     *
+     * <p>Example: {@code type(widget, "ggVj"); settle(session);} then the selection is on the widget.
+     * Safe while Neovim waits for more keys (after {@code g}): the no-op sends nothing to Neovim.
+     */
+    static void settle(NeovimSession session, long timeoutMs) {
+        AtomicBoolean reached = new AtomicBoolean();
+        session.runAsync("test: settle", () -> reached.set(true));
+        waitUntil("the session to finish the work queued before", timeoutMs, reached::get);
+        Display display = Display.getCurrent();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        int quiet = 0;
+        while (quiet < QUIET_TURNS) {
+            if (System.currentTimeMillis() > deadline) {
+                fail("Timed out after " + timeoutMs + " ms waiting for the UI thread to become idle");
+            }
+            if (display.readAndDispatch()) {
+                quiet = 0;
+            } else {
+                quiet++;
+                try {
+                    Thread.sleep(5); // let an RPC thread post work it has just received
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     fail("interrupted");

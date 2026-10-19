@@ -48,6 +48,10 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   an empty line.
 - `FakeCaret` (`tests/text`): an in-memory caret and selection with `assertCaretPosition(line, col)` and
   `assertSelectionRange(start, length)`.
+- `UiTestSupport` (UI tests): `waitUntil(what, timeout, condition)` runs the event loop until a
+  condition holds, and `settle(session, timeout)` waits until the session has handled everything
+  queued so far and the UI thread has applied the result. Use these, not fixed sleeps: a sleep is
+  either too short on a slow CI machine or wasted time on a fast one.
 - Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`, `CommandRunner.Neovim`, `StateSync.Neovim`, `KeyInput.Neovim`) and `UiExecutor`
   (`IMMEDIATE`, or one that holds work back) are defined next to the tests that use them.
 
