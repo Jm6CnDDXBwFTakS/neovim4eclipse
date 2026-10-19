@@ -30,8 +30,10 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.BlockSelection.LineRange;
  * <p>A {@link PaintListener} runs every time the widget repaints, after it has drawn its text, so the
  * overlay survives scrolling and typing; {@link #show} repaints when the rectangle changes. Only
  * visible lines are measured; folded lines are skipped. UI thread only.
+ *
+ * <p>The editor's {@link BlockHighlight}; tests of the deciding code use a fake instead.
  */
-final class BlockOverlay {
+final class BlockOverlay implements BlockHighlight {
 
     private static final Logger LOG = Logger.getLogger(BlockOverlay.class.getName());
 
@@ -52,7 +54,8 @@ final class BlockOverlay {
     }
 
     /** Shows the block {@code lineRanges} of {@code doc}; an empty list removes the overlay. */
-    void show(IDocument doc, List<LineRange> lineRanges) {
+    @Override
+    public void show(IDocument doc, List<LineRange> lineRanges) {
         document = doc;
         boolean changed = !ranges.equals(lineRanges);
         ranges = List.copyOf(lineRanges);
@@ -62,7 +65,8 @@ final class BlockOverlay {
     }
 
     /** Removes the overlay. */
-    void clear() {
+    @Override
+    public void clear() {
         show(document, List.of());
     }
 
@@ -119,7 +123,8 @@ final class BlockOverlay {
     }
 
     /** Removes the overlay and the paint listener. */
-    void dispose() {
+    @Override
+    public void dispose() {
         ranges = List.of();
         if (!styledText.isDisposed()) {
             styledText.removePaintListener(painter);
