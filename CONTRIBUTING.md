@@ -42,7 +42,9 @@ behavior: CI only shows a failure after the push.
    but not on the workbench (no `ITextEditor`, `IWorkbenchPage`, preferences). These tests create
    their own `Display` and `Shell` (`new Shell(Display.getDefault())`), so they run as plain JUnit,
    without starting Eclipse; they still need a display (`xvfb-run` on a headless machine). Example:
-   `BlockOverlayTest` paints the overlay into an image and checks the pixels. List the class in
+   `BlockOverlayTest` paints the overlay into an image and checks the pixels. A class that also
+   needs Neovim or the editor can still go here once those are behind a small interface:
+   `CommandLineBoxTest` drives the real `:` box with a fake `CommandLineBox.Commands`. List the class in
    the compiler includes of `tests/swt/pom.xml`.
 4. The UI tests only for what really needs the workbench: editors and their commands, preference
    pages, key bindings, and the end-to-end tests with Neovim.

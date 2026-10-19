@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,9 +19,7 @@ import org.eclipse.swt.events.VerifyEvent;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.ui.texteditor.ITextEditor;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandHistory;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine.Kind;
@@ -45,10 +44,11 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand;
  *       stays until the new command is run or canceled.</li>
  *   <li>{@code :} in visual mode first leaves visual mode and pre-fills {@code '<,'>}, as Vim does.</li>
  *   <li>File and tab commands ({@code :w}, {@code :wa}, {@code :q}, {@code :e}, {@code :tabn}, ...)
- *       are executed by Eclipse ({@link HostCommands}). Commands that only display something ({@code :ls},
- *       {@code :marks}, ... see {@link ListingCommand}) are run with output capture and their output is
- *       shown in an {@link OutputPopup}. Everything else is typed into Neovim; whatever it prints
- *       ({@code :echo}, {@code :set ts?}) is shown in the same popup.</li>
+ *       are executed by Eclipse ({@code HostCommands}, through {@link Commands#runInIde}). Commands
+ *       that only display something ({@code :ls}, {@code :marks}, {@code :echo}, {@code :set ts?},
+ *       ... see {@link ListingCommand}) are run with output capture and their output is shown in an
+ *       {@link OutputPopup}. Everything else ({@code :set ts=4}, {@code :s/a/b/}) is run in Neovim;
+ *       whatever it prints (an error, the number of substitutions) is shown in the same popup.</li>
  * </ul>
  *
  * <h2>Implementation notes</h2>
@@ -56,8 +56,38 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand;
  * keyboard focus away from the editor while it has focus, which also switches off the Vim key bindings
  * (so Ctrl-V pastes into the box). It is repositioned on resize and on every repaint, so scrolling
  * cannot leave it behind. UI thread only.
+ *
+ * <p>What a submitted line does goes through {@link Commands}, not through the session and the
+ * editor directly. So the box needs only SWT, and {@code tests/swt} tests it with a fake that records
+ * the calls ("{@code :ls} was captured, {@code :w} went to the IDE"), without a workbench or Neovim.
  */
 final class CommandLineBox {
+
+    /**
+     * What the command line asks of Neovim and the IDE. {@code NeovimEditorController} implements it
+     * on the session and the editor; tests use a fake. Every method is called on the UI thread and
+     * must not block (the session's {@code ...Async} methods only queue work).
+     */
+    interface Commands {
+        /** Leaves visual mode, so that the marks {@code '<} and {@code '>} exist for a range. */
+        void leaveVisualMode();
+
+        /**
+         * Runs a file or tab command ({@code :w}, {@code :q}, {@code :tabn}, ...) in the IDE.
+         *
+         * @return whether the IDE handled it; if not, it goes to Neovim
+         */
+        boolean runInIde(String exCommand);
+
+        /** Runs a listing ({@code :ls}, {@code :marks}) with its output captured, for the popup. */
+        void capture(String exCommand, Consumer<String> onOutput);
+
+        /** Runs any other command in Neovim; what it prints ({@code :echo}) goes to {@code onOutput}. */
+        void run(String exCommand, Consumer<String> onOutput);
+
+        /** Searches for {@code pattern}, like {@code /} ({@code backward}: {@code ?}). */
+        void search(String pattern, boolean backward);
+    }
 
     private static final Logger LOG = Logger.getLogger(CommandLineBox.class.getName());
 
@@ -74,8 +104,7 @@ final class CommandLineBox {
     private static final long ECHO_GUARD_MS = 150;
 
     private final StyledText host;
-    private final NeovimSession session;
-    private final ITextEditor editor;
+    private final Commands commands;
     private final OutputPopup output;
 
     private OverlayFrame<Text> frame;
@@ -100,10 +129,9 @@ final class CommandLineBox {
         }
     };
 
-    CommandLineBox(StyledText host, NeovimSession session, ITextEditor editor) {
+    CommandLineBox(StyledText host, Commands commands) {
         this.host = host;
-        this.session = session;
-        this.editor = editor;
+        this.commands = commands;
         this.output = new OutputPopup(host, () -> open(Kind.EX, false));
     }
 
@@ -137,7 +165,7 @@ final class CommandLineBox {
             close(false);
         }
         if (fromVisualMode && newKind == Kind.EX) {
-            session.inputAsync("<Esc>"); // leave visual mode so that '< and '> exist for the range
+            commands.leaveVisualMode();
         }
         kind = newKind;
         frame = new OverlayFrame<>(host, parent -> new Text(parent, SWT.SINGLE)); // border drawn by the frame
@@ -281,19 +309,19 @@ final class CommandLineBox {
     private void run(Submission submission) {
         try {
             if (submission.kind() == Kind.EX) {
-                if (editor != null && HostCommands.tryHandleEx(submission.body(), editor)) {
+                if (commands.runInIde(submission.body())) {
                     LOG.fine("Ex handled by Eclipse: " + submission.body());
                     return;
                 }
                 if (ListingCommand.isListing(submission.body())) {
                     String title = ":" + submission.body();
-                    session.captureOutputAsync(submission.body(), text -> showOutput(title, text));
+                    commands.capture(submission.body(), text -> showOutput(title, text));
                     return;
                 }
                 String title = ":" + submission.body();
-                session.commandAsync(submission.body(), text -> showOutput(title, text));
+                commands.run(submission.body(), text -> showOutput(title, text));
             } else {
-                session.search(submission.body(), submission.kind() == Kind.SEARCH_BACKWARD);
+                commands.search(submission.body(), submission.kind() == Kind.SEARCH_BACKWARD);
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Command line failed: " + submission, e);
