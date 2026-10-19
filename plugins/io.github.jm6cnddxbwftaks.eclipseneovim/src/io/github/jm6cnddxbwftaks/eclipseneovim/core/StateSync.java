@@ -53,7 +53,7 @@ final class StateSync {
         List<String> bufferLines() throws Exception;
     }
 
-    /** Who hears about state changes; the session fires its listener lists. Any thread. */
+    /** Who hears about state changes ({@link SessionEvents} in the session). Any thread. */
     interface Listeners {
         void mode(String mode);
 
