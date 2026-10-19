@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Resolves the Neovim executable and builds the {@code --embed} command line.
@@ -128,6 +129,27 @@ public final class NvimExecutable {
             }
         }
         return cmd;
+    }
+
+    /**
+     * Adjusts the environment Neovim inherits (the {@link ProcessBuilder#environment()} map).
+     *
+     * <h2>Why {@code SHELL} is dropped on Windows</h2>
+     * Neovim takes its {@code 'shell'} option from {@code $SHELL}, but on Windows it sets matching
+     * {@code 'shellcmdflag'} and quoting options only for its default, {@code cmd.exe}. Eclipse started
+     * from Git Bash (or MSYS2, Cygwin) inherits {@code SHELL=/usr/bin/bash}, so {@code :!echo hi} ran
+     * {@code bash /s /c "echo hi"} and failed with "/s: No such file or directory". Without
+     * {@code SHELL}, Neovim uses {@code cmd.exe} as when Eclipse is started from Explorer or
+     * PowerShell. A user who wants another shell sets {@code 'shell'} and its flags in
+     * {@code init.lua} ({@code :help shell-powershell}).
+     *
+     * @param env     the child's environment, changed in place
+     * @param windows whether Windows rules apply
+     */
+    public static void prepareEnvironment(Map<String, String> env, boolean windows) {
+        if (windows) {
+            env.remove("SHELL");
+        }
     }
 
     /** Best-effort check that the configured executable exists, searching the real {@code PATH}. */
