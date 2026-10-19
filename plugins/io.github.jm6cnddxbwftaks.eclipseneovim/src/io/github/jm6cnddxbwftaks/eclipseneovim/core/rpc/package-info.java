@@ -19,13 +19,18 @@
  *       implemented with neovim-java (temporary, an adapter).</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Incoming}: what Neovim sends on its
  *       own (notifications and requests), implemented by {@code core/NotificationBridge}.</li>
+ *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.MsgpackNeovimApi}: the same
+ *       interface over our own client (not used yet), through
+ *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcRequests}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel}: the msgpack-rpc
  *       connection itself (not used yet; our own client).</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.MsgpackValues}: Java values to and
  *       from MessagePack, for {@code RpcChannel}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimErrorException},
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimConnectionClosedException}:
- *       how a call fails (Neovim said no; Neovim is gone).</li>
+ *       how a call fails (Neovim said no; Neovim is gone);
+ *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.UnexpectedAnswerException}: Neovim
+ *       answered with the wrong shape.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle}: a buffer, window or tab
  *       page.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode}: the answer to
