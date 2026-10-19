@@ -21,6 +21,8 @@
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand},
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand},
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay}.</li>
+ *   <li><b>Exceptions:</b> {@link io.github.jm6cnddxbwftaks.eclipseneovim.util.NeovimExceptionBase},
+ *       the base of every exception class the plug-in defines.</li>
  * </ul>
  *
  * <p>When adding behavior, try to express the decision as a function here first, with a test, and

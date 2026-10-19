@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import com.ensarsarajcic.neovim.java.corerpc.client.RpcConnection;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.NeovimExceptionBase;
 
 /**
  * The connection to Neovim as neovim-java sees it, with one change: once we are shutting the
@@ -28,7 +29,7 @@ import com.ensarsarajcic.neovim.java.corerpc.client.RpcConnection;
 final class QuittingConnection implements RpcConnection {
 
     /** Ends neovim-java's reader thread quietly when the session is being closed on purpose. */
-    static final class Quit extends RuntimeException {
+    static final class Quit extends NeovimExceptionBase {
         private static final long serialVersionUID = 1L;
 
         Quit() {
