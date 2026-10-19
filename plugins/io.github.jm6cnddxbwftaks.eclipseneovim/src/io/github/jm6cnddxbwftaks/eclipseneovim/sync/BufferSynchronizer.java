@@ -48,7 +48,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.TextDiff;
  * <p>All document mutation happens on the UI thread; {@link #isApplyingRemote()} lets UI listeners
  * tell a Neovim-driven change (caret moves, etc.) from a user-driven one.
  */
-public final class BufferSynchronizer implements AutoCloseable {
+public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mirror {
 
     private static final Logger LOG = Logger.getLogger(BufferSynchronizer.class.getName());
 
@@ -165,6 +165,7 @@ public final class BufferSynchronizer implements AutoCloseable {
     }
 
     /** Starts applying Neovim to Eclipse changes. Call only after the initial push. */
+    @Override
     public void startRemoteListening() {
         if (listening || closed) {
             return;
@@ -181,6 +182,7 @@ public final class BufferSynchronizer implements AutoCloseable {
      * <p>Why: Neovim echoes a push back as a line event, which is applied with {@code syncExec}
      * on the UI thread. If the UI thread is itself waiting for the push, that deadlocks.
      */
+    @Override
     public void stopRemoteListening() {
         listening = false;
         session.removeBufferChangeListener(bufferChangeListener);
@@ -194,6 +196,7 @@ public final class BufferSynchronizer implements AutoCloseable {
      * written here. A JFace document is not thread-safe: read from this thread while the UI thread
      * edits it (linked mode, a formatter, save actions), it could return torn text or throw.
      */
+    @Override
     public void pushDocumentToNeovim() {
         if (closed) {
             return;

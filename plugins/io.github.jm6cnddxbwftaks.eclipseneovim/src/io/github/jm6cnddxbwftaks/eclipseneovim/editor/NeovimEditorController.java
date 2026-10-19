@@ -27,6 +27,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
@@ -70,6 +71,8 @@ public final class NeovimEditorController implements AutoCloseable {
     /** Viewer the key interceptor is prepended to; {@code null} if it sits on the widget instead. */
     private final ITextViewerExtension keyViewer;
     private final BufferSynchronizer synchronizer;
+    /** Pushes the document into Neovim on attach and when Neovim mode is switched back on. */
+    private final DocumentPush documentPush;
     /** Remembers the text before an Eclipse-driven insert so "." can repeat what was typed. */
     private final InsertTracker insertTracker;
     /** The inline {@code :} / {@code /} / {@code ?} command line along the bottom of the editor. */
@@ -104,6 +107,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.keyInterceptor = new KeyInterceptor(session);
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session, SwtUiExecutor.INSTANCE);
+        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
         EditorCaret caret = new StyledTextCaret(styledText, offsets);
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
@@ -158,50 +162,13 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Pushes the Eclipse document and caret into Neovim without blocking the UI thread.
-     *
-     * <p>Order matters: listening for Neovim changes is paused during the push and resumed after
-     * it, so the echo of the push cannot be applied back (and cannot deadlock with the UI thread,
-     * see {@link BufferSynchronizer#stopRemoteListening()}). Queuing on the session's input thread
-     * also guarantees that keys typed right afterward are processed after the push.
+     * Pushes the Eclipse document and caret into Neovim without blocking the UI thread; the steps and
+     * their order are in {@link DocumentPush}. The tab width and indentation are read here, on the UI
+     * thread.
      */
     private void pushDocumentAndCursorAsync(int line1, int col0, boolean takeNeovimCursor) {
-        synchronizer.stopRemoteListening();
-        final int tabWidth = styledText.isDisposed() ? 0 : styledText.getTabs();
-        final Indentation indentation = indentationOf(tabWidth);
-        try {
-            session.runAttachSetup(() -> {
-                try {
-                    session.showBuffer(buffer);
-                } catch (Exception e) {
-                    LOG.log(Level.SEVERE, "Could not switch Neovim to the document's buffer", e);
-                    return; // pushing now would overwrite another document's buffer
-                }
-                try {
-                    // Tabs as wide as in the editor (block selections are measured in screen columns),
-                    // and new lines indented like the code around them.
-                    session.setIndentation(tabWidth, indentation);
-                } catch (Exception e) {
-                    LOG.log(Level.WARNING, "Could not set Neovim's tab and indent options", e);
-                }
-                synchronizer.pushDocumentToNeovim();
-                synchronizer.startRemoteListening();
-                if (takeNeovimCursor) {
-                    // Neovim jumped into this file (Ctrl-O, 'A): the caret goes where Neovim put the cursor.
-                    session.syncModeAndCursorFromNeovim();
-                    return;
-                }
-                try {
-                    session.setCursor(line1, col0);
-                    LOG.info("Preserved cursor at line=" + line1 + " col=" + col0);
-                } catch (Exception e) {
-                    LOG.log(Level.WARNING, "Failed to set Neovim cursor after push", e);
-                }
-            });
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Document push could not be scheduled", e);
-            synchronizer.startRemoteListening();
-        }
+        int tabWidth = styledText.isDisposed() ? 0 : styledText.getTabs();
+        documentPush.start(tabWidth, indentationOf(tabWidth), line1, col0, takeNeovimCursor);
     }
 
     /**
@@ -480,5 +447,33 @@ public final class NeovimEditorController implements AutoCloseable {
         modeStatus.dispose();
         cursorStyle.dispose();
         LOG.info("Detached Neovim from editor: " + editor.getTitle());
+    }
+
+    /** {@link DocumentPush.Neovim} on the session, for this editor's buffer. */
+    private record SessionPushTarget(NeovimSession session, DocumentBuffer buffer) implements DocumentPush.Neovim {
+        @Override
+        public void queue(Runnable work) {
+            session.runAttachSetup(work);
+        }
+
+        @Override
+        public void showDocumentBuffer() throws Exception {
+            session.showBuffer(buffer);
+        }
+
+        @Override
+        public void setIndentation(int tabWidth, Indentation indentation) throws Exception {
+            session.setIndentation(tabWidth, indentation);
+        }
+
+        @Override
+        public void setCursor(int line1, int col0) throws Exception {
+            session.setCursor(line1, col0);
+        }
+
+        @Override
+        public void takeCursorFromNeovim() {
+            session.syncModeAndCursorFromNeovim();
+        }
     }
 }

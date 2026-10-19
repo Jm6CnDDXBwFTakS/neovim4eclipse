@@ -88,7 +88,9 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 ### 6. One Neovim buffer per document
 
 `EditorAttachManager` keeps a `DocumentBuffer` per open `IDocument` (two editors on one file share
-it) and passes it to the controller, which calls `NeovimSession.showBuffer` on attach. Buffers are
+it) and passes it to the controller, whose attach push (`sync/DocumentPush`) calls
+`NeovimSession.showBuffer` first. If that fails, the document is not pushed (it would overwrite the
+buffer Neovim is in, another file's), but the editor listens for Neovim's changes again. Buffers are
 listed, named after the file path, and `buftype=nofile` (Neovim never writes or swaps them, and no
 filetype detection runs). Only the attached buffer's line events and cursor reports reach Eclipse.
 
@@ -316,6 +318,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
+| Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
 | Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | `tests/text` `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |
 | Visual `v`/`V` selection: corner order, inclusive end, caret end | `util/VisualSelectionGeometry` (applied by `editor/VisualSelectionView` through `EditorCaret` and `BlockHighlight`) | `VisualSelectionGeometryTest`, `tests/text` `VisualSelectionViewTest` (`FakeCaret`, fake highlight) |
 | Blockwise overlay painting | `editor/BlockOverlay` (the editor's `BlockHighlight`) | UI `BlockOverlayTest` (paints into an image) |
