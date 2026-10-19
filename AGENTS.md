@@ -68,6 +68,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - After changing a constructor or method signature, callers whose source did not change are not
   recompiled and fail at run time with `NoSuchMethodError` (in UI tests: every attach times out).
   Delete `plugins/.../target/classes` (not `clean`) and build again.
+- The same goes for a changed `static final String` constant (such as a `LuaScripts` script): javac
+  copies its text into every class that uses it, so those classes keep the old text until they are
+  recompiled. Delete `plugins/.../target/classes` after changing one.
 - Synthetic SWT key events in UI tests need `event.doit = true`.
 
 ## Conventions
@@ -78,3 +81,5 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - Comments and docs in an explanatory style: say why, give an example, link the concept.
 - Add or update tests with every behavior change; update README and `docs/` when behavior changes.
 - One commit per logical change. Do not push, and never to `main`, unless the maintainer asks.
+- Commit in UTC (`TZ=UTC git commit ...`; in PowerShell set `$env:TZ = 'UTC'` first), so commit
+  dates do not depend on the machine's time zone.
