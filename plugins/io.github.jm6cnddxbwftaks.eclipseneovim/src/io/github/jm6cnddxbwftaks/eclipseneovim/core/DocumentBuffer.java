@@ -24,6 +24,11 @@ public final class DocumentBuffer {
         this.name = name == null ? "" : name;
     }
 
+    /** The buffer name, normally the file path; may be empty. */
+    public String name() {
+        return name;
+    }
+
     /** Neovim's buffer number, or {@link NotificationBridge#UNKNOWN_BUFFER} before first use. */
     public int bufnr() {
         return bufnr;

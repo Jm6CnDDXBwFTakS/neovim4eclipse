@@ -95,7 +95,18 @@ it) in a `core/EditorBuffers` (the bookkeeping, unit-tested without Eclipse) and
 `NeovimSession.showBuffer` first. If that fails, the document is not pushed (it would overwrite the
 buffer Neovim is in, another file's), but the editor listens for Neovim's changes again. Buffers are
 listed, named after the file path, and `buftype=nofile` (Neovim never writes or swaps them, and no
-filetype detection runs). Only the attached buffer's line events and cursor reports reach Eclipse.
+filetype detection runs). Only the attached buffer's cursor reports reach Eclipse.
+
+Neovim can change any of those buffers (`:bufdo %s/old/new/g`), and Eclipse can change a document
+whose editor is in the background (a rename refactoring). Every document with a buffer therefore has a
+`sync/UnattachedDocumentSync`, kept by `EditorAttachManager`, that carries changes both ways while the
+document is not attached: `NeovimSession` routes the line events of a document buffer that is not
+attached to that document's listener (`core/DocumentBufferPort`), which applies them with `asyncExec`
+(the RPC thread must not wait, or `:bufdo`'s `BufEnter`s would queue up behind the changes); and each
+change Eclipse makes to the document is pushed to its buffer (`setDocumentBufferLines`, which drops the
+echo of its own write). While the document is attached, `BufferSynchronizer` does the pushing; on
+detach, one push leaves the buffer equal to the document. Both sides changing the same document at once
+is applied in arrival order; a Neovim change that no longer fits is logged and replaced by Eclipse's text.
 
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is
 followed: its editor is activated and attached, keeping Neovim's cursor. When several editors show
@@ -149,7 +160,7 @@ neovim-java's `@NeovimRequestHandler` annotation, which does not work in neovim-
 
 Never call `await` on the UI thread for key handling.
 
-`BufferSynchronizer` and `CaretSync` hand work to the UI thread through `core/UiExecutor`, not
+`BufferSynchronizer`, `UnattachedDocumentSync` and `CaretSync` hand work to the UI thread through `core/UiExecutor`, not
 `Display` directly: the editor passes `editor/SwtUiExecutor`, tests pass `UiExecutor.IMMEDIATE`
 or a fake that holds the work back (for example, to close the editor while a Neovim change waits).
 
@@ -352,6 +363,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
+| A document that is not attached and its buffer in step (`:bufdo`, refactorings) | `sync/UnattachedDocumentSync` (session seen through `core/DocumentBufferPort`) | `tests/text` `UnattachedDocumentSyncTest` (fake port: both directions, coalescing, attach and detach, a change that no longer fits), `NeovimBufferIntegrationTest` (routing, echo), UI `EditorEndToEndTest` (`:bufdo` over three files) |
 | Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | `tests/text` `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |
 | Visual `v`/`V` selection: corner order, inclusive end, caret end | `util/VisualSelectionGeometry` (applied by `editor/VisualSelectionView` through `EditorCaret` and `BlockHighlight`) | `VisualSelectionGeometryTest`, `tests/text` `VisualSelectionViewTest` (`FakeCaret`, fake highlight) |
 | Blockwise overlay painting | `editor/BlockOverlay` (the editor's `BlockHighlight`) | `tests/swt` `BlockOverlayTest` (paints into an image) |

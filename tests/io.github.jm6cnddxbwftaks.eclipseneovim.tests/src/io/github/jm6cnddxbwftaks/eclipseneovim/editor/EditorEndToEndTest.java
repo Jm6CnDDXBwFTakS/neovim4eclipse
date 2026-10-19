@@ -8,6 +8,7 @@ import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
@@ -279,6 +280,62 @@ class EditorEndToEndTest {
             page.closeEditor(second, false);
             page.closeEditor(third, false);
         }
+    }
+
+    /**
+     * {@code :bufdo} changes files whose editors are in the background; each change reaches its
+     * document (sync/UnattachedDocumentSync), which is then dirty, ready for Save All.
+     */
+    @Test
+    void bufdoChangesEveryOpenFile() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor second = openFile("second.txt", "banana\n");
+        ITextEditor third = openFile("third.txt", "papaya\n");
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        try {
+            // As the : box runs it (CommandRunner): with the keys alone, the "3 substitutions" message of
+            // each buffer would end in a hit-enter prompt, during which Neovim answers no requests.
+            session.commandAsync("bufdo %s/a/A/ge");
+
+            waitForAttach(third, "third.txt, where :bufdo ends");
+            expectText("AlphA\nbetA\ngAmmA\n");
+            waitUntil("second.txt changed", TIMEOUT_MS, () -> "bAnAnA\n".equals(documentOf(second).get()),
+                    () -> "; it reads " + documentOf(second).get().replace("\n", "\\n"));
+            assertEquals("pApAyA\n", documentOf(third).get());
+            assertTrue(second.isDirty(), "second.txt is changed, not saved");
+        } finally {
+            page.closeEditor(second, false);
+            page.closeEditor(third, false);
+        }
+    }
+
+    /**
+     * The other way: Eclipse changes a file whose editor is in the background (as a rename
+     * refactoring does), and the change reaches its buffer. Otherwise the {@code :bufdo} below would
+     * edit Neovim's stale copy, one line, and its change would replace the wrong line.
+     */
+    @Test
+    void eclipsesChangeToAFileInTheBackgroundReachesItsBuffer() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor second = openFile("second.txt", "banana\n");
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        try {
+            documentOf(second).replace(0, 0, "added\n");
+            settle();
+
+            session.commandAsync("bufdo %s/^/>/");
+
+            waitUntil("second.txt changed", TIMEOUT_MS, () -> ">added\n>banana\n".equals(documentOf(second).get()),
+                    () -> "; it reads " + documentOf(second).get().replace("\n", "\\n"));
+        } finally {
+            page.closeEditor(second, false);
+        }
+    }
+
+    private static IDocument documentOf(ITextEditor textEditor) {
+        return textEditor.getDocumentProvider().getDocument(textEditor.getEditorInput());
     }
 
     // The system clipboard (Eclipse is Neovim's clipboard provider; see core/ClipboardRegisters).

@@ -126,6 +126,59 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /** {@code :bufdo} edits buffers that are not attached; each change goes to that document's listener. */
+    @Test
+    void changesToADocumentThatIsNotAttachedGoToItsOwnListener() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer("");
+            DocumentBuffer b = new DocumentBuffer("");
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a old"));
+            s.showBuffer(b);
+            s.setBufferLines(List.of("b old"));
+            List<BufferChange> ofA = new CopyOnWriteArrayList<>();
+            List<BufferChange> ofB = new CopyOnWriteArrayList<>();
+            List<BufferChange> attached = new CopyOnWriteArrayList<>();
+            s.addUnattachedChangeListener(a, ofA::add);
+            s.addUnattachedChangeListener(b, ofB::add);
+            s.addBufferChangeListener(attached::add);
+
+            s.command("bufdo s/old/new/");
+
+            waitFor(() -> !ofA.isEmpty() && !attached.isEmpty(), "both changes");
+            assertEquals(new BufferChange(0, 1, List.of("a new")), ofA.get(0));
+            assertTrue(attached.stream().anyMatch(c -> c.newLines().contains("b new")), attached.toString());
+            assertEquals(List.of(), ofB, "b is attached: its change goes to the attached editor");
+        }
+    }
+
+    /**
+     * Eclipse's change to a document in the background reaches its buffer, without coming back as a
+     * line event; a buffer that was never attached (so does not exist yet) is left alone.
+     */
+    @Test
+    void eclipseWritesADocumentBufferThatIsNotAttachedWithoutAnEcho() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer("");
+            DocumentBuffer b = new DocumentBuffer("");
+            s.showBuffer(a);
+            s.setBufferLines(List.of("one", "two"));
+            s.showBuffer(b);
+            s.setBufferLines(List.of("b"));
+            List<BufferChange> ofA = new CopyOnWriteArrayList<>();
+            s.addUnattachedChangeListener(a, ofA::add);
+
+            assertTrue(s.setDocumentBufferLines(a, List.of("one", "TWO")));
+
+            assertEquals(List.of("one", "TWO"), s.lua("return vim.api.nvim_buf_get_lines(" + a.bufnr() + ", 0, -1, false)"));
+            assertEquals(List.of("b"), s.getBufferLines(), "the attached buffer is untouched");
+            s.lua("vim.api.nvim_buf_set_lines(" + a.bufnr() + ", 0, 1, false, {'ONE'})"); // Neovim's own change...
+            waitFor(() -> !ofA.isEmpty(), "Neovim's own change");
+            assertEquals(List.of(new BufferChange(0, 1, List.of("ONE"))), ofA, "...is the only one reported");
+            assertFalse(s.setDocumentBufferLines(new DocumentBuffer(""), List.of("x")), "never attached");
+        }
+    }
+
     @Test
     void neovimSwitchingToAnotherDocumentIsReportedButEclipsesOwnSwitchesAreNot() throws Exception {
         try (NeovimSession s = start()) {

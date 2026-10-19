@@ -285,6 +285,11 @@ so no cursor is read; once the target character arrives, the next read publishes
 `d` Neovim is in operator-pending mode, `{mode = "no", blocking = false}`: it still answers requests.) All requests also run on
 one thread (`eclipse-neovim-input`), which keeps keys in order and keeps blocking off the UI thread.
 
+A *hit-enter prompt* blocks the same way. `:bufdo %s/a/b/g` typed as keys prints one "N substitutions"
+message per buffer, more than fits, so Neovim asks "Press ENTER" and answers nothing else until a key
+comes. That is why the `:` box runs commands through `core/CommandRunner`, which types them with `:silent`
+and collects the output itself (and why the UI tests use `session.commandAsync`, not typed keys).
+
 ### 2.7 Buffers and line events
 
 - `nvim_create_buf(listed, scratch)` makes a buffer; `nvim_set_current_buf` shows it in the window.
@@ -295,6 +300,13 @@ one thread (`eclipse-neovim-input`), which keeps keys in order and keeps blockin
   `nvim_buf_lines_event [buf, changedtick, firstline, lastline, linedata, more]` after every edit:
   "lines `[firstline, lastline)` now read `linedata`". `NotificationBridge` decodes it and
   `util/LineRangeEdit` turns it into one `IDocument.replace`.
+
+Every document buffer is attached this way, not only the one in the window, so a change to any of
+them arrives: `:bufdo` edits each buffer in turn. `NeovimSession` sends the attached buffer's events to
+the editor and the others to their own document (`sync/UnattachedDocumentSync`). When Eclipse writes a
+buffer itself, Neovim reports that write too, as a line event; since Neovim sends the event before the
+reply to `nvim_buf_set_lines`, the session drops the events that arrive while it waits for that reply
+(`setDocumentBufferLines`), instead of applying its own change a second time.
 
 Neovim has no notion of a final newline: a buffer is a list of lines. `util/LineTextUtil` explains how
 the plug-in keeps an Eclipse file's final newline.
@@ -407,6 +419,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 |------|---------|----------------|
 | `KeyRouter.Neovim` | `core/KeyRouter` | `NeovimSession` |
 | `BufferPort` | `sync/BufferSynchronizer` | `NeovimSession` |
+| `DocumentBufferPort` | `sync/UnattachedDocumentSync` | `NeovimSession` |
 | `CursorPort` | `editor/CaretSync` | `NeovimSession` |
 | `CommandRunner.Neovim` | `core/CommandRunner` | adapter inside `NeovimSession` |
 | `KeyInput.Neovim` | `core/KeyInput` | adapter inside `NeovimSession` (`KeyInputTest` scripts it: "after `i` the mode is `i`") |
