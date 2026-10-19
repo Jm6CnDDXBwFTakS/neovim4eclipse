@@ -152,6 +152,12 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 
+The commands above are the ones typed in the `:` box. Neovim can also write a buffer by itself:
+`:update` inside `:bufdo` or `:argdo`, `:wall`, or a mapping in your `init.lua` such as
+`<leader>w` → `:w<CR>`. Those writes save the file through Eclipse too (so save actions run as usual),
+and Neovim never writes a file itself. A write under another name (`:w other.txt`) is refused; use
+*File → Save As*.
+
 Commands that only display something (`:ls`, `:buffers`, `:jumps`, `:marks`, `:registers`, `:changes`,
 `:messages`, `:pwd`, `:echo`, `:set opt?` ...) show their output in a read-only box in the same place.
 `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys scroll it; any other key or a click closes it.
@@ -186,7 +192,8 @@ the plugin makes sure everything you do is seen by Neovim as keys:
   IME composition are therefore unavailable *while recording*.
 - **`:` commands and `/` searches** from the command line are typed into Neovim (`:silent <cmd>`), so they are
   recorded and `@:` works. `:w`, `:wa`, `:q`, `:wq`, `:x` are still handled by Eclipse and are **not** recorded; a
-  `:w` inside a macro would be run by Neovim and fail, which stops the macro.
+  `:w` inside a macro is run by Neovim, which asks Eclipse to save (see below). The editor gets the macro's
+  changes only when it ends, so such a save writes the text from before the macro.
 - **Playback** is applied to the editor as one change when the macro finishes, which is much faster than
   replaying each step and avoids half-finished states. Very long macros are given up to 60 seconds.
 - `f/`, `t:`, `r/`, `@:`, `qa` ...: the character after `f F t T r @ m ' \` " q` is an *argument* and always goes
@@ -291,7 +298,8 @@ These are real and deliberate to know about before extending the code:
    only the editor of the file they end in); jumps to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
-   reach that file's editor, which is then dirty: save them with `:wa` or *File → Save All*.
+   reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the
+   same command (`:bufdo %s/old/new/g | update`).
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.

@@ -57,8 +57,8 @@
  *       register type of what Neovim copied itself.</li>
  *   <li>{@code LuaScripts}: every Lua chunk run inside Neovim, with comments.</li>
  *   <li>{@code NotificationBridge}: decodes the msgpack-rpc notifications Neovim sends (buffer line
- *       events and the plug-in's own {@code eclipse_*} events), and answers its one request, the
- *       clipboard paste.</li>
+ *       events and the plug-in's own {@code eclipse_*} events), and answers its two requests, the
+ *       clipboard paste and the save of a document Neovim writes.</li>
  * </ul>
  *
  * <p>See {@code docs/LEARNING.md}, part 2, for msgpack-rpc, {@code nvim_input}, blocking, and

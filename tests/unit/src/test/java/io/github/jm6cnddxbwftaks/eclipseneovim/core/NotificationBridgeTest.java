@@ -49,6 +49,13 @@ class NotificationBridgeTest {
                 }
                 return List.of(List.of("pasted"), "v");
             }
+            @Override public String onWrite(int bufnr) {
+                events.add("write@" + bufnr);
+                if (bufnr == 13) {
+                    throw new IllegalStateException("workspace closed");
+                }
+                return bufnr == 7 ? "read-only" : null;
+            }
             @Override public void onIdeAction(IdeAction action) {
                 events.add("action:" + action.name() + ":" + action.count());
             }
@@ -150,6 +157,20 @@ class NotificationBridgeTest {
         assertEquals(List.of(List.of("pasted"), "v"), bridge.onRequest(request("+")));
         RequestMessage unknown = new RequestMessage.Builder("eclipse_unknown", new ArrayList<>()).build();
         assertThrows(UnsupportedOperationException.class, () -> bridge.onRequest(unknown));
+    }
+
+    /** The answer is what Neovim shows: "" for a save that worked, else the message. */
+    @Test
+    void writeRequestsAnswerWithTheErrorOrNothing() {
+        assertEquals("", bridge.onRequest(named("eclipse_write", 3)));
+        assertEquals("read-only", bridge.onRequest(named("eclipse_write", 7L)));
+        assertEquals("Eclipse could not save the file: workspace closed", bridge.onRequest(named("eclipse_write", 13)));
+        assertEquals("Eclipse got a write request without a buffer number", bridge.onRequest(named("eclipse_write")));
+        assertEquals(List.of("write@3", "write@7", "write@13"), events);
+    }
+
+    private static RequestMessage named(String method, Object... args) {
+        return new RequestMessage.Builder(method, new ArrayList<>(Arrays.asList(args))).build();
     }
 
     @Test

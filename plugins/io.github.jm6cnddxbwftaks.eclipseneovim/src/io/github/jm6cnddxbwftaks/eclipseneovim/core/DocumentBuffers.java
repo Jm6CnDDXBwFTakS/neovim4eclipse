@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import static io.github.jm6cnddxbwftaks.eclipseneovim.core.Rpc.await;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -141,8 +142,9 @@ final class DocumentBuffers {
     }
 
     private NeovimBufferApi create(String name) throws Exception {
-        // Listed, so :ls and :b see it. Scratch: buftype=nofile and no swap file, so Neovim never
-        // writes the file itself (Eclipse saves it), and no filetype detection runs.
+        // Listed, so :ls and :b see it. Scratch: no swap file, and no filetype detection runs. Its
+        // buftype=nofile is then changed to acwrite, so that a write asks Eclipse to save
+        // (LuaScripts.DOCUMENT_BUFFER): Neovim never writes the file itself.
         NeovimBufferApi buffer = await(api.createBuffer(true, true));
         if (!name.isEmpty()) {
             try {
@@ -151,6 +153,7 @@ final class DocumentBuffers {
                 LOG.log(Level.FINE, "Buffer name already in use, left unnamed: " + name, e);
             }
         }
+        await(api.executeLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
         // nvim_buf_attach: Neovim now sends nvim_buf_lines_event for this buffer. No initial
         // full-buffer event (false): the document is pushed into the buffer instead.
         await(buffer.attach(false, Map.of()));

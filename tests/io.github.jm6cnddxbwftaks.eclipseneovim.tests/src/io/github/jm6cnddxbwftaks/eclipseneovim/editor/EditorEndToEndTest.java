@@ -334,6 +334,41 @@ class EditorEndToEndTest {
         }
     }
 
+    /**
+     * {@code :bufdo ... | update} saves every changed file through Eclipse: the document buffers are
+     * {@code buftype=acwrite}, and their write hook asks Eclipse to save (core/LuaScripts.DOCUMENT_BUFFER).
+     */
+    @Test
+    void bufdoUpdateSavesEveryChangedFileThroughEclipse() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor second = openFile("second.txt", "banana\n");
+        ITextEditor unchanged = openFile("third.txt", "kiwi\n");
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        try {
+            session.commandAsync("bufdo %s/a/A/ge | update");
+
+            waitUntil("second.txt saved", TIMEOUT_MS, () -> "bAnAnA\n".equals(fileText("second.txt")),
+                    () -> "; it reads " + fileText("second.txt").replace("\n", "\\n"));
+            waitUntil("test.txt saved", TIMEOUT_MS, () -> "AlphA\nbetA\ngAmmA\n".equals(fileText("test.txt")));
+            assertFalse(second.isDirty());
+            assertFalse(editor.isDirty());
+            assertFalse(unchanged.isDirty());
+        } finally {
+            page.closeEditor(second, false);
+            page.closeEditor(unchanged, false);
+        }
+    }
+
+    /** The file's contents on disk. */
+    private String fileText(String name) {
+        try (var in = project.getFile(name).getContents(true)) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new AssertionError("cannot read " + name, e);
+        }
+    }
+
     private static IDocument documentOf(ITextEditor textEditor) {
         return textEditor.getDocumentProvider().getDocument(textEditor.getEditorInput());
     }

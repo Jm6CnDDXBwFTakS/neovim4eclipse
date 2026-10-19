@@ -11,6 +11,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -55,13 +59,18 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.sync.UnattachedDocumentSync;
  *
  * <p>Neovim can also change documents that are not attached ({@code :bufdo}), and Eclipse can change
  * documents whose editor is in the background (a rename refactoring). An
- * {@link UnattachedDocumentSync} per document with a buffer carries those changes across.
+ * {@link UnattachedDocumentSync} per document with a buffer carries those changes across. When
+ * Neovim writes a document's buffer ({@code :bufdo update}), Eclipse saves the document
+ * ({@link #saveForNeovim}).
  */
 public final class EditorAttachManager {
 
     private static final Logger LOG = Logger.getLogger(EditorAttachManager.class.getName());
 
     private static final EditorAttachManager INSTANCE = new EditorAttachManager();
+
+    /** How long Neovim waits for Eclipse to save a document whose buffer it writes; see {@link #saveForNeovim}. */
+    static final long SAVE_TIMEOUT_MS = 30_000;
 
     /** Guarded by {@code this}. At most one editor is attached at a time (Neovim has one window). */
     private NeovimEditorController activeController;
@@ -330,6 +339,7 @@ public final class EditorAttachManager {
         if (session != followedSession) { // first attach, or Neovim was restarted
             followedSession = session;
             session.setBufferEnterHandler(this::onNeovimEnteredBuffer);
+            session.setWriteHandler(this::saveForNeovim);
             // A new Neovim has none of the old buffers; each document gets a new one on its next attach.
             unattachedSyncs.values().forEach(UnattachedDocumentSync::close);
             unattachedSyncs.clear();
@@ -398,6 +408,62 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not follow Neovim into buffer " + bufnr, e);
         }
         session.returnToAttachedBufferAsync();
+    }
+
+    /**
+     * Neovim writes a document's buffer ({@code :update}, {@code :bufdo update}, {@code :wall}, a
+     * mapping's {@code :w}; see {@code core/LuaScripts.DOCUMENT_BUFFER}). Called on the RPC thread
+     * while Neovim waits for the answer; saves on the UI thread.
+     *
+     * <p>The wait is bounded ({@value #SAVE_TIMEOUT_MS} ms), like the clipboard paste's
+     * ({@link ClipboardBridge}): were the UI thread ever waiting for Neovim, the two would otherwise
+     * wait for each other forever. It is long because a save may ask a question (a read-only file, a
+     * file changed on disk). A save that takes longer still finishes; Neovim is told it did not, and
+     * leaves the buffer modified.
+     *
+     * @return {@code null} if the document was saved, else the message Neovim shows
+     */
+    private String saveForNeovim(DocumentBuffer buffer) {
+        Display display = Display.getDefault();
+        if (display == null || display.isDisposed()) {
+            return "Eclipse is shutting down; " + buffer.name() + " was not saved";
+        }
+        CompletableFuture<String> result = new CompletableFuture<>();
+        display.asyncExec(() -> {
+            try {
+                result.complete(saveOnUi(buffer));
+            } catch (RuntimeException e) {
+                result.completeExceptionally(e);
+            }
+        });
+        try {
+            return result.get(SAVE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            LOG.warning("Eclipse did not save " + buffer.name() + " within " + SAVE_TIMEOUT_MS + " ms; Neovim was told so");
+            return "Eclipse did not finish saving " + buffer.name() + " in time; check whether it was saved";
+        } catch (ExecutionException e) {
+            LOG.log(Level.WARNING, "Saving " + buffer.name() + " for Neovim failed", e.getCause());
+            return "Eclipse could not save " + buffer.name() + " (see the Error Log)";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "Interrupted; " + buffer.name() + " may not have been saved";
+        }
+    }
+
+    /** Saves {@code buffer}'s document through the first editor open on it. UI thread. */
+    private String saveOnUi(DocumentBuffer buffer) {
+        Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
+        synchronized (this) {
+            NeovimSession session = followedSession;
+            showing = session == null ? Optional.empty()
+                    : documents.editorShowing(buffer.bufnr(), b -> b == buffer && b.isOpenIn(session));
+        }
+        if (showing.isEmpty()) {
+            return "Eclipse has no editor open on " + buffer.name() + "; nothing was saved";
+        }
+        IEditorPart part = showing.get().editor();
+        return EclipseFileCommands.savePart(part) ? null
+                : "Eclipse could not save " + part.getTitle() + " (see the Error Log)";
     }
 
     /** Forgets {@code part}; the buffer of a document whose last editor closed is wiped in Neovim. */

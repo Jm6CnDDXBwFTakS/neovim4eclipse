@@ -27,13 +27,19 @@ final class LuaScripts {
      *       {@link NotificationBridge}.</li>
      *   <li>Unless the user's config sets {@code g:clipboard}, a clipboard provider whose copy sends
      *       {@code eclipse_clipboard_copy} and whose paste is the {@code eclipse_clipboard_paste}
-     *       request (see {@link ClipboardRegisters}). The one argument is Eclipse's RPC channel
-     *       number, which the request is sent to.</li>
+     *       request (see {@link ClipboardRegisters}).</li>
+     *   <li>The one argument is Eclipse's RPC channel number, which requests are sent to. It is kept
+     *       in {@code g:eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
      *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
      * </ul>
      */
     static final String SETUP = """
+            -- vim.rpcrequest needs Eclipse's channel number (rpcnotify(0, ...) below means "every
+            -- channel"). Eclipse passes it as the script's argument: inside Lua run through
+            -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
+            local chan = tonumber(select(1, ...))
+            vim.g.eclipse_channel = chan
             vim.opt.timeout = true
             vim.opt.timeoutlen = 400
             vim.opt.ttimeoutlen = 50
@@ -93,10 +99,6 @@ final class LuaScripts {
             -- "*p paste what was copied in any program, with no xclip, wl-paste or pbpaste needed.
             -- A user who sets g:clipboard in init.lua (which runs before this) keeps their own provider.
             if vim.g.clipboard == nil then
-              -- rpcrequest needs Eclipse's channel number (rpcnotify(0, ...) above means "every
-              -- channel"). Eclipse passes it as the script's argument: inside Lua run through
-              -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
-              local chan = tonumber(select(1, ...))
               local function copy(reg)
                 return function(lines, regtype)
                   vim.rpcnotify(chan, 'eclipse_clipboard_copy', reg, lines, regtype)
@@ -284,6 +286,50 @@ final class LuaScripts {
             if not ok then
               error(err)
             end
+            -- Like a file just read: not modified, so :update (and :bufdo update) skips it.
+            vim.bo.modified = false
+            """;
+
+    /**
+     * Makes a new buffer (argument: its number) a document buffer, which only Eclipse writes.
+     *
+     * <h2>The concept: {@code buftype=acwrite}</h2>
+     * Eclipse owns the files: a {@code :w} by Neovim itself would write its copy behind Eclipse's
+     * back (no save actions, no refresh, a "file changed on disk" dialog later). A buffer with
+     * {@code buftype=acwrite} is never written by Neovim; every write runs the buffer's
+     * {@code BufWriteCmd} autocommands instead ({@code :help acwrite}, {@code :help BufWriteCmd}).
+     * The one here asks Eclipse to save the document (the {@code eclipse_write} request, answered by
+     * {@link NotificationBridge}) and, if that worked, clears {@code 'modified'}, as a real write does.
+     * So {@code :bufdo %s/a/b/g | update}, {@code :wall} and a {@code <leader>w} mapping in
+     * {@code init.lua} all save through Eclipse. ({@code :w} typed in the {@code :} box never gets here:
+     * Eclipse handles it before Neovim sees it, see {@code util/HostExCommand}.)
+     *
+     * <p>A write under another name ({@code :w other.txt}) is refused: Eclipse saves a document only
+     * as its own file. A failed save is shown as Neovim shows a failed write, and the buffer stays
+     * modified, so {@code :update} tries again next time.
+     */
+    static final String DOCUMENT_BUFFER = """
+            local buf = tonumber(select(1, ...))
+            vim.bo[buf].buftype = 'acwrite'
+            vim.api.nvim_create_autocmd('BufWriteCmd', {
+              buffer = buf,
+              desc = 'Eclipse saves the document',
+              callback = function(ev)
+                local function fail(msg)
+                  vim.v.errmsg = msg
+                  vim.api.nvim_echo({ { msg, 'ErrorMsg' } }, true, {})
+                end
+                if ev.match ~= vim.api.nvim_buf_get_name(ev.buf) then
+                  return fail('Eclipse saves a file only under its own name; use File > Save As')
+                end
+                -- Neovim waits for the answer: Eclipse saves on its UI thread (see EditorAttachManager).
+                local err = vim.rpcrequest(vim.g.eclipse_channel, 'eclipse_write', ev.buf)
+                if type(err) == 'string' and err ~= '' then
+                  return fail(err)
+                end
+                vim.bo[ev.buf].modified = false
+              end,
+            })
             """;
 
     /**

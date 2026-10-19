@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -112,6 +113,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile Predicate<String> hostExHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
     private volatile Runnable leaveInsertPush;
+    /** Saves a document when Neovim writes its buffer; see {@link #setWriteHandler}. */
+    private volatile Function<DocumentBuffer, String> writeHandler;
 
     /** Mode, buffer change, cursor, selection and IDE action listeners. */
     private final SessionEvents events = new SessionEvents();
@@ -410,6 +413,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         unattachedListeners.remove(buffer, listener);
     }
 
+    /**
+     * Saves the document when Neovim writes its buffer ({@code :w} from a mapping, {@code :update},
+     * {@code :bufdo update}, {@code :wall}; see {@link LuaScripts#DOCUMENT_BUFFER}). Called on the RPC
+     * thread while Neovim waits for the answer, so it must return, even if the UI thread is busy.
+     *
+     * @param handler returns {@code null} when the document was saved, else the error message for
+     *                Neovim to show; without a handler a write fails with a message
+     */
+    public void setWriteHandler(Function<DocumentBuffer, String> handler) {
+        this.writeHandler = handler;
+    }
+
     /** Number of the buffer mirrored into the attached document. */
     public int getAttachedBufnr() {
         return buffers.attachedBufnr();
@@ -689,6 +704,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         public void onClipboardCopy(String register, List<String> lines, String regtype) {
             LOG.fine(() -> "clipboard copy register=" + register + " regtype=" + regtype + " lines=" + lines.size());
             clipboard.copy(register, lines, regtype);
+        }
+
+        @Override
+        public String onWrite(int bufnr) {
+            DocumentBuffer document = buffers.documentOf(bufnr);
+            Function<DocumentBuffer, String> handler = writeHandler;
+            if (document == null || handler == null) {
+                return "Eclipse has no editor for buffer " + bufnr + "; nothing was saved";
+            }
+            return handler.apply(document);
         }
 
         @Override

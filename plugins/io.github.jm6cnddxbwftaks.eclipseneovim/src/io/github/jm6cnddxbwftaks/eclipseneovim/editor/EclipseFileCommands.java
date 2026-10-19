@@ -71,8 +71,16 @@ public final class EclipseFileCommands {
 
     /** {@code :w}. @return {@code true} if the editor is clean afterward */
     static boolean save(ITextEditor editor) {
+        return savePart(EditorAttachManager.getInstance().workbenchPartOf(editor));
+    }
+
+    /**
+     * Saves a workbench editor (a multi-page editor as a whole) if it is dirty. UI thread.
+     *
+     * @return {@code true} if the editor is clean afterward
+     */
+    static boolean savePart(IEditorPart part) {
         try {
-            IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
             if (!part.isDirty()) {
                 return true;
             }

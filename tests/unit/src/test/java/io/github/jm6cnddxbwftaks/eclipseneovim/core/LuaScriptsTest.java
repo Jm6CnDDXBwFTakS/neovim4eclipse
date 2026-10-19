@@ -18,6 +18,15 @@ class LuaScriptsTest {
         }
     }
 
+    /** Document buffers are written only through Eclipse: acwrite, and a write hook that asks it to save. */
+    @Test
+    void documentBuffersAreWrittenThroughEclipse() {
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("buftype = 'acwrite'"));
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'BufWriteCmd'"));
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'eclipse_write'"));
+        assertTrue(LuaScripts.SETUP.contains("vim.g.eclipse_channel = chan"), "the channel the request goes to");
+    }
+
     @Test
     void yankHookStandsDownWhenNeovimSyncsTheClipboardItself() {
         // Regression guard for linewise yanks turning charwise (P pasting inline) when two writers raced.
