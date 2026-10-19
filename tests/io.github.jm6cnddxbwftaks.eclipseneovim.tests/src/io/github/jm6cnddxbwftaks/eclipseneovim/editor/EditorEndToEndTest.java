@@ -23,6 +23,7 @@ import org.eclipse.jface.text.link.LinkedPosition;
 import org.eclipse.jface.text.link.LinkedPositionGroup;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
@@ -179,20 +180,93 @@ class EditorEndToEndTest {
     /** {@code gt} is mapped in Neovim to an IDE action: the whole chain from key to tab switch. */
     @Test
     void gtSwitchesToTheNextEditorTab() throws Exception {
-        IFile other = project.getFile("other.txt");
-        other.create(new ByteArrayInputStream("other\n".getBytes(StandardCharsets.UTF_8)), true, null);
+        ITextEditor otherEditor = openOtherFile();
         IWorkbenchPage page = editor.getSite().getPage();
-        ITextEditor otherEditor = (ITextEditor) IDE.openEditor(page, other, "org.eclipse.ui.DefaultTextEditor", true);
-        StyledText otherWidget = (StyledText) otherEditor.getAdapter(Control.class);
-        waitUntil("Neovim to attach to other.txt", TIMEOUT_MS, () -> {
-            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
-            return c != null && c.getEditor() == otherEditor;
-        });
-        settle();
 
-        type(otherWidget, "gt");
+        type(widgetOf(otherEditor), "gt");
         waitUntil("the other tab to be active", TIMEOUT_MS, () -> page.getActiveEditor() != otherEditor);
         page.closeEditor(otherEditor, false);
+    }
+
+    /**
+     * Neovim's own jump into another open file ({@code 'A} here; {@code Ctrl-O} and {@code :b} work
+     * the same way) is followed: Eclipse activates that file's editor and attaches to it, with the
+     * caret where Neovim's cursor is. Of two editors on the file, the first one opened is chosen
+     * ({@code core/EditorBuffers}).
+     */
+    @Test
+    void neovimsJumpToAnotherFileActivatesTheFirstEditorOnIt() throws Exception {
+        // File mark A on line 2 of test.txt, then the caret away from it: activating an editor alone
+        // would put Neovim's cursor where the editor's caret is (line 3), following keeps Neovim's.
+        type(widget, "jmAj");
+        settle();
+        IWorkbenchPage page = editor.getSite().getPage();
+        // A second editor on the same file (Window > New Editor): it shares test.txt's buffer.
+        IEditorPart second = page.openEditor(editor.getEditorInput(), "org.eclipse.ui.DefaultTextEditor", true,
+                IWorkbenchPage.MATCH_NONE);
+        waitForAttach((ITextEditor) second, "the second editor on test.txt");
+        ITextEditor otherEditor = openOtherFile();
+
+        type(widgetOf(otherEditor), "'A");
+
+        waitForAttach(editor, "the first editor on test.txt");
+        assertEquals(editor, page.getActiveEditor());
+        waitUntil("the caret on the mark's line", TIMEOUT_MS,
+                () -> widget.getLineAtOffset(widget.getCaretOffset()) == 1);
+        page.closeEditor(second, false);
+        page.closeEditor(otherEditor, false);
+    }
+
+    /**
+     * A buffer no editor shows (here a new empty one, {@code :enew}; also help or {@code :e} of a
+     * file that is not open) is not followed: Neovim is sent back to the attached document, so
+     * the next key still edits it. (The send-back is {@code core/DocumentBuffers.onEntered}; the
+     * one in {@code EditorAttachManager} is for a document's buffer whose editor cannot show it,
+     * such as a multi-page editor on a form page, which no test here sets up.)
+     */
+    @Test
+    void neovimIsSentBackFromABufferNoEditorShows() throws Exception {
+        type(widget, "G"); // line 3, "gamma"; in :enew's empty buffer the cursor would be on line 1
+        settle();
+        assertEquals(3, cursorLine());
+
+        session.inputAsync(":enew<CR>");
+        settle();
+        waitUntil("Neovim back in test.txt", TIMEOUT_MS, () -> cursorLine() == 3);
+
+        type(widget, "ggx");
+        expectText("lpha\nbeta\ngamma\n");
+    }
+
+    /** Neovim's cursor line, asked from Neovim itself (not the last one Eclipse heard of). */
+    private int cursorLine() {
+        try {
+            return session.getCursor().line1Based();
+        } catch (Exception e) {
+            throw new AssertionError("Neovim did not answer", e);
+        }
+    }
+
+    /** Opens other.txt (one line, "other") and waits until Neovim is attached to it. */
+    private ITextEditor openOtherFile() throws Exception {
+        IFile other = project.getFile("other.txt");
+        other.create(new ByteArrayInputStream("other\n".getBytes(StandardCharsets.UTF_8)), true, null);
+        ITextEditor otherEditor = (ITextEditor) IDE.openEditor(editor.getSite().getPage(), other,
+                "org.eclipse.ui.DefaultTextEditor", true);
+        waitForAttach(otherEditor, "other.txt");
+        return otherEditor;
+    }
+
+    private void waitForAttach(ITextEditor target, String what) {
+        waitUntil("Neovim to attach to " + what, TIMEOUT_MS, () -> {
+            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
+            return c != null && c.getEditor() == target && !c.isClosed();
+        });
+        settle();
+    }
+
+    private static StyledText widgetOf(ITextEditor textEditor) {
+        return (StyledText) textEditor.getAdapter(Control.class);
     }
 
     /**
