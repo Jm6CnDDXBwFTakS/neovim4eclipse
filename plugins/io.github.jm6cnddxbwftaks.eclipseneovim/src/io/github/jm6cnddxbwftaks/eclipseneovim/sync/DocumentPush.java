@@ -124,7 +124,7 @@ public final class DocumentPush {
         }
         try {
             nvim.setCursor(line1, col0);
-            LOG.info("Preserved cursor at line=" + line1 + " col=" + col0);
+            LOG.fine("Preserved cursor at line=" + line1 + " col=" + col0);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Failed to set Neovim cursor after push", e);
         }

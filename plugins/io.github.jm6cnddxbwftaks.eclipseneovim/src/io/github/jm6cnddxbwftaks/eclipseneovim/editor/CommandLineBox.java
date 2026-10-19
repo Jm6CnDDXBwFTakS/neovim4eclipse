@@ -282,7 +282,7 @@ final class CommandLineBox {
         try {
             if (submission.kind() == Kind.EX) {
                 if (editor != null && HostCommands.tryHandleEx(submission.body(), editor)) {
-                    LOG.info("Ex handled by Eclipse: " + submission.body());
+                    LOG.fine("Ex handled by Eclipse: " + submission.body());
                     return;
                 }
                 if (ListingCommand.isListing(submission.body())) {
