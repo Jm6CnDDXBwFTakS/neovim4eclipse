@@ -4,12 +4,9 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
@@ -34,8 +31,9 @@ import org.eclipse.ui.part.MultiPageEditorPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.EditorBuffers;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach
@@ -48,7 +46,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
  * <p>Each open document has its own Neovim buffer (named after the file), kept while any editor on
  * it is open, so undo history and marks survive switching editors. When Neovim itself switches to
  * another document's buffer (Ctrl-O across files, {@code 'A}, {@code :b}), Eclipse follows by
- * activating that document's editor.
+ * activating that document's editor. Which editors share, find and give up a buffer is decided by
+ * {@link EditorBuffers} (unit-tested without Eclipse); this class adds the workbench glue.
  */
 public final class EditorAttachManager {
 
@@ -64,7 +63,7 @@ public final class EditorAttachManager {
     private final Set<MultiPageEditorPart> watchedMultiPageEditors =
             Collections.newSetFromMap(new WeakHashMap<>());
     /** Guarded by {@code this}. The Neovim buffer of every document opened while attached, with its editors. */
-    private final Map<IDocument, DocumentEntry> documents = new HashMap<>();
+    private final EditorBuffers<IDocument, IEditorPart> documents = new EditorBuffers<>();
     /** Guarded by {@code this}. The session whose buffer switches are followed. */
     private NeovimSession followedSession;
     private volatile boolean autoAttach = true;
@@ -106,16 +105,6 @@ public final class EditorAttachManager {
         @Override public void partVisible(IWorkbenchPartReference partRef) { }
         @Override public void partInputChanged(IWorkbenchPartReference partRef) { }
     };
-
-    /** A document's Neovim buffer and the editors (workbench parts) showing it. */
-    private static final class DocumentEntry {
-        final DocumentBuffer buffer;
-        final Set<IEditorPart> parts = new HashSet<>();
-
-        DocumentEntry(DocumentBuffer buffer) {
-            this.buffer = buffer;
-        }
-    }
 
     private EditorAttachManager() {
     }
@@ -331,10 +320,8 @@ public final class EditorAttachManager {
         if (document == null) {
             throw new IllegalStateException("Editor has no document: " + editor.getTitle());
         }
-        DocumentEntry entry = documents.computeIfAbsent(document,
-                d -> new DocumentEntry(new DocumentBuffer(bufferName(textEditor.getEditorInput()))));
-        entry.parts.add(editor);
-        activeController = NeovimEditorController.attach(textEditor, session, entry.buffer, takeNeovimCursor);
+        DocumentBuffer buffer = documents.add(document, editor, () -> bufferName(textEditor.getEditorInput()));
+        activeController = NeovimEditorController.attach(textEditor, session, buffer, takeNeovimCursor);
         attachedPart = editor;
         LOG.fine("Attached Neovim to: " + textEditor.getTitle());
         return activeController;
@@ -353,8 +340,7 @@ public final class EditorAttachManager {
 
     private void followNeovimInto(int bufnr) {
         NeovimSession session;
-        IEditorPart target = null;
-        IDocument targetDocument = null;
+        Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
         synchronized (this) {
             session = followedSession;
             if (session == null) {
@@ -363,21 +349,15 @@ public final class EditorAttachManager {
             if (bufnr == session.getAttachedBufnr()) {
                 return; // Eclipse switched there itself in the meantime
             }
-            for (Map.Entry<IDocument, DocumentEntry> e : documents.entrySet()) {
-                if (e.getValue().buffer.bufnr() == bufnr && e.getValue().buffer.isOpenIn(session)
-                        && !e.getValue().parts.isEmpty()) {
-                    target = e.getValue().parts.iterator().next();
-                    targetDocument = e.getKey();
-                    break;
-                }
-            }
+            showing = documents.editorShowing(bufnr, buffer -> buffer.isOpenIn(session));
         }
         try {
-            if (target != null) {
+            if (showing.isPresent()) {
+                IEditorPart target = showing.get().editor();
                 target.getSite().getPage().activate(target);
                 ITextEditor textEditor = textEditorOf(target);
                 // A multi-page editor may open on a form page: no text editor to follow into.
-                if (textEditor != null && documentOf(textEditor) == targetDocument) {
+                if (textEditor != null && documentOf(textEditor) == showing.get().document()) {
                     attach(target, false, true);
                     return;
                 }
@@ -390,17 +370,11 @@ public final class EditorAttachManager {
 
     /** Forgets {@code part}; the buffer of a document whose last editor closed is wiped in Neovim. */
     private void releaseDocumentsOf(IEditorPart part) {
-        List<DocumentBuffer> unused = new ArrayList<>();
+        List<DocumentBuffer> unused;
         NeovimSession session;
         synchronized (this) {
             session = followedSession;
-            documents.values().removeIf(entry -> {
-                if (entry.parts.remove(part) && entry.parts.isEmpty()) {
-                    unused.add(entry.buffer);
-                    return true;
-                }
-                return false;
-            });
+            unused = documents.remove(part);
         }
         if (session != null && session.isAlive()) {
             unused.forEach(session::closeBufferAsync);
