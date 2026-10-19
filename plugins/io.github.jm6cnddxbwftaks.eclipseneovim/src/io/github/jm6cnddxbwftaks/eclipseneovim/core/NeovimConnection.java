@@ -52,6 +52,26 @@ final class NeovimConnection implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(NeovimConnection.class.getName());
 
+    /**
+     * neovim-java logs through SLF4J, which the bundled slf4j-simple prints to the console. At its
+     * default level, INFO, that is one line per RPC message ("Sending message: RequestMessage{...}"),
+     * several per key, flooding the console of a runtime Eclipse and of the tests. So unless a level
+     * was chosen with {@code -Dorg.slf4j.simpleLogger.defaultLogLevel=...} (for example {@code debug}
+     * to study the RPC traffic), only warnings and errors are printed.
+     *
+     * <p>A system property and not a {@code simplelogger.properties} file: slf4j-simple looks the
+     * file up through the thread's context class loader, which inside OSGi is usually not this
+     * bundle's. It reads the property once, when the first logger is created, which is why this runs
+     * here, before any neovim-java class is used.
+     */
+    private static final String SLF4J_LEVEL_PROPERTY = "org.slf4j.simpleLogger.defaultLogLevel";
+
+    static {
+        if (System.getProperty(SLF4J_LEVEL_PROPERTY) == null) {
+            System.setProperty(SLF4J_LEVEL_PROPERTY, "warn");
+        }
+    }
+
     /** Name this plug-in reports to Neovim through {@code nvim_set_client_info}. */
     static final String CLIENT_NAME = "Eclipse-Neovim";
 
