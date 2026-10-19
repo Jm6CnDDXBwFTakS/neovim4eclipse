@@ -32,12 +32,15 @@
        mvn test -f tests/unit/pom.xml
        tests/text is the same kind of module for code that uses Eclipse's text model (IDocument)
        but no widgets: mvn test -f tests/text/pom.xml
+       tests/swt runs widget tests with the SWT jar and a display, but no workbench:
+       mvn test -f tests/swt/pom.xml
        tests/...eclipseneovim.tests is a test fragment that runs inside a real Eclipse workbench
        (needs a display; -DskipTests skips it). -->
   <modules>
     <module>plugins/io.github.jm6cnddxbwftaks.eclipseneovim</module>
     <module>tests/unit</module>
     <module>tests/text</module>
+    <module>tests/swt</module>
     <module>tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests</module>
     <module>features/io.github.jm6cnddxbwftaks.eclipseneovim.feature</module>
     <module>releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite</module>
@@ -64,6 +67,7 @@
     <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
     <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
     <maven-antrun-plugin.version>3.1.0</maven-antrun-plugin.version>
+    <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
     <!-- Code coverage (see CONTRIBUTING.md, "Code coverage"). 0.8.14 or newer is needed to run on a
          Java 25 JDK: an older agent cannot read the JDK's own class files and fails at start-up. -->
     <jacoco.version>0.8.15</jacoco.version>
@@ -82,6 +86,13 @@
     <eclipse.text.version>3.14.200</eclipse.text.version>
     <eclipse.equinox.common.version>3.19.200</eclipse.equinox.common.version>
     <eclipse.core.commands.version>3.12.200</eclipse.core.commands.version>
+    <!-- For tests/swt only, the same way: SWT (one jar per OS and processor, chosen by a profile in
+         tests/swt/pom.xml), JFace and JFace Text as in the release above. -->
+    <eclipse.swt.version>3.128.0</eclipse.swt.version>
+    <eclipse.jface.version>3.35.100</eclipse.jface.version>
+    <eclipse.jface.text.version>3.26.0</eclipse.jface.text.version>
+    <eclipse.core.runtime.version>3.32.0</eclipse.core.runtime.version>
+    <eclipse.osgi.version>3.22.0</eclipse.osgi.version>
   </properties>
 
   <dependencyManagement>
@@ -179,6 +190,52 @@
         <groupId>org.eclipse.platform</groupId>
         <artifactId>org.eclipse.core.commands</artifactId>
         <version>${eclipse.core.commands.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <!-- JFace and JFace Text, for tests/swt (WidgetOffsets uses the text viewer). Their POMs ask for
+           OSGi, core.runtime, ICU and more; excluded, tests/swt lists what it really needs. -->
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.jface</artifactId>
+        <version>${eclipse.jface.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.jface.text</artifactId>
+        <version>${eclipse.jface.text.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.core.runtime</artifactId>
+        <version>${eclipse.core.runtime.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.platform</groupId>
+        <artifactId>org.eclipse.osgi</artifactId>
+        <version>${eclipse.osgi.version}</version>
         <exclusions>
           <exclusion>
             <groupId>*</groupId>
@@ -310,6 +367,11 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-antrun-plugin</artifactId>
           <version>${maven-antrun-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>${maven-enforcer-plugin.version}</version>
         </plugin>
         <plugin>
           <groupId>org.jacoco</groupId>

@@ -323,8 +323,8 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
 | Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | `tests/text` `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |
 | Visual `v`/`V` selection: corner order, inclusive end, caret end | `util/VisualSelectionGeometry` (applied by `editor/VisualSelectionView` through `EditorCaret` and `BlockHighlight`) | `VisualSelectionGeometryTest`, `tests/text` `VisualSelectionViewTest` (`FakeCaret`, fake highlight) |
-| Blockwise overlay painting | `editor/BlockOverlay` (the editor's `BlockHighlight`) | UI `BlockOverlayTest` (paints into an image) |
-| Caret and Neovim cursor in step | `editor/CaretSync` (caret seen through `editor/EditorCaret`, on the widget `StyledTextCaret`) | `tests/text` `CaretSyncTest` (in-memory `FakeCaret`), UI `StyledTextCaretTest` |
+| Blockwise overlay painting | `editor/BlockOverlay` (the editor's `BlockHighlight`) | `tests/swt` `BlockOverlayTest` (paints into an image) |
+| Caret and Neovim cursor in step | `editor/CaretSync` (caret seen through `editor/EditorCaret`, on the widget `StyledTextCaret`) | `tests/text` `CaretSyncTest` (in-memory `FakeCaret`), `tests/swt` `StyledTextCaretTest` |
 | Test text with caret and selection markers | `tests/text` helper `VimText` (`"al\|pha"`, `«selected»`, `VimText.SAMPLE`) | `VimTextTest`; used by `CaretSyncTest`, `DocumentPositionsTest` |
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
@@ -341,7 +341,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Session facade | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Overlay colors | `util/OverlayColors` | `OverlayColorsTest` |
 | Ctrl-key ids and defaults | `util/VimCtrlKeys` | `VimCtrlKeysTest`, `PluginXmlConsistencyTest` |
-| Eclipse glue | `editor/*`, `prefs/*` | UI test fragment `tests/...eclipseneovim.tests` (`OverlayFrameTest`, `BlockOverlayTest`, `VimKeyContextsTest`, `CtrlKeysPreferencePageTest`, ...) |
+| Eclipse glue | `editor/*`, `prefs/*` | `tests/swt` for widgets (`OverlayFrameTest`, `BlockOverlayTest`, `WidgetOffsetsTest`); UI test fragment `tests/...eclipseneovim.tests` for the workbench (`VimKeyContextsTest`, `CtrlKeysPreferencePageTest`, ...) |
 | Whole plug-in in a real editor | all of the above | `EditorEndToEndTest` (needs nvim and a display) |
 
 When adding behavior, prefer putting the decision in a pure `util` class and leaving the Eclipse class

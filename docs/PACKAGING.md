@@ -47,7 +47,9 @@ packages only to this fragment (`x-friends` in its `MANIFEST.MF`).
 
 Tests of code that uses only the text model (`IDocument`) are not here but in `tests/text`, a plain
 Maven module that compiles those classes against the `org.eclipse.text` jar from Maven Central and
-runs without a workbench.
+runs without a workbench. Widget tests that need SWT but not the workbench are in `tests/swt`, which
+does the same with the SWT jar for the build machine's OS and processor (a profile picks it) and
+needs a display.
 
 ## PDE (optional, for interactive development)
 

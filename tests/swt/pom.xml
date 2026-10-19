@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Plain jar module, part of the root reactor; also runs alone:
+       mvn test -f tests/swt/pom.xml
+
+       Tests of editor/ classes that work on SWT widgets (StyledText, painting, folded-code offsets)
+       but not on the workbench: StyledTextCaret, BlockOverlay, OverlayFrame, WidgetOffsets. They
+       need SWT and a display, like the UI tests, but not a started Eclipse: plain JUnit creates
+       the SWT Display on its own thread, which saves the workbench start and lets them run in the
+       IDE as ordinary JUnit tests. On a machine without a display run them under xvfb-run.
+
+       SWT is one jar per operating system and processor (it calls the native toolkit: GTK, Win32,
+       Cocoa). A profile below picks it from the machine running the build; the version is the one
+       in the Eclipse release (root pom.xml). As in tests/text, the compiler enforces the boundary:
+       no workbench jar is on the classpath.
+
+       Sources under test come from the plug-in project; there is no second copy. -->
+  <parent>
+    <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+    <artifactId>EclipseNeovim</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>eclipse-neovim-swt-tests</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Eclipse Neovim SWT Tests</name>
+  <description>
+    Tests of editor/ code that uses SWT widgets but not the workbench: plain JUnit with the SWT jar
+    and a display.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>${java.release}</maven.compiler.release>
+    <jacoco.dataFile>${project.build.directory}/jacoco.exec</jacoco.dataFile>
+    <!-- Set by the profile for this machine; the build fails with a clear message when none matches. -->
+    <swt.platform>unsupported-platform</swt.platform>
+    <!-- Extra JVM arguments for SWT (macOS needs one). -->
+    <swt.jvmArgs></swt.jvmArgs>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.swt.${swt.platform}</artifactId>
+      <version>${eclipse.swt.version}</version>
+      <exclusions>
+        <!-- The fragment's POM points back to a host artifact with an unresolvable platform name. -->
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.jface.text</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.jface</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.text</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.equinox.common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.core.commands</artifactId>
+    </dependency>
+    <!-- JFace Text's TextSelection asks org.eclipse.core.runtime.Platform whether it runs in debug
+         mode; that class needs the OSGi jar on the classpath. No OSGi framework is started. -->
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.core.runtime</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.platform</groupId>
+      <artifactId>org.eclipse.osgi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>add-plugin-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- The classes under test, one by one (editor/ also holds workbench code), and the util/
+               classes they use. -->
+          <includes>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/util/**</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/EditorCaret.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/StyledTextCaret.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/WidgetOffsets.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/BlockHighlight.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/BlockOverlay.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OverlayFrame.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>known-swt-platform</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireProperty>
+                  <property>swt.platform</property>
+                  <regex>^(gtk|win32|cocoa)\..*</regex>
+                  <regexMessage>No SWT jar for this OS and processor (${os.name} ${os.arch}): add a profile to tests/swt/pom.xml, or skip this module with -pl '!tests/swt'.</regexMessage>
+                </requireProperty>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Coverage, as in tests/unit; the report is target/site/jacoco/index.html (editor/ only). -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>coverage-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <configuration>
+              <destFile>${jacoco.dataFile}</destFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>coverage-report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+            <configuration>
+              <dataFile>${jacoco.dataFile}</dataFile>
+              <includes>
+                <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/**</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- @{argLine} keeps the JaCoCo agent that prepare-agent put there. -->
+          <argLine>@{argLine} ${swt.jvmArgs}</argLine>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>swt-linux-x86_64</id>
+      <activation>
+        <os>
+          <family>unix</family>
+            <name>Linux</name>
+          <arch>amd64</arch>
+        </os>
+      </activation>
+      <properties>
+        <swt.platform>gtk.linux.x86_64</swt.platform>
+      </properties>
+    </profile>
+    <profile>
+      <id>swt-linux-aarch64</id>
+      <activation>
+        <os>
+          <family>unix</family>
+            <name>Linux</name>
+          <arch>aarch64</arch>
+        </os>
+      </activation>
+      <properties>
+        <swt.platform>gtk.linux.aarch64</swt.platform>
+      </properties>
+    </profile>
+    <profile>
+      <id>swt-windows-x86_64</id>
+      <activation>
+        <os>
+          <family>windows</family>
+          <arch>amd64</arch>
+        </os>
+      </activation>
+      <properties>
+        <swt.platform>win32.win32.x86_64</swt.platform>
+      </properties>
+    </profile>
+    <profile>
+      <id>swt-windows-aarch64</id>
+      <activation>
+        <os>
+          <family>windows</family>
+          <arch>aarch64</arch>
+        </os>
+      </activation>
+      <properties>
+        <swt.platform>win32.win32.aarch64</swt.platform>
+      </properties>
+    </profile>
+    <profile>
+      <id>swt-macos-x86_64</id>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>x86_64</arch>
+        </os>
+      </activation>
+      <properties>
+        <swt.platform>cocoa.macosx.x86_64</swt.platform>
+        <!-- Cocoa only lets the process's first thread run the UI; surefire runs the tests there. -->
+        <swt.jvmArgs>-XstartOnFirstThread</swt.jvmArgs>
+      </properties>
+    </profile>
+    <profile>
+      <id>swt-macos-aarch64</id>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>aarch64</arch>
+        </os>
+      </activation>
+      <properties>
+        <swt.platform>cocoa.macosx.aarch64</swt.platform>
+        <!-- Cocoa only lets the process's first thread run the UI; surefire runs the tests there. -->
+        <swt.jvmArgs>-XstartOnFirstThread</swt.jvmArgs>
+      </properties>
+    </profile>
+  </profiles>
+</project>

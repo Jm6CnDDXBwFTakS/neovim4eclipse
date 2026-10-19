@@ -33,7 +33,7 @@ class StyledTextCaretTest {
 
     @BeforeEach
     void create() {
-        shell = new Shell(Display.getCurrent());
+        shell = new Shell(Display.getDefault());
         widget = new StyledText(shell, SWT.MULTI);
         widget.setText("alpha\nbeta");
         caret = new StyledTextCaret(widget, new WidgetOffsets(widget, null));
