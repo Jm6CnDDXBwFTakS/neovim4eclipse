@@ -102,7 +102,7 @@ plugins/io.github.jm6cnddxbwftaks.eclipseneovim/
   src/io/github/jm6cnddxbwftaks/eclipseneovim/
     util/     pure Java: key mapping, mode strings, line/text conversion, range edits, UTF-8 columns
     core/     NeovimSession (process + RPC + events); no SWT/Eclipse imports allowed
-      rpc/    the plug-in's own RPC types (Mode), replacing neovim-java's step by step
+      rpc/    the plug-in's own Neovim API interface and types, replacing neovim-java step by step
     sync/     BufferSynchronizer: IDocument <-> Neovim buffer
     editor/   attach/detach, key interception, caret/status UI, :w/:q handling
     prefs/    preference pages (Neovim, Ctrl Keys) and defaults

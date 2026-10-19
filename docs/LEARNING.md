@@ -230,8 +230,19 @@ ProcessRpcConnection    the process's stdin/stdout (wrapped in core/QuittingConn
 RpcClient               encodes/decodes messages, matches responses to requests (Jackson + msgpack)
 ReactiveRpcStreamer     turns each request into a CompletableFuture
 NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), buffer.setLines(...)
+NeovimJavaApi           our own interface over it, core/rpc/NeovimApi: api.input("dd"),
+                        api.bufSetLines(buffer, ...); the only layer the rest of the plug-in sees
 NeovimHandlerManager    routes notifications to @NeovimNotificationHandler methods (NotificationBridge)
 ```
+
+The plug-in calls neovim-java through an interface of its own, `core/rpc/NeovimApi`: the 16
+Neovim functions it uses, named after Neovim's (`bufSetLines` is `nvim_buf_set_lines`), with
+buffers and windows as plain `Handle(kind, id)` records instead of neovim-java's buffer objects.
+`core/rpc/NeovimJavaApi` implements it by calling neovim-java and converting the types. This
+is the first half of the *strangler* pattern for replacing a library: put your own interface in
+front of it, move every caller to the interface, then write a second implementation and swap
+(`docs/RPC_CLIENT.md` is the plan; the second implementation is our own msgpack-rpc client).
+Until the swap, only `NeovimConnection` and the adapter import neovim-java's API.
 
 neovim-java also has a `@NeovimRequestHandler` annotation for answering Neovim's requests, but in
 version 0.5.0 it never fires: the manager stores those handlers in one map and looks them up in

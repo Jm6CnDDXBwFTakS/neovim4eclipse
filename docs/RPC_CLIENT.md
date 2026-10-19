@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: step 1. Next: step 2.
+Status: **accepted** (option A), in progress. Done: steps 1–2. Next: step 3.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -43,7 +43,8 @@ tests. They fall into four groups.
 ### 1.2 Typed API calls
 
 `NeovimStreamApi` implements `NeovimApi`, `NeovimBufferApi` and `NeovimWindowApi`; each method
-sends one request and returns a `CompletableFuture`. The plug-in calls 18 distinct API functions:
+sends one request and returns a `CompletableFuture`. The plug-in calls 18 distinct API functions
+(16 through `core/rpc/NeovimApi` since step 2, plus the two `NeovimConnection` makes while opening):
 
 | Call | Neovim function | Where |
 |---|---|---|
@@ -61,7 +62,8 @@ sends one request and returns a `CompletableFuture`. The plug-in calls 18 distin
 | `buffer.attach` (2) | `nvim_buf_attach` | `NeovimSession`, `DocumentBuffers` |
 | `buffer.setName` | `nvim_buf_set_name` | `DocumentBuffers` |
 | `buffer.delete` | `nvim_buf_delete` | `DocumentBuffers` |
-| `buffer.get().getId()` | (the handle's number) | `DocumentBuffers.bufnr` |
+| `buffer.getLines` / `setLines` (2 each) | `nvim_buf_get_lines` / `nvim_buf_set_lines` | `NeovimSession` |
+| `buffer.get().getId()` | (the handle's number, no call) | `DocumentBuffers.bufnr` |
 | `window.getCursor` / `setCursor` | `nvim_win_get_cursor` / `nvim_win_set_cursor` | `NeovimSession` |
 
 Value types from `api.types`: `VimMode` (also in `StateSync`, `KeyInput` and their unit tests),
@@ -126,7 +128,7 @@ Sizes are estimates including Javadoc in the project's explanatory style.
 | `Handle` | ~30 | `record Handle(Kind kind, long id)` with `Kind { BUFFER, WINDOW, TABPAGE }`; replaces `Buffer`, `BaseCustomIdType`, `MessagePackExtensionType`. |
 | `NeovimError` | ~20 | An `Exception` carrying Neovim's error type and message, so `Rpc.errorMessage` still finds `E94: ...` in it. |
 | `RpcChannel` | ~220 | The connection: a reader thread, request ids, pending responses, writing, dispatching Neovim's notifications and requests, closing. Details below. |
-| `NeovimApi` (ours) | ~150 | The 18 functions of 1.2 as thin typed methods, each one line over `RpcChannel.request`, using `Mode(String mode, boolean blocking)` (step 1) and the existing `core/CursorPos`. Only the functions we use; adding one is a line. |
+| `NeovimApi` (ours) | ~150 | The functions of 1.2 as thin typed methods, each one line over `RpcChannel.request`, using `Mode(String mode, boolean blocking)` (step 1) and `WinCursor(int row, int col)` (step 2). Only the functions we use; adding one is a line. |
 
 About 550 lines in total, around 300 of them code. In return `QuittingConnection` (100 lines), the
 executor and SLF4J setup in `NeovimConnection` (about 40 lines) and `QuittingConnectionTest` go away.
@@ -201,18 +203,32 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
    `nvim_get_mode`. Pure refactoring. `VimCoords` needed no new type: it was already used only
    inside `NeovimSession`, which converts it to the existing `core/CursorPos`; it goes away with
    step 2.
-2. **Own API interface.** Introduce `core/rpc/NeovimApi` (the 18 functions, returning
-   `CompletableFuture`s of our types, buffers as `Handle`) and `NeovimJavaApi`, an adapter that
-   implements it with neovim-java. Move `NeovimSession` and `DocumentBuffers` to the interface;
-   `DocumentBuffers.bufnr` becomes `handle.id()`. After this commit only `NeovimConnection` and the
-   adapter import `com.ensarsarajcic`.
+2. **Own API interface.** *Done.* Introduce `core/rpc/NeovimApi` and `NeovimJavaApi`, an adapter
+   that implements it with neovim-java. Move `NeovimSession` and `DocumentBuffers` to the interface;
+   `DocumentBuffers.bufnr` becomes `handle.intId()`. As built:
+   - The interface is flat and uses Neovim's names without `nvim_` (`bufSetLines(Handle, ...)` is
+     `nvim_buf_set_lines`), 16 methods. `nvim_get_chan_info` is `getChannelId()`, the one field read.
+   - `Handle` (planned for step 4) came here, because the interface passes buffers and windows as
+     handles. `HandleTest` covers it.
+   - `WinCursor(int row, int col)` is `nvim_win_get_cursor`'s answer. `NeovimSession` converts it to
+     `core/CursorPos`, the listeners' type, so `core/rpc` does not depend on `core` (which depends
+     on it).
+   - `nvim_set_client_info` and `nvim_ui_attach` stay in `NeovimConnection` on neovim-java's API
+     (its option types) until step 7.
+   - The adapter converts answers with `thenApply`, which runs on the RPC thread; the conversions
+     do not block.
+   - Not caught by any test: `bufAttach`'s `sendBuffer` (only the home buffer passes `true`, and it
+     is empty then). `NeovimApiTest` in step 6 checks the parameters sent.
+
+   After this commit `com.ensarsarajcic` is imported only by `NeovimConnection`, the adapter,
+   `NotificationBridge` (step 3) and `QuittingConnection` (step 7).
 3. **Plain notification and request handlers.** `NotificationBridge` implements
    `RpcChannel.Incoming`-shaped methods (`notification(String, List<Object>)` dispatching by name
    with a `switch`, `request(String, List<Object>)`) instead of annotated methods taking
    `NotificationMessage`/`RequestMessage`. `NeovimConnection` registers one raw notification
    callback and the existing request callback that call them. Drops the annotation scanning and the
    need for `public` handler methods. `bufferNumber` still accepts both extension forms here.
-4. **`MsgpackValues` and `Handle`** with their unit tests. Not used yet.
+4. **`MsgpackValues`** with its unit tests (`Handle` exists since step 2). Not used yet.
 5. **`RpcChannel`** with its unit tests. Not used yet.
 6. **`MsgpackNeovimApi`**, our implementation of the interface over `RpcChannel`, with
    `NeovimApiTest`. Make `NeovimBufferIntegrationTest` (or a new small contract test) run against
@@ -232,6 +248,10 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
    msgpack-core only). Dependabot reads the root `pom.xml` properties, so it stops proposing the
    removed libraries by itself. Delete `plugins/.../lib/` and `target/classes` before building (see AGENTS.md, "Pitfalls"), then install
    the ZIP in a real Eclipse and try typing, `:w`, `"+p` and closing editors.
+9. **Cursor calls on window 0.** `NeovimSession.getCursor` and `setCursor` first ask
+   `nvim_get_current_win` and then pass that window; Neovim's window functions accept `0` for the
+   current window, so `winGetCursor(Handle.window(0))` saves one round trip per call. A one-line
+   behavior change, kept out of the refactoring steps on purpose.
 
 Steps 1–3 are worth doing even if the rest is never done: they confine neovim-java to two classes.
 

@@ -12,10 +12,8 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.ensarsarajcic.neovim.java.api.NeovimApi;
-import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
-import com.ensarsarajcic.neovim.java.api.types.api.DeleteBufferOptions;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimApi;
 
 /**
  * The Neovim buffers that mirror Eclipse documents, and which of them is <em>attached</em>.
@@ -45,14 +43,14 @@ final class DocumentBuffers {
     private static final Logger LOG = Logger.getLogger(DocumentBuffers.class.getName());
 
     private final NeovimApi api;
-    private final NeovimBufferApi home;
+    private final Handle home;
     /** Changed on the input thread only; read from any thread. */
-    private volatile NeovimBufferApi attached;
+    private volatile Handle attached;
     private volatile int attachedBufnr;
     /** The document mirrored into the attached buffer; {@code null} for the home buffer. */
     private volatile DocumentBuffer attachedDocument;
     /** Buffers created by {@link #show}, by number. */
-    private final Map<Integer, NeovimBufferApi> created = new ConcurrentHashMap<>();
+    private final Map<Integer, Handle> created = new ConcurrentHashMap<>();
     /** The documents mirrored into the buffers in {@link #created}, by number. */
     private final Map<Integer, DocumentBuffer> documents = new ConcurrentHashMap<>();
     /** Called with the number of a document buffer Neovim switched to by itself. */
@@ -63,7 +61,7 @@ final class DocumentBuffers {
      */
     private volatile int enteredBufnr;
 
-    DocumentBuffers(NeovimApi api, NeovimBufferApi home) {
+    DocumentBuffers(NeovimApi api, Handle home) {
         this.api = api;
         this.home = home;
         this.attached = home;
@@ -71,12 +69,12 @@ final class DocumentBuffers {
         this.enteredBufnr = attachedBufnr;
     }
 
-    static int bufnr(NeovimBufferApi buffer) {
-        return (int) buffer.get().getId();
+    static int bufnr(Handle buffer) {
+        return buffer.intId();
     }
 
     /** The buffer mirrored into the attached document (the home buffer when none is). */
-    NeovimBufferApi attached() {
+    Handle attached() {
         return attached;
     }
 
@@ -120,13 +118,13 @@ final class DocumentBuffers {
     }
 
     /** Neovim's handle on a document's buffer, or {@code null} while it does not exist in this session. */
-    NeovimBufferApi handleOf(DocumentBuffer buffer) {
+    Handle handleOf(DocumentBuffer buffer) {
         return owns(buffer) ? created.get(buffer.bufnr) : null;
     }
 
     /** Makes {@code buffer} the attached buffer and Neovim's current one, creating it on first use. */
     void show(DocumentBuffer buffer) throws Exception {
-        NeovimBufferApi target = owns(buffer) ? created.get(buffer.bufnr) : null;
+        Handle target = owns(buffer) ? created.get(buffer.bufnr) : null;
         if (target == null) {
             target = create(buffer.name);
             buffer.bufnr = bufnr(target);
@@ -138,25 +136,25 @@ final class DocumentBuffers {
         attached = target;
         attachedBufnr = buffer.bufnr;
         attachedDocument = buffer;
-        await(api.setCurrentBuffer(target.get()));
+        await(api.setCurrentBuf(target));
     }
 
-    private NeovimBufferApi create(String name) throws Exception {
+    private Handle create(String name) throws Exception {
         // Listed, so :ls and :b see it. Scratch: no swap file, and no filetype detection runs. Its
         // buftype=nofile is then changed to acwrite, so that a write asks Eclipse to save
         // (LuaScripts.DOCUMENT_BUFFER): Neovim never writes the file itself.
-        NeovimBufferApi buffer = await(api.createBuffer(true, true));
+        Handle buffer = await(api.createBuf(true, true));
         if (!name.isEmpty()) {
             try {
-                await(buffer.setName(name));
+                await(api.bufSetName(buffer, name));
             } catch (Exception e) {
                 LOG.log(Level.FINE, "Buffer name already in use, left unnamed: " + name, e);
             }
         }
-        await(api.executeLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
+        await(api.execLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
         // nvim_buf_attach: Neovim now sends nvim_buf_lines_event for this buffer. No initial
         // full-buffer event (false): the document is pushed into the buffer instead.
-        await(buffer.attach(false, Map.of()));
+        await(api.bufAttach(buffer, false));
         created.put(bufnr(buffer), buffer);
         return buffer;
     }
@@ -166,7 +164,7 @@ final class DocumentBuffers {
         if (!owns(buffer)) {
             return;
         }
-        NeovimBufferApi doomed = created.remove(buffer.bufnr);
+        Handle doomed = created.remove(buffer.bufnr);
         documents.remove(buffer.bufnr);
         buffer.owner = null;
         if (doomed == null) {
@@ -179,13 +177,13 @@ final class DocumentBuffers {
         }
         // Leave the buffer first: wiping the window's buffer makes Neovim enter some other one,
         // which Eclipse would follow by activating that editor.
-        await(api.setCurrentBuffer(attached.get()));
-        await(doomed.delete(new DeleteBufferOptions(true, false)));
+        await(api.setCurrentBuf(attached));
+        await(api.bufDelete(doomed, true, false)); // force: unsaved changes live in Eclipse
     }
 
     /** Switches Neovim back to the attached buffer. */
     void returnToAttached() throws Exception {
-        await(api.setCurrentBuffer(attached.get()));
+        await(api.setCurrentBuf(attached));
     }
 
     void setEnterHandler(Consumer<Integer> handler) {

@@ -14,7 +14,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.ensarsarajcic.neovim.java.api.NeovimApi;
 import com.ensarsarajcic.neovim.java.api.NeovimStreamApi;
 import com.ensarsarajcic.neovim.java.api.types.api.ClientAttributes;
 import com.ensarsarajcic.neovim.java.api.types.api.ClientType;
@@ -32,6 +31,8 @@ import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamer;
 import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamerWrapper;
 import com.ensarsarajcic.neovim.java.handler.NeovimHandlerManager;
 import com.ensarsarajcic.neovim.java.handler.NeovimHandlerProxy;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimApi;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimJavaApi;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.PlatformUtil;
 
@@ -47,6 +48,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.PlatformUtil;
  *   RpcClient               encodes requests, decodes responses and notifications (Jackson + msgpack)
  *   ReactiveRpcStreamer     turns each request into a CompletableFuture
  *   NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), ...
+ *   NeovimJavaApi           our own interface over it (core/rpc/NeovimApi), which the rest of the
+ *                           plug-in uses, so that it does not depend on neovim-java
  * </pre>
  *
  * <p>After the stack is up, {@link #open} introduces the client to Neovim
@@ -139,14 +142,17 @@ final class NeovimConnection implements AutoCloseable {
         ReactiveRpcStreamer reactive = ReactiveRpcClient.createInstanceWithCustomReactiveStreamer(
                 new ReactiveRpcStreamerWrapper(rpcClient, rpcExecutor));
         reactive.attach(streams);
-        NeovimApi api = new NeovimStreamApi(reactive);
-        NeovimConnection connection = new NeovimConnection(process, streams, rpcClient, rpcExecutor, api);
+        NeovimStreamApi streamApi = new NeovimStreamApi(reactive);
+        NeovimConnection connection = new NeovimConnection(process, streams, rpcClient, rpcExecutor,
+                new NeovimJavaApi(streamApi, reactive));
 
         try {
-            await(api.setClientInfo(CLIENT_NAME, clientVersion(clientVersion),
+            // These two still use neovim-java's API directly (its option types); they move to
+            // core/rpc/NeovimApi with our own client (docs/RPC_CLIENT.md, step 7).
+            await(streamApi.setClientInfo(CLIENT_NAME, clientVersion(clientVersion),
                     ClientType.REMOTE, Map.of(), new ClientAttributes(null, null, null)));
             // Without a UI attached, nvim_input is not processed reliably under --embed.
-            await(api.attachUi(120, 40, UiOptions.TERMINAL));
+            await(streamApi.attachUi(120, 40, UiOptions.TERMINAL));
         } catch (Exception e) {
             connection.close();
             throw e;
@@ -172,7 +178,7 @@ final class NeovimConnection implements AutoCloseable {
         }
     }
 
-    /** The typed Neovim API. */
+    /** The typed Neovim API (our interface, implemented with neovim-java for now). */
     NeovimApi api() {
         return api;
     }

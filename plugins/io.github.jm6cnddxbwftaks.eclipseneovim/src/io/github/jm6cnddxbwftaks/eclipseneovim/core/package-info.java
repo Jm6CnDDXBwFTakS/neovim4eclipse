@@ -59,9 +59,9 @@
  *   <li>{@code NotificationBridge}: decodes the msgpack-rpc notifications Neovim sends (buffer line
  *       events and the plug-in's own {@code eclipse_*} events), and answers its two requests, the
  *       clipboard paste and the save of a document Neovim writes.</li>
- *   <li>Subpackage {@code core/rpc}: the plug-in's own types for Neovim's API answers (such as
- *       {@code Mode}), used instead of neovim-java's, so the library can be replaced
- *       ({@code docs/RPC_CLIENT.md}).</li>
+ *   <li>Subpackage {@code core/rpc}: the plug-in's own interface to the Neovim API
+ *       ({@code NeovimApi}) and its types ({@code Handle}, {@code Mode}, {@code WinCursor}), used
+ *       instead of neovim-java's, so the library can be replaced ({@code docs/RPC_CLIENT.md}).</li>
  * </ul>
  *
  * <p>See {@code docs/LEARNING.md}, part 2, for msgpack-rpc, {@code nvim_input}, blocking, and

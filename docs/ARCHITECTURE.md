@@ -170,7 +170,9 @@ or a fake that holds the work back (for example, to close the editor while a Neo
 
 ## Dependency stack
 
-- **neovim-java** (`neovim-api`, `core-rpc`, `reactive-core-rpc`, handlers; version in the root `pom.xml`)
+- **neovim-java** (`neovim-api`, `core-rpc`, `reactive-core-rpc`, handlers; version in the root `pom.xml`),
+  seen by the plug-in only through its own `core/rpc/NeovimApi` (adapter `NeovimJavaApi`), so that it
+  can be replaced (`docs/RPC_CLIENT.md`)
 - MessagePack + Jackson
 - SLF4j simple (logging from the client library)
 
