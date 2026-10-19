@@ -23,8 +23,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link HostCommands}: Vim's file and tab commands carried out by Eclipse. Neovim is not involved
- * (auto-attach is off), so the documents are edited directly and only Eclipse's side is tested.
+ * {@link HostCommands}: Vim's file and tab commands carried out by a real Eclipse. Neovim is not
+ * involved (auto-attach is off), so the documents are edited directly and only Eclipse's side is
+ * tested.
+ *
+ * <p>Which calls each command makes ({@code :wq} saves, then closes; a failed save keeps the file
+ * open) is decided by {@code util/HostCommandRunner} and tested in {@code HostCommandRunnerTest}
+ * without a workbench. These tests check one real path per Eclipse operation: saving files, the
+ * {@code :e} file lookup and its refusal with changes, and tab switching. Closing is also covered by
+ * the end-to-end tests ({@code ZZ}, {@code ZQ}).
  */
 class HostCommandsTest {
 
@@ -66,31 +73,6 @@ class HostCommandsTest {
         assertTrue(HostCommands.tryHandleEx("wa", first));
 
         waitUntil("both editors saved", TIMEOUT_MS, () -> !first.isDirty() && !second.isDirty());
-        assertEquals("one changed\n", contentsOf(project.getFile("one.txt")));
-        assertEquals("two changed\n", contentsOf(project.getFile("two.txt")));
-    }
-
-    @Test
-    void writeSavesOnlyTheCurrentEditor() throws Exception {
-        assertTrue(HostCommands.tryHandleEx("w", first));
-
-        waitUntil("first editor saved", TIMEOUT_MS, () -> !first.isDirty());
-        assertTrue(second.isDirty());
-        assertEquals("two\n", contentsOf(project.getFile("two.txt")));
-    }
-
-    @Test
-    void quitAllClosesEveryEditor() {
-        assertTrue(HostCommands.tryHandleEx("qa!", first));
-
-        waitUntil("all editors closed", TIMEOUT_MS, () -> page().getEditorReferences().length == 0);
-    }
-
-    @Test
-    void writeQuitAllSavesThenClosesEveryEditor() throws Exception {
-        assertTrue(HostCommands.tryHandleEx("xa", first));
-
-        waitUntil("all editors closed", TIMEOUT_MS, () -> page().getEditorReferences().length == 0);
         assertEquals("one changed\n", contentsOf(project.getFile("one.txt")));
         assertEquals("two changed\n", contentsOf(project.getFile("two.txt")));
     }

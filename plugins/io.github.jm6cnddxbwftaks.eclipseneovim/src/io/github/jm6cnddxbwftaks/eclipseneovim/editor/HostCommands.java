@@ -10,12 +10,17 @@ import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostCommandRunner;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.TabNavigation;
 
 /**
  * Carries out the {@code :} commands that belong to the IDE (see {@link HostExCommand} for the
  * list): files through {@link EclipseFileCommands}, tabs through {@link EditorTabs}.
+ *
+ * <p>What each command does (save before close, a failed save keeps the file open, ...) is decided
+ * by {@link HostCommandRunner}, which has no Eclipse code and is unit-tested; this class only
+ * connects it to the editor ({@link EditorIde}) and the UI thread.
  *
  * <p>Two places call {@link #tryHandleEx}: the inline command box ({@link CommandLineBox}) and the
  * session, when Enter is pressed on Neovim's own command line (for example while a macro is being
@@ -40,34 +45,41 @@ public final class HostCommands {
         if (editor == null) {
             return false;
         }
-        HostExCommand cmd = HostExCommand.parse(raw);
-        LOG.fine(() -> "tryHandleEx [" + raw + "] -> " + cmd);
-        boolean force = cmd.force();
-        switch (cmd.kind()) {
-            case WRITE -> runOnUi(() -> EclipseFileCommands.save(editor));
-            case WRITE_ALL -> runOnUi(EclipseFileCommands::saveAll);
-            case QUIT -> runOnUi(() -> EclipseFileCommands.close(editor, force));
-            case QUIT_ALL -> runOnUi(() -> EclipseFileCommands.closeAll(editor, force));
-            case WRITE_QUIT -> runOnUi(() -> {
-                if (EclipseFileCommands.save(editor) || force) {
-                    EclipseFileCommands.close(editor, true);
-                }
-            });
-            case WRITE_QUIT_ALL -> runOnUi(() -> {
-                if (EclipseFileCommands.saveAll() || force) {
-                    EclipseFileCommands.closeAll(editor, true);
-                }
-            });
-            case EDIT -> runOnUi(() -> EclipseFileCommands.edit(editor, cmd.argument(), force));
-            case TAB_NEXT -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.NEXT, cmd.count()));
-            case TAB_PREVIOUS -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.PREVIOUS, cmd.count()));
-            case TAB_FIRST -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.FIRST, 0));
-            case TAB_LAST -> runOnUi(() -> EditorTabs.go(editor, TabNavigation.Action.LAST, 0));
-            case NONE -> {
-                return false;
-            }
+        LOG.fine(() -> "tryHandleEx [" + raw + "] -> " + HostExCommand.parse(raw));
+        return new HostCommandRunner(new EditorIde(editor), HostCommands::runOnUi).run(raw);
+    }
+
+    /** {@link HostCommandRunner.Ide} for one editor: Eclipse's save, close, open and tab switching. */
+    private record EditorIde(ITextEditor editor) implements HostCommandRunner.Ide {
+        @Override
+        public boolean save() {
+            return EclipseFileCommands.save(editor);
         }
-        return true;
+
+        @Override
+        public boolean saveAll() {
+            return EclipseFileCommands.saveAll();
+        }
+
+        @Override
+        public void close(boolean force) {
+            EclipseFileCommands.close(editor, force);
+        }
+
+        @Override
+        public void closeAll(boolean force) {
+            EclipseFileCommands.closeAll(editor, force);
+        }
+
+        @Override
+        public void edit(String file, boolean force) {
+            EclipseFileCommands.edit(editor, file, force);
+        }
+
+        @Override
+        public void goToTab(TabNavigation.Action action, int count) {
+            EditorTabs.go(editor, action, count);
+        }
     }
 
     /**
