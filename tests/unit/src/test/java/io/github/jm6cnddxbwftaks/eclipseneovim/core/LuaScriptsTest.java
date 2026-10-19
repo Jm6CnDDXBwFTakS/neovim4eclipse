@@ -12,7 +12,8 @@ class LuaScriptsTest {
 
     @Test
     void setupScriptRegistersTheNotificationsTheBridgeHandles() {
-        for (String name : new String[] { "eclipse_mode", "eclipse_cursor", "eclipse_buf_enter", "eclipse_yank" }) {
+        for (String name : new String[] { "eclipse_mode", "eclipse_cursor", "eclipse_buf_enter", "eclipse_yank",
+                "eclipse_clipboard_copy", "eclipse_clipboard_paste" }) {
             assertTrue(LuaScripts.SETUP.contains("'" + name + "'"), name);
         }
     }
@@ -21,6 +22,14 @@ class LuaScriptsTest {
     void yankHookStandsDownWhenNeovimSyncsTheClipboardItself() {
         // Regression guard for linewise yanks turning charwise (P pasting inline) when two writers raced.
         assertTrue(LuaScripts.SETUP.contains("vim.o.clipboard:find('unnamed'"));
+        // "+y goes to the provider; the yank hook must not write the clipboard a second time.
+        assertTrue(LuaScripts.SETUP.contains("e.regname == '+' or e.regname == '*'"));
+    }
+
+    @Test
+    void theClipboardProviderIsInstalledOnlyWhenTheUserHasNone() {
+        assertTrue(LuaScripts.SETUP.contains("if vim.g.clipboard == nil then"));
+        assertTrue(LuaScripts.SETUP.contains("vim.g.loaded_clipboard_provider = nil"));
     }
 
     @Test

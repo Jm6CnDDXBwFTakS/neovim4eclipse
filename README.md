@@ -27,7 +27,7 @@ release process; see [Known limitations](#known-limitations).
 | File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:e file`, `:e!`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
 | `gd` (Open Declaration) and `K` (hover information), through the editor's own commands | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
-| Copying yanked text to the OS clipboard (one way; skipped if your config sets `clipboard=unnamedplus`, because Neovim then does it itself) | `p` / `P` / `.` / counts, from Neovim's own registers |
+| The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
 
 Details of what happens on each key are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -209,6 +209,23 @@ mode (`R`) are also not repeated by Neovim in this mode. Insert-mode mappings an
 `init.lua` are cleared in the embedded Neovim (Eclipse never applied them anyway), so that they cannot
 hijack the re-typed text.
 
+## Clipboard
+
+Eclipse is the embedded Neovim's *clipboard provider* (`:help clipboard`), so the registers that
+stand for the system clipboard work as in Vim, with no `xclip`, `wl-clipboard` or `win32yank` needed:
+
+- `"+p` pastes what was copied in any program, `"+yy` copies a line for any program to paste.
+- `"*` is the primary selection on Linux (the text last selected, pasted with the middle mouse button);
+  on Windows and macOS it is the same clipboard as `"+`.
+- With `set clipboard=unnamedplus` in your `init.lua`, plain `y` and `p` use the clipboard, as in Vim.
+- Without it, every yank (`yy`, `dw`, `"ay` ...) is still copied to the clipboard, so text yanked in
+  the editor can be pasted elsewhere; plain `p` pastes Neovim's own register.
+
+A whole-line copy ends with a line break, and pasting text that ends with one pastes whole lines. What
+Neovim copied itself pastes back as it was yanked: lines as lines, a `Ctrl-V` block as a block. If your
+`init.lua` sets `g:clipboard`, your provider is kept. If the clipboard cannot be read within 2 seconds,
+the paste inserts nothing.
+
 ## Blockwise visual (`Ctrl-V`)
 
 Works like Vim: `Ctrl-V` then motions, `$` to extend to line ends, `o`/`O` to switch corners, and `d`, `y`,
@@ -280,8 +297,7 @@ These are real and deliberate to know about before extending the code:
 3. **Host commands are a fixed set** (table under *Command line*). `:w <otherfile>` saves the current editor and ignores
    the name; `:e` cannot create a new file and does not expand `%` or wildcards; tab commands only move
    within the current editor stack (one half of a split editor area).
-4. **No clipboard paste from the OS into Neovim**; use Eclipse's paste in insert mode.
-5. **No empty last line without a final newline.** A file that does not end with a line break
+4. **No empty last line without a final newline.** A file that does not end with a line break
    cannot show a trailing empty line (the text would be identical to a file that does). This only
    matters briefly, e.g. right after `o` on the last line of such a file.
 

@@ -22,7 +22,11 @@ import org.eclipse.jface.text.link.LinkedModeModel;
 import org.eclipse.jface.text.link.LinkedPosition;
 import org.eclipse.jface.text.link.LinkedPositionGroup;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
+import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
@@ -236,6 +240,42 @@ class EditorEndToEndTest {
 
         type(widget, "ggx");
         expectText("lpha\nbeta\ngamma\n");
+    }
+
+    // The system clipboard (Eclipse is Neovim's clipboard provider; see core/ClipboardRegisters).
+    // These assume the init.lua on the test machine does not set g:clipboard (its own provider wins).
+
+    @Test
+    void plusPPastesTextCopiedInAnotherProgram() {
+        setSystemClipboard("copied ");
+        type(widget, "\"+P");
+        expectText("copied alpha\nbeta\ngamma\n");
+    }
+
+    @Test
+    void plusYyCopiesTheLineToTheSystemClipboard() {
+        setSystemClipboard("before");
+        type(widget, "j\"+yy");
+        settle();
+        waitUntil("the copy", TIMEOUT_MS, () -> ("beta" + System.lineSeparator()).equals(systemClipboard()));
+    }
+
+    private static void setSystemClipboard(String text) {
+        Clipboard clipboard = new Clipboard(Display.getCurrent());
+        try {
+            clipboard.setContents(new Object[] { text }, new Transfer[] { TextTransfer.getInstance() });
+        } finally {
+            clipboard.dispose();
+        }
+    }
+
+    private static String systemClipboard() {
+        Clipboard clipboard = new Clipboard(Display.getCurrent());
+        try {
+            return (String) clipboard.getContents(TextTransfer.getInstance());
+        } finally {
+            clipboard.dispose();
+        }
     }
 
     /** Neovim's cursor line, asked from Neovim itself (not the last one Eclipse heard of). */

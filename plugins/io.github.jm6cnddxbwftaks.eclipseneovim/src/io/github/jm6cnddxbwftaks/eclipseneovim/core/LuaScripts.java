@@ -25,6 +25,10 @@ final class LuaScripts {
      *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number),
      *       {@code eclipse_buf_enter} and {@code eclipse_yank} notifications handled by
      *       {@link NotificationBridge}.</li>
+     *   <li>Unless the user's config sets {@code g:clipboard}, a clipboard provider whose copy sends
+     *       {@code eclipse_clipboard_copy} and whose paste is the {@code eclipse_clipboard_paste}
+     *       request (see {@link ClipboardRegisters}). The one argument is Eclipse's RPC channel
+     *       number, which the request is sent to.</li>
      *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
      * </ul>
@@ -76,11 +80,45 @@ final class LuaScripts {
                   return
                 end
                 local e = vim.v.event
+                -- "+y and "*y already went to the clipboard provider below; a second write would race.
+                if e and (e.regname == '+' or e.regname == '*') then
+                  return
+                end
                 if e and e.regcontents then
                   vim.rpcnotify(0, 'eclipse_yank', e.regcontents, e.regtype or 'v')
                 end
               end
             })
+            -- Eclipse is Neovim's clipboard provider (:help clipboard, ClipboardRegisters), so "+p and
+            -- "*p paste what was copied in any program, with no xclip, wl-paste or pbpaste needed.
+            -- A user who sets g:clipboard in init.lua (which runs before this) keeps their own provider.
+            if vim.g.clipboard == nil then
+              -- rpcrequest needs Eclipse's channel number (rpcnotify(0, ...) above means "every
+              -- channel"). Eclipse passes it as the script's argument: inside Lua run through
+              -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
+              local chan = tonumber(select(1, ...))
+              local function copy(reg)
+                return function(lines, regtype)
+                  vim.rpcnotify(chan, 'eclipse_clipboard_copy', reg, lines, regtype)
+                end
+              end
+              local function paste(reg)
+                -- A request: Neovim waits (at most about 2 s, see ClipboardBridge) for the text.
+                return function()
+                  return vim.rpcrequest(chan, 'eclipse_clipboard_paste', reg)
+                end
+              end
+              vim.g.clipboard = {
+                name = 'eclipse',
+                copy = { ['+'] = copy('+'), ['*'] = copy('*') },
+                paste = { ['+'] = paste('+'), ['*'] = paste('*') },
+                cache_enabled = 0,
+              }
+              -- Neovim reads g:clipboard once, when its clipboard script loads; reload it in case that
+              -- already happened (the reload its own comments describe).
+              vim.g.loaded_clipboard_provider = nil
+              vim.cmd('runtime autoload/provider/clipboard.vim')
+            end
             -- Keys only the IDE can carry out (see IdeAction). This runs after the user's init.lua,
             -- so it wins over their own mappings of these keys; `vim.g.eclipse_ide_keys = 0` (or
             -- false, v:false in Vim script) in init.lua keeps Neovim's meaning instead. vim.v.count

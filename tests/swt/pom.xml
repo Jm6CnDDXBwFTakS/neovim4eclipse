@@ -123,9 +123,10 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <!-- The classes under test, one by one (editor/ also holds workbench code), and the util/
-               classes they use. -->
+               and core/ classes they use (core/ClipboardPort: the interface ClipboardBridge implements). -->
           <includes>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/util/**</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/core/ClipboardPort.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/EditorCaret.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/StyledTextCaret.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/WidgetOffsets.java</include>
@@ -134,6 +135,7 @@
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OverlayFrame.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OutputPopup.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/CommandLineBox.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/ClipboardBridge.java</include>
           </includes>
         </configuration>
       </plugin>

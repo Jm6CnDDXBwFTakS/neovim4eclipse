@@ -69,7 +69,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final NeovimConnection connection;
     /** Shortcut for {@code connection.api()}. */
     private final NeovimApi api;
-    private final ClipboardPort clipboard;
+    /** Neovim's {@code "+} and {@code "*} registers in the system clipboard (Eclipse is the provider). */
+    private final ClipboardRegisters clipboard;
 
     // ---- buffers and keys ----
 
@@ -87,10 +88,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final StateSync state;
     private volatile boolean closed;
     /**
-     * True when the user's config makes Neovim read/write the OS clipboard itself
-     * ({@code clipboard=unnamed[plus]}). Then we must not also write it: the two writers race, the
-     * text can differ (line separators), Neovim then no longer recognizes its own register contents
-     * and pastes a whole-line yank ({@code yyP}) as characters at the cursor.
+     * True when the user's config makes every yank go to the clipboard provider
+     * ({@code clipboard=unnamed[plus]}): the provider writes the OS clipboard (ours, see
+     * {@link ClipboardRegisters}, or the user's own {@code g:clipboard}). Then plain yanks must not
+     * also be copied: the two writers race, the text can differ (line separators), Neovim then no
+     * longer recognizes its own register contents and pastes a whole-line yank ({@code yyP}) as
+     * characters at the cursor. (The Lua hook stands down too; this is the second guard.)
      */
     private volatile boolean nvimManagesClipboard;
     /** Asked before a {@code :} command line is executed on Enter (used for host-side {@code :w}/{@code :q}). */
@@ -116,7 +119,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 this::modeChanged);
         this.keyInput = new KeyInput(new KeyInputNeovim(), state, status, () -> hostExHandler,
                 () -> leaveInsertPush);
-        this.clipboard = clipboard;
+        this.clipboard = new ClipboardRegisters(clipboard, System.lineSeparator());
     }
 
     // ---- lifecycle ----
@@ -131,7 +134,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      *
      * @param nvimPath  preference value: command name or absolute path (see {@link NvimExecutable})
      * @param extraArgs extra command-line arguments, e.g. {@code --clean} for tests
-     * @param clipboard receives text yanked in Neovim
+     * @param clipboard the system clipboard: receives text yanked in Neovim, and is read when Neovim
+     *                  pastes from {@code "+} or {@code "*}
      * @param clientVersion this plug-in's version (OSGi {@code major.minor.micro.qualifier}), reported to Neovim
      * @throws Exception if the process cannot start or does not answer within {@value #RPC_TIMEOUT_SEC}s per call
      */
@@ -157,9 +161,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         await(api.executeLua(LuaScripts.DELETE_STARTUP_BUFFER, List.of(String.valueOf(DocumentBuffers.bufnr(homeBuffer)))));
 
         NeovimSession session = new NeovimSession(connection, homeBuffer, clipboard);
-        connection.addNotificationHandler(new NotificationBridge(session.new EventSink()));
+        NotificationBridge bridge = new NotificationBridge(session.new EventSink());
+        connection.addNotificationHandler(bridge);
+        connection.setRequestHandler(bridge::onRequest);
 
-        await(api.executeLua(LuaScripts.SETUP, List.of()));
+        // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
+        int channel = await(api.getChannelInfo(0)).getId();
+        await(api.executeLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
         Object clipboardOption = await(api.executeLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -603,12 +611,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onYank(List<String> lines, boolean linewise) {
-            LOG.fine(() -> "yank linewise=" + linewise + " lines=" + lines.size()
+        public void onYank(List<String> lines, String regtype) {
+            LOG.fine(() -> "yank regtype=" + regtype + " lines=" + lines.size()
                     + " bridge=" + !nvimManagesClipboard);
             if (!nvimManagesClipboard) {
-                clipboard.copyToSystem(lines, linewise);
+                clipboard.copyYank(lines, regtype);
             }
+        }
+
+        @Override
+        public void onClipboardCopy(String register, List<String> lines, String regtype) {
+            LOG.fine(() -> "clipboard copy register=" + register + " regtype=" + regtype + " lines=" + lines.size());
+            clipboard.copy(register, lines, regtype);
+        }
+
+        @Override
+        public Object onClipboardPaste(String register) {
+            ClipboardRegisters.Paste paste = clipboard.paste(register);
+            LOG.fine(() -> "clipboard paste register=" + register + " regtype=" + paste.regtype()
+                    + " lines=" + paste.lines().size());
+            return paste.toRpc();
         }
 
         @Override
