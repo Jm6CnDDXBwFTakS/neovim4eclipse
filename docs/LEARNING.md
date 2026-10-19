@@ -217,7 +217,7 @@ This plug-in does not encode MessagePack itself. [neovim-java](https://github.co
 provides layers that `NeovimSession.start` stacks up:
 
 ```text
-ProcessRpcConnection    the process's stdin/stdout
+ProcessRpcConnection    the process's stdin/stdout (wrapped in core/QuittingConnection, see below)
 RpcClient               encodes/decodes messages, matches responses to requests (Jackson + msgpack)
 ReactiveRpcStreamer     turns each request into a CompletableFuture
 NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), buffer.setLines(...)
@@ -227,6 +227,15 @@ NeovimHandlerManager    routes notifications to @NeovimNotificationHandler metho
 Every API call returns a `CompletableFuture`. `Rpc.await` waits for it with a timeout (and
 `Rpc.errorMessage` turns a failed call into Neovim's own `E…:` text).
 Waiting is the blocking step that must never happen on the SWT thread.
+
+msgpack-rpc has two kinds of message from client to server: a *request* carries an id and gets a
+*response* with the same id; a *notification* has no id and gets no answer. Closing the session shows
+why the difference matters: Neovim exits while it runs `:qa!`, so a `:qa!` sent as a request is never
+answered, and a thread would wait for the answer until it times out or is interrupted (which
+neovim-java prints as an error). `NeovimConnection.requestQuit` therefore sends `nvim_command("qa!")`
+as a notification and waits for the *process* to exit instead. The exit then ends the stream that
+neovim-java's reader thread reads, which it would also report as an error; `core/QuittingConnection`
+wraps the stream so that, once the session is closing on purpose, that end is expected and silent.
 
 ### 2.4 Attaching as a UI
 
@@ -340,7 +349,7 @@ can repeat it (see "Dot-repeat" in ARCHITECTURE.md).
 Much of the plug-in's logic is a decision: "should this key go to Neovim?", "should this command's
 output be captured?", "may Eclipse type yet?". Tested through the real thing, each decision needs a
 running Eclipse (UI tests: a workbench that takes seconds to start, and a display) or a real `nvim`
-(integration tests, about a minute, and `nvim` must be installed). So the code that decides is kept apart from the code that talks to Eclipse or
+(integration tests, a few seconds, but `nvim` must be installed). So the code that decides is kept apart from the code that talks to Eclipse or
 Neovim, and the two meet at a *port*: a small interface listing only the calls the decision needs.
 
 In production the port is implemented by a thin *adapter* over the real API; in a test by a *fake*,

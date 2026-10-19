@@ -45,7 +45,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 1. **Windows path with spaces** — set the preference to a quoted-free absolute path (`C:\Program Files\Neovim\bin\nvim.exe`); `ProcessBuilder` does not use a shell.
 2. **macOS Gatekeeper** — first launch of a Homebrew/nvim binary may need approval.
 3. **Headless CI** — unit tests in `tests/unit` need no GUI; full plugin tests need a display (or Xvfb on Linux).
-4. **RPC EOF on shutdown** — mitigated by `qa!` before tearing down the pipe; rare library ERROR logs can still appear if the process is killed hard.
+4. **RPC EOF on shutdown** — closing sends `:qa!` as a notification and waits for the process to exit (milliseconds); `core/QuittingConnection` keeps neovim-java from logging the expected end of the stream as an error. An ERROR from neovim-java's reader now means Neovim really went away during a session (it crashed or was killed).
 
 ## Quick verification
 
