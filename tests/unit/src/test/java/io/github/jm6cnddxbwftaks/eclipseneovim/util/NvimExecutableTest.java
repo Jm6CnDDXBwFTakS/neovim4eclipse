@@ -10,7 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +21,18 @@ class NvimExecutableTest {
     /** Resolve with an empty PATH and no fallback folders, so the result does not depend on this machine. */
     private static String resolveNowhere(String configured, boolean windows) {
         return NvimExecutable.resolve(configured, "", windows, List.of());
+    }
+
+    /** Git Bash's SHELL would give Neovim on Windows bash with cmd.exe's flags; see prepareEnvironment. */
+    @Test
+    void shellIsDroppedOnWindowsOnly() {
+        Map<String, String> windows = new HashMap<>(Map.of("SHELL", "/usr/bin/bash", "PATH", "C:\\bin"));
+        NvimExecutable.prepareEnvironment(windows, true);
+        assertEquals(Map.of("PATH", "C:\\bin"), windows);
+
+        Map<String, String> linux = new HashMap<>(Map.of("SHELL", "/bin/zsh", "PATH", "/usr/bin"));
+        NvimExecutable.prepareEnvironment(linux, false);
+        assertEquals(Map.of("SHELL", "/bin/zsh", "PATH", "/usr/bin"), linux);
     }
 
     @Test

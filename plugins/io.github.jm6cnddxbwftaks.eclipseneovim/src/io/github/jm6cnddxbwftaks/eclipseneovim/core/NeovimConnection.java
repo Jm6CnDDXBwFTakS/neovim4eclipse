@@ -33,6 +33,7 @@ import com.ensarsarajcic.neovim.java.corerpc.reactive.ReactiveRpcStreamerWrapper
 import com.ensarsarajcic.neovim.java.handler.NeovimHandlerManager;
 import com.ensarsarajcic.neovim.java.handler.NeovimHandlerProxy;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.PlatformUtil;
 
 /**
  * The {@code nvim --embed} process and the msgpack-rpc stack on top of it: everything needed to
@@ -115,6 +116,7 @@ final class NeovimConnection implements AutoCloseable {
         List<String> cmd = NvimExecutable.embedCommand(nvimPath, extraArgs);
         // Inherit the environment so "nvim"/"nvim.exe" resolve through PATH/PATHEXT.
         ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
+        NvimExecutable.prepareEnvironment(pb.environment(), PlatformUtil.isWindows());
         Process process = pb.start();
         LOG.info(() -> "Started Neovim pid=" + process.pid() + " cmd=" + cmd);
 

@@ -15,6 +15,9 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 - Preference **Neovim executable** accepts a **command name** (`nvim`, `nvim.exe`) or an **absolute path**.
 - Default: `nvim` on Unix/macOS, `nvim.exe` on Windows (`NvimExecutable.defaultCommandName()`).
 - Process is started with `ProcessBuilder` and the inherited environment so `PATH` / `PATHEXT` apply on Windows.
+- On Windows, `SHELL` is not passed on (`NvimExecutable.prepareEnvironment`): Eclipse started from Git Bash
+  inherits `SHELL=/usr/bin/bash`, which Neovim would combine with `cmd.exe`'s flags, so `:!` commands failed.
+  Neovim then uses `cmd.exe`; set `'shell'` and its flags in `init.lua` for another shell.
 - Install Neovim from https://neovim.io/ and ensure the binary is on `PATH`, or set the absolute path in **Preferences → Neovim**.
 - A bare name that is not on `PATH` is also looked for in the usual install folders, on macOS and Linux
   alike: `/opt/homebrew/bin`, `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin`, `~/.linuxbrew/bin`,
