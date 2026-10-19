@@ -39,7 +39,16 @@ The safe loop for any upgrade:
 
 Dependabot (`.github/dependabot.yml`) opens weekly pull requests for the Maven properties (not for
 major library versions) and the GitHub Actions. It cannot see the JDK, the Eclipse release, Neovim
-or the Maven wrapper; those are upgraded by hand with the steps below.
+or the Maven wrapper; those are upgraded by hand with the steps below. It also skips the
+`org.eclipse.platform` jars on purpose: they must match the Eclipse release, so they move with it.
+The embedded libraries (neovim-java, msgpack, Jackson) come as one pull request, because they
+depend on each other's versions: msgpack 0.9.12 alone (built for Jackson 2.20) made every RPC
+time out with Jackson 2.14.
+
+Its pull requests target `main`, the default branch. Rather than merging them there, apply an
+accepted update on `develop` as its own commit (with the checks below), then fast-forward `main`;
+Dependabot closes its pull request by itself once `main` has the new version. GitHub reads
+`dependabot.yml` from `main` only, so a change to it takes effect at the next fast-forward.
 
 ## JDK / Java release
 
@@ -109,7 +118,14 @@ To change a version:
    ```
 4. Keep the versions compatible with each other: neovim-java was built against particular Jackson
    and msgpack versions. A major version (SLF4J 1 to 2, Jackson 2 to 3) changes APIs or packages
-   and needs code changes; Dependabot skips those on purpose.
+   and needs code changes; Dependabot skips those on purpose. A minor version can still need a
+   newer partner: each msgpack release names the Jackson it was built with, for example
+   ```bash
+   curl -s https://repo.maven.apache.org/maven2/org/msgpack/jackson-dataformat-msgpack/0.9.12/jackson-dataformat-msgpack-0.9.12.pom | grep -A2 jackson-databind
+   ```
+   shows Jackson 2.20.0. Raise Jackson to at least that version in the same commit. (Jackson 2.20
+   publishes `jackson-annotations` as `2.20`, without a patch number, so one `<jackson.version>`
+   no longer fits all three Jackson jars from that release on.)
 5. Run everything, integration tests included (they exercise neovim-java and msgpack).
 
 To add a library: add it to the root `dependencyManagement`, to `artifactItems` in the plug-in's
