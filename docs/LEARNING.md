@@ -402,6 +402,21 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
 | `ClipboardPort` | `NeovimSession` | `editor/ClipboardBridge` (`ClipboardPort.NONE` in tests) |
 
+A port is not the only way to keep Eclipse out of a class. When the class only *stores* Eclipse
+objects and compares them, never calls them, type parameters are enough. `core/EditorBuffers<D, E>`
+decides which editors share a document's buffer, which editor Eclipse activates when Neovim switches
+buffers itself (the first one opened, so the choice is repeatable), and when a buffer is wiped (when
+its last editor closes). In the plug-in it is an `EditorBuffers<IDocument, IEditorPart>`; in
+`EditorBuffersTest` it is an `EditorBuffers<String, String>`:
+
+```java
+EditorBuffers<String, String> buffers = new EditorBuffers<>();
+DocumentBuffer a = buffers.add("A.java", "editor 1", () -> "/src/A.java");
+buffers.add("A.java", "editor 2", () -> "/src/A.java");      // same buffer, shared undo history
+assertEquals(List.of(), buffers.remove("editor 1"));          // editor 2 still shows A.java
+assertEquals(List.of(a), buffers.remove("editor 2"));         // last one closed: wipe it
+```
+
 When *not* to add one: glue code that only passes values through (an adapter, `KeyInterceptor`) has no
 decision to test, and a port would only add a layer to read through. The integration and UI tests
 still matter: a fake says what the code *asks for*, and only a real Neovim or Eclipse shows that

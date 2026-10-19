@@ -22,7 +22,8 @@
  *             macros, host {@code :} commands). It does not know the session: it is given
  *             {@code StateSync}, {@code StatusTracker} and its own small {@code KeyInput.Neovim}
  *             interface, so the session depends on it and not the other way round;</li>
- *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, and which is attached;</li>
+ *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, and which is attached
+ *             (the Neovim side; {@code EditorBuffers}, below, is the Eclipse side);</li>
  *         <li>{@code CommandRunner}: submitted {@code :} commands (with their output), listings,
  *             searches and {@code :normal!}; sees Neovim through its small {@code Neovim} interface;</li>
  *         <li>{@code StateSync}: mode, cursor and whether Eclipse may type; reads them from
@@ -46,6 +47,10 @@
  *       {@code editor/CaretSync}), {@code KeyRouter.Neovim}; and the other direction, what core code
  *       and its callers need from Eclipse: {@code ClipboardPort}, {@code UiExecutor} (the UI thread;
  *       {@code editor/SwtUiExecutor} in the editor, {@code UiExecutor.IMMEDIATE} in tests).</li>
+ *   <li>{@code EditorBuffers}: which Eclipse editors show each document's buffer, so when a buffer
+ *       is shared, which editor follows a Neovim buffer switch, and when a buffer is wiped. Generic
+ *       over the document and editor types, so it holds {@code IDocument} and {@code IEditorPart}
+ *       in the plug-in without importing them.</li>
  *   <li>{@code LuaScripts}: every Lua chunk run inside Neovim, with comments.</li>
  *   <li>{@code NotificationBridge}: decodes the msgpack-rpc notifications Neovim sends (buffer line
  *       events and the plug-in's own {@code eclipse_*} events).</li>

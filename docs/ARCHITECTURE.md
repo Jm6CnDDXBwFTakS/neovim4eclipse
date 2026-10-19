@@ -88,14 +88,15 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 ### 6. One Neovim buffer per document
 
 `EditorAttachManager` keeps a `DocumentBuffer` per open `IDocument` (two editors on one file share
-it) and passes it to the controller, whose attach push (`sync/DocumentPush`) calls
+it) in a `core/EditorBuffers` (the bookkeeping, unit-tested without Eclipse) and passes it to the controller, whose attach push (`sync/DocumentPush`) calls
 `NeovimSession.showBuffer` first. If that fails, the document is not pushed (it would overwrite the
 buffer Neovim is in, another file's), but the editor listens for Neovim's changes again. Buffers are
 listed, named after the file path, and `buftype=nofile` (Neovim never writes or swaps them, and no
 filetype detection runs). Only the attached buffer's line events and cursor reports reach Eclipse.
 
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is
-followed: its editor is activated and attached, keeping Neovim's cursor. A switch to any other
+followed: its editor is activated and attached, keeping Neovim's cursor. When several editors show
+that document, the first one opened is chosen. A switch to any other
 buffer is undone (`returnToAttachedBufferAsync`). When a document's last editor closes, its buffer
 is wiped (`closeBufferAsync`).
 

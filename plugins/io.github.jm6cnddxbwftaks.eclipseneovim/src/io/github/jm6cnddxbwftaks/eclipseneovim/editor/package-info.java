@@ -8,7 +8,8 @@
  * <h2>Who does what</h2>
  * <ul>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.EditorAttachManager}: one per IDE. Watches
- *       the workbench (part listeners) and attaches Neovim to the active text editor.</li>
+ *       the workbench (part listeners) and attaches Neovim to the active text editor; which editors
+ *       share, follow and give up a document's buffer is decided by {@code core/EditorBuffers}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.editor.NeovimEditorController}: one per attached
  *       editor. Wires the editor's viewer and widget to the shared
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession}, through one helper per
