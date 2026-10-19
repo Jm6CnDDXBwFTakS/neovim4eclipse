@@ -34,7 +34,7 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   an empty line.
 - `FakeCaret` (UI tests): an in-memory caret and selection with `assertCaretPosition(line, col)` and
   `assertSelectionRange(start, length)`.
-- Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`, `CommandRunner.Neovim`, `StateSync.Neovim`) and `UiExecutor`
+- Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`, `CommandRunner.Neovim`, `StateSync.Neovim`, `KeyInput.Neovim`) and `UiExecutor`
   (`IMMEDIATE`, or one that holds work back) are defined next to the tests that use them.
 
 Avoid `clean` while a runtime Eclipse launched from the IDE is running: it deletes the plug-in's

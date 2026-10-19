@@ -3,15 +3,14 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
-import static io.github.jm6cnddxbwftaks.eclipseneovim.core.Rpc.await;
-
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.ensarsarajcic.neovim.java.api.NeovimApi;
 import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.ModeTransition;
@@ -37,8 +36,20 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
  * </ul>
  *
  * <p>Everything here blocks on RPC and runs on the session's single input thread, which keeps keys
- * in order. State that other parts of the session also use (mode, buffer-event suppression,
- * publishing) stays in {@link NeovimSession}, reached through its package-private methods.
+ * in order.
+ *
+ * <h2>Dependencies</h2>
+ * KeyInput does not know {@link NeovimSession}. It is given what it uses:
+ * <ul>
+ *   <li>{@link StateSync}: the mode, reading it, buffer-event suppression and publishing (shared
+ *       with the rest of the session);</li>
+ *   <li>{@link StatusTracker}: the status bar message, the pending key, and macro recording;</li>
+ *   <li>the small {@link Neovim} interface: the few raw calls it makes itself;</li>
+ *   <li>two suppliers for what the editor installs later: the host {@code :} command handler and
+ *       the document push before leaving insert mode.</li>
+ * </ul>
+ * So {@code KeyInputTest} runs it with a fake Neovim and a real {@code StateSync} on a fake (see
+ * {@code docs/LEARNING.md}, "Ports and fakes").
  */
 final class KeyInput {
 
@@ -46,11 +57,45 @@ final class KeyInput {
 
     /** A key that takes longer than this end to end is logged as a warning (diagnostics). */
     private static final long SLOW_KEY_WARNING_MS = 250;
-    /** Upper bound for waiting on a macro to finish ({@code 1000@a} can run for a while). */
-    private static final long MACRO_TIMEOUT_SEC = 60;
+    /** Default upper bound for waiting on a macro to finish ({@code 1000@a} can run for a while). */
+    static final Duration MACRO_TIMEOUT = Duration.ofSeconds(60);
 
-    private final NeovimSession session;
-    private final NeovimApi api;
+    /** The raw Neovim calls KeyInput makes itself. All block, on the input thread. */
+    interface Neovim {
+        /** Types {@code keys} (Neovim notation) as if the user pressed them ({@code nvim_input}). */
+        void type(String keys) throws Exception;
+
+        /**
+         * Returns once Neovim has consumed all pending input. Any cheap request does that, because
+         * Neovim answers requests only when idle ({@code nvim_get_mode} does not: it is answered out
+         * of band, even while keys are pending).
+         */
+        void awaitKeysConsumed() throws Exception;
+
+        /** The command line's type ({@code ":"}, {@code "/"}, ...; {@link LuaScripts#GET_CMDTYPE}). */
+        String commandLineType() throws Exception;
+
+        /** The text typed on the command line so far ({@link LuaScripts#GET_CMDLINE}). */
+        String commandLineText() throws Exception;
+
+        /**
+         * The attached buffer's lines. Answered only once Neovim is idle, so after {@code @a} it
+         * waits for the macro to finish, up to {@code timeout}.
+         */
+        List<String> bufferLines(Duration timeout) throws Exception;
+
+        /** Moves Neovim's cursor; {@code col0} is a 0-based UTF-8 byte column. */
+        void setCursor(int line1, int col0) throws Exception;
+    }
+
+    private final Neovim nvim;
+    private final StateSync state;
+    private final StatusTracker status;
+    /** The editor's host {@code :} command handler ({@code :w} saves in Eclipse), or {@code null}. */
+    private final Supplier<Predicate<String>> hostExHandler;
+    /** Pushes the Eclipse document to Neovim before insert mode ends, or {@code null}. */
+    private final Supplier<Runnable> leaveInsertPush;
+    private final Duration macroTimeout;
 
     /**
      * True while insert mode was entered from blockwise visual ({@code I}, {@code A}, {@code c}, ...)
@@ -63,9 +108,20 @@ final class KeyInput {
     /** Set by a lone {@code @}: the next key names the macro register and starts the playback. */
     private boolean macroRegisterPending;
 
-    KeyInput(NeovimSession session, NeovimApi api) {
-        this.session = session;
-        this.api = api;
+    KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Predicate<String>> hostExHandler,
+            Supplier<Runnable> leaveInsertPush) {
+        this(nvim, state, status, hostExHandler, leaveInsertPush, MACRO_TIMEOUT);
+    }
+
+    /** @param macroTimeout how long to wait for a macro to finish (tests use milliseconds) */
+    KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Predicate<String>> hostExHandler,
+            Supplier<Runnable> leaveInsertPush, Duration macroTimeout) {
+        this.nvim = nvim;
+        this.state = state;
+        this.status = status;
+        this.hostExHandler = hostExHandler;
+        this.leaveInsertPush = leaveInsertPush;
+        this.macroTimeout = macroTimeout;
     }
 
     /** Insert mode in which Neovim, not Eclipse, must receive the typed keys (see the field comment). */
@@ -112,51 +168,51 @@ final class KeyInput {
         } finally {
             long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             if (ms >= SLOW_KEY_WARNING_MS) {
-                LOG.warning("input('" + keys + "') took " + ms + " ms (mode=" + session.getMode() + ")");
+                LOG.warning("input('" + keys + "') took " + ms + " ms (mode=" + state.mode() + ")");
             }
         }
     }
 
     private void inputKey(String keys) throws Exception {
-        LOG.fine(() -> "input(" + keys + ") mode=" + session.getMode());
-        session.status().clearMessage(); // a message stays visible until the next key
+        LOG.fine(() -> "input(" + keys + ") mode=" + state.mode());
+        status.clearMessage(); // a message stays visible until the next key
 
         if (NvimKeys.isEnter(keys) && tryHostCommandLine()) {
             return;
         }
 
-        boolean wasTyping = session.isTypingMode();
-        String modeBefore = session.getMode();
+        boolean wasTyping = state.isTypingMode();
+        String modeBefore = state.mode();
         // The key after a lone @ names the macro register and starts the playback.
         boolean startsMacro = macroRegisterPending && !wasTyping;
         macroRegisterPending = false;
 
         if (startsMacro) {
-            session.setSuppressBufferEvents(true); // see syncBufferAfterMacro
+            state.setSuppressBufferEvents(true); // see syncBufferAfterMacro
         }
         VimMode mode;
         try {
-            await(api.input(keys));
-            mode = session.readMode();
+            nvim.type(keys);
+            mode = state.readMode();
         } catch (Exception e) {
-            session.setSuppressBufferEvents(false);
+            state.setSuppressBufferEvents(false);
             throw e;
         }
         if (mode != null && mode.isBlocking()) {
             // Waiting for the rest of the command (see the method comment): nothing to sync yet, and
             // a buffer request would not be answered until the next key arrives.
-            session.setSuppressBufferEvents(false);
+            state.setSuppressBufferEvents(false);
             macroRegisterPending = "@".equals(keys) && !wasTyping;
-            session.status().showPendingKey(keys);
+            status.showPendingKey(keys);
             return;
         }
         if (startsMacro) {
             syncBufferAfterMacro();
-            session.publishState();
+            state.publishState();
             return;
         }
-        ModeTransition transition = ModeTransition.after(modeBefore, session.getMode(), neovimDrivenInsert,
-                session.isRecording(), keys);
+        ModeTransition transition = ModeTransition.after(modeBefore, state.mode(), neovimDrivenInsert,
+                !status.recordingRegister().isEmpty(), keys);
         switch (transition) {
             case ENTER_NEOVIM_INSERT -> neovimDrivenInsert = true;
             case LEAVE_NEOVIM_INSERT -> neovimDrivenInsert = false;
@@ -165,9 +221,9 @@ final class KeyInput {
             case ENTER_INSERT, TEXT_CHANGED, NONE -> { }
         }
         if (transition.syncsBuffer()) {
-            session.syncBufferFromNeovim();
+            state.syncBuffer();
         }
-        session.publishState();
+        state.publishState();
     }
 
     /**
@@ -179,14 +235,14 @@ final class KeyInput {
      */
     private void syncBufferAfterMacro() {
         try {
-            List<String> lines = session.getBufferLines(MACRO_TIMEOUT_SEC);
-            session.setSuppressBufferEvents(false); // before dispatching, or the sync itself would be dropped
+            List<String> lines = nvim.bufferLines(macroTimeout);
+            state.setSuppressBufferEvents(false); // before dispatching, or the sync itself would be dropped
             LOG.fine(() -> "buffer sync after macro: " + lines.size() + " lines");
-            session.dispatchBufferChange(0, -1, lines);
+            state.dispatchBufferChange(0, -1, lines);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "buffer sync after macro failed", e);
         } finally {
-            session.setSuppressBufferEvents(false);
+            state.setSuppressBufferEvents(false);
         }
     }
 
@@ -198,18 +254,18 @@ final class KeyInput {
      */
     private boolean tryHostCommandLine() {
         try {
-            VimMode mode = session.readMode();
+            VimMode mode = state.readMode();
             // Not on a command line (or Neovim is blocked and would not answer): nothing to intercept.
             if (mode == null || mode.isBlocking() || !VimModes.isCmdline(mode.getMode())) {
                 return false;
             }
-            String type = cmdline(LuaScripts.GET_CMDTYPE);
-            String text = cmdline(LuaScripts.GET_CMDLINE);
-            Predicate<String> handler = session.hostExHandler();
+            String type = nvim.commandLineType();
+            String text = nvim.commandLineText();
+            Predicate<String> handler = hostExHandler.get();
             if (handler != null && type.startsWith(":") && !text.isBlank() && handler.test(text.strip())) {
-                await(api.input("<Esc>"));
-                session.syncBufferFromNeovim();
-                session.publishState();
+                nvim.type("<Esc>");
+                state.syncBuffer();
+                state.publishState();
                 LOG.info("Host handled cmdline: " + text);
                 return true;
             }
@@ -217,11 +273,6 @@ final class KeyInput {
             LOG.log(Level.WARNING, "cmdline host intercept failed", e);
         }
         return false;
-    }
-
-    private String cmdline(String lua) throws Exception {
-        Object raw = await(api.executeLua(lua, List.of()));
-        return raw == null ? "" : String.valueOf(raw);
     }
 
     /**
@@ -239,25 +290,25 @@ final class KeyInput {
      * @param replay what to re-type, or {@code null}
      */
     void leaveInsertMode(InsertReplay.Plan replay) throws Exception {
-        Runnable push = session.leaveInsertPush();
+        Runnable push = leaveInsertPush.get();
         boolean replayed = replay != null && replayTypedText(replay);
         if (replayed) {
             try {
                 if (push != null) {
                     push.run();
                 }
-                session.setCursor(replay.finalLine1Based(), replay.finalCol0Based());
+                nvim.setCursor(replay.finalLine1Based(), replay.finalCol0Based());
             } finally {
-                session.setSuppressBufferEvents(false);
+                state.setSuppressBufferEvents(false);
             }
         } else {
             if (push != null) {
                 push.run();
             }
-            await(api.input("<Esc>"));
+            nvim.type("<Esc>");
         }
         neovimDrivenInsert = false;
-        session.syncModeAndCursorFromNeovim();
+        state.syncModeAndCursor();
     }
 
     /**
@@ -265,32 +316,26 @@ final class KeyInput {
      * Leaves buffer events suppressed on success (the caller resumes them after pushing the
      * document; applying them would insert the text twice) and resumes them on failure.
      *
-     * <p>A cheap request (not {@code nvim_get_mode}, which is answered out of band) follows every
-     * chunk. Neovim handles requests only after it has consumed all pending keys, so this guarantees
-     * the keys are processed before the next step and keeps its input buffer from overflowing.
+     * <p>{@link Neovim#awaitKeysConsumed()} follows every chunk, so the keys are processed before the
+     * next step and Neovim's input buffer does not overflow.
      *
      * @return {@code true} if the text was typed and insert mode was left
      */
     private boolean replayTypedText(InsertReplay.Plan plan) {
-        session.setSuppressBufferEvents(true);
+        state.setSuppressBufferEvents(true);
         try {
-            session.setCursor(plan.baseLine1Based(), plan.baseCol0Based());
+            nvim.setCursor(plan.baseLine1Based(), plan.baseCol0Based());
             for (String chunk : plan.keyChunks()) {
-                await(api.input(chunk));
-                awaitKeysConsumed();
+                nvim.type(chunk);
+                nvim.awaitKeysConsumed();
             }
-            await(api.input("<Esc>"));
-            awaitKeysConsumed();
+            nvim.type("<Esc>");
+            nvim.awaitKeysConsumed();
             return true;
         } catch (Exception e) {
             LOG.log(Level.WARNING, "replaying typed text into Neovim failed; dot-repeat will not include it", e);
-            session.setSuppressBufferEvents(false);
+            state.setSuppressBufferEvents(false);
             return false;
         }
-    }
-
-    /** Returns once Neovim has consumed all pending input: it answers requests only when idle. */
-    private void awaitKeysConsumed() throws Exception {
-        await(api.executeLua("return 0", List.of()));
     }
 }
