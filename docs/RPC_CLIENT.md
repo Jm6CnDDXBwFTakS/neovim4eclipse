@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–3. Next: step 4.
+Status: **accepted** (option A), in progress. Done: steps 1–4. Next: step 5.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -232,7 +232,17 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      logged at WARNING in `setIncoming`; a request that throws is answered with an error, as before.
    - `NeovimHandlerManager` and `NeovimHandlerProxy` are no longer used; their jars
      (`handler-annotations`, `neovim-notifications`) go in step 8 with the others.
-4. **`MsgpackValues`** with its unit tests (`Handle` exists since step 2). Not used yet.
+4. **`MsgpackValues`** with its unit tests (`Handle` exists since step 2). *Done.* Not used yet.
+   As built:
+   - Static `pack(MessagePacker, Object)` and `unpack(MessageUnpacker)`, streaming, as `RpcChannel`
+     needs them; the class comment has the type table.
+   - Integers always decode as `Long`; there is no `BigInteger`, since Neovim's Integer is signed
+     64-bit and a larger uint64 fails as a protocol error. MessagePack `bin` decodes as `byte[]`.
+   - An extension type other than 0, 1 or 2 is an `IOException`. A Java type with no MessagePack
+     form is an `IllegalArgumentException`, possibly after part of a list was written, so step 5
+     packs each message into a buffer before sending it.
+   - msgpack-core reports truncated input (also a stream that ends, when Neovim exits) with
+     unchecked `MessagePackException`s, not `IOException`, so step 5's reader loop must catch both.
 5. **`RpcChannel`** with its unit tests. Not used yet.
 6. **`MsgpackNeovimApi`**, our implementation of the interface over `RpcChannel`, with
    `NeovimApiTest`. Make `NeovimBufferIntegrationTest` (or a new small contract test) run against

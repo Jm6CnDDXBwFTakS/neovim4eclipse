@@ -220,6 +220,13 @@ setup Lua: inside Lua run by `nvim_exec_lua`, `nvim_get_chan_info(0)` does not k
 In Neovim, `:help api` lists every function and `:help rpc` describes the protocol. `nvim --api-info`
 dumps the API as MessagePack.
 
+Which Java value stands for which MessagePack value is decided in `core/rpc/MsgpackValues` (a
+table in its class comment). Two things there are easy to trip over: every integer decodes as
+`Long`, so read numbers through `Number`, since `Long.valueOf(1).equals(1)` is false; and buffers,
+windows and tab pages are MessagePack *extension* values, a type byte plus the number. Buffer 9
+is the three bytes `d4 00 09`. `MsgpackValuesTest` writes such bytes out in hex, which is a quick
+way to see what really travels on the pipe.
+
 ### 2.3 neovim-java
 
 This plug-in does not encode MessagePack itself. [neovim-java](https://github.com/esensar/neovim-java)
