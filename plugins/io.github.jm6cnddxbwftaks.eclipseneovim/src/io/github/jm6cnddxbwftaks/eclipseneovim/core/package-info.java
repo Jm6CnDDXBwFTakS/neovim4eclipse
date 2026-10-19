@@ -25,6 +25,8 @@
  *             Neovim and passes them to the listeners, through its small {@code Neovim} and
  *             {@code Listeners} interfaces;</li>
  *         <li>{@code StateSnapshot}: reading the per-key state answer;</li>
+ *         <li>{@code SessionEvents}: the mode, buffer change, cursor, selection and IDE action
+ *             listeners (the session's {@code add...Listener} methods pass through to it);</li>
  *         <li>{@code StatusTracker}: status bar parts (showcmd, message, statusline) and macro
  *             recording, fired to listeners only when they change;</li>
  *         <li>{@code InputThread}: the single thread for all blocking RPC, which keeps keys in order;</li>

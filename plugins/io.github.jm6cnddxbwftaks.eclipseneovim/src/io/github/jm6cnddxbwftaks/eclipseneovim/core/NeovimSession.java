@@ -97,11 +97,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
     private volatile Runnable leaveInsertPush;
 
-    private final ListenerList<String> modeListeners = new ListenerList<>("mode", Level.FINE);
-    private final ListenerList<BufferChange> bufferChangeListeners = new ListenerList<>("buffer change", Level.WARNING);
-    private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
-    private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
-    private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
+    /** Mode, buffer change, cursor, selection and IDE action listeners. */
+    private final SessionEvents events = new SessionEvents();
 
     /** Single thread that performs all blocking RPC, preserving key order. */
     private final InputThread inputThread = new InputThread();
@@ -113,7 +110,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         this.api = connection.api();
         this.buffers = new DocumentBuffers(api, homeBuffer);
         this.keyInput = new KeyInput(this, api);
-        this.state = new StateSync(new StateSyncNeovim(), new StateListeners(), status, buffers::isAttached,
+        this.state = new StateSync(new StateSyncNeovim(), events, status, buffers::isAttached,
                 keyInput::onModeChanged);
         this.clipboard = clipboard;
     }
@@ -289,44 +286,44 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     public void addModeListener(Consumer<String> listener) {
-        modeListeners.add(listener);
+        events.addModeListener(listener);
     }
 
     public void removeModeListener(Consumer<String> listener) {
-        modeListeners.remove(listener);
+        events.removeModeListener(listener);
     }
 
     public void addBufferChangeListener(Consumer<BufferChange> listener) {
-        bufferChangeListeners.add(listener);
+        events.addBufferChangeListener(listener);
     }
 
     public void removeBufferChangeListener(Consumer<BufferChange> listener) {
-        bufferChangeListeners.remove(listener);
+        events.removeBufferChangeListener(listener);
     }
 
     public void addCursorListener(Consumer<CursorPos> listener) {
-        cursorListeners.add(listener);
+        events.addCursorListener(listener);
     }
 
     public void removeCursorListener(Consumer<CursorPos> listener) {
-        cursorListeners.remove(listener);
+        events.removeCursorListener(listener);
     }
 
     public void addSelectionListener(Consumer<VisualSelection> listener) {
-        selectionListeners.add(listener);
+        events.addSelectionListener(listener);
     }
 
     public void removeSelectionListener(Consumer<VisualSelection> listener) {
-        selectionListeners.remove(listener);
+        events.removeSelectionListener(listener);
     }
 
     /** Notified (on an RPC thread) when a key mapped in Neovim asks the IDE to act; see {@link IdeAction}. */
     public void addIdeActionListener(Consumer<IdeAction> listener) {
-        ideActionListeners.add(listener);
+        events.addIdeActionListener(listener);
     }
 
     public void removeIdeActionListener(Consumer<IdeAction> listener) {
-        ideActionListeners.remove(listener);
+        events.removeIdeActionListener(listener);
     }
 
     // ---- per-document buffers (see DocumentBuffers) ----
@@ -647,7 +644,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void onIdeAction(IdeAction action) {
             LOG.fine(() -> "IDE action " + action);
-            ideActionListeners.fire(action);
+            events.ideAction(action);
         }
     }
 
@@ -715,29 +712,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public List<String> bufferLines() throws Exception {
             return getBufferLines();
-        }
-    }
-
-    /** Fires the session's listener lists for {@link StateSync}. */
-    private final class StateListeners implements StateSync.Listeners {
-        @Override
-        public void mode(String mode) {
-            modeListeners.fire(mode);
-        }
-
-        @Override
-        public void cursor(CursorPos cursor) {
-            cursorListeners.fire(cursor);
-        }
-
-        @Override
-        public void selection(VisualSelection selection) {
-            selectionListeners.fire(selection);
-        }
-
-        @Override
-        public void bufferChange(BufferChange change) {
-            bufferChangeListeners.fire(change);
         }
     }
 }
