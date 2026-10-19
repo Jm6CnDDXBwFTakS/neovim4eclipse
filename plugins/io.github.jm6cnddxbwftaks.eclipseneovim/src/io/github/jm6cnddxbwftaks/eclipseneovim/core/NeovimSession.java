@@ -21,6 +21,7 @@ import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
 import com.ensarsarajcic.neovim.java.api.types.api.VimCoords;
 import com.ensarsarajcic.neovim.java.api.types.api.VimMode;
 import com.ensarsarajcic.neovim.java.api.window.NeovimWindowApi;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
@@ -781,8 +782,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Gives {@link StateSync} the Neovim calls it needs. */
     private final class StateSyncNeovim implements StateSync.Neovim {
         @Override
-        public VimMode getMode() throws Exception {
-            return await(api.getMode());
+        public Mode getMode() throws Exception {
+            // neovim-java's VimMode stays here, the one place it is read; the rest of core/ sees only
+            // our own Mode (docs/RPC_CLIENT.md, step 1).
+            VimMode read = await(api.getMode());
+            return read == null ? null : new Mode(read.getMode(), read.isBlocking());
         }
 
         @Override

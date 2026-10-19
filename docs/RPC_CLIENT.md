@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **proposal**, for the maintainer to decide. Nothing described here is implemented yet.
+Status: **accepted** (option A), in progress. Done: step 1. Next: step 2.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -126,7 +126,7 @@ Sizes are estimates including Javadoc in the project's explanatory style.
 | `Handle` | ~30 | `record Handle(Kind kind, long id)` with `Kind { BUFFER, WINDOW, TABPAGE }`; replaces `Buffer`, `BaseCustomIdType`, `MessagePackExtensionType`. |
 | `NeovimError` | ~20 | An `Exception` carrying Neovim's error type and message, so `Rpc.errorMessage` still finds `E94: ...` in it. |
 | `RpcChannel` | ~220 | The connection: a reader thread, request ids, pending responses, writing, dispatching Neovim's notifications and requests, closing. Details below. |
-| `NeovimApi` (ours) | ~150 | The 18 functions of 1.2 as thin typed methods, each one line over `RpcChannel.request`, plus small records `Mode(String mode, boolean blocking)` and `Cursor(int line1, int col0)`. Only the functions we use; adding one is a line. |
+| `NeovimApi` (ours) | ~150 | The 18 functions of 1.2 as thin typed methods, each one line over `RpcChannel.request`, using `Mode(String mode, boolean blocking)` (step 1) and the existing `core/CursorPos`. Only the functions we use; adding one is a line. |
 
 About 550 lines in total, around 300 of them code. In return `QuittingConnection` (100 lines), the
 executor and SLF4J setup in `NeovimConnection` (about 40 lines) and `QuittingConnectionTest` go away.
@@ -196,9 +196,11 @@ The idea is the "strangler" pattern: first put an interface of our own between t
 neovim-java, implemented by neovim-java, then write a second implementation and swap. Each commit
 keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration` green.
 
-1. **Own value types.** Replace `VimMode` with `core/rpc/Mode` and `VimCoords` with `Cursor` in
-   `StateSync`, `KeyInput`, `NeovimSession` and their tests; `NeovimSession` converts from
-   neovim-java's types at the one place it calls them. Pure refactoring.
+1. **Own value types.** *Done.* Replace `VimMode` with `core/rpc/Mode` in `StateSync`, `KeyInput`
+   and their tests; `NeovimSession` converts from neovim-java's type at the one place it calls
+   `nvim_get_mode`. Pure refactoring. `VimCoords` needed no new type: it was already used only
+   inside `NeovimSession`, which converts it to the existing `core/CursorPos`; it goes away with
+   step 2.
 2. **Own API interface.** Introduce `core/rpc/NeovimApi` (the 18 functions, returning
    `CompletableFuture`s of our types, buffers as `Handle`) and `NeovimJavaApi`, an adapter that
    implements it with neovim-java. Move `NeovimSession` and `DocumentBuffers` to the interface;
