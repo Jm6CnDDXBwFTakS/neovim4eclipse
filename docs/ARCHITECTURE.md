@@ -79,7 +79,7 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 - **Mode status**: `ModeStatusContribution` on the editor status line.
 - **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`).
 - **Ex / search**: `:`, `/`, `?` open `CommandLineBox`, an inline `Text` child of the editor widget
-  (see "Command line" below); submitted commands use `commandAsync` / `search`.
+  (see "Command line" below); submitted commands use `commandAsync` / `search`, carried out by `core/CommandRunner`.
 
 ### 5. Auto-attach
 
@@ -189,7 +189,9 @@ to the box, which (via the focus listener in the controller) also deactivates th
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
   `redir => g:eclipse_neovim_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
-  non-empty result that is not just the error message is shown in the `OutputPopup`. Full
+  non-empty result that is not just the error message is shown in the `OutputPopup`. Ending the
+  redirection waits for the command; meanwhile a prompt is dismissed with Esc, and after 60 s the
+  output is given up (`core/CommandRunner`, durations set in its constructor). Full
   `ext_messages` support was considered and not chosen: it needs `ext_linegrid`, i.e. grid redraw
   traffic on every key, and a redraw-event parser.
 
@@ -327,6 +329,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
+| `:` commands with output capture, listings, `:normal!`, search | `core/CommandRunner` (Neovim seen through `CommandRunner.Neovim`) | `CommandRunnerTest` (fake: capture around typing, user `:redir`, prompt Esc, timeout) |
 | Session facade, state publishing | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Overlay colors | `util/OverlayColors` | `OverlayColorsTest` |
 | Ctrl-key ids and defaults | `util/VimCtrlKeys` | `VimCtrlKeysTest`, `PluginXmlConsistencyTest` |
