@@ -52,12 +52,18 @@ final class DocumentBuffers {
     private final Map<Integer, NeovimBufferApi> created = new ConcurrentHashMap<>();
     /** Called with the number of a document buffer Neovim switched to by itself. */
     private volatile Consumer<Integer> enterHandler;
+    /**
+     * The buffer Neovim entered last ({@code BufEnter}), that is, its current buffer as far as the
+     * notifications read so far tell. Written on the RPC thread, read from any thread.
+     */
+    private volatile int enteredBufnr;
 
     DocumentBuffers(NeovimApi api, NeovimBufferApi home) {
         this.api = api;
         this.home = home;
         this.attached = home;
         this.attachedBufnr = bufnr(home);
+        this.enteredBufnr = attachedBufnr;
     }
 
     static int bufnr(NeovimBufferApi buffer) {
@@ -71,6 +77,15 @@ final class DocumentBuffers {
 
     int attachedBufnr() {
         return attachedBufnr;
+    }
+
+    /**
+     * The buffer Neovim entered last. When it differs from a buffer the enter handler was called
+     * with, Neovim has moved on since: {@code :bufdo}, {@code :argdo} and {@code :cdo} enter every
+     * buffer in turn, and only the last one is worth following.
+     */
+    int enteredBufnr() {
+        return enteredBufnr;
     }
 
     /** The document mirrored into the attached buffer, or {@code null} when the home buffer is attached. */
@@ -160,6 +175,7 @@ final class DocumentBuffers {
      * enter handler; anything else is undone with {@code returnBack}.
      */
     void onEntered(int bufnr, Runnable returnBack) {
+        enteredBufnr = bufnr; // first: a follow-up queued for an earlier buffer must see it
         if (bufnr == attachedBufnr) {
             return; // Eclipse's own switch, or Neovim came back
         }

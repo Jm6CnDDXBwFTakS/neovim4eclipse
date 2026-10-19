@@ -372,6 +372,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return buffers.attachedBufnr();
     }
 
+    /**
+     * Number of the buffer Neovim entered last, as far as its notifications have been read. A buffer
+     * enter handler compares it with its argument to skip a buffer Neovim has already left again
+     * ({@code :bufdo} walks through every buffer). Any thread.
+     */
+    public int getEnteredBufnr() {
+        return buffers.enteredBufnr();
+    }
+
     // ---- buffer and cursor access (blocking) ----
 
     /**

@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -28,6 +30,9 @@ import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IPartListener2;
+import org.eclipse.ui.IWorkbenchPart;
+import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
@@ -242,6 +247,40 @@ class EditorEndToEndTest {
         expectText("lpha\nbeta\ngamma\n");
     }
 
+    /**
+     * {@code :bufdo} (also {@code :argdo}, {@code :cdo}) enters every buffer in turn. Eclipse follows
+     * only the last one, where Vim ends: following each would activate (and attach to) every
+     * editor on the way.
+     */
+    @Test
+    void aCommandThatWalksThroughBuffersIsFollowedOnlyToTheLastOne() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor second = openFile("second.txt", "second\n");
+        ITextEditor third = openFile("third.txt", "third\n"); // opened last: the highest buffer number
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        List<IWorkbenchPart> activated = new ArrayList<>();
+        IPartListener2 listener = new IPartListener2() {
+            @Override
+            public void partActivated(IWorkbenchPartReference partRef) {
+                activated.add(partRef.getPart(false));
+            }
+        };
+        page.addPartListener(listener);
+        try {
+            session.inputAsync(":bufdo let b:visited = 1<CR>");
+            // Hold the UI thread meanwhile, so that every BufEnter has been read before Eclipse handles
+            // the first: the case the check is for. (Without the wait it is also the usual case.)
+            Thread.sleep(500);
+            waitForAttach(third, "third.txt, where :bufdo ends");
+            assertEquals(List.of(third), activated);
+        } finally {
+            page.removePartListener(listener);
+            page.closeEditor(second, false);
+            page.closeEditor(third, false);
+        }
+    }
+
     // The system clipboard (Eclipse is Neovim's clipboard provider; see core/ClipboardRegisters).
     // These assume the init.lua on the test machine does not set g:clipboard (its own provider wins).
 
@@ -289,12 +328,17 @@ class EditorEndToEndTest {
 
     /** Opens other.txt (one line, "other") and waits until Neovim is attached to it. */
     private ITextEditor openOtherFile() throws Exception {
-        IFile other = project.getFile("other.txt");
-        other.create(new ByteArrayInputStream("other\n".getBytes(StandardCharsets.UTF_8)), true, null);
-        ITextEditor otherEditor = (ITextEditor) IDE.openEditor(editor.getSite().getPage(), other,
+        return openFile("other.txt", "other\n");
+    }
+
+    /** Creates {@code name} in the test project, opens it and waits until Neovim is attached to it. */
+    private ITextEditor openFile(String name, String content) throws Exception {
+        IFile file = project.getFile(name);
+        file.create(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)), true, null);
+        ITextEditor opened = (ITextEditor) IDE.openEditor(editor.getSite().getPage(), file,
                 "org.eclipse.ui.DefaultTextEditor", true);
-        waitForAttach(otherEditor, "other.txt");
-        return otherEditor;
+        waitForAttach(opened, name);
+        return opened;
     }
 
     private void waitForAttach(ITextEditor target, String what) {

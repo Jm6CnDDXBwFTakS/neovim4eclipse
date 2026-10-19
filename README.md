@@ -287,7 +287,8 @@ These are real and deliberate to know about before extending the code:
 
 1. **One Neovim window.** Each open document has its own Neovim buffer (named after the file, so
    undo history and marks survive switching editors), but only the active editor is attached.
-   Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor; jumps to anything else
+   Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor (after `:bufdo` or `:argdo`,
+   only the editor of the file they end in); jumps to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes made by Neovim to a buffer that is not attached (e.g.
    `:bufdo`) are overwritten by the Eclipse document when that file's editor is next activated.
