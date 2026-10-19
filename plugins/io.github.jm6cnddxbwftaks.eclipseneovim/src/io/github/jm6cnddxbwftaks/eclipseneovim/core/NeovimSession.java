@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -23,9 +22,6 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimKeys;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.OutputCapture;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.SearchCommand;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
 
@@ -65,10 +61,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * request, a keystroke should cost a fraction of a second, not {@value #RPC_TIMEOUT_SEC}s.
      */
     private static final long STATE_TIMEOUT_MS = 750;
-    /** How long a typed {@code :} command may run before its output capture gives up. */
-    private static final long COMMAND_TIMEOUT_SEC = 60;
-    /** How often a running command is checked for a prompt that waits for a key. */
-    private static final long CAPTURE_POLL_MS = 250;
 
     // ---- connection ----
 
@@ -115,12 +107,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     private volatile boolean waitingForArgument;
 
-    /**
-     * Whether a {@code :redir} typed by the user is collecting output (from {@code :redir @a} until
-     * {@code :redir END}); no output capture is done meanwhile. Input thread only.
-     */
-    private boolean userRedirActive;
-
     /** Asked before a {@code :} command line is executed on Enter (used for host-side {@code :w}/{@code :q}). */
     private volatile Predicate<String> hostExHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -134,6 +120,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Single thread that performs all blocking RPC, preserving key order. */
     private final InputThread inputThread = new InputThread();
+    /** Runs submitted {@code :} commands, listings, searches and {@code :normal!}. */
+    private final CommandRunner commands = new CommandRunner(new CommandRunnerNeovim());
 
     private NeovimSession(NeovimConnection connection, NeovimBufferApi homeBuffer, ClipboardPort clipboard) {
         this.connection = connection;
@@ -510,125 +498,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Runs an ex command, then refreshes buffer, mode and cursor in Eclipse, and passes what the
-     * command printed ({@code :echo}, {@code :set ts?}, {@code :!ls}) to {@code onOutput}, on a
-     * session thread. Nothing is passed when it printed nothing, or only an error (the status bar
-     * shows errors).
-     *
-     * <p>The command is typed, not run with {@code nvim_command}: Neovim then records it in a macro
-     * being recorded and knows it for {@code @:} and the history. Its output is collected with
-     * {@code :redir} around the typed command ({@link LuaScripts#START_OUTPUT_CAPTURE}).
+     * Types {@code :cmd<CR>}, then refreshes Eclipse and passes what the command printed to
+     * {@code onOutput}, on a session thread. See {@link CommandRunner#run}.
      *
      * @param onOutput receives the printed text; {@code null} to ignore it
      */
     public void commandAsync(String cmd, Consumer<String> onOutput) {
-        submit("command " + cmd, Level.WARNING, () -> {
-            // While the user's own :redir runs, a capture would take it over (see OutputCapture).
-            OutputCapture.Redir redir = OutputCapture.redirOf(cmd);
-            boolean capture = onOutput != null && redir == OutputCapture.Redir.NONE && !userRedirActive;
-            if (redir != OutputCapture.Redir.NONE) {
-                userRedirActive = redir == OutputCapture.Redir.START;
-            }
-            String output = "";
-            if (capture) {
-                await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
-            }
-            try {
-                typeCommand(cmd);
-            } finally {
-                if (capture) {
-                    output = stopOutputCapture();
-                }
-            }
-            syncBufferFromNeovim();
-            syncModeAndCursorFromNeovim();
-            if (onOutput != null && !output.isBlank()) {
-                onOutput.accept(output);
-            }
-        });
-    }
-
-    /** Types {@code :cmd<CR>} into Neovim and dismisses a "press Enter" prompt it leaves. Input thread. */
-    private void typeCommand(String cmd) throws Exception {
-        await(api.input(NvimKeys.exCommand(cmd)));
-        if (isBlocked()) {
-            await(api.input("<Esc>"));
-        }
+        submit("command " + cmd, Level.WARNING, () -> commands.run(cmd, onOutput));
     }
 
     /**
-     * Ends the {@code :redir} capture and returns what it collected.
-     *
-     * <p>Neovim answers this request only once the typed command has finished, which can take a
-     * while ({@code :!make}). While waiting, the mode is checked every {@value #CAPTURE_POLL_MS} ms
-     * (Neovim answers that at once): if Neovim is stuck at a prompt, an Esc dismisses it.
-     *
-     * <p>A command still running after {@value #COMMAND_TIMEOUT_SEC} s is not waited for any longer:
-     * its output is dropped and the editor is refreshed. The request stays queued in Neovim, which
-     * handles requests in order, so {@code redir END} still runs when the command finishes, before
-     * any later capture starts; the redirection is never left on.
-     *
-     * @return the collected text, or "" when the command did not finish in time
-     */
-    private String stopOutputCapture() throws Exception {
-        CompletableFuture<Object> stop = api.executeLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(COMMAND_TIMEOUT_SEC);
-        while (true) {
-            try {
-                Object raw = stop.get(CAPTURE_POLL_MS, TimeUnit.MILLISECONDS);
-                return raw == null ? "" : String.valueOf(raw);
-            } catch (TimeoutException e) {
-                if (System.nanoTime() > deadline) {
-                    LOG.warning("':' command still running after " + COMMAND_TIMEOUT_SEC
-                            + " s; its output is not shown");
-                    return "";
-                }
-                if (isBlocked()) {
-                    LOG.fine("command left Neovim at a prompt; sending Esc");
-                    await(api.input("<Esc>"));
-                }
-            }
-        }
-    }
-
-    /**
-     * Runs an ex command that only displays information (see {@code ListingCommand}) and passes what
-     * it printed, or its error message, to {@code onOutput} on a session thread. Not typed into
-     * Neovim, so a macro being recorded does not include it (it changes nothing anyway).
-     *
-     * <p>While the user's own {@code :redir} runs, the command is typed instead and nothing is
-     * passed: {@code nvim_exec2} would keep the output from that redirection, and in Vim the
-     * redirection gets it ({@code :redir @a}, {@code :echo 'x'}, {@code :redir END} puts "x" in a).
+     * Runs an ex command that only displays information and passes what it printed, or its error
+     * message, to {@code onOutput} on a session thread. See {@link CommandRunner#capture}.
      */
     public void captureOutputAsync(String cmd, Consumer<String> onOutput) {
-        submit("capture " + cmd, Level.WARNING, () -> {
-            if (userRedirActive) {
-                typeCommand(cmd);
-                syncModeAndCursorFromNeovim();
-                return;
-            }
-            String output;
-            try {
-                Object raw = await(api.executeLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
-                output = raw == null ? "" : String.valueOf(raw);
-            } catch (Exception e) {
-                output = Rpc.errorMessage(e);
-            }
-            onOutput.accept(output.startsWith("\n") ? output.substring(1) : output);
-        });
+        submit("capture " + cmd, Level.WARNING, () -> commands.capture(cmd, onOutput));
     }
 
-    /**
-     * Runs normal-mode {@code keys} without mappings ({@code :normal!}), then refreshes Eclipse.
-     * Used for Neovim's own meaning of a key the plug-in maps to an IDE action, for example
-     * {@code gd} in a file that has no Open Declaration.
-     */
+    /** Runs normal-mode {@code keys} without mappings, then refreshes Eclipse. See {@link CommandRunner#normal}. */
     public void normalAsync(String keys) {
-        submit("normal! " + keys, Level.WARNING, () -> {
-            await(api.executeLua(LuaScripts.NORMAL_WITHOUT_MAPPINGS, List.of(keys)));
-            syncBufferFromNeovim();
-            syncModeAndCursorFromNeovim();
-        });
+        submit("normal! " + keys, Level.WARNING, () -> commands.normal(keys));
     }
 
     /** Runs a search ({@code /} or {@code ?}) and moves the cursor to the match. */
@@ -636,11 +525,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (pattern == null || pattern.isEmpty()) {
             return;
         }
-        submit("search " + pattern, Level.WARNING, () -> {
-            await(api.input(SearchCommand.build(pattern, backward)));
-            syncBufferFromNeovim();
-            syncModeAndCursorFromNeovim();
-        });
+        submit("search " + pattern, Level.WARNING, () -> commands.search(pattern, backward));
     }
 
     /** Leaves insert mode without replaying typed text (see {@link #leaveInsertModeAsync(InsertReplay.Plan)}). */
@@ -873,5 +758,48 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     private static <T> T await(CompletableFuture<T> future) throws Exception {
         return Rpc.await(future);
+    }
+
+    /** Gives {@link CommandRunner} the Neovim calls it needs. */
+    private final class CommandRunnerNeovim implements CommandRunner.Neovim {
+        @Override
+        public void type(String keys) throws Exception {
+            await(api.input(keys));
+        }
+
+        @Override
+        public boolean isBlocked() {
+            return NeovimSession.this.isBlocked();
+        }
+
+        @Override
+        public void startCapture() throws Exception {
+            await(api.executeLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
+        }
+
+        @Override
+        public CompletableFuture<Object> stopCapture() {
+            return api.executeLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
+        }
+
+        @Override
+        public Object captureOutput(String cmd) throws Exception {
+            return await(api.executeLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
+        }
+
+        @Override
+        public void normalWithoutMappings(String keys) throws Exception {
+            await(api.executeLua(LuaScripts.NORMAL_WITHOUT_MAPPINGS, List.of(keys)));
+        }
+
+        @Override
+        public void syncBuffer() {
+            syncBufferFromNeovim();
+        }
+
+        @Override
+        public void syncModeAndCursor() {
+            syncModeAndCursorFromNeovim();
+        }
     }
 }
