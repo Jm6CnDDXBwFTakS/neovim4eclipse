@@ -293,6 +293,18 @@ These are real and deliberate to know about before extending the code:
 - Keep `util/` and `core/` free of `org.eclipse.*` imports; the Maven build enforces it (`tests/unit` compiles them with no Eclipse jars available).
 - Keep `Bundle-RequiredExecutionEnvironment` aligned with the target Eclipse (**JavaSE-21**).
 
+## AI assistance
+
+This project is developed with AI assistance: much of the code, tests and documentation was written
+with [Claude Code](https://claude.com/claude-code), Anthropic's coding assistant, under the
+maintainer's direction and review. Every change goes through the same checks as hand-written code:
+the unit, text-model, SWT and UI test suites, mutation checks of new tests (break the code on
+purpose, see the test fail), and manual checks on Linux, macOS and Windows.
+
+The instructions such tools follow in this repository are in [AGENTS.md](AGENTS.md) (Claude Code
+reads it through `CLAUDE.md`): the commands, the rules the code depends on, and the conventions.
+They are the same rules a human contributor follows ([CONTRIBUTING.md](CONTRIBUTING.md)).
+
 ## License
 
 Copyright (c) 2026 Jm6CnDDXBwFTakS.
