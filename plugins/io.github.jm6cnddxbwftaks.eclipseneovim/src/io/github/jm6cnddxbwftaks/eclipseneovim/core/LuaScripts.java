@@ -305,8 +305,10 @@ final class LuaScripts {
      * Eclipse handles it before Neovim sees it, see {@code util/HostExCommand}.)
      *
      * <p>A write under another name ({@code :w other.txt}) is refused: Eclipse saves a document only
-     * as its own file. A failed save is shown as Neovim shows a failed write, and the buffer stays
-     * modified, so {@code :update} tries again next time.
+     * as its own file. The names are compared after {@code vim.fs.normalize}, because on Windows
+     * Neovim reports the written name with forward slashes while the buffer keeps backslashes. A
+     * failed save is shown as Neovim shows a failed write, and the buffer stays modified, so
+     * {@code :update} tries again next time.
      */
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
@@ -319,7 +321,8 @@ final class LuaScripts {
                   vim.v.errmsg = msg
                   vim.api.nvim_echo({ { msg, 'ErrorMsg' } }, true, {})
                 end
-                if ev.match ~= vim.api.nvim_buf_get_name(ev.buf) then
+                -- Normalized: on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt, C:\\x\\a.txt).
+                if vim.fs.normalize(ev.match) ~= vim.fs.normalize(vim.api.nvim_buf_get_name(ev.buf)) then
                   return fail('Eclipse saves a file only under its own name; use File > Save As')
                 end
                 -- Neovim waits for the answer: Eclipse saves on its UI thread (see EditorAttachManager).
