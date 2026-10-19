@@ -103,6 +103,30 @@ that document, the first one opened is chosen. A switch to any other
 buffer is undone (`returnToAttachedBufferAsync`). When a document's last editor closes, its buffer
 is wiped (`closeBufferAsync`).
 
+### 7. Eclipse is Neovim's clipboard provider
+
+Neovim reads and writes the system clipboard only through a *provider*, the `copy` and `paste`
+functions in `g:clipboard`. Unless the user's config sets `g:clipboard`, `LuaScripts.SETUP` installs one
+whose copy sends the `eclipse_clipboard_copy` notification and whose paste is the
+`eclipse_clipboard_paste` *request*: Neovim waits for its answer. `core/ClipboardRegisters` maps `"+`
+to the clipboard and `"*` to the primary selection, joins and splits lines, and remembers what Neovim
+copied so that it pastes back with its type (lines, characters, block). `editor/ClipboardBridge`
+reads and writes SWT's `Clipboard` on the UI thread.
+
+A paste is the one place where Neovim waits for Eclipse, and the answer needs the UI thread. So the
+request runs on the RPC thread and waits for the UI thread at most 2 s; after that it answers "nothing
+to paste". Without the bound, a UI thread that waits for Neovim and a Neovim that waits for the UI
+thread would wait for each other forever.
+
+The `TextYankPost` hook still copies every other yank to the clipboard (`eclipse_yank`), except yanks
+into `"+`/`"*` (the provider already wrote them) and all yanks when `'clipboard'` contains `unnamed`
+(then every yank goes to the provider). One writer per yank: two would race, and a linewise yank
+could come back charwise.
+
+Requests reach `NotificationBridge.onRequest` through `NeovimConnection.setRequestHandler`, not
+neovim-java's `@NeovimRequestHandler` annotation, which does not work in neovim-java 0.5.0 (see
+`NeovimConnection.addNotificationHandler`).
+
 ## Ideas for future work
 
 | Topic | Hint |
@@ -118,7 +142,7 @@ is wiped (`closeBufferAsync`).
 |--------|---------|
 | SWT UI | Widget updates, `VerifyKeyListener`, the command-line box, all `IDocument` edits and reads (a push from the input thread takes its snapshot of the text with `syncExec`) |
 | input executor | All neovim-java `await(...)` RPC |
-| RPC listener | Dispatch to listeners; schedule UI work with `Display.asyncExec` |
+| RPC listener | Dispatch to listeners; schedule UI work with `Display.asyncExec`; answer Neovim's requests (a clipboard paste waits for the UI thread at most 2 s) |
 
 Never call `await` on the UI thread for key handling.
 

@@ -5,6 +5,8 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
@@ -12,10 +14,11 @@ import org.msgpack.jackson.dataformat.MessagePackExtensionType;
 
 import com.ensarsarajcic.neovim.java.api.types.msgpack.BaseCustomIdType;
 import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
+import com.ensarsarajcic.neovim.java.corerpc.message.RequestMessage;
 import com.ensarsarajcic.neovim.java.handler.annotations.NeovimNotificationHandler;
 
 /**
- * Receives raw Neovim RPC notifications and turns them into typed {@link Sink} calls.
+ * Receives raw Neovim RPC notifications (and one request) and turns them into typed {@link Sink} calls.
  *
  * <p>Registered with neovim-java's {@code NeovimHandlerManager}, which finds the annotated
  * methods by reflection; hence this class and its handler methods must stay {@code public}.
@@ -24,8 +27,17 @@ import com.ensarsarajcic.neovim.java.handler.annotations.NeovimNotificationHandl
  * ({@code nvim_buf_lines_event}) and custom {@code vim.rpcnotify} calls made by the Lua autocmds
  * in {@link LuaScripts#SETUP}. Malformed payloads are ignored rather than thrown, because an
  * exception here would be logged by the RPC library as an error on every keystroke.
+ *
+ * <p><b>Notification or request.</b> A notification ({@code vim.rpcnotify}) is fire-and-forget:
+ * Neovim goes on at once. A request ({@code vim.rpcrequest}) makes Neovim wait for the answer, so
+ * it is used only where Neovim needs a value back: {@code eclipse_clipboard_paste}, asked when
+ * Neovim pastes from the system clipboard. Requests reach {@link #onRequest} through
+ * {@code NeovimConnection.setRequestHandler} (not an annotation, see there), and its return value is
+ * the answer.
  */
 public final class NotificationBridge {
+
+    private static final Logger LOG = Logger.getLogger(NotificationBridge.class.getName());
 
     /** Buffer number used when a notification does not say which buffer it is about. */
     public static final int UNKNOWN_BUFFER = -1;
@@ -49,8 +61,26 @@ public final class NotificationBridge {
         /** Neovim made {@code bufnr} its current buffer (a jump, {@code :b}, or a switch by Eclipse). */
         void onBufferEnter(int bufnr);
 
-        /** @param linewise {@code true} when the register type is {@code V} */
-        void onYank(List<String> lines, boolean linewise);
+        /**
+         * Text was yanked or deleted into a register other than {@code "+} and {@code "*}.
+         *
+         * @param regtype {@code v} (characters), {@code V} (lines) or Ctrl-V and a width (a block)
+         */
+        void onYank(List<String> lines, String regtype);
+
+        /**
+         * The clipboard provider's copy: Neovim wrote register {@code register} ({@code +} or {@code *}).
+         *
+         * @param lines with a final empty line for linewise and blockwise text (see {@link ClipboardRegisters})
+         */
+        void onClipboardCopy(String register, List<String> lines, String regtype);
+
+        /**
+         * The clipboard provider's paste: Neovim waits for the contents of register {@code register}.
+         *
+         * @return the answer sent to Neovim: a list of lines, or {@code [lines, regtype]}
+         */
+        Object onClipboardPaste(String register);
 
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
@@ -92,12 +122,51 @@ public final class NotificationBridge {
         }
     }
 
+    /** Payload: {@code [regcontents, regtype]}; a missing type counts as characters. */
     @NeovimNotificationHandler("eclipse_yank")
     public void onYank(NotificationMessage message) {
         List<?> args = message.getArguments();
         if (args != null && !args.isEmpty() && args.get(0) != null) {
-            boolean linewise = args.size() >= 2 && "V".equals(String.valueOf(args.get(1)));
-            sink.onYank(toStringList(args.get(0)), linewise);
+            String regtype = args.size() >= 2 && args.get(1) != null ? String.valueOf(args.get(1)) : "v";
+            sink.onYank(toStringList(args.get(0)), regtype);
+        }
+    }
+
+    /** Payload: {@code [register, lines, regtype]}, from the copy function of the clipboard provider. */
+    @NeovimNotificationHandler("eclipse_clipboard_copy")
+    public void onClipboardCopy(NotificationMessage message) {
+        List<?> args = message.getArguments();
+        if (args != null && args.size() >= 3 && args.get(0) != null && args.get(1) != null) {
+            sink.onClipboardCopy(String.valueOf(args.get(0)), toStringList(args.get(1)),
+                    String.valueOf(args.get(2)));
+        }
+    }
+
+    /**
+     * Answers a request from Neovim; see the class comment.
+     *
+     * @throws UnsupportedOperationException for a request this bridge does not know (answered as an error)
+     */
+    public Object onRequest(RequestMessage message) {
+        if ("eclipse_clipboard_paste".equals(message.getMethod())) {
+            return onClipboardPaste(message);
+        }
+        throw new UnsupportedOperationException("Unknown request: " + message.getMethod());
+    }
+
+    /**
+     * Payload: {@code [register]}, from the paste function of the clipboard provider. Neovim is
+     * blocked until this returns. Never throws: an exception would reach Neovim as an RPC error, and
+     * an empty list (nothing to paste) is the friendlier answer.
+     */
+    Object onClipboardPaste(RequestMessage message) {
+        List<?> args = message.getArguments();
+        String register = args != null && !args.isEmpty() && args.get(0) != null ? String.valueOf(args.get(0)) : "+";
+        try {
+            return sink.onClipboardPaste(register);
+        } catch (RuntimeException e) {
+            LOG.log(Level.WARNING, "Reading the system clipboard for Neovim failed", e);
+            return List.of();
         }
     }
 

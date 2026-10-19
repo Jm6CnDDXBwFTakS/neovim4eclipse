@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import org.msgpack.jackson.dataformat.MessagePackExtensionType;
 
 import com.ensarsarajcic.neovim.java.api.types.msgpack.Buffer;
 import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
+import com.ensarsarajcic.neovim.java.corerpc.message.RequestMessage;
 
 class NotificationBridgeTest {
 
@@ -34,8 +36,18 @@ class NotificationBridgeTest {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
             @Override public void onBufferEnter(int bufnr) { events.add("enter:" + bufnr); }
-            @Override public void onYank(List<String> lines, boolean linewise) {
-                events.add("yank:" + lines + (linewise ? ":line" : ":char"));
+            @Override public void onYank(List<String> lines, String regtype) {
+                events.add("yank:" + lines + ":" + regtype);
+            }
+            @Override public void onClipboardCopy(String register, List<String> lines, String regtype) {
+                events.add("copy" + register + ":" + lines + ":" + regtype);
+            }
+            @Override public Object onClipboardPaste(String register) {
+                events.add("paste" + register);
+                if ("!".equals(register)) {
+                    throw new IllegalStateException("the clipboard is gone");
+                }
+                return List.of(List.of("pasted"), "v");
             }
             @Override public void onIdeAction(IdeAction action) {
                 events.add("action:" + action.name() + ":" + action.count());
@@ -45,6 +57,10 @@ class NotificationBridgeTest {
 
     private static NotificationMessage msg(String name, Object... args) {
         return new NotificationMessage(name, new ArrayList<>(Arrays.asList(args)));
+    }
+
+    private static RequestMessage request(Object... args) {
+        return new RequestMessage.Builder("eclipse_clipboard_paste", new ArrayList<>(Arrays.asList(args))).build();
     }
 
     @Test
@@ -93,19 +109,53 @@ class NotificationBridgeTest {
     @Test
     void yankNotificationWithLineList() {
         bridge.onYank(msg("eclipse_yank", List.of("one", "two"), "V"));
-        assertEquals(List.of("yank:[one, two]:line"), events);
+        assertEquals(List.of("yank:[one, two]:V"), events);
     }
 
     @Test
     void yankNotificationWithCharwiseType() {
         bridge.onYank(msg("eclipse_yank", List.of("word"), "v"));
-        assertEquals(List.of("yank:[word]:char"), events);
+        assertEquals(List.of("yank:[word]:v"), events);
+    }
+
+    @Test
+    void yankNotificationKeepsABlockTypeAndDefaultsToCharacters() {
+        bridge.onYank(msg("eclipse_yank", List.of("ab", "cd"), "\u00162"));
+        bridge.onYank(msg("eclipse_yank", List.of("x")));
+        assertEquals(List.of("yank:[ab, cd]:\u00162", "yank:[x]:v"), events);
+    }
+
+    @Test
+    void clipboardCopyCarriesRegisterLinesAndType() {
+        bridge.onClipboardCopy(msg("eclipse_clipboard_copy", "+", List.of("line", ""), "V"));
+        bridge.onClipboardCopy(msg("eclipse_clipboard_copy", "*", List.of("w"), "v"));
+        bridge.onClipboardCopy(msg("eclipse_clipboard_copy", "+"));
+        assertEquals(List.of("copy+:[line, ]:V", "copy*:[w]:v"), events);
+    }
+
+    @Test
+    void clipboardPasteAnswersWithTheSinksValue() {
+        assertEquals(List.of(List.of("pasted"), "v"), bridge.onClipboardPaste(request("*")));
+        assertEquals(List.of(List.of("pasted"), "v"), bridge.onClipboardPaste(request()));
+        assertEquals(List.of("paste*", "paste+"), events, "no register given: the clipboard");
+    }
+
+    @Test
+    void aFailingClipboardPastesNothingInsteadOfThrowingAtNeovim() {
+        assertEquals(List.of(), bridge.onClipboardPaste(request("!")));
+    }
+
+    @Test
+    void requestsAreAnsweredByName() {
+        assertEquals(List.of(List.of("pasted"), "v"), bridge.onRequest(request("+")));
+        RequestMessage unknown = new RequestMessage.Builder("eclipse_unknown", new ArrayList<>()).build();
+        assertThrows(UnsupportedOperationException.class, () -> bridge.onRequest(unknown));
     }
 
     @Test
     void yankNotificationWithSingleString() {
         bridge.onYank(msg("eclipse_yank", "solo", "v"));
-        assertEquals(List.of("yank:[solo]:char"), events);
+        assertEquals(List.of("yank:[solo]:v"), events);
     }
 
     @Test

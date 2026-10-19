@@ -32,8 +32,14 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 
 ## Clipboard
 
-- `ClipboardBridge` uses SWT `Clipboard` / `TextTransfer` (works on all three platforms).
-- System clipboard access requires a display thread (already enforced).
+- `ClipboardBridge` uses SWT `Clipboard` / `TextTransfer` (works on all three platforms), so Neovim
+  needs no clipboard tool (`xclip`, `wl-clipboard`, `pbcopy`, `win32yank`).
+- System clipboard access requires the display thread: copies are queued to it, pastes wait for it
+  (at most 2 s).
+- `"*` is the primary selection (`DND.SELECTION_CLIPBOARD`) on GTK only; on Windows and macOS it is
+  the one clipboard, as in Vim.
+- Copies join lines with the platform's line separator (`\r\n` on Windows); pastes accept any line
+  break.
 
 ## Keys
 

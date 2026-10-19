@@ -208,6 +208,13 @@ Requests are answered in order of processing; the `msgid` pairs each answer with
 Notifications are fire-and-forget: Neovim uses them for events, and Lua code can send its own with
 `vim.rpcnotify(0, name, ...)` (channel 0 means "every connected client").
 
+Requests go the other way too. `vim.rpcrequest(channel, name, ...)` sends one to a client and
+**Neovim waits** until the client answers; it needs a real channel number, not 0. The plug-in uses
+this once: when Neovim pastes from the system clipboard (`"+p`), it asks Eclipse for the text
+(`eclipse_clipboard_paste`, see `core/ClipboardRegisters`). Eclipse learns its own channel number by
+calling `nvim_get_chan_info(0)` itself (0 is "the caller" in a direct API call) and passes it to the
+setup Lua: inside Lua run by `nvim_exec_lua`, `nvim_get_chan_info(0)` does not know who called.
+
 In Neovim, `:help api` lists every function and `:help rpc` describes the protocol. `nvim --api-info`
 dumps the API as MessagePack.
 
@@ -223,6 +230,13 @@ ReactiveRpcStreamer     turns each request into a CompletableFuture
 NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), buffer.setLines(...)
 NeovimHandlerManager    routes notifications to @NeovimNotificationHandler methods (NotificationBridge)
 ```
+
+neovim-java also has a `@NeovimRequestHandler` annotation for answering Neovim's requests, but in
+version 0.5.0 it never fires: the manager stores those handlers in one map and looks them up in
+another, so every request gets "No handler found". `NeovimConnection.setRequestHandler` answers
+requests itself, straight from the `RpcClient`, and the manager is attached for notifications only.
+A library's documented feature can be broken; a small integration test against the real program
+(here `ClipboardIntegrationTest`) is what finds it.
 
 Every API call returns a `CompletableFuture`. `Rpc.await` waits for it with a timeout (and
 `Rpc.errorMessage` turns a failed call into Neovim's own `E…:` text).
@@ -298,7 +312,9 @@ Every column crossing the boundary goes through `util/Utf8Columns`.
 
 - **Setup**: options and *autocommands* (`ModeChanged`, `CursorMoved`, `BufEnter`, `TextYankPost`)
   whose callbacks call `vim.rpcnotify(0, 'eclipse_mode', ...)`. Those notifications arrive at the
-  matching `@NeovimNotificationHandler` method in `NotificationBridge`.
+  matching `@NeovimNotificationHandler` method in `NotificationBridge`. Setup also makes Eclipse
+  Neovim's clipboard provider (`g:clipboard`, see `:help clipboard`), whose functions are Lua
+  closures that notify or ask Eclipse.
 - **Snapshots**: `STATE_SNAPSHOT` returns cursor, visual selection, mode, recording register and
   status texts in one round trip, instead of many separate requests per key.
 
@@ -401,7 +417,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `DocumentPush.Neovim`, `DocumentPush.Mirror` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer` |
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
 | `CommandLineBox.Commands` | `editor/CommandLineBox` | a record in `NeovimEditorController` (a fake that records "`:ls` captured, `:w` to the IDE" in tests) |
-| `ClipboardPort` | `NeovimSession` | `editor/ClipboardBridge` (`ClipboardPort.NONE` in tests) |
+| `ClipboardPort` | `core/ClipboardRegisters` | `editor/ClipboardBridge` (`ClipboardPort.NONE`, or a fake that keeps one text per selection, in tests) |
 
 A port is not the only way to keep Eclipse out of a class. When the class only *stores* Eclipse
 objects and compares them, never calls them, type parameters are enough. `core/EditorBuffers<D, E>`
@@ -437,6 +453,12 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `NotificationBridge` and a method to its `Sink`; implement it in `NeovimSession.EventSink`. If the
 event changes state the session keeps (like mode or cursor), record it in `StateSync` and give it a
 listener list in `SessionEvents`.
+
+**Answer a question from Neovim.** In Lua, call `vim.rpcrequest(chan, 'eclipse_<name>', ...)`, where
+`chan` is the channel number `LuaScripts.SETUP` receives as its argument (Neovim waits for the answer,
+so keep the Java side quick and bounded); add a case to `NotificationBridge.onRequest` and a method to
+its `Sink`; implement it in `NeovimSession.EventSink`. The value returned is the answer; Lua sees Java
+lists as tables. `eclipse_clipboard_paste` is the example.
 
 **Ask Neovim for more state per key.** Extend `LuaScripts.STATE_SNAPSHOT` (append at the end so the
 existing indexes stay valid), add a reader for the new element to `StateSnapshot` (and a case to
