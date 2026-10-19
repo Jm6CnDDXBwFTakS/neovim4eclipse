@@ -26,11 +26,25 @@ updates:
           - "org.apache.maven.plugins:*"
           - "org.codehaus.mojo:*"
           - "org.eclipse.tycho:*"
+      # The libraries embedded in the plug-in depend on each other: msgpack is built against a
+      # particular Jackson, and neovim-java against both. One pull request for all of them, so
+      # they cannot drift apart (msgpack 0.9.12 alone, built for Jackson 2.20, broke every RPC
+      # with our Jackson 2.14; see pull request #3). Still check licenses: docs/UPGRADING.md.
+      rpc-libraries:
+        patterns:
+          - "com.ensarsarajcic.neovim.java:*"
+          - "org.msgpack:*"
+          - "com.fasterxml.jackson.core:*"
     ignore:
       # Major versions of the embedded libraries change APIs (SLF4J 2 changed how bindings are
       # found, for example) and need a deliberate upgrade; see docs/UPGRADING.md.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # These jars only feed tests/text and tests/swt, and must be the versions of the target
+      # Eclipse release (eclipse-repo.url), not the newest on Maven Central: org.eclipse.text
+      # 3.14.800, for example, needs OSGi classes those tests do not have. They move with the
+      # Eclipse release, by hand (docs/UPGRADING.md, "Eclipse release").
+      - dependency-name: "org.eclipse.platform:*"
 
   - package-ecosystem: github-actions
     directory: /
