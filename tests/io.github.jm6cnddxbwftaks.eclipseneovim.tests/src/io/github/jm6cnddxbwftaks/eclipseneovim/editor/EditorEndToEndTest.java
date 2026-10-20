@@ -9,7 +9,6 @@ import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.waitU
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
-import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.link.LinkedModeModel;
@@ -29,115 +26,26 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
-import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
-import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
-
 /**
- * Real editor, real Neovim: opens a file in Eclipse's text editor, waits for the plug-in to attach,
- * types keys into the editor widget and checks the document. Skipped when no {@code nvim} can be
- * found ({@code -Dnvim.path=...} selects one).
- *
- * <p>Keys are delivered with {@code notifyListeners(SWT.KeyDown)}, which runs the editor's own key
- * handling, the plug-in's {@code KeyInterceptor} included, but not the workbench's key-binding
- * dispatcher; Ctrl keys are therefore not covered here.
+ * Real editor, real Neovim: types keys into the editor widget of test.txt and checks the document.
+ * The setup, and how keys are delivered, is in {@link EndToEndTestBase}.
  */
-class EditorEndToEndTest {
-
-    private static final long TIMEOUT_MS = 15_000;
-
-    private IProject project;
-    private ITextEditor editor;
-    private StyledText widget;
-    private IDocument document;
-    private NeovimSession session;
-
-    @BeforeEach
-    void openEditor() throws Exception {
-        String nvimPath = nvimPathProperty();
-        if (!nvimPath.isBlank()) {
-            Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, nvimPath);
-        }
-        assumeTrue(NvimExecutable.looksAvailable(Activator.getDefault().getNvimExecutable()),
-                "nvim not found; set -Dnvim.path");
-
-        project = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e");
-        if (!project.exists()) {
-            project.create(null);
-        }
-        project.open(null);
-        IFile file = project.getFile("test.txt");
-        byte[] content = "alpha\nbeta\ngamma\n".getBytes(StandardCharsets.UTF_8);
-        if (file.exists()) {
-            file.setContents(new ByteArrayInputStream(content), true, false, null);
-        } else {
-            file.create(new ByteArrayInputStream(content), true, null);
-        }
-
-        EditorAttachManager.getInstance().installWorkbenchListeners();
-        IWorkbenchPage page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
-        editor = (ITextEditor) IDE.openEditor(page, file, "org.eclipse.ui.DefaultTextEditor", true);
-        document = editor.getDocumentProvider().getDocument(editor.getEditorInput());
-        widget = (StyledText) editor.getAdapter(Control.class);
-
-        waitUntil("Neovim to attach", TIMEOUT_MS, () -> {
-            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
-            return c != null && c.getEditor() == editor && !c.isClosed();
-        });
-        session = Activator.getDefault().getOrCreateSession();
-        // One Neovim serves the whole IDE, so a previous test may have left it in another mode.
-        session.inputAsync("<Esc>");
-        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
-        settle(); // let the initial document push and cursor placement finish
-    }
-
-    /**
-     * {@code -Dnvim.path}, or "" when it was not given. Without it the pom.xml passes an empty value,
-     * which tycho-surefire turns into the text {@code "null"}; taken as a path, that made every test
-     * here skip ("nvim not found") although nvim was on the PATH.
-     */
-    private static String nvimPathProperty() {
-        String value = System.getProperty("nvim.path", "");
-        return "null".equals(value) ? "" : value;
-    }
-
-    @AfterEach
-    void closeEditor() throws Exception {
-        if (editor != null) {
-            editor.getSite().getPage().closeEditor(editor, false);
-        }
-        if (project != null && project.exists()) {
-            project.delete(true, true, null);
-        }
-    }
-
-    private void expectText(String expected) {
-        waitUntil("document to read " + expected.replace("\n", "\\n"), TIMEOUT_MS,
-                () -> expected.equals(document.get()),
-                () -> "; it reads " + document.get().replace("\n", "\\n") + " (mode " + session.getMode()
-                        + ", caret " + widget.getCaretOffset() + ")");
-    }
+class EditorEndToEndTest extends EndToEndTestBase {
 
     @Test
     void ddDeletesTheFirstLine() {
@@ -367,19 +275,6 @@ class EditorEndToEndTest {
         }
     }
 
-    /** The file's contents on disk. */
-    private String fileText(String name) {
-        try (var in = project.getFile(name).getContents(true)) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            throw new AssertionError("cannot read " + name, e);
-        }
-    }
-
-    private static IDocument documentOf(ITextEditor textEditor) {
-        return textEditor.getDocumentProvider().getDocument(textEditor.getEditorInput());
-    }
-
     // The system clipboard (Eclipse is Neovim's clipboard provider; see core/ClipboardRegisters).
     // These assume the init.lua on the test machine does not set g:clipboard (its own provider wins).
 
@@ -416,15 +311,6 @@ class EditorEndToEndTest {
         }
     }
 
-    /** Neovim's cursor line, asked from Neovim itself (not the last one Eclipse heard of). */
-    private int cursorLine() {
-        try {
-            return session.getCursor().line1Based();
-        } catch (Exception e) {
-            throw new AssertionError("Neovim did not answer", e);
-        }
-    }
-
     /**
      * Tab in the {@code :} box, the whole way: Neovim completes {@code :e} names in the edited
      * file's folder (not its own working directory), and Enter opens the completed file.
@@ -456,48 +342,6 @@ class EditorEndToEndTest {
         waitUntil("other.txt to open", TIMEOUT_MS,
                 () -> page.getActiveEditor() != null && "other.txt".equals(page.getActiveEditor().getTitle()));
         page.closeEditor(page.getActiveEditor(), false);
-    }
-
-    private static Text textChildOf(Composite parent) {
-        for (Control child : parent.getChildren()) {
-            if (child instanceof Text text && !text.isDisposed()) {
-                return text;
-            }
-            if (child instanceof Composite composite) {
-                Text found = textChildOf(composite);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
-    }
-
-    /** Opens other.txt (one line, "other") and waits until Neovim is attached to it. */
-    private ITextEditor openOtherFile() throws Exception {
-        return openFile("other.txt", "other\n");
-    }
-
-    /** Creates {@code name} in the test project, opens it and waits until Neovim is attached to it. */
-    private ITextEditor openFile(String name, String content) throws Exception {
-        IFile file = project.getFile(name);
-        file.create(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)), true, null);
-        ITextEditor opened = (ITextEditor) IDE.openEditor(editor.getSite().getPage(), file,
-                "org.eclipse.ui.DefaultTextEditor", true);
-        waitForAttach(opened, name);
-        return opened;
-    }
-
-    private void waitForAttach(ITextEditor target, String what) {
-        waitUntil("Neovim to attach to " + what, TIMEOUT_MS, () -> {
-            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
-            return c != null && c.getEditor() == target && !c.isClosed();
-        });
-        settle();
-    }
-
-    private static StyledText widgetOf(ITextEditor textEditor) {
-        return (StyledText) textEditor.getAdapter(Control.class);
     }
 
     /**
@@ -635,22 +479,6 @@ class EditorEndToEndTest {
         expectText("alpha\nta\ngamma\n");
     }
 
-    /** Types one key at a time, letting each selection update reach the widget before the next key. */
-    private void typeSlowly(String keys) {
-        for (char key : keys.toCharArray()) {
-            type(widget, key);
-            settle();
-        }
-    }
-
-    /**
-     * Waits until Neovim has handled every key and push so far and the editor shows the result (see
-     * {@link UiTestSupport#settle}): no fixed sleep, so the test waits only as long as needed.
-     */
-    private void settle() {
-        UiTestSupport.settle(session, TIMEOUT_MS);
-    }
-
     /**
      * {@code ZQ} closes the editor only after the key event is over. Eclipse's own key listeners
      * run after the plug-in's and use the editor; closed during the event, the Java editor fails
@@ -742,35 +570,6 @@ class EditorEndToEndTest {
         } finally {
             page.closeEditor(generic, false);
         }
-    }
-
-    /**
-     * While {@code control} exists, closes every modal dialog that opens and returns their titles. A
-     * timer keeps running inside a dialog's own event loop, so this also ends a dialog that would
-     * otherwise block the test forever.
-     */
-    private static List<String> closeModalDialogsWhile(Control control) {
-        Shell owner = control.getShell();
-        Display display = Display.getCurrent();
-        List<String> titles = new ArrayList<>();
-        int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
-        Runnable check = new Runnable() {
-            @Override
-            public void run() {
-                if (control.isDisposed()) {
-                    return;
-                }
-                for (Shell shell : display.getShells()) {
-                    if (shell != owner && shell.isVisible() && (shell.getStyle() & modal) != 0) {
-                        titles.add(shell.getText());
-                        shell.close();
-                    }
-                }
-                display.timerExec(200, this);
-            }
-        };
-        display.timerExec(200, check);
-        return titles;
     }
 
     @Test
