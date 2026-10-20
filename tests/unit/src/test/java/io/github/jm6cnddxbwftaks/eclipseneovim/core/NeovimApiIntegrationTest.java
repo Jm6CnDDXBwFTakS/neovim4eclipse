@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -173,11 +174,16 @@ class NeovimApiIntegrationTest {
         assertEquals(List.of("twö"), await(api.bufGetLines(buffer, 1, 2, true)));
     }
 
+    /**
+     * Neovim resolves symbolic links in the directory of the name: on macOS {@code /tmp} is a link
+     * to {@code /private/tmp}, so the buffer is named {@code /private/tmp/contract-test.txt}.
+     */
     @Test
     void bufSetNameNamesTheBuffer() throws Exception {
         Handle buffer = await(api.createBuf(true, true));
         await(api.bufSetName(buffer, "/tmp/contract-test.txt"));
-        assertEquals("/tmp/contract-test.txt", lua("return vim.api.nvim_buf_get_name(" + buffer.id() + ")"));
+        String expected = Path.of("/tmp").toRealPath().resolve("contract-test.txt").toString();
+        assertEquals(expected, lua("return vim.api.nvim_buf_get_name(" + buffer.id() + ")"));
     }
 
     @Test
