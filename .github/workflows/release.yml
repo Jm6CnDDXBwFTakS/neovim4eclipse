@@ -5,39 +5,62 @@
 #   git tag v0.1.0 && git push origin v0.1.0
 # The tag supplies the version: the build rewrites 0.1.0-SNAPSHOT / 0.1.0.qualifier to 0.1.0
 # in the POMs, MANIFEST.MF and feature.xml (inside the runner only; nothing is committed back).
+#
+# Three jobs, each starting only when the one before succeeded:
+#   1. version: reads the version from the tag.
+#   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
+#               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
+#               EclipseNeovim-<version>.zip as an artifact of this run.
+#   3. publish: downloads that ZIP and creates the GitHub Release.
 name: Release
 
 on:
   push:
     tags: ['v*']
 
-permissions:
-  contents: write   # needed to create the release
+# Each job asks for what it needs; nothing by default.
+permissions: {}
 
 jobs:
-  release:
+  version:
+    name: Version from the tag
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - id: tag
+        # v0.1.0 -> 0.1.0. GITHUB_REF_NAME is the tag name for a tag push.
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  publish:
+    name: Publish the release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the release
+    steps:
+      # The build job uploads the ZIP unwrapped (upload-artifact's archive: false), so the artifact
+      # is named after the file; download-artifact v8 fetches such a file by that name.
+      - uses: actions/download-artifact@v8
         with:
-          distribution: temurin
-          java-version-file: .java-version   # the JDK version, kept in one file
-          cache: maven
-      - name: Set version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # Tycho's own goal keeps POMs, MANIFEST.MF and feature.xml in step.
-          ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
-      # -Pui: also the UI tests (off by default); they need a display (xvfb-run). Without nvim on the
-      # PATH their end-to-end part is skipped.
-      - run: xvfb-run -a ./mvnw -B -ntp verify -Pui
+          name: EclipseNeovim-${{ needs.version.outputs.version }}.zip
+          path: dist
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}   # no checkout here, so gh cannot find the repository itself
+          VERSION: ${{ needs.version.outputs.version }}
         run: >
           gh release create "$GITHUB_REF_NAME"
-          "releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/EclipseNeovim-${VERSION}.zip"
+          "dist/EclipseNeovim-${VERSION}.zip"
           --title "Eclipse Neovim ${VERSION}"
           --generate-notes
