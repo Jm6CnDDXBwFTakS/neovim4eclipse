@@ -305,8 +305,11 @@ final class LuaScripts {
      * Eclipse handles it before Neovim sees it, see {@code util/HostExCommand}.)
      *
      * <p>A write under another name ({@code :w other.txt}) is refused: Eclipse saves a document only
-     * as its own file. The names are compared after {@code vim.fs.normalize}, because on Windows
-     * Neovim reports the written name with forward slashes while the buffer keeps backslashes. A
+     * as its own file. The names are compared after {@code resolve()} and {@code vim.fs.normalize}:
+     * Neovim resolves symbolic links in a buffer's name but not in the written name (on macOS
+     * {@code /var} is a link to {@code /private/var}, so the buffer is {@code /private/var/.../A.txt}
+     * while {@code :update} writes {@code /var/.../A.txt}), and on Windows it reports the written
+     * name with forward slashes while the buffer keeps backslashes. A
      * failed save is shown as Neovim shows a failed write, and the buffer stays modified, so
      * {@code :update} tries again next time.
      */
@@ -321,8 +324,12 @@ final class LuaScripts {
                   vim.v.errmsg = msg
                   vim.api.nvim_echo({ { msg, 'ErrorMsg' } }, true, {})
                 end
+                -- Resolved: the buffer name has its links resolved, ev.match not (/private/var/x, /var/x on macOS).
                 -- Normalized: on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt, C:\\x\\a.txt).
-                if vim.fs.normalize(ev.match) ~= vim.fs.normalize(vim.api.nvim_buf_get_name(ev.buf)) then
+                local function canonical(name)
+                  return vim.fs.normalize(vim.fn.resolve(name))
+                end
+                if canonical(ev.match) ~= canonical(vim.api.nvim_buf_get_name(ev.buf)) then
                   return fail('Eclipse saves a file only under its own name; use File > Save As')
                 end
                 -- Neovim waits for the answer: Eclipse saves on its UI thread (see EditorAttachManager).
