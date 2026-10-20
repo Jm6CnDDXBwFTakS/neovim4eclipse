@@ -24,7 +24,10 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("buftype = 'acwrite'"));
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'BufWriteCmd'"));
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'eclipse_write'"));
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.fs.normalize(ev.match)"), "Windows: / against \\");
+        // Both names are compared canonical: links resolved (macOS /var), slashes normalized (Windows / against \).
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.fs.normalize(vim.fn.resolve(name))"));
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains(
+                "canonical(ev.match) ~= canonical(vim.api.nvim_buf_get_name(ev.buf))"));
         assertTrue(LuaScripts.SETUP.contains("vim.g.eclipse_channel = chan"), "the channel the request goes to");
     }
 
