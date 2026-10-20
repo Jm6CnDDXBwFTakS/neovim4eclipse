@@ -16,7 +16,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.eclipseneovim.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.eclipseneovim.editor.EditorAttachManager;
 import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.ToolbarVisibility;
+import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.ContributionVisibility;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
 /**
@@ -54,8 +54,8 @@ public class Activator extends AbstractUIPlugin {
 
         preferenceListener = event -> {
             String property = event.getProperty();
-            if (PreferenceConstants.SHOW_TOOLBAR.equals(property)) {
-                ToolbarVisibility.refresh();
+            if (PreferenceConstants.SHOW_TOOLBAR.equals(property) || PreferenceConstants.SHOW_MENU.equals(property)) {
+                ContributionVisibility.refresh();
             } else if (PreferenceConstants.NVIM_EXECUTABLE.equals(property)) {
                 resetSession();
             } else if (PreferenceConstants.isStatusItemKey(property)) {

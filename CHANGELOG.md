@@ -36,4 +36,5 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
   tool needed.
 - Indentation options (tabs or spaces, width) read from each document, so `o`, `O` and `>>` indent
   like the file.
-- Preferences: the Neovim executable, the toolbar toggle, and which `Ctrl` keys go to Neovim.
+- Preferences: the Neovim executable, the toolbar toggle, whether the *Neovim* menu is in the menu
+  bar, and which `Ctrl` keys go to Neovim.

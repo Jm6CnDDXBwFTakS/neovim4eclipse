@@ -25,6 +25,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         IEclipsePreferences defaults = DefaultScope.INSTANCE.getNode(Activator.PLUGIN_ID);
         defaults.put(PreferenceConstants.NVIM_EXECUTABLE, NvimExecutable.defaultCommandName());
         defaults.putBoolean(PreferenceConstants.SHOW_TOOLBAR, PreferenceConstants.SHOW_TOOLBAR_DEFAULT);
+        defaults.putBoolean(PreferenceConstants.SHOW_MENU, PreferenceConstants.SHOW_MENU_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_MODE, PreferenceConstants.STATUS_ITEM_MODE_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_CMD, PreferenceConstants.STATUS_ITEM_CMD_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_MSG, PreferenceConstants.STATUS_ITEM_MSG_DEFAULT);
