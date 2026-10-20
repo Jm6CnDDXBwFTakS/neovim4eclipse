@@ -293,31 +293,46 @@ editor has focus; in insert mode and in Eclipse mode (toggle with the toolbar bu
 shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
 the system Paste.
 
-**If `Ctrl-V` does nothing**, look for these lines in the console of the Eclipse process: the
-terminal you started Eclipse from, or the Console view of the Eclipse that launched a runtime Eclipse.
-The first three are written when Neovim mode turns on in an editor, not when you press `Ctrl-V`.
-The warnings (the third and the last line) also appear in the Error Log (*Window › Show View › Error Log*).
+**If `Ctrl-V` does nothing**, the plug-in's log says why. It goes to the console of the Eclipse
+process: the terminal you started Eclipse from, or the Console view of the Eclipse that launched a
+runtime Eclipse. WARNING lines also appear in the Error Log (*Window › Show View › Error Log*).
+The first three lines are written when Neovim mode turns on in an editor, not when you press `Ctrl-V`.
 
-The first two are details (level FINE), hidden by default. To see them, create a file such as
-`vim-logging.properties` with
+| Log line | Level | Meaning |
+|----------|-------|---------|
+| `Neovim key context activated` | FINE | the context is on; if absent, the editor did not have focus or Neovim mode is off/insert |
+| `Ctrl-V (M1+V) resolves to the Neovim Ctrl-key command` | FINE | binding works; the key goes to Neovim |
+| `Ctrl-V (...) resolves to '<other command>'` | WARNING | another binding outranks ours, or the context is not in effect |
+| `Ctrl chord reached the editor key listener` | INFO | the key got past the workbench (so a binding is not consuming it) |
+| `Ctrl-key command ran but there is nothing to send to` | WARNING | the binding fired but no editor is attached (the line names the command and key) |
+
+FINE lines are hidden by default. To show them (and the plug-in's other details, such as each
+attach and detach):
+
+1. Create a file, for example `vim-logging.properties`:
+
+   ```properties
+   handlers = java.util.logging.ConsoleHandler
+   java.util.logging.ConsoleHandler.level = FINE
+   io.github.jm6cnddxbwftaks.eclipseneovim.level = FINE
+   ```
+
+2. Add `-Djava.util.logging.config.file=/path/to/vim-logging.properties` on its own line after
+   `-vmargs` in `eclipse.ini` (for a runtime Eclipse: the *Arguments* tab of its launch). Prefer
+   `eclipse.ini` to the command line: there, `-vmargs` replaces all of `eclipse.ini`'s VM arguments,
+   memory settings included, unless `eclipse.ini` has `--launcher.appendVmargs`.
+3. Start Eclipse from a terminal. On **Windows**, run `eclipsec.exe`, not `eclipse.exe`: it is in the
+   same folder, and `eclipse.exe` has no console, so its log lines are lost.
+
+To write the log to a file instead, replace the two `ConsoleHandler` lines with these (`%h` is your
+home folder; the `formatter` line makes it plain text rather than XML):
 
 ```properties
-handlers = java.util.logging.ConsoleHandler
-java.util.logging.ConsoleHandler.level = FINE
-io.github.jm6cnddxbwftaks.eclipseneovim.level = FINE
+handlers = java.util.logging.FileHandler
+java.util.logging.FileHandler.level = FINE
+java.util.logging.FileHandler.pattern = %h/eclipse-neovim.log
+java.util.logging.FileHandler.formatter = java.util.logging.SimpleFormatter
 ```
-
-and start Eclipse with `-Djava.util.logging.config.file=/path/to/vim-logging.properties` (after
-`-vmargs` in `eclipse.ini`, or in the *Arguments* tab of a runtime Eclipse launch). The plug-in's
-other details (each attach and detach, cursor pushes) then appear too.
-
-| Log line | Meaning |
-|----------|---------|
-| `Neovim key context activated` | the context is on; if absent, the editor did not have focus or Neovim mode is off/insert |
-| `Ctrl-V (M1+V) resolves to the Neovim Ctrl-key command` | binding works; the key goes to Neovim |
-| `Ctrl-V (...) resolves to '<other command>'` | another binding outranks ours, or the context is not in effect |
-| `Ctrl chord reached the editor key listener` | the key got past the workbench (so a binding is not consuming it) |
-| `Ctrl-key command ran but there is nothing to send to` | the binding fired but no editor is attached (the line names the command and key) |
 
 ## Preferences
 
