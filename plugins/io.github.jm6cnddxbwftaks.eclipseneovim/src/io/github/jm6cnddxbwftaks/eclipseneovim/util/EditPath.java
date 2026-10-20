@@ -18,6 +18,13 @@ import java.util.List;
  *
  * <p>Example: editing {@code /ws/app/src/Main.java} in project {@code /ws/app},
  * {@code :e Util.java} tries {@code /ws/app/src/Util.java}, then {@code /ws/app/Util.java}.
+ *
+ * <p>A name starting with {@code ./} or {@code ../} is resolved against the first directory only
+ * (the edited file's): {@code :e ./Util.java} means the one beside {@code Main.java}, never the
+ * project root's. This is the plug-in's rule, not Vim's (Vim has no second directory to opt out
+ * of); it works like a shell, where {@code ./script} runs the file here and {@code script} searches
+ * {@code PATH}. {@code ../} is not limited to the project: from {@code src/}, {@code ../../x} is
+ * {@code /ws/x}.
  */
 public final class EditPath {
 
@@ -28,7 +35,8 @@ public final class EditPath {
      * @param argument the file name as typed after {@code :e}; quotes are not interpreted
      * @param home     the user's home directory
      * @param bases    directories to resolve a relative name against, in order; {@code null}
-     *                 entries are skipped
+     *                 entries are skipped. A {@code ./} or {@code ../} name uses only the first
+     *                 entry, and gives nothing when it is {@code null}
      * @return candidate paths, normalized and without duplicates, best first; empty if
      *         {@code argument} is blank or not a valid path on this system
      */
@@ -52,7 +60,9 @@ public final class EditPath {
                 out.add(typed.normalize());
                 return out;
             }
-            for (Path base : bases) {
+            List<Path> searched = isFromCurrentFolder(name) && !bases.isEmpty()
+                    ? bases.subList(0, 1) : bases;
+            for (Path base : searched) {
                 if (base != null) {
                     Path candidate = base.resolve(typed).normalize();
                     if (!out.contains(candidate)) {
@@ -64,5 +74,20 @@ public final class EditPath {
             out.clear(); // a name such as "a\0b" cannot be a file anywhere
         }
         return out;
+    }
+
+    /**
+     * Whether {@code argument} starts with {@code ./} or {@code ../} ({@code .\} and {@code ..\} too,
+     * for Windows users), so it is resolved against the edited file's folder only. A bare {@code .}
+     * or {@code ..} counts as well.
+     */
+    public static boolean isFromCurrentFolder(String argument) {
+        if (argument == null) {
+            return false;
+        }
+        String name = argument.strip();
+        return name.equals(".") || name.equals("..")
+                || name.startsWith("./") || name.startsWith(".\\")
+                || name.startsWith("../") || name.startsWith("..\\");
     }
 }
