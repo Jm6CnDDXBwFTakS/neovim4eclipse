@@ -2,17 +2,17 @@
 
 ## Supported environments
 
-| OS | Window system | Arch | Neovim binary |
-|----|---------------|--------------|---------------|
-| Linux | GTK | x86_64, aarch64 | `nvim` on `PATH` |
-| macOS | Cocoa | x86_64, aarch64 | `nvim` on `PATH` |
-| Windows | Win32 | x86_64, aarch64 | `nvim.exe` on `PATH` |
+| OS | Window system | Arch |
+|----|---------------|--------------|
+| Linux | GTK | x86_64, aarch64 |
+| macOS | Cocoa | x86_64, aarch64 |
+| Windows | Win32 | x86_64, aarch64 |
 
 Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`tests/unit`) run as plain JUnit without Eclipse.
 
 ## Neovim executable
 
-- Preference **Neovim executable** accepts a **command name** (`nvim`, `nvim.exe`) or an **absolute path**.
+- Preference **Neovim executable** accepts a **command name** (`nvim`, `nvim.exe`), looked up on `PATH` and then in the usual install folders (below), or an **absolute path**.
 - Default: `nvim` on Unix/macOS, `nvim.exe` on Windows (`NvimExecutable.defaultCommandName()`).
 - Process is started with `ProcessBuilder` and the inherited environment so `PATH` / `PATHEXT` apply on Windows.
 - On Windows, `SHELL` is not passed on (`NvimExecutable.prepareEnvironment`): Eclipse started from Git Bash
