@@ -140,6 +140,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `features/...feature` | the installable feature |
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
+| `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
 
 ## Rules the code relies on
@@ -170,6 +171,9 @@ text that tests do not always catch.
 - [docs/LEARNING.md](docs/LEARNING.md), part 4, has recipes: adding a preference, a Neovim event, an
   Eclipse-side `:` command.
 - Update the documentation (README, `docs/`, Javadoc) when behavior changes.
+- Add a line to [CHANGELOG.md](CHANGELOG.md), under *Unreleased*, for every change a user of the
+  plug-in would notice (a feature, a fix, a changed default). Internal changes (refactoring, tests,
+  build) need none.
 - To change a version (JDK, Eclipse, a library, a build tool, Neovim), follow
   [docs/UPGRADING.md](docs/UPGRADING.md); `VersionConsistencyTest` lists any copy left behind.
 - `AGENTS.md` (read by Claude Code through `CLAUDE.md`) gives AI assistants the same rules in short.
@@ -197,6 +201,27 @@ text that tests do not always catch.
 - One logical change per commit, with a message that says what changed and why.
 - Pull requests use the template in [.github](.github): describe the change and how you tested it.
   The *Build* workflow must pass.
+
+## Releasing
+
+A release is a `v<version>` tag on `main`; pushing it starts the *Release* workflow
+(`.github/workflows/release.yml`), which builds and tests that version like every CI run and
+publishes a GitHub Release with the ZIP. For 0.1.0:
+
+1. In [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to `## [0.1.0] - 2026-11-02` (the
+   release date, in ISO form) and add a new, empty `## [Unreleased]` above it. That section becomes
+   the release notes; `releng/release-notes.sh 0.1.0` prints them, exactly as they will appear.
+2. Commit that on `develop`, fast-forward `main` to it, push both, and wait for the *Build* workflow
+   on `main` to pass.
+3. Tag the commit on `main` and push the tag:
+
+   ```bash
+   git tag v0.1.0 main && git push origin v0.1.0
+   ```
+
+The workflow stops before building anything if the tagged commit is not on `main` or the changelog
+has no `0.1.0` section. Nothing is committed back: the version in the POMs stays
+`0.1.0-SNAPSHOT` until it is raised for the next release.
 
 ## License
 

@@ -19,6 +19,7 @@ release process; see [Known limitations](#known-limitations).
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
   step by step.
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 
 ## How it behaves
 
@@ -153,7 +154,7 @@ plugins/io.github.jm6cnddxbwftaks.eclipseneovim/
   lib/        msgpack-core jar (copied by the build; version in the root pom.xml)
 tests/unit/   JUnit 5 tests for util + core (sources come from the plug-in; no copies)
 features/     feature project (Tycho eclipse-feature)
-releng/       p2 category / update-site (Tycho eclipse-repository)
+releng/       p2 category / update-site (Tycho eclipse-repository), release-notes.sh, formatter
 docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING, RPC_CLIENT
 .github/      GitHub Actions workflows (build, release), Dependabot, issue templates
 pom.xml       Maven/Tycho parent (aggregator)
