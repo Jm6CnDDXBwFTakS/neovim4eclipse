@@ -184,6 +184,54 @@ class KeyRouterTest {
         assertEquals(List.of(":"), prompts);
     }
 
+    /**
+     * {@code qa ... q:} typed faster than Neovim reports that a recording started: the second
+     * {@code q} still stops it, so {@code :} opens the prompt instead of going to Neovim as a register.
+     */
+    @Test
+    void aQuickQAfterQaStopsTheRecordingBeforeNeovimReportsIt() {
+        type("q", "a", "j", "q", ":");
+        assertEquals(List.of("q", "a", "j", "q"), neovim.sent);
+        assertEquals(List.of(":"), prompts);
+    }
+
+    @Test
+    void qColonStartsNoRecording() {
+        type("q", ":"); // the command-line window, not a recording
+        type("q", ":");
+        assertEquals(List.of("q", ":", "q", ":"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    /** Once Neovim reports the same as the keys said, its answer counts again. */
+    @Test
+    void neovimsAnswerCountsAgainOnceItAgrees() {
+        type("q", "a");
+        neovim.recording = true; // Neovim has caught up
+        type("j"); // routed while both agree
+        neovim.recording = false; // and the recording ended some other way
+        type("q", ":");
+        assertEquals(List.of("q", "a", "j", "q", ":"), neovim.sent, "q starts a recording again, so : is its register");
+        assertEquals(List.of(), prompts);
+    }
+
+    @Test
+    void untilNeovimAgreesTheKeysCount() {
+        type("q", "a", "q"); // started and stopped faster than Neovim answers
+        neovim.recording = true; // Neovim's late answer about the start
+        type("q", ":");
+        assertEquals(List.of("q", "a", "q", "q", ":"), neovim.sent, "the third q starts a new recording");
+        assertEquals(List.of(), prompts);
+    }
+
+    @Test
+    void resetLetsNeovimsAnswerCountAgain() {
+        type("q", "a");
+        router.reset();
+        type("q", ":");
+        assertEquals(List.of("q", "a", "q", ":"), neovim.sent, "Neovim says not recording: q takes : as register");
+    }
+
     @Test
     void promptKeysOpenTheEditorsPrompt() {
         assertEquals(List.of(true, true, true), type(":", "/", "?"));

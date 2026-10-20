@@ -64,6 +64,16 @@ class NvimKeysTest {
     }
 
     @Test
+    void lettersDigitsAndQuoteAreRecordingRegisters() {
+        for (String k : new String[] {"a", "z", "A", "Z", "0", "9", "\""}) {
+            assertTrue(NvimKeys.isRecordingRegister(k), k);
+        }
+        for (String k : new String[] {":", "/", "?", "<Esc>", "", null, "ab"}) {
+            assertFalse(NvimKeys.isRecordingRegister(k), String.valueOf(k));
+        }
+    }
+
+    @Test
     void literalTextEscapesLessThan() {
         assertEquals("a<lt>Esc>b", NvimKeys.escapeLiteral("a<Esc>b"));
         assertEquals("plain", NvimKeys.escapeLiteral("plain"));
