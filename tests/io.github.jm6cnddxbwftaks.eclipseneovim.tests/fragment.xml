@@ -27,4 +27,15 @@
       </key>
    </extension>
 
+   <!-- A stand-in for a Language Server's go-to-definition in the Generic Editor: the word LINKME is a
+        link. Only test files contain that word. -->
+   <extension point="org.eclipse.ui.workbench.texteditor.hyperlinkDetectors">
+      <hyperlinkDetector
+            id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.hyperlinkDetector"
+            name="Eclipse Neovim tests: LINKME"
+            class="io.github.jm6cnddxbwftaks.eclipseneovim.editor.TestHyperlinkDetector"
+            targetId="org.eclipse.ui.genericeditor.GenericEditor">
+      </hyperlinkDetector>
+   </extension>
+
 </fragment>

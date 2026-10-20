@@ -8,6 +8,7 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.commands.NotHandledException;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
@@ -25,11 +26,13 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.TabNavigation;
  * editor activates "Editing Java Source", which binds F3 to Java's Open Declaration), so asking
  * the binding service "what does F3 run here?" finds the right command for any editor.
  * <ul>
- *   <li>{@code gd}: the command bound to F3; if none, or if it cannot run in this editor (the plain
- *       Text Editor), Neovim's own {@code gd} (jump to the word's first use, its "local
- *       declaration"). The Generic Editor binds
- *       F3 to Open Hyperlink, which Language Server files use for go to definition, so {@code gd}
- *       runs it there too, the same as F3.</li>
+ *   <li>{@code gd}: goes to a definition when Eclipse knows one, else it is Neovim's own {@code gd}
+ *       (jump to the word's first use, its "local declaration"). That is: the command bound to F3
+ *       (Open Declaration in the Java editor); Neovim's {@code gd} if there is none or it cannot run
+ *       in this editor (the plain Text Editor). The Generic Editor binds F3 to Open Hyperlink, which
+ *       Language Server files use for go to definition; there {@code gd} runs it only when a link is
+ *       under the caret ({@link HyperlinkProbe}), so a plain {@code .txt} file behaves the same in the
+ *       Generic Editor as in the Text Editor.</li>
  *   <li>{@code K}: Show Tooltip Description (F2), the hover information of the text editor.</li>
  * </ul>
  *
@@ -45,15 +48,19 @@ final class IdeActions {
     /**
      * Runs {@code action} in {@code editor}; an unknown action name is logged and ignored.
      *
+     * @param viewer   the editor's text viewer, or {@code null}; for the hyperlink check of {@code gd}
+     * @param caret    the caret as a document offset, for the same check
      * @param neovimGd runs Neovim's own {@code gd}, bypassing the plug-in's mapping
      */
-    static void run(IdeAction action, ITextEditor editor, Runnable neovimGd) {
+    static void run(IdeAction action, ITextEditor editor, ITextViewer viewer, int caret, Runnable neovimGd) {
         switch (action.name()) {
             case IdeAction.DEFINITION -> {
                 String bound = commandBoundTo("F3");
+                boolean noLinkHere = ITextEditorActionDefinitionIds.OPEN_HYPERLINK.equals(bound)
+                        && (viewer == null || !HyperlinkProbe.isAt(editor, viewer, caret));
                 // A command bound to F3 may still not run in this editor: another plug-in can bind F3
                 // for every text editor while only its own editors handle it. gd is then Neovim's own.
-                if (bound == null || !execute(editor, bound, "gd")) {
+                if (bound == null || noLinkHere || !execute(editor, bound, "gd")) {
                     neovimGd.run();
                 }
             }

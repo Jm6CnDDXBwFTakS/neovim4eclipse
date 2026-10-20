@@ -70,7 +70,7 @@ still handles counts and the `g` prefix:
 
 | Key | Eclipse runs |
 |-----|--------------|
-| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor); in an editor without one (the plain Text Editor), or where that command cannot run (another plug-in may bind `F3` for every text editor), Neovim's own `gd` (the word's first use). The Generic Editor binds `F3` to Open Hyperlink, which is also how Language Server files go to a definition, so there `gd` does what `F3` does, including its hyperlink chooser |
+| `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor); in an editor without one (the plain Text Editor), or where that command cannot run (another plug-in may bind `F3` for every text editor), Neovim's own `gd` (the word's first use). The Generic Editor binds `F3` to Open Hyperlink, which is also how Language Server files go to a definition; there `gd` does what `F3` does where the editor knows a definition under the cursor, and is Neovim's own `gd` elsewhere. In short: `gd` goes to a definition when Eclipse knows one, else it is Vim's `gd`, so a plain `.txt` file behaves the same in the Text Editor and the Generic Editor. URLs and file paths are not followed by `gd` in either; that is `Ctrl`+click |
 | `K` | Show Tooltip Description (`F2`): the hover information |
 | `gt`, `{N}gt` | next editor tab, or tab N |
 | `gT`, `{N}gT` | previous editor tab, or N tabs back |

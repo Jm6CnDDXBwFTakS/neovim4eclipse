@@ -26,7 +26,8 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
   `:argdo` reach the other editors.
 - File and tab commands go to Eclipse: `:w`, `:wa`, `:q`, `:qa`, `:wq`, `:x`, `:xa`, `ZZ`, `ZQ`,
   `:e file`, `:e!`, `:tabn`, `:tabp`, `gt`, `gT`. `gd` opens the declaration and `K` shows hover
-  information through the editor's own commands.
+  information through the editor's own commands; where Eclipse knows no definition (a plain text
+  file, in the Text Editor or the Generic Editor), `gd` is Vim's own.
 - An inline command line for `:`, `/` and `?`, with separate histories.
 - Vim's mode, pending command, recording register and more in the Eclipse status bar, chosen in
   *Preferences → Neovim → Status Bar*.
