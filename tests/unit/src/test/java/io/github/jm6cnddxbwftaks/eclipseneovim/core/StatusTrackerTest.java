@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -34,6 +35,38 @@ class StatusTrackerTest {
         tracker.clearMessage();
         tracker.publish(new StatusInfo("", "", ""));
         assertEquals("", seen.get(seen.size() - 1).message());
+    }
+
+    @Test
+    void clearingAMessageIsHeardAtOnce() {
+        tracker.publish(new StatusInfo("", "", "E486: Pattern not found: x", true));
+        tracker.clearMessage();
+        StatusInfo cleared = seen.get(seen.size() - 1);
+        assertEquals("", cleared.message());
+        assertFalse(cleared.error());
+    }
+
+    /** {@code n} twice with no match: the second error must reach the message line again. */
+    @Test
+    void theSameErrorAfterTheNextKeyIsHeardAgain() {
+        StatusInfo error = new StatusInfo("", "", "E486: Pattern not found: x", true);
+        tracker.publish(error);
+        tracker.clearMessage();
+        tracker.publish(error);
+        assertEquals(List.of(error, StatusInfo.EMPTY, error), seen);
+    }
+
+    @Test
+    void clearingWithNoMessageFiresNothing() {
+        tracker.clearMessage();
+        assertTrue(seen.isEmpty());
+    }
+
+    @Test
+    void theErrorFlagStaysWithItsMessage() {
+        tracker.publish(new StatusInfo("", "", "E1: x", true));
+        tracker.publish(new StatusInfo("", "2", ""));
+        assertTrue(seen.get(seen.size() - 1).error(), "kept with the kept message");
     }
 
     @Test

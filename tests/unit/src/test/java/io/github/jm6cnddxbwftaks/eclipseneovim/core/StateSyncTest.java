@@ -46,8 +46,8 @@ class StateSyncTest {
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean showcmd, boolean message) {
-            snapshotFlags = List.of(statusline, showcmd, message);
+        public Object stateSnapshot(boolean statusline, boolean showcmd) {
+            snapshotFlags = List.of(statusline, showcmd);
             if (snapshot == null) {
                 throw new IllegalStateException("timed out");
             }
@@ -187,7 +187,7 @@ class StateSyncTest {
 
         state.publishState();
 
-        assertEquals(List.of(false, true, false), nvim.snapshotFlags);
+        assertEquals(List.of(false, true), nvim.snapshotFlags);
     }
 
     @Test

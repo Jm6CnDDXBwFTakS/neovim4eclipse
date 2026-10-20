@@ -28,9 +28,9 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         defaults.putBoolean(PreferenceConstants.SHOW_MENU, PreferenceConstants.SHOW_MENU_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_MODE, PreferenceConstants.STATUS_ITEM_MODE_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_CMD, PreferenceConstants.STATUS_ITEM_CMD_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.STATUS_ITEM_MSG, PreferenceConstants.STATUS_ITEM_MSG_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE,
                 PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT);
+        defaults.putBoolean(PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.FLASH_ON_ERROR_DEFAULT);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
         }

@@ -59,6 +59,12 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
                 PreferenceConstants.SHOW_MENU,
                 "Show Neovim menu in the menu bar",
                 getFieldEditorParent()));
+
+        // Messages and errors always appear in a line at the bottom of the editor; this adds a flash.
+        addField(new BooleanFieldEditor(
+                PreferenceConstants.FLASH_ON_ERROR,
+                "Flash the editor on errors",
+                getFieldEditorParent()));
     }
 
     @Override

@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -66,10 +67,9 @@ class LuaScriptsTest {
     void snapshotOnlyEvaluatesTheStatusPartsThatAreRequested() {
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("select(1, ...) == '1'"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("select(2, ...) == '1'"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("select(3, ...) == '1'"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_statusline then"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_cmd then"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_msg then"));
+        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("select(3"), "messages are always read");
     }
 
     @Test

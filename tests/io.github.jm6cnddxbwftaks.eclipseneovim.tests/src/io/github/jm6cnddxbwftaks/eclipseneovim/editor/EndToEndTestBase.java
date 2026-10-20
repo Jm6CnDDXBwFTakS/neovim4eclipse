@@ -247,6 +247,18 @@ abstract class EndToEndTestBase {
         return texts;
     }
 
+    /** The message line of {@code target} while Neovim is attached to it; else {@code null}. */
+    static MessageLine messageLineOf(ITextEditor target) {
+        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
+        return controller != null && controller.getEditor() == target ? controller.messageLine() : null;
+    }
+
+    /** The message shown along the bottom of {@code target}; "" when none is. */
+    static String messageText(ITextEditor target) {
+        MessageLine line = messageLineOf(target);
+        return line == null ? "" : line.text();
+    }
+
     private static void collectLabels(Control control, List<String> texts) {
         if (control instanceof CLabel label && label.getText() != null && !label.getText().isEmpty()) {
             texts.add(label.getText());

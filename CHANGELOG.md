@@ -36,6 +36,9 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
   completes file names next to the current file, then in its project.
 - Vim's mode, pending command, recording register and more in the Eclipse status bar, chosen in
   *Preferences → Neovim → Status Bar*.
+- Neovim's messages and errors in a line along the bottom of the editor, errors in the error color,
+  until the next key. *Preferences → Neovim → Flash the editor on errors* (off by default) adds a brief
+  flash, like Vim's `'visualbell'`.
 - Macros (`q`, `@`), including insert mode while recording.
 - Blockwise visual mode (`Ctrl-V`), with `I`, `A`, `c`, `$` and a rectangle drawn in screen columns.
 - Eclipse as Neovim's clipboard provider: `"+` and `"*` use the system clipboard, with no external

@@ -36,7 +36,8 @@ final class StateSnapshot {
     }
 
     /**
-     * Status bar parts: statusline, showcmd, and the message (an error wins over a status message).
+     * Status bar parts, statusline and showcmd, and the message: an error wins over a status message,
+     * and {@link StatusInfo#error()} says which one it is.
      * Missing or malformed data gives empty text.
      */
     static StatusInfo status(Object raw) {
@@ -45,8 +46,8 @@ final class StateSnapshot {
         }
         String errmsg = text(list.get(ERRMSG));
         String statusmsg = text(list.get(STATUSMSG));
-        return new StatusInfo(text(list.get(STATUSLINE)), text(list.get(SHOWCMD)),
-                errmsg.isEmpty() ? statusmsg : errmsg);
+        boolean error = !errmsg.isEmpty();
+        return new StatusInfo(text(list.get(STATUSLINE)), text(list.get(SHOWCMD)), error ? errmsg : statusmsg, error);
     }
 
     /** The register being recorded into; "" if not recording or not understood. */

@@ -814,9 +814,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean showcmd, boolean message) throws Exception {
+        public Object stateSnapshot(boolean statusline, boolean showcmd) throws Exception {
             // Short timeout: see STATE_TIMEOUT_MS.
-            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(showcmd), flag(message)))
+            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(showcmd)))
                     .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 

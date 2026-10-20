@@ -33,16 +33,24 @@ public final class PreferenceConstants {
     public static final String STATUS_ITEM_MODE = "statusItemMode";
     /** Show the pending command ({@code showcmd}, e.g. {@code 2d}). */
     public static final String STATUS_ITEM_CMD = "statusItemCmd";
-    /** Show the latest Neovim message or error. */
-    public static final String STATUS_ITEM_MSG = "statusItemMsg";
     /** Show Neovim's own {@code 'statusline'}. */
     public static final String STATUS_ITEM_STATUSLINE = "statusItemStatusline";
 
     public static final boolean STATUS_ITEM_MODE_DEFAULT = true;
     public static final boolean STATUS_ITEM_CMD_DEFAULT = true;
-    public static final boolean STATUS_ITEM_MSG_DEFAULT = true;
     /** Off by default: it is long and mostly repeats what Eclipse already shows (file, position). */
     public static final boolean STATUS_ITEM_STATUSLINE_DEFAULT = false;
+
+    // ---- Messages in the editor ----
+
+    /**
+     * Whether an error also flashes the editor briefly, like Vim's {@code 'visualbell'}, so that it is
+     * noticed while the eyes are on the cursor. Messages always appear in the editor's message line.
+     */
+    public static final String FLASH_ON_ERROR = "flashOnError";
+
+    /** Off by default: a flash is easy to find distracting. */
+    public static final boolean FLASH_ON_ERROR_DEFAULT = false;
 
     // ---- Which Ctrl+letter keys go to Neovim (Window > Preferences > Neovim > Ctrl Keys) ----
 
@@ -59,9 +67,8 @@ public final class PreferenceConstants {
         return key != null && key.startsWith(CTRL_KEY_TO_NEOVIM_PREFIX);
     }
 
-    /** Whether the key is one of the four status item preferences. */
+    /** Whether the key is one of the three status item preferences. */
     public static boolean isStatusItemKey(String key) {
-        return STATUS_ITEM_MODE.equals(key) || STATUS_ITEM_CMD.equals(key) || STATUS_ITEM_MSG.equals(key)
-                || STATUS_ITEM_STATUSLINE.equals(key);
+        return STATUS_ITEM_MODE.equals(key) || STATUS_ITEM_CMD.equals(key) || STATUS_ITEM_STATUSLINE.equals(key);
     }
 }

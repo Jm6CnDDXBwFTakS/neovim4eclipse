@@ -144,12 +144,14 @@ class StateSnapshotTest {
         assertEquals("[No Name] 1,1", info.statusline());
         assertEquals("2d", info.cmd());
         assertEquals("3 lines yanked", info.message());
+        assertFalse(info.error(), "a status message is not an error");
     }
 
     @Test
     void anErrorWinsOverAStatusMessage() {
         StatusInfo info = StateSnapshot.status(snapshot("", "", "3 lines yanked", "E486: Pattern not found: x"));
         assertEquals("E486: Pattern not found: x", info.message());
+        assertTrue(info.error());
     }
 
     @Test
