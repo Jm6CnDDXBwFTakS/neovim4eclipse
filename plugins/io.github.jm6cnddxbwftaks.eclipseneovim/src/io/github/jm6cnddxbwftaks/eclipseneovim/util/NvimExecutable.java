@@ -128,8 +128,9 @@ public final class NvimExecutable {
      * runs before any config file, also with {@code --clean} or {@code -u}, so {@link #GUARD_VARIABLE}
      * is there when {@code init.lua} looks. It is a {@code g:} variable rather than an environment
      * variable because Neovim passes its environment on to {@code :terminal} and {@code :!}: a
-     * Neovim started in a terminal inside Eclipse would think it was embedded too. The command has
-     * no spaces, so no platform's argument quoting can split it.
+     * Neovim started in a terminal inside Eclipse would think it was embedded too. The command is one
+     * argument with a space in it; {@link ProcessBuilder} quotes it on Windows, and
+     * {@code NeovimSessionIntegrationTest} checks that Neovim receives it whole.
      *
      * @param configured preference path or command name
      * @param extraArgs  optional extra arguments, e.g. {@code --clean}; may be {@code null}
