@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -29,6 +31,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.Completion;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
@@ -466,6 +470,18 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void search(String pattern, boolean backward) {
             session.search(pattern, backward);
+        }
+
+        /** {@code :e} names complete in the folders {@code :e} looks in; other lines need none. */
+        @Override
+        public void complete(String line, String steps, Consumer<Completion> onResult) {
+            List<String> folders = new ArrayList<>();
+            if (HostExCommand.parse(line).kind() == HostExCommand.Kind.EDIT) {
+                for (Path folder : EclipseFileCommands.editFolders(editor)) {
+                    folders.add(folder == null ? "" : folder.toString());
+                }
+            }
+            session.completeAsync(line, steps, folders, onResult);
         }
     }
 

@@ -28,7 +28,9 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
   `:e file`, `:e!`, `:tabn`, `:tabp`, `gt`, `gT`. `gd` opens the declaration and `K` shows hover
   information through the editor's own commands; where Eclipse knows no definition (a plain text
   file, in the Text Editor or the Generic Editor), `gd` is Vim's own.
-- An inline command line for `:`, `/` and `?`, with separate histories.
+- An inline command line for `:`, `/` and `?`, with separate histories. In `:`, Tab and Shift+Tab
+  complete as in Neovim (following `'wildmode'`), with the candidates listed above the box; `:e`
+  completes file names next to the current file, then in its project.
 - Vim's mode, pending command, recording register and more in the Eclipse status bar, chosen in
   *Preferences → Neovim → Status Bar*.
 - Macros (`q`, `@`), including insert mode while recording.

@@ -1,7 +1,8 @@
 # Design note: Tab completion in the `:` command line
 
-Status: **planned, not started.** Written 2026-10-20 against `develop` at `b56571c`, with Neovim 0.12.4
-on Windows 11 for the experiments. Decisions made with the maintainer are marked *(decided)*.
+Status: **implemented** (2026-10-20). Planned against `develop` at `b56571c`, with Neovim 0.12.4 on
+Windows 11 for the experiments. Decisions made with the maintainer are marked *(decided)*. Where the
+code differs from the plan below, the section *As built* says how and why.
 
 ## Summary
 
@@ -19,6 +20,31 @@ including the user's `'wildmode'`, `'wildignore'` and `'wildignorecase'`. The on
 `:e`, whose file names must be completed the way the plug-in's `:e` resolves them (section 3).
 
 Size: about 350 lines of code and 400 of tests, in two commits (section 7).
+
+## As built (differences from the plan)
+
+Found while implementing, by experiment with Neovim 0.12.4:
+
+- **The keys are not "typed".** With `nvim_feedkeys(…, 't')`, as in the prototype of section 2, the
+  keys are recorded into a macro being recorded (`qa`, then Tab in the box, then `q` left
+  `:e al<Tab>…` in register a), and the `<C-\>e` expression is added to the `=` history. Without `t`,
+  neither happens, and nothing reaches the `:` history either, so no `histdel` is needed.
+- **So Tab is `'wildcharm'`, not `'wildchar'`.** Keys that are not typed do not trigger `'wildchar'`;
+  `'wildcharm'` is set to Tab for the call and restored. The user's own `'wildchar'` does not matter:
+  the box's Tab is always the completion key.
+- **Shift+Tab is `<C-p>`.** `<S-Tab>` works only for typed keys. The request carries the keys as a string
+  of steps (`T` next, `P` previous) instead of a signed count: Shift+Tab adds `P`, and at the start of a
+  cycle `TPP`, which gives the last match as Neovim's own Shift+Tab does (`util/CommandCompletion`).
+- **The line is fed separately**, with `escape_ks`, so `<` needs no `<lt>` escaping.
+- **`ModeChanged` is ignored too** (`'eventignore'`), so Eclipse does not hear of the trip to
+  command-line mode and back.
+- **The `:e` folder is chosen before typing:** the script runs `getcompletion` in the first folder and
+  moves to the second only if that finds nothing; a folder that does not exist is skipped.
+- **The answer record is `util/Completion`, not in `core`,** so that `tests/swt` can compile the box,
+  which receives it.
+- **Command names follow `'ignorecase'`**, which the plug-in sets: `tabn` gives `tabNext`, `tabnew`,
+  `tabnext`. That is Neovim's behavior with that option, and the box shows what Neovim does.
+- **Completion works on the whole line** and puts the caret at the end; the caret position is not used.
 
 ## 1. Behavior
 
@@ -179,6 +205,9 @@ Two commits, in UTC, as AGENTS.md asks:
    `CHANGELOG.md`. Set this note's status to done.
 
 ## 8. To check while implementing
+
+Still open after implementing: all four points below were not checked (no Neovim 0.9 at hand; the
+grid, the speed in a large folder and the old Tab behavior need a person at a running Eclipse).
 
 - **Neovim 0.9**, the oldest supported version: `<C-\>e` with `v:lua` and `nvim_feedkeys` in
   command-line mode should work there; only 0.12 was tried.

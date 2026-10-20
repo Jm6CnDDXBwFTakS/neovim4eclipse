@@ -8,6 +8,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
@@ -15,13 +16,19 @@ import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.KeyListener;
 import org.eclipse.swt.events.PaintListener;
+import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.events.VerifyEvent;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Text;
 
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandCompletion;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandCompletion.ListLine;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandCompletion.Request;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandHistory;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.Completion;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine.Kind;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine.Submission;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand;
@@ -39,6 +46,10 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.ListingCommand;
  *       cannot be edited. Backspace on an otherwise empty box cancels, as in Vim.</li>
  *   <li>Enter runs the command; Esc cancels. Up/Down walk a history that is kept separately for
  *       commands and searches.</li>
+ *   <li>In the {@code :} box, Tab and Shift+Tab complete the line as Neovim's own command line does
+ *       ({@link Commands#complete}, {@link CommandCompletion}), and a line above the box lists the
+ *       candidates with the current one highlighted. Any edit closes the list. In the {@code /} and
+ *       {@code ?} boxes Tab does nothing, as in Vim; in no box does it move the focus away.</li>
  *   <li>Clicking elsewhere (anything that takes keyboard focus away from the box) cancels it.</li>
  *   <li>{@code :} typed while a command's output is shown opens the box below that output; the output
  *       stays until the new command is run or canceled.</li>
@@ -87,6 +98,15 @@ final class CommandLineBox {
 
         /** Searches for {@code pattern}, like {@code /} ({@code backward}: {@code ?}). */
         void search(String pattern, boolean backward);
+
+        /**
+         * Completes a {@code :} line in Neovim. {@code onResult} may be called on any thread, or not
+         * at all (Neovim busy).
+         *
+         * @param line  the line before the first Tab, without the {@code :}
+         * @param steps the keys pressed, see {@link CommandCompletion.Request#steps()}
+         */
+        void complete(String line, String steps, Consumer<Completion> onResult);
     }
 
     private static final Logger LOG = Logger.getLogger(CommandLineBox.class.getName());
@@ -115,6 +135,13 @@ final class CommandLineBox {
     private boolean programmatic;
     private long openedAtMillis;
     private int prefillLength;
+
+    /** The Tab cycle of the open box. */
+    private CommandCompletion completion = new CommandCompletion();
+    /** True while a completed line is put into the box, which is not an edit that ends the cycle. */
+    private boolean applyingCompletion;
+    /** The candidate list above the box; {@code null} while hidden. */
+    private OverlayFrame<StyledText> listFrame;
 
     private final PaintListener repositionOnPaint = event -> reposition();
     private final ControlListener repositionOnResize = new ControlListener() {
@@ -180,6 +207,14 @@ final class CommandLineBox {
         // replace the prefix as well. Put the caret back at the end once focus has arrived.
         box.addFocusListener(FocusListener.focusGainedAdapter(e -> moveCaretToEndLater()));
         box.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
+        box.addTraverseListener(this::onTraverse);
+        completion = new CommandCompletion();
+        box.addModifyListener(e -> {
+            if (!applyingCompletion) {
+                completion.reset(); // typed, deleted or a history entry: the next Tab starts over
+                hideList();
+            }
+        });
         // Clicking elsewhere cancels.
         box.addFocusListener(FocusListener.focusLostAdapter(e -> close(false)));
         host.addPaintListener(repositionOnPaint);
@@ -188,7 +223,7 @@ final class CommandLineBox {
         openedAtMillis = System.currentTimeMillis();
         reposition();
         // ':' typed over a command's output: keep the output visible above the box until Enter or cancel.
-        output.makeRoomBelow(frame.control().getBounds().height + PADDING);
+        output.makeRoomBelow(roomBelowOutput());
         box.setFocus();
         moveCaretToEndLater();
     }
@@ -265,12 +300,100 @@ final class CommandLineBox {
         } else if (e.keyCode == SWT.ARROW_DOWN) {
             e.doit = false;
             showHistoryEntry(HISTORY.next(kind));
+        } else if (e.keyCode == SWT.TAB) {
+            e.doit = false; // handled as a traversal (onTraverse); no tab character in the box
         } else if (e.keyCode == SWT.BS && box.getSelectionCount() == 0 && box.getCaretPosition() <= 1) {
             e.doit = false;
             if (box.getText().length() <= prefillLength) {
                 HISTORY.resetNavigation(kind);
                 close(true); // Backspace over the prefix leaves the command line, as in Vim
             }
+        }
+    }
+
+    /**
+     * Tab and Shift+Tab. SWT reports them as a traversal, which would move the focus to the next
+     * control and so close the box; {@code doit = false} keeps the focus here.
+     */
+    private void onTraverse(TraverseEvent e) {
+        if (e.detail != SWT.TRAVERSE_TAB_NEXT && e.detail != SWT.TRAVERSE_TAB_PREVIOUS) {
+            return;
+        }
+        boolean backward = e.detail == SWT.TRAVERSE_TAB_PREVIOUS;
+        e.doit = false;
+        if (kind == Kind.EX) {
+            complete(backward);
+        }
+    }
+
+    /** Asks Neovim to complete; the answer is applied on the UI thread, if still wanted. */
+    private void complete(boolean backward) {
+        Request request = completion.press(currentBody(), backward);
+        CommandCompletion cycle = completion;
+        Display display = host.getDisplay();
+        commands.complete(request.line(), request.steps(), answer -> {
+            if (!display.isDisposed()) {
+                display.asyncExec(() -> applyCompletion(cycle, request, answer));
+            }
+        });
+    }
+
+    private void applyCompletion(CommandCompletion cycle, Request request, Completion answer) {
+        if (!isOpen() || cycle != completion || !cycle.accept(request.generation(), answer)) {
+            return; // closed, reopened, edited or a newer Tab: this answer is not wanted any more
+        }
+        applyingCompletion = true;
+        try {
+            setBoxText(kind.prefix() + answer.line());
+        } finally {
+            applyingCompletion = false;
+        }
+        showList(answer);
+    }
+
+    /** Shows the candidates in one line above the box, with the current one highlighted. */
+    private void showList(Completion answer) {
+        if (answer.candidates().isEmpty()) {
+            hideList();
+            return;
+        }
+        if (listFrame == null) {
+            listFrame = new OverlayFrame<>(host, parent -> new StyledText(parent, SWT.SINGLE | SWT.READ_ONLY));
+        }
+        reposition(); // the list's width is needed to fit the candidates
+        StyledText list = listFrame.content();
+        ListLine line = CommandCompletion.fit(answer.candidates(), answer.total(),
+                CommandCompletion.currentIndex(answer.line(), answer.candidates()), columnsOf(list));
+        list.setText(line.text());
+        if (line.highlightStart() >= 0) {
+            Display display = host.getDisplay();
+            list.setStyleRange(new StyleRange(line.highlightStart(), line.highlightLength(),
+                    display.getSystemColor(SWT.COLOR_LIST_SELECTION_TEXT),
+                    display.getSystemColor(SWT.COLOR_LIST_SELECTION)));
+        }
+        reposition();
+        output.makeRoomBelow(roomBelowOutput()); // ':' over a command's output: keep the output above the list
+    }
+
+    /** How many average characters fit into the list (exact for the monospaced fonts editors use). */
+    private static int columnsOf(StyledText list) {
+        GC gc = new GC(list);
+        try {
+            double charWidth = Math.max(1, gc.getFontMetrics().getAverageCharacterWidth());
+            return Math.max(1, (int) (list.getClientArea().width / charWidth) - 1);
+        } finally {
+            gc.dispose();
+        }
+    }
+
+    private void hideList() {
+        if (listFrame == null) {
+            return;
+        }
+        listFrame.dispose();
+        listFrame = null;
+        if (isOpen()) {
+            output.makeRoomBelow(roomBelowOutput());
         }
     }
 
@@ -346,10 +469,28 @@ final class CommandLineBox {
         int width = Math.max(10, area.width - 2 * OverlayFrame.SIDE_PADDING);
         int x = area.x + OverlayFrame.SIDE_PADDING;
         int y = area.y + area.height - height - OverlayFrame.bottomGap(host);
-        Rectangle current = frame.control().getBounds();
-        if (current.x != x || current.y != y || current.width != width || current.height != height) {
-            frame.control().setBounds(x, y, width, height);
+        setBoundsIfChanged(frame, x, y, width, height);
+        if (listFrame != null) {
+            StyledText list = listFrame.content();
+            int listHeight = OverlayFrame.outerHeight(list.computeSize(width - 2 * OverlayFrame.BORDER, SWT.DEFAULT).y);
+            setBoundsIfChanged(listFrame, x, y - PADDING - listHeight, width, listHeight);
         }
+    }
+
+    private static void setBoundsIfChanged(OverlayFrame<?> overlay, int x, int y, int width, int height) {
+        Rectangle current = overlay.control().getBounds();
+        if (current.x != x || current.y != y || current.width != width || current.height != height) {
+            overlay.control().setBounds(x, y, width, height);
+        }
+    }
+
+    /** Space the output popup leaves free below it: the box, and the candidate list if shown. */
+    private int roomBelowOutput() {
+        int room = frame.control().getBounds().height + PADDING;
+        if (listFrame != null) {
+            room += listFrame.control().getBounds().height + PADDING;
+        }
+        return room;
     }
 
     /**
@@ -362,6 +503,11 @@ final class CommandLineBox {
             return;
         }
         output.close(false); // output kept for this command line goes with it (Enter, Esc, click away)
+        if (listFrame != null) {
+            listFrame.dispose();
+            listFrame = null;
+        }
+        completion.reset(); // an answer still on its way is not for the next box
         OverlayFrame<Text> old = frame;
         frame = null;
         box = null;

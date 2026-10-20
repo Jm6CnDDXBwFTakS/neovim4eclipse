@@ -29,9 +29,12 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
@@ -420,6 +423,54 @@ class EditorEndToEndTest {
         } catch (Exception e) {
             throw new AssertionError("Neovim did not answer", e);
         }
+    }
+
+    /**
+     * Tab in the {@code :} box, the whole way: Neovim completes {@code :e} names in the edited
+     * file's folder (not its own working directory), and Enter opens the completed file.
+     */
+    @Test
+    void tabCompletesAFileNameForEditAndEnterOpensIt() throws Exception {
+        IFile other = project.getFile("other.txt");
+        other.create(new ByteArrayInputStream("other\n".getBytes(StandardCharsets.UTF_8)), true, null);
+        type(widget, ':');
+        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(widget) != null);
+        Text box = textChildOf(widget);
+        box.insert("e ot");
+
+        Event tab = new Event();
+        tab.detail = SWT.TRAVERSE_TAB_NEXT;
+        tab.keyCode = SWT.TAB;
+        tab.character = SWT.TAB;
+        tab.doit = true;
+        box.notifyListeners(SWT.Traverse, tab);
+        waitUntil("Tab to complete the name", TIMEOUT_MS, () -> ":e other.txt".equals(box.getText()),
+                () -> "; the box reads " + box.getText());
+
+        Event enter = new Event();
+        enter.keyCode = SWT.CR;
+        enter.character = SWT.CR;
+        enter.doit = true;
+        box.notifyListeners(SWT.KeyDown, enter);
+        IWorkbenchPage page = editor.getSite().getPage();
+        waitUntil("other.txt to open", TIMEOUT_MS,
+                () -> page.getActiveEditor() != null && "other.txt".equals(page.getActiveEditor().getTitle()));
+        page.closeEditor(page.getActiveEditor(), false);
+    }
+
+    private static Text textChildOf(Composite parent) {
+        for (Control child : parent.getChildren()) {
+            if (child instanceof Text text && !text.isDisposed()) {
+                return text;
+            }
+            if (child instanceof Composite composite) {
+                Text found = textChildOf(composite);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     /** Opens other.txt (one line, "other") and waits until Neovim is attached to it. */

@@ -174,12 +174,23 @@ public final class EclipseFileCommands {
         open(editor.getEditorSite().getPage(), file);
     }
 
-    /** The first existing {@link EditPath#candidates} entry, or {@code null}. */
-    private static Path findFile(ITextEditor editor, String argument) {
+    /**
+     * Where {@code :e} looks for a relative file name, best first: the edited file's folder, then
+     * its project's root (see {@link EditPath}). Entries are {@code null} when unknown. Tab in the
+     * {@code :} box completes {@code :e} names in the same folders, so that it offers only names
+     * {@code :e} can find.
+     */
+    static List<Path> editFolders(ITextEditor editor) {
         Path current = EditorAttachManager.fileOf(editor.getEditorInput());
         List<Path> bases = new ArrayList<>();
         bases.add(current == null ? null : current.getParent());
         bases.add(projectRootOf(editor.getEditorInput()));
+        return bases;
+    }
+
+    /** The first existing {@link EditPath#candidates} entry, or {@code null}. */
+    private static Path findFile(ITextEditor editor, String argument) {
+        List<Path> bases = editFolders(editor);
         for (Path candidate : EditPath.candidates(argument, Path.of(System.getProperty("user.home")), bases)) {
             if (Files.exists(candidate)) {
                 return candidate;

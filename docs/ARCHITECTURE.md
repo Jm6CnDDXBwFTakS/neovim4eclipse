@@ -244,6 +244,12 @@ to the box, which (via the focus listener in the controller) also deactivates th
   output is given up (`core/CommandRunner`, durations set in its constructor). Full
   `ext_messages` support was considered and not chosen: it needs `ext_linegrid`, i.e. grid redraw
   traffic on every key, and a redraw-event parser.
+- **Tab completion** (`:` box only): each Tab sends the line as it was before the first Tab plus the keys
+  pressed so far (`util/CommandCompletion`) to `NeovimSession.completeAsync`, whose one Lua call
+  (`LuaScripts.COMPLETE_CMDLINE`) types them into Neovim's command line, reads the result and cancels.
+  So Neovim never stays in command-line mode, and the completion is exactly Neovim's. The answer
+  (`util/Completion`) is applied only if nothing was typed meanwhile; the candidates are shown in a
+  one-line `StyledText` above the box. Details and the experiments behind them: `docs/TAB_COMPLETION.md`.
 
 ## Macros
 
@@ -366,6 +372,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), UI `HostCommandsTest` (one real path per operation) |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
+| Tab completion in the `:` box | `util/CommandCompletion` (cycle, stale answers, list line), `util/Completion` (the answer), `core/LuaScripts.COMPLETE_CMDLINE`, `editor/CommandLineBox` | `CommandCompletionTest`, `CompletionTest`, `CommandCompletionIntegrationTest` (real Neovim), `tests/swt` `CommandLineBoxTest`, UI `EditorEndToEndTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
 | A document that is not attached and its buffer in step (`:bufdo`, refactorings) | `sync/UnattachedDocumentSync` (session seen through `core/DocumentBufferPort`) | `tests/text` `UnattachedDocumentSyncTest` (fake port: both directions, coalescing, attach and detach, a change that no longer fits), `NeovimBufferIntegrationTest` (routing, echo), UI `EditorEndToEndTest` (`:bufdo` over three files) |
