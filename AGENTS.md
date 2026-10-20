@@ -15,8 +15,9 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ## Commands
 
 ```bash
-./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # everything: plug-in, all tests incl. UI, feature, ZIP
+./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # everything: plug-in, all tests incl. UI (not -PuiHeavyJava), feature, ZIP
 ./mvnw verify                                     # the same without the UI tests (no Eclipse window)
+./mvnw verify -PuiHeavyJava                       # only the UI tests that need Java tooling (slow; not in CI)
 ./mvnw verify -DskipTests                         # build only
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
 ./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)

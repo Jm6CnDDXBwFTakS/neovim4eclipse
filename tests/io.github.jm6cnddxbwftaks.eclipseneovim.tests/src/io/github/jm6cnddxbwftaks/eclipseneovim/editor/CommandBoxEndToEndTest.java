@@ -47,26 +47,6 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
  */
 class CommandBoxEndToEndTest extends EndToEndTestBase {
 
-    /** Types {@code :} into {@code target}, waits for the box, and types {@code command} after it. */
-    private Text openBox(StyledText target, String command) {
-        type(target, ':');
-        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(target) != null);
-        Text box = textChildOf(target);
-        box.insert(command);
-        return box;
-    }
-
-    /** Runs {@code command} through the box, as typed: {@code :}, the command, Enter. */
-    private void runInBox(StyledText target, String command) {
-        Text box = openBox(target, command);
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
-        settle();
-    }
-
     private static boolean activeEditorIs(String title) {
         IEditorPart active = page().getActiveEditor();
         return active != null && title.equals(active.getTitle());

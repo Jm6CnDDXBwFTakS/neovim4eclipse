@@ -26,7 +26,13 @@
        (so a broken test still fails the build) but starts no Eclipse, so no window opens; the UI
        tests are the only ones that open one. CI always passes -Pui. -Pui -DskipTests skips them
        again. The end-to-end tests also need nvim (they are skipped without it);
-       -Dnvim.path=/path/to/nvim selects one. -->
+       -Dnvim.path=/path/to/nvim selects one.
+
+       The tests tagged "heavyJava" need the Java development tools (a Java editor, Format, Rename,
+       Open Declaration) in the test Eclipse. They are left out of -Pui and run only with
+       ./mvnw verify -PuiHeavyJava, which adds the tools (a larger download, a slower start) and
+       runs only those tests. Not run in CI. -->
+
   <build>
     <plugins>
       <plugin>
@@ -145,6 +151,10 @@
           <systemProperties>
             <nvim.path>${nvim.path}</nvim.path>
           </systemProperties>
+          <!-- Which tests run, by JUnit tag: all but the "heavyJava" ones, unless the uiHeavyJava
+               profile swaps the two properties (see the comment at the top). -->
+          <groups>${ui.groups}</groups>
+          <excludedGroups>${ui.excludedGroups}</excludedGroups>
           <!-- Each run gets a fresh workspace under target/. -->
           <deleteOsgiDataDirectory>true</deleteOsgiDataDirectory>
         </configuration>
@@ -159,6 +169,9 @@
     <skipTests>false</skipTests>
     <!-- Whether the UI tests and their coverage report are skipped: yes, unless the ui profile is on. -->
     <ui.skip>true</ui.skip>
+    <!-- The JUnit tags run and left out; see the uiHeavyJava profile. Empty: no filter. -->
+    <ui.groups></ui.groups>
+    <ui.excludedGroups>heavyJava</ui.excludedGroups>
   </properties>
 
   <profiles>
@@ -168,6 +181,38 @@
       <properties>
         <ui.skip>${skipTests}</ui.skip>
       </properties>
+    </profile>
+    <!-- ./mvnw verify -PuiHeavyJava: the test Eclipse also gets the Java development tools (the
+         org.eclipse.jdt feature: Java editor, formatter, refactorings, and the JRE detection a Java
+         project needs), and runs only the tests tagged "heavyJava" (JavaEditorEndToEndTest). Slow to
+         start and a large first download, so it is off in -Pui and in CI; run it after changing
+         how Eclipse's own edits reach Neovim, or the gd/K key lookup. -->
+    <profile>
+      <id>uiHeavyJava</id>
+      <properties>
+        <ui.skip>${skipTests}</ui.skip>
+        <ui.groups>heavyJava</ui.groups>
+        <ui.excludedGroups></ui.excludedGroups>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>target-platform-configuration</artifactId>
+            <configuration>
+              <dependency-resolution>
+                <extraRequirements combine.children="append">
+                  <requirement>
+                    <type>eclipse-feature</type>
+                    <id>org.eclipse.jdt</id>
+                    <versionRange>0.0.0</versionRange>
+                  </requirement>
+                </extraRequirements>
+              </dependency-resolution>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
     <!-- macOS: Cocoa lets only the process's first thread create the SWT Display, and Java runs main()
          on another thread unless -XstartOnFirstThread is given. Without it the test Eclipse stops at

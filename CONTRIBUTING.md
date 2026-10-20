@@ -17,6 +17,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ```bash
 ./mvnw verify                                   # plug-in, unit/text/SWT tests, update-site ZIP
 ./mvnw verify -Pui                              # ... and the UI tests (opens an Eclipse window)
+./mvnw verify -PuiHeavyJava                     # only the UI tests that need Java tooling (slow)
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
@@ -30,6 +31,16 @@ leaves them out (it still compiles them). On a headless Linux machine run
 `xvfb-run -a ./mvnw verify -Pui`, which keeps the window on a virtual display. CI always runs them,
 but run `-Pui` yourself before you push a change to the editor, the session or the end-to-end
 behavior: CI only shows a failure after the push.
+
+The Java-editor checks (Format, Rename, Organize Imports, a save action, a template, `gd`/`K` as
+Open Declaration and the Javadoc hover, folded imports) need the Java development tools in the
+test Eclipse, which the normal UI run leaves out to stay fast. They are in `JavaEditorEndToEndTest`,
+tagged `heavyJava`, and run only with `./mvnw verify -PuiHeavyJava`: that profile adds the
+`org.eclipse.jdt` feature to the test Eclipse (a large first download, a slower start) and runs
+only the tagged tests, while `-Pui` leaves them out. CI does not run them. Run them after changing
+how Eclipse's own edits reach Neovim (`sync/`, `DocumentPush`, `CaretSync`) or the `gd`/`K` key
+lookup. The fragment uses JDT only through IDs (editor, commands, natures, preferences), so it
+does not depend on JDT and still starts without it.
 
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 
@@ -65,6 +76,11 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   condition holds, and `settle(session, timeout)` waits until the session has handled everything
   queued so far and the UI thread has applied the result. Use these, not fixed sleeps: a sleep is
   either too short on a slow CI machine or wasted time on a fast one.
+- `EndToEndTestBase` (UI tests): the setup of the end-to-end tests (`test.txt` open and attached,
+  Neovim in normal mode) and their helpers: `expectText`, `openFile`, `waitForAttach`, `runCommand`
+  (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed
+  into the box), `statusLineTexts` (the window's status line, where Eclipse-side errors appear).
+  `SessionProbe` runs Lua in Neovim, for what the editor cannot show (the buffer list).
 - `ExpectedLog` (`tests/shared`, used by `tests/unit` and `tests/text`): for a test that makes the
   code fail on purpose. `try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) { ... }` keeps
   that class's log records off the console while the block runs, and
