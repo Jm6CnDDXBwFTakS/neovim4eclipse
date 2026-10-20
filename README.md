@@ -21,6 +21,8 @@ release process; see [Known limitations](#known-limitations).
   it is the only one.
 - [docs/TAB_COMPLETION.md](docs/TAB_COMPLETION.md): how Tab completion in the `:` command line
   works, and why.
+- [docs/FOLDING.md](docs/FOLDING.md): the plan for folding with `zo`, `zc` and the other `z` commands
+  (not implemented yet).
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
   step by step.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
@@ -156,7 +158,7 @@ tests/unit/   JUnit 5 tests for util + core (sources come from the plug-in; no c
 features/     feature project (Tycho eclipse-feature)
 releng/       p2 category / update-site (Tycho eclipse-repository), release-notes.sh, formatter
 docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING, RPC_CLIENT,
-              TAB_COMPLETION, LOG_LEVEL
+              TAB_COMPLETION, LOG_LEVEL, FOLDING
 .github/      GitHub Actions workflows (build, release), Dependabot, issue templates
 pom.xml       Maven/Tycho parent (aggregator)
 ```
