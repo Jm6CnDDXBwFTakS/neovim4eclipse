@@ -15,9 +15,9 @@
  *       Sends keys and requests, and publishes mode, cursor, selection and text changes to listeners.
  *       It delegates to:
  *       <ul>
- *         <li>{@code NeovimConnection}: the {@code nvim --embed} process and the RPC layers, and
- *             closing them: {@code :qa!}, then waiting for the process ({@code QuittingConnection}
- *             keeps the expected end of Neovim's output from being logged as an error);</li>
+ *         <li>{@code NeovimConnection}: the {@code nvim --embed} process and the RPC connection
+ *             ({@code core/rpc}), and closing them: {@code :qa!}, then waiting for the process
+ *             (the channel is told first, so the expected end of Neovim's output is no error);</li>
  *         <li>{@code KeyInput}: what happens when a key is sent (pending commands, insert replay,
  *             macros, host {@code :} commands). It does not know the session: it is given
  *             {@code StateSync}, {@code StatusTracker} and its own small {@code KeyInput.Neovim}
@@ -62,7 +62,8 @@
  *   <li>Subpackage {@code core/rpc}: the plug-in's own interface to the Neovim API
  *       ({@code NeovimApi}), what Neovim sends on its own ({@code Incoming}) and their types
  *       ({@code Handle}, {@code Mode}, {@code WinCursor}), used
- *       instead of neovim-java's, so the library can be replaced ({@code docs/RPC_CLIENT.md}).</li>
+ *       and the msgpack-rpc client itself ({@code RpcChannel}, {@code MsgpackNeovimApi}), the
+ *       plug-in's own code on msgpack-core ({@code docs/RPC_CLIENT.md}).</li>
  * </ul>
  *
  * <p>See {@code docs/LEARNING.md}, part 2, for msgpack-rpc, {@code nvim_input}, blocking, and

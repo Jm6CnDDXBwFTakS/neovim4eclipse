@@ -8,11 +8,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.msgpack.core.MessagePack;
-import org.msgpack.core.MessageUnpacker;
-import org.msgpack.jackson.dataformat.MessagePackExtensionType;
-
-import com.ensarsarajcic.neovim.java.api.types.msgpack.BaseCustomIdType;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Incoming;
 
 /**
@@ -230,19 +226,12 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Buffer handles arrive as msgpack extension values: decoded by neovim-java into a
-     * {@code Buffer}, or left as a raw extension whose payload is the msgpack-encoded number.
+     * The buffer number in an event: Neovim sends the buffer as a handle (a MessagePack extension
+     * value, decoded into a {@link Handle}); a plain number is accepted too.
      */
     static Integer bufferNumber(Object raw) {
-        if (raw instanceof BaseCustomIdType id) {
-            return (int) id.getId();
-        }
-        if (raw instanceof MessagePackExtensionType ext) {
-            try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(ext.getData())) {
-                return (int) unpacker.unpackLong();
-            } catch (Exception e) {
-                return null;
-            }
+        if (raw instanceof Handle handle && handle.kind() == Handle.Kind.BUFFER) {
+            return handle.intId();
         }
         return toInt(raw);
     }

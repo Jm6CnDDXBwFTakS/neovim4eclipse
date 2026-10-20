@@ -17,8 +17,8 @@ release process; see [Known limitations](#known-limitations).
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
-- [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): replacing neovim-java with our own msgpack-rpc
-  client (in progress, step by step).
+- [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
+  step by step.
 
 ## How it behaves
 
@@ -102,7 +102,7 @@ plugins/io.github.jm6cnddxbwftaks.eclipseneovim/
   src/io/github/jm6cnddxbwftaks/eclipseneovim/
     util/     pure Java: key mapping, mode strings, line/text conversion, range edits, UTF-8 columns
     core/     NeovimSession (process + RPC + events); no SWT/Eclipse imports allowed
-      rpc/    the plug-in's own Neovim API interface and types, replacing neovim-java step by step
+      rpc/    the plug-in's own msgpack-rpc client: connection, encoding, typed Neovim API
     sync/     BufferSynchronizer: IDocument <-> Neovim buffer
     editor/   attach/detach, key interception, caret/status UI, :w/:q handling
     prefs/    preference pages (Neovim, Ctrl Keys) and defaults

@@ -13,9 +13,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.msgpack.jackson.dataformat.MessagePackExtensionType;
 
-import com.ensarsarajcic.neovim.java.api.types.msgpack.Buffer;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle;
 
 /**
  * {@link NotificationBridge} as the RPC layer calls it: {@code notification(name, args)} and
@@ -113,11 +112,10 @@ class NotificationBridgeTest {
     }
 
     @Test
-    void bufferHandlesDecodeFromNeovimJavaTypesRawExtensionsAndNumbers() {
-        assertEquals(7, NotificationBridge.bufferNumber(new Buffer(7)));
-        // msgpack positive fixint 9, as Neovim encodes a Buffer handle's payload
-        assertEquals(9, NotificationBridge.bufferNumber(new MessagePackExtensionType((byte) 0, new byte[] { 9 })));
-        assertEquals(3, NotificationBridge.bufferNumber(3));
+    void bufferHandlesAndPlainNumbersGiveTheBufferNumber() {
+        assertEquals(7, NotificationBridge.bufferNumber(Handle.buffer(7)));
+        assertEquals(3, NotificationBridge.bufferNumber(3L));
+        assertEquals(null, NotificationBridge.bufferNumber(Handle.window(1000)), "a window is not a buffer");
         assertEquals(null, NotificationBridge.bufferNumber("x"));
     }
 

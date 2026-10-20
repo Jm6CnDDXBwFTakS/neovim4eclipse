@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: EPL-2.0
 
 /**
- * The plug-in's own types for talking to Neovim over msgpack-rpc.
- *
- * <p>Today the RPC itself still goes through neovim-java. This package holds the interface and the
- * value types that the rest of {@code core/} uses instead of neovim-java's, so that the library can
- * later be replaced by a small client of our own without touching that code. The plan, step by
- * step, is in {@code docs/RPC_CLIENT.md}.
+ * The plug-in's own msgpack-rpc client for Neovim, on msgpack-core alone: the connection
+ * ({@code RpcChannel}), the encoding ({@code MsgpackValues}), the typed API ({@code NeovimApi}) and
+ * its value types. It replaced the neovim-java library; {@code docs/RPC_CLIENT.md} tells why and
+ * how, step by step.
  *
  * <p>Like the rest of {@code core/}, this package must not import {@code org.eclipse.*}: it is
  * compiled and unit-tested without Eclipse ({@code tests/unit}).
@@ -15,15 +13,13 @@
  * <ul>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimApi}: the Neovim functions
  *       the plug-in calls, one method each, named after Neovim's.</li>
- *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimJavaApi}: that interface
- *       implemented with neovim-java (temporary, an adapter).</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Incoming}: what Neovim sends on its
  *       own (notifications and requests), implemented by {@code core/NotificationBridge}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.MsgpackNeovimApi}: the same
- *       interface over our own client (not used yet), through
+ *       interface's implementation, over
  *       {@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcRequests}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel}: the msgpack-rpc
- *       connection itself (not used yet; our own client).</li>
+ *       connection itself: requests, responses, notifications, the reader thread.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.MsgpackValues}: Java values to and
  *       from MessagePack, for {@code RpcChannel}.</li>
  *   <li>{@link io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimErrorException},

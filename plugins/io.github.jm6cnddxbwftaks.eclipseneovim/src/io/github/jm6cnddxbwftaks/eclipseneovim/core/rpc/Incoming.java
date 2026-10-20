@@ -20,8 +20,8 @@ import java.util.List;
  * Neovim sent them. While one runs, nothing else from Neovim is read, so they must not wait for an
  * answer from Neovim themselves (that answer could never be read: a deadlock).
  *
- * <p>Implemented by {@code core/NotificationBridge}. Today neovim-java delivers the messages
- * ({@code NeovimConnection}); later our own client will ({@code docs/RPC_CLIENT.md}).
+ * <p>Implemented by {@code core/NotificationBridge}; {@link RpcChannel} delivers the messages (set up
+ * in {@code NeovimConnection}).
  */
 public interface Incoming {
 

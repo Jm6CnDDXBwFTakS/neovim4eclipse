@@ -10,8 +10,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
+import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel;
+import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
@@ -409,18 +412,55 @@ class NeovimSessionIntegrationTest {
             assertEquals("Eclipse-Neovim", client.get("name"));
             assertEquals("remote", client.get("type"));
             assertEquals(Map.of("major", 1L, "minor", 2L, "patch", 3L, "prerelease", "qual"),
-                    NeovimApiContractTest.numbersAsLong(client.get("version")));
+                    NeovimApiIntegrationTest.numbersAsLong(client.get("version")));
             assertEquals(0, ((java.util.Collection<?>) values(client.get("methods"))).size());
             assertEquals(0, ((java.util.Collection<?>) values(client.get("attributes"))).size());
 
             List<?> uis = (List<?>) s.lua("return vim.api.nvim_list_uis()");
             assertEquals(1, uis.size());
-            Map<?, ?> ui = (Map<?, ?>) NeovimApiContractTest.numbersAsLong(uis.get(0));
+            Map<?, ?> ui = (Map<?, ?>) NeovimApiIntegrationTest.numbersAsLong(uis.get(0));
             assertEquals(120L, ui.get("width"));
             assertEquals(40L, ui.get("height"));
             for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                     "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
                 assertEquals(false, ui.get(option), option);
+            }
+        }
+    }
+
+    /** Closing on purpose (:qa!, then the end of Neovim's output) is not reported as a crash. */
+    @Test
+    void aNormalCloseLogsNoWarning() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            try (NeovimSession s = start()) {
+                s.command("echo 1");
+            }
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+    }
+
+    /**
+     * Neovim's stderr is kept apart from the MessagePack on stdout: a line written there is logged,
+     * and the session goes on (merged into stdout, it would have broken the stream).
+     */
+    @Test
+    void neovimsStderrIsLoggedAndDoesNotBreakTheSession() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(NeovimConnection.class);
+                NeovimSession s = NeovimSession.start(NVIM,
+                        List.of("--clean", "--cmd", "lua io.stderr:write('stray text\\n')"))) {
+            s.setBufferLines(List.of("still here"));
+            assertEquals(List.of("still here"), s.getBufferLines());
+            long deadline = System.nanoTime() + 2_000_000_000L; // the stderr thread logs on its own
+            while (true) {
+                try {
+                    log.assertLogged(Level.WARNING, "Neovim stderr: stray text");
+                    break;
+                } catch (AssertionError notYet) {
+                    if (System.nanoTime() > deadline) {
+                        throw notYet;
+                    }
+                    Thread.sleep(20);
+                }
             }
         }
     }
