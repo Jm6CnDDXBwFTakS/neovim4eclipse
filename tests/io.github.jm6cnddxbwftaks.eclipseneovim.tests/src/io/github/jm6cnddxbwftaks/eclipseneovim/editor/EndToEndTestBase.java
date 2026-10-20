@@ -25,6 +25,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
@@ -124,6 +125,14 @@ abstract class EndToEndTestBase {
     /** The active workbench page. */
     static IWorkbenchPage page() {
         return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+    }
+
+    /**
+     * Runs an Eclipse command by its ID, as its menu item or key binding would (for example
+     * {@code org.eclipse.ui.file.revert}, File › Revert): synthetic keys miss the key bindings.
+     */
+    static void runCommand(String commandId) throws Exception {
+        PlatformUI.getWorkbench().getService(IHandlerService.class).executeCommand(commandId, null);
     }
 
     /** Waits until test.txt's document reads {@code expected}. */

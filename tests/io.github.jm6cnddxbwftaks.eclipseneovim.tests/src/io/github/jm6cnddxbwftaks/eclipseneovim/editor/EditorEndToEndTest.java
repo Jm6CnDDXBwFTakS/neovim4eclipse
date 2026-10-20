@@ -37,9 +37,7 @@ import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
-import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -589,11 +587,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("zeta\nalpha\nbeta\n");
         type(widget, 'u');
         expectText("zeta\nalpha\nbeta\ngamma\n");
-    }
-
-    /** Runs an Eclipse command by its ID, as its menu item or key binding would. */
-    private static void runCommand(String commandId) throws Exception {
-        PlatformUI.getWorkbench().getService(IHandlerService.class).executeCommand(commandId, null);
     }
 
     // ---- Keys (review check REFACTOR) ----
