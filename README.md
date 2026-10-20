@@ -20,6 +20,7 @@ release process; see [Known limitations](#known-limitations).
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
   step by step.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+- [SECURITY.md](SECURITY.md): how to report a vulnerability privately.
 
 ## How it behaves
 

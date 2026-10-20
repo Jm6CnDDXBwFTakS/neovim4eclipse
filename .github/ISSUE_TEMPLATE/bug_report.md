@@ -4,6 +4,9 @@ about: Something does not work as described
 labels: bug
 ---
 
+<!-- A security problem? Please do not open a public issue; see SECURITY.md for how to report it
+     privately. -->
+
 **What happened**
 <!-- What you did (the keys you typed, the command you ran) and what you saw. -->
 
