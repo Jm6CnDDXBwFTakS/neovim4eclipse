@@ -22,6 +22,11 @@ public final class PreferenceConstants {
 
     public static final boolean SHOW_TOOLBAR_DEFAULT = true;
 
+    /** Whether the Neovim menu is in the menu bar. */
+    public static final String SHOW_MENU = "showMenu";
+
+    public static final boolean SHOW_MENU_DEFAULT = true;
+
     // ---- Which parts of the Vim status information the Eclipse status bar shows ----
 
     /** Show the mode ({@code -- INSERT --}, {@code recording @q}). */

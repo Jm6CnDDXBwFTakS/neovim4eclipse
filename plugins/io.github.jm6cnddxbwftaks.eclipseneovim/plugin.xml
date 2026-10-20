@@ -427,6 +427,13 @@
          <!-- Attach and Detach have no menu entries (attaching is automatic); their commands remain,
               reachable through their key bindings and Quick Access (Ctrl+3). -->
          <menu id="io.github.jm6cnddxbwftaks.eclipseneovim.menu" label="Neovim" mnemonic="N">
+            <!-- The "Show Neovim menu in the menu bar" preference (NeovimPropertyTester). -->
+            <visibleWhen checkEnabled="false">
+               <test
+                     property="io.github.jm6cnddxbwftaks.eclipseneovim.showMenu"
+                     value="true">
+               </test>
+            </visibleWhen>
             <command
                   commandId="io.github.jm6cnddxbwftaks.eclipseneovim.commands.toggleMode"
                   label="Toggle Neovim / Eclipse Mode"
@@ -1058,7 +1065,7 @@
       <propertyTester
             id="io.github.jm6cnddxbwftaks.eclipseneovim.propertyTester"
             namespace="io.github.jm6cnddxbwftaks.eclipseneovim"
-            properties="showToolbar"
+            properties="showToolbar,showMenu"
             type="java.lang.Object"
             class="io.github.jm6cnddxbwftaks.eclipseneovim.prefs.NeovimPropertyTester">
       </propertyTester>

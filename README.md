@@ -322,7 +322,10 @@ other details (each attach and detach, cursor pushes) then appear too.
 ## Preferences
 
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
-expanded): the Neovim executable (command or absolute path) and whether to show the toolbar toggle.
+expanded): the Neovim executable (command or absolute path), whether to show the toolbar toggle, and
+whether to show the *Neovim* menu in the menu bar. With the menu hidden, its entries stay reachable:
+the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
+through *Window → Preferences*.
 Changing the executable restarts Neovim and re-attaches the active editor.
 
 *Window → Preferences → Neovim → Status Bar*: which parts of the Vim status appear in the status bar.

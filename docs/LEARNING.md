@@ -62,7 +62,7 @@ Extension points used here, all defined by the Eclipse Platform:
 | `org.eclipse.ui.startup` | `EarlyStartup`, run after the workbench starts. |
 | `org.eclipse.ui.preferencePages` | The *Neovim* and *Ctrl Keys* pages. |
 | `org.eclipse.core.runtime.preferences` | `PreferenceInitializer`, which supplies default values. |
-| `org.eclipse.core.expressions.propertyTesters` | `NeovimPropertyTester`, which lets `plugin.xml` hide the toolbar button based on a preference. |
+| `org.eclipse.core.expressions.propertyTesters` | `NeovimPropertyTester`, which lets `plugin.xml` hide the toolbar button and the *Neovim* menu based on preferences. |
 
 The split into command, handler, binding and context is the most important idea in this list:
 

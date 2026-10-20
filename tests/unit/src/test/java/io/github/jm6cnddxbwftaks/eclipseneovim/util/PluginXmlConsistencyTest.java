@@ -125,6 +125,26 @@ class PluginXmlConsistencyTest {
         assertFalse(attributes(extension(load(), "org.eclipse.ui.bindings"), "key", "contextId").isEmpty());
     }
 
+    /**
+     * A {@code visibleWhen} test of a property no tester declares is never true: the menu or button
+     * would vanish for good, with only a log entry to say why. The menu and the toolbar button each
+     * have one ({@code showMenu}, {@code showToolbar}).
+     */
+    @Test
+    void everyVisibleWhenPropertyIsDeclaredByThePropertyTester() throws Exception {
+        Document doc = load();
+        Element tester = (Element) extension(doc, "org.eclipse.core.expressions.propertyTesters")
+                .getElementsByTagName("propertyTester").item(0);
+        Set<String> declared = new HashSet<>();
+        for (String property : tester.getAttribute("properties").split(",")) {
+            declared.add(tester.getAttribute("namespace") + "." + property.strip());
+        }
+        Set<String> used = attributes(extension(doc, "org.eclipse.ui.menus"), "test", "property");
+        assertEquals(Set.of("io.github.jm6cnddxbwftaks.eclipseneovim.showMenu",
+                "io.github.jm6cnddxbwftaks.eclipseneovim.showToolbar"), used);
+        assertTrue(declared.containsAll(used), "declared: " + declared + ", used: " + used);
+    }
+
     @Test
     void everyCtrlKeyHasItsOwnContextUnderTheNeovimContext() throws Exception {
         Map<String, String> parents = new HashMap<>();

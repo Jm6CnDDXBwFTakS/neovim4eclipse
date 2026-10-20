@@ -14,8 +14,8 @@
  * while Eclipse runs.
  *
  * <p>{@link io.github.jm6cnddxbwftaks.eclipseneovim.prefs.NeovimPropertyTester} and
- * {@link io.github.jm6cnddxbwftaks.eclipseneovim.prefs.ToolbarVisibility} let {@code plugin.xml}
- * show or hide the toolbar button through a {@code visibleWhen} expression, which is evaluated
+ * {@link io.github.jm6cnddxbwftaks.eclipseneovim.prefs.ContributionVisibility} let {@code plugin.xml}
+ * show or hide the toolbar button and the Neovim menu through {@code visibleWhen} expressions, which is evaluated
  * without running plug-in code until the expression needs the value.
  */
 package io.github.jm6cnddxbwftaks.eclipseneovim.prefs;

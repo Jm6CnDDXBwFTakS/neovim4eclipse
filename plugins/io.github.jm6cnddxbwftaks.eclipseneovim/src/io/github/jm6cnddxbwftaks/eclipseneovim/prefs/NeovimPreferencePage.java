@@ -52,6 +52,13 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
                 PreferenceConstants.SHOW_TOOLBAR,
                 "Show NVIM button on the main toolbar",
                 getFieldEditorParent()));
+
+        // Hidden, its two entries stay reachable: Window > Preferences > Neovim, and the toggle's
+        // key binding, toolbar button and Quick Access (Ctrl+3).
+        addField(new BooleanFieldEditor(
+                PreferenceConstants.SHOW_MENU,
+                "Show Neovim menu in the menu bar",
+                getFieldEditorParent()));
     }
 
     @Override
@@ -59,7 +66,7 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
         boolean ok = super.performOk();
         if (ok) {
             // Re-evaluate menu/toolbar visibility expressions
-            ToolbarVisibility.refresh();
+            ContributionVisibility.refresh();
         }
         return ok;
     }
@@ -67,6 +74,6 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
     @Override
     protected void performApply() {
         super.performApply();
-        ToolbarVisibility.refresh();
+        ContributionVisibility.refresh();
     }
 }
