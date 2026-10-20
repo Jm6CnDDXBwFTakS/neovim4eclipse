@@ -41,3 +41,5 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
   like the file.
 - Preferences: the Neovim executable, the toolbar toggle, whether the *Neovim* menu is in the menu
   bar, and which `Ctrl` keys go to Neovim.
+- `-Declipseneovim.logLevel=FINE` (or any other `java.util.logging` level) prints the plug-in's
+  details to the console, one line each; see the README, "If `Ctrl-V` does nothing".

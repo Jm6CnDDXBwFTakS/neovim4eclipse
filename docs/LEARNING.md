@@ -521,7 +521,9 @@ Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
 - **Logs**: the plug-in logs with `java.util.logging`, which writes to the console of the Eclipse
   process (the launching Eclipse's Console view, or the terminal Eclipse was started from).
   Warnings and errors also go to the Error Log view (*Window > Show View > Error Log*), through
-  `ErrorLogHandler`. `KeyContextDiagnostics` reports which command the workbench resolves for
+  `ErrorLogHandler`. The details (FINE and below) are hidden unless Eclipse starts with
+  `-Declipseneovim.logLevel=FINE` (or `FINER`, `FINEST`; `util/LogLevelSwitch`, and README, "If
+  `Ctrl-V` does nothing"). `KeyContextDiagnostics` reports which command the workbench resolves for
   `Ctrl+V`; the README lists what its messages mean.
 - **Key bindings**: *Window > Preferences > General > Keys* shows each binding with its context
   ("When"). The *Ctrl Keys* page decides which of this plug-in's letter contexts are active.

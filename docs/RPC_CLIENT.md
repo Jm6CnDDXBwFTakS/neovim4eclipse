@@ -170,7 +170,8 @@ final class RpcChannel implements AutoCloseable {
 - **Close:** sets `closing`, closes both streams, interrupts the reader if needed, fails pending
   futures. `NeovimConnection` still owns the process and ends it as today.
 - **Logging:** `java.util.logging`, like the rest of the plug-in. Message tracing at FINEST
-  replaces `-Dorg.slf4j.simpleLogger.defaultLogLevel=debug` for studying the traffic.
+  replaces `-Dorg.slf4j.simpleLogger.defaultLogLevel=debug` for studying the traffic; turn it on with
+  `-Declipseneovim.logLevel=FINEST`.
 
 ### 2.4 How it is tested
 

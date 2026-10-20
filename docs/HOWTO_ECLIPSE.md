@@ -10,8 +10,9 @@ For a headless CI build of the plug-in and update site, use Maven/Tycho (`./mvnw
 4. Open `META-INF/MANIFEST.MF` → Overview → **Launch an Eclipse application** (or a custom Eclipse Application launch config).
 5. Runtime JRE: Java 21.
 6. Open a `.txt` / source file — the first attach logs `Started Neovim pid=...` and `NeovimSession ready`
-   (java.util.logging, level INFO). Each attach and detach is logged at FINE; README, "If `Ctrl-V` does
-   nothing", shows how to turn FINE on.
+   (java.util.logging, level INFO). Each attach and detach is logged at FINE: to see those lines, add
+   `-Declipseneovim.logLevel=FINE` to the launch configuration's *Arguments* tab, *VM arguments*.
+   They appear in this Eclipse's Console view (README, "If `Ctrl-V` does nothing").
 
 ## Common problems
 

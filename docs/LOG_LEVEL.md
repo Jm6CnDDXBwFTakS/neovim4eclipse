@@ -1,7 +1,8 @@
 # Design note: one switch for the plug-in's log level
 
-Status: **planned, not started.** Written 2026-10-20 against `develop` at `0eaf5ae`. Decisions made
-with the maintainer are marked *(decided)*.
+Status: **implemented** (2026-10-20). Written 2026-10-20 against `develop` at `0eaf5ae`. Decisions made
+with the maintainer are marked *(decided)*. Where the code differs from this plan, "As built" at the
+end says how.
 
 ## Summary
 
@@ -63,9 +64,12 @@ whole plug-in, `core/` and `util/` included.
 3. The property name in one constant (in `LogLevelSwitch`), so the README, the tests and the code
    agree.
 
-**Check first when implementing:** that `--launcher.appendVmargs` works on the command line and not
-only in `eclipse.ini`. The launcher documentation suggests so, but it was not tried. If it does not
-work, the README recommends the `eclipse.ini` line instead and drops the command-line form.
+**Checked:** `--launcher.appendVmargs` works on the command line too, not only in `eclipse.ini`. Tried
+with `eclipsec.exe` (Eclipse 4.41, Windows) and a copy of `eclipse.ini` without that line, passed
+with `--launcher.ini`, plus `-vmargs -XX:+PrintCommandLineFlags`: with `--launcher.appendVmargs` on the
+command line, the ini's `-XX:+UseStringDeduplication` was still in effect; without it, it was gone.
+The EPP packages' own `eclipse.ini` already has `--launcher.appendVmargs`, so for most people the
+trap does not arise; the README still shows the flag, since it costs nothing.
 
 ## 3. Why no environment variable *(decided)*
 
@@ -107,3 +111,16 @@ Activator's preference listener reapplying the level, a test. It was left out be
 - **The Review Fix Checks page:** check 8d uses the switch.
 - **This note:** status set to done.
 - **One commit**, in UTC (`TZ=UTC git commit`).
+
+## As built
+
+- `LogLevelSwitch.parse` throws an `IllegalArgumentException` for an unknown value (its message is
+  the text the plug-in logs) instead of returning an error text. Only the nine level names are
+  accepted: plain `Level.parse` would also take numbers such as `500`.
+- `LogLevelSwitch` is an object that remembers what it changed: `remove()` takes the handler away
+  and puts back the parent logger's level and `useParentHandlers`, so the tests and a restarted
+  plug-in start from the JDK's defaults.
+- `Activator.start` applies the switch right after installing the Error Log bridge, not before it,
+  so the warning about an unknown value reaches the Error Log too. Nothing logs in between.
+- Tests: `tests/unit/.../util/LogLevelSwitchTest` (8 tests). The `Activator` glue (reading the
+  property) has no test of its own; it is four lines.
