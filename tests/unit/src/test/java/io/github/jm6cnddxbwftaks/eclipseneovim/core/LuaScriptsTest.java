@@ -28,6 +28,23 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.SETUP.contains("vim.g.eclipse_channel = chan"), "the channel the request goes to");
     }
 
+    /** See the COMPLETE_CMDLINE comment for why each of these matters. */
+    @Test
+    void completionKeysAreNotTypedAndEverythingChangedIsRestored() {
+        String script = LuaScripts.COMPLETE_CMDLINE;
+        assertTrue(script.contains("'xn', false)"), "not typed: no macro recording, no '=' history");
+        assertTrue(script.contains("nvim_feedkeys(':' .. line, 'n', true)"), "the line fed as text");
+        assertTrue(script.contains("vim.o.wildcharm = 9"), "Tab completes in keys that are not typed");
+        assertTrue(script.contains("[[<C-\\>ev:lua.__eclipse_capture()<CR><C-c>]]"));
+        assertTrue(script.contains("mode.mode ~= 'n' or mode.blocking"), "':' is typed in normal mode only");
+        assertTrue(script.contains("local ok, err = pcall(complete)"));
+        for (String restore : new String[] { "vim.o.wildmode = saved.wildmode", "vim.o.wildcharm = saved.wildcharm",
+                "vim.o.eventignore = saved.eventignore", "_G.__eclipse_capture = nil", "noautocmd lcd ' .. back",
+                "noautocmd tcd ' .. back", "noautocmd cd ' .. back" }) {
+            assertTrue(script.contains(restore), restore);
+        }
+    }
+
     @Test
     void yankHookStandsDownWhenNeovimSyncsTheClipboardItself() {
         // Regression guard for linewise yanks turning charwise (P pasting inline) when two writers raced.

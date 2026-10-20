@@ -20,6 +20,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.WinCursor;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.Completion;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.LineDiff;
@@ -66,6 +67,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * request, a keystroke should cost a fraction of a second, not {@value #RPC_TIMEOUT_SEC}s.
      */
     private static final long STATE_TIMEOUT_MS = 750;
+    /** At most this many completion candidates are sent back for the list; {@code :h } has thousands. */
+    static final int COMPLETION_CAP = 200;
 
     // ---- connection ----
 
@@ -566,6 +569,34 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void captureOutputAsync(String cmd, Consumer<String> onOutput) {
         submit("capture " + cmd, Level.WARNING, () -> commands.capture(cmd, onOutput));
+    }
+
+    /**
+     * Completes a {@code :} command line as Neovim's own Tab does ({@link LuaScripts#COMPLETE_CMDLINE})
+     * and passes the answer to {@code onResult}, on a session thread. Nothing is passed when Neovim
+     * is busy with a command or not in normal mode: Tab then does nothing.
+     *
+     * @param line    the command line, without the {@code :}
+     * @param steps   one letter per key: {@code T} next match, {@code P} previous match
+     * @param folders where to complete {@code :e} file names, best first (at most two are used);
+     *                empty for any other command
+     */
+    public void completeAsync(String line, String steps, List<String> folders, Consumer<Completion> onResult) {
+        submit("complete " + line, Level.FINE, () -> {
+            if (isBlocked()) {
+                return;
+            }
+            Completion completion = Completion.parse(await(api.execLua(LuaScripts.COMPLETE_CMDLINE, List.of(
+                    line, steps, folderArgument(folders, 0), folderArgument(folders, 1),
+                    String.valueOf(COMPLETION_CAP)))));
+            if (completion != null) {
+                onResult.accept(completion);
+            }
+        });
+    }
+
+    private static String folderArgument(List<String> folders, int index) {
+        return index < folders.size() && folders.get(index) != null ? folders.get(index) : "";
     }
 
     /** Runs normal-mode {@code keys} without mappings, then refreshes Eclipse. See {@link CommandRunner#normal}. */
