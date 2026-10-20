@@ -4,8 +4,8 @@ Embeds **real Neovim** (`nvim --embed`) in Eclipse text editors so modal editing
 text objects, visual mode, registers, macros, ex commands) works on the buffer you see in the IDE.
 Neovim owns editing; Eclipse owns files and rendering.
 
-**Status: working prototype** for developers who will extend it. It has not been run through a
-release process; see [Known limitations](#known-limitations).
+**Status: 0.1.0, an early release.** It works day to day on Linux, macOS and Windows; expect rough
+edges, see [Known limitations](#known-limitations).
 
 **Documentation**
 
