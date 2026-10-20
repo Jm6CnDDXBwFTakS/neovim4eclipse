@@ -6,7 +6,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+  <groupId>io.github.jm6cnddxbwftaks.neovim4eclipse</groupId>
   <artifactId>neovim4eclipse</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
@@ -34,16 +34,16 @@
        but no widgets: mvn test -f tests/text/pom.xml
        tests/swt runs widget tests with the SWT jar and a display, but no workbench:
        mvn test -f tests/swt/pom.xml
-       tests/...eclipseneovim.tests is a test fragment that runs inside a real Eclipse workbench
+       tests/...neovim4eclipse.tests is a test fragment that runs inside a real Eclipse workbench
        (needs a display; -DskipTests skips it). -->
   <modules>
-    <module>plugins/io.github.jm6cnddxbwftaks.eclipseneovim</module>
+    <module>plugins/io.github.jm6cnddxbwftaks.neovim4eclipse</module>
     <module>tests/unit</module>
     <module>tests/text</module>
     <module>tests/swt</module>
-    <module>tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests</module>
-    <module>features/io.github.jm6cnddxbwftaks.eclipseneovim.feature</module>
-    <module>releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite</module>
+    <module>tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests</module>
+    <module>features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature</module>
+    <module>releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite</module>
   </modules>
 
   <!-- Versions: see docs/UPGRADING.md before changing any of them. VersionConsistencyTest

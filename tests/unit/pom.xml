@@ -10,7 +10,7 @@
        mvn test -f tests/unit/pom.xml
        Library versions come from the root pom.xml (dependencyManagement). -->
   <parent>
-    <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
+    <groupId>io.github.jm6cnddxbwftaks.neovim4eclipse</groupId>
     <artifactId>neovim4eclipse</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
@@ -74,7 +74,7 @@
             </goals>
             <configuration>
               <sources>
-                <source>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/src</source>
+                <source>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src</source>
               </sources>
             </configuration>
           </execution>
@@ -85,8 +85,8 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <includes>
-            <include>io/github/jm6cnddxbwftaks/eclipseneovim/util/**</include>
-            <include>io/github/jm6cnddxbwftaks/eclipseneovim/core/**</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/**</include>
           </includes>
         </configuration>
       </plugin>

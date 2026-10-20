@@ -11,7 +11,7 @@ Ctrl-key command") takes a JUL properties file passed with `-Djava.util.logging.
 explained in the README's "If `Ctrl-V` does nothing" section. That is three steps, and on Windows two
 traps on top (`eclipse.exe` has no console; `-vmargs` on the command line replaces `eclipse.ini`'s).
 
-**Plan:** one JVM system property, `-Declipseneovim.logLevel=FINE` *(decided)*, read when the
+**Plan:** one JVM system property, `-Dneovim4eclipse.logLevel=FINE` *(decided)*, read when the
 plug-in starts. It sets the level of all the plug-in's loggers and prints them to stderr, one line
 each. Files come from shell redirection, not from the plug-in *(decided)*. It is the only way to do
 it: no environment variable, no preference *(decided)*, and the README drops the properties-file
@@ -22,10 +22,10 @@ Size: about 80 lines of code and 120 of tests, in one commit.
 ## 1. Behavior
 
 - **Where to put it:**
-  - a line `-Declipseneovim.logLevel=FINE` after `-vmargs` in `eclipse.ini`;
+  - a line `-Dneovim4eclipse.logLevel=FINE` after `-vmargs` in `eclipse.ini`;
   - in a runtime Eclipse launched from the IDE, the launch configuration's *Arguments* tab →
     *VM arguments*, with the output in the Console view of the launching Eclipse;
-  - on the command line, `eclipsec.exe --launcher.appendVmargs -vmargs -Declipseneovim.logLevel=FINE`
+  - on the command line, `eclipsec.exe --launcher.appendVmargs -vmargs -Dneovim4eclipse.logLevel=FINE`
     (section 3).
 - **Values:** JUL level names, in any case: `OFF`, `SEVERE`, `WARNING`, `INFO`, `CONFIG`, `FINE`,
   `FINER`, `FINEST`, `ALL`. An unknown value prints one warning naming the valid ones; the setting
@@ -42,7 +42,7 @@ Size: about 80 lines of code and 120 of tests, in one commit.
 ## 2. How
 
 All the plug-in's loggers are named after their classes, under one parent:
-`io.github.jm6cnddxbwftaks.eclipseneovim` (`Activator.PLUGIN_ID`). Setting that parent covers the
+`io.github.jm6cnddxbwftaks.neovim4eclipse` (`Activator.PLUGIN_ID`). Setting that parent covers the
 whole plug-in, `core/` and `util/` included.
 
 1. **`util/LogLevelSwitch`** (JUL only, no Eclipse, so unit-tested in `tests/unit`):
@@ -58,7 +58,7 @@ whole plug-in, `core/` and `util/` included.
      - keeps a strong reference to the logger (JUL holds loggers weakly; `ErrorLogHandler` does
        the same).
 2. **`Activator.start`**, first thing, before anything logs: read
-   `System.getProperty("eclipseneovim.logLevel")`; if set, `LogLevelSwitch.apply(…, System.err)`;
+   `System.getProperty("neovim4eclipse.logLevel")`; if set, `LogLevelSwitch.apply(…, System.err)`;
    on an unknown value, one WARNING (it reaches the Error Log too). In `stop`, remove the handler,
    as `ErrorLogHandler.uninstall` does.
 3. The property name in one constant (in `LogLevelSwitch`), so the README, the tests and the code
@@ -92,7 +92,7 @@ Activator's preference listener reapplying the level, a test. It was left out be
 
 - `parse`: each level name; lower and mixed case; blank; an unknown name gives the error text.
 - `apply` with a `PrintStream` on a byte array:
-  - at `FINE`, a FINE record from a child logger (`…eclipseneovim.editor.X`) reaches the stream,
+  - at `FINE`, a FINE record from a child logger (`…neovim4eclipse.editor.X`) reaches the stream,
     on one line;
   - an INFO record is printed once, not again through the root handler;
   - at `OFF`, a WARNING still reaches a second handler on the parent logger (the stand-in for

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<feature
+      id="io.github.jm6cnddxbwftaks.neovim4eclipse.feature"
+      label="Neovim for Eclipse"
+      version="0.1.0.qualifier"
+      provider-name="Jm6CnDDXBwFTakS">
+
+   <!-- Shown under Help > Install New Software > Details. The text is displayed as written, so
+        it starts at column 0 to avoid leading spaces on the second line. -->
+   <description url="https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse">Vim mode for Eclipse, powered by Neovim
+
+https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse</description>
+
+   <copyright>
+      Copyright (c) 2026 Jm6CnDDXBwFTakS.
+   </copyright>
+
+   <license url="https://www.eclipse.org/legal/epl-2.0/">
+      This program and the accompanying materials are made available under the terms of the
+Eclipse Public License 2.0, which is available at https://www.eclipse.org/legal/epl-2.0/
+
+SPDX-License-Identifier: EPL-2.0
+   </license>
+
+   <requires>
+      <import feature="org.eclipse.platform" version="4.34.0" match="greaterOrEqual"/>
+   </requires>
+
+   <plugin
+         id="io.github.jm6cnddxbwftaks.neovim4eclipse"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"
+         unpack="false"/>
+
+</feature>

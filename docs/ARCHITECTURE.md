@@ -248,7 +248,7 @@ to the box, which (via the focus listener in the controller) also deactivates th
   save, which would open Save As (see [NEW_FILE.md](NEW_FILE.md)).
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
-  `redir => g:eclipse_neovim_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
+  `redir => g:neovim4eclipse_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
   non-empty result that is not just the error message is shown in the `OutputPopup`. Ending the
   redirection waits for the command; meanwhile a prompt is dismissed with Esc, and after 60 s the
   output is given up (`core/CommandRunner`, durations set in its constructor). Full
@@ -322,7 +322,7 @@ the replay early.
 - **Tab width:** `NeovimEditorController` sets Neovim's `tabstop` to the editor's tab width on attach, so
   Neovim's block commands and the overlay use the same columns.
 - **Keys:** the workbench dispatches key bindings *before* widget key listeners, so `Ctrl-V` etc. would never
-  reach `KeyInterceptor`. A context (`io.github.jm6cnddxbwftaks.eclipseneovim.context.normal`) is activated
+  reach `KeyInterceptor`. A context (`io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal`) is activated
   workbench-wide while Neovim owns normal/visual keys **and** the editor's text widget has focus, and
   deactivated in insert mode, in Eclipse mode and on focus loss. Below it is one context per letter
   (`...context.ctrl.a` ... `...ctrl.z`), each holding that letter's binding to `SendKeyHandler`; `VimKeyContexts`
@@ -394,7 +394,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |
-| Command line that starts Neovim, with `vim.g.eclipse_neovim` for the user's config | `util/NvimExecutable` | `NvimExecutableTest`, `NeovimSessionIntegrationTest` |
+| Command line that starts Neovim, with `vim.g.neovim4eclipse` for the user's config | `util/NvimExecutable` | `NvimExecutableTest`, `NeovimSessionIntegrationTest` |
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
 | Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
@@ -408,7 +408,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Session facade | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Overlay colors | `util/OverlayColors` | `OverlayColorsTest` |
 | Ctrl-key ids and defaults | `util/VimCtrlKeys` | `VimCtrlKeysTest`, `PluginXmlConsistencyTest` |
-| Eclipse glue | `editor/*`, `prefs/*` | `tests/swt` for widgets (`OverlayFrameTest`, `BlockOverlayTest`, `WidgetOffsetsTest`, `OutputPopupTest`); UI test fragment `tests/...eclipseneovim.tests` for the workbench (`VimKeyContextsTest`, `CtrlKeysPreferencePageTest`, ...) |
+| Eclipse glue | `editor/*`, `prefs/*` | `tests/swt` for widgets (`OverlayFrameTest`, `BlockOverlayTest`, `WidgetOffsetsTest`, `OutputPopupTest`); UI test fragment `tests/...neovim4eclipse.tests` for the workbench (`VimKeyContextsTest`, `CtrlKeysPreferencePageTest`, ...) |
 | Whole plug-in in a real editor | all of the above | `EditorEndToEndTest` (needs nvim and a display) |
 
 When adding behavior, prefer putting the decision in a pure `util` class and leaving the Eclipse class

@@ -151,7 +151,7 @@ final class RpcChannel implements AutoCloseable {
   first.
 - **Writing:** one `MessagePacker` over the process's stdin, used under a lock, flushed after each
   message. Any thread may call `request` or `notify`.
-- **Reading:** one daemon thread per channel (`eclipse-neovim-rpc`), no pool. For each message it
+- **Reading:** one daemon thread per channel (`neovim4eclipse-rpc`), no pool. For each message it
   - completes the matching future (`complete(result)`, or `completeExceptionally(new
     NeovimErrorException(...))`); an unknown id is logged at FINE and ignored;
   - calls `incoming.notification(...)`;
@@ -171,7 +171,7 @@ final class RpcChannel implements AutoCloseable {
   futures. `NeovimConnection` still owns the process and ends it as today.
 - **Logging:** `java.util.logging`, like the rest of the plug-in. Message tracing at FINEST
   replaces `-Dorg.slf4j.simpleLogger.defaultLogLevel=debug` for studying the traffic; turn it on with
-  `-Declipseneovim.logLevel=FINEST`.
+  `-Dneovim4eclipse.logLevel=FINEST`.
 
 ### 2.4 How it is tested
 
@@ -278,7 +278,7 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      for their options, still sent through neovim-java. `NeovimConnection.TERMINAL_UI` lists the
      UI options (all false; `rgb` must be sent, it defaults to true) and `clientVersion` builds the
      version map. `NeovimSessionIntegrationTest.neovimKnowsTheClientAndATerminalUi` pins what
-     Neovim records about us (probed before the change: name `Eclipse-Neovim`, type `remote`,
+     Neovim records about us (probed before the change: name `neovim4eclipse`, type `remote`,
      version with `prerelease`, a 120 x 40 UI without `rgb` or `ext_*`), so 7b must keep it.
    - **7b** *Done.* The switch below, as described. Also decided: Neovim's stderr is kept apart from the MessagePack
      stream (today it is merged, so stray output would corrupt it) and logged at WARNING by a

@@ -97,8 +97,8 @@ are needed to [install](#install) it.
 ## Run it (PDE)
 
 1. Run `./mvnw generate-resources` once (or any full build) to download the Java dependencies into
-   `plugins/io.github.jm6cnddxbwftaks.eclipseneovim/lib/`. Their versions are set only in the root `pom.xml`.
-2. *File → Import → Existing Projects into Workspace* → `plugins/io.github.jm6cnddxbwftaks.eclipseneovim`.
+   `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/lib/`. Their versions are set only in the root `pom.xml`.
+2. *File → Import → Existing Projects into Workspace* → `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse`.
 3. Open `META-INF/MANIFEST.MF` → *Launch an Eclipse application*. See [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md).
 4. Open a text file; Neovim attaches automatically (or press `Ctrl+Shift+N`, *Neovim: Attach to Active Editor*).
 
@@ -118,7 +118,7 @@ There are two test modules:
 
 - `tests/unit` is a plain Maven jar module: part of the reactor, and also runnable alone. It compiles and
   tests the **headless** packages (`util`, `core`) without Eclipse.
-- `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` is a **test fragment** of the plug-in. Tycho starts
+- `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` is a **test fragment** of the plug-in. Tycho starts
   a real Eclipse workbench with the plug-in installed and runs its tests on the UI thread: the Eclipse glue
   (`editor`, `prefs`) on real SWT widgets, and end-to-end tests that open a text editor, type keys and check
   the document. The end-to-end tests need `nvim` (skipped otherwise; `-Dnvim.path=...` selects one).
@@ -146,8 +146,8 @@ GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
 ## Layout
 
 ```text
-plugins/io.github.jm6cnddxbwftaks.eclipseneovim/
-  src/io/github/jm6cnddxbwftaks/eclipseneovim/
+plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/
+  src/io/github/jm6cnddxbwftaks/neovim4eclipse/
     util/     pure Java: key mapping, mode strings, line/text conversion, range edits, UTF-8 columns
     core/     NeovimSession (process + RPC + events); no SWT/Eclipse imports allowed
       rpc/    the plug-in's own msgpack-rpc client: connection, encoding, typed Neovim API
@@ -344,7 +344,7 @@ The first three lines are written when Neovim mode turns on in an editor, not wh
 | `Ctrl-key command ran but there is nothing to send to` | WARNING | the binding fired but no editor is attached (the line names the command and key) |
 
 FINE lines are hidden by default. To show them (and the plug-in's other details, such as each
-attach and detach), start Eclipse with the JVM system property `-Declipseneovim.logLevel=FINE`.
+attach and detach), start Eclipse with the JVM system property `-Dneovim4eclipse.logLevel=FINE`.
 It takes the `java.util.logging` level names, in any case: `OFF`, `SEVERE`, `WARNING`, `INFO`,
 `CONFIG`, `FINE`, `FINER`, `FINEST`, `ALL`. The plug-in's lines then go to the console, one per line:
 
@@ -354,11 +354,11 @@ It takes the `java.util.logging` level names, in any case: `OFF`, `SEVERE`, `WAR
 
 Pass it in one of these places:
 
-- **Every start:** a line `-Declipseneovim.logLevel=FINE` after `-vmargs` in `eclipse.ini`.
+- **Every start:** a line `-Dneovim4eclipse.logLevel=FINE` after `-vmargs` in `eclipse.ini`.
 - **One start, from a terminal:**
 
   ```bash
-  eclipsec.exe --launcher.appendVmargs -vmargs -Declipseneovim.logLevel=FINE
+  eclipsec.exe --launcher.appendVmargs -vmargs -Dneovim4eclipse.logLevel=FINE
   ```
 
   On Linux and macOS, run `eclipse` instead. Keep `--launcher.appendVmargs`: without it, `-vmargs` on
@@ -377,13 +377,13 @@ ignored, with a warning that lists the valid names.
 
 The embedded Neovim reads your normal config. Some of it makes sense in a terminal but not inside
 Eclipse: UI plug-ins, language servers, completion. The plug-in starts Neovim with
-`vim.g.eclipse_neovim` set to `1` before any config runs, so your config can skip those parts:
+`vim.g.neovim4eclipse` set to `1` before any config runs, so your config can skip those parts:
 
 ```lua
 -- init.lua
 vim.opt.ignorecase = true          -- shared by terminal Neovim and Eclipse
 
-if vim.g.eclipse_neovim then
+if vim.g.neovim4eclipse then
   vim.g.eclipse_ide_keys = 0       -- settings for Eclipse only go here
   return                           -- the rest is for terminal Neovim only
 end
@@ -391,7 +391,7 @@ end
 require('lazy').setup('plugins')
 ```
 
-With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.eclipse_neovim`. The
+With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.neovim4eclipse`. The
 variable is set with `--cmd`, not in the environment, so a Neovim you start in a `:terminal` inside
 Eclipse does not see it.
 
@@ -399,7 +399,7 @@ The variables starting with `eclipse_` work in two directions:
 
 | Variable | Set by | Meaning |
 |----------|--------|---------|
-| `vim.g.eclipse_neovim` | the plug-in, before your config | this Neovim runs inside Eclipse |
+| `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
 | `vim.g.eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT` ([docs/KEYS.md](docs/KEYS.md)) |
 | `vim.g.eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 

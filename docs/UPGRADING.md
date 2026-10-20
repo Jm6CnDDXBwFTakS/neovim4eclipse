@@ -68,8 +68,8 @@ To raise it (example: 21 to 25):
 2. Check that the Tycho version supports building for it (Tycho release notes).
 3. Set `<java.release>25</java.release>` in the root `pom.xml`, and `25` in `.java-version`.
 4. Update `Bundle-RequiredExecutionEnvironment: JavaSE-25` in
-   `plugins/io.github.jm6cnddxbwftaks.eclipseneovim/META-INF/MANIFEST.MF` and
-   `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests/META-INF/MANIFEST.MF`, and
+   `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/META-INF/MANIFEST.MF` and
+   `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/META-INF/MANIFEST.MF`, and
    `jre.compilation.profile = JavaSE-25` in the plug-in's `build.properties`.
 5. Update the docs; the test prints each `file:line` that still names the old version.
 6. In the IDE: register a JDK 25 under *Preferences > Java > Installed JREs > Execution

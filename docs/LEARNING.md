@@ -29,7 +29,7 @@ The headers this plug-in uses:
 
 | Header | Meaning here |
 |--------|--------------|
-| `Bundle-SymbolicName: ...eclipseneovim;singleton:=true` | The unique id. `singleton` is required for bundles that contribute to `plugin.xml` extension points. |
+| `Bundle-SymbolicName: ...neovim4eclipse;singleton:=true` | The unique id. `singleton` is required for bundles that contribute to `plugin.xml` extension points. |
 | `Bundle-Version: 0.1.0.qualifier` | `qualifier` is replaced by a build timestamp, so every build is a newer version. |
 | `Bundle-Activator` | Class whose `start`/`stop` OSGi calls (`Activator`). |
 | `Bundle-ActivationPolicy: lazy` | The bundle starts only when one of its classes is first loaded. |
@@ -172,14 +172,14 @@ from an Eclipse *p2 repository* (the `eclipse-repo.url` in the root `pom.xml`) i
 
 | Module | Packaging | Produces |
 |--------|-----------|----------|
-| `plugins/...eclipseneovim` | `eclipse-plugin` | the bundle jar |
+| `plugins/...neovim4eclipse` | `eclipse-plugin` | the bundle jar |
 | `features/...feature` | `eclipse-feature` | a *feature*: the installable unit users see, grouping bundles |
 | `releng/...updatesite` | `eclipse-repository` | a *p2 repository* (an update site) and its ZIP |
 | `tests/unit` | `jar` | plain JUnit tests of the headless code |
 
 p2 is Eclipse's installer. *Help > Install New Software* reads a p2 repository. p2 names a
 feature's installable unit `<feature id>.feature.group`, which is why the installer shows
-`...eclipseneovim.feature.feature.group`.
+`...neovim4eclipse.feature.feature.group`.
 
 ---
 
@@ -270,7 +270,7 @@ therefore sends `nvim_command("qa!")` as a notification and waits for the *proce
 instead. It tells the channel first (`RpcChannel.closing()`), so the end of Neovim's output that
 follows is expected and logged at FINE; the same end without it, Neovim crashing, is a WARNING.
 
-To watch the traffic, set the logger `io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel`
+To watch the traffic, set the logger `io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel`
 to FINEST: every message in and out is logged.
 
 ### 2.4 Attaching as a UI
@@ -281,7 +281,7 @@ Neovim then sends `redraw` notifications describing its screen; this plug-in ign
 the state it needs directly instead. A UI that wanted Neovim's own command line and messages would
 draw them from those events.
 
-`nvim_set_client_info` tells Neovim who is connected (`Eclipse-Neovim` and the bundle version).
+`nvim_set_client_info` tells Neovim who is connected (`neovim4eclipse` and the bundle version).
 `:checkhealth` and `nvim_list_chans()` show it.
 
 ### 2.5 Sending keys: `nvim_input`
@@ -305,7 +305,7 @@ stops there: `StateSync.syncModeAndCursor` asks `isBlocked()` before it requests
 "Pending commands" in ARCHITECTURE.md). Example: after `f` the answer is `{mode = "n", blocking = true}`,
 so no cursor is read; once the target character arrives, the next read publishes the new state. (After
 `d` Neovim is in operator-pending mode, `{mode = "no", blocking = false}`: it still answers requests.) All requests also run on
-one thread (`eclipse-neovim-input`), which keeps keys in order and keeps blocking off the UI thread.
+one thread (`neovim4eclipse-input`), which keeps keys in order and keeps blocking off the UI thread.
 
 A *hit-enter prompt* blocks the same way. `:bufdo %s/a/b/g` typed as keys prints one "N substitutions"
 message per buffer, more than fits, so Neovim asks "Press ENTER" and answers nothing else until a key
@@ -522,12 +522,12 @@ Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
   process (the launching Eclipse's Console view, or the terminal Eclipse was started from).
   Warnings and errors also go to the Error Log view (*Window > Show View > Error Log*), through
   `ErrorLogHandler`. The details (FINE and below) are hidden unless Eclipse starts with
-  `-Declipseneovim.logLevel=FINE` (or `FINER`, `FINEST`; `util/LogLevelSwitch`, and README, "If
+  `-Dneovim4eclipse.logLevel=FINE` (or `FINER`, `FINEST`; `util/LogLevelSwitch`, and README, "If
   `Ctrl-V` does nothing"). `KeyContextDiagnostics` reports which command the workbench resolves for
   `Ctrl+V`; the README lists what its messages mean.
 - **Key bindings**: *Window > Preferences > General > Keys* shows each binding with its context
   ("When"). The *Ctrl Keys* page decides which of this plug-in's letter contexts are active.
-- **Inside Neovim**: `:messages`, `:ls`, `:set option?` all work through the `:` box. `vim.g.eclipse_neovim`
+- **Inside Neovim**: `:messages`, `:ls`, `:set option?` all work through the `:` box. `vim.g.neovim4eclipse`
   is `1` inside the embedded Neovim, so your `init.lua` can tell where it runs.
 - **Neovim side**: start Eclipse with `NVIM_LOG_FILE=/tmp/nvim.log` set to collect Neovim's own log.
 - **Headless reproduction**: the integration tests (`NeovimSessionIntegrationTest`) drive a real

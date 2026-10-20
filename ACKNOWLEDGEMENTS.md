@@ -17,7 +17,7 @@ license does not apply to this project, and no MIT notice needs to be kept here.
 ## Libraries
 
 This library is embedded in the plug-in's `lib/` folder. Its license text and notice ship with the
-plug-in in `plugins/io.github.jm6cnddxbwftaks.eclipseneovim/licenses/` and are linked from its
+plug-in in `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/licenses/` and are linked from its
 `about.html`.
 
 | Library | License |

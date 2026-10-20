@@ -23,8 +23,8 @@ Artifacts:
 ### Install from the local update site
 
 1. *Help → Install New Software… → Add…*, then either
-   - *Archive…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/neovim4eclipse-<version>.zip`, or
-   - *Local…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/repository`
+   - *Archive…* and select `releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-<version>.zip`, or
+   - *Local…* and select `releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/repository`
 2. Choose **Neovim for Eclipse**, finish, restart (the bundle is unsigned: trust it when Eclipse asks; README, "Install", has every step)
 
 ### Unit tests only
@@ -40,7 +40,7 @@ sources and runs JUnit 5. It does **not** need Eclipse or SWT.
 
 ### UI tests
 
-`tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` runs inside a real Eclipse workbench as part of
+`tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` runs inside a real Eclipse workbench as part of
 `./mvnw verify -Pui` (only with the `ui` profile, because the workbench opens a window). It needs a
 display (`xvfb-run -a ./mvnw verify -Pui` on a headless machine) and, for its
 end-to-end tests, `nvim`. Because Maven cannot see that this fragment depends on the plug-in (the
