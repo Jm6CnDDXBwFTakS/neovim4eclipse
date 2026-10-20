@@ -76,18 +76,28 @@ jobs:
       - uses: actions/checkout@v7
       # The build job uploads the ZIP unwrapped (upload-artifact's archive: false), so the artifact
       # is named after the file; download-artifact v8 fetches such a file by that name.
+      # skip-decompress: by default download-artifact unpacks any ZIP it downloads, which would
+      # leave the update site's files in dist/ instead of the ZIP itself (the v0.1.0 tag's first
+      # run failed that way: "no matches found for dist/neovim4eclipse-0.1.0.zip").
       - uses: actions/download-artifact@v8
         with:
           name: neovim4eclipse-${{ needs.version.outputs.version }}.zip
           path: dist
+          skip-decompress: true
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
         # The notes are the version's CHANGELOG.md section, written to a file outside the checkout.
+        # The check lists dist/ when the ZIP is not where expected, so a failure shows what arrived.
         run: |
+          zip="dist/neovim4eclipse-${VERSION}.zip"
+          if [ ! -f "$zip" ]; then
+            echo "::error::$zip not found; dist/ holds:"; ls -lR dist; exit 1
+          fi
+          unzip -l "$zip" | grep -q 'content\.jar$' || { echo "::error::$zip is not the update site"; exit 1; }
           releng/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" \
-            "dist/neovim4eclipse-${VERSION}.zip" \
+            "$zip" \
             --title "Neovim for Eclipse ${VERSION}" \
             --notes-file "$RUNNER_TEMP/notes.md"
