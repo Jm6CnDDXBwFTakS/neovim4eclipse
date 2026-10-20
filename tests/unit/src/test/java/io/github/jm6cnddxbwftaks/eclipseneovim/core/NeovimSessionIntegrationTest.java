@@ -4,12 +4,14 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel;
@@ -269,6 +271,23 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * A shell command that prints several lines ({@code :!dir} on Windows, {@code :!ls} elsewhere)
+     * shows one line per entry: no {@code \r} left from Windows' {@code \r\n}, which the popup
+     * would show as stray {@code ^M} characters or double spacing.
+     */
+    @Test
+    void multiLineShellCommandOutputHasNoCarriageReturns() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> outputs = new CopyOnWriteArrayList<>();
+            s.commandAsync(PlatformUtil.isWindows() ? "!dir" : "!ls -a", outputs::add);
+            waitFor(() -> !outputs.isEmpty(), "the shell command's output");
+            String output = outputs.get(0);
+            assertTrue(output.contains("\n"), "several lines: " + output);
+            assertFalse(output.contains("\r"), "no carriage return: " + output.replace("\r", "\\r"));
+        }
+    }
+
     @Test
     void aTypedRedirKeepsRedirecting() throws Exception {
         try (NeovimSession s = start()) {
@@ -436,6 +455,39 @@ class NeovimSessionIntegrationTest {
                 s.command("echo 1");
             }
             log.assertNothingAtOrAbove(Level.WARNING);
+        }
+    }
+
+    /**
+     * The other side of {@link #aNormalCloseLogsNoWarning}: a Neovim that is killed (a crash, or
+     * ending it in the Task Manager) is still reported as a warning, which reaches the Error Log.
+     * The process is found as a child of this JVM, the only Neovim this test started.
+     */
+    @Test
+    void aKilledNeovimIsLoggedAsAWarning() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            try (NeovimSession s = start()) {
+                s.command("echo 1");
+                List<ProcessHandle> nvims = ProcessHandle.current().children()
+                        .filter(p -> p.info().command().map(c -> c.toLowerCase().contains("nvim")).orElse(false))
+                        .toList();
+                assertEquals(1, nvims.size(), "this test's Neovim: " + nvims);
+                nvims.get(0).destroyForcibly();
+                nvims.get(0).onExit().get(5, TimeUnit.SECONDS);
+                waitFor(() -> !s.isAlive(), "the session to notice");
+                long deadline = System.nanoTime() + 2_000_000_000L; // the reader thread logs on its own
+                while (true) {
+                    try {
+                        log.assertLogged(Level.WARNING, "Neovim exited unexpectedly");
+                        break;
+                    } catch (AssertionError notYet) {
+                        if (System.nanoTime() > deadline) {
+                            throw notYet;
+                        }
+                        Thread.sleep(20);
+                    }
+                }
+            }
         }
     }
 
