@@ -55,9 +55,8 @@ The code follows the plan, with these differences:
   never lost, which is why typing `ihello` in one go in a test did not reproduce it.
 - **The names in the messages:** `[New]` on opening shows the name as typed (`"sub/new.txt" [New]`);
   the written message shows the file name (`"new.txt" [New] 1L, 6B written`).
-- **Not tested:** `:w ++p` for a file outside the workspace in a missing folder (it takes the same
-  path as a workspace file, with `Files.createDirectories`), and the encoding of the byte count for
-  a workspace file with a non-default charset.
+- **Also tested:** `:w ++p` for a file outside the workspace in a missing folder, and the byte count
+  in a non-default encoding (`é` in an ISO-8859-1 project is `1B`, and one byte on disk).
 
 ## 1. Behavior
 

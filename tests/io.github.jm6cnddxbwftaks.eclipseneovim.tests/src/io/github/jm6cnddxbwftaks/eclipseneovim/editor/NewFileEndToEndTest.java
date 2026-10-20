@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 
 import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.waitUntil;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -180,6 +181,58 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             Files.deleteIfExists(outside);
             Files.deleteIfExists(dir);
         }
+    }
+
+    /**
+     * Outside the workspace, a missing folder also needs {@code ++p}, and it is created with
+     * {@code Files.createDirectories}. (If {@code :w} ever fell back to Eclipse's own save here, this
+     * test would hang on the native Save As dialog instead of failing.)
+     */
+    @Test
+    void aMissingFolderOutsideTheWorkspaceNeedsPlusPlusP() throws Exception {
+        Path dir = Files.createTempDirectory("eclipseneovim-e2e").toRealPath();
+        Path sub = dir.resolve("sub");
+        Path outside = sub.resolve("new.txt");
+        try {
+            runInBox(widget, "e " + outside);
+            ITextEditor opened = activeEditorNamed("new.txt");
+            StyledText target = widgetOf(opened);
+            insert(target, "out");
+            expectText(opened, "out");
+
+            runInBox(target, "w");
+            expectMessage(opened, NewFiles.NO_FOLDER);
+            assertFalse(Files.exists(sub), "no folder");
+            assertTrue(opened.isDirty());
+
+            runInBox(target, "w ++p");
+            assertEquals("out", Files.readString(outside, StandardCharsets.UTF_8));
+            assertFalse(opened.isDirty());
+            closeAll();
+        } finally {
+            Files.deleteIfExists(outside);
+            Files.deleteIfExists(sub);
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    /** The written message counts bytes in the file's encoding: é is 1 byte in ISO-8859-1, 2 in UTF-8. */
+    @Test
+    void theWrittenMessageCountsBytesInTheFilesEncoding() throws Exception {
+        project.setDefaultCharset("ISO-8859-1", null);
+        runInBox(widget, "e enc.txt");
+        ITextEditor opened = activeEditorNamed("enc.txt");
+        StyledText target = widgetOf(opened);
+        insert(target, "é");
+        expectText(opened, "é");
+
+        runInBox(target, "w");
+
+        expectMessage(opened, "\"enc.txt\" [New] [noeol] 1L, 1B written");
+        try (var in = project.getFile("enc.txt").getContents(true)) {
+            assertArrayEquals(new byte[] { (byte) 0xE9 }, in.readAllBytes(), "written in ISO-8859-1");
+        }
+        closeAll();
     }
 
     /** No editor is registered for this extension: the Text Editor opens, never an outside program. */
