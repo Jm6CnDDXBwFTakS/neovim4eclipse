@@ -147,16 +147,26 @@ class NvimExecutableTest {
     }
 
     @Test
-    void embedCommandAddsEmbedFlagThenExtraArgs() {
+    void embedCommandAddsEmbedFlagAndGuardThenExtraArgs() {
         String abs = Path.of(System.getProperty("java.io.tmpdir"), "no-such-nvim").toAbsolutePath().toString();
-        assertEquals(List.of(abs, "--embed", "--clean"), NvimExecutable.embedCommand(abs, List.of("--clean")));
+        assertEquals(List.of(abs, "--embed", "--cmd", "let g:eclipse_neovim=1", "--clean"),
+                NvimExecutable.embedCommand(abs, List.of("--clean")));
+    }
+
+    /** One argument on every platform: a space could let a quoting bug split it in two. */
+    @Test
+    void theGuardCommandHasNoSpaces() {
+        String abs = Path.of(System.getProperty("java.io.tmpdir"), "no-such-nvim").toAbsolutePath().toString();
+        String guard = NvimExecutable.embedCommand(abs, null).get(3);
+        assertFalse(guard.contains(" "), guard);
     }
 
     @Test
     void embedCommandSkipsNullAndBlankExtraArgs() {
         String abs = Path.of(System.getProperty("java.io.tmpdir"), "no-such-nvim").toAbsolutePath().toString();
-        assertEquals(List.of(abs, "--embed"), NvimExecutable.embedCommand(abs, null));
-        assertEquals(List.of(abs, "--embed", "-u"),
+        assertEquals(List.of(abs, "--embed", "--cmd", "let g:eclipse_neovim=1"),
+                NvimExecutable.embedCommand(abs, null));
+        assertEquals(List.of(abs, "--embed", "--cmd", "let g:eclipse_neovim=1", "-u"),
                 NvimExecutable.embedCommand(abs, java.util.Arrays.asList(null, " ", "-u")));
     }
 

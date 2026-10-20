@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,8 +39,12 @@ class NeovimSessionIntegrationTest {
     private static final String NVIM = System.getProperty("nvim.path", "nvim");
 
     private static NeovimSession start() throws Exception {
+        return start(List.of("--clean"));
+    }
+
+    private static NeovimSession start(List<String> args) throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
-        return NeovimSession.start(NVIM, List.of("--clean"));
+        return NeovimSession.start(NVIM, args);
     }
 
     @Test
@@ -415,6 +421,27 @@ class NeovimSessionIntegrationTest {
 
             keys(s, "j", "@", ":"); // repeats the last command line on line 3
             assertEquals(List.of("bar", "bar", "bar"), s.getBufferLines());
+        }
+    }
+
+    /**
+     * The user's config sees {@code vim.g.eclipse_neovim} while it runs, before the plug-in's own
+     * setup, and the variable is still set afterwards. The config here only records what it saw.
+     */
+    @Test
+    void theConfigCanTellItRunsInsideEclipse() throws Exception {
+        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        Path config = Files.createTempFile("init", ".lua");
+        try {
+            Files.writeString(config,
+                    "_G.saw = { guard = vim.g.eclipse_neovim, channel = vim.g.eclipse_channel or 'none' }\n");
+            try (NeovimSession s = start(List.of("--clean", "-u", config.toString()))) {
+                assertEquals("1", String.valueOf(s.lua("return _G.saw.guard")));
+                assertEquals("none", s.lua("return _G.saw.channel"), "the plug-in's setup runs after the config");
+                assertEquals("1", String.valueOf(s.lua("return vim.g.eclipse_neovim")));
+            }
+        } finally {
+            Files.deleteIfExists(config);
         }
     }
 

@@ -349,6 +349,45 @@ To keep the log in a file, redirect the console: `eclipsec.exe … 2> neovim.log
 not affected: WARNING and SEVERE lines reach it at every level, even `OFF`. An unknown value is
 ignored, with a warning that lists the valid names.
 
+## Your `init.lua` in Eclipse
+
+The embedded Neovim reads your normal config. Some of it makes sense in a terminal but not inside
+Eclipse: UI plug-ins, language servers, completion. The plug-in starts Neovim with
+`vim.g.eclipse_neovim` set to `1` before any config runs, so your config can skip those parts:
+
+```lua
+-- init.lua
+vim.opt.ignorecase = true          -- shared by terminal Neovim and Eclipse
+
+if vim.g.eclipse_neovim then
+  vim.g.eclipse_ide_keys = 0       -- settings for Eclipse only go here
+  return                           -- the rest is for terminal Neovim only
+end
+
+require('lazy').setup('plugins')
+```
+
+With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.eclipse_neovim`. The
+variable is set with `--cmd`, not in the environment, so a Neovim you start in a `:terminal` inside
+Eclipse does not see it.
+
+The variables starting with `eclipse_` work in two directions:
+
+| Variable | Set by | Meaning |
+|----------|--------|---------|
+| `vim.g.eclipse_neovim` | the plug-in, before your config | this Neovim runs inside Eclipse |
+| `vim.g.eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT` ([docs/KEYS.md](docs/KEYS.md)) |
+| `vim.g.eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
+
+**A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
+the environment variable `NVIM_APPNAME` set, for example to `eclipse-nvim` (Neovim 0.9 or newer).
+Neovim then reads `~/.config/eclipse-nvim/init.lua` (on Windows `%LOCALAPPDATA%\eclipse-nvim\init.lua`)
+instead of your normal one. It also keeps its data apart: installed plug-ins, history, registers
+and marks are not shared with your terminal Neovim. Set it only where Eclipse starts (a small
+script that sets it and then runs Eclipse): set for your whole account, it changes your terminal
+Neovim too, and `eclipse.ini` cannot set environment variables. Every Neovim started inside that
+one, in a `:terminal` too, inherits it.
+
 ## Preferences
 
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
