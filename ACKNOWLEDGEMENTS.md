@@ -16,16 +16,13 @@ license does not apply to this project, and no MIT notice needs to be kept here.
 
 ## Libraries
 
-These libraries are embedded in the plug-in's `lib/` folder. Their license texts ship with the
+This library is embedded in the plug-in's `lib/` folder. Its license text and notice ship with the
 plug-in in `plugins/io.github.jm6cnddxbwftaks.eclipseneovim/licenses/` and are linked from its
 `about.html`.
 
 | Library | License |
 |---------|---------|
-| [neovim-java](https://codeberg.org/neovim-java/neovim-java) | MIT |
 | [msgpack-java](https://github.com/msgpack/msgpack-java) | Apache-2.0 |
-| [Jackson](https://github.com/FasterXML/jackson) | Apache-2.0 |
-| [SLF4J](https://www.slf4j.org/) | MIT |
 
 [Neovim](https://neovim.io/) itself (Apache-2.0 and Vim license) is not embedded; the plug-in
 starts the `nvim` you have installed.

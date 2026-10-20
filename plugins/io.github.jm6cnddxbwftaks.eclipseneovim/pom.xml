@@ -45,52 +45,8 @@
               <overWriteIfNewer>true</overWriteIfNewer>
               <artifactItems>
                 <artifactItem>
-                  <groupId>com.ensarsarajcic.neovim.java</groupId>
-                  <artifactId>neovim-api</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.ensarsarajcic.neovim.java</groupId>
-                  <artifactId>core-rpc</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.ensarsarajcic.neovim.java</groupId>
-                  <artifactId>reactive-core-rpc</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.ensarsarajcic.neovim.java</groupId>
-                  <artifactId>handler-annotations</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.ensarsarajcic.neovim.java</groupId>
-                  <artifactId>neovim-notifications</artifactId>
-                </artifactItem>
-                <artifactItem>
                   <groupId>org.msgpack</groupId>
                   <artifactId>msgpack-core</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.msgpack</groupId>
-                  <artifactId>jackson-dataformat-msgpack</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.fasterxml.jackson.core</groupId>
-                  <artifactId>jackson-databind</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.fasterxml.jackson.core</groupId>
-                  <artifactId>jackson-core</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.fasterxml.jackson.core</groupId>
-                  <artifactId>jackson-annotations</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.slf4j</groupId>
-                  <artifactId>slf4j-api</artifactId>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.slf4j</groupId>
-                  <artifactId>slf4j-simple</artifactId>
                 </artifactItem>
               </artifactItems>
             </configuration>

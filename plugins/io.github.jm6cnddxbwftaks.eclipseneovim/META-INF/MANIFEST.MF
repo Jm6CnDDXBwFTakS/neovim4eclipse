@@ -30,15 +30,4 @@ Export-Package: io.github.jm6cnddxbwftaks.eclipseneovim;x-friends:="io.github.jm
  io.github.jm6cnddxbwftaks.eclipseneovim.sync;x-friends:="io.github.jm6cnddxbwftaks.eclipseneovim.tests",
  io.github.jm6cnddxbwftaks.eclipseneovim.util;x-friends:="io.github.jm6cnddxbwftaks.eclipseneovim.tests"
 Bundle-ClassPath: .,
- lib/neovim-api.jar,
- lib/core-rpc.jar,
- lib/reactive-core-rpc.jar,
- lib/handler-annotations.jar,
- lib/neovim-notifications.jar,
- lib/msgpack-core.jar,
- lib/jackson-dataformat-msgpack.jar,
- lib/jackson-databind.jar,
- lib/jackson-core.jar,
- lib/jackson-annotations.jar,
- lib/slf4j-api.jar,
- lib/slf4j-simple.jar
+ lib/msgpack-core.jar
