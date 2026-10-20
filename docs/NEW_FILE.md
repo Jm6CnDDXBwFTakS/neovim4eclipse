@@ -1,9 +1,9 @@
 # Design note: `:e newfile` opens an empty editor that `:w` creates
 
-Status: **planned**, not implemented. Planned against `develop` at `64c6993`. The experiments used
-Neovim 0.12.4 on Windows 11, and the plug-in's UI test runtime. Decisions made with the maintainer
-are marked *(decided)*. Once the feature is built, add a section *As built* after the summary saying
-where the code differs from this plan and why, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
+Status: **implemented** (four commits after `9fe4804`). Planned against `develop` at `64c6993`. The
+experiments used Neovim 0.12.4 on Windows 11, and the plug-in's UI test runtime. Decisions made with
+the maintainer are marked *(decided)*. The plan below is kept as written; *As built* says where the
+code differs from it and why.
 
 ## Summary
 
@@ -21,6 +21,43 @@ In Vim, `:e new.txt` for a file that does not exist opens an empty buffer named 
   editor for a missing file, which would launch Notepad or a similar program.
 
 Size: about 250 lines of code and 350 of tests, in four commits (section 7).
+
+## As built
+
+The code follows the plan, with these differences:
+
+- **The opening and the creating write are in `editor/NewFiles`**, not in `EclipseFileCommands`,
+  which only calls it (`NewFiles.open`, `NewFiles.save`, `NewFiles.missingFileOf`). The written
+  message is `util/WrittenMessage`.
+- **`:wq` and `:x` are told apart.** The parser gave both the same kind, but only `:wq` writes an
+  untouched new editor (section 1). `HostExCommand` gained `writesUnchanged()`, true for `:w` and
+  `:wq`, false for `:update`, `:x`, `:exit`, and `Ide.save` takes it next to `createFolders`.
+- **A failed write keeps `ZZ` from closing.** Before, `ZZ` closed the editor even when the save
+  failed. Now it closes only after a successful write, as in Vim, so `ZZ` on a new file in a missing
+  folder shows E212 and keeps the text. This also applies to existing files (a read-only file).
+- **`:wa` when a new file cannot be written:** Eclipse's Save All would offer Save As for it, so the
+  other modified editors are then saved one by one instead, and `:wa` reports failure.
+- **An untouched editor's `:w`** creates the empty file, then asks the document provider to
+  synchronize, so Eclipse does not report the file as changed on disk. The UI test switches editors
+  after it and sees no dialog (section 8, second point).
+- **Only outside files opened as `FileStoreEditorInput` count as new files**, the kind `:e` opens.
+  Other inputs without a file, such as an untitled document (File › New › Untitled Text File), keep
+  Eclipse's Save As on `:w`, as before.
+- **The editor choice** also rejects in-place (OLE) editors, not only external ones:
+  `IEditorDescriptor.isInternal()`.
+- **The first key** (section 5): the cause is the text editor's one-time `Validator`, a
+  `VerifyListener` that runs `validateEditorInputState()` on the first typed change and drops the
+  key if the check fails or changes the document or input on the way. For a missing workspace file
+  it does (which of the two was not traced). The controller now runs the check when it attaches to
+  an editor whose workspace file does not exist (`NeovimEditorController.validateNewWorkspaceFile`).
+  Existing files keep Eclipse's timing, because their check may ask the user. The bug only showed
+  when Eclipse types the text; keys typed before insert mode reached Eclipse go to Neovim and were
+  never lost, which is why typing `ihello` in one go in a test did not reproduce it.
+- **The names in the messages:** `[New]` on opening shows the name as typed (`"sub/new.txt" [New]`);
+  the written message shows the file name (`"new.txt" [New] 1L, 6B written`).
+- **Not tested:** `:w ++p` for a file outside the workspace in a missing folder (it takes the same
+  path as a workspace file, with `Files.createDirectories`), and the encoding of the byte count for
+  a workspace file with a non-default charset.
 
 ## 1. Behavior
 

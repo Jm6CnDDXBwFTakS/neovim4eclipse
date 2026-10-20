@@ -33,9 +33,13 @@ import java.util.Set;
  * {@code :w otherfile} saves the current editor and ignores the path; ranges other than
  * {@code %} make a command not a host command.
  *
- * @param argument the text after the command name, as typed (case kept, trimmed); "" if none
+ * @param argument        the text after the command name, as typed (case kept, trimmed); "" if none
+ * @param writesUnchanged whether the command writes even when nothing changed, as Vim's {@code :w}
+ *                        and {@code :wq} do; {@code :update}, {@code :x} and {@code :exit} write only
+ *                        changes. Only a new file's editor uses it (an untouched one still creates
+ *                        the empty file), since Eclipse saves only modified editors
  */
-public record HostExCommand(Kind kind, boolean force, String argument) {
+public record HostExCommand(Kind kind, boolean force, String argument, boolean writesUnchanged) {
 
     public enum Kind {
         /** Not a host command: forward to Neovim. */
@@ -64,7 +68,7 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
         TAB_LAST
     }
 
-    private static final HostExCommand NOT_HOST = new HostExCommand(Kind.NONE, false, "");
+    private static final HostExCommand NOT_HOST = new HostExCommand(Kind.NONE, false, "", false);
 
     /**
      * Every name Eclipse handles, lowercase, with its kind. Each command can be shortened down to
@@ -74,6 +78,8 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
     private static final Map<String, Kind> KINDS = buildKinds();
     /** {@code :tabN[ext]}: matched before lowercasing, because {@code :tabn} means the opposite. */
     private static final Set<String> TAB_PREVIOUS_CAPITAL_N = abbrev("tabN", "tabNext");
+    /** {@code :w[rite]} and {@code :wq}: see {@link #writesUnchanged()}. */
+    private static final Set<String> WRITES_UNCHANGED = union(abbrev("w", "write"), Set.of("wq"));
 
     public HostExCommand {
         argument = argument == null ? "" : argument;
@@ -129,7 +135,8 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
         if (!acceptsArgument(kind, argument)) {
             return NOT_HOST;
         }
-        return kind == Kind.NONE ? NOT_HOST : new HostExCommand(kind, force, argument);
+        boolean writesUnchanged = WRITES_UNCHANGED.contains(name.toLowerCase(Locale.ROOT));
+        return kind == Kind.NONE ? NOT_HOST : new HostExCommand(kind, force, argument, writesUnchanged);
     }
 
     /**
@@ -182,6 +189,12 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
             names.add(full.substring(0, length));
         }
         return Set.copyOf(names);
+    }
+
+    private static Set<String> union(Set<String> a, Set<String> b) {
+        Set<String> all = new HashSet<>(a);
+        all.addAll(b);
+        return Set.copyOf(all);
     }
 
     private static Map<String, Kind> buildKinds() {

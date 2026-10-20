@@ -122,16 +122,6 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    @Test
-    void editOfAMissingFileSaysSoInTheMessageLine() {
-        runInBox(widget, "e nosuchfile.txt");
-
-        waitUntil("the error in the message line", TIMEOUT_MS,
-                () -> messageText(editor).equals("Can't find file \"nosuchfile.txt\"") && messageLineOf(editor).isError(),
-                () -> "; the message line shows " + messageText(editor));
-        assertSame(editor, page().getActiveEditor(), "nothing else opened");
-    }
-
     /**
      * An untitled file (File › New › Untitled Text File) has no folder to look in, so a relative
      * name is not found, even one at the root of a project; an absolute path still opens.

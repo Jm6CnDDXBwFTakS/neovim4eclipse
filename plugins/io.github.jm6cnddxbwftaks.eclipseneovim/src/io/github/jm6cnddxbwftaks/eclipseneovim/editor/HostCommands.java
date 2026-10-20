@@ -52,8 +52,8 @@ public final class HostCommands {
     /** {@link HostCommandRunner.Ide} for one editor: Eclipse's save, close, open and tab switching. */
     private record EditorIde(ITextEditor editor) implements HostCommandRunner.Ide {
         @Override
-        public boolean save(boolean createFolders) {
-            return EclipseFileCommands.save(editor);
+        public boolean save(boolean createFolders, boolean evenIfUnchanged) {
+            return EclipseFileCommands.save(editor, createFolders, evenIfUnchanged);
         }
 
         @Override
@@ -88,14 +88,30 @@ public final class HostCommands {
      * Without Neovim attached to {@code editor}, it goes to the window's status line instead.
      */
     static void showError(ITextEditor editor, String message) {
+        showMessage(editor, message, true);
+    }
+
+    /**
+     * Shows a message in the editor's message line, as an error or as a normal message (such as
+     * {@code "new.txt" [New]}). Without Neovim attached to {@code editor}, it goes to the window's
+     * status line instead.
+     */
+    static void showMessage(ITextEditor editor, String message, boolean error) {
+        if (editor == null) {
+            return;
+        }
         NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
         if (controller != null && controller.getEditor() == editor && !controller.isClosed()) {
-            runOnUi(() -> controller.showMessage(message, true));
+            runOnUi(() -> controller.showMessage(message, error));
             return;
         }
         try {
             IStatusLineManager status = editor.getEditorSite().getActionBars().getStatusLineManager();
-            status.setErrorMessage(message);
+            if (error) {
+                status.setErrorMessage(message);
+            } else {
+                status.setMessage(message);
+            }
         } catch (Exception e) {
             LOG.log(Level.FINE, "Could not show: " + message, e);
         }

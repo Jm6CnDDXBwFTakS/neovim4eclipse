@@ -25,8 +25,8 @@ class HostCommandRunnerTest {
         boolean saveWorks = true;
 
         @Override
-        public boolean save(boolean createFolders) {
-            calls.add(createFolders ? "save ++p" : "save");
+        public boolean save(boolean createFolders, boolean evenIfUnchanged) {
+            calls.add((evenIfUnchanged ? "save" : "update") + (createFolders ? " ++p" : ""));
             return saveWorks;
         }
 
@@ -137,7 +137,19 @@ class HostCommandRunnerTest {
         assertEquals(List.of("save ++p", "close!"), run("wq ++p"));
         ide.calls.clear();
         ide.saveWorks = false; // the folder could not be created
-        assertEquals(List.of("save ++p"), run("x ++p"));
+        assertEquals(List.of("update ++p"), run("x ++p"));
+    }
+
+    /** For a new file's editor: :w and :wq create it even untouched, :up and :x only with changes. */
+    @Test
+    void writeAndWqWriteUnchangedFilesWhileUpdateAndXDoNot() {
+        run("w");
+        run("wq");
+        run("up");
+        run("x");
+        run("exit");
+        assertEquals(List.of("save", "save", "close!", "update", "update", "close!", "update", "close!"),
+                ide.calls);
     }
 
     // ---- :e ----

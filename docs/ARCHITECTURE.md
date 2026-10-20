@@ -243,6 +243,9 @@ to the box, which (via the focus listener in the controller) also deactivates th
 - Pure logic is in `util/CommandLine` (kinds, prefill, parsing) and `util/CommandHistory`, both unit tested;
   host commands are classified by `util/HostExCommand`, turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
+  `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by
+  the file's name, and a write creates the file through the document provider instead of Eclipse's
+  save, which would open Save As (see [NEW_FILE.md](NEW_FILE.md)).
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
   `redir => g:eclipse_neovim_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
@@ -376,7 +379,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
 | Which key goes to Neovim or Eclipse | `core/KeyRouter` (SWT glue: `editor/KeyInterceptor`) | `KeyRouterTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
-| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), UI `HostCommandsTest` (one real path per operation) |
+| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | Tab completion in the `:` box | `util/CommandCompletion` (cycle, stale answers, list line), `util/Completion` (the answer), `core/LuaScripts.COMPLETE_CMDLINE`, `editor/CommandLineBox` | `CommandCompletionTest`, `CompletionTest`, `CommandCompletionIntegrationTest` (real Neovim), `tests/swt` `CommandLineBoxTest`, UI `EditorEndToEndTest` |
