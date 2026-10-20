@@ -124,7 +124,7 @@ public final class NvimExecutable {
      * <h2>Why {@code --cmd}</h2>
      * The user's {@code init.lua} needs a way to skip what does not belong in Eclipse (UI plug-ins,
      * language servers, a {@code 'foldmethod'}), but everything the plug-in sets itself
-     * ({@code g:eclipse_channel}, its mappings) arrives after the config has run. {@code --cmd}
+     * ({@code g:neovim4eclipse_channel}, its mappings) arrives after the config has run. {@code --cmd}
      * runs before any config file, also with {@code --clean} or {@code -u}, so {@link #GUARD_VARIABLE}
      * is there when {@code init.lua} looks. It is a {@code g:} variable rather than an environment
      * variable because Neovim passes its environment on to {@code :terminal} and {@code :!}: a

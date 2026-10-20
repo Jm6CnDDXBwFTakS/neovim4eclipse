@@ -242,7 +242,7 @@ class NeovimSessionIntegrationTest {
     void ideKeysCanBeLeftToNeovim() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
         for (String value : List.of("0", "v:false")) {
-            try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:eclipse_ide_keys = " + value))) {
+            try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:neovim4eclipse_ide_keys = " + value))) {
                 List<IdeAction> actions = new CopyOnWriteArrayList<>();
                 s.addIdeActionListener(actions::add);
                 keys(s, "g", "t"); // Neovim's own gt: there is only one tab page, so nothing happens
@@ -436,7 +436,7 @@ class NeovimSessionIntegrationTest {
         Path config = Files.createTempFile("init", ".lua");
         try {
             Files.writeString(config,
-                    "_G.saw = { guard = vim.g.neovim4eclipse, channel = vim.g.eclipse_channel or 'none' }\n");
+                    "_G.saw = { guard = vim.g.neovim4eclipse, channel = vim.g.neovim4eclipse_channel or 'none' }\n");
             try (NeovimSession s = start(List.of("--clean", "-u", config.toString()))) {
                 assertEquals("1", String.valueOf(s.lua("return _G.saw.guard")));
                 assertEquals("none", s.lua("return _G.saw.channel"), "the plug-in's setup runs after the config");
@@ -456,7 +456,7 @@ class NeovimSessionIntegrationTest {
     @Test
     void neovimKnowsTheClientAndATerminalUi() throws Exception {
         try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean"), ClipboardPort.NONE, "1.2.3.qual")) {
-            Map<?, ?> client = (Map<?, ?>) s.lua("return vim.api.nvim_get_chan_info(vim.g.eclipse_channel).client");
+            Map<?, ?> client = (Map<?, ?>) s.lua("return vim.api.nvim_get_chan_info(vim.g.neovim4eclipse_channel).client");
             assertEquals("neovim4eclipse", client.get("name"));
             assertEquals("remote", client.get("type"));
             assertEquals(Map.of("major", 1L, "minor", 2L, "patch", 3L, "prerelease", "qual"),

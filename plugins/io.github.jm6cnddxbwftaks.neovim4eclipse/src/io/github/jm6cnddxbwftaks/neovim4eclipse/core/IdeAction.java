@@ -13,7 +13,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * {@link NotificationBridge} turns it into this record. Mapping in Neovim (rather than catching the
  * keys in Eclipse) lets Neovim do what it is good at: counts ({@code 3gt}), the {@code g} prefix
  * and {@code timeoutlen}. A user who wants Neovim's own meaning of these keys sets
- * {@code vim.g.eclipse_ide_keys = 0} in {@code init.lua}.
+ * {@code vim.g.neovim4eclipse_ide_keys = 0} in {@code init.lua}.
  *
  * @param name  one of the {@code *} constants below; others are ignored by the editor
  * @param count Vim's count ({@code v:count}): 0 when none was typed

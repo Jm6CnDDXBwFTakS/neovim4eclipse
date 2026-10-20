@@ -384,7 +384,7 @@ Eclipse: UI plug-ins, language servers, completion. The plug-in starts Neovim wi
 vim.opt.ignorecase = true          -- shared by terminal Neovim and Eclipse
 
 if vim.g.neovim4eclipse then
-  vim.g.eclipse_ide_keys = 0       -- settings for Eclipse only go here
+  vim.g.neovim4eclipse_ide_keys = 0       -- settings for Eclipse only go here
   return                           -- the rest is for terminal Neovim only
 end
 
@@ -400,8 +400,8 @@ The variables starting with `eclipse_` work in two directions:
 | Variable | Set by | Meaning |
 |----------|--------|---------|
 | `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
-| `vim.g.eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT` ([docs/KEYS.md](docs/KEYS.md)) |
-| `vim.g.eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
+| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT` ([docs/KEYS.md](docs/KEYS.md)) |
+| `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
 the environment variable `NVIM_APPNAME` set, for example to `eclipse-nvim` (Neovim 0.9 or newer).
