@@ -116,6 +116,27 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Review check Fix 6: in a multi-page editor (here {@link TestMultiPageEditor}, like the POM
+     * editor) the editor tab is the multi-page editor, not the text page Neovim is attached to.
+     * {@code gt} on that page still moves to the next editor tab, with no error in the status line.
+     */
+    @Test
+    void gtInAMultiPageEditorSwitchesToTheNextEditorTab() throws Exception {
+        IFile file = createFile("pom.mpage", "<project/>\n");
+        IEditorPart multiPage = IDE.openEditor(page(), file, true);
+        assertTrue(multiPage instanceof TestMultiPageEditor, "opened in " + multiPage);
+        ITextEditor sourcePage = EditorAttachManager.textEditorOf(multiPage);
+        waitForAttach(sourcePage, "the Source page");
+
+        type(widgetOf(sourcePage), "gt");
+
+        waitUntil("another tab to be active", TIMEOUT_MS, () -> page().getActiveEditor() != multiPage);
+        assertTrue(statusLineTexts(sourcePage).stream().noneMatch(text -> text.contains("tabs")),
+                "no tab error: " + statusLineTexts(sourcePage));
+        page().closeEditor(multiPage, false);
+    }
+
+    /**
      * Neovim's own jump into another open file ({@code 'A} here; {@code Ctrl-O} and {@code :b} work
      * the same way) is followed: Eclipse activates that file's editor and attaches to it, with the
      * caret where Neovim's cursor is. Of two editors on the file, the first one opened is chosen

@@ -15,8 +15,12 @@ import java.util.List;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.jface.action.IContributionManager;
+import org.eclipse.jface.action.StatusLineManager;
+import org.eclipse.jface.action.SubContributionManager;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -221,6 +225,36 @@ abstract class EndToEndTestBase {
      */
     void settle() {
         UiTestSupport.settle(session, TIMEOUT_MS);
+    }
+
+    /**
+     * The texts shown in the workbench window's status line. {@link HostCommands#showError} writes
+     * through the editor's action bars, a {@code SubStatusLineManager}; its parent is the window's
+     * {@link StatusLineManager}, whose control holds the message as a {@link CLabel}.
+     */
+    static List<String> statusLineTexts(ITextEditor target) {
+        IContributionManager manager = target.getEditorSite().getActionBars().getStatusLineManager();
+        while (manager instanceof SubContributionManager sub) {
+            manager = sub.getParent();
+        }
+        List<String> texts = new ArrayList<>();
+        if (manager instanceof StatusLineManager window && window.getControl() != null) {
+            collectLabels(window.getControl(), texts);
+        } else {
+            texts.add("(no status line control: " + manager + ")");
+        }
+        return texts;
+    }
+
+    private static void collectLabels(Control control, List<String> texts) {
+        if (control instanceof CLabel label && label.getText() != null && !label.getText().isEmpty()) {
+            texts.add(label.getText());
+        }
+        if (control instanceof Composite composite) {
+            for (Control child : composite.getChildren()) {
+                collectLabels(child, texts);
+            }
+        }
     }
 
     /** The first {@link Text} below {@code parent}: the {@code :} box, which opens inside the editor. */

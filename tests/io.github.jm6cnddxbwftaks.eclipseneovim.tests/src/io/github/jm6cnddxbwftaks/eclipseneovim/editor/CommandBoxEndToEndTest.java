@@ -14,22 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
-import org.eclipse.jface.action.IContributionManager;
-import org.eclipse.jface.action.StatusLineManager;
-import org.eclipse.jface.action.SubContributionManager;
 import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.custom.StyledText;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
@@ -192,36 +185,6 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         assertNull(untitled.getEditorInput().getAdapter(IFile.class), "an untitled file");
         waitForAttach(untitled, "the untitled file");
         return untitled;
-    }
-
-    /**
-     * The texts shown in the workbench window's status line. {@link HostCommands#showError} writes
-     * through the editor's action bars, a {@code SubStatusLineManager}; its parent is the window's
-     * {@link StatusLineManager}, whose control holds the message as a {@link CLabel}.
-     */
-    private static List<String> statusLineTexts(ITextEditor target) {
-        IContributionManager manager = target.getEditorSite().getActionBars().getStatusLineManager();
-        while (manager instanceof SubContributionManager sub) {
-            manager = sub.getParent();
-        }
-        List<String> texts = new ArrayList<>();
-        if (manager instanceof StatusLineManager window && window.getControl() != null) {
-            collectLabels(window.getControl(), texts);
-        } else {
-            texts.add("(no status line control: " + manager + ")");
-        }
-        return texts;
-    }
-
-    private static void collectLabels(Control control, List<String> texts) {
-        if (control instanceof CLabel label && label.getText() != null && !label.getText().isEmpty()) {
-            texts.add(label.getText());
-        }
-        if (control instanceof Composite composite) {
-            for (Control child : composite.getChildren()) {
-                collectLabels(child, texts);
-            }
-        }
     }
 
     // ---- Fix 10: command names; Fix 7: :e! ----
