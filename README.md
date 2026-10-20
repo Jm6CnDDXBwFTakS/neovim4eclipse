@@ -17,6 +17,8 @@ release process; see [Known limitations](#known-limitations).
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
+- [docs/LOG_LEVEL.md](docs/LOG_LEVEL.md): the plan for one switch that sets the plug-in's log level
+  (not implemented yet).
 - [docs/TAB_COMPLETION.md](docs/TAB_COMPLETION.md): the plan for Tab completion in the `:` command
   line (not implemented yet).
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
@@ -154,7 +156,7 @@ tests/unit/   JUnit 5 tests for util + core (sources come from the plug-in; no c
 features/     feature project (Tycho eclipse-feature)
 releng/       p2 category / update-site (Tycho eclipse-repository), release-notes.sh, formatter
 docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING, RPC_CLIENT,
-              TAB_COMPLETION
+              TAB_COMPLETION, LOG_LEVEL
 .github/      GitHub Actions workflows (build, release), Dependabot, issue templates
 pom.xml       Maven/Tycho parent (aggregator)
 ```
