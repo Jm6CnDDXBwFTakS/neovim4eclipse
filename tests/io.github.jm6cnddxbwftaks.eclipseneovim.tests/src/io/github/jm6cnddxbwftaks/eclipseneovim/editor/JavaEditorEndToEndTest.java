@@ -40,9 +40,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * The checks that need Java tooling: Eclipse's own Java edits (Format, Rename, Organize
- * Imports, a save action, a template) reach Neovim, {@code gd} and {@code K} run
- * Open Declaration and the Javadoc hover, folded imports, and {@code ZQ} in a Java editor.
+ * The end-to-end checks that need Java tooling: Eclipse's own Java edits (Format, Rename, Organize
+ * Imports, a save action, a template) reach Neovim, {@code gd} and {@code K} run Open Declaration
+ * and the Javadoc hover, folded imports, and {@code ZQ} in a Java editor.
  *
  * <p>Runs only with {@code ./mvnw verify -PuiHeavyJava}, which adds the Java development tools to
  * the test Eclipse (see the test module's pom.xml); tagged so that {@code -Pui} leaves it out. JDT is
