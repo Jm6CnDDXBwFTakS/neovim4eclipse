@@ -4,9 +4,9 @@
 
 | OS | Window system | Arch | Neovim binary |
 |----|---------------|--------------|---------------|
-| Linux | GTK | x86_64 | `nvim` on `PATH` |
+| Linux | GTK | x86_64, aarch64 | `nvim` on `PATH` |
 | macOS | Cocoa | x86_64, aarch64 | `nvim` on `PATH` |
-| Windows | Win32 | x86_64 | `nvim.exe` on `PATH` |
+| Windows | Win32 | x86_64, aarch64 | `nvim.exe` on `PATH` |
 
 Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`tests/unit`) run as plain JUnit without Eclipse.
 
