@@ -25,7 +25,7 @@ Artifacts:
 1. *Help → Install New Software… → Add…*, then either
    - *Archive…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/EclipseNeovim-<version>.zip`, or
    - *Local…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/repository`
-2. Choose **Eclipse Neovim**, finish, restart (the bundle is unsigned; accept the warning)
+2. Choose **Eclipse Neovim**, finish, restart (the bundle is unsigned: trust it when Eclipse asks; README, "Install", has every step)
 
 ### Unit tests only
 
