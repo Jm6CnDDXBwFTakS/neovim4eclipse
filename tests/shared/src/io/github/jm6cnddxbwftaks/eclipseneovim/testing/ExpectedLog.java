@@ -28,6 +28,10 @@ import java.util.logging.Logger;
  * }
  * </pre>
  *
+ * <p>By default only what the logger passes at its usual level is captured: INFO and above, so
+ * {@code FINE} details are not. {@link #of(Class, Level)} lowers the level for the block, to check
+ * a {@code FINE} record too ("Response 42 came after its caller stopped waiting; dropped").
+ *
  * <p>Only that one logger is captured, only while the block runs: anything else that logs still
  * prints, so an unexpected warning stays visible. Uses {@code java.util.logging}, which the plug-in
  * logs through. Shared by the test modules (each adds {@code tests/shared/src} as a test source).
@@ -37,6 +41,8 @@ public final class ExpectedLog implements AutoCloseable {
     /** Held so the logger, and the settings changed on it, are not garbage-collected meanwhile. */
     private final Logger logger;
     private final boolean usedParentHandlers;
+    /** The logger's own level before the block; {@code null} means "inherited from its parent". */
+    private final Level usedLevel;
     private final List<LogRecord> records = new ArrayList<>();
     private final Handler handler = new Handler() {
         @Override
@@ -55,16 +61,28 @@ public final class ExpectedLog implements AutoCloseable {
         }
     };
 
-    private ExpectedLog(Logger logger) {
+    private ExpectedLog(Logger logger, Level capture) {
         this.logger = logger;
         this.usedParentHandlers = logger.getUseParentHandlers();
+        this.usedLevel = logger.getLevel();
+        if (capture != null) {
+            logger.setLevel(capture);
+        }
         logger.setUseParentHandlers(false); // not to the console (the root logger's handler)
         logger.addHandler(handler);
     }
 
     /** Starts capturing what {@code type} logs (its logger is named after the class). */
     public static ExpectedLog of(Class<?> type) {
-        return new ExpectedLog(Logger.getLogger(type.getName()));
+        return new ExpectedLog(Logger.getLogger(type.getName()), null);
+    }
+
+    /**
+     * Like {@link #of(Class)}, and also captures the records below INFO down to {@code capture}, for
+     * example {@code Level.FINE}. The logger's level is restored on {@link #close()}.
+     */
+    public static ExpectedLog of(Class<?> type, Level capture) {
+        return new ExpectedLog(Logger.getLogger(type.getName()), capture);
     }
 
     /** Fails unless a record at {@code level} whose message contains {@code messagePart} was logged. */
@@ -104,5 +122,6 @@ public final class ExpectedLog implements AutoCloseable {
     public void close() {
         logger.removeHandler(handler);
         logger.setUseParentHandlers(usedParentHandlers);
+        logger.setLevel(usedLevel);
     }
 }
