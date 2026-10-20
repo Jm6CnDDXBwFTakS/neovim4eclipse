@@ -23,6 +23,8 @@ release process; see [Known limitations](#known-limitations).
   works, and why.
 - [docs/FOLDING.md](docs/FOLDING.md): the plan for folding with `zo`, `zc` and the other `z` commands
   (not implemented yet).
+- [docs/NEW_FILE.md](docs/NEW_FILE.md): the plan for `:e newfile` opening an empty editor that `:w`
+  creates (not implemented yet).
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
   step by step.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
@@ -158,7 +160,7 @@ tests/unit/   JUnit 5 tests for util + core (sources come from the plug-in; no c
 features/     feature project (Tycho eclipse-feature)
 releng/       p2 category / update-site (Tycho eclipse-repository), release-notes.sh, formatter
 docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING, RPC_CLIENT,
-              TAB_COMPLETION, LOG_LEVEL, FOLDING
+              TAB_COMPLETION, LOG_LEVEL, FOLDING, NEW_FILE
 .github/      GitHub Actions workflows (build, release), Dependabot, issue templates
 pom.xml       Maven/Tycho parent (aggregator)
 ```
