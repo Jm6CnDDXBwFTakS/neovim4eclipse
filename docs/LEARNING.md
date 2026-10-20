@@ -247,7 +247,7 @@ finds it; the *response* with that msgid completes the future (with the result, 
 Neovim goes to `Incoming` (`NotificationBridge`, which picks the handler by name with a `switch`),
 and a request gets exactly one answer, an error answer included, because Neovim waits for it.
 
-`NeovimApi` names its 18 methods after Neovim's functions (`bufSetLines` is `nvim_buf_set_lines`)
+`NeovimApi` names its 17 methods after Neovim's functions (`bufSetLines` is `nvim_buf_set_lines`)
 and passes buffers and windows as plain `Handle(kind, id)` records. It used to be implemented with
 the neovim-java library; the plug-in's own client replaced it by the *strangler* pattern: put your
 own interface in front of the library, move every caller to it, write a second implementation, check

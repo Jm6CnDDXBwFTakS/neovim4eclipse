@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–8 (the plug-in runs on its own client, and embeds msgpack-core only). Left: step 9.
+Status: **done** (option A, steps 1–9). The plug-in runs on its own msgpack-rpc client and embeds msgpack-core only.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -313,7 +313,9 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
 9. **Cursor calls on window 0.** `NeovimSession.getCursor` and `setCursor` first ask
    `nvim_get_current_win` and then pass that window; Neovim's window functions accept `0` for the
    current window, so `winGetCursor(Handle.window(0))` saves one round trip per call. A one-line
-   behavior change, kept out of the refactoring steps on purpose.
+   behavior change, kept out of the refactoring steps on purpose. *Done.* As built: the constant
+   `Handle.CURRENT_WINDOW`; `getCurrentWin` (`nvim_get_current_win`) had no other caller and left
+   `NeovimApi`, which now has 17 methods.
 
 Steps 1–3 are worth doing even if the rest is never done: they confine neovim-java to two classes.
 

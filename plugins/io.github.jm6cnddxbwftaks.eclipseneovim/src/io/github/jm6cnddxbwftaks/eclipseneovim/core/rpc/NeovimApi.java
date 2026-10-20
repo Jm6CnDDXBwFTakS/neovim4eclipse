@@ -90,9 +90,6 @@ public interface NeovimApi {
     /** {@code nvim_set_current_buf(buffer)}: shows {@code buffer} in the current window. */
     CompletableFuture<Void> setCurrentBuf(Handle buffer);
 
-    /** {@code nvim_get_current_win()}: the current window. */
-    CompletableFuture<Handle> getCurrentWin();
-
     /**
      * {@code nvim_buf_attach(buffer, send_buffer, {})}: from now on Neovim sends an
      * {@code nvim_buf_lines_event} notification for every change to {@code buffer}; with
