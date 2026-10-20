@@ -38,4 +38,16 @@
       </hyperlinkDetector>
    </extension>
 
+   <!-- A stand-in for a multi-page editor such as the POM editor (a text page and a page without
+        text), for the tab commands in such an editor. Only test files have the extension mpage. -->
+   <extension point="org.eclipse.ui.editors">
+      <editor
+            id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.multiPageEditor"
+            name="Eclipse Neovim tests: multi-page editor"
+            class="io.github.jm6cnddxbwftaks.eclipseneovim.editor.TestMultiPageEditor"
+            extensions="mpage"
+            default="true">
+      </editor>
+   </extension>
+
 </fragment>
