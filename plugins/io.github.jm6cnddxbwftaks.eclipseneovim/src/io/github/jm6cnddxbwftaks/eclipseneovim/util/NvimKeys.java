@@ -42,6 +42,19 @@ public final class NvimKeys {
         return ARGUMENT_COMMANDS.indexOf(c) >= 0;
     }
 
+    /**
+     * Whether {@code key}, typed after {@code q}, starts a recording: a register Vim records into
+     * ({@code a}-{@code z}, {@code A}-{@code Z} to append, {@code 0}-{@code 9}, {@code "}). Any other key
+     * starts none: {@code q:} opens the command-line window, {@code q<Esc>} does nothing.
+     */
+    public static boolean isRecordingRegister(String key) {
+        if (key == null || key.length() != 1) {
+            return false;
+        }
+        char c = key.charAt(0);
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '"';
+    }
+
     /** Text with {@code <} escaped as {@code <lt>}, so that {@code nvim_input} types it literally. */
     public static String escapeLiteral(String text) {
         return text.replace("<", "<lt>");

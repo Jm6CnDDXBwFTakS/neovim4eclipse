@@ -80,7 +80,12 @@ public final class KeyRouter {
          * reach Neovim instead of opening the prompt. Tracked here as well as in the session because
          * keys can arrive faster than Neovim's answer about its state.
          */
-        ARGUMENT
+        ARGUMENT,
+        /**
+         * A {@code q} that starts a recording: like {@link #ARGUMENT}, and if the next key names a
+         * register ({@code qa}), a recording has begun ({@link #recordingByKeys}).
+         */
+        REGISTER
     }
 
     private final Neovim neovim;
@@ -91,6 +96,14 @@ public final class KeyRouter {
     /** Whether a {@code Ctrl+letter} goes to Neovim; letters it rejects are left to Eclipse. */
     private volatile Predicate<Character> ctrlKeyFilter = letter -> true;
     private volatile Pending pending = Pending.NONE;
+    /**
+     * Whether a macro is being recorded, as far as the keys routed here tell, or {@code null} once
+     * Neovim has caught up ({@link #isRecording()}). The session learns it from Neovim after each key,
+     * which can be later than the next key: in {@code qaA;<Esc>jq:} typed quickly, the session may still
+     * say "not recording" when the second {@code q} arrives, which would then wait for a register and
+     * send the {@code :} to Neovim instead of opening the prompt.
+     */
+    private volatile Boolean recordingByKeys;
 
     public KeyRouter(Neovim neovim) {
         this.neovim = neovim;
@@ -122,6 +135,7 @@ public final class KeyRouter {
     /** Forget a half-typed command; called when a key reaches Neovim by another route (Ctrl-key bindings). */
     public void reset() {
         pending = Pending.NONE;
+        recordingByKeys = null; // that key may have started or stopped a recording: ask Neovim again
     }
 
     /**
@@ -155,7 +169,10 @@ public final class KeyRouter {
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }
 
-        if (pending == Pending.ARGUMENT || neovim.isWaitingForArgument()) {
+        if (pending == Pending.ARGUMENT || pending == Pending.REGISTER || neovim.isWaitingForArgument()) {
+            if (pending == Pending.REGISTER && NvimKeys.isRecordingRegister(nvimKey)) {
+                recordingByKeys = true;
+            }
             pending = Pending.NONE;
             neovim.inputAsync(nvimKey); // the argument of f/F/t/T/r/@/m/'/`/"/q, whatever the key is
             return true;
@@ -180,9 +197,31 @@ public final class KeyRouter {
             return false; // the user gave this Ctrl key to Eclipse (Window > Preferences > Neovim > Ctrl Keys)
         }
 
-        pending = NvimKeys.takesArgument(nvimKey, neovim.isRecording()) ? Pending.ARGUMENT : Pending.NONE;
+        boolean recording = isRecording();
+        if ("q".equals(nvimKey) && recording) {
+            recordingByKeys = false; // this q stops the recording
+            pending = Pending.NONE;
+        } else if ("q".equals(nvimKey)) {
+            pending = Pending.REGISTER;
+        } else {
+            pending = NvimKeys.takesArgument(nvimKey, recording) ? Pending.ARGUMENT : Pending.NONE;
+        }
         neovim.inputAsync(nvimKey);
         return true;
+    }
+
+    /**
+     * Whether a macro is being recorded: what the keys routed here say until the session's answer
+     * from Neovim agrees with it, then the session's answer.
+     */
+    private boolean isRecording() {
+        Boolean byKeys = recordingByKeys;
+        boolean reported = neovim.isRecording();
+        if (byKeys == null || byKeys == reported) {
+            recordingByKeys = null; // Neovim has caught up
+            return reported;
+        }
+        return byKeys;
     }
 
     private static boolean isPromptKey(String nvimKey) {

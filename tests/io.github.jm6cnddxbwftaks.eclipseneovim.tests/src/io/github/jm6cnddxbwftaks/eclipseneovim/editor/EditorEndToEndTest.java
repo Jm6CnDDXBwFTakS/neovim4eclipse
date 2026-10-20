@@ -655,6 +655,19 @@ class EditorEndToEndTest extends EndToEndTestBase {
     /**
      * The {@code q} that stops a recording takes no register, so the {@code :} right after it opens
      * the box, and the recorded macro then plays back.
+     *
+     * <p>The keys are typed faster than Neovim reports its state: "normal mode" is already true before
+     * {@code ggqaA;<Esc>} is processed, so {@code jq} arrives while the session still says "not
+     * recording". {@code KeyRouter} therefore tracks the recording from the keys it routed; before it
+     * did, this test failed whenever it ran with the rest of the class.
+     *
+     * <p>Known rare failure (2026-10-20): after that fix it failed once in 32 runs, the first full
+     * {@code -Pui} build, with the same symptom (the {@code :} reached Neovim, mode {@code c}). A trace
+     * of every routing decision did not catch it again in 31 runs, so the cause is unknown; one
+     * guess is that the build used classes compiled before the fix. If it fails again, the failure
+     * message gives Neovim's mode; trace {@code KeyRouter.route} (key, pending state, recording by keys
+     * and as reported, waiting for an argument), kept in memory and printed only in the failure
+     * message, since printing every key may change the timing.
      */
     @Test
     void afterRecordingAMacroColonOpensTheBoxAndTheMacroPlaysBack() {
@@ -666,7 +679,8 @@ class EditorEndToEndTest extends EndToEndTestBase {
         waitUntil("the recording to stop", TIMEOUT_MS, () -> !session.isRecording());
 
         type(widget, ':');
-        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(widget) != null);
+        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(widget) != null,
+                () -> "; Neovim is in mode " + session.getMode() + " (c: the : went to Neovim)");
         Text box = textChildOf(widget);
         Event escape = new Event();
         escape.keyCode = SWT.ESC;
