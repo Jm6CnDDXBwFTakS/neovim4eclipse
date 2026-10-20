@@ -5,9 +5,6 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import java.util.List;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
-
 /**
  * Reads the answer of {@link LuaScripts#STATE_SNAPSHOT}, the one request made after each key.
  *

@@ -9,8 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
-
 import org.junit.jupiter.api.Test;
 
 /** Parsing of the per-key state snapshot ({@link StateSnapshot}); no Neovim process involved. */
