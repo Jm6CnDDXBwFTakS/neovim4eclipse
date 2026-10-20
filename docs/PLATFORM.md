@@ -54,7 +54,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 1. **Windows path with spaces** — set the preference to a quoted-free absolute path (`C:\Program Files\Neovim\bin\nvim.exe`); `ProcessBuilder` does not use a shell.
 2. **macOS Gatekeeper** — first launch of a Homebrew/nvim binary may need approval.
 3. **Headless CI** — unit tests in `tests/unit` need no GUI; full plugin tests need a display (or Xvfb on Linux).
-4. **RPC EOF on shutdown** — closing sends `:qa!` as a notification and waits for the process to exit (milliseconds); `RpcChannel.closing()` marks the end of the stream as expected, so it is logged at FINE only. A WARNING "Neovim exited unexpectedly" means Neovim really went away during a session (it crashed or was killed); anything Neovim writes to stderr is logged as a WARNING "Neovim stderr: ...".
+4. **RPC EOF on shutdown** — closing sends `:qa!` as a notification and waits for the process to exit (milliseconds); `RpcChannel.closing()` marks the end of the stream as expected, so it is logged at FINE only. A WARNING "Neovim exited unexpectedly" means Neovim really went away during a session (it crashed or was killed); anything Neovim writes to stderr is logged as a WARNING "Neovim stderr: ...". On Windows, `nvim --embed` passes nothing on to that stderr pipe (Neovim 0.12, tried with its own writes and with a child process's), so nothing is logged there; diagnose with Neovim's own log (`:help $NVIM_LOG_FILE`) instead.
 
 ## Quick verification
 

@@ -17,6 +17,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.PlatformUtil;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -441,6 +442,10 @@ class NeovimSessionIntegrationTest {
     /**
      * Neovim's stderr is kept apart from the MessagePack on stdout: a line written there is logged,
      * and the session goes on (merged into stdout, it would have broken the stream).
+     *
+     * <p>On Windows only the second half is checked: there {@code nvim --embed} delivers nothing to
+     * the stderr pipe (not its own writes, not even a child's {@code echo x 1>&2}), so there is no
+     * line to log. {@code nvim --headless} without {@code --embed} does deliver it.
      */
     @Test
     void neovimsStderrIsLoggedAndDoesNotBreakTheSession() throws Exception {
@@ -449,6 +454,9 @@ class NeovimSessionIntegrationTest {
                         List.of("--clean", "--cmd", "lua io.stderr:write('stray text\\n')"))) {
             s.setBufferLines(List.of("still here"));
             assertEquals(List.of("still here"), s.getBufferLines());
+            if (PlatformUtil.isWindows()) {
+                return;
+            }
             long deadline = System.nanoTime() + 2_000_000_000L; // the stderr thread logs on its own
             while (true) {
                 try {
