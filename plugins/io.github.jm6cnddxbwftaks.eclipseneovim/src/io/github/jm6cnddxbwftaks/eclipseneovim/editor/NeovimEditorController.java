@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
@@ -21,6 +22,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.ITextEditorExtension2;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
@@ -162,6 +164,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addIdeActionListener(ideActionListener);
 
         modeStatus.addTo(editor.getEditorSite());
+        validateNewWorkspaceFile(editor);
 
         int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offsets.caretModelOffset());
 
@@ -169,6 +172,30 @@ public final class NeovimEditorController implements AutoCloseable {
 
         onModeChanged(session.getMode());
         LOG.fine("Attached Neovim to editor: " + editor.getTitle());
+    }
+
+    /**
+     * Runs Eclipse's check "may this file be edited?" now, for a workspace file that does not exist
+     * yet ({@code :e new.txt}), instead of on the first typed key.
+     *
+     * <p>Why: a text editor checks its file once, on the first change typed into the widget (a
+     * {@code VerifyListener} in {@code AbstractTextEditor} that calls
+     * {@link ITextEditorExtension2#validateEditorInputState()}). That listener drops the key when
+     * the check fails or changes the document or input on the way. For a workspace file that does
+     * not exist it does so (which of the two was not traced): {@code ihello} typed by Eclipse gave
+     * {@code ello}. Checked here, before any key, nothing is lost. Existing files keep Eclipse's usual timing, since their check may ask the user (a
+     * read-only file, a team provider's checkout), which should happen when they start typing, not
+     * when the editor opens. Files outside the workspace were not affected.
+     */
+    private static void validateNewWorkspaceFile(ITextEditor editor) {
+        IFile file = editor.getEditorInput() == null ? null : editor.getEditorInput().getAdapter(IFile.class);
+        if (file != null && !file.exists() && editor instanceof ITextEditorExtension2 extension) {
+            try {
+                extension.validateEditorInputState();
+            } catch (RuntimeException e) {
+                LOG.log(Level.FINE, "Could not validate the new file " + file, e);
+            }
+        }
     }
 
     /**
