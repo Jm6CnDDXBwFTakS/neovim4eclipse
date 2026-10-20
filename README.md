@@ -95,11 +95,6 @@ are needed to [install](#install) it.
 3. Open `META-INF/MANIFEST.MF` → *Launch an Eclipse application*. See [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md).
 4. Open a text file; Neovim attaches automatically (or press `Ctrl+Shift+N`, *Neovim: Attach to Active Editor*).
 
-> **Upgrading from the old `com.example.eclipsseneovim` id?** The bundle, packages, command/context ids and
-> preference node were renamed to `io.github.jm6cnddxbwftaks.eclipseneovim`. Remove the old projects from your
-> workspace and import the renamed ones, and delete any old *Run Configuration* that lists the old bundle.
-> Stored preferences (executable path, toolbar toggle) were under the old id and must be set again.
-
 Things to try: `hjkl`, `diw`, `ci"`, `dd`, `u`, `v` + motion, `i … Esc`, `:` then `%s/foo/bar/g`, `/pattern`.
 
 ## Build and test
