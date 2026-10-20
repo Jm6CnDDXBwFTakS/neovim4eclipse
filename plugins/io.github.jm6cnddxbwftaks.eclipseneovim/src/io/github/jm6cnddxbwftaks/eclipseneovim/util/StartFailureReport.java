@@ -55,7 +55,7 @@ public final class StartFailureReport {
      * The text of the notice. For example, with {@code nvim} not installed:
      *
      * <pre>
-     * Eclipse Neovim could not start Neovim, so editors keep their normal Eclipse keys.
+     * Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.
      *
      * Executable: nvim
      * Error: Cannot run program "nvim": error=2, No such file or directory
@@ -67,7 +67,7 @@ public final class StartFailureReport {
      * @param error      why the start failed; its innermost cause is shown ({@link #rootMessage})
      */
     public static String message(String executable, Throwable error) {
-        return "Eclipse Neovim could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
+        return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"
                 + "Install Neovim, or set the full path to nvim on the Neovim preference page. "

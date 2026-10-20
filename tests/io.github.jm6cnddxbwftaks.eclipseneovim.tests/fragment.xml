@@ -8,14 +8,14 @@
    <extension point="org.eclipse.ui.contexts">
       <context
             id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.context.unhandledF3"
-            name="Eclipse Neovim tests: F3 without a handler"
+            name="Neovim for Eclipse tests: F3 without a handler"
             parentId="org.eclipse.ui.textEditorScope">
       </context>
    </extension>
    <extension point="org.eclipse.ui.commands">
       <command
             id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.commands.unhandledF3"
-            name="Eclipse Neovim tests: F3 without a handler">
+            name="Neovim for Eclipse tests: F3 without a handler">
       </command>
    </extension>
    <extension point="org.eclipse.ui.bindings">
@@ -32,7 +32,7 @@
    <extension point="org.eclipse.ui.workbench.texteditor.hyperlinkDetectors">
       <hyperlinkDetector
             id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.hyperlinkDetector"
-            name="Eclipse Neovim tests: LINKME"
+            name="Neovim for Eclipse tests: LINKME"
             class="io.github.jm6cnddxbwftaks.eclipseneovim.editor.TestHyperlinkDetector"
             targetId="org.eclipse.ui.genericeditor.GenericEditor">
       </hyperlinkDetector>
@@ -43,7 +43,7 @@
    <extension point="org.eclipse.ui.editors">
       <editor
             id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.multiPageEditor"
-            name="Eclipse Neovim tests: multi-page editor"
+            name="Neovim for Eclipse tests: multi-page editor"
             class="io.github.jm6cnddxbwftaks.eclipseneovim.editor.TestMultiPageEditor"
             extensions="mpage"
             default="true">

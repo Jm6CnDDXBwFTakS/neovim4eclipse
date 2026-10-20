@@ -8,7 +8,7 @@
 
   <parent>
     <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
-    <artifactId>EclipseNeovim</artifactId>
+    <artifactId>neovim4eclipse</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
@@ -16,7 +16,7 @@
   <artifactId>io.github.jm6cnddxbwftaks.eclipseneovim</artifactId>
   <packaging>eclipse-plugin</packaging>
 
-  <name>Eclipse Neovim Plug-in</name>
+  <name>Neovim for Eclipse Plug-in</name>
 
   <build>
     <plugins>

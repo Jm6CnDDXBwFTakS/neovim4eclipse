@@ -11,7 +11,7 @@
 #               the version, and reads the version from the tag.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
 #               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
-#               EclipseNeovim-<version>.zip as an artifact of this run.
+#               neovim4eclipse-<version>.zip as an artifact of this run.
 #   3. publish: downloads that ZIP and creates the GitHub Release, with the version's CHANGELOG.md
 #               section as its notes.
 name: Release
@@ -78,7 +78,7 @@ jobs:
       # is named after the file; download-artifact v8 fetches such a file by that name.
       - uses: actions/download-artifact@v8
         with:
-          name: EclipseNeovim-${{ needs.version.outputs.version }}.zip
+          name: neovim4eclipse-${{ needs.version.outputs.version }}.zip
           path: dist
       - name: Publish release
         env:
@@ -88,6 +88,6 @@ jobs:
         run: |
           releng/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" \
-            "dist/EclipseNeovim-${VERSION}.zip" \
-            --title "Eclipse Neovim ${VERSION}" \
+            "dist/neovim4eclipse-${VERSION}.zip" \
+            --title "Neovim for Eclipse ${VERSION}" \
             --notes-file "$RUNNER_TEMP/notes.md"

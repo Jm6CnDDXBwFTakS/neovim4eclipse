@@ -1,10 +1,10 @@
 # Changelog
 
-What changed in each release of Eclipse Neovim, newest first, for people who install it. The format
-follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): each release has a section, and
-inside it the groups *Added*, *Changed*, *Deprecated*, *Removed*, *Fixed* and *Security*, as needed.
-Version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); before 1.0.0, a
-minor version (0.2.0) may change behavior.
+What changed in each release of Neovim for Eclipse, newest first, for people who install it. The
+format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): each release has a section,
+and inside it the groups *Added*, *Changed*, *Deprecated*, *Removed*, *Fixed* and *Security*, as
+needed. Version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); before
+1.0.0, a minor version (0.2.0) may change behavior.
 
 New entries go under **Unreleased** with the change that makes them. A release renames that heading
 to the version and date, and the release workflow publishes that section as the release notes: it
@@ -12,7 +12,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
-The first release. Eclipse Neovim embeds a real Neovim (`nvim --embed`) in Eclipse text editors:
+The first release. Neovim for Eclipse embeds a real Neovim (`nvim --embed`) in Eclipse text editors:
 Neovim does the editing, Eclipse keeps the files, the rendering and its own tools.
 
 ### Added

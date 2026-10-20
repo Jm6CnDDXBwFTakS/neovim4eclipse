@@ -24,15 +24,15 @@
        Sources under test come from the plug-in project; there is no second copy. -->
   <parent>
     <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
-    <artifactId>EclipseNeovim</artifactId>
+    <artifactId>neovim4eclipse</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
-  <artifactId>eclipse-neovim-text-tests</artifactId>
+  <artifactId>neovim4eclipse-text-tests</artifactId>
   <packaging>jar</packaging>
 
-  <name>Eclipse Neovim Text-Model Tests</name>
+  <name>Neovim for Eclipse Text-Model Tests</name>
   <description>
     Tests of sync/ and editor/ code that uses Eclipse's text model (org.eclipse.text) but no
     widgets: plain JUnit, no workbench, no display.
