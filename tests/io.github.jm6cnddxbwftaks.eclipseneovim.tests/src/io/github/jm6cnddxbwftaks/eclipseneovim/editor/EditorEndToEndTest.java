@@ -24,12 +24,14 @@ import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.link.LinkedModeModel;
 import org.eclipse.jface.text.link.LinkedPosition;
 import org.eclipse.jface.text.link.LinkedPositionGroup;
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
@@ -647,6 +649,77 @@ class EditorEndToEndTest {
         } finally {
             contexts.deactivateContext(activation);
         }
+    }
+
+    /**
+     * The Generic Editor binds F3 to Open Hyperlink, how Language Server files go to a definition.
+     * {@code gd} runs it only where a link is under the caret (here {@link TestHyperlinkDetector}'s
+     * LINKME); on any other word it is Neovim's own, as in the plain Text Editor.
+     */
+    @Test
+    void gdInTheGenericEditorOpensALinkOnlyWhereThereIsOne() throws Exception {
+        IFile file = project.getFile("generic.txt");
+        // Offsets: "word" at 2 and 14, LINKME at 7. None is 0, where the caret starts, so each wait
+        // below can only be met by the step before it.
+        file.create(new ByteArrayInputStream("a word LINKME\nword\n".getBytes(StandardCharsets.UTF_8)), true, null);
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor generic = (ITextEditor) IDE.openEditor(page, file, "org.eclipse.ui.genericeditor.GenericEditor", true);
+        try {
+            waitForAttach(generic, "generic.txt in the Generic Editor");
+            assertEquals("org.eclipse.ui.edit.text.open.hyperlink", KeyBindings.commandIdFor("F3"));
+            StyledText genericWidget = widgetOf(generic);
+            int openedBefore = TestHyperlinkDetector.OPENED.get();
+            // Open Hyperlink where there is none shows a modal dialog ("Select a hyperlink target"),
+            // which would block the test; close any such dialog, and fail below.
+            List<String> dialogs = closeModalDialogsWhile(genericWidget);
+
+            type(genericWidget, "G"); // on the second "word": no link there
+            waitUntil("the caret on the second word", TIMEOUT_MS, () -> genericWidget.getCaretOffset() == 14,
+                    () -> "; caret " + genericWidget.getCaretOffset());
+            type(genericWidget, "gd");
+            waitUntil("Neovim's gd: the caret on the first word", TIMEOUT_MS, () -> genericWidget.getCaretOffset() == 2,
+                    () -> "; caret " + genericWidget.getCaretOffset() + ", dialogs " + dialogs);
+            assertEquals(openedBefore, TestHyperlinkDetector.OPENED.get(), "no link was opened");
+            assertEquals(List.of(), dialogs, "no dialog");
+
+            type(genericWidget, "w"); // on LINKME; Neovim's cursor followed its own gd
+            waitUntil("the caret on LINKME", TIMEOUT_MS, () -> genericWidget.getCaretOffset() == 7,
+                    () -> "; caret " + genericWidget.getCaretOffset());
+            type(genericWidget, "gd");
+            waitUntil("the LINKME link opened", TIMEOUT_MS, () -> TestHyperlinkDetector.OPENED.get() == openedBefore + 1);
+            assertEquals(List.of(), dialogs, "no dialog");
+        } finally {
+            page.closeEditor(generic, false);
+        }
+    }
+
+    /**
+     * While {@code control} exists, closes every modal dialog that opens and returns their titles. A
+     * timer keeps running inside a dialog's own event loop, so this also ends a dialog that would
+     * otherwise block the test forever.
+     */
+    private static List<String> closeModalDialogsWhile(Control control) {
+        Shell owner = control.getShell();
+        Display display = Display.getCurrent();
+        List<String> titles = new ArrayList<>();
+        int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
+        Runnable check = new Runnable() {
+            @Override
+            public void run() {
+                if (control.isDisposed()) {
+                    return;
+                }
+                for (Shell shell : display.getShells()) {
+                    if (shell != owner && shell.isVisible() && (shell.getStyle() & modal) != 0) {
+                        titles.add(shell.getText());
+                        shell.close();
+                    }
+                }
+                display.timerExec(200, this);
+            }
+        };
+        display.timerExec(200, check);
+        return titles;
     }
 
     @Test

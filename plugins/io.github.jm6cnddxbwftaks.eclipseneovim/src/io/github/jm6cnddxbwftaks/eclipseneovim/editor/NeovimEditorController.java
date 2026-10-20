@@ -303,7 +303,8 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         HostCommands.runOnUi(() -> {
             if (!closed && !styledText.isDisposed()) {
-                IdeActions.run(action, editor, () -> session.normalAsync("gd"));
+                IdeActions.run(action, editor, viewerOf(editor), offsets.caretModelOffset(),
+                        () -> session.normalAsync("gd"));
             }
         });
     }
