@@ -112,7 +112,24 @@ public final class NvimExecutable {
     }
 
     /**
-     * Builds {@code <nvim> --embed [extraArgs...]}. Null/blank extra args are skipped.
+     * The global variable that tells the user's config it runs inside Eclipse:
+     * {@code if vim.g.eclipse_neovim then ... end} in {@code init.lua}.
+     */
+    public static final String GUARD_VARIABLE = "eclipse_neovim";
+
+    /**
+     * Builds {@code <nvim> --embed --cmd let g:eclipse_neovim=1 [extraArgs...]}. Null/blank extra
+     * args are skipped.
+     *
+     * <h2>Why {@code --cmd}</h2>
+     * The user's {@code init.lua} needs a way to skip what does not belong in Eclipse (UI plug-ins,
+     * language servers, a {@code 'foldmethod'}), but everything the plug-in sets itself
+     * ({@code g:eclipse_channel}, its mappings) arrives after the config has run. {@code --cmd}
+     * runs before any config file, also with {@code --clean} or {@code -u}, so {@link #GUARD_VARIABLE}
+     * is there when {@code init.lua} looks. It is a {@code g:} variable rather than an environment
+     * variable because Neovim passes its environment on to {@code :terminal} and {@code :!}: a
+     * Neovim started in a terminal inside Eclipse would think it was embedded too. The command has
+     * no spaces, so no platform's argument quoting can split it.
      *
      * @param configured preference path or command name
      * @param extraArgs  optional extra arguments, e.g. {@code --clean}; may be {@code null}
@@ -121,6 +138,8 @@ public final class NvimExecutable {
         List<String> cmd = new ArrayList<>();
         cmd.add(resolve(configured));
         cmd.add("--embed");
+        cmd.add("--cmd");
+        cmd.add("let g:" + GUARD_VARIABLE + "=1");
         if (extraArgs != null) {
             for (String arg : extraArgs) {
                 if (arg != null && !arg.isBlank()) {

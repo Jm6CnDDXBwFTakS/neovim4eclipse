@@ -19,6 +19,8 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
 
 - Normal, visual and operator-pending mode run in Neovim: motions, text objects, operators, counts,
   registers, marks, undo, and your own `init.lua`.
+- `vim.g.eclipse_neovim` is set before your config runs, so `init.lua` can leave out what does not
+  belong in Eclipse (`if vim.g.eclipse_neovim then ... end`).
 - Insert and replace mode type in Eclipse, so content assist and input methods (IME) keep working;
   `.` repeats the inserted text as in Vim. One `Esc` leaves insert mode also when Eclipse takes it
   first, to leave linked editing (a Java rename, a template's fields) or close the completion popup.

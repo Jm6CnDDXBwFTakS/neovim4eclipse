@@ -384,6 +384,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Line/range/diff conversion | `util/LineTextUtil`, `LineRangeEdit`, `TextDiff` | matching `*Test` classes |
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |
+| Command line that starts Neovim, with `vim.g.eclipse_neovim` for the user's config | `util/NvimExecutable` | `NvimExecutableTest`, `NeovimSessionIntegrationTest` |
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
 | Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
