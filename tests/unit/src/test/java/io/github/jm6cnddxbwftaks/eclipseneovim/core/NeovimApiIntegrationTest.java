@@ -19,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.Mode;
@@ -175,15 +176,17 @@ class NeovimApiIntegrationTest {
     }
 
     /**
-     * Neovim resolves symbolic links in the directory of the name: on macOS {@code /tmp} is a link
-     * to {@code /private/tmp}, so the buffer is named {@code /private/tmp/contract-test.txt}.
+     * The name is in a temporary folder that exists on every system ({@code /tmp} does not on
+     * Windows), given with its links already resolved: Neovim resolves links in the directory of a
+     * name (on macOS the temporary folder under {@code /var} is really under {@code /private/var}),
+     * and Windows can report the folder with a short {@code RUNNER~1} part, which resolving expands.
      */
     @Test
-    void bufSetNameNamesTheBuffer() throws Exception {
+    void bufSetNameNamesTheBuffer(@TempDir Path dir) throws Exception {
         Handle buffer = await(api.createBuf(true, true));
-        await(api.bufSetName(buffer, "/tmp/contract-test.txt"));
-        String expected = Path.of("/tmp").toRealPath().resolve("contract-test.txt").toString();
-        assertEquals(expected, lua("return vim.api.nvim_buf_get_name(" + buffer.id() + ")"));
+        String name = dir.toRealPath().resolve("contract-test.txt").toString();
+        await(api.bufSetName(buffer, name));
+        assertEquals(name, lua("return vim.api.nvim_buf_get_name(" + buffer.id() + ")"));
     }
 
     @Test
