@@ -17,8 +17,8 @@ release process; see [Known limitations](#known-limitations).
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
-- [docs/LOG_LEVEL.md](docs/LOG_LEVEL.md): the plan for one switch that sets the plug-in's log level
-  (not implemented yet).
+- [docs/LOG_LEVEL.md](docs/LOG_LEVEL.md): the one switch that sets the plug-in's log level, and why
+  it is the only one.
 - [docs/TAB_COMPLETION.md](docs/TAB_COMPLETION.md): how Tab completion in the `:` command line
   works, and why.
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
@@ -318,32 +318,34 @@ The first three lines are written when Neovim mode turns on in an editor, not wh
 | `Ctrl-key command ran but there is nothing to send to` | WARNING | the binding fired but no editor is attached (the line names the command and key) |
 
 FINE lines are hidden by default. To show them (and the plug-in's other details, such as each
-attach and detach):
+attach and detach), start Eclipse with the JVM system property `-Declipseneovim.logLevel=FINE`.
+It takes the `java.util.logging` level names, in any case: `OFF`, `SEVERE`, `WARNING`, `INFO`,
+`CONFIG`, `FINE`, `FINER`, `FINEST`, `ALL`. The plug-in's lines then go to the console, one per line:
 
-1. Create a file, for example `vim-logging.properties`:
-
-   ```properties
-   handlers = java.util.logging.ConsoleHandler
-   java.util.logging.ConsoleHandler.level = FINE
-   io.github.jm6cnddxbwftaks.eclipseneovim.level = FINE
-   ```
-
-2. Add `-Djava.util.logging.config.file=/path/to/vim-logging.properties` on its own line after
-   `-vmargs` in `eclipse.ini` (for a runtime Eclipse: the *Arguments* tab of its launch). Prefer
-   `eclipse.ini` to the command line: there, `-vmargs` replaces all of `eclipse.ini`'s VM arguments,
-   memory settings included, unless `eclipse.ini` has `--launcher.appendVmargs`.
-3. Start Eclipse from a terminal. On **Windows**, run `eclipsec.exe`, not `eclipse.exe`: it is in the
-   same folder, and `eclipse.exe` has no console, so its log lines are lost.
-
-To write the log to a file instead, replace the two `ConsoleHandler` lines with these (`%h` is your
-home folder; the `formatter` line makes it plain text rather than XML):
-
-```properties
-handlers = java.util.logging.FileHandler
-java.util.logging.FileHandler.level = FINE
-java.util.logging.FileHandler.pattern = %h/eclipse-neovim.log
-java.util.logging.FileHandler.formatter = java.util.logging.SimpleFormatter
+```text
+06:50:12.345 FINE KeyContextDiagnostics: Ctrl-V (M1+V) resolves to the Neovim Ctrl-key command
 ```
+
+Pass it in one of these places:
+
+- **Every start:** a line `-Declipseneovim.logLevel=FINE` after `-vmargs` in `eclipse.ini`.
+- **One start, from a terminal:**
+
+  ```bash
+  eclipsec.exe --launcher.appendVmargs -vmargs -Declipseneovim.logLevel=FINE
+  ```
+
+  On Linux and macOS, run `eclipse` instead. Keep `--launcher.appendVmargs`: without it, `-vmargs` on
+  the command line replaces all of `eclipse.ini`'s VM arguments, memory settings included. On
+  **Windows**, run `eclipsec.exe`, not `eclipse.exe`: it is in the same folder, and `eclipse.exe` has
+  no console, so its log lines are lost.
+- **A runtime Eclipse launched from the IDE:** its launch configuration, *Arguments* tab, *VM
+  arguments*. The lines appear in the Console view of the Eclipse that launched it.
+
+To keep the log in a file, redirect the console: `eclipsec.exe … 2> neovim.log`, or
+`eclipse … 2>&1 | tee neovim.log` on Linux and macOS to see it at the same time. The Error Log is
+not affected: WARNING and SEVERE lines reach it at every level, even `OFF`. An unknown value is
+ignored, with a warning that lists the valid names.
 
 ## Preferences
 

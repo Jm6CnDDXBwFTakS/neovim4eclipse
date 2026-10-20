@@ -6,6 +6,8 @@ package io.github.jm6cnddxbwftaks.eclipseneovim;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.IPropertyChangeListener;
@@ -17,6 +19,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.eclipseneovim.editor.EditorAttachManager;
 import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.ContributionVisibility;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.LogLevelSwitch;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
 /**
@@ -43,6 +46,8 @@ public class Activator extends AbstractUIPlugin {
     private IPropertyChangeListener preferenceListener;
     /** Copies the plug-in's JUL warnings and errors to the Error Log. */
     private ErrorLogHandler errorLogHandler;
+    /** Prints the plug-in's log at the level of {@code -Declipseneovim.logLevel}, when it is set. */
+    private final LogLevelSwitch logLevelSwitch = new LogLevelSwitch();
 
     @Override
     public void start(BundleContext context) throws Exception {
@@ -50,6 +55,7 @@ public class Activator extends AbstractUIPlugin {
         plugin = this;
         errorLogHandler = new ErrorLogHandler(getLog());
         errorLogHandler.install(PLUGIN_ID);
+        applyLogLevel();
         EditorAttachManager.getInstance().installWorkbenchListeners();
 
         preferenceListener = event -> {
@@ -80,7 +86,21 @@ public class Activator extends AbstractUIPlugin {
             errorLogHandler.uninstall();
             errorLogHandler = null;
         }
+        logLevelSwitch.remove();
         super.stop(context);
+    }
+
+    /**
+     * Applies {@link LogLevelSwitch#PROPERTY} before anything else logs. Runs after the Error Log
+     * bridge is installed, so a warning about a wrong value reaches the Error Log too.
+     */
+    private void applyLogLevel() {
+        try {
+            LogLevelSwitch.parse(System.getProperty(LogLevelSwitch.PROPERTY))
+                    .ifPresent(level -> logLevelSwitch.apply(Logger.getLogger(PLUGIN_ID), level, System.err));
+        } catch (IllegalArgumentException e) {
+            Logger.getLogger(Activator.class.getName()).log(Level.WARNING, e.getMessage());
+        }
     }
 
     public static Activator getDefault() {
