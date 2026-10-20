@@ -80,7 +80,8 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - American spelling (behavior, color, license).
 - Every exception class the plug-in defines extends `util/NeovimExceptionBase` (abstract, unchecked).
 - Comments and docs in an explanatory style: say why, give an example, link the concept.
-- Add or update tests with every behavior change; update README and `docs/` when behavior changes.
+- Add or update tests with every behavior change; update README and `docs/` when behavior changes,
+  and add a user-visible change to `CHANGELOG.md` under *Unreleased*.
 - One commit per logical change. Do not push, and never to `main`, unless the maintainer asks.
 - Commit in UTC (`TZ=UTC git commit ...`; in PowerShell set `$env:TZ = 'UTC'` first), so commit
   dates do not depend on the machine's time zone.

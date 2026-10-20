@@ -7,11 +7,13 @@
 # in the POMs, MANIFEST.MF and feature.xml (inside the runner only; nothing is committed back).
 #
 # Three jobs, each starting only when the one before succeeded:
-#   1. version: checks that the tagged commit is on main, and reads the version from the tag.
+#   1. version: checks that the tagged commit is on main and that CHANGELOG.md has a section for
+#               the version, and reads the version from the tag.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
 #               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
 #               EclipseNeovim-<version>.zip as an artifact of this run.
-#   3. publish: downloads that ZIP and creates the GitHub Release.
+#   3. publish: downloads that ZIP and creates the GitHub Release, with the version's CHANGELOG.md
+#               section as its notes.
 name: Release
 
 on:
@@ -49,6 +51,10 @@ jobs:
       - id: tag
         # v0.1.0 -> 0.1.0. GITHUB_REF_NAME is the tag name for a tag push.
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      # Here, before the build, so that a forgotten changelog stops the release in seconds rather
+      # than after the whole build. The output is thrown away; publish reads the notes again.
+      - name: Check that CHANGELOG.md has a section for ${{ steps.tag.outputs.version }}
+        run: releng/release-notes.sh "${{ steps.tag.outputs.version }}" > /dev/null
 
   build:
     name: Build
@@ -66,6 +72,8 @@ jobs:
     permissions:
       contents: write   # needed to create the release
     steps:
+      # For CHANGELOG.md and releng/release-notes.sh, and so that gh knows the repository.
+      - uses: actions/checkout@v7
       # The build job uploads the ZIP unwrapped (upload-artifact's archive: false), so the artifact
       # is named after the file; download-artifact v8 fetches such a file by that name.
       - uses: actions/download-artifact@v8
@@ -75,10 +83,11 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}   # no checkout here, so gh cannot find the repository itself
           VERSION: ${{ needs.version.outputs.version }}
-        run: >
-          gh release create "$GITHUB_REF_NAME"
-          "dist/EclipseNeovim-${VERSION}.zip"
-          --title "Eclipse Neovim ${VERSION}"
-          --generate-notes
+        # The notes are the version's CHANGELOG.md section, written to a file outside the checkout.
+        run: |
+          releng/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/EclipseNeovim-${VERSION}.zip" \
+            --title "Eclipse Neovim ${VERSION}" \
+            --notes-file "$RUNNER_TEMP/notes.md"
