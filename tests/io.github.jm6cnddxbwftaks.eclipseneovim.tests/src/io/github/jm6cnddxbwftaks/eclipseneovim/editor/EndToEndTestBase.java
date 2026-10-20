@@ -25,6 +25,7 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbenchPage;
@@ -255,6 +256,26 @@ abstract class EndToEndTestBase {
                 collectLabels(child, texts);
             }
         }
+    }
+
+    /** Types {@code :} into {@code target}, waits for the box, and types {@code command} after it. */
+    Text openBox(StyledText target, String command) {
+        type(target, ':');
+        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(target) != null);
+        Text box = textChildOf(target);
+        box.insert(command);
+        return box;
+    }
+
+    /** Runs {@code command} through the box, as typed: {@code :}, the command, Enter. */
+    void runInBox(StyledText target, String command) {
+        Text box = openBox(target, command);
+        Event enter = new Event();
+        enter.keyCode = SWT.CR;
+        enter.character = SWT.CR;
+        enter.doit = true;
+        box.notifyListeners(SWT.KeyDown, enter);
+        settle();
     }
 
     /** The first {@link Text} below {@code parent}: the {@code :} box, which opens inside the editor. */
