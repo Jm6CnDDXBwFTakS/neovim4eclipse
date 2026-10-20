@@ -107,12 +107,10 @@ class NeovimApiTest {
     }
 
     @Test
-    void createBufAndGetCurrentWinAnswerHandles() throws Exception {
+    void createBufAnswersAHandle() throws Exception {
         answer = Handle.buffer(5);
         assertEquals(Handle.buffer(5), get(api.createBuf(true, false)));
-        answer = Handle.window(1000);
-        assertEquals(Handle.window(1000), get(api.getCurrentWin()));
-        assertEquals(List.of(List.of("nvim_create_buf", true, false), List.of("nvim_get_current_win")), sent);
+        assertSent("nvim_create_buf", true, false);
     }
 
     @Test

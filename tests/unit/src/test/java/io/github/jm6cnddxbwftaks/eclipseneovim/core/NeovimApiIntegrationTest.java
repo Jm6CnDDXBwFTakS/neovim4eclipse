@@ -166,13 +166,6 @@ class NeovimApiIntegrationTest {
     }
 
     @Test
-    void getCurrentWinIsAWindowId() throws Exception {
-        Handle window = await(api.getCurrentWin());
-        assertEquals(Handle.Kind.WINDOW, window.kind());
-        assertEquals(window.id(), lua("return vim.api.nvim_get_current_win()"));
-    }
-
-    @Test
     void linesRoundTrip() throws Exception {
         Handle buffer = await(api.createBuf(false, true));
         await(api.bufSetLines(buffer, 0, -1, false, List.of("one", "twö", "")));
@@ -206,8 +199,9 @@ class NeovimApiIntegrationTest {
         Handle buffer = await(api.createBuf(false, true));
         await(api.setCurrentBuf(buffer));
         await(api.bufSetLines(buffer, 0, -1, false, List.of("first", "héllo")));
-        Handle window = await(api.getCurrentWin());
-        await(api.winSetCursor(window, new WinCursor(2, 3))); // the second l: é is two bytes
-        assertEquals(new WinCursor(2, 3), await(api.winGetCursor(window)));
+        // Window 0 is the current window (Handle.CURRENT_WINDOW).
+        await(api.winSetCursor(Handle.CURRENT_WINDOW, new WinCursor(2, 3))); // the second l: é is two bytes
+        assertEquals(new WinCursor(2, 3), await(api.winGetCursor(Handle.CURRENT_WINDOW)));
+        assertEquals(List.of(2L, 3L), lua("return vim.api.nvim_win_get_cursor(vim.api.nvim_get_current_win())"));
     }
 }

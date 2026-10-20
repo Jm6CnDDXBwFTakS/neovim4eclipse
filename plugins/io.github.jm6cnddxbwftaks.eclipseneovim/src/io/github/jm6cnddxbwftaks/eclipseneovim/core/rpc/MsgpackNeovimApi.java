@@ -94,11 +94,6 @@ public final class MsgpackNeovimApi implements NeovimApi {
     }
 
     @Override
-    public CompletableFuture<Handle> getCurrentWin() {
-        return call(answer -> handle("nvim_get_current_win", answer, Handle.Kind.WINDOW), "nvim_get_current_win");
-    }
-
-    @Override
     public CompletableFuture<Boolean> bufAttach(Handle buffer, boolean sendBuffer) {
         return call(answer -> {
             if (answer instanceof Boolean attached) {

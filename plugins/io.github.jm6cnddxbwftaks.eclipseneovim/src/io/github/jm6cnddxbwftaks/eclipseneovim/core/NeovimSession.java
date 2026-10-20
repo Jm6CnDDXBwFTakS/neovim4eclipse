@@ -472,14 +472,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** @param line1Based 1-based line; @param col0Based 0-based UTF-8 byte column */
     public void setCursor(int line1Based, int col0Based) throws Exception {
-        Handle win = await(api.getCurrentWin());
-        await(api.winSetCursor(win, new WinCursor(line1Based, col0Based)));
+        await(api.winSetCursor(Handle.CURRENT_WINDOW, new WinCursor(line1Based, col0Based)));
         state.rememberCursor(new CursorPos(line1Based, col0Based));
     }
 
     public CursorPos getCursor() throws Exception {
-        Handle win = await(api.getCurrentWin());
-        WinCursor cursor = await(api.winGetCursor(win));
+        WinCursor cursor = await(api.winGetCursor(Handle.CURRENT_WINDOW));
         // WinCursor is the RPC layer's type, CursorPos the listeners' (see WinCursor): same meaning.
         return cursor == null ? new CursorPos(1, 0) : new CursorPos(cursor.row(), cursor.col());
     }

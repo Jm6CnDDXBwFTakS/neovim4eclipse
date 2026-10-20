@@ -31,6 +31,13 @@ public record Handle(Kind kind, long id) {
         Objects.requireNonNull(kind, "kind");
     }
 
+    /**
+     * The current window, in the API functions that take a window: Neovim reads handle 0 as "the
+     * window the cursor is in". Saves asking {@code nvim_get_current_win} first, one round trip.
+     * Example: {@code nvim_win_get_cursor(0)}.
+     */
+    public static final Handle CURRENT_WINDOW = window(0);
+
     /** A buffer handle; {@code id} is the buffer number ({@code bufnr()}). */
     public static Handle buffer(long id) {
         return new Handle(Kind.BUFFER, id);
