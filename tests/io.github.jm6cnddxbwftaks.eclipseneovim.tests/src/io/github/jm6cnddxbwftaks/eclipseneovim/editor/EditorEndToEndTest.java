@@ -118,7 +118,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Review check Fix 6: in a multi-page editor (here {@link TestMultiPageEditor}, like the POM
+     * In a multi-page editor (here {@link TestMultiPageEditor}, like the POM
      * editor) the editor tab is the multi-page editor, not the text page Neovim is attached to.
      * {@code gt} on that page still moves to the next editor tab.
      */
@@ -600,7 +600,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         assertEquals("n", session.getMode());
     }
 
-    // ---- Eclipse's own edits reach Neovim (review check Fix 7, the parts without Java tooling) ----
+    // ---- Eclipse's own edits reach Neovim (the parts without Java tooling) ----
 
     /** File › Revert (Eclipse's command, not {@code :e!}): Neovim gets the saved text back. */
     @Test
@@ -639,7 +639,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("zeta\nalpha\nbeta\ngamma\n");
     }
 
-    // ---- Keys (review check REFACTOR) ----
+    // ---- Keys ----
 
     /** {@code f:} finds the colon (it does not open the : box), {@code r/} replaces it, {@code t/} stops before the next slash. */
     @Test

@@ -27,7 +27,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.LogLevelSwitch;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimCtrlKeys;
 
 /**
- * Review check Fix 8d: with {@code -Declipseneovim.logLevel=FINE}, turning Neovim mode on prints
+ * With {@code -Declipseneovim.logLevel=FINE}, turning Neovim mode on prints
  * "Neovim key context activated" and the Ctrl-V resolution, each once, and neither reaches the
  * Error Log. The switch is applied here the way the activator applies it, with the output going to
  * a buffer instead of {@code System.err}. The real Ctrl+V key press is left out (synthetic keys miss

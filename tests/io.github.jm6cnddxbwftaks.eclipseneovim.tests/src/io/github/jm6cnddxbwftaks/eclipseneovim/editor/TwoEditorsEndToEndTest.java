@@ -19,7 +19,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.SessionProbe;
 
 /**
  * Two editors on one file (Window › New Editor) share one Neovim buffer ({@code core/EditorBuffers}),
- * and the buffer goes with the last of them. Review checks BUFFERS and LATER.
+ * and the buffer goes with the last of them.
  */
 class TwoEditorsEndToEndTest extends EndToEndTestBase {
 

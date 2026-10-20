@@ -40,7 +40,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
 /**
  * The {@code :} box ({@link CommandLineBox}) the whole way: {@code :} typed in the editor opens it,
  * the command is typed into it, Enter runs it in Eclipse ({@link HostCommands}) or in Neovim.
- * Review checks Fix 7 ({@code :e!}), Fix 9 ({@code :e} finds files) and Fix 10 (command names).
+ * Covers {@code :e!}, where {@code :e} looks for files, and command names and abbreviations.
  *
  * <p>Errors from Eclipse's side ("Can't find file") go to the editor's message line, read back by
  * {@link #messageText}; errors from Neovim's side arrive as the session's status message.
@@ -79,7 +79,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         page().closeEditor(page().getActiveEditor(), false);
     }
 
-    // ---- Fix 9: where :e looks ----
+    // ---- Where :e looks ----
 
     /** From a file in a subfolder, {@code :e} also looks in the project's root folder. */
     @Test
@@ -157,7 +157,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         return untitled;
     }
 
-    // ---- Fix 10: command names; Fix 7: :e! ----
+    // ---- Command names; :e! ----
 
     /** {@code :wal} is {@code :wall}, abbreviated: Eclipse saves every changed file. */
     @Test

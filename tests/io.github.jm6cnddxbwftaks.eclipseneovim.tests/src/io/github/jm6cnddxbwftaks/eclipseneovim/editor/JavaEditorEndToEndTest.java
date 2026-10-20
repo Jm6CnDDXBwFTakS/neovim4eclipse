@@ -40,9 +40,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * The review checks that need Java tooling: Eclipse's own Java edits (Format, Rename, Organize
- * Imports, a save action, a template) reach Neovim (Fix 7, REFACTOR), {@code gd} and {@code K} run
- * Open Declaration and the Javadoc hover (Fix 8), folded imports, and {@code ZQ} in a Java editor.
+ * The end-to-end checks that need Java tooling: Eclipse's own Java edits (Format, Rename, Organize
+ * Imports, a save action, a template) reach Neovim, {@code gd} and {@code K} run Open Declaration
+ * and the Javadoc hover, folded imports, and {@code ZQ} in a Java editor.
  *
  * <p>Runs only with {@code ./mvnw verify -PuiHeavyJava}, which adds the Java development tools to
  * the test Eclipse (see the test module's pom.xml); tagged so that {@code -Pui} leaves it out. JDT is
@@ -175,7 +175,7 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         return body.substring(0, body.lastIndexOf('\n') + 1);
     }
 
-    // ---- Fix 7: Eclipse's own Java edits reach Neovim ----
+    // ---- Eclipse's own Java edits reach Neovim ----
 
     /** Format (Ctrl+Shift+F) in normal mode, then {@code G dd}: the real last line goes. */
     @Test
@@ -203,7 +203,7 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
 
     /**
      * Rename (Alt+Shift+R) on a local variable starts linked editing; {@code ciw} and a new name
-     * change every occurrence together, and Neovim has the renamed text (also LATER's check).
+     * change every occurrence together, and Neovim has the renamed text.
      */
     @Test
     void ciwInAJavaRenameChangesEveryOccurrenceAndNeovimHasIt() throws Exception {
@@ -364,7 +364,7 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         return Arrays.stream(Display.getCurrent().getShells()).filter(Shell::isVisible).toList();
     }
 
-    // ---- Fix 8: gd and K run Eclipse's commands in a Java editor ----
+    // ---- gd and K run Eclipse's commands in a Java editor ----
 
     private static final String CALLER = """
             package p;
@@ -407,7 +407,7 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         return ((ITextSelection) javaEditor.getSelectionProvider().getSelection()).getStartLine();
     }
 
-    // ---- REFACTOR: folded code; Fix 10: ZQ in a Java editor ----
+    // ---- Folded code; ZQ in a Java editor ----
 
     /** With the imports folded, {@code 4G} (inside them) unfolds them; {@code x} edits that line. */
     @Test

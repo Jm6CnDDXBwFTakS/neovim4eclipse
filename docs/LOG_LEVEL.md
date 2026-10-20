@@ -108,7 +108,6 @@ Activator's preference listener reapplying the level, a test. It was left out be
   and the Windows paragraph. The table of log lines with their levels stays.
 - **`docs/HOWTO_ECLIPSE.md`:** the launch-configuration line.
 - **`CHANGELOG.md`:** an *Added* entry under *Unreleased*.
-- **The Review Fix Checks page:** check 8d uses the switch.
 - **This note:** status set to done.
 - **One commit**, in UTC (`TZ=UTC git commit`).
 
