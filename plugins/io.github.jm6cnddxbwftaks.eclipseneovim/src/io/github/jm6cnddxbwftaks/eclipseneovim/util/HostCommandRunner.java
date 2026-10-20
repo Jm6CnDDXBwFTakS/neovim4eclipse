@@ -24,8 +24,12 @@ public final class HostCommandRunner {
 
     /** What a host command can ask of the IDE, for the editor it was typed in. */
     public interface Ide {
-        /** Saves the current editor; {@code false} if it could not be saved. */
-        boolean save();
+        /**
+         * Saves the current editor; {@code false} if it could not be saved.
+         *
+         * @param createFolders {@code :w ++p}: a new file's missing folders may be created
+         */
+        boolean save(boolean createFolders);
 
         /** Saves every modified editor; {@code false} if one could not be saved. */
         boolean saveAll();
@@ -69,13 +73,13 @@ public final class HostCommandRunner {
         HostExCommand cmd = HostExCommand.parse(raw);
         boolean force = cmd.force();
         switch (cmd.kind()) {
-            case WRITE -> onUi.accept(ide::save);
+            case WRITE -> onUi.accept(() -> ide.save(cmd.createFolders()));
             case WRITE_ALL -> onUi.accept(ide::saveAll);
             case QUIT -> onUi.accept(() -> ide.close(force));
             case QUIT_ALL -> onUi.accept(() -> ide.closeAll(force));
             // Closed with force = true once saved: the save already dealt with the changes.
             case WRITE_QUIT -> onUi.accept(() -> {
-                if (ide.save() || force) {
+                if (ide.save(cmd.createFolders()) || force) {
                     ide.close(true);
                 }
             });

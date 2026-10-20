@@ -25,8 +25,8 @@ class HostCommandRunnerTest {
         boolean saveWorks = true;
 
         @Override
-        public boolean save() {
-            calls.add("save");
+        public boolean save(boolean createFolders) {
+            calls.add(createFolders ? "save ++p" : "save");
             return saveWorks;
         }
 
@@ -125,6 +125,19 @@ class HostCommandRunnerTest {
     void writeQuitAllBangClosesEverythingEvenWhenASaveFails() {
         ide.saveWorks = false;
         assertEquals(List.of("saveAll", "closeAll!"), run("wqa!"));
+    }
+
+    @Test
+    void writePlusPlusPMayCreateFolders() {
+        assertEquals(List.of("save ++p"), run("w ++p"));
+    }
+
+    @Test
+    void writeQuitPlusPlusPClosesOnlyAfterTheSaveWorked() {
+        assertEquals(List.of("save ++p", "close!"), run("wq ++p"));
+        ide.calls.clear();
+        ide.saveWorks = false; // the folder could not be created
+        assertEquals(List.of("save ++p"), run("x ++p"));
     }
 
     // ---- :e ----

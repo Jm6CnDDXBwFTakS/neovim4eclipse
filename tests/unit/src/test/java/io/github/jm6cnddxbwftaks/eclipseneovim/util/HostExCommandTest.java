@@ -121,6 +121,16 @@ class HostExCommandTest {
     }
 
     @Test
+    void plusPlusPCreatesFoldersForWritesOnly() {
+        for (String raw : new String[] { "w ++p", ":wq ++p", "x ++p", "up ++p", "w! ++p", "w ++p other.txt" }) {
+            assertTrue(HostExCommand.parse(raw).createFolders(), raw);
+        }
+        for (String raw : new String[] { "w", "w foo", "w ++pfoo", "wa", "e ++p", "q", "w foo ++p" }) {
+            assertFalse(HostExCommand.parse(raw).createFolders(), raw);
+        }
+    }
+
+    @Test
     void isHostCommandReflectsKind() {
         assertTrue(HostExCommand.parse("w").isHostCommand());
         assertFalse(HostExCommand.parse("echo 1").isHostCommand());
