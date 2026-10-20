@@ -19,9 +19,11 @@ import java.util.List;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.link.LinkedModeModel;
 import org.eclipse.jface.text.link.LinkedPosition;
 import org.eclipse.jface.text.link.LinkedPositionGroup;
+import org.eclipse.jface.text.link.LinkedModeUI;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.Clipboard;
@@ -394,8 +396,34 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("oo = oo\n");
     }
 
+    /**
+     * With Eclipse's linked-mode UI on (as a Java rename or a template starts it), Esc is taken by
+     * Eclipse to leave linked mode before the plug-in's key listener sees it. One Esc must still end
+     * Neovim's insert mode too ({@code KeyInterceptor.afterKeyDown}), not leave the user typing.
+     */
+    @Test
+    void oneEscLeavesBothLinkedModeAndInsertMode() throws Exception {
+        LinkedModeModel model = linkTwoFoos();
+        ITextViewer viewer = (ITextViewer) editor.getAdapter(ITextOperationTarget.class);
+        LinkedModeUI ui = new LinkedModeUI(model, viewer);
+        ui.enter();
+        type(widget, "gg0");
+        type(widget, "ciw");
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, "bar");
+
+        escape(widget);
+
+        expectText("bar = bar;\n");
+        waitUntil("normal mode after one Esc", TIMEOUT_MS, () -> "n".equals(session.getMode()),
+                () -> "; mode " + session.getMode());
+        assertFalse(LinkedModeModel.hasInstalledModel(document), "linked mode ended");
+        type(widget, "$x"); // Neovim's next edit: it must see the renamed line
+        expectText("bar = bar\n");
+    }
+
     /** Makes the document "foo = foo;" with both names linked, the way a rename does. */
-    private void linkTwoFoos() throws Exception {
+    private LinkedModeModel linkTwoFoos() throws Exception {
         document.set("foo = foo;\n");
         settle(); // Eclipse's own change is pushed to Neovim
         LinkedPositionGroup group = new LinkedPositionGroup();
@@ -404,6 +432,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         LinkedModeModel model = new LinkedModeModel();
         model.addGroup(group);
         model.forceInstall();
+        return model;
     }
 
     /** {@code o} after a line ending in a brace starts one level further in, like the Eclipse formatter. */
