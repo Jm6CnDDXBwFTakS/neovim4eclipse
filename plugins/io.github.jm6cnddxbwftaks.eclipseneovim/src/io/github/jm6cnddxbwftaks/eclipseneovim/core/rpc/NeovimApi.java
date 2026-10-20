@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -24,9 +25,8 @@ import java.util.concurrent.CompletableFuture;
  * completes the future exceptionally with Neovim's message ({@code E94: ...}) somewhere in the cause
  * chain ({@code Rpc.errorMessage} finds it).
  *
- * <p>Two calls made only while connecting ({@code nvim_set_client_info}, {@code nvim_ui_attach}) are
- * not here yet: {@code NeovimConnection} still makes them with neovim-java directly (step 7 of the
- * plan moves them).
+ * <p>Dictionaries that Neovim takes as options are plain {@code Map}s with Neovim's key names, as
+ * {@code :help} documents them; for example {@link #uiAttach}'s {@code {"rgb": false}}.
  */
 public interface NeovimApi {
 
@@ -45,6 +45,30 @@ public interface NeovimApi {
      * Answers at once with the number of bytes queued, before Neovim has processed them.
      */
     CompletableFuture<Integer> input(String keys);
+
+    /**
+     * {@code nvim_set_client_info(name, version, type, methods, attributes)}: tells Neovim who is on
+     * this channel; {@code :lua =vim.api.nvim_get_chan_info(n).client} shows it.
+     *
+     * @param version    {@code {"major": 1, "minor": 2, "patch": 3, "prerelease": "..."}}
+     *                   ({@code prerelease} optional)
+     * @param type       {@code "remote"}, {@code "ui"}, {@code "embedder"}, {@code "host"} or
+     *                   {@code "plugin"}
+     * @param methods    the RPC methods this client offers, by name; empty for us
+     * @param attributes optional {@code website}, {@code license}, {@code logo}
+     */
+    CompletableFuture<Void> setClientInfo(String name, Map<String, Object> version, String type,
+            Map<String, Object> methods, Map<String, Object> attributes);
+
+    /**
+     * {@code nvim_ui_attach(width, height, options)}: registers this channel as a UI, which makes
+     * Neovim send {@code redraw} notifications (ignored here). Needed under {@code --embed}: without
+     * a UI, Neovim does not process {@code nvim_input} reliably.
+     *
+     * @param options for example {@code {"rgb": false, "ext_cmdline": false}}; mind that {@code rgb}
+     *                defaults to {@code true}
+     */
+    CompletableFuture<Void> uiAttach(int width, int height, Map<String, Object> options);
 
     /** {@code nvim_get_mode()}: answered even while Neovim waits for the rest of a command. */
     CompletableFuture<Mode> getMode();

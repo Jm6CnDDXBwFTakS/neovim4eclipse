@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–6. Next: step 7.
+Status: **accepted** (option A), in progress. Done: steps 1–6 and 7a. Next: step 7b.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -272,7 +272,19 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      inside the command), not after `d` (an operator returns to the main loop as mode `no`).
    - Surefire's `.txt` summary counts the `@Nested` classes' tests as 0; their results are in the
      XML report and the console.
-7. **Switch.** `NeovimConnection.open` builds an `RpcChannel` over the process streams and a
+7. Done in two commits (7a, 7b), as decided with the maintainer:
+   - **7a** *Done.* `setClientInfo` and `uiAttach` join `NeovimApi` (18 methods), with plain maps
+     for their options, still sent through neovim-java. `NeovimConnection.TERMINAL_UI` lists the
+     UI options (all false; `rgb` must be sent, it defaults to true) and `clientVersion` builds the
+     version map. `NeovimSessionIntegrationTest.neovimKnowsTheClientAndATerminalUi` pins what
+     Neovim records about us (probed before the change: name `Eclipse-Neovim`, type `remote`,
+     version with `prerelease`, a 120 x 40 UI without `rgb` or `ext_*`), so 7b must keep it.
+   - **7b**: the switch below. Also decided: Neovim's stderr is kept apart from the MessagePack
+     stream (today it is merged, so stray output would corrupt it) and logged at WARNING by a
+     small daemon thread; `NeovimApiContractTest` keeps only its own-client half, renamed
+     `NeovimApiIntegrationTest`.
+
+   **Switch.** `NeovimConnection.open` builds an `RpcChannel` over the process streams and a
    `MsgpackNeovimApi`; `requestQuit` uses `channel.closing()` and `channel.notify("nvim_command",
    "qa!")`. Delete `QuittingConnection` and its test, `NeovimJavaApi`, the executor and the SLF4J
    static block. `NotificationBridge.bufferNumber` keeps only the `Handle` case. Update

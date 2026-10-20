@@ -9,7 +9,11 @@ import java.util.concurrent.CompletableFuture;
 
 import com.ensarsarajcic.neovim.java.api.buffer.BufferStreamApi;
 import com.ensarsarajcic.neovim.java.api.buffer.NeovimBufferApi;
+import com.ensarsarajcic.neovim.java.api.types.api.ClientAttributes;
+import com.ensarsarajcic.neovim.java.api.types.api.ClientType;
+import com.ensarsarajcic.neovim.java.api.types.api.ClientVersionInfo;
 import com.ensarsarajcic.neovim.java.api.types.api.DeleteBufferOptions;
+import com.ensarsarajcic.neovim.java.api.types.api.UiOptions;
 import com.ensarsarajcic.neovim.java.api.types.api.VimCoords;
 import com.ensarsarajcic.neovim.java.api.types.msgpack.Buffer;
 import com.ensarsarajcic.neovim.java.api.types.msgpack.Window;
@@ -59,6 +63,38 @@ public final class NeovimJavaApi implements NeovimApi {
     @Override
     public CompletableFuture<Integer> input(String keys) {
         return api.input(keys);
+    }
+
+    /** Converts our maps to neovim-java's types; {@code methods} must be empty (we offer none). */
+    @Override
+    public CompletableFuture<Void> setClientInfo(String name, Map<String, Object> version, String type,
+            Map<String, Object> methods, Map<String, Object> attributes) {
+        if (!methods.isEmpty()) {
+            throw new UnsupportedOperationException("neovim-java adapter: client methods are not supported");
+        }
+        ClientVersionInfo versionInfo = new ClientVersionInfo(number(version.get("major")),
+                number(version.get("minor")), number(version.get("patch")),
+                (String) version.get("prerelease"));
+        return api.setClientInfo(name, versionInfo, ClientType.fromString(type), Map.of(),
+                new ClientAttributes((String) attributes.get("website"), (String) attributes.get("license"),
+                        (String) attributes.get("logo")));
+    }
+
+    /** {@code options} as neovim-java's {@code UiOptions}, in its constructor's order. */
+    @Override
+    public CompletableFuture<Void> uiAttach(int width, int height, Map<String, Object> options) {
+        return api.attachUi(width, height, new UiOptions(flag(options, "rgb"), flag(options, "override"),
+                flag(options, "ext_cmdline"), flag(options, "ext_hlstate"), flag(options, "ext_linegrid"),
+                flag(options, "ext_messages"), flag(options, "ext_multigrid"), flag(options, "ext_popupmenu"),
+                flag(options, "ext_tabline"), flag(options, "ext_termcolors")));
+    }
+
+    private static int number(Object value) {
+        return value == null ? 0 : ((Number) value).intValue();
+    }
+
+    private static boolean flag(Map<String, Object> options, String name) {
+        return Boolean.TRUE.equals(options.get(name));
     }
 
     @Override

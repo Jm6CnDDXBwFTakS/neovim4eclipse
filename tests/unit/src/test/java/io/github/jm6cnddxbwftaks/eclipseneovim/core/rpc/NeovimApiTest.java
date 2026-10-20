@@ -74,6 +74,15 @@ class NeovimApiTest {
     }
 
     @Test
+    void clientInfoAndUiAttachSendTheirDictionaries() throws Exception {
+        get(api.setClientInfo("Eclipse-Neovim", Map.of("major", 1), "remote", Map.of(), Map.of()));
+        get(api.uiAttach(120, 40, Map.of("rgb", false)));
+        assertEquals(List.of(
+                List.of("nvim_set_client_info", "Eclipse-Neovim", Map.of("major", 1), "remote", Map.of(), Map.of()),
+                List.of("nvim_ui_attach", 120, 40, Map.of("rgb", false))), sent);
+    }
+
+    @Test
     void inputAnswersTheNumberOfBytes() throws Exception {
         answer = 2L;
         assertEquals(2, get(api.input("dd")));

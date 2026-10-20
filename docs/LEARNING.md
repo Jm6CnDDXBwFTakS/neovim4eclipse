@@ -243,7 +243,7 @@ RpcClient callbacks     every notification and request, handed to core/rpc/Incom
                         (NotificationBridge picks the handler by name with a switch)
 ```
 
-The plug-in calls neovim-java through an interface of its own, `core/rpc/NeovimApi`: the 16
+The plug-in calls neovim-java through an interface of its own, `core/rpc/NeovimApi`: the 18
 Neovim functions it uses, named after Neovim's (`bufSetLines` is `nvim_buf_set_lines`), with
 buffers and windows as plain `Handle(kind, id)` records instead of neovim-java's buffer objects.
 `core/rpc/NeovimJavaApi` implements it by calling neovim-java and converting the types. This

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
@@ -393,6 +394,40 @@ class NeovimSessionIntegrationTest {
             keys(s, "j", "@", ":"); // repeats the last command line on line 3
             assertEquals(List.of("bar", "bar", "bar"), s.getBufferLines());
         }
+    }
+
+    /**
+     * What Neovim knows about us, pinned before the switch to our own client
+     * ({@code docs/RPC_CLIENT.md}, step 7): the client info, and a terminal-like UI of 120 x 40 with
+     * no 24-bit color and no {@code ext_*} features. An empty Lua table has no type, so empty
+     * {@code methods} and {@code attributes} may come back as a list or a map; both mean "none".
+     */
+    @Test
+    void neovimKnowsTheClientAndATerminalUi() throws Exception {
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean"), ClipboardPort.NONE, "1.2.3.qual")) {
+            Map<?, ?> client = (Map<?, ?>) s.lua("return vim.api.nvim_get_chan_info(vim.g.eclipse_channel).client");
+            assertEquals("Eclipse-Neovim", client.get("name"));
+            assertEquals("remote", client.get("type"));
+            assertEquals(Map.of("major", 1L, "minor", 2L, "patch", 3L, "prerelease", "qual"),
+                    NeovimApiContractTest.numbersAsLong(client.get("version")));
+            assertEquals(0, ((java.util.Collection<?>) values(client.get("methods"))).size());
+            assertEquals(0, ((java.util.Collection<?>) values(client.get("attributes"))).size());
+
+            List<?> uis = (List<?>) s.lua("return vim.api.nvim_list_uis()");
+            assertEquals(1, uis.size());
+            Map<?, ?> ui = (Map<?, ?>) NeovimApiContractTest.numbersAsLong(uis.get(0));
+            assertEquals(120L, ui.get("width"));
+            assertEquals(40L, ui.get("height"));
+            for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
+                    "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
+                assertEquals(false, ui.get(option), option);
+            }
+        }
+    }
+
+    /** A Lua table that may have been decoded as a list or as a map. */
+    private static Object values(Object table) {
+        return table instanceof Map<?, ?> map ? map.values() : table;
     }
 
     @Test
