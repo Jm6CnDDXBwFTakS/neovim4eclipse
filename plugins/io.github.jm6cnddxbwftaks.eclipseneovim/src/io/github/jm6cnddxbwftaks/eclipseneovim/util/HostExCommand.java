@@ -85,6 +85,18 @@ public record HostExCommand(Kind kind, boolean force, String argument) {
     }
 
     /**
+     * Whether a write may create the missing folders of a new file: {@code :w ++p}, {@code :wq ++p},
+     * {@code :x ++p}, as in Neovim ({@code :help ++p}). Any other argument is ignored, as before.
+     */
+    public boolean createFolders() {
+        if (kind != Kind.WRITE && kind != Kind.WRITE_QUIT) {
+            return false;
+        }
+        int space = indexOfWhitespace(argument);
+        return (space >= 0 ? argument.substring(0, space) : argument).equals("++p");
+    }
+
+    /**
      * The tab count argument ({@code :tabn 3}): the number, or 0 when there is none.
      * {@link #parse} only accepts tab commands whose argument is empty or a number.
      */

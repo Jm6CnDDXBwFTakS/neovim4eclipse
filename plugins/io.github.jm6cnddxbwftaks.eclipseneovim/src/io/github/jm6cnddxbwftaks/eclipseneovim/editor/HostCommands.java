@@ -52,7 +52,7 @@ public final class HostCommands {
     /** {@link HostCommandRunner.Ide} for one editor: Eclipse's save, close, open and tab switching. */
     private record EditorIde(ITextEditor editor) implements HostCommandRunner.Ide {
         @Override
-        public boolean save() {
+        public boolean save(boolean createFolders) {
             return EclipseFileCommands.save(editor);
         }
 
