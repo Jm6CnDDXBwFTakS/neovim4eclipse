@@ -33,7 +33,48 @@ release process; see [Known limitations](#known-limitations).
 
 Details of what happens on each key are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Install
+
+To use the plug-in in your own Eclipse, without building it.
+
+**You need**
+
+- Eclipse IDE **2024-12 (4.34) or newer**, any package (Java, C/C++, Committers, ...), running on
+  Java 21 or newer (the Eclipse packages bring their own Java 21+).
+- **Neovim 0.9 or newer**: `nvim --version` in a terminal should print it. If Eclipse cannot find it
+  (see the note below), set the absolute path in *Window → Preferences → Neovim*.
+
+**Steps**
+
+1. Download `EclipseNeovim-<version>.zip` from the
+   [Releases](https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim/releases) page. Do not unpack it: the
+   ZIP is a complete p2 update site (Eclipse's installer format), read as it is.
+2. In Eclipse: *Help → Install New Software… → Add… → Archive…*, select the ZIP, then *Add*.
+3. Tick **Eclipse Neovim**, then *Next*, *Next*, accept the license (EPL-2.0) and *Finish*.
+4. Eclipse asks whether to trust the content, because it is **unsigned** (the plug-in has no
+   code-signing certificate): tick the unsigned entry and choose *Trust Selected*.
+5. Restart Eclipse when asked.
+6. Open any text file: Neovim attaches to the editor automatically. *Neovim: Attach to Active Editor*
+   (`Ctrl+Shift+N`) attaches by hand; the toolbar toggle turns it off and on.
+
+**Updating and removing**
+
+- To update, install the newer ZIP the same way; Eclipse replaces the old version.
+- To remove: *Help → About Eclipse IDE → Installation Details → Installed Software*, select
+  **Eclipse Neovim**, *Uninstall…*, and restart.
+
+**Untested builds:** every push to `main` builds the same ZIP. It is attached to the run under the
+repository's *Actions* tab (*Build*, latest run, *Artifacts*; downloading needs a GitHub login) and
+installs the same way.
+
+To build the ZIP yourself from source, see [Build and test](#build-and-test) and
+[docs/PACKAGING.md](docs/PACKAGING.md); to run the plug-in from the Eclipse IDE while you work on
+it, see [Run it (PDE)](#run-it-pde).
+
 ## Prerequisites
+
+For developers: building from source and running the plug-in from the IDE. Only Eclipse and Neovim
+are needed to [install](#install) it.
 
 - **JDK 21 or newer** for the build. Maven itself is not needed: `./mvnw` (Windows: `mvnw.cmd`) downloads
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
