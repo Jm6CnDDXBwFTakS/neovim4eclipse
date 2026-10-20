@@ -34,6 +34,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Completion;
+import io.github.jm6cnddxbwftaks.eclipseneovim.util.EditPath;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.HostExCommand;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.InsertReplay;
@@ -518,9 +519,13 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void complete(String line, String steps, Consumer<Completion> onResult) {
             List<String> folders = new ArrayList<>();
-            if (HostExCommand.parse(line).kind() == HostExCommand.Kind.EDIT) {
+            HostExCommand command = HostExCommand.parse(line);
+            if (command.kind() == HostExCommand.Kind.EDIT) {
                 for (Path folder : EclipseFileCommands.editFolders(editor)) {
                     folders.add(folder == null ? "" : folder.toString());
+                }
+                if (EditPath.isFromCurrentFolder(command.argument()) && folders.size() > 1) {
+                    folders = folders.subList(0, 1); // :e ./ looks beside the edited file only
                 }
             }
             session.completeAsync(line, steps, folders, onResult);

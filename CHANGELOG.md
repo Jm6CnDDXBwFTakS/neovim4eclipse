@@ -33,7 +33,8 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
   file, in the Text Editor or the Generic Editor), `gd` is Vim's own.
 - An inline command line for `:`, `/` and `?`, with separate histories. In `:`, Tab and Shift+Tab
   complete as in Neovim (following `'wildmode'`), with the candidates listed above the box; `:e`
-  completes file names next to the current file, then in its project.
+  completes file names next to the current file, then in its project. A name starting with `./` or
+  `../` is looked for, and completed, from the current file's folder only.
 - Vim's mode, pending command, recording register and more in the Eclipse status bar, chosen in
   *Preferences → Neovim → Status Bar*.
 - Neovim's messages and errors in a line along the bottom of the editor, errors in the error color,

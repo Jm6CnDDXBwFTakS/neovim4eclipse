@@ -214,8 +214,9 @@ Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it.
 In the `:` box, Tab completes the line as Neovim's own command line does (commands, options and their
 values, buffers, help tags, variables, functions, file names), following your `'wildmode'`; Shift+Tab goes
 back. A line above the box lists the candidates, with the current one highlighted. `:e` completes file
-names in the folders `:e` looks in: next to the current file, then in its project. Completion works on the
-whole line, whatever the caret position; typing anything starts over. In `/` and `?`, Tab does nothing.
+names in the folders `:e` looks in: next to the current file, then in its project (`./` and `../` only next
+to the current file). Completion works on the whole line, whatever the caret position; typing anything
+starts over. In `/` and `?`, Tab does nothing.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.
 
@@ -227,7 +228,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
 | `:wqa[ll]`, `:xa[ll]` | save all, then close all |
-| `:e[dit] file` | open `file`, looked for next to the current file, then in its project; `~` and absolute paths work |
+| `:e[dit] file` | open `file`, looked for next to the current file, then in its project; `./file` and `../file` only from the current file's folder; `~` and absolute paths work |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |

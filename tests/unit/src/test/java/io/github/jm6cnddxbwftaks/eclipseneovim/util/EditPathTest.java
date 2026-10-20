@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -28,6 +29,41 @@ class EditPathTest {
     void dotDotIsNormalizedAndDuplicatesDropped() {
         assertEquals(List.of(PROJECT.resolve("pom.xml")),
                 EditPath.candidates("../pom.xml", HOME, List.of(SRC, SRC)));
+    }
+
+    @Test
+    void dotSlashLooksOnlyInTheEditedFilesFolder() {
+        assertEquals(List.of(SRC.resolve("Util.java")),
+                EditPath.candidates("./Util.java", HOME, List.of(SRC, PROJECT)));
+        assertEquals(List.of(SRC.resolve("Util.java")),
+                EditPath.candidates(".\\Util.java".replace('\\', java.io.File.separatorChar), HOME,
+                        List.of(SRC, PROJECT)));
+    }
+
+    @Test
+    void dotDotIsResolvedFromTheEditedFilesFolderOnlyAndMayLeaveTheProject() {
+        assertEquals(List.of(PROJECT.resolve("pom.xml")),
+                EditPath.candidates("../pom.xml", HOME, List.of(SRC, PROJECT)));
+        assertEquals(List.of(PROJECT.getParent().resolve("x.txt")),
+                EditPath.candidates("../../x.txt", HOME, List.of(SRC, PROJECT)),
+                "not also tried from the project root, and not stopped at it");
+    }
+
+    @Test
+    void dotSlashWithoutAnEditedFileFolderGivesNothing() {
+        assertTrue(EditPath.candidates("./a.txt", HOME, Arrays.asList(null, PROJECT)).isEmpty());
+        assertEquals(List.of(PROJECT.resolve("a.txt")),
+                EditPath.candidates("a.txt", HOME, Arrays.asList(null, PROJECT)));
+    }
+
+    @Test
+    void whichNamesCountAsFromTheCurrentFolder() {
+        for (String name : new String[] { "./a", ".\\a", "../a", "..\\a", ".", "..", " ./a " }) {
+            assertTrue(EditPath.isFromCurrentFolder(name), name);
+        }
+        for (String name : new String[] { "a", ".a", "..a", ".hidden/x", "/abs", "~/x", "", null }) {
+            assertFalse(EditPath.isFromCurrentFolder(name), String.valueOf(name));
+        }
     }
 
     @Test
