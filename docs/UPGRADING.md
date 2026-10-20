@@ -109,9 +109,9 @@ To change a version:
 2. Compare the jar's own license files with the copies in `plugins/.../licenses/`; a new version can
    add or change a `NOTICE`, which must then be updated. For example:
    ```bash
-   unzip -l ~/.m2/repository/org/msgpack/msgpack-core/0.9.3/msgpack-core-0.9.3.jar | grep -i -E 'notice|license'
+   unzip -l ~/.m2/repository/org/msgpack/msgpack-core/0.9.12/msgpack-core-0.9.12.jar | grep -i -E 'notice|license'
    ```
-   msgpack-core 0.9.3 carries none in its jar: the `NOTICE` in `licenses/` comes from the
+   msgpack-core (0.9.3 to 0.9.12 at least) carries none in its jar: the `NOTICE` in `licenses/` comes from the
    [msgpack-java](https://github.com/msgpack/msgpack-java) repository, so compare with the one
    there at the new version's tag.
 3. Check for new transitive dependencies, which are **not** copied automatically:

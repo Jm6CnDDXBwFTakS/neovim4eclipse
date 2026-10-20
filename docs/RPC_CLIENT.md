@@ -286,8 +286,8 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      forwarder as its `Incoming`, so `setIncoming` can come after `open` (until then notifications
      are dropped, as before, and requests answered with an error). New integration tests: a normal
      close logs no warning; a line on Neovim's stderr is logged and the session goes on. The JDK's
-     `sun.misc.Unsafe` warning at start-up comes from msgpack-core 0.9.3 itself and was there
-     before; a newer msgpack-core may drop it.
+     `sun.misc.Unsafe` warning at start-up comes from msgpack-core itself (its `MessageBuffer`)
+     and was there before; 0.9.12 still prints it on JDK 25.
 
    **Switch.** `NeovimConnection.open` builds an `RpcChannel` over the process streams and a
    `MsgpackNeovimApi`; `requestQuit` uses `channel.closing()` and `channel.notify("nvim_command",
@@ -309,7 +309,7 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
    `Bundle-ClassPath` row, README and ARCHITECTURE. The consistency tests needed no change (they
    compare the lists with each other). `lib/` now holds `msgpack-core.jar` only, and the plug-in jar
    in the ZIP is 416 KB. Still to do by hand: install the ZIP in a real Eclipse and try typing, `:w`,
-   `"+p` and closing editors. Decided separately: msgpack-core 0.9.3 to 0.9.12 in its own commit.
+   `"+p` and closing editors. Decided separately: msgpack-core 0.9.3 to 0.9.12 in its own commit (done right after step 8).
 9. **Cursor calls on window 0.** `NeovimSession.getCursor` and `setCursor` first ask
    `nvim_get_current_win` and then pass that window; Neovim's window functions accept `0` for the
    current window, so `winGetCursor(Handle.window(0))` saves one round trip per call. A one-line

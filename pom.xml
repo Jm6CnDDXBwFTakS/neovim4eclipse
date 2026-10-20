@@ -75,7 +75,7 @@
     <!-- Third-party library versions: the ONLY place they are defined. The plug-in build copies
          the jars into plugins/.../lib/ (version-less names, see its pom.xml) and the unit tests
          inherit them through dependencyManagement below. -->
-    <msgpack.version>0.9.3</msgpack.version>
+    <msgpack.version>0.9.12</msgpack.version>
     <junit.version>5.14.4</junit.version>
     <!-- Eclipse's text model jars, for tests/text only (the plug-in gets them from the Eclipse
          release above). They are the versions inside that release: when <eclipse-repo.url>
