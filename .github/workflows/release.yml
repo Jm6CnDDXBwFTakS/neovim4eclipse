@@ -7,7 +7,7 @@
 # in the POMs, MANIFEST.MF and feature.xml (inside the runner only; nothing is committed back).
 #
 # Three jobs, each starting only when the one before succeeded:
-#   1. version: reads the version from the tag.
+#   1. version: checks that the tagged commit is on main, and reads the version from the tag.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
 #               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
 #               EclipseNeovim-<version>.zip as an artifact of this run.
@@ -23,11 +23,29 @@ permissions: {}
 
 jobs:
   version:
-    name: Version from the tag
+    name: Tag on main, version from the tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout
     outputs:
       version: ${{ steps.tag.outputs.version }}
     steps:
+      # Releases come from main only: main holds what the Build workflow has tested (it runs on
+      # every push to main). A tag on a develop commit, or on any commit main does not contain,
+      # stops the release here, before anything is built or published.
+      # fetch-depth: 0 fetches the whole history and all branches, so origin/main exists and
+      # merge-base can walk back from it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check that the tag is on main
+        run: |
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_REF_NAME ($GITHUB_SHA) is on main."
+          else
+            echo "::error::$GITHUB_REF_NAME points to $GITHUB_SHA, which is not on main. Tag a commit of main."
+            exit 1
+          fi
       - id: tag
         # v0.1.0 -> 0.1.0. GITHUB_REF_NAME is the tag name for a tag push.
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
