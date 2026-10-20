@@ -9,7 +9,7 @@
 #   - github-actions: the uses: lines in .github/workflows/.
 # What it does not cover (update by hand, see docs/UPGRADING.md): the JDK (.java-version), the
 # Eclipse release (eclipse-repo.url, a p2 site Dependabot cannot read), Neovim (NVIM_VERSION) and
-# the Maven wrapper.
+# the Maven wrapper (ignored below, with the reason).
 #
 # Each pull request still runs the Build workflow, so a broken update shows up as a red check.
 version: 2
@@ -36,6 +36,14 @@ updates:
       # 3.14.800, for example, needs OSGi classes those tests do not have. They move with the
       # Eclipse release, by hand (docs/UPGRADING.md, "Eclipse release").
       - dependency-name: "org.eclipse.platform:*"
+      # The Maven wrapper (.mvn/wrapper/maven-wrapper.properties): Maven itself and the wrapper
+      # scripts. Dependabot finds them, but updates them by running "./mvnw wrapper:wrapper" on a
+      # copy of the repository that holds only the build files. Tycho reads every module's
+      # META-INF/MANIFEST.MF before it runs any goal, finds none in that copy, and the job fails
+      # ("OsgiManifestParserException: ... Manifest file not found"), for every release, patch
+      # releases too. They are updated by hand instead (docs/UPGRADING.md, "Maven").
+      - dependency-name: "org.apache.maven:apache-maven"
+      - dependency-name: "org.apache.maven.wrapper:maven-wrapper"
 
   - package-ecosystem: github-actions
     directory: /

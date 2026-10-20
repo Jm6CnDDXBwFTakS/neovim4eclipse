@@ -38,9 +38,15 @@ The safe loop for any upgrade:
 | CI operating system | `runs-on: ubuntu-latest` in the workflows | not checked |
 
 Dependabot (`.github/dependabot.yml`) opens weekly pull requests for the Maven properties (not for
-major library versions) and the GitHub Actions. It cannot see the JDK, the Eclipse release, Neovim
-or the Maven wrapper; those are upgraded by hand with the steps below. It also skips the
-`org.eclipse.platform` jars on purpose: they must match the Eclipse release, so they move with it.
+major library versions) and the GitHub Actions. It cannot see the JDK, the Eclipse release or
+Neovim; those are upgraded by hand with the steps below. It also skips, on purpose:
+
+- the `org.eclipse.platform` jars: they must match the Eclipse release, so they move with it;
+- the Maven wrapper (Maven itself and the wrapper scripts): Dependabot would update it by running
+  `./mvnw wrapper:wrapper` on a copy of the repository without the `MANIFEST.MF` files, which
+  Tycho needs before it runs any goal, so every such job fails. Check for a new Maven 3.9 release
+  now and then, or with other upgrades, and follow "Maven" below.
+
 The embedded msgpack-core comes as an ordinary pull request of its own; it has no partner
 libraries to keep in step since the plug-in's own RPC client replaced neovim-java and Jackson
 (`docs/RPC_CLIENT.md`).
