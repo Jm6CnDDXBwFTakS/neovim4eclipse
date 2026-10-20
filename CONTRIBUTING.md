@@ -25,7 +25,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
 ```
 
-The UI tests in `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` run only with `-Pui`. They
+The UI tests in `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` run only with `-Pui`. They
 start an Eclipse workbench, which opens a window for about 15 seconds, so a plain `./mvnw verify`
 leaves them out (it still compiles them). On a headless Linux machine run
 `xvfb-run -a ./mvnw verify -Pui`, which keeps the window on a virtual display. CI always runs them,
@@ -103,7 +103,7 @@ browser:
 | Unit tests against real Neovim (`-Pintegration`) | `tests/unit/target/site/jacoco-integration/index.html` |
 | Text-model tests (`./mvnw verify` or `./mvnw test -f tests/text/pom.xml`) | `tests/text/target/site/jacoco/index.html` |
 | SWT tests (`./mvnw verify` or `./mvnw test -f tests/swt/pom.xml`) | `tests/swt/target/site/jacoco/index.html` |
-| UI tests (`./mvnw verify -Pui`) | `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests/target/site/jacoco/index.html` |
+| UI tests (`./mvnw verify -Pui`) | `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/site/jacoco/index.html` |
 
 **Why one report per kind of test, not one merged report.** JaCoCo matches what it recorded to class
 files by a checksum of their bytecode. The unit tests compile their own copy of `core/` and `util/`
@@ -136,7 +136,7 @@ The integration profile alone covers 49% of `core` and `util`.
 Avoid `clean` while a runtime Eclipse launched from the IDE is running: it deletes the plug-in's
 `lib/*.jar`, which that Eclipse is using.
 
-The installable archive is `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/neovim4eclipse-<version>.zip`.
+The installable archive is `releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-<version>.zip`.
 
 ## Run it from Eclipse
 
@@ -147,17 +147,32 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 
 | Path | Contents |
 |------|----------|
-| `plugins/io.github.jm6cnddxbwftaks.eclipseneovim` | the plug-in |
+| `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse` | the plug-in |
 | `tests/unit` | JUnit tests of `util` and `core`, without Eclipse |
 | `tests/text` | JUnit tests of code that uses Eclipse's text model but no widgets (`sync`, parts of `editor`), without a workbench |
 | `tests/swt` | JUnit tests of `editor` classes that use SWT widgets but not the workbench; need a display |
 | `tests/shared` | test helpers shared by those modules (`ExpectedLog`); not a module of its own |
-| `tests/io.github.jm6cnddxbwftaks.eclipseneovim.tests` | workbench tests (a fragment of the plug-in) |
+| `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` | workbench tests (a fragment of the plug-in) |
 | `features/...feature` | the installable feature |
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
+
+The project has two names. People see **Neovim for Eclipse** (feature, bundle name, preference
+page, release titles); everything a machine reads uses **neovim4eclipse**: the repository, the
+Maven artifactIds, the ZIP (`neovim4eclipse-0.1.0.zip`), the bundle IDs and Java packages
+(`io.github.jm6cnddxbwftaks.neovim4eclipse`), `-Dneovim4eclipse.logLevel` and the guard variable
+`vim.g.neovim4eclipse`. Why these two:
+
+- The Eclipse Foundation's trademark guidelines do not allow "Eclipse" inside a third-party product
+  name; "*product* for Eclipse" is the accepted form (it matters for an Eclipse Marketplace listing).
+- Java packages and OSGi bundle IDs cannot contain a hyphen, so the machine name is one word, and
+  the "4" keeps it readable. Using the same word everywhere means there is only one to remember.
+
+A bundle ID is part of what users install: p2 sees a renamed bundle as a different plug-in (no
+update, only uninstall and reinstall), and saved preferences live under it. Do not rename it after a
+release.
 
 ## Rules the code relies on
 

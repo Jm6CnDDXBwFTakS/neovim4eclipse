@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<site>
+   <feature id="io.github.jm6cnddxbwftaks.neovim4eclipse.feature" version="0.0.0">
+      <category name="neovim4eclipse"/>
+   </feature>
+   <category-def name="neovim4eclipse" label="Neovim for Eclipse">
+      <description>
+         Neovim modal editing integrated into the Eclipse IDE.
+      </description>
+   </category-def>
+</site>

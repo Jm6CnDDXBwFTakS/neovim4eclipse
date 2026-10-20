@@ -77,7 +77,7 @@ jobs:
           # archive: false (upload-artifact v7+) uploads the single file as it is, instead of
           # wrapping it in a ZIP of its own; the artifact is then named after the file.
           archive: false
-          path: releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/neovim4eclipse-*.zip
+          path: releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-*.zip
           if-no-files-found: error
 
   integration:
