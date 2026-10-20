@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: EPL-2.0
 
 /**
- * Eclipse Neovim: Vim editing in Eclipse text editors, performed by an embedded Neovim process.
+ * Neovim for Eclipse: Vim editing in Eclipse text editors, performed by an embedded Neovim process.
  *
  * <h2>Packages</h2>
  * <pre>

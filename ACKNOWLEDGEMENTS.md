@@ -4,8 +4,8 @@
 
 <https://github.com/vscode-neovim/vscode-neovim>, licensed under the MIT License.
 
-vscode-neovim embeds a real Neovim process in Visual Studio Code. Eclipse Neovim follows the same
-architecture instead of re-implementing Vim inside the IDE:
+vscode-neovim embeds a real Neovim process in Visual Studio Code. Neovim for Eclipse follows the
+same architecture instead of re-implementing Vim inside the IDE:
 
 - Neovim owns normal and visual mode; the IDE owns insert mode, files and rendering.
 - Buffer changes are synchronized through `nvim_buf_attach` line events.

@@ -8,7 +8,7 @@
 
   <parent>
     <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
-    <artifactId>EclipseNeovim</artifactId>
+    <artifactId>neovim4eclipse</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
@@ -16,7 +16,7 @@
   <!-- Tycho requires artifactId == Bundle-SymbolicName. -->
   <artifactId>io.github.jm6cnddxbwftaks.eclipseneovim.tests</artifactId>
   <packaging>eclipse-test-plugin</packaging>
-  <name>Eclipse Neovim UI Tests</name>
+  <name>Neovim for Eclipse UI Tests</name>
 
   <!-- Workbench tests: tycho-surefire starts a real Eclipse (the IDE workbench, with a window) with
        this fragment and the plug-in installed, and runs the JUnit 5 tests on the UI thread.
@@ -108,7 +108,7 @@
                   <executiondata>
                     <fileset dir="${project.build.directory}" includes="jacoco.exec"/>
                   </executiondata>
-                  <structure name="Eclipse Neovim plug-in (UI tests)">
+                  <structure name="Neovim for Eclipse plug-in (UI tests)">
                     <classfiles>
                       <fileset dir="${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.eclipseneovim/target/classes"/>
                     </classfiles>

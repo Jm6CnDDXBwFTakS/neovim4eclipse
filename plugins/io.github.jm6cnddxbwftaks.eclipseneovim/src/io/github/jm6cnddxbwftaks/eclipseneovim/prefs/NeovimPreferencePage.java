@@ -26,7 +26,7 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
     public NeovimPreferencePage() {
         super(GRID);
         setPreferenceStore(Activator.getDefault().getPreferenceStore());
-        setDescription("Configure the Eclipse Neovim integration.");
+        setDescription("Configure the Neovim for Eclipse integration.");
     }
 
     @Override

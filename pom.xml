@@ -7,13 +7,13 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
-  <artifactId>EclipseNeovim</artifactId>
+  <artifactId>neovim4eclipse</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>Eclipse Neovim</name>
+  <name>Neovim for Eclipse</name>
   <description>Vim mode for Eclipse, powered by Neovim</description>
-  <url>https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim</url>
+  <url>https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse</url>
 
   <licenses>
     <license>
@@ -23,9 +23,9 @@
   </licenses>
 
   <scm>
-    <url>https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim</url>
-    <connection>scm:git:https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim.git</connection>
-    <developerConnection>scm:git:git@github.com:Jm6CnDDXBwFTakS/EclipseNeovim.git</developerConnection>
+    <url>https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse</url>
+    <connection>scm:git:https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse.git</connection>
+    <developerConnection>scm:git:git@github.com:Jm6CnDDXBwFTakS/neovim4eclipse.git</developerConnection>
   </scm>
 
   <!-- tests/unit is a plain jar module (no OSGi); it runs in this reactor and also alone:

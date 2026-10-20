@@ -1,4 +1,4 @@
-# Eclipse Neovim
+# Neovim for Eclipse
 
 Embeds **real Neovim** (`nvim --embed`) in Eclipse text editors so modal editing (motions, operators,
 text objects, visual mode, registers, macros, ex commands) works on the buffer you see in the IDE.
@@ -55,11 +55,11 @@ To use the plug-in in your own Eclipse, without building it.
 
 **Steps**
 
-1. Download `EclipseNeovim-<version>.zip` from the
-   [Releases](https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim/releases) page. Do not unpack it: the
+1. Download `neovim4eclipse-<version>.zip` from the
+   [Releases](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases) page. Do not unpack it: the
    ZIP is a complete p2 update site (Eclipse's installer format), read as it is.
 2. In Eclipse: *Help → Install New Software… → Add… → Archive…*, select the ZIP, then *Add*.
-3. Tick **Eclipse Neovim**, then *Next*, *Next*, accept the license (EPL-2.0) and *Finish*.
+3. Tick **Neovim for Eclipse**, then *Next*, *Next*, accept the license (EPL-2.0) and *Finish*.
 4. Eclipse asks whether to trust the content, because it is **unsigned** (the plug-in has no
    code-signing certificate): tick the unsigned entry and choose *Trust Selected*.
 5. Restart Eclipse when asked.
@@ -70,7 +70,7 @@ To use the plug-in in your own Eclipse, without building it.
 
 - To update, install the newer ZIP the same way; Eclipse replaces the old version.
 - To remove: *Help → About Eclipse IDE → Installation Details → Installed Software*, select
-  **Eclipse Neovim**, *Uninstall…*, and restart.
+  **Neovim for Eclipse**, *Uninstall…*, and restart.
 
 **Untested builds:** every push to `main` builds the same ZIP. It is attached to the run under the
 repository's *Actions* tab (*Build*, latest run, *Artifacts*; downloading needs a GitHub login) and
@@ -127,7 +127,7 @@ There are two test modules:
 
 The p2 update site is produced under
 `releng/.../target/repository/`, and as the installable archive
-`releng/.../target/EclipseNeovim-<version>.zip` (see [docs/PACKAGING.md](docs/PACKAGING.md)).
+`releng/.../target/neovim4eclipse-<version>.zip` (see [docs/PACKAGING.md](docs/PACKAGING.md)).
 
 ### Continuous integration
 
@@ -135,13 +135,13 @@ GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
 
 - **Build** runs on every push and pull request to `main`, or on demand (Actions tab > Build >
   Run workflow). It runs `./mvnw verify -Pui` (UI tests under `xvfb-run`) and the integration tests against a pinned Neovim
-  release, and attaches the installable ZIP to the run as it is: `EclipseNeovim-<version>.zip`, ready for
+  release, and attaches the installable ZIP to the run as it is: `neovim4eclipse-<version>.zip`, ready for
   *Install New Software → Add → Archive* without unpacking.
 - **Release** runs when you push a tag such as `v0.1.0`, and stops at once unless the tagged
   commit is on `main`. It runs the Build workflow itself (as a
   reusable workflow, so with the same Neovim and all the same tests) for that version (the tag
   replaces `0.1.0-SNAPSHOT`), and only when that passes publishes a GitHub Release with
-  `EclipseNeovim-0.1.0.zip` attached.
+  `neovim4eclipse-0.1.0.zip` attached.
 
 ## Layout
 

@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: EPL-2.0 -->
 <!-- Java formatter profile for this project.
      Import: Window > Preferences > Java > Code Style > Formatter > Import..., then select
-     "EclipseNeovim" (for this workspace) or set it per project.
+     "neovim4eclipse" (for this workspace) or set it per project.
      Only the settings that differ from Eclipse's built-in profile are listed:
      - spaces, 4 per level; continuation lines +8 (two levels);
      - lines up to 120 characters;
@@ -11,7 +11,7 @@
        tables, lists) that automatic re-wrapping would destroy;
      - wrapped lines are kept as written. -->
 <profiles version="23">
-  <profile kind="CodeFormatterProfile" name="EclipseNeovim" version="23">
+  <profile kind="CodeFormatterProfile" name="neovim4eclipse" version="23">
     <setting id="org.eclipse.jdt.core.formatter.tabulation.char" value="space"/>
     <setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
     <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>

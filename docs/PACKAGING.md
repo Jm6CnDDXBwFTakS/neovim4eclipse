@@ -18,14 +18,14 @@ Artifacts:
 | `plugins/.../target/*.jar` | OSGi plug-in jar |
 | `features/.../target/*.jar` | Feature jar |
 | `releng/.../target/repository/` | p2 update site (installable) |
-| `releng/.../target/EclipseNeovim-<version>.zip` | Same update site as one archive (installable; attach to GitHub releases) |
+| `releng/.../target/neovim4eclipse-<version>.zip` | Same update site as one archive (installable; attach to GitHub releases) |
 
 ### Install from the local update site
 
 1. *Help → Install New Software… → Add…*, then either
-   - *Archive…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/EclipseNeovim-<version>.zip`, or
+   - *Archive…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/neovim4eclipse-<version>.zip`, or
    - *Local…* and select `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/repository`
-2. Choose **Eclipse Neovim**, finish, restart (the bundle is unsigned: trust it when Eclipse asks; README, "Install", has every step)
+2. Choose **Neovim for Eclipse**, finish, restart (the bundle is unsigned: trust it when Eclipse asks; README, "Install", has every step)
 
 ### Unit tests only
 

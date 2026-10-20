@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the latest release gets fixes. Eclipse Neovim has a single maintainer, so there are no
+Only the latest release gets fixes. Neovim for Eclipse has a single maintainer, so there are no
 backports to older versions: a fix comes as a new release.
 
 ## Reporting a vulnerability
@@ -12,12 +12,12 @@ before the problem is widely known.
 
 Use GitHub's private vulnerability reporting: on the repository's **Security** tab, choose
 **Report a vulnerability**
-([direct link](https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim/security/advisories/new)). Only the
+([direct link](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/security/advisories/new)). Only the
 maintainer sees the report.
 
 Please include:
 
-- the Eclipse Neovim, Eclipse and Neovim versions, and the operating system;
+- the Neovim for Eclipse, Eclipse and Neovim versions, and the operating system;
 - what an attacker can do, and the steps or a file that shows it.
 
 There is no guaranteed response time. You can expect an acknowledgement when the maintainer has

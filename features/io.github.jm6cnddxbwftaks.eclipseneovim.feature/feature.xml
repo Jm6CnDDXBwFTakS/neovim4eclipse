@@ -3,15 +3,15 @@
 <!-- SPDX-License-Identifier: EPL-2.0 -->
 <feature
       id="io.github.jm6cnddxbwftaks.eclipseneovim.feature"
-      label="Eclipse Neovim"
+      label="Neovim for Eclipse"
       version="0.1.0.qualifier"
       provider-name="Jm6CnDDXBwFTakS">
 
    <!-- Shown under Help > Install New Software > Details. The text is displayed as written, so
         it starts at column 0 to avoid leading spaces on the second line. -->
-   <description url="https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim">Vim mode for Eclipse, powered by Neovim
+   <description url="https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse">Vim mode for Eclipse, powered by Neovim
 
-https://github.com/Jm6CnDDXBwFTakS/EclipseNeovim</description>
+https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse</description>
 
    <copyright>
       Copyright (c) 2026 Jm6CnDDXBwFTakS.

@@ -8,7 +8,7 @@
 
   <parent>
     <groupId>io.github.jm6cnddxbwftaks.eclipseneovim</groupId>
-    <artifactId>EclipseNeovim</artifactId>
+    <artifactId>neovim4eclipse</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
@@ -16,11 +16,11 @@
   <artifactId>io.github.jm6cnddxbwftaks.eclipseneovim.updatesite</artifactId>
   <packaging>eclipse-repository</packaging>
 
-  <name>Eclipse Neovim Update Site</name>
+  <name>Neovim for Eclipse Update Site</name>
 
   <build>
-    <!-- Name of the installable archive: target/EclipseNeovim-<version>.zip -->
-    <finalName>EclipseNeovim-${project.version}</finalName>
+    <!-- Name of the installable archive: target/neovim4eclipse-<version>.zip -->
+    <finalName>neovim4eclipse-${project.version}</finalName>
     <plugins>
       <plugin>
         <groupId>org.eclipse.tycho</groupId>

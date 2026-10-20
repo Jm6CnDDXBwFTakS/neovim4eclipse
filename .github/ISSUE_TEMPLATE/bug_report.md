@@ -17,7 +17,7 @@ labels: bug
 2.
 
 **Environment**
-- Eclipse Neovim version (Help > About > Installation Details > Plug-ins):
+- Neovim for Eclipse version (Help > About > Installation Details > Plug-ins):
 - Eclipse version:
 - Operating system and architecture:
 - Neovim version (`nvim --version`, first line):

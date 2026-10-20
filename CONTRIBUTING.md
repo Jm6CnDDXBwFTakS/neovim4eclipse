@@ -136,7 +136,7 @@ The integration profile alone covers 49% of `core` and `util`.
 Avoid `clean` while a runtime Eclipse launched from the IDE is running: it deletes the plug-in's
 `lib/*.jar`, which that Eclipse is using.
 
-The installable archive is `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/EclipseNeovim-<version>.zip`.
+The installable archive is `releng/io.github.jm6cnddxbwftaks.eclipseneovim.updatesite/target/neovim4eclipse-<version>.zip`.
 
 ## Run it from Eclipse
 

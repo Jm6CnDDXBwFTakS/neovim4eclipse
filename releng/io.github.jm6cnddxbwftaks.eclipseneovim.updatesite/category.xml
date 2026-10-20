@@ -5,7 +5,7 @@
    <feature id="io.github.jm6cnddxbwftaks.eclipseneovim.feature" version="0.0.0">
       <category name="eclipse_neovim"/>
    </feature>
-   <category-def name="eclipse_neovim" label="Eclipse Neovim">
+   <category-def name="eclipse_neovim" label="Neovim for Eclipse">
       <description>
          Neovim modal editing integrated into the Eclipse IDE.
       </description>

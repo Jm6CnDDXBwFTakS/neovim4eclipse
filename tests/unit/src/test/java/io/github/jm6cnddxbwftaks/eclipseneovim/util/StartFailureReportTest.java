@@ -58,7 +58,7 @@ class StartFailureReportTest {
         Exception error = new IllegalStateException("could not start the session",
                 new IOException("Cannot run program \"nvim\": error=2, No such file or directory"));
         String message = StartFailureReport.message("/usr/bin/nvim", error);
-        assertTrue(message.startsWith("Eclipse Neovim could not start Neovim"), message);
+        assertTrue(message.startsWith("Neovim for Eclipse could not start Neovim"), message);
         assertTrue(message.contains("\nExecutable: /usr/bin/nvim\n"), message);
         assertTrue(message.contains("\nError: Cannot run program \"nvim\": error=2, No such file or directory\n"),
                 message);
