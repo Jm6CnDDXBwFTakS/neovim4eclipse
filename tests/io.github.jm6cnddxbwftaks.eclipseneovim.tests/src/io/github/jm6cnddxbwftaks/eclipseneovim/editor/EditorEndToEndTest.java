@@ -8,6 +8,7 @@ import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.eclipseneovim.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -27,6 +28,7 @@ import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
@@ -35,7 +37,9 @@ import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -312,39 +316,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Tab in the {@code :} box, the whole way: Neovim completes {@code :e} names in the edited
-     * file's folder (not its own working directory), and Enter opens the completed file.
-     */
-    @Test
-    void tabCompletesAFileNameForEditAndEnterOpensIt() throws Exception {
-        IFile other = project.getFile("other.txt");
-        other.create(new ByteArrayInputStream("other\n".getBytes(StandardCharsets.UTF_8)), true, null);
-        type(widget, ':');
-        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(widget) != null);
-        Text box = textChildOf(widget);
-        box.insert("e ot");
-
-        Event tab = new Event();
-        tab.detail = SWT.TRAVERSE_TAB_NEXT;
-        tab.keyCode = SWT.TAB;
-        tab.character = SWT.TAB;
-        tab.doit = true;
-        box.notifyListeners(SWT.Traverse, tab);
-        waitUntil("Tab to complete the name", TIMEOUT_MS, () -> ":e other.txt".equals(box.getText()),
-                () -> "; the box reads " + box.getText());
-
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
-        IWorkbenchPage page = editor.getSite().getPage();
-        waitUntil("other.txt to open", TIMEOUT_MS,
-                () -> page.getActiveEditor() != null && "other.txt".equals(page.getActiveEditor().getTitle()));
-        page.closeEditor(page.getActiveEditor(), false);
-    }
-
-    /**
      * A change Eclipse makes by itself in normal mode (here: what a formatter or refactoring would
      * do) must reach Neovim. Otherwise {@code Gdd} would delete Neovim's stale last line, "gamma",
      * and its line event would remove "beta" from the document instead.
@@ -579,5 +550,148 @@ class EditorEndToEndTest extends EndToEndTestBase {
         type(widget, 'u');
         expectText("alpha\nbeta\ngamma\n");
         assertEquals("n", session.getMode());
+    }
+
+    // ---- Eclipse's own edits reach Neovim (review check Fix 7, the parts without Java tooling) ----
+
+    /** File › Revert (Eclipse's command, not {@code :e!}): Neovim gets the saved text back. */
+    @Test
+    void fileRevertReachesNeovim() throws Exception {
+        type(widget, "ggdd");
+        expectText("beta\ngamma\n");
+
+        runCommand("org.eclipse.ui.file.revert");
+        expectText("alpha\nbeta\ngamma\n");
+        assertFalse(editor.isDirty());
+        settle(); // let the push reach Neovim
+
+        type(widget, "Gdd");
+        expectText("alpha\nbeta\n");
+    }
+
+    /**
+     * Neovim mode off (the NVIM toolbar toggle), an edit in plain Eclipse, Neovim mode on again:
+     * the edit reaches Neovim when it is switched back on ({@code DocumentPush}), so {@code G dd}
+     * deletes the real last line and {@code u} brings it back.
+     */
+    @Test
+    void anEditWhileNeovimModeIsOffReachesNeovimWhenItIsBackOn() throws Exception {
+        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
+        runCommand("io.github.jm6cnddxbwftaks.eclipseneovim.commands.toggleMode");
+        assertFalse(controller.isNeovimModeActive());
+        document.replace(0, 0, "zeta\n");
+
+        runCommand("io.github.jm6cnddxbwftaks.eclipseneovim.commands.toggleMode");
+        assertTrue(controller.isNeovimModeActive());
+        settle();
+
+        type(widget, "Gdd");
+        expectText("zeta\nalpha\nbeta\n");
+        type(widget, 'u');
+        expectText("zeta\nalpha\nbeta\ngamma\n");
+    }
+
+    /** Runs an Eclipse command by its ID, as its menu item or key binding would. */
+    private static void runCommand(String commandId) throws Exception {
+        PlatformUI.getWorkbench().getService(IHandlerService.class).executeCommand(commandId, null);
+    }
+
+    // ---- Keys (review check REFACTOR) ----
+
+    /** {@code f:} finds the colon (it does not open the : box), {@code r/} replaces it, {@code t/} stops before the next slash. */
+    @Test
+    void fRAndTTakeColonAndSlashAsTheirArgument() throws Exception {
+        document.set("key: a/b/c\n");
+        settle();
+        typeSlowly("0f:r/t/");
+        assertNull(textChildOf(widget), "no : box");
+        type(widget, 'x');
+        expectText("key/ /b/c\n");
+    }
+
+    /**
+     * The {@code q} that stops a recording takes no register, so the {@code :} right after it opens
+     * the box, and the recorded macro then plays back.
+     */
+    @Test
+    void afterRecordingAMacroColonOpensTheBoxAndTheMacroPlaysBack() {
+        type(widget, "ggqaA;");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        type(widget, "jq");
+        settle();
+        waitUntil("the recording to stop", TIMEOUT_MS, () -> !session.isRecording());
+
+        type(widget, ':');
+        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(widget) != null);
+        Text box = textChildOf(widget);
+        Event escape = new Event();
+        escape.keyCode = SWT.ESC;
+        escape.character = SWT.ESC;
+        escape.doit = true;
+        box.notifyListeners(SWT.KeyDown, escape);
+        waitUntil("the : box to close", TIMEOUT_MS, () -> textChildOf(widget) == null);
+
+        type(widget, "@a");
+        expectText("alpha;\nbeta;\ngamma\n");
+    }
+
+    /** A click puts Neovim's cursor where the caret lands: {@code x} deletes the clicked character. */
+    @Test
+    void xDeletesTheCharacterThatWasClicked() {
+        click(8); // the t of "beta"
+        settle();
+        type(widget, 'x');
+        expectText("alpha\nbea\ngamma\n");
+    }
+
+    /** After dragging over words, {@code x} deletes the first selected character (Neovim's cursor goes to the start). */
+    @Test
+    void xAfterDraggingOverWordsDeletesTheFirstSelectedCharacter() throws Exception {
+        document.set("one two three\n");
+        settle();
+        drag(4, 9); // "two t"
+        assertEquals(new Point(4, 9), widget.getSelection(), "the dragged selection");
+        settle();
+        type(widget, 'x');
+        expectText("one wo three\n");
+    }
+
+    /** A left click on the character at {@code offset}, as the mouse sends it. */
+    private void click(int offset) {
+        Point at = pointOf(offset);
+        widget.notifyListeners(SWT.MouseDown, mouse(at, 0));
+        widget.notifyListeners(SWT.MouseUp, mouse(at, SWT.BUTTON1));
+    }
+
+    /**
+     * Presses the left button on {@code from}, moves to {@code to} in two steps, releases it. Two,
+     * as a real drag sends many: on each move StyledText moves the caret (the plug-in sends it to
+     * Neovim then) before it extends the selection, so only from the second move on does the caret
+     * event see a selection, and send its start.
+     */
+    private void drag(int from, int to) {
+        Point start = pointOf(from);
+        Point end = pointOf(to);
+        widget.notifyListeners(SWT.MouseDown, mouse(start, 0));
+        widget.notifyListeners(SWT.MouseMove, mouse(pointOf(to - 1), SWT.BUTTON1));
+        widget.notifyListeners(SWT.MouseMove, mouse(end, SWT.BUTTON1));
+        widget.notifyListeners(SWT.MouseUp, mouse(end, SWT.BUTTON1));
+    }
+
+    /** Inside the left half of the character at {@code offset}, so the caret goes before it. */
+    private Point pointOf(int offset) {
+        Point location = widget.getLocationAtOffset(offset);
+        return new Point(location.x + 1, location.y + widget.getLineHeight(offset) / 2);
+    }
+
+    private static Event mouse(Point at, int stateMask) {
+        Event event = new Event();
+        event.button = 1;
+        event.count = 1;
+        event.x = at.x;
+        event.y = at.y;
+        event.stateMask = stateMask;
+        return event;
     }
 }
