@@ -44,8 +44,9 @@ final class InputThread {
      *
      * @param what         short description for the log
      * @param failureLevel level at which a failure of {@code work} is logged
+     * @return {@code false} if the thread has shut down and {@code work} will never run
      */
-    void submit(String what, Level failureLevel, Task work) {
+    boolean submit(String what, Level failureLevel, Task work) {
         try {
             executor.execute(() -> {
                 try {
@@ -54,8 +55,10 @@ final class InputThread {
                     LOG.log(failureLevel, what + " failed", e);
                 }
             });
+            return true;
         } catch (RejectedExecutionException e) {
             LOG.log(Level.FINE, "Input thread shut down; dropped: " + what);
+            return false;
         }
     }
 
