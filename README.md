@@ -23,8 +23,7 @@ release process; see [Known limitations](#known-limitations).
   works, and why.
 - [docs/FOLDING.md](docs/FOLDING.md): the plan for folding with `zo`, `zc` and the other `z` commands
   (not implemented yet).
-- [docs/NEW_FILE.md](docs/NEW_FILE.md): the plan for `:e newfile` opening an empty editor that `:w`
-  creates (not implemented yet).
+- [docs/NEW_FILE.md](docs/NEW_FILE.md): how `:e newfile` opens an empty editor that `:w` creates.
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
   step by step.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
@@ -228,7 +227,8 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
 | `:wqa[ll]`, `:xa[ll]` | save all, then close all |
-| `:e[dit] file` | open `file`, looked for next to the current file, then in its project; `./file` and `../file` only from the current file's folder; `~` and absolute paths work |
+| `:e[dit] file` | open `file`, looked for next to the current file, then in its project; `./file` and `../file` only from the current file's folder; `~` and absolute paths work. A file not found opens as a new, empty editor next to the current file (`"file" [New]`); nothing is written until `:w` |
+| `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
@@ -445,8 +445,10 @@ These are real and deliberate to know about before extending the code:
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
 3. **Host commands are a fixed set** (table under *Command line*). `:w <otherfile>` saves the current editor and ignores
-   the name; `:e` cannot create a new file and does not expand `%` or wildcards; tab commands only move
-   within the current editor stack (one half of a split editor area).
+   the name; `:e` does not expand `%` or wildcards; tab commands only move within the current editor
+   stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
+   *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`
+   creates it.
 4. **No empty last line without a final newline.** A file that does not end with a line break
    cannot show a trailing empty line (the text would be identical to a file that does). This only
    matters briefly, e.g. right after `o` on the last line of such a file.

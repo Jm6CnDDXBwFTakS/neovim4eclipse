@@ -131,6 +131,16 @@ class HostExCommandTest {
     }
 
     @Test
+    void writeAndWqWriteEvenUnchangedFiles() {
+        for (String raw : new String[] { "w", "wri", "write!", "wq", "WQ!", "w ++p" }) {
+            assertTrue(HostExCommand.parse(raw).writesUnchanged(), raw);
+        }
+        for (String raw : new String[] { "up", "update", "x", "xit", "exit", "wa", "wqa", "q", "e x" }) {
+            assertFalse(HostExCommand.parse(raw).writesUnchanged(), raw);
+        }
+    }
+
+    @Test
     void isHostCommandReflectsKind() {
         assertTrue(HostExCommand.parse("w").isHostCommand());
         assertFalse(HostExCommand.parse("echo 1").isHostCommand());

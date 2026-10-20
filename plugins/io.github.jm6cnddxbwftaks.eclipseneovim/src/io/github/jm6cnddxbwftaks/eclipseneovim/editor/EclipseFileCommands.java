@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.eclipseneovim.editor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -18,8 +19,10 @@ import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -43,11 +46,15 @@ public final class EclipseFileCommands {
     private EclipseFileCommands() {
     }
 
-    /** {@code ZZ}: write if needed, then quit. Call from the key event; see {@link #afterKeyEvent}. */
+    /**
+     * {@code ZZ}: write if needed, then quit; a failed write keeps the editor open, as in Vim (a new
+     * file in a missing folder, a read-only file). Call from the key event; see {@link #afterKeyEvent}.
+     */
     public static void zz(ITextEditor editor) {
         afterKeyEvent(() -> {
-            save(editor);
-            close(editor, true);
+            if (save(editor, false, false)) {
+                close(editor, true);
+            }
         });
     }
 
@@ -69,9 +76,18 @@ public final class EclipseFileCommands {
         }
     }
 
-    /** {@code :w}. @return {@code true} if the editor is clean afterward */
-    static boolean save(ITextEditor editor) {
-        return savePart(EditorAttachManager.getInstance().workbenchPartOf(editor));
+    /**
+     * {@code :w}. An editor whose file does not exist yet is saved by creating the file
+     * ({@link NewFiles#save}); any other is saved by Eclipse, as {@code Ctrl+S} would.
+     *
+     * @param createFolders   {@code :w ++p}: a new file's missing folders may be created
+     * @param evenIfUnchanged a new file is created even when nothing was typed ({@code :w}, {@code :wq})
+     * @return {@code true} if the editor is clean afterward
+     */
+    static boolean save(ITextEditor editor, boolean createFolders, boolean evenIfUnchanged) {
+        IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
+        NewFiles.Missing missing = NewFiles.missingFileOf(editor);
+        return missing == null ? savePart(part) : NewFiles.save(editor, part, missing, createFolders, evenIfUnchanged);
     }
 
     /**
@@ -96,16 +112,54 @@ public final class EclipseFileCommands {
      * {@code :wa}: saves every modified editor in every workbench window, without asking, as Vim
      * writes every changed buffer. This is Eclipse's own <em>File &gt; Save All</em>.
      *
+     * <p>Editors whose file does not exist yet are written first, creating their files
+     * ({@link NewFiles#save}): Eclipse's own save would open Save As for each. If one of them cannot
+     * be written (its folder is missing), Eclipse's Save All would still offer Save As for it, so the
+     * other editors are then saved one by one instead.
+     *
      * @return {@code true} if nothing is left unsaved (an editor can refuse, e.g. on a write error)
      */
     static boolean saveAll() {
         try {
             IWorkbench workbench = PlatformUI.getWorkbench();
-            return workbench.saveAllEditors(false); // false: no "Save resources?" confirmation
+            List<IEditorPart> dirty = dirtyEditors(workbench);
+            List<IEditorPart> failed = new ArrayList<>();
+            for (IEditorPart part : dirty) {
+                ITextEditor text = EditorAttachManager.textEditorOf(part);
+                NewFiles.Missing missing = text == null ? null : NewFiles.missingFileOf(text);
+                if (missing != null && !NewFiles.save(text, part, missing, false, false)) {
+                    failed.add(part);
+                }
+            }
+            if (failed.isEmpty()) {
+                return workbench.saveAllEditors(false); // false: no "Save resources?" confirmation
+            }
+            for (IEditorPart part : dirty) {
+                if (!failed.contains(part) && part.isDirty()) {
+                    savePart(part);
+                }
+            }
+            return false;
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Eclipse save all failed", e);
             return false;
         }
+    }
+
+    /** The modified editors of every workbench window; editors never shown are not modified. */
+    private static List<IEditorPart> dirtyEditors(IWorkbench workbench) {
+        List<IEditorPart> dirty = new ArrayList<>();
+        for (IWorkbenchWindow window : workbench.getWorkbenchWindows()) {
+            for (IWorkbenchPage page : window.getPages()) {
+                for (IEditorReference reference : page.getEditorReferences()) {
+                    IEditorPart part = reference.getEditor(false);
+                    if (part != null && part.isDirty()) {
+                        dirty.add(part);
+                    }
+                }
+            }
+        }
+        return dirty;
     }
 
     /**
@@ -145,7 +199,9 @@ public final class EclipseFileCommands {
     /**
      * {@code :e[!] [file]}.
      * <ul>
-     *   <li>With a file name: opens it (see {@link EditPath} for where it is looked for).</li>
+     *   <li>With a file name: opens it (see {@link EditPath} for where it is looked for). A file
+     *       that is not found opens as a new, empty editor beside the current file, created by the
+     *       first {@code :w} ({@link NewFiles}).</li>
      *   <li>{@code :e!}: reverts the editor to the saved file, discarding changes.</li>
      *   <li>{@code :e}: reloads the saved file, refused (as in Vim, E37) while there are changes.</li>
      * </ul>
@@ -164,7 +220,12 @@ public final class EclipseFileCommands {
         }
         Path file = findFile(editor, argument);
         if (file == null) {
-            HostCommands.showError(editor, "Can't find file \"" + argument + "\"");
+            Path created = newFilePath(editor, argument);
+            if (created == null) {
+                HostCommands.showError(editor, "Can't find file \"" + argument + "\"");
+            } else {
+                NewFiles.open(editor.getEditorSite().getPage(), created, argument);
+            }
             return;
         }
         if (Files.isDirectory(file)) {
@@ -197,6 +258,17 @@ public final class EclipseFileCommands {
             }
         }
         return null;
+    }
+
+    /**
+     * Where {@code :e name} creates a file it did not find: {@code name} beside the current file
+     * (absolute and {@code ~} paths as typed), never in the project root. {@code null} when there is
+     * no current folder (an untitled document) and the name is relative.
+     */
+    private static Path newFilePath(ITextEditor editor, String argument) {
+        List<Path> currentFolder = Collections.singletonList(editFolders(editor).get(0));
+        List<Path> candidates = EditPath.candidates(argument, Path.of(System.getProperty("user.home")), currentFolder);
+        return candidates.isEmpty() ? null : candidates.get(0);
     }
 
     /**

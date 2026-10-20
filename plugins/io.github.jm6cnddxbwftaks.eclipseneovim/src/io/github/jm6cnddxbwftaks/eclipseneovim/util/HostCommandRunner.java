@@ -27,9 +27,11 @@ public final class HostCommandRunner {
         /**
          * Saves the current editor; {@code false} if it could not be saved.
          *
-         * @param createFolders {@code :w ++p}: a new file's missing folders may be created
+         * @param createFolders   {@code :w ++p}: a new file's missing folders may be created
+         * @param evenIfUnchanged {@code :w}, {@code :wq}: a new file is created even when nothing was
+         *                        typed (an empty file); {@code :x} and {@code :update} create none
          */
-        boolean save(boolean createFolders);
+        boolean save(boolean createFolders, boolean evenIfUnchanged);
 
         /** Saves every modified editor; {@code false} if one could not be saved. */
         boolean saveAll();
@@ -73,13 +75,13 @@ public final class HostCommandRunner {
         HostExCommand cmd = HostExCommand.parse(raw);
         boolean force = cmd.force();
         switch (cmd.kind()) {
-            case WRITE -> onUi.accept(() -> ide.save(cmd.createFolders()));
+            case WRITE -> onUi.accept(() -> ide.save(cmd.createFolders(), cmd.writesUnchanged()));
             case WRITE_ALL -> onUi.accept(ide::saveAll);
             case QUIT -> onUi.accept(() -> ide.close(force));
             case QUIT_ALL -> onUi.accept(() -> ide.closeAll(force));
             // Closed with force = true once saved: the save already dealt with the changes.
             case WRITE_QUIT -> onUi.accept(() -> {
-                if (ide.save(cmd.createFolders()) || force) {
+                if (ide.save(cmd.createFolders(), cmd.writesUnchanged()) || force) {
                     ide.close(true);
                 }
             });
