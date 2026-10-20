@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.core;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -14,10 +16,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.ensarsarajcic.neovim.java.api.NeovimStreamApi;
-import com.ensarsarajcic.neovim.java.api.types.api.ClientAttributes;
-import com.ensarsarajcic.neovim.java.api.types.api.ClientType;
-import com.ensarsarajcic.neovim.java.api.types.api.ClientVersionInfo;
-import com.ensarsarajcic.neovim.java.api.types.api.UiOptions;
 import com.ensarsarajcic.neovim.java.api.util.ObjectMappers;
 import com.ensarsarajcic.neovim.java.corerpc.client.ProcessRpcConnection;
 import com.ensarsarajcic.neovim.java.corerpc.message.NotificationMessage;
@@ -83,6 +81,28 @@ final class NeovimConnection implements AutoCloseable {
     /** Name this plug-in reports to Neovim through {@code nvim_set_client_info}. */
     static final String CLIENT_NAME = "Eclipse-Neovim";
 
+    /**
+     * The size reported with {@code nvim_ui_attach}. The plug-in draws nothing from Neovim's screen,
+     * but the size still matters a little: it is what {@code &columns} and {@code &lines} say.
+     */
+    private static final int UI_WIDTH = 120;
+    private static final int UI_HEIGHT = 40;
+    /**
+     * A plain terminal-like UI: no 24-bit color ({@code rgb} defaults to {@code true}, so it is sent
+     * explicitly) and none of the {@code ext_*} features, which would make Neovim send their events
+     * instead of drawing the command line, messages, ... into the grid.
+     */
+    static final Map<String, Object> TERMINAL_UI = terminalUi();
+
+    private static Map<String, Object> terminalUi() {
+        Map<String, Object> options = new LinkedHashMap<>();
+        for (String name : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
+                "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
+            options.put(name, false);
+        }
+        return Collections.unmodifiableMap(options); // keeps the order: the same bytes every time
+    }
+
     /** Upper bound for the requests made while opening. */
     private static final long OPEN_TIMEOUT_SEC = 5;
     /** How long {@link #requestQuit} waits for Neovim to exit after {@code :qa!} (it takes milliseconds). */
@@ -139,17 +159,13 @@ final class NeovimConnection implements AutoCloseable {
         ReactiveRpcStreamer reactive = ReactiveRpcClient.createInstanceWithCustomReactiveStreamer(
                 new ReactiveRpcStreamerWrapper(rpcClient, rpcExecutor));
         reactive.attach(streams);
-        NeovimStreamApi streamApi = new NeovimStreamApi(reactive);
-        NeovimConnection connection = new NeovimConnection(process, streams, rpcClient, rpcExecutor,
-                new NeovimJavaApi(streamApi, reactive));
+        NeovimApi api = new NeovimJavaApi(new NeovimStreamApi(reactive), reactive);
+        NeovimConnection connection = new NeovimConnection(process, streams, rpcClient, rpcExecutor, api);
 
         try {
-            // These two still use neovim-java's API directly (its option types); they move to
-            // core/rpc/NeovimApi with our own client (docs/RPC_CLIENT.md, step 7).
-            await(streamApi.setClientInfo(CLIENT_NAME, clientVersion(clientVersion),
-                    ClientType.REMOTE, Map.of(), new ClientAttributes(null, null, null)));
+            await(api.setClientInfo(CLIENT_NAME, clientVersion(clientVersion), "remote", Map.of(), Map.of()));
             // Without a UI attached, nvim_input is not processed reliably under --embed.
-            await(streamApi.attachUi(120, 40, UiOptions.TERMINAL));
+            await(api.uiAttach(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
         } catch (Exception e) {
             connection.close();
             throw e;
@@ -161,10 +177,16 @@ final class NeovimConnection implements AutoCloseable {
      * Converts an OSGi version ({@code 1.2.3.qualifier}) to Neovim's client version: the qualifier
      * becomes the pre-release tag; missing or non-numeric parts become 0.
      */
-    static ClientVersionInfo clientVersion(String version) {
+    static Map<String, Object> clientVersion(String version) {
         String[] parts = version == null ? new String[0] : version.split("\\.", 4);
-        return new ClientVersionInfo(versionPart(parts, 0), versionPart(parts, 1), versionPart(parts, 2),
-                parts.length > 3 && !parts[3].isEmpty() ? parts[3] : null);
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("major", versionPart(parts, 0));
+        info.put("minor", versionPart(parts, 1));
+        info.put("patch", versionPart(parts, 2));
+        if (parts.length > 3 && !parts[3].isEmpty()) {
+            info.put("prerelease", parts[3]); // optional: left out, not sent as nil
+        }
+        return info;
     }
 
     private static int versionPart(String[] parts, int index) {

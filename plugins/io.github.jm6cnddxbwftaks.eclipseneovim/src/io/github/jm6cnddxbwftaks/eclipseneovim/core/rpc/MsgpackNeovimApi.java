@@ -52,6 +52,17 @@ public final class MsgpackNeovimApi implements NeovimApi {
     }
 
     @Override
+    public CompletableFuture<Void> setClientInfo(String name, Map<String, Object> version, String type,
+            Map<String, Object> methods, Map<String, Object> attributes) {
+        return call(MsgpackNeovimApi::nothing, "nvim_set_client_info", name, version, type, methods, attributes);
+    }
+
+    @Override
+    public CompletableFuture<Void> uiAttach(int width, int height, Map<String, Object> options) {
+        return call(MsgpackNeovimApi::nothing, "nvim_ui_attach", width, height, options);
+    }
+
+    @Override
     public CompletableFuture<Mode> getMode() {
         return call(answer -> {
             Map<?, ?> map = map("nvim_get_mode", answer, "a map with mode and blocking");

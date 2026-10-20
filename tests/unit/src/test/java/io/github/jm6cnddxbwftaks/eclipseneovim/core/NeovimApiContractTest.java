@@ -114,6 +114,17 @@ class NeovimApiContractTest {
         }
 
         @Test
+        void setClientInfoIsWhatNeovimShowsForTheChannel() throws Exception {
+            int id = await(api.getChannelId());
+            await(api.setClientInfo("contract", Map.of("major", 1, "minor", 2, "patch", 3, "prerelease", "q"),
+                    "remote", Map.of(), Map.of("website", "https://example.org")));
+            Object client = lua("return vim.api.nvim_get_chan_info(" + id + ").client");
+            assertEquals(Map.of("name", "contract", "type", "remote", "methods", Map.of(),
+                    "attributes", Map.of("website", "https://example.org"),
+                    "version", Map.of("major", 1L, "minor", 2L, "patch", 3L, "prerelease", "q")), client);
+        }
+
+        @Test
         void inputAnswersTheBytesQueued() throws Exception {
             assertEquals(2, await(api.input("ix")));
         }
@@ -252,10 +263,10 @@ class NeovimApiContractTest {
             }, "contract-test-rpc");
             channel.start();
             // As NeovimConnection.open does: without a UI attached, Neovim does not reliably
-            // process nvim_input under --embed (the "blocking" test fails without it). Sent raw:
-            // nvim_ui_attach joins NeovimApi only in step 7.
-            await(channel.request("nvim_ui_attach", 120, 40, Map.of()));
-            return new MsgpackNeovimApi(channel);
+            // process nvim_input under --embed (the "blocking" test fails without it).
+            NeovimApi api = new MsgpackNeovimApi(channel);
+            await(api.uiAttach(120, 40, NeovimConnection.TERMINAL_UI));
+            return api;
         }
 
         @Override

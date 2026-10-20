@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
 /** Pure helpers of {@link NeovimSession} and {@link NeovimConnection}; no Neovim process involved. */
@@ -33,21 +35,16 @@ class NeovimSessionParsingTest {
 
     @Test
     void clientVersionTakesMajorMinorMicroAndQualifier() {
-        var v = NeovimConnection.clientVersion("1.2.3.202610170535");
-        assertEquals(1, v.getMajor());
-        assertEquals(2, v.getMinor());
-        assertEquals(3, v.getPatch());
-        assertEquals("202610170535", v.getPreRelease());
+        // The map nvim_set_client_info takes as its version.
+        assertEquals(Map.of("major", 1, "minor", 2, "patch", 3, "prerelease", "202610170535"),
+                NeovimConnection.clientVersion("1.2.3.202610170535"));
     }
 
     @Test
     void clientVersionDefaultsMissingOrBadPartsToZero() {
-        var v = NeovimConnection.clientVersion("4.x");
-        assertEquals(4, v.getMajor());
-        assertEquals(0, v.getMinor());
-        assertEquals(0, v.getPatch());
-        assertEquals(null, v.getPreRelease());
-        assertEquals(0, NeovimConnection.clientVersion(null).getMajor());
+        // No qualifier: no prerelease key at all (Neovim would show a nil one).
+        assertEquals(Map.of("major", 4, "minor", 0, "patch", 0), NeovimConnection.clientVersion("4.x"));
+        assertEquals(Map.of("major", 0, "minor", 0, "patch", 0), NeovimConnection.clientVersion(null));
     }
 
 }
