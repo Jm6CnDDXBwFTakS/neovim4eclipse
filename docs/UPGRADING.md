@@ -26,7 +26,7 @@ The safe loop for any upgrade:
 |------|-----------------|-----------------------------------------------------------|
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
 | Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, and the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties) |
-| Embedded libraries | `<neovim.java.version>`, `<msgpack.version>`, `<jackson.version>`, `<slf4j.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
+| Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
 | Tycho | `<tycho.version>` in the root `pom.xml` | none |
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
@@ -41,9 +41,9 @@ Dependabot (`.github/dependabot.yml`) opens weekly pull requests for the Maven p
 major library versions) and the GitHub Actions. It cannot see the JDK, the Eclipse release, Neovim
 or the Maven wrapper; those are upgraded by hand with the steps below. It also skips the
 `org.eclipse.platform` jars on purpose: they must match the Eclipse release, so they move with it.
-The embedded libraries (neovim-java, msgpack, Jackson) come as one pull request, because they
-depend on each other's versions: msgpack 0.9.12 alone (built for Jackson 2.20) made every RPC
-time out with Jackson 2.14.
+The embedded msgpack-core comes as an ordinary pull request of its own; it has no partner
+libraries to keep in step since the plug-in's own RPC client replaced neovim-java and Jackson
+(`docs/RPC_CLIENT.md`).
 
 Its pull requests target `main`, the default branch. Rather than merging them there, apply an
 accepted update on `develop` as its own commit (with the checks below), then fast-forward `main`;
@@ -97,9 +97,9 @@ To raise it (example: 2024-12 to 2025-12):
 `Require-Bundle` in `MANIFEST.MF` has no version ranges, so nothing else stops an install on an
 Eclipse older than the target; the target release is the promise.
 
-## Embedded libraries (neovim-java, msgpack, Jackson, SLF4J)
+## Embedded library (msgpack-core)
 
-The jars are copied into `plugins/.../lib/` by the plug-in's `pom.xml` and redistributed inside the
+The plug-in embeds one library, msgpack-core, under its own RPC client in `core/rpc`. The jars are copied into `plugins/.../lib/` by the plug-in's `pom.xml` and redistributed inside the
 plug-in, so their license files ship with it.
 
 To change a version:
@@ -109,24 +109,20 @@ To change a version:
 2. Compare the jar's own license files with the copies in `plugins/.../licenses/`; a new version can
    add or change a `NOTICE`, which must then be updated. For example:
    ```bash
-   unzip -l ~/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.14.2/jackson-core-2.14.2.jar | grep -i -E 'notice|license'
-   unzip -p ~/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.14.2/jackson-core-2.14.2.jar META-INF/NOTICE
+   unzip -l ~/.m2/repository/org/msgpack/msgpack-core/0.9.3/msgpack-core-0.9.3.jar | grep -i -E 'notice|license'
    ```
+   msgpack-core 0.9.3 carries none in its jar: the `NOTICE` in `licenses/` comes from the
+   [msgpack-java](https://github.com/msgpack/msgpack-java) repository, so compare with the one
+   there at the new version's tag.
 3. Check for new transitive dependencies, which are **not** copied automatically:
    ```bash
    ./mvnw dependency:tree -f tests/unit/pom.xml
    ```
-4. Keep the versions compatible with each other: neovim-java was built against particular Jackson
-   and msgpack versions. A major version (SLF4J 1 to 2, Jackson 2 to 3) changes APIs or packages
-   and needs code changes; Dependabot skips those on purpose. A minor version can still need a
-   newer partner: each msgpack release names the Jackson it was built with, for example
-   ```bash
-   curl -s https://repo.maven.apache.org/maven2/org/msgpack/jackson-dataformat-msgpack/0.9.12/jackson-dataformat-msgpack-0.9.12.pom | grep -A2 jackson-databind
-   ```
-   shows Jackson 2.20.0. Raise Jackson to at least that version in the same commit. (Jackson 2.20
-   publishes `jackson-annotations` as `2.20`, without a patch number, so one `<jackson.version>`
-   no longer fits all three Jackson jars from that release on.)
-5. Run everything, integration tests included (they exercise neovim-java and msgpack).
+4. Read the release notes for changes to the API `core/rpc/MsgpackValues` and `RpcChannel` use
+   (`MessagePacker`, `MessageUnpacker`, the `MessagePackException`s). A major version changes APIs
+   and needs code changes; Dependabot skips those on purpose.
+5. Run everything, integration tests included (they exercise the RPC client against a real
+   Neovim): `MsgpackValuesTest` pins the bytes on the wire, `RpcChannelTest` the protocol.
 
 To add a library: add it to the root `dependencyManagement`, to `artifactItems` in the plug-in's
 `pom.xml`, to `Bundle-ClassPath` in `MANIFEST.MF`, its license to `licenses/` and `about.html`, and

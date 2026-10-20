@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–7 (the plug-in runs on its own client). Next: step 8, removing the jars.
+Status: **accepted** (option A), in progress. Done: steps 1–8 (the plug-in runs on its own client, and embeds msgpack-core only). Left: step 9.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -304,6 +304,12 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
    msgpack-core only). Dependabot reads the root `pom.xml` properties, so it stops proposing the
    removed libraries by itself. Delete `plugins/.../lib/` and `target/classes` before building (see AGENTS.md, "Pitfalls"), then install
    the ZIP in a real Eclipse and try typing, `:w`, `"+p` and closing editors.
+   *Done.* As built: also `ACKNOWLEDGEMENTS.md`, the Dependabot group `rpc-libraries` (removed with
+   its comment; msgpack-core gets ordinary pull requests) and its pull request #6 (closed), LEARNING's
+   `Bundle-ClassPath` row, README and ARCHITECTURE. The consistency tests needed no change (they
+   compare the lists with each other). `lib/` now holds `msgpack-core.jar` only, and the plug-in jar
+   in the ZIP is 416 KB. Still to do by hand: install the ZIP in a real Eclipse and try typing, `:w`,
+   `"+p` and closing editors. Decided separately: msgpack-core 0.9.3 to 0.9.12 in its own commit.
 9. **Cursor calls on window 0.** `NeovimSession.getCursor` and `setCursor` first ask
    `nvim_get_current_win` and then pass that window; Neovim's window functions accept `0` for the
    current window, so `winGetCursor(Handle.window(0))` saves one round trip per call. A one-line

@@ -172,8 +172,8 @@ or a fake that holds the work back (for example, to close the editor while a Neo
 ## Dependency stack
 
 - **msgpack-core** (MessagePack), under the plug-in's own msgpack-rpc client in `core/rpc`
-  (`docs/RPC_CLIENT.md` tells how it replaced neovim-java). Until step 8 of that plan, the old jars
-  (neovim-java, Jackson, SLF4J) are still bundled, but nothing uses them.
+  (`docs/RPC_CLIENT.md` tells how it replaced neovim-java, Jackson and SLF4J). The only
+  third-party jar the plug-in embeds.
 
 Jars live under `plugins/.../lib/` and on `Bundle-ClassPath`. They are copied there by the build
 (version-less names); their versions are defined only in the root `pom.xml`.

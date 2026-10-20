@@ -59,42 +59,10 @@
       <groupId>org.eclipse.platform</groupId>
       <artifactId>org.eclipse.core.commands</artifactId>
     </dependency>
-    <!-- core/ is compiled here too (sync/ and editor/ use its ports), so it needs its libraries. -->
-    <dependency>
-      <groupId>com.ensarsarajcic.neovim.java</groupId>
-      <artifactId>neovim-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.ensarsarajcic.neovim.java</groupId>
-      <artifactId>core-rpc</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.ensarsarajcic.neovim.java</groupId>
-      <artifactId>reactive-core-rpc</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.ensarsarajcic.neovim.java</groupId>
-      <artifactId>handler-annotations</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.ensarsarajcic.neovim.java</groupId>
-      <artifactId>neovim-notifications</artifactId>
-    </dependency>
+    <!-- core/ is compiled here too (sync/ and editor/ use its ports), so it needs its library. -->
     <dependency>
       <groupId>org.msgpack</groupId>
       <artifactId>msgpack-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.msgpack</groupId>
-      <artifactId>jackson-dataformat-msgpack</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

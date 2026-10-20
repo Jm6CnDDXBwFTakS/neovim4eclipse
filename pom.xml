@@ -75,10 +75,7 @@
     <!-- Third-party library versions: the ONLY place they are defined. The plug-in build copies
          the jars into plugins/.../lib/ (version-less names, see its pom.xml) and the unit tests
          inherit them through dependencyManagement below. -->
-    <neovim.java.version>0.5.0</neovim.java.version>
     <msgpack.version>0.9.3</msgpack.version>
-    <jackson.version>2.14.2</jackson.version>
-    <slf4j.version>1.7.36</slf4j.version>
     <junit.version>5.14.4</junit.version>
     <!-- Eclipse's text model jars, for tests/text only (the plug-in gets them from the Eclipse
          release above). They are the versions inside that release: when <eclipse-repo.url>
@@ -98,64 +95,9 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>com.ensarsarajcic.neovim.java</groupId>
-        <artifactId>neovim-api</artifactId>
-        <version>${neovim.java.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.ensarsarajcic.neovim.java</groupId>
-        <artifactId>core-rpc</artifactId>
-        <version>${neovim.java.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.ensarsarajcic.neovim.java</groupId>
-        <artifactId>reactive-core-rpc</artifactId>
-        <version>${neovim.java.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.ensarsarajcic.neovim.java</groupId>
-        <artifactId>handler-annotations</artifactId>
-        <version>${neovim.java.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.ensarsarajcic.neovim.java</groupId>
-        <artifactId>neovim-notifications</artifactId>
-        <version>${neovim.java.version}</version>
-      </dependency>
-      <dependency>
         <groupId>org.msgpack</groupId>
         <artifactId>msgpack-core</artifactId>
         <version>${msgpack.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.msgpack</groupId>
-        <artifactId>jackson-dataformat-msgpack</artifactId>
-        <version>${msgpack.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>${jackson.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-core</artifactId>
-        <version>${jackson.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-annotations</artifactId>
-        <version>${jackson.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-api</artifactId>
-        <version>${slf4j.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-simple</artifactId>
-        <version>${slf4j.version}</version>
       </dependency>
       <dependency>
         <groupId>org.junit.jupiter</groupId>

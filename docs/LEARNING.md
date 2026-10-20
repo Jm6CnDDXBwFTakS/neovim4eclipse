@@ -34,7 +34,7 @@ The headers this plug-in uses:
 | `Bundle-Activator` | Class whose `start`/`stop` OSGi calls (`Activator`). |
 | `Bundle-ActivationPolicy: lazy` | The bundle starts only when one of its classes is first loaded. |
 | `Require-Bundle` | Other bundles whose exported packages this one uses (`org.eclipse.ui`, `org.eclipse.jface.text`, ...). |
-| `Bundle-ClassPath: ., lib/neovim-api.jar, ...` | Jars *inside* the bundle that join its class path. This is how the plug-in embeds neovim-java and its dependencies. |
+| `Bundle-ClassPath: ., lib/msgpack-core.jar` | Jars *inside* the bundle that join its class path. This is how the plug-in embeds msgpack-core, the one library under its RPC client. |
 | `Bundle-RequiredExecutionEnvironment: JavaSE-21` | The minimum Java version. |
 
 Because the embedded jars are listed by name in `Bundle-ClassPath`, the build copies them into `lib/`
