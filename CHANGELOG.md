@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-20
+
 The first release. Neovim for Eclipse embeds a real Neovim (`nvim --embed`) in Eclipse text editors:
 Neovim does the editing, Eclipse keeps the files, the rendering and its own tools.
 
