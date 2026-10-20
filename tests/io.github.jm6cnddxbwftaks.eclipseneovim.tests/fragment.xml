@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<!-- Contributions used only by the UI tests. They are inert until a test activates the context below. -->
+<fragment>
+
+   <!-- Some installed plug-ins bind F3 for every text editor to a command that only their own editors
+        handle. A test activates this context to recreate that in the plain Text Editor. -->
+   <extension point="org.eclipse.ui.contexts">
+      <context
+            id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.context.unhandledF3"
+            name="Eclipse Neovim tests: F3 without a handler"
+            parentId="org.eclipse.ui.textEditorScope">
+      </context>
+   </extension>
+   <extension point="org.eclipse.ui.commands">
+      <command
+            id="io.github.jm6cnddxbwftaks.eclipseneovim.tests.commands.unhandledF3"
+            name="Eclipse Neovim tests: F3 without a handler">
+      </command>
+   </extension>
+   <extension point="org.eclipse.ui.bindings">
+      <key
+            commandId="io.github.jm6cnddxbwftaks.eclipseneovim.tests.commands.unhandledF3"
+            contextId="io.github.jm6cnddxbwftaks.eclipseneovim.tests.context.unhandledF3"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="F3">
+      </key>
+   </extension>
+
+</fragment>

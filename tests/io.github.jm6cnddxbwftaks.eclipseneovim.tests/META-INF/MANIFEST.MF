@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Eclipse Neovim Tests
-Bundle-SymbolicName: io.github.jm6cnddxbwftaks.eclipseneovim.tests
+Bundle-SymbolicName: io.github.jm6cnddxbwftaks.eclipseneovim.tests;singleton:=true
 Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: Jm6CnDDXBwFTakS
 Fragment-Host: io.github.jm6cnddxbwftaks.eclipseneovim

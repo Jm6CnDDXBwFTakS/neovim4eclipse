@@ -37,6 +37,8 @@ import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.contexts.IContextActivation;
+import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -621,6 +623,30 @@ class EditorEndToEndTest {
                 () -> "; caret " + widget.getCaretOffset());
         type(widget, 'x');
         expectText("int  = 1;\ny = x;\n");
+    }
+
+    /**
+     * Another plug-in may bind F3 for every text editor to a command the Text Editor has no handler
+     * for (the test context in {@code fragment.xml} recreates that). {@code gd} is then Neovim's own,
+     * not the error "gd: not available in this editor".
+     */
+    @Test
+    void gdIsNeovimsOwnWhenTheF3CommandCannotRunHere() throws Exception {
+        IContextService contexts = editor.getSite().getService(IContextService.class);
+        IContextActivation activation = contexts.activateContext(
+                "io.github.jm6cnddxbwftaks.eclipseneovim.tests.context.unhandledF3");
+        try {
+            assertEquals("io.github.jm6cnddxbwftaks.eclipseneovim.tests.commands.unhandledF3",
+                    KeyBindings.commandIdFor("F3"), "F3 is bound, with no handler");
+            document.set("int x = 1;\ny = x;\n");
+            settle();
+            type(widget, "G$h"); // on the x of "y = x;"
+            type(widget, "gd");
+            waitUntil("the caret on the first x", TIMEOUT_MS, () -> widget.getCaretOffset() == 4,
+                    () -> "; caret " + widget.getCaretOffset());
+        } finally {
+            contexts.deactivateContext(activation);
+        }
     }
 
     @Test
