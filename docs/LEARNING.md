@@ -527,7 +527,7 @@ Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
   `Ctrl+V`; the README lists what its messages mean.
 - **Key bindings**: *Window > Preferences > General > Keys* shows each binding with its context
   ("When"). The *Ctrl Keys* page decides which of this plug-in's letter contexts are active.
-- **Inside Neovim**: `:messages`, `:ls`, `:set option?` all work through the `:` box. `vim.g.eclipse`
+- **Inside Neovim**: `:messages`, `:ls`, `:set option?` all work through the `:` box. `vim.g.eclipse_neovim`
   is `1` inside the embedded Neovim, so your `init.lua` can tell where it runs.
 - **Neovim side**: start Eclipse with `NVIM_LOG_FILE=/tmp/nvim.log` set to collect Neovim's own log.
 - **Headless reproduction**: the integration tests (`NeovimSessionIntegrationTest`) drive a real
