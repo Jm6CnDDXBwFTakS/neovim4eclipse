@@ -72,6 +72,9 @@ class RpcChannelTest {
                 if ("explode".equals(method)) {
                     throw new IllegalStateException("handler bug");
                 }
+                if ("close".equals(method)) {
+                    channel.close(); // from the reader thread itself, as a handler may
+                }
             }
 
             @Override
@@ -91,6 +94,12 @@ class RpcChannelTest {
     /** Neovim sends one message. */
     private void send(Object... message) throws IOException {
         MsgpackValues.pack(toChannel, Arrays.asList(message));
+        toChannel.flush();
+    }
+
+    /** Neovim sends one value as it is, which need not be a msgpack-rpc message at all. */
+    private void sendValue(Object value) throws IOException {
+        MsgpackValues.pack(toChannel, value);
         toChannel.flush();
     }
 
@@ -287,6 +296,161 @@ class RpcChannelTest {
         assertInstanceOf(NeovimConnectionClosedException.class, failure(channel.request("nvim_get_mode")));
         assertThrows(NeovimConnectionClosedException.class, () -> channel.notify("nvim_command", "qa!"));
         channel.close(); // twice is fine
+    }
+
+    // ---- messages that are not what msgpack-rpc allows ----
+
+    @Test
+    void aValueThatIsNotAMessageIsIgnoredAndReadingGoesOn() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            sendValue("hello"); // not an array
+            sendValue(List.of()); // an empty array
+            sendValue(List.of("two", "x", List.of())); // the type is not a number
+            send(2, "after", List.of());
+            waitUntil(() -> heard.size() == 1);
+            log.assertLogged(Level.WARNING, "Ignored a message that is not msgpack-rpc: hello");
+            log.assertLogged(Level.WARNING, "Ignored a message that is not msgpack-rpc: []");
+            log.assertLogged(Level.WARNING, "Ignored a message that is not msgpack-rpc: [two, x, []]");
+        }
+    }
+
+    /** The right type, the wrong shape: one malformed message of each type, then one that is fine. */
+    @Test
+    void eachTypeWithTheWrongShapeIsMalformed() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            send(1, 0, null); // a response needs 4 elements
+            send(1, "zero", null, "x"); // ... and a number as its msgid
+            send(2, 5, List.of()); // a notification needs a method name
+            send(2, "a", List.of(), "extra"); // ... and exactly 3 elements
+            send(0, "seven", "m", List.of()); // a request needs a number as its msgid
+            send(0, 7, 8, List.of()); // ... and a method name
+            send(0, 7, "m"); // ... and 4 elements
+            send(2, "after", List.of());
+            waitUntil(() -> heard.size() == 1);
+            assertEquals(List.of("notification after []"), heard);
+            log.assertLogged(Level.WARNING, "Ignored a malformed msgpack-rpc message: [1, 0, null]");
+            log.assertLogged(Level.WARNING, "Ignored a malformed msgpack-rpc message: [0, 7, m]");
+        }
+    }
+
+    @Test
+    void paramsThatAreNotAnArrayReachIncomingAsAList() throws Exception {
+        send(2, "one", "single"); // a lone value: a list of that value
+        send(2, "none", null); // nil: no params
+        waitUntil(() -> heard.size() == 2);
+        assertEquals(List.of("notification one [single]", "notification none []"), heard);
+    }
+
+    @Test
+    void aResponseNobodyWaitsForIsDroppedQuietly() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class, Level.FINE)) {
+            send(1, 42, null, "for whom?");
+            CompletableFuture<Object> next = channel.request("nvim_get_mode");
+            receive();
+            send(1, 0, null, "on time");
+            assertEquals("on time", result(next));
+            log.assertLogged(Level.FINE, "Response 42 came after its caller stopped waiting; dropped");
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+    }
+
+    // ---- a connection that breaks while writing or closing ----
+
+    /** An output stream whose every write and close fails, as a pipe does once Neovim is gone. */
+    private static final class BrokenOutput extends OutputStream {
+        @Override
+        public void write(int b) throws IOException {
+            throw new IOException("Broken pipe");
+        }
+
+        @Override
+        public void close() throws IOException {
+            throw new IOException("already closed");
+        }
+    }
+
+    /** A second channel that reads from a pipe the test writes, and writes to {@link BrokenOutput}. */
+    private RpcChannel brokenChannel(Pipe input) {
+        RpcChannel broken = new RpcChannel(Channels.newInputStream(input.source()), new BrokenOutput(),
+                new Incoming() {
+                    @Override
+                    public void notification(String method, List<?> params) {
+                        heard.add("notification " + method + " " + params);
+                    }
+
+                    @Override
+                    public Object request(String method, List<?> params) {
+                        heard.add("request " + method + " " + params);
+                        return "answer";
+                    }
+                }, "test-rpc-broken");
+        broken.start();
+        return broken;
+    }
+
+    @Test
+    void aRequestThatCannotBeWrittenFailsAsClosed() throws Exception {
+        RpcChannel broken = brokenChannel(Pipe.open());
+        try {
+            CompletableFuture<Object> answer = broken.request("nvim_get_mode");
+            NeovimConnectionClosedException e =
+                    assertInstanceOf(NeovimConnectionClosedException.class, failure(answer));
+            assertEquals("Could not send nvim_get_mode to Neovim", e.getMessage());
+            assertEquals("Broken pipe", e.getCause().getMessage());
+            assertEquals(0, broken.pendingCount());
+        } finally {
+            broken.close();
+        }
+    }
+
+    @Test
+    void aNotificationThatCannotBeWrittenThrows() throws Exception {
+        RpcChannel broken = brokenChannel(Pipe.open());
+        try {
+            NeovimConnectionClosedException e = assertThrows(NeovimConnectionClosedException.class,
+                    () -> broken.notify("nvim_command", "qa!"));
+            assertEquals("Could not send nvim_command to Neovim", e.getMessage());
+        } finally {
+            broken.close();
+        }
+    }
+
+    /** Neovim asked, then went away before the answer: nothing to do but note it. */
+    @Test
+    void anAnswerThatCannotBeWrittenIsOnlyNoted() throws Exception {
+        Pipe input = Pipe.open();
+        RpcChannel broken = brokenChannel(input);
+        MessagePacker neovim = MessagePack.newDefaultPacker(Channels.newOutputStream(input.sink()));
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class, Level.FINE)) {
+            MsgpackValues.pack(neovim, List.of(0, 3, "eclipse_write", List.of(1)));
+            MsgpackValues.pack(neovim, List.of(2, "after", List.of()));
+            neovim.flush();
+            waitUntil(() -> heard.size() == 2); // the reader went on to the next message
+            log.assertLogged(Level.FINE, "Answering eclipse_write failed (Neovim gone?)");
+            log.assertNothingAtOrAbove(Level.WARNING);
+        } finally {
+            broken.close();
+        }
+    }
+
+    @Test
+    void streamsThatFailToCloseAreNotedAndCloseStillFinishes() throws Exception {
+        Pipe input = Pipe.open();
+        RpcChannel broken = brokenChannel(input);
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class, Level.FINE)) {
+            broken.close();
+            log.assertLogged(Level.FINE, "Closing a Neovim stream failed");
+            assertThrows(NeovimConnectionClosedException.class, () -> broken.notify("nvim_command", "qa!"));
+        }
+    }
+
+    @Test
+    void aHandlerMayCloseTheChannelFromTheReaderThread() throws Exception {
+        CompletableFuture<Object> waiting = channel.request("nvim_get_mode");
+        receive();
+        send(2, "close", List.of()); // the handler closes the channel while the reader runs it
+        assertInstanceOf(NeovimConnectionClosedException.class, failure(waiting));
+        assertThrows(NeovimConnectionClosedException.class, () -> channel.notify("nvim_command", "qa!"));
     }
 
     private static void waitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
