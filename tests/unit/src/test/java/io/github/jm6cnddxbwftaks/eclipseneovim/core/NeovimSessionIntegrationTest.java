@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 
-import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.eclipseneovim.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.Indentation;

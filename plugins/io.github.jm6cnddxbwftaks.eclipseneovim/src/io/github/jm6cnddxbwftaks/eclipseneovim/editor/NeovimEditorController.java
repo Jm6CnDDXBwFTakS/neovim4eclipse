@@ -64,8 +64,6 @@ public final class NeovimEditorController implements AutoCloseable {
 
     private final ITextEditor editor;
     private final NeovimSession session;
-    /** The editor's document's own Neovim buffer (shared with other editors on the same document). */
-    private final DocumentBuffer buffer;
     private final StyledText styledText;
     private final KeyInterceptor keyInterceptor;
     /** Viewer the key interceptor is prepended to; {@code null} if it sits on the widget instead. */
@@ -102,7 +100,6 @@ public final class NeovimEditorController implements AutoCloseable {
             DocumentBuffer buffer, boolean takeNeovimCursor) {
         this.editor = editor;
         this.session = session;
-        this.buffer = buffer;
         this.styledText = styledText;
         this.keyInterceptor = new KeyInterceptor(session);
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
