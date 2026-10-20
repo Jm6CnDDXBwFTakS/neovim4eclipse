@@ -492,7 +492,7 @@ listener list in `SessionEvents`.
 
 **Answer a question from Neovim.** In Lua, call `vim.rpcrequest(chan, 'eclipse_<name>', ...)`, where
 `chan` is the channel number `LuaScripts.SETUP` receives as its argument and keeps in
-`g:eclipse_channel` (Neovim waits for the answer,
+`g:neovim4eclipse_channel` (Neovim waits for the answer,
 so keep the Java side quick and bounded); add a case to `NotificationBridge.request` and a method to
 its `Sink`; implement it in `NeovimSession.EventSink`. The value returned is the answer; Lua sees Java
 lists as tables. `eclipse_clipboard_paste` and `eclipse_write` are the examples; the second shows the

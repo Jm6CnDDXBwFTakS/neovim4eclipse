@@ -29,7 +29,7 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.fs.normalize(vim.fn.resolve(name))"));
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains(
                 "canonical(ev.match) ~= canonical(vim.api.nvim_buf_get_name(ev.buf))"));
-        assertTrue(LuaScripts.SETUP.contains("vim.g.eclipse_channel = chan"), "the channel the request goes to");
+        assertTrue(LuaScripts.SETUP.contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
     }
 
     /** See the COMPLETE_CMDLINE comment for why each of these matters. */

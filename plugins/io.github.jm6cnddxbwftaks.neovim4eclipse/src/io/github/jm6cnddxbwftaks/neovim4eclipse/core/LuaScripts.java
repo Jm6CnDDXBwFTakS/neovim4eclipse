@@ -29,7 +29,7 @@ final class LuaScripts {
      *       {@code eclipse_clipboard_copy} and whose paste is the {@code eclipse_clipboard_paste}
      *       request (see {@link ClipboardRegisters}).</li>
      *   <li>The one argument is Eclipse's RPC channel number, which requests are sent to. It is kept
-     *       in {@code g:eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
+     *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
      *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
      * </ul>
@@ -39,7 +39,7 @@ final class LuaScripts {
             -- channel"). Eclipse passes it as the script's argument: inside Lua run through
             -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
             local chan = tonumber(select(1, ...))
-            vim.g.eclipse_channel = chan
+            vim.g.neovim4eclipse_channel = chan
             vim.opt.timeout = true
             vim.opt.timeoutlen = 400
             vim.opt.ttimeoutlen = 50
@@ -122,10 +122,10 @@ final class LuaScripts {
               vim.cmd('runtime autoload/provider/clipboard.vim')
             end
             -- Keys only the IDE can carry out (see IdeAction). This runs after the user's init.lua,
-            -- so it wins over their own mappings of these keys; `vim.g.eclipse_ide_keys = 0` (or
+            -- so it wins over their own mappings of these keys; `vim.g.neovim4eclipse_ide_keys = 0` (or
             -- false, v:false in Vim script) in init.lua keeps Neovim's meaning instead. vim.v.count
             -- is the count typed before the key.
-            local ide_keys = vim.g.eclipse_ide_keys
+            local ide_keys = vim.g.neovim4eclipse_ide_keys
             if ide_keys ~= 0 and ide_keys ~= false then
               local function ide(action, key, desc)
                 vim.keymap.set('n', key, function()
@@ -330,7 +330,7 @@ final class LuaScripts {
                   return fail('Eclipse saves a file only under its own name; use File > Save As')
                 end
                 -- Neovim waits for the answer: Eclipse saves on its UI thread (see EditorAttachManager).
-                local err = vim.rpcrequest(vim.g.eclipse_channel, 'eclipse_write', ev.buf)
+                local err = vim.rpcrequest(vim.g.neovim4eclipse_channel, 'eclipse_write', ev.buf)
                 if type(err) == 'string' and err ~= '' then
                   return fail(err)
                 end

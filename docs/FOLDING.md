@@ -56,14 +56,14 @@ Size: about 450 lines of code and 550 of tests, in three commits (section 7).
   `'nofoldenable'` in Neovim's window while they are shown *(decided)*. Neovim then never hides
   lines that Eclipse shows, whatever the user's `'foldmethod'`. `z` commands give Neovim's usual
   errors.
-- **On by default, with an opt-out in `init.lua`** *(decided)*: `vim.g.eclipse_folds = 0` (or
-  `false`). As with `vim.g.eclipse_ide_keys`, there is no Eclipse preference. With the opt-out,
+- **On by default, with an opt-out in `init.lua`** *(decided)*: `vim.g.neovim4eclipse_folds = 0` (or
+  `false`). As with `vim.g.neovim4eclipse_ide_keys`, there is no Eclipse preference. With the opt-out,
   the plug-in leaves Neovim's folding alone, as before this feature. Moving into folded code then
   unfolds it in Eclipse, as today.
 - **The opt-out costs nothing** *(decided)*. The setting is read once per Neovim session, after
   `init.lua` has run, and when it is off none of the fold code runs: Eclipse sets up no mirror and
   listens to nothing, sends no fold list, and the per-key snapshot reads no fold state (section 3.6).
-  The cost is that changing `g:eclipse_folds` in a running Neovim does nothing until Neovim is
+  The cost is that changing `g:neovim4eclipse_folds` in a running Neovim does nothing until Neovim is
   restarted (Window › Preferences › Neovim, or restarting Eclipse). README says so.
 
 ## 2. Background, with the experiments
@@ -143,7 +143,7 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
   1. Window-local `foldmethod=manual`, `foldenable`, `foldminlines=0` (Eclipse folds two-line
      regions, which Neovim's default `1` would show open), then `zE`.
   2. Create each fold with `:{first},{last}fold`, outer first; then set each one's state.
-  3. Put one extmark per fold, in the namespace `eclipse_folds`, at the fold's first line. Its id
+  3. Put one extmark per fold, in the namespace `neovim4eclipse_folds`, at the fold's first line. Its id
      is the fold's index in the list Eclipse sent, so Neovim can name a fold to Eclipse and both
      stay valid while edits move lines.
   4. Keep the cursor and view (`winsaveview`/`winrestview`).
@@ -207,11 +207,11 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
 
 ### 3.6 The opt-out, read once
 
-- **When:** the session reads `vim.g.eclipse_folds` once, while it starts, right after
+- **When:** the session reads `vim.g.neovim4eclipse_folds` once, while it starts, right after
   `LuaScripts.SETUP` (so after `init.lua`), in the same request or the one after it. Session start
   already runs off the UI thread and already waits for Neovim, so this adds no wait anywhere else.
   The value is kept in a final field, `NeovimSession.foldsEnabled()`. `0` and `false` (`v:false`)
-  mean off, as for `eclipse_ide_keys`; anything else, including not set, means on.
+  mean off, as for `neovim4eclipse_ide_keys`; anything else, including not set, means on.
 - **What off skips, all of it:**
   - the controller creates no `FoldMirror`, so no annotation-model or projection listener is added
     and nothing is sent at attach, on a reconcile or on a buffer switch;
@@ -226,7 +226,7 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
 - **Why not check the variable in Lua each time:** that kept a Neovim call per fold change and an
   Eclipse listener per editor even when the user had said no. Reading it once is cheaper and also
   makes the behavior stable for the life of the session. The cost (a change needs a Neovim restart)
-  is the same as for `eclipse_ide_keys`, whose mappings are also made once at start.
+  is the same as for `neovim4eclipse_ide_keys`, whose mappings are also made once at start.
 
 ## 4. Implementation, by layer
 
@@ -287,7 +287,7 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
   - `zo` shows the lines again;
   - a collapse through `org.eclipse.ui.edit.text.folding.collapse` makes `j` step over the fold;
   - `zf` shows the error in the status line;
-  - with `vim.g.eclipse_folds = 0` (a test `init.lua`, or `--cmd`), the controller has no
+  - with `vim.g.neovim4eclipse_folds = 0` (a test `init.lua`, or `--cmd`), the controller has no
     mirror, and moving into collapsed code unfolds it as today.
 - **`-PuiHeavyJava`, `JavaEditorEndToEndTest`:**
   - `zM` collapses the methods;

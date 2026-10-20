@@ -73,7 +73,7 @@ varies (results from the experiments):
 | `tabn` | `tabnew`, `tabnext` | `tabnew`, then `tabnext`, then `tabn` |
 | `set ts=` | `8` | `set ts=8` (appended) |
 | `echo &tab` | `tabclose`, `tabline`, ... | `echo &tabclose` (replaces `tab`) |
-| `let g:ecl` | `g:eclipse_channel` | `let g:eclipse_channel` (replaces `g:ecl`) |
+| `let g:neo` | `g:neovim4eclipse_channel` | `let g:neovim4eclipse_channel` (replaces `g:neo`) |
 | `h bufd` | `:bufdo`, `BufDelete` | `h :bufdo` (replaces `bufd`) |
 | `e with` | `with space.txt` | `e with\ space.txt` (space escaped) |
 | `e sub/` (Windows) | `sub\x.java` | `e sub\x.java` |
