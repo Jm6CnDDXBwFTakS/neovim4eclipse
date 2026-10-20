@@ -28,6 +28,8 @@ class KeyRouterTest {
         boolean neovimDriven;
         boolean eclipseTypingReady = true;
         boolean waitingForArgument;
+        /** Keys sent but not yet processed by Neovim: {@link #waitingForArgument} is then out of date. */
+        boolean keysInFlight;
         boolean recording;
         final List<String> sent = new ArrayList<>();
         final List<InsertReplay.Plan> leftInsert = new ArrayList<>();
@@ -50,6 +52,11 @@ class KeyRouterTest {
         @Override
         public boolean isWaitingForArgument() {
             return waitingForArgument;
+        }
+
+        @Override
+        public boolean hasKeysInFlight() {
+            return keysInFlight;
         }
 
         @Override
@@ -159,6 +166,21 @@ class KeyRouterTest {
         type("f", ":");
         assertEquals(List.of("f", ":"), neovim.sent);
         assertEquals(List.of(), prompts);
+    }
+
+    /**
+     * {@code ggqa ... q:} typed faster than Neovim processes it: Neovim's answer "waiting for a key"
+     * is still the one from the first {@code g} when {@code q} arrives, but the second {@code g} has
+     * already been sent as that key. The {@code q} starts a recording, so the last {@code q} stops it
+     * and {@code :} opens the prompt (and does not become {@code q:}, the command-line window).
+     */
+    @Test
+    void anOutOfDateWaitingAnswerDoesNotTakeTheNextKey() {
+        neovim.waitingForArgument = true; // Neovim's answer after the first g
+        neovim.keysInFlight = true; // but the second g is already on its way
+        type("q", "a", "j", "q", ":");
+        assertEquals(List.of("q", "a", "j", "q"), neovim.sent);
+        assertEquals(List.of(":"), prompts);
     }
 
     @Test

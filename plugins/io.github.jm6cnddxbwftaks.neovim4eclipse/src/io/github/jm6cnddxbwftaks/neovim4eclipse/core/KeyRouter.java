@@ -47,6 +47,12 @@ public final class KeyRouter {
 
         boolean isWaitingForArgument();
 
+        /**
+         * Whether keys sent with {@link #inputAsync} have not been processed by Neovim yet. While
+         * they have not, {@link #isWaitingForArgument()} describes an earlier key.
+         */
+        boolean hasKeysInFlight();
+
         boolean isRecording();
 
         /** Lets Neovim type the rest of the current insert; see {@link #route}. */
@@ -169,7 +175,7 @@ public final class KeyRouter {
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }
 
-        if (pending == Pending.ARGUMENT || pending == Pending.REGISTER || neovim.isWaitingForArgument()) {
+        if (pending == Pending.ARGUMENT || pending == Pending.REGISTER || isNeovimWaitingForThisKey()) {
             if (pending == Pending.REGISTER && NvimKeys.isRecordingRegister(nvimKey)) {
                 recordingByKeys = true;
             }
@@ -222,6 +228,19 @@ public final class KeyRouter {
             return reported;
         }
         return byKeys;
+    }
+
+    /**
+     * Whether Neovim waits for one more key, and that key is the one being routed now. Neovim's
+     * answer describes the keys it has processed: with keys still on their way to it, the answer is
+     * about an earlier key, which those keys may already have completed. Example: {@code ggqa}
+     * typed quickly. After the first {@code g} Neovim waits for a key; the second {@code g} is that
+     * key. If the {@code q} arrives before Neovim has processed the second {@code g}, the old
+     * answer would make the {@code q} a third argument, and the router would miss that a recording
+     * starts. Keys this router knows to take an argument are tracked in {@link #pending} instead.
+     */
+    private boolean isNeovimWaitingForThisKey() {
+        return neovim.isWaitingForArgument() && !neovim.hasKeysInFlight();
     }
 
     private static boolean isPromptKey(String nvimKey) {
