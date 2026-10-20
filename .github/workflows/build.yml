@@ -6,6 +6,10 @@
 # (EclipseNeovim-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software >
 # Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
 # included, inside a virtual X display (xvfb-run) with a pinned Neovim.
+#
+# It is also a reusable workflow (workflow_call): release.yml runs this same build for a tag, with
+# the version taken from the tag, so a release is built and tested exactly like every CI run. Keep
+# the build steps here only.
 name: Build
 
 on:
@@ -14,6 +18,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: >-
+          Build this release version (for example 0.1.0) instead of the -SNAPSHOT / .qualifier one
+          in the POMs. Empty (the default, and always on push, pull request and manual runs): build
+          the version as committed.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -38,6 +51,15 @@ jobs:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven   # caches ~/.m2/repository, keyed on the pom.xml files
+      # Only when release.yml passes a version. inputs.version is empty or absent otherwise, and an
+      # empty string is false in an if: expression. Tycho's own goal rewrites 0.1.0-SNAPSHOT and
+      # 0.1.0.qualifier to the release version in the POMs, MANIFEST.MF and feature.xml together,
+      # inside the runner only (nothing is committed back), so the ZIP is EclipseNeovim-0.1.0.zip.
+      - name: Set version ${{ inputs.version }}
+        if: ${{ inputs.version }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
       # Ubuntu's packaged Neovim is too old, so use the official release tarball.
       - name: Install Neovim ${{ env.NVIM_VERSION }}
         run: |
