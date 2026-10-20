@@ -20,7 +20,8 @@ Neovim does the editing, Eclipse keeps the files, the rendering and its own tool
 - Normal, visual and operator-pending mode run in Neovim: motions, text objects, operators, counts,
   registers, marks, undo, and your own `init.lua`.
 - Insert and replace mode type in Eclipse, so content assist and input methods (IME) keep working;
-  `.` repeats the inserted text as in Vim.
+  `.` repeats the inserted text as in Vim. One `Esc` leaves insert mode also when Eclipse takes it
+  first, to leave linked editing (a Java rename, a template's fields) or close the completion popup.
 - Each open document has its own Neovim buffer, with its own undo history and marks. Jumps into
   another open file (`Ctrl-O`, `'A`, `:b`) activate its editor; changes made with `:bufdo` and
   `:argdo` reach the other editors.

@@ -129,6 +129,7 @@ public final class NeovimEditorController implements AutoCloseable {
         } else {
             styledText.addVerifyKeyListener(keyInterceptor);
         }
+        keyInterceptor.install(styledText); // an Esc that Eclipse took first (linked mode) still ends insert mode
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
@@ -429,6 +430,7 @@ public final class NeovimEditorController implements AutoCloseable {
             } else {
                 styledText.removeVerifyKeyListener(keyInterceptor);
             }
+            keyInterceptor.uninstall(styledText);
         } catch (Exception e) {
             LOG.log(Level.FINE, "removeVerifyKeyListener", e);
         }

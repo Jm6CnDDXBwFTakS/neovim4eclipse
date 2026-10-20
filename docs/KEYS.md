@@ -56,7 +56,9 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
 ## Other keys
 
 - `Esc` always reaches Neovim, including in insert mode, where it first hands Eclipse's typing to
-  Neovim so that `.` can repeat it.
+  Neovim so that `.` can repeat it. When Eclipse takes `Esc` first (to leave linked editing, as in a
+  Java rename or a template, or to close the completion popup), the same `Esc` still ends insert mode,
+  as in Vim, where `Esc` closes the completion menu and leaves insert mode at once.
 - Any other key with an Eclipse key binding is taken by Eclipse first, in every mode: function keys
   such as `F3` (Open Declaration) and most `Ctrl+Shift+...` and `Alt+Shift+...` shortcuts.
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,

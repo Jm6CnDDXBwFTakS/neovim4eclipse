@@ -8,8 +8,12 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.custom.VerifyKeyListener;
 import org.eclipse.swt.events.VerifyEvent;
+import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Listener;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.KeyRouter;
@@ -34,9 +38,14 @@ public final class KeyInterceptor implements VerifyKeyListener {
     /** Number of Ctrl chords still to be logged; a small budget so the log shows the first few and then stops. */
     private static final AtomicInteger CTRL_LOG_BUDGET = new AtomicInteger(12);
 
+    private static final String ESCAPE = "<Esc>";
+
     private final NeovimSession session;
     private final KeyRouter router;
     private volatile boolean enabled = true;
+    /** Set when {@link #verifyKey} saw an Esc; read and cleared by {@link #afterKeyDown} for the same key press. UI thread. */
+    private boolean escapeVerified;
+    private final Listener afterKeyDown = this::afterKeyDown;
 
     public KeyInterceptor(NeovimSession session) {
         this.session = session;
@@ -83,13 +92,50 @@ public final class KeyInterceptor implements VerifyKeyListener {
 
     @Override
     public void verifyKey(VerifyEvent event) {
+        String nvimKey = KeyMapping.toNeovimKey(event.keyCode, event.stateMask, event.character);
+        escapeVerified |= ESCAPE.equals(nvimKey);
         if (!enabled || !session.isAlive()) {
             return;
         }
-        String nvimKey = KeyMapping.toNeovimKey(event.keyCode, event.stateMask, event.character);
         logCtrlChord(event, nvimKey);
         if (nvimKey != null && router.route(nvimKey)) {
             event.doit = false;
+        }
+    }
+
+    /**
+     * The widget's {@code KeyDown} listener (see {@link #install}): leaves insert mode when Eclipse
+     * took the Esc before {@link #verifyKey} saw it.
+     *
+     * <p>Why: listeners that are added to the text viewer later run before this one, and some
+     * stop the key. Eclipse's linked mode (a Java rename with Alt+Shift+R, a template's fields)
+     * takes Esc to leave linked mode, the content-assist popup takes it to close. Neovim then stayed
+     * in insert mode until a second Esc. As in Vim, where Esc closes the completion menu and ends
+     * the insert at once, one Esc now does both: Eclipse's part, then Neovim's.
+     *
+     * <p>How: StyledText runs the verify-key listeners from its own {@code KeyDown} listener, the
+     * first one on the widget, so this listener runs after them for the same key press. Only Esc,
+     * and only in insert or replace mode, where an Esc left out leaves the user stuck typing.
+     */
+    private void afterKeyDown(Event event) {
+        boolean verified = escapeVerified;
+        escapeVerified = false;
+        if (verified || !enabled || !session.isAlive() || !session.isTypingMode()
+                || !ESCAPE.equals(KeyMapping.toNeovimKey(event.keyCode, event.stateMask, event.character))) {
+            return;
+        }
+        LOG.fine("Eclipse took Esc (linked mode or a popup) before Neovim saw it; leaving insert mode too");
+        router.route(ESCAPE);
+    }
+
+    /** Adds the {@link #afterKeyDown} listener to {@code widget}; undo with {@link #uninstall}. UI thread. */
+    public void install(StyledText widget) {
+        widget.addListener(SWT.KeyDown, afterKeyDown);
+    }
+
+    public void uninstall(StyledText widget) {
+        if (!widget.isDisposed()) {
+            widget.removeListener(SWT.KeyDown, afterKeyDown);
         }
     }
 
