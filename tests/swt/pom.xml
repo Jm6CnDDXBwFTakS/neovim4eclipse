@@ -134,6 +134,7 @@
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/BlockOverlay.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OverlayFrame.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/OutputPopup.java</include>
+            <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/MessageLine.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/CommandLineBox.java</include>
             <include>io/github/jm6cnddxbwftaks/eclipseneovim/editor/ClipboardBridge.java</include>
           </includes>

@@ -45,9 +45,10 @@ final class StateSync {
 
         /**
          * Runs {@link LuaScripts#STATE_SNAPSHOT} (with a short timeout) and returns its raw answer,
-         * read by {@link StateSnapshot}. The flags say which optional status bar parts to include.
+         * read by {@link StateSnapshot}. The flags say which optional status bar parts to include;
+         * messages are always included.
          */
-        Object stateSnapshot(boolean statusline, boolean showcmd, boolean message) throws Exception;
+        Object stateSnapshot(boolean statusline, boolean showcmd) throws Exception;
 
         /** The attached buffer's lines. */
         List<String> bufferLines() throws Exception;
@@ -190,8 +191,7 @@ final class StateSync {
         String current = mode;
         try {
             Set<StatusItem> items = status.items();
-            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE),
-                    items.contains(StatusItem.CMD), items.contains(StatusItem.MSG));
+            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE), items.contains(StatusItem.CMD));
             dispatchMode(current);
             if (isAttached.test(StateSnapshot.buffer(raw))) {
                 CursorPos cursor = StateSnapshot.cursor(raw);

@@ -183,6 +183,7 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** The status bar parts are only read when shown; messages always are, for the message line. */
     @Test
     void nothingOptionalIsEvaluatedWhenOnlyTheModeIsShown() throws Exception {
         try (NeovimSession s = start()) {
@@ -191,8 +192,9 @@ class NeovimSessionIntegrationTest {
             List<StatusInfo> seen = new CopyOnWriteArrayList<>();
             s.addStatusListener(seen::add);
             keys(s, "2", "d", "d", "/", "n", "o", "<CR>");
-            assertTrue(seen.stream().allMatch(i -> i.statusline().isEmpty() && i.cmd().isEmpty() && i.message().isEmpty()),
+            assertTrue(seen.stream().allMatch(i -> i.statusline().isEmpty() && i.cmd().isEmpty()),
                     "unrequested parts must stay empty: " + seen);
+            assertTrue(seen.stream().anyMatch(i -> i.error() && i.message().contains("E486")), "the error: " + seen);
         }
     }
 

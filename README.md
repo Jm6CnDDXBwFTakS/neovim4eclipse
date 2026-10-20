@@ -174,13 +174,34 @@ Eclipse status bar; changes apply immediately:
 |------|-------|---------|
 | `mode` | `-- INSERT --`, `-- VISUAL BLOCK --`, `recording @q` | on |
 | `cmd` | the pending command as Vim's `showcmd` shows it: `2d`, `"a`, `2f` | on |
-| `msg` | the latest Neovim message or error (`E486: Pattern not found: x`), until the next key | on |
 | `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
 The parts are joined in that order. `-- ECLIPSE --` is always shown while Neovim mode is off. Only the enabled
-parts are requested from Neovim. `cmd` needs Neovim 0.9 or newer (`showcmdloc`). `msg` shows messages
-Neovim gives through its status-message and error variables; messages from `:echo`, and normal messages of
-`:` commands (typed as `:silent`) are not included, but errors are.
+parts are requested from Neovim. `cmd` needs Neovim 0.9 or newer (`showcmdloc`). Messages and errors are not in
+the status bar: they appear in the editor (next section).
+
+## Messages and errors
+
+Neovim's latest message or error appears in a line along the bottom of the editor, where Vim shows
+its messages and where the `:` box opens:
+
+- **Errors** in the theme's error color: `E486: Pattern not found: x`, `E37: No write since last
+  change`, `Can't find file "x"`.
+- **Other messages** in the editor's text color: `3 lines yanked`, `3 substitutions on 3 lines`.
+
+As in Vim, the message stays until the next key; a click also hides it. A message too long for the
+line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones.
+
+The line shows two kinds of text:
+
+- what Neovim gives through its status-message and error variables (`v:statusmsg`, `v:errmsg`);
+- the plug-in's own errors from the file and tab commands.
+
+Messages from `:echo` and the normal messages of `:` commands (typed as `:silent`) are not included,
+but errors are.
+
+*Window → Preferences → Neovim → Flash the editor on errors* (off by default) also tints the editor for
+a moment on each error, like Vim's `'visualbell'`, for when your eyes are on the cursor.
 
 ## Command line (`:`, `/`, `?`)
 
@@ -222,7 +243,7 @@ Commands that only display something (`:ls`, `:buffers`, `:jumps`, `:marks`, `:r
 `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys scroll it; any other key or a click closes it.
 These commands are not recorded into a macro (they change nothing). Any other command is typed into
 Neovim, and whatever it prints (`:!ls`, `:echo` inside a longer command, a `:s` report) is collected with
-`:redir` and shown in the same box. Errors appear in the status bar only. Messages printed later, by a
+`:redir` and shown in the same box. Errors appear in the message line only. Messages printed later, by a
 timer or an autocmd, are not shown, and nothing is collected while your own `:redir` is running.
 
 ## Indentation (`o`, `O`, `>>`)
@@ -397,7 +418,8 @@ expanded): the Neovim executable (command or absolute path), whether to show the
 whether to show the *Neovim* menu in the menu bar. With the menu hidden, its entries stay reachable:
 the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
 through *Window → Preferences*.
-Changing the executable restarts Neovim and re-attaches the active editor.
+Changing the executable restarts Neovim and re-attaches the active editor. *Flash the editor on errors*
+adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
 
 *Window → Preferences → Neovim → Status Bar*: which parts of the Vim status appear in the status bar.
 

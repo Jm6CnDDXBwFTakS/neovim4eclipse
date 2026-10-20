@@ -15,27 +15,27 @@ class StatusLineFormatTest {
 
     @Test
     void allPartsAreJoinedInDisplayOrder() {
-        assertEquals("-- NORMAL --  2d  E486: Pattern not found: x  [No Name] 1,1",
-                StatusLineFormat.compose(ALL, "-- NORMAL --", "2d", "E486: Pattern not found: x", "[No Name] 1,1"));
+        assertEquals("-- NORMAL --  2d  [No Name] 1,1",
+                StatusLineFormat.compose(ALL, "-- NORMAL --", "2d", "[No Name] 1,1"));
     }
 
     @Test
     void onlyEnabledItemsAreShown() {
-        assertEquals("-- INSERT --", StatusLineFormat.compose(EnumSet.of(StatusItem.MODE), "-- INSERT --", "2d", "msg", "sl"));
+        assertEquals("-- INSERT --", StatusLineFormat.compose(EnumSet.of(StatusItem.MODE), "-- INSERT --", "2d", "sl"));
         assertEquals("2d  sl", StatusLineFormat.compose(EnumSet.of(StatusItem.CMD, StatusItem.STATUSLINE),
-                "-- INSERT --", "2d", "msg", "sl"));
+                "-- INSERT --", "2d", "sl"));
     }
 
     @Test
     void nothingEnabledGivesAnEmptyString() {
-        assertEquals("", StatusLineFormat.compose(EnumSet.noneOf(StatusItem.class), "-- NORMAL --", "2d", "m", "s"));
+        assertEquals("", StatusLineFormat.compose(EnumSet.noneOf(StatusItem.class), "-- NORMAL --", "2d", "s"));
     }
 
     @Test
     void emptyPartsLeaveNoStraySeparators() {
-        assertEquals("-- NORMAL --  sl", StatusLineFormat.compose(ALL, "-- NORMAL --", "", null, "sl"));
-        assertEquals("-- NORMAL --", StatusLineFormat.compose(ALL, "-- NORMAL --", "", "", ""));
-        assertEquals("msg", StatusLineFormat.compose(ALL, "", "", "msg", ""));
+        assertEquals("-- NORMAL --  sl", StatusLineFormat.compose(ALL, "-- NORMAL --", null, "sl"));
+        assertEquals("-- NORMAL --", StatusLineFormat.compose(ALL, "-- NORMAL --", "", ""));
+        assertEquals("sl", StatusLineFormat.compose(ALL, "", "", "sl"));
     }
 
     @Test
@@ -53,6 +53,6 @@ class StatusLineFormatTest {
 
     @Test
     void composeCleansFreeText() {
-        assertEquals("-- NORMAL --  E1: a b", StatusLineFormat.compose(ALL, "-- NORMAL --", "", "E1:\na   b", ""));
+        assertEquals("-- NORMAL --  1,1 All", StatusLineFormat.compose(ALL, "-- NORMAL --", "", "1,1\n   All"));
     }
 }

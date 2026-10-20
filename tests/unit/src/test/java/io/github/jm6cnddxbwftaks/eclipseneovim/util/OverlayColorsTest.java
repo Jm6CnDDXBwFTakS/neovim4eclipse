@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.eclipseneovim.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -40,5 +41,19 @@ class OverlayColorsTest {
     void borderLiesBetweenBackgroundAndForeground() {
         int border = OverlayColors.border(0xFFFFFF, 0x000000);
         assertEquals(0xA6A6A6, border);
+    }
+
+    @Test
+    void errorTextIsLighterOnDarkThemesAndDeeperOnLightOnes() {
+        assertEquals(0xF14C4C, OverlayColors.errorText(0x1E1E1E));
+        assertEquals(0xCD3131, OverlayColors.errorText(0xFFFFFF));
+    }
+
+    @Test
+    void darknessFollowsPerceivedBrightness() {
+        assertTrue(OverlayColors.isDark(0x2F2F2F));
+        assertTrue(OverlayColors.isDark(0x0000FF), "pure blue looks dark");
+        assertFalse(OverlayColors.isDark(0xFFFF00), "yellow looks light");
+        assertFalse(OverlayColors.isDark(0xF7F7F7));
     }
 }

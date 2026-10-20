@@ -101,7 +101,7 @@ class KeyInputTest {
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean showcmd, boolean message) {
+        public Object stateSnapshot(boolean statusline, boolean showcmd) {
             calls.add("snapshot");
             Object[] raw = new Object[StateSnapshot.BUFNR + 1];
             Arrays.fill(raw, "");

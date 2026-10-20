@@ -203,15 +203,22 @@ Search options set at session start: `hlsearch`, `incsearch`, `ignorecase`, `sma
 
 `ModeStatusContribution` shows the parts selected by the `statusItem*` preferences (`util/StatusItem`;
 composition and whitespace cleaning in the tested `util/StatusLineFormat`). Besides the mode, the parts come
-from the same single `STATE_SNAPSHOT` call, with three flags so that only enabled parts are evaluated:
+from the same single `STATE_SNAPSHOT` call, with two flags so that only enabled parts are evaluated:
 
 - **statusline:** `nvim_eval_statusline(vim.o.statusline or a Vim-like default)`, so a user's `%!` expressions
   and plugins such as lualine are honored.
 - **cmd:** `nvim_eval_statusline('%S')`. `%S` needs `showcmdloc=statusline` (set in `LuaScripts.SETUP`, Neovim
   0.9+). While Neovim is *blocked* waiting for a character no API call is possible, so the key just sent is
   appended to the last known text (`2` then `f` shows `2f`).
-- **msg:** `v:statusmsg` / `v:errmsg`, *cleared after reading* so each message is seen once (an error wins). The
-  session keeps the message until the next key.
+
+The same call always reads `v:statusmsg` and `v:errmsg`, *cleared after reading* so each message is seen
+once (an error wins, and `StatusInfo.error` says which it was). The session keeps the message until the next
+key (`core/StatusTracker`), and says so at once when that key clears it, so the same error twice shows twice.
+The message does not go to the status bar but to `editor/MessageLine`: a one-line `CLabel` in an
+`OverlayFrame` along the bottom of the editor, where the `:` box opens, in the theme's error color
+(`JFacePreferences.ERROR_COLOR`, or `OverlayColors.errorText` outside a theme) for errors. It hides on the
+next key or click, never takes the focus, and with the `flashOnError` preference tints the editor's
+background for `FLASH_MS` on an error. Host command errors (`HostCommands.showError`) go to the same line.
 
 `NeovimSession` publishes a `StatusInfo` to listeners only when it changes. A preference change reaches the
 session through `Activator.applyStatusItems` and redraws via `EditorAttachManager.refreshStatusLine`.
@@ -390,6 +397,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
+| Messages and errors in the editor, error flash | `editor/MessageLine` (colors: `util/OverlayColors`) | `tests/swt` `MessageLineTest`, `OverlayColorsTest`, UI `MessageLineEndToEndTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
 | `:` commands with output capture, listings, `:normal!`, search | `core/CommandRunner` (Neovim seen through `CommandRunner.Neovim`) | `CommandRunnerTest` (fake: capture around typing, user `:redir`, prompt Esc, timeout) |
 | Mode, cursor and typing state; reading it from Neovim and publishing it | `core/StateSync` (Neovim seen through `StateSync.Neovim`, listeners through `StateSync.Listeners`) | `StateSyncTest` (fake: blocked gate, unattached buffer, visual selection, when Eclipse may type, suppressed events) |

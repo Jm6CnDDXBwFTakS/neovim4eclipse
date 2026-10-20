@@ -95,7 +95,7 @@ public final class ModeStatusContribution extends ContributionItem {
 
         label = new CLabel(parent, SWT.CENTER);
         StatusLineLayoutData ld = new StatusLineLayoutData();
-        ld.widthHint = 420; // room for mode + pending command + message; longer text is shortened with "..."
+        ld.widthHint = 420; // room for mode + pending command (+ statusline); longer text is shortened with "..."
         label.setLayoutData(ld);
         if (boldFont == null && label.getFont() != null) {
             FontData[] fds = label.getFont().getFontData();
@@ -127,7 +127,7 @@ public final class ModeStatusContribution extends ContributionItem {
         refresh();
     }
 
-    /** Pending command, message and statusline text from Neovim. */
+    /** Pending command and statusline text from Neovim. */
     public void setStatusInfo(StatusInfo statusInfo) {
         info = statusInfo == null ? StatusInfo.EMPTY : statusInfo;
         refresh();
@@ -140,7 +140,7 @@ public final class ModeStatusContribution extends ContributionItem {
 
     /**
      * The text shown: the parts the user enabled (preference <em>Neovim</em>), in the order mode, cmd,
-     * msg, statusline. The "-- ECLIPSE --" indicator is always shown, because it says where keys go.
+     * statusline. The "-- ECLIPSE --" indicator is always shown, because it says where keys go.
      */
     private String displayText() {
         String mode = recording.isEmpty() ? modeText : modeText + "  recording @" + recording;
@@ -149,7 +149,7 @@ public final class ModeStatusContribution extends ContributionItem {
         }
         Activator activator = Activator.getDefault();
         Set<StatusItem> items = activator == null ? StatusItem.defaults() : activator.getStatusItems();
-        return StatusLineFormat.compose(items, mode, info.cmd(), info.message(), info.statusline());
+        return StatusLineFormat.compose(items, mode, info.cmd(), info.statusline());
     }
 
     private void refresh() {

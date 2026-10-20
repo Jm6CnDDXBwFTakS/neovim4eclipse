@@ -120,7 +120,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     /**
      * Review check Fix 6: in a multi-page editor (here {@link TestMultiPageEditor}, like the POM
      * editor) the editor tab is the multi-page editor, not the text page Neovim is attached to.
-     * {@code gt} on that page still moves to the next editor tab, with no error in the status line.
+     * {@code gt} on that page still moves to the next editor tab.
      */
     @Test
     void gtInAMultiPageEditorSwitchesToTheNextEditorTab() throws Exception {
@@ -132,9 +132,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
         type(widgetOf(sourcePage), "gt");
 
-        waitUntil("another tab to be active", TIMEOUT_MS, () -> page().getActiveEditor() != multiPage);
-        assertTrue(statusLineTexts(sourcePage).stream().noneMatch(text -> text.contains("tabs")),
-                "no tab error: " + statusLineTexts(sourcePage));
+        // A gt that fails shows its error in the message line and stays on this tab, so the wait fails.
+        waitUntil("another tab to be active", TIMEOUT_MS, () -> page().getActiveEditor() != multiPage,
+                () -> "; the message line shows " + messageText(sourcePage));
         page().closeEditor(multiPage, false);
     }
 

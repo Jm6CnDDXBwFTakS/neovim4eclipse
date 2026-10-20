@@ -11,8 +11,8 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
 /**
- * The status-bar side of a {@link NeovimSession}: the {@code showcmd} text, the last message, the
- * statusline, and the register of a macro being recorded. It turns the raw parts read from Neovim
+ * The status side of a {@link NeovimSession}: the {@code showcmd} text, the last message (for the
+ * editor's message line), the statusline, and the register of a macro being recorded. It turns the raw parts read from Neovim
  * into {@link StatusInfo} events and fires them only when something changed.
  *
  * <p>Two rules shape it:
@@ -32,8 +32,10 @@ final class StatusTracker {
 
     /** Which optional status bar parts to ask Neovim for. */
     private volatile Set<StatusItem> items = StatusItem.defaults();
-    /** The message shown in the status bar: kept until the next key is processed. */
+    /** The message shown in the editor: kept until the next key is processed. */
     private volatile String currentMessage = "";
+    /** Whether {@link #currentMessage} is an error. */
+    private volatile boolean currentError;
     /** Last {@code showcmd} text read from Neovim (extended by keys that leave Neovim waiting). */
     private volatile String lastShowcmd = "";
     private volatile StatusInfo lastStatus = StatusInfo.EMPTY;
@@ -51,18 +53,26 @@ final class StatusTracker {
         this.items = Set.copyOf(items);
     }
 
-    /** Clears the message: a message stays visible until the next key. */
+    /**
+     * Clears the message: a message stays visible until the next key. Listeners hear of it at once, so
+     * that the same message given again by that key (a second {@code n} with no match) shows again.
+     */
     void clearMessage() {
-        currentMessage = "";
+        if (!currentMessage.isEmpty()) {
+            currentMessage = "";
+            currentError = false;
+            fire(new StatusInfo(lastStatus.statusline(), lastStatus.cmd(), "", false));
+        }
     }
 
     /** Publishes the parts read from Neovim; an empty message keeps the current one. */
     void publish(StatusInfo parsed) {
         if (!parsed.message().isEmpty()) {
             currentMessage = parsed.message();
+            currentError = parsed.error();
         }
         lastShowcmd = parsed.cmd();
-        fire(new StatusInfo(parsed.statusline(), parsed.cmd(), currentMessage));
+        fire(new StatusInfo(parsed.statusline(), parsed.cmd(), currentMessage, currentError));
     }
 
     /**
@@ -73,7 +83,7 @@ final class StatusTracker {
     void showPendingKey(String keys) {
         if (keys.length() == 1 && items.contains(StatusItem.CMD)) {
             lastShowcmd = lastShowcmd + keys;
-            fire(new StatusInfo(lastStatus.statusline(), lastShowcmd, currentMessage));
+            fire(new StatusInfo(lastStatus.statusline(), lastShowcmd, currentMessage, currentError));
         }
     }
 

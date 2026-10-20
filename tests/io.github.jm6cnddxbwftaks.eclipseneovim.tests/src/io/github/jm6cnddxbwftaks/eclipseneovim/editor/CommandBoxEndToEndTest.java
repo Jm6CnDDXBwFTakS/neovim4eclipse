@@ -42,8 +42,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
  * the command is typed into it, Enter runs it in Eclipse ({@link HostCommands}) or in Neovim.
  * Review checks Fix 7 ({@code :e!}), Fix 9 ({@code :e} finds files) and Fix 10 (command names).
  *
- * <p>Errors from Eclipse's side ("Can't find file") go to the window's status line, read back by
- * {@link #statusLineTexts}; errors from Neovim's side arrive as the session's status message.
+ * <p>Errors from Eclipse's side ("Can't find file") go to the editor's message line, read back by
+ * {@link #messageText}; errors from Neovim's side arrive as the session's status message.
  */
 class CommandBoxEndToEndTest extends EndToEndTestBase {
 
@@ -123,12 +123,12 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void editOfAMissingFileSaysSoInTheStatusLine() {
+    void editOfAMissingFileSaysSoInTheMessageLine() {
         runInBox(widget, "e nosuchfile.txt");
 
-        waitUntil("the error in the status line", TIMEOUT_MS,
-                () -> statusLineTexts(editor).contains("Can't find file \"nosuchfile.txt\""),
-                () -> "; the status line shows " + statusLineTexts(editor));
+        waitUntil("the error in the message line", TIMEOUT_MS,
+                () -> messageText(editor).equals("Can't find file \"nosuchfile.txt\"") && messageLineOf(editor).isError(),
+                () -> "; the message line shows " + messageText(editor));
         assertSame(editor, page().getActiveEditor(), "nothing else opened");
     }
 
@@ -143,9 +143,9 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         StyledText untitledWidget = widgetOf(untitled);
 
         runInBox(untitledWidget, "e root.txt");
-        waitUntil("the error in the status line", TIMEOUT_MS,
-                () -> statusLineTexts(untitled).contains("Can't find file \"root.txt\""),
-                () -> "; the status line shows " + statusLineTexts(untitled));
+        waitUntil("the error in the message line", TIMEOUT_MS,
+                () -> messageText(untitled).equals("Can't find file \"root.txt\""),
+                () -> "; the message line shows " + messageText(untitled));
         assertSame(untitled, page().getActiveEditor());
 
         runInBox(untitledWidget, "e " + project.getFile("root.txt").getLocation().toOSString());

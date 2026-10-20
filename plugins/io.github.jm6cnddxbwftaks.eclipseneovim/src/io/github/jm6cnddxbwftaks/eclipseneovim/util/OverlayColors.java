@@ -48,6 +48,27 @@ public final class OverlayColors {
     }
 
     /**
+     * A red for error text that reads well on the editor background, for when the theme defines no
+     * error color: lighter on a dark background, deeper on a light one.
+     *
+     * <pre>
+     *   errorText(0x1E1E1E) = 0xF14C4C   (dark theme)
+     *   errorText(0xFFFFFF) = 0xCD3131   (light theme)
+     * </pre>
+     */
+    public static int errorText(int editorBackground) {
+        return isDark(editorBackground) ? 0xF14C4C : 0xCD3131;
+    }
+
+    /** Whether a color is dark: its perceived brightness (ITU-R BT.601 weights) is below half. */
+    static boolean isDark(int rgb) {
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+        return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+    }
+
+    /**
      * Linear mix of two {@code 0xRRGGBB} colors, channel by channel.
      *
      * @param amount 0 gives {@code from}, 1 gives {@code to}; values outside are clamped

@@ -15,17 +15,16 @@ class StatusItemTest {
     void keysAreStable() {
         assertEquals("mode", StatusItem.MODE.key());
         assertEquals("cmd", StatusItem.CMD.key());
-        assertEquals("msg", StatusItem.MSG.key());
         assertEquals("statusline", StatusItem.STATUSLINE.key());
     }
 
     @Test
     void defaultsShowEverythingExceptTheLongStatusline() {
-        assertEquals(EnumSet.of(StatusItem.MODE, StatusItem.CMD, StatusItem.MSG), StatusItem.defaults());
+        assertEquals(EnumSet.of(StatusItem.MODE, StatusItem.CMD), StatusItem.defaults());
     }
 
     @Test
-    void thereAreExactlyFourItems() {
-        assertEquals(4, StatusItem.values().length);
+    void thereAreExactlyThreeItems() {
+        assertEquals(3, StatusItem.values().length);
     }
 }

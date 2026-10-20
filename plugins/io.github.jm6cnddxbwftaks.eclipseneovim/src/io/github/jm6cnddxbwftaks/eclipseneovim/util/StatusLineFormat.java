@@ -15,20 +15,18 @@ public final class StatusLineFormat {
     }
 
     /**
-     * Joins the enabled, non-empty parts in display order: mode, cmd, msg, statusline.
+     * Joins the enabled, non-empty parts in display order: mode, cmd, statusline.
      * Free text is cleaned first (see {@link #cleanText}).
      *
      * @param items      what the user chose to show
      * @param mode       mode text (already including {@code recording @x} if applicable)
      * @param cmd        pending command text
-     * @param msg        latest message
      * @param statusline text of Neovim's statusline
      */
-    public static String compose(Set<StatusItem> items, String mode, String cmd, String msg, String statusline) {
+    public static String compose(Set<StatusItem> items, String mode, String cmd, String statusline) {
         StringBuilder sb = new StringBuilder();
         append(sb, items.contains(StatusItem.MODE), mode);
         append(sb, items.contains(StatusItem.CMD), cmd);
-        append(sb, items.contains(StatusItem.MSG), msg);
         append(sb, items.contains(StatusItem.STATUSLINE), statusline);
         return sb.toString();
     }

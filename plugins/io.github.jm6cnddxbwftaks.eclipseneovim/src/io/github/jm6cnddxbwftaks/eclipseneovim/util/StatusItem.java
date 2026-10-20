@@ -10,6 +10,7 @@ import java.util.Set;
  * The parts of Vim's status information that can be shown in the Eclipse status bar (preference
  * <em>Window → Preferences → Neovim</em>), named as in the Visual Studio Code Neovim extension.
  * The declaration order is the display order.
+ * Messages and errors are not among them: they appear in the editor ({@code editor/MessageLine}).
  */
 public enum StatusItem {
 
@@ -17,8 +18,6 @@ public enum StatusItem {
     MODE("mode"),
     /** The pending command as Vim's {@code showcmd} shows it, e.g. {@code 2d} or {@code "a}. */
     CMD("cmd"),
-    /** The latest Neovim message or error, e.g. {@code E486: Pattern not found: foo}. */
-    MSG("msg"),
     /** Neovim's own {@code 'statusline'} (file, cursor position, ...), evaluated by Neovim. */
     STATUSLINE("statusline");
 
@@ -35,6 +34,6 @@ public enum StatusItem {
 
     /** What is shown out of the box: everything except the (long) statusline. */
     public static Set<StatusItem> defaults() {
-        return EnumSet.of(MODE, CMD, MSG);
+        return EnumSet.of(MODE, CMD);
     }
 }

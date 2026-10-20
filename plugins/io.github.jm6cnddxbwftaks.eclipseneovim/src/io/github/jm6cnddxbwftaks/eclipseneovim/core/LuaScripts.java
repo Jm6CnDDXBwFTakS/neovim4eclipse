@@ -150,21 +150,20 @@ final class LuaScripts {
      * {@code curswant} is 2147483647 after {@code $} (a block then extends to each line's end).
      * {@code recording} is the register being recorded into ({@code reg_recording()}), or "".
      *
-     * <p>The last four depend on three arguments, each {@code "1"} or {@code "0"}, so that nothing is
+     * <p>Two of them depend on two arguments, each {@code "1"} or {@code "0"}, so that nothing is
      * evaluated that the status bar does not show: (1) the evaluated {@code 'statusline'} (a Vim-like
-     * default if the user has none), (2) {@code showcmd} via the {@code %S} statusline item, (3) the
-     * latest message {@code v:statusmsg} and error {@code v:errmsg}, which are <em>cleared</em> after
-     * reading so that each message is seen once.
+     * default if the user has none), (2) {@code showcmd} via the {@code %S} statusline item. The latest
+     * message {@code v:statusmsg} and error {@code v:errmsg} are always read, for the editor's message
+     * line, and <em>cleared</em> after reading so that each message is seen once.
      */
     static final String STATE_SNAPSHOT = """
             local want_statusline = select(1, ...) == '1'
             local want_cmd = select(2, ...) == '1'
-            local want_msg = select(3, ...) == '1'
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
             local view = vim.fn.winsaveview()
-            local statusline, showcmd, statusmsg, errmsg = '', '', '', ''
+            local statusline, showcmd = '', ''
             if want_statusline then
               local fmt = vim.o.statusline
               if fmt == nil or fmt == '' then fmt = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P' end
@@ -175,12 +174,10 @@ final class LuaScripts {
               local ok, res = pcall(vim.api.nvim_eval_statusline, '%S', { maxwidth = 40 })
               if ok and type(res) == 'table' then showcmd = res.str or '' end
             end
-            if want_msg then
-              statusmsg = vim.v.statusmsg or ''
-              errmsg = vim.v.errmsg or ''
-              pcall(function() vim.v.statusmsg = '' end)
-              pcall(function() vim.v.errmsg = '' end)
-            end
+            local statusmsg = vim.v.statusmsg or ''
+            local errmsg = vim.v.errmsg or ''
+            pcall(function() vim.v.statusmsg = '' end)
+            pcall(function() vim.v.errmsg = '' end)
             return { c[1], c[2], s[2], s[3], e[2], e[3], vim.fn.mode(), view.curswant, vim.bo.tabstop,
                      vim.fn.reg_recording(), statusline, showcmd, statusmsg, errmsg,
                      vim.api.nvim_get_current_buf() }

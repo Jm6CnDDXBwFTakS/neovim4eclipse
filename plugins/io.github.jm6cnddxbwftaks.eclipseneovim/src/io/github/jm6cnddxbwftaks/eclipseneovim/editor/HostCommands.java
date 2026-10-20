@@ -83,10 +83,16 @@ public final class HostCommands {
     }
 
     /**
-     * Shows a Vim-style error in the window's status line (left part), where Eclipse shows its own
-     * messages. Used when a host command cannot be carried out, e.g. {@code :e} with changes.
+     * Shows a Vim-style error in the editor's message line ({@link MessageLine}), where Neovim's own
+     * errors appear. Used when a host command cannot be carried out, e.g. {@code :e} with changes.
+     * Without Neovim attached to {@code editor}, it goes to the window's status line instead.
      */
     static void showError(ITextEditor editor, String message) {
+        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
+        if (controller != null && controller.getEditor() == editor && !controller.isClosed()) {
+            runOnUi(() -> controller.showMessage(message, true));
+            return;
+        }
         try {
             IStatusLineManager status = editor.getEditorSite().getActionBars().getStatusLineManager();
             status.setErrorMessage(message);

@@ -22,12 +22,14 @@ import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import io.github.jm6cnddxbwftaks.eclipseneovim.Activator;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.CursorPos;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.IdeAction;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.eclipseneovim.core.StatusInfo;
+import io.github.jm6cnddxbwftaks.eclipseneovim.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.eclipseneovim.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.CommandLine;
@@ -49,7 +51,7 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.VimModes;
  *   <li>{@link CaretSync}: caret and cursor, both directions;</li>
  *   <li>{@link EditorKeyContext}: when the Vim Ctrl-key bindings are active;</li>
  *   <li>{@link VisualSelectionView}, {@link CursorStyleController}, {@link ModeStatusContribution},
- *       {@link CommandLineBox}: what is drawn;</li>
+ *       {@link CommandLineBox}, {@link MessageLine}: what is drawn;</li>
  *   <li>{@link InsertTracker}: what was typed in insert mode, for {@code .}.</li>
  * </ul>
  *
@@ -79,6 +81,10 @@ public final class NeovimEditorController implements AutoCloseable {
     private final InsertTracker insertTracker;
     /** The inline {@code :} / {@code /} / {@code ?} command line along the bottom of the editor. */
     private final CommandLineBox commandLine;
+    /** Neovim's messages and errors, and the plug-in's own, along the bottom of the editor. */
+    private final MessageLine messageLine;
+    /** The message last handed to {@link #messageLine}, so that other status changes do not show it again. */
+    private String shownMessage = "";
     private final ModeStatusContribution modeStatus;
     private final CursorStyleController cursorStyle;
     /** Neovim's visual selection shown in the widget (native selection or blockwise overlay). */
@@ -134,6 +140,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
         this.commandLine = new CommandLineBox(styledText, new SessionCommands(session, editor));
+        this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
         keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
@@ -293,6 +300,7 @@ public final class NeovimEditorController implements AutoCloseable {
             LOG.info("Mode → NEOVIM (keys to nvim)");
         } else {
             modeStatus.setHostEclipseMode();
+            messageLine.hide(); // Neovim's messages are about keys it no longer gets
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
             LOG.info("Mode → ECLIPSE (keys to IDE)");
@@ -314,9 +322,40 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
-    /** Command, message or statusline text changed: show it in the status bar item. */
+    /**
+     * Command, message or statusline text changed: the command and statusline go to the status bar
+     * item, the message to the message line. Called on the session's thread.
+     */
     private void onStatusChanged(StatusInfo info) {
         modeStatus.setStatusInfo(info);
+        HostCommands.runOnUi(() -> {
+            if (closed || styledText.isDisposed() || !isNeovimModeActive() || info.message().equals(shownMessage)) {
+                return;
+            }
+            shownMessage = info.message();
+            messageLine.show(info.message(), info.error());
+        });
+    }
+
+    /**
+     * Shows a message of the plug-in's own in the message line, e.g. {@code E37: No write since last
+     * change} from {@code :e}. It goes away with the next key, like Neovim's messages. UI thread.
+     */
+    void showMessage(String message, boolean error) {
+        if (!closed && !styledText.isDisposed()) {
+            messageLine.show(message, error);
+        }
+    }
+
+    /** The message line, for tests. */
+    MessageLine messageLine() {
+        return messageLine;
+    }
+
+    /** The preference <em>Flash the editor on errors</em>. */
+    private static boolean flashOnError() {
+        Activator activator = Activator.getDefault();
+        return activator != null && activator.getPreferenceStore().getBoolean(PreferenceConstants.FLASH_ON_ERROR);
     }
 
     /** Redraws the status bar item and re-reads Neovim's side of it (a preference changed). */
@@ -424,6 +463,7 @@ public final class NeovimEditorController implements AutoCloseable {
         try {
             caretSync.dispose();
             commandLine.dispose();
+            messageLine.dispose();
             selectionView.dispose();
             if (keyViewer != null) {
                 keyViewer.removeVerifyKeyListener(keyInterceptor);

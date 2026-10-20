@@ -158,8 +158,8 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
   `StateSnapshot` requires). It holds the ids of the closed folds: the marks whose line
   `foldclosed()` reports as the start of a closed fold. It is empty when there are no marks or
   `'foldenable'` is off, so `zn` and `zi` open everything in Eclipse too. The script computes it
-  only when a fourth argument is `"1"`, like its three existing flags (the statusline, `showcmd`,
-  the messages); with folding off it is `"0"`, and the element is an empty list that nothing reads.
+  only when a third argument is `"1"`, like its two existing flags (the statusline and `showcmd`;
+  messages are always read); with folding off it is `"0"`, and the element is an empty list that nothing reads.
 - **Applied on the UI thread:** compare with the last list; collapse or expand only the
   annotations whose state differs. This must happen *before* the cursor is applied, so that the
   caret lands on visible text.
@@ -221,7 +221,7 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
   - `HostExCommand` treats `:fold` and `:folddelete` as Neovim commands;
   - `CaretSync` keeps today's path (reveal every hidden offset), since there is no caption lookup.
 
-  What remains is one flag test per key on each side, which is the same work the three existing
+  What remains is one flag test per key on each side, which is the same work the two existing
   snapshot flags do.
 - **Why not check the variable in Lua each time:** that kept a Neovim call per fold change and an
   Eclipse listener per editor even when the user had said no. Reading it once is cheaper and also
@@ -234,7 +234,7 @@ matter: `gd` ends in Eclipse, which reveals the target, and that reaches Neovim 
    - from `(firstLine, lastLine, collapsed)` triples to the sorted, filtered list of section 3.1;
    - from the snapshot's closed ids and the previous ones to "collapse these, expand those".
 2. **`core`**:
-   - `LuaScripts.SET_FOLDS`, plus the snapshot's fourth flag, new element and `StateSnapshot` index;
+   - `LuaScripts.SET_FOLDS`, plus the snapshot's third flag, new element and `StateSnapshot` index;
    - `NeovimSession.foldsEnabled()`, read once at start (section 3.6), and the snapshot flag set
      from it;
    - `NeovimSession.setFoldsAsync(buffer, regions)`;
