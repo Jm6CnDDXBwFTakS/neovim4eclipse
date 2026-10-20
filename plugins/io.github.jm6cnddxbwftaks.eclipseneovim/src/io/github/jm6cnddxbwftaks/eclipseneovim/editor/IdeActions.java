@@ -25,8 +25,9 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.TabNavigation;
  * editor activates "Editing Java Source", which binds F3 to Java's Open Declaration), so asking
  * the binding service "what does F3 run here?" finds the right command for any editor.
  * <ul>
- *   <li>{@code gd}: the command bound to F3; if none (the plain Text Editor), Neovim's own
- *       {@code gd} (jump to the word's first use, its "local declaration"). The Generic Editor binds
+ *   <li>{@code gd}: the command bound to F3; if none, or if it cannot run in this editor (the plain
+ *       Text Editor), Neovim's own {@code gd} (jump to the word's first use, its "local
+ *       declaration"). The Generic Editor binds
  *       F3 to Open Hyperlink, which Language Server files use for go to definition, so {@code gd}
  *       runs it there too, the same as F3.</li>
  *   <li>{@code K}: Show Tooltip Description (F2), the hover information of the text editor.</li>
@@ -50,13 +51,17 @@ final class IdeActions {
         switch (action.name()) {
             case IdeAction.DEFINITION -> {
                 String bound = commandBoundTo("F3");
-                if (bound != null) {
-                    execute(editor, bound, "gd");
-                } else {
+                // A command bound to F3 may still not run in this editor: another plug-in can bind F3
+                // for every text editor while only its own editors handle it. gd is then Neovim's own.
+                if (bound == null || !execute(editor, bound, "gd")) {
                     neovimGd.run();
                 }
             }
-            case IdeAction.HOVER -> execute(editor, ITextEditorActionDefinitionIds.SHOW_INFORMATION, "K");
+            case IdeAction.HOVER -> {
+                if (!execute(editor, ITextEditorActionDefinitionIds.SHOW_INFORMATION, "K")) {
+                    HostCommands.showError(editor, "K: not available in this editor");
+                }
+            }
             case IdeAction.NEXT_TAB -> EditorTabs.go(editor, TabNavigation.Action.NEXT, action.count());
             case IdeAction.PREVIOUS_TAB -> EditorTabs.go(editor, TabNavigation.Action.PREVIOUS, action.count());
             default -> LOG.fine(() -> "Unknown IDE action ignored: " + action);
@@ -76,17 +81,22 @@ final class IdeActions {
     /**
      * Executes a command through the editor's handler service, so that the editor's own handler
      * (for example Java's Open Declaration) is the one that runs.
+     *
+     * @return {@code false} if the command has no enabled handler in this editor (e.g. Open
+     *         Declaration in a plain text file); {@code true} if it ran, or failed while running
+     *         (logged)
      */
-    private static void execute(ITextEditor editor, String commandId, String vimKey) {
+    private static boolean execute(ITextEditor editor, String commandId, String vimKey) {
         try {
             IHandlerService handlers = editor.getSite().getService(IHandlerService.class);
             handlers.executeCommand(commandId, null);
+            return true;
         } catch (NotHandledException | NotEnabledException e) {
-            // No handler in this kind of editor (e.g. Open Declaration in a plain text file).
-            HostCommands.showError(editor, vimKey + ": not available in this editor");
             LOG.fine(() -> vimKey + ": " + commandId + " is not available here: " + e.getMessage());
+            return false;
         } catch (Exception e) {
             LOG.log(Level.WARNING, vimKey + ": running " + commandId + " failed", e);
+            return true;
         }
     }
 }
