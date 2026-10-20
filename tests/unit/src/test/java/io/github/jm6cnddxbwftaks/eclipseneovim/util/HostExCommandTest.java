@@ -111,6 +111,16 @@ class HostExCommandTest {
     }
 
     @Test
+    void partialEditLinesAreEditsForTabCompletion() {
+        // Tab in the : box completes file names in :e's own folders for these.
+        for (String partial : new String[] { "e", "e ", "e al", "edit sub/" }) {
+            expect(partial, Kind.EDIT, false);
+        }
+        expect("edit! x", Kind.EDIT, true);
+        assertEquals(Kind.NONE, HostExCommand.parse("ec").kind(), ":echo, not :e");
+    }
+
+    @Test
     void isHostCommandReflectsKind() {
         assertTrue(HostExCommand.parse("w").isHostCommand());
         assertFalse(HostExCommand.parse("echo 1").isHostCommand());

@@ -19,8 +19,8 @@ release process; see [Known limitations](#known-limitations).
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
 - [docs/LOG_LEVEL.md](docs/LOG_LEVEL.md): the plan for one switch that sets the plug-in's log level
   (not implemented yet).
-- [docs/TAB_COMPLETION.md](docs/TAB_COMPLETION.md): the plan for Tab completion in the `:` command
-  line (not implemented yet).
+- [docs/TAB_COMPLETION.md](docs/TAB_COMPLETION.md): how Tab completion in the `:` command line
+  works, and why.
 - [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
   step by step.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
@@ -185,6 +185,12 @@ minus a small padding and in the editor's font. Enter runs it; Esc or Backspace 
 empty box cancels; clicking elsewhere also cancels it; Up/Down browse a history (kept separately for commands and
 searches). `:` from visual mode leaves visual mode and pre-fills `:'<,'>`. While the box has focus the
 Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it.
+
+In the `:` box, Tab completes the line as Neovim's own command line does (commands, options and their
+values, buffers, help tags, variables, functions, file names), following your `'wildmode'`; Shift+Tab goes
+back. A line above the box lists the candidates, with the current one highlighted. `:e` completes file
+names in the folders `:e` looks in: next to the current file, then in its project. Completion works on the
+whole line, whatever the caret position; typing anything starts over. In `/` and `?`, Tab does nothing.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.
 
