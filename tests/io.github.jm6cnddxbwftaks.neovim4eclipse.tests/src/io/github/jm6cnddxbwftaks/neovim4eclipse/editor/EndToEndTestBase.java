@@ -270,12 +270,22 @@ abstract class EndToEndTestBase {
         }
     }
 
-    /** Types {@code :} into {@code target}, waits for the box, and types {@code command} after it. */
+    /**
+     * Types {@code :} into {@code target}, waits for the box, and types {@code command} after it.
+     *
+     * <p>Waits until the box shows the command, because the insert may land a moment later. On
+     * macOS a text field selects its whole content (the {@code :}) when it gains focus, so the
+     * insert would replace the prefix. The box's prefix guard refuses that edit and applies it after
+     * the prefix in a later {@code asyncExec} (see {@code CommandLineBox.protectPrefix}). An Enter
+     * sent before then would submit an empty command line.
+     */
     Text openBox(StyledText target, String command) {
         type(target, ':');
         waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(target) != null);
         Text box = textChildOf(target);
         box.insert(command);
+        waitUntil("the command in the : box", TIMEOUT_MS, () -> box.getText().equals(":" + command),
+                () -> "; the box shows " + box.getText());
         return box;
     }
 
