@@ -6,6 +6,7 @@ Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: Jm6CnDDXBwFTakS
 Fragment-Host: io.github.jm6cnddxbwftaks.eclipseneovim
 Bundle-RequiredExecutionEnvironment: JavaSE-21
+Automatic-Module-Name: io.github.jm6cnddxbwftaks.eclipseneovim.tests
 Require-Bundle: org.eclipse.ui.ide,
  org.eclipse.core.resources,
  org.eclipse.jface.text,
