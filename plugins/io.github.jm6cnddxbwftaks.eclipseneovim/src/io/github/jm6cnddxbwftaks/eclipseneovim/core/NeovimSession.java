@@ -190,8 +190,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         LOG.info(() -> "Neovim 'clipboard' option = '" + clipboardOption + "'; "
                 + (session.nvimManagesClipboard ? "Neovim manages the OS clipboard, bridge disabled"
                         : "bridge copies yanks to the OS clipboard"));
-        // Lets a user's init.lua detect the host: `if vim.g.eclipse == 1 then ... end`.
-        await(api.setVar("eclipse", 1));
 
         session.state.readMode();
         LOG.info("NeovimSession ready");
