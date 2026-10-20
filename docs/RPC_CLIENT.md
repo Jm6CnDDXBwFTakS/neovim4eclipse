@@ -1,6 +1,6 @@
 # Design note: our own msgpack-rpc client instead of neovim-java
 
-Status: **accepted** (option A), in progress. Done: steps 1–6 and 7a. Next: step 7b.
+Status: **accepted** (option A), in progress. Done: steps 1–7 (the plug-in runs on its own client). Next: step 8, removing the jars.
 Written 2026-10-19 against the `develop` branch (neovim-java 0.5.0, msgpack 0.9.3, Jackson 2.14.2,
 SLF4J 1.7.36).
 
@@ -279,10 +279,15 @@ keeps `./mvnw verify -Pui` and `./mvnw test -f tests/unit/pom.xml -Pintegration`
      version map. `NeovimSessionIntegrationTest.neovimKnowsTheClientAndATerminalUi` pins what
      Neovim records about us (probed before the change: name `Eclipse-Neovim`, type `remote`,
      version with `prerelease`, a 120 x 40 UI without `rgb` or `ext_*`), so 7b must keep it.
-   - **7b**: the switch below. Also decided: Neovim's stderr is kept apart from the MessagePack
+   - **7b** *Done.* The switch below, as described. Also decided: Neovim's stderr is kept apart from the MessagePack
      stream (today it is merged, so stray output would corrupt it) and logged at WARNING by a
      small daemon thread; `NeovimApiContractTest` keeps only its own-client half, renamed
-     `NeovimApiIntegrationTest`.
+     `NeovimApiIntegrationTest`. As built: `NeovimConnection` builds the `RpcChannel` with a small
+     forwarder as its `Incoming`, so `setIncoming` can come after `open` (until then notifications
+     are dropped, as before, and requests answered with an error). New integration tests: a normal
+     close logs no warning; a line on Neovim's stderr is logged and the session goes on. The JDK's
+     `sun.misc.Unsafe` warning at start-up comes from msgpack-core 0.9.3 itself and was there
+     before; a newer msgpack-core may drop it.
 
    **Switch.** `NeovimConnection.open` builds an `RpcChannel` over the process streams and a
    `MsgpackNeovimApi`; `requestQuit` uses `channel.closing()` and `channel.notify("nvim_command",

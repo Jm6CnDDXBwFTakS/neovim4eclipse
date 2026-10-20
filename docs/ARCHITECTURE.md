@@ -25,7 +25,7 @@ What the plug-in does and why. For the Eclipse and Neovim concepts it is built o
 │       nvim_input / executeCommand / get_mode / get_cursor / execute_lua │
 └──────────────────────────────────────┬──────────────────────────────────┘
                                        ▼
-┌──────────────────────── nvim --embed (neovim-java) ─────────────────────┐
+┌──────────────────── nvim --embed (core/rpc client) ─────────────────────┐
 │  one buffer per document ◄── nvim_buf_set_lines / lines_event           │
 │  ui_attach(TERMINAL) for input processing                               │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -143,8 +143,8 @@ could come back charwise.
 
 Notifications and requests both reach `NotificationBridge` (`notification`, `request`, the two
 methods of `core/rpc/Incoming`) through `NeovimConnection.setIncoming`, which pick the handler by
-name. Not through neovim-java's handler annotations: its `@NeovimRequestHandler` does not work in
-neovim-java 0.5.0 (see `NeovimConnection.setIncoming`).
+name. `core/rpc/RpcChannel` delivers them on its reader thread, in arrival order, and answers
+each request exactly once.
 
 ## Ideas for future work
 
@@ -160,8 +160,8 @@ neovim-java 0.5.0 (see `NeovimConnection.setIncoming`).
 | Thread | Allowed |
 |--------|---------|
 | SWT UI | Widget updates, `VerifyKeyListener`, the command-line box, all `IDocument` edits and reads (a push from the input thread takes its snapshot of the text with `syncExec`) |
-| input executor | All neovim-java `await(...)` RPC |
-| RPC listener | Dispatch to listeners; schedule UI work with `Display.asyncExec`; answer Neovim's requests (a clipboard paste waits for the UI thread at most 2 s, a save at most 30 s) |
+| input executor | All blocking `await(...)` RPC |
+| RPC reader (`RpcChannel`, one per session) | Completing the futures; dispatch to listeners; schedule UI work with `Display.asyncExec`; answer Neovim's requests (a clipboard paste waits for the UI thread at most 2 s, a save at most 30 s) |
 
 Never call `await` on the UI thread for key handling.
 
@@ -171,11 +171,9 @@ or a fake that holds the work back (for example, to close the editor while a Neo
 
 ## Dependency stack
 
-- **neovim-java** (`neovim-api`, `core-rpc`, `reactive-core-rpc`, handlers; version in the root `pom.xml`),
-  seen by the plug-in only through its own `core/rpc/NeovimApi` (adapter `NeovimJavaApi`), so that it
-  can be replaced (`docs/RPC_CLIENT.md`)
-- MessagePack + Jackson
-- SLF4j simple (logging from the client library)
+- **msgpack-core** (MessagePack), under the plug-in's own msgpack-rpc client in `core/rpc`
+  (`docs/RPC_CLIENT.md` tells how it replaced neovim-java). Until step 8 of that plan, the old jars
+  (neovim-java, Jackson, SLF4J) are still bundled, but nothing uses them.
 
 Jars live under `plugins/.../lib/` and on `Bundle-ClassPath`. They are copied there by the build
 (version-less names); their versions are defined only in the root `pom.xml`.

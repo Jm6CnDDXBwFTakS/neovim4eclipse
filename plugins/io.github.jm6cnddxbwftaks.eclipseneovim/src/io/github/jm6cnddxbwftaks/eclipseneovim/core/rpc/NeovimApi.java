@@ -16,9 +16,10 @@ import java.util.concurrent.CompletableFuture;
  * windows are passed as {@link Handle}s, so the interface is as flat as Neovim's C API.
  *
  * <p>Why the plug-in has its own interface: the code that uses it ({@code NeovimSession},
- * {@code DocumentBuffers}) then does not depend on the RPC library. Today
- * {@link NeovimJavaApi} implements it with neovim-java; a client of our own replaces it later
- * ({@code docs/RPC_CLIENT.md}). Adding a function is one method here and one in each implementation.
+ * {@code DocumentBuffers}) then does not depend on how the messages travel, which is how the
+ * neovim-java library could be swapped for our own client ({@code docs/RPC_CLIENT.md}); tests can
+ * also fake it. {@link MsgpackNeovimApi} implements it. Adding a function is one method here and
+ * one there.
  *
  * <p>Thread rules: any thread may call these methods, but waiting for a future blocks, so it is done
  * on the session's input thread ({@code Rpc.await}), never on the SWT UI thread. A failed call

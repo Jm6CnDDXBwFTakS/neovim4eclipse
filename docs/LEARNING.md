@@ -227,56 +227,51 @@ windows and tab pages are MessagePack *extension* values, a type byte plus the n
 is the three bytes `d4 00 09`. `MsgpackValuesTest` writes such bytes out in hex, which is a quick
 way to see what really travels on the pipe.
 
-### 2.3 neovim-java
+### 2.3 The RPC client
 
-This plug-in does not encode MessagePack itself. [neovim-java](https://github.com/esensar/neovim-java)
-provides layers that `NeovimSession.start` stacks up:
+The plug-in speaks msgpack-rpc with code of its own in `core/rpc`, on the msgpack-core library
+alone. Three layers, which `NeovimConnection.open` builds on the process:
 
 ```text
-ProcessRpcConnection    the process's stdin/stdout (wrapped in core/QuittingConnection, see below)
-RpcClient               encodes/decodes messages, matches responses to requests (Jackson + msgpack)
-ReactiveRpcStreamer     turns each request into a CompletableFuture
-NeovimStreamApi         typed methods: api.input("dd"), api.getMode(), buffer.setLines(...)
-NeovimJavaApi           our own interface over it, core/rpc/NeovimApi: api.input("dd"),
-                        api.bufSetLines(buffer, ...); the only layer the rest of the plug-in sees
-RpcClient callbacks     every notification and request, handed to core/rpc/Incoming
-                        (NotificationBridge picks the handler by name with a switch)
+RpcChannel          the messages on stdin/stdout: request ids, responses matched to their requests,
+                    one reader thread that hands notifications and requests to core/rpc/Incoming
+MsgpackValues       Java values to MessagePack and back (integers as Long, handles as Handle, ...)
+MsgpackNeovimApi    the typed API, core/rpc/NeovimApi: api.input("dd"), api.getMode(),
+                    api.bufSetLines(buffer, ...), one method per Neovim function
 ```
 
-The plug-in calls neovim-java through an interface of its own, `core/rpc/NeovimApi`: the 18
-Neovim functions it uses, named after Neovim's (`bufSetLines` is `nvim_buf_set_lines`), with
-buffers and windows as plain `Handle(kind, id)` records instead of neovim-java's buffer objects.
-`core/rpc/NeovimJavaApi` implements it by calling neovim-java and converting the types. This
-is the first half of the *strangler* pattern for replacing a library: put your own interface in
-front of it, move every caller to the interface, then write a second implementation and swap
-(`docs/RPC_CLIENT.md` is the plan; the second implementation is our own msgpack-rpc client).
-Until the swap, only `NeovimConnection` and the adapter import neovim-java's API. The second
-implementation, `core/rpc/MsgpackNeovimApi` over `core/rpc/RpcChannel`, already exists, and
-`NeovimApiContractTest` runs the same checks against a real Neovim through both: a *contract test*,
-which is how a replacement proves it behaves like the original before anything depends on it.
+Where each of the message shapes from 2.2 is handled, in `RpcChannel`: a *request* we send gets a
+msgid and a `CompletableFuture`, stored before the bytes are written so that even an instant answer
+finds it; the *response* with that msgid completes the future (with the result, or with
+`NeovimErrorException` carrying Neovim's `[type, message]`); a *notification* or a *request* from
+Neovim goes to `Incoming` (`NotificationBridge`, which picks the handler by name with a `switch`),
+and a request gets exactly one answer, an error answer included, because Neovim waits for it.
 
-neovim-java also has annotations for handlers (`@NeovimNotificationHandler`,
-`@NeovimRequestHandler`), found by reflection. The plug-in used them for notifications, but the
-request one never fires in version 0.5.0: the manager stores those handlers in one map and looks
-them up in another, so every request gets "No handler found". So `NeovimConnection.setIncoming`
-takes both kinds straight from the `RpcClient` and hands them to `Incoming`'s two methods, and
-`NotificationBridge` dispatches with a `switch` on the name: every name in one place, no
-reflection.
-A library's documented feature can be broken; a small integration test against the real program
-(here `ClipboardIntegrationTest`) is what finds it.
+`NeovimApi` names its 18 methods after Neovim's functions (`bufSetLines` is `nvim_buf_set_lines`)
+and passes buffers and windows as plain `Handle(kind, id)` records. It used to be implemented with
+the neovim-java library; the plug-in's own client replaced it by the *strangler* pattern: put your
+own interface in front of the library, move every caller to it, write a second implementation, check
+both against the real program with the same tests (a *contract test*), then swap.
+`docs/RPC_CLIENT.md` tells the story step by step, including the library's bugs that made it worth
+it: its request handlers never fired (they were stored in one map and looked up in another), and
+it logged every normal shutdown as an error. A library's documented feature can be broken; a small
+integration test against the real program (here `ClipboardIntegrationTest`) is what finds it.
 
 Every API call returns a `CompletableFuture`. `Rpc.await` waits for it with a timeout (and
 `Rpc.errorMessage` turns a failed call into Neovim's own `E…:` text).
-Waiting is the blocking step that must never happen on the SWT thread.
+Waiting is the blocking step that must never happen on the SWT thread. The futures are completed
+on `RpcChannel`'s reader thread, so nothing chained onto them may block either.
 
 msgpack-rpc has two kinds of message from client to server: a *request* carries an id and gets a
 *response* with the same id; a *notification* has no id and gets no answer. Closing the session shows
 why the difference matters: Neovim exits while it runs `:qa!`, so a `:qa!` sent as a request is never
-answered, and a thread would wait for the answer until it times out or is interrupted (which
-neovim-java prints as an error). `NeovimConnection.requestQuit` therefore sends `nvim_command("qa!")`
-as a notification and waits for the *process* to exit instead. The exit then ends the stream that
-neovim-java's reader thread reads, which it would also report as an error; `core/QuittingConnection`
-wraps the stream so that, once the session is closing on purpose, that end is expected and silent.
+answered, and a thread would wait for the answer until it times out. `NeovimConnection.requestQuit`
+therefore sends `nvim_command("qa!")` as a notification and waits for the *process* to exit
+instead. It tells the channel first (`RpcChannel.closing()`), so the end of Neovim's output that
+follows is expected and logged at FINE; the same end without it, Neovim crashing, is a WARNING.
+
+To watch the traffic, set the logger `io.github.jm6cnddxbwftaks.eclipseneovim.core.rpc.RpcChannel`
+to FINEST: every message in and out is logged.
 
 ### 2.4 Attaching as a UI
 
@@ -544,4 +539,4 @@ Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
   [Eclipse Platform documentation](https://help.eclipse.org/latest/); Lars Vogel's
   [Eclipse tutorials](https://www.vogella.com/tutorials/eclipse.html) (commands, handlers, SWT, OSGi).
 - Neovim: `:help api`, `:help rpc`, `:help ui`, `:help lua-guide`, `:help autocmd`.
-- [neovim-java](https://github.com/esensar/neovim-java) source, for the RPC layers.
+- [msgpack-rpc specification](https://github.com/msgpack-rpc/msgpack-rpc/blob/master/spec.md), the protocol `core/rpc` implements.

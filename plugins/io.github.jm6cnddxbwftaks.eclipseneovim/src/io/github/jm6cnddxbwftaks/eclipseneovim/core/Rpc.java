@@ -9,7 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Waiting for Neovim's answers. Every neovim-java call returns a {@link CompletableFuture}; waiting
+ * Waiting for Neovim's answers. Every Neovim API call ({@code core/rpc/NeovimApi}) returns a {@link CompletableFuture}; waiting
  * for it blocks the calling thread, so these helpers are for the session's input thread (and tests),
  * never the SWT UI thread.
  */

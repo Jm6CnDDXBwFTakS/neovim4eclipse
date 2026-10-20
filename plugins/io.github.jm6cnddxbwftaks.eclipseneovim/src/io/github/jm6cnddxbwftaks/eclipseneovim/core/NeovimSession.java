@@ -27,8 +27,8 @@ import io.github.jm6cnddxbwftaks.eclipseneovim.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.eclipseneovim.util.StatusItem;
 
 /**
- * Façade over one embedded {@code nvim --embed} process, using
- * <a href="https://codeberg.org/neovim-java/neovim-java">neovim-java</a> (version set in the root {@code pom.xml}).
+ * Façade over one embedded {@code nvim --embed} process, through the plug-in's own msgpack-rpc
+ * client ({@link NeovimConnection}, {@code core/rpc}).
  *
  * <h2>Threading (important)</h2>
  * <ul>
