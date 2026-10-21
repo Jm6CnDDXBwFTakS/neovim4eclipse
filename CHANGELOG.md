@@ -12,6 +12,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- `:e new.txt` for a file that does not exist yet inside a project now opens an empty editor you can
+  type in. Before, Eclipse showed "File ... does not exist." in place of the text, so keys and `:w`
+  did nothing (files outside the workspace were not affected). After the first `:w` the editor
+  becomes an ordinary editor on the project's file, and Neovim keeps the buffer's undo history.
+
 ## [0.1.0] - 2026-10-20
 
 The first release. Neovim for Eclipse embeds a real Neovim (`nvim --embed`) in Eclipse text editors:

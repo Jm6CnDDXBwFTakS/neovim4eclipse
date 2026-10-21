@@ -4,8 +4,11 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -112,5 +115,45 @@ class EditorBuffersTest {
         buffers.add("C.java", "editor 2", () -> "C");
 
         assertEquals(List.of(a, b), buffers.remove("search editor"));
+    }
+
+    @Test
+    void aDocumentIsSharedOnlyWhenAnotherEditorShowsIt() {
+        buffers.add("A.java", "editor 1", () -> "A");
+        assertFalse(buffers.isSharedWithAnotherEditor("A.java", "editor 1"));
+        assertTrue(buffers.isSharedWithAnotherEditor("A.java", "editor 2"));
+        assertFalse(buffers.isSharedWithAnotherEditor("B.java", "editor 1"), "a document without a buffer");
+
+        buffers.add("A.java", "editor 2", () -> "A"); // Window > New Editor
+        assertTrue(buffers.isSharedWithAnotherEditor("A.java", "editor 1"));
+    }
+
+    /** The case it is for: a new file's editor switched from its location to the workspace file. */
+    @Test
+    void moveKeepsTheBufferAndItsEditorsUnderTheNewDocument() {
+        DocumentBuffer buffer = numbered(buffers.add("new.txt by location", "editor 1", () -> "/p/new.txt"), 4);
+
+        assertSame(buffer, buffers.move("new.txt by location", "new.txt in the workspace"));
+
+        assertSame(buffer, buffers.add("new.txt in the workspace", "editor 1", () -> "unused"),
+                "the attach after the switch finds the same buffer");
+        assertEquals(Optional.of(new EditorBuffers.Showing<>("new.txt in the workspace", "editor 1")),
+                buffers.editorShowing(4, OPEN));
+        assertEquals(List.of(buffer), buffers.remove("editor 1"), "nothing is left under the old document");
+    }
+
+    @Test
+    void moveOfADocumentWithoutABufferMovesNothing() {
+        assertNull(buffers.move("unknown", "other"));
+        assertFalse(buffers.isSharedWithAnotherEditor("other", "editor 1"));
+    }
+
+    @Test
+    void moveOntoADocumentThatHasABufferIsRefused() {
+        buffers.add("A", "editor 1", () -> "A");
+        buffers.add("B", "editor 2", () -> "B");
+
+        assertThrows(IllegalStateException.class, () -> buffers.move("A", "B"));
+        assertTrue(buffers.isSharedWithAnotherEditor("A", "editor 2"), "A keeps its buffer and editor");
     }
 }

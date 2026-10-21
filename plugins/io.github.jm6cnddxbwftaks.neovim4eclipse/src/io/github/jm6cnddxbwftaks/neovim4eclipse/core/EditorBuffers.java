@@ -95,6 +95,37 @@ public final class EditorBuffers<D, E> {
     }
 
     /**
+     * Whether an editor other than {@code editor} shows {@code document}. Example: after
+     * <em>Window → New Editor</em> on {@code A.java} each of the two editors shares it; with one
+     * editor, or for a document without a buffer, it is not shared.
+     */
+    public boolean isSharedWithAnotherEditor(D document, E editor) {
+        Entry<E> entry = documents.get(document);
+        return entry != null && entry.editors.stream().anyMatch(other -> !other.equals(editor));
+    }
+
+    /**
+     * Moves {@code from}'s buffer and editors to {@code to}: an editor now shows the same file
+     * through another document, and should keep its Neovim buffer (number, undo history, marks).
+     * Example: a new file's editor, opened by location, is switched to the workspace file after
+     * its first {@code :w}; Eclipse then reads the file into a new document with the same text.
+     *
+     * @return the buffer moved, or {@code null} when {@code from} has none (nothing is moved)
+     * @throws IllegalStateException if {@code to} already has a buffer: two buffers cannot be merged
+     */
+    public DocumentBuffer move(D from, D to) {
+        if (documents.containsKey(to)) {
+            throw new IllegalStateException("The new document already has a buffer");
+        }
+        Entry<E> entry = documents.remove(from);
+        if (entry == null) {
+            return null;
+        }
+        documents.put(to, entry);
+        return entry.buffer;
+    }
+
+    /**
      * Forgets {@code editor} (it closed) and returns the buffers no editor shows any more, for the
      * caller to wipe in Neovim. An editor can be listed under more than one document when Eclipse
      * reused it for another file, so the result may hold several buffers; usually it holds one or none.

@@ -297,14 +297,9 @@ abstract class EndToEndTestBase {
         waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(target) != null);
         Text box = textChildOf(target);
         // The box closes as soon as it loses keyboard focus (CommandLineBox), so it must have the
-        // focus, in the active window, until Enter; see UiTestSupport.requireKeyboardFocus.
-        // Not when the target is hidden: a hidden control cannot take the focus, and some tests type
-        // into one on purpose. Example: after ":e new.txt" for a missing file Eclipse shows its "File
-        // ... does not exist." page in front of the text widget the plug-in attached to. A box that
-        // never had the focus cannot lose it, so there is nothing to guard there.
-        if (target.isVisible()) {
-            requireKeyboardFocus(box, TIMEOUT_MS);
-        }
+        // focus, in the active window, until Enter; see UiTestSupport.requireKeyboardFocus. This
+        // also fails a test that types into an editor nobody can see (the box opens hidden there).
+        requireKeyboardFocus(box, TIMEOUT_MS);
         box.insert(command);
         waitUntil("the command in the : box", TIMEOUT_MS, () -> requireOpen(box, target).getText().equals(":" + command),
                 () -> "; the box shows " + box.getText());
