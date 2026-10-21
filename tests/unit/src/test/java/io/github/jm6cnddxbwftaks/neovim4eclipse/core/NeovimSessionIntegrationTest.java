@@ -449,7 +449,7 @@ class NeovimSessionIntegrationTest {
 
     /**
      * What Neovim knows about us, pinned before the switch to our own client
-     * ({@code docs/RPC_CLIENT.md}, step 7): the client info, and a terminal-like UI of 120 x 40 with
+     * ({@code docs/design/RPC_CLIENT.md}, step 7): the client info, and a terminal-like UI of 120 x 40 with
      * no 24-bit color and no {@code ext_*} features. An empty Lua table has no type, so empty
      * {@code methods} and {@code attributes} may come back as a list or a map; both mean "none".
      */

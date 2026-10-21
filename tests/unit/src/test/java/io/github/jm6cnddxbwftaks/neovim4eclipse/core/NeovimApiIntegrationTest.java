@@ -32,7 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
  * Every {@link NeovimApi} method against a real {@code nvim --embed}, through our own client
  * ({@link MsgpackNeovimApi} over {@link RpcChannel}), connected the way the plug-in connects.
  *
- * <p>Until the switch away from neovim-java ({@code docs/RPC_CLIENT.md}, step 7) this was a
+ * <p>Until the switch away from neovim-java ({@code docs/design/RPC_CLIENT.md}, step 7) this was a
  * <em>contract test</em>: the same checks ran through both clients, and had to pass on both. The
  * checks stayed; {@link #numbersAsLong} still compares numbers by value, so a check can say
  * {@code 5L} whatever integer type an answer has. Each test gets a fresh Neovim ({@code --clean}:

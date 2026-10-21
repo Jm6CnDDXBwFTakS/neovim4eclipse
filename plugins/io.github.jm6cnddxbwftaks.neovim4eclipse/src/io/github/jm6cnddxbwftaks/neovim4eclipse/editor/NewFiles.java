@@ -42,7 +42,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
 /**
  * Files that do not exist yet, as Vim has them: {@code :e new.txt} opens an empty editor, and the
- * first {@code :w} creates the file. Design and experiments: {@code docs/NEW_FILE.md}.
+ * first {@code :w} creates the file. Design and experiments: {@code docs/design/NEW_FILE.md}.
  *
  * <p>Three things in Eclipse need working around:
  * <ul>

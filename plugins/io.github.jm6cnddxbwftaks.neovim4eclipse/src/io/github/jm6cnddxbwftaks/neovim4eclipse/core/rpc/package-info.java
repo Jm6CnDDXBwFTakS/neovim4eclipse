@@ -4,7 +4,7 @@
 /**
  * The plug-in's own msgpack-rpc client for Neovim, on msgpack-core alone: the connection
  * ({@code RpcChannel}), the encoding ({@code MsgpackValues}), the typed API ({@code NeovimApi}) and
- * its value types. It replaced the neovim-java library; {@code docs/RPC_CLIENT.md} tells why and
+ * its value types. It replaced the neovim-java library; {@code docs/design/RPC_CLIENT.md} tells why and
  * how, step by step.
  *
  * <p>Like the rest of {@code core/}, this package must not import {@code org.eclipse.*}: it is
