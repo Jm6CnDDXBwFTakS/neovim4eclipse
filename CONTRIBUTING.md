@@ -251,8 +251,9 @@ fix/<name>, feature/<name>  ──►  release/<next version>  ──►  main  
   "Releasing"), and every tag `v<version>` is on it.
 - **`release/<version>`**, for example `release/0.1.2`, collects the fixes and features of the
   next release. It is cut from `main` right after a release, and its first commit sets the version
-  in the POMs to `<version>-SNAPSHOT` (see "Releasing", step 4). The *Build* workflow runs on every
-  push to it, so it is tested before `main` moves. If the scope grows, rename it (0.1.2 to 0.2.0)
+  in the POMs to `<version>-SNAPSHOT` (see "Releasing", step 4). The *Build* workflow does not run
+  on it automatically, to save Actions minutes: run it by hand when a change needs CI, and always
+  before `main` moves (step 1 of "Releasing"). If the scope grows, rename it (0.1.2 to 0.2.0)
   and set the version again.
 - **`fix/<name>`** and **`feature/<name>`** hold one piece of work, cut from the release branch and
   merged back into it, by pull request or directly. They are not built automatically; run the
@@ -280,7 +281,13 @@ publishes a GitHub Release with the ZIP. For 0.1.2, released from `release/0.1.2
    `## [0.1.2] - 2026-11-02` (the release date, in ISO form) and add a new, empty
    `## [Unreleased]` above it. That section becomes the release notes;
    `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
-   the README's status line. Commit, push, and wait for the *Build* workflow on the branch to pass.
+   the README's status line. Commit and push, then run the *Build* workflow on the branch by hand
+   and wait for it to pass:
+
+   ```bash
+   gh workflow run build.yml --ref release/0.1.2
+   gh run watch   # pick the new run from the list; it can take a few seconds to appear
+   ```
 2. Fast-forward `main` to the release branch (or merge a pull request from it), push `main`, and
    wait for the *Build* workflow on `main` to pass:
 
