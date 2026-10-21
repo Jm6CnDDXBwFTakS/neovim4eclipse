@@ -49,7 +49,7 @@ Neovim; those are upgraded by hand with the steps below. It also skips, on purpo
 
 The embedded msgpack-core comes as an ordinary pull request of its own; it has no partner
 libraries to keep in step since the plug-in's own RPC client replaced neovim-java and Jackson
-(`docs/RPC_CLIENT.md`).
+(`docs/design/RPC_CLIENT.md`).
 
 Its pull requests target `main`, the default branch. Rather than merging them there, apply an
 accepted update on the current release branch (`release/0.1.2`, see CONTRIBUTING.md, "Branches")

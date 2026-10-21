@@ -17,15 +17,9 @@ edges, see [Known limitations](#known-limitations).
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
-- [docs/LOG_LEVEL.md](docs/LOG_LEVEL.md): the one switch that sets the plug-in's log level, and why
-  it is the only one.
-- [docs/TAB_COMPLETION.md](docs/TAB_COMPLETION.md): how Tab completion in the `:` command line
-  works, and why.
-- [docs/FOLDING.md](docs/FOLDING.md): the plan for folding with `zo`, `zc` and the other `z` commands
-  (not implemented yet).
-- [docs/NEW_FILE.md](docs/NEW_FILE.md): how `:e newfile` opens an empty editor that `:w` creates.
-- [docs/RPC_CLIENT.md](docs/RPC_CLIENT.md): how our own msgpack-rpc client replaced neovim-java,
-  step by step.
+- [docs/design/](docs/design/README.md): design notes, one per larger change, each with its status
+  (planned or built), the experiments behind it and the decisions made. For example how Tab
+  completion in the `:` command line works, or the plan for folding with `zo` and `zc`.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [SECURITY.md](SECURITY.md): how to report a vulnerability privately.
 

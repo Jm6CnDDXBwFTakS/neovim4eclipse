@@ -13,7 +13,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc;
  * after each key (see {@code StateSync}).
  *
  * <p>This is the plug-in's own type, so that code outside the RPC layer does not depend on
- * neovim-java's {@code VimMode} (see {@code docs/RPC_CLIENT.md}, migration step 1). The mode
+ * neovim-java's {@code VimMode} (see {@code docs/design/RPC_CLIENT.md}, migration step 1). The mode
  * strings themselves are interpreted by {@code util/VimModes}.
  *
  * @param mode     the mode code, such as {@code "n"}, {@code "i"}, {@code "v"} or {@code "no"}

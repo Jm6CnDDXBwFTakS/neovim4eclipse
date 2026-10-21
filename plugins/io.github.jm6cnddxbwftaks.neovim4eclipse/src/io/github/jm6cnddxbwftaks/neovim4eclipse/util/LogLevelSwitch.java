@@ -22,7 +22,7 @@ import java.util.logging.Logger;
  * The one switch that sets the plug-in's log level: the JVM system property {@value #PROPERTY},
  * for example {@code -Dneovim4eclipse.logLevel=FINE} after {@code -vmargs} in {@code eclipse.ini}.
  * The plug-in's activator reads it when the plug-in starts (README, "If {@code Ctrl-V} does
- * nothing"; design in {@code docs/LOG_LEVEL.md}).
+ * nothing"; design in {@code docs/design/LOG_LEVEL.md}).
  *
  * <h2>How java.util.logging decides what is printed</h2>
  * Every logger of the plug-in is named after its class, so all of them sit below one parent, the

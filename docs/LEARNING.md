@@ -135,7 +135,7 @@ So `:e new.txt` inside a project opens by location (an empty, editable editor) a
 `IReusableEditor.setInput` (`NewFiles.becomeWorkspaceFileEditor`). A new input means a new
 `IDocument`, which is why the plug-in moves the Neovim buffer to it
 (`EditorAttachManager.replaceInputKeepingBuffer`) instead of starting a new one. Details:
-[NEW_FILE.md](NEW_FILE.md).
+[NEW_FILE.md](design/NEW_FILE.md).
 
 ### 1.5 SWT: one UI thread
 
@@ -270,7 +270,7 @@ and passes buffers and windows as plain `Handle(kind, id)` records. It used to b
 the neovim-java library; the plug-in's own client replaced it by the *strangler* pattern: put your
 own interface in front of the library, move every caller to it, write a second implementation, check
 both against the real program with the same tests (a *contract test*), then swap.
-`docs/RPC_CLIENT.md` tells the story step by step, including the library's bugs that made it worth
+`docs/design/RPC_CLIENT.md` tells the story step by step, including the library's bugs that made it worth
 it: its request handlers never fired (they were stored in one map and looked up in another), and
 it logged every normal shutdown as an error. A library's documented feature can be broken; a small
 integration test against the real program (here `ClipboardIntegrationTest`) is what finds it.

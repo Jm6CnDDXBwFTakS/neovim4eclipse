@@ -154,7 +154,7 @@ each request exactly once.
 | Highlights | `nvim_buf_get_extmarks` → Eclipse annotations |
 | True block visual | Custom paint on `StyledText` or block selection API if available |
 | Cmdline | Parse UI `cmdline_show` redraw events instead of the inline box |
-| New-file buffer leak, shared editors | A new file's editor is opened by location and switched to the workspace file at its first `:w`, which then releases the file buffer Eclipse leaves behind (`NewFiles.releaseLeftOverBuffer`, see [NEW_FILE.md](NEW_FILE.md)). The switch is skipped when two editors show the new file (*Window › New Editor* before the first `:w`), so closing them leaves that buffer connected. Then, after the file is deleted, `:e` of the same name shows the old text in a clean editor (nothing is lost: a `:w` writes what is shown). Fix for every case: when an editor opened by location closes and its file now exists in the workspace, release the buffer under the unnormalized location if no other editor uses it (a hook in `EditorAttachManager`'s part-closed handling, plus a UI test) |
+| New-file buffer leak, shared editors | A new file's editor is opened by location and switched to the workspace file at its first `:w`, which then releases the file buffer Eclipse leaves behind (`NewFiles.releaseLeftOverBuffer`, see [NEW_FILE.md](design/NEW_FILE.md)). The switch is skipped when two editors show the new file (*Window › New Editor* before the first `:w`), so closing them leaves that buffer connected. Then, after the file is deleted, `:e` of the same name shows the old text in a clean editor (nothing is lost: a `:w` writes what is shown). Fix for every case: when an editor opened by location closes and its file now exists in the workspace, release the buffer under the unnormalized location if no other editor uses it (a hook in `EditorAttachManager`'s part-closed handling, plus a UI test) |
 
 ## Threading rules
 
@@ -173,7 +173,7 @@ or a fake that holds the work back (for example, to close the editor while a Neo
 ## Dependency stack
 
 - **msgpack-core** (MessagePack), under the plug-in's own msgpack-rpc client in `core/rpc`
-  (`docs/RPC_CLIENT.md` tells how it replaced neovim-java, Jackson and SLF4J). The only
+  (`docs/design/RPC_CLIENT.md` tells how it replaced neovim-java, Jackson and SLF4J). The only
   third-party jar the plug-in embeds.
 
 Jars live under `plugins/.../lib/` and on `Bundle-ClassPath`. They are copied there by the build
@@ -246,7 +246,7 @@ to the box, which (via the focus listener in the controller) also deactivates th
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
   `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by
   the file's name, and a write creates the file through the document provider instead of Eclipse's
-  save, which would open Save As (see [NEW_FILE.md](NEW_FILE.md)). The editor is opened by location
+  save, which would open Save As (see [NEW_FILE.md](design/NEW_FILE.md)). The editor is opened by location
   even inside a project, because a text editor refuses to show a workspace file that does not exist;
   after the first write it is switched to the workspace file, keeping its Neovim buffer
   (`EditorAttachManager.replaceInputKeepingBuffer`, `core/EditorBuffers.move`).
@@ -263,7 +263,7 @@ to the box, which (via the focus listener in the controller) also deactivates th
   (`LuaScripts.COMPLETE_CMDLINE`) types them into Neovim's command line, reads the result and cancels.
   So Neovim never stays in command-line mode, and the completion is exactly Neovim's. The answer
   (`util/Completion`) is applied only if nothing was typed meanwhile; the candidates are shown in a
-  one-line `StyledText` above the box. Details and the experiments behind them: `docs/TAB_COMPLETION.md`.
+  one-line `StyledText` above the box. Details and the experiments behind them: `docs/design/TAB_COMPLETION.md`.
 
 ## Macros
 

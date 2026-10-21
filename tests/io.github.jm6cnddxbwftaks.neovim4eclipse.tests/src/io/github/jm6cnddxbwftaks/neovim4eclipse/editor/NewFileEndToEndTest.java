@@ -27,7 +27,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code :e newfile} opens an empty editor, and {@code :w} creates the file (docs/NEW_FILE.md).
+ * {@code :e newfile} opens an empty editor, and {@code :w} creates the file (docs/design/NEW_FILE.md).
  *
  * <p>Each test watches for dialogs ({@link #closeModalDialogsWhile}): Eclipse's own save of a missing
  * file opens Save As, which would otherwise block the test instead of failing it. No test may let

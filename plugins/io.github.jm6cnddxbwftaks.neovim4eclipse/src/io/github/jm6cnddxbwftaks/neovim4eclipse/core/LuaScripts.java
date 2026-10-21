@@ -356,7 +356,7 @@ final class LuaScripts {
 
     /**
      * Completes a {@code :} command line the way Neovim's own command line does, for Tab in the
-     * {@code :} box (see {@code docs/TAB_COMPLETION.md}). Returns {@code {line, total, candidates}}:
+     * {@code :} box (see {@code docs/design/TAB_COMPLETION.md}). Returns {@code {line, total, candidates}}:
      * the completed line, how many candidates there are, and the first {@code cap} of them; or
      * {@code nil} when Neovim is not in normal mode (it would not be safe to type {@code :} then).
      *

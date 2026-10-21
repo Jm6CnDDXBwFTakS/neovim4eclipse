@@ -37,7 +37,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  *   MsgpackNeovimApi   core/rpc: typed methods over it, api.input("dd"), api.getMode(), ...
  * </pre>
  * All three are the plug-in's own code on msgpack-core (until 2026 the RPC went through the
- * neovim-java library; {@code docs/RPC_CLIENT.md} tells why and how it was replaced).
+ * neovim-java library; {@code docs/design/RPC_CLIENT.md} tells why and how it was replaced).
  *
  * <p>After the connection is up, {@link #open} introduces the client to Neovim
  * ({@code nvim_set_client_info}) and attaches as a UI ({@code nvim_ui_attach}), without which

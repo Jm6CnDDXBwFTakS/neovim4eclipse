@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>Why the plug-in has its own interface: the code that uses it ({@code NeovimSession},
  * {@code DocumentBuffers}) then does not depend on how the messages travel, which is how the
- * neovim-java library could be swapped for our own client ({@code docs/RPC_CLIENT.md}); tests can
+ * neovim-java library could be swapped for our own client ({@code docs/design/RPC_CLIENT.md}); tests can
  * also fake it. {@link MsgpackNeovimApi} implements it. Adding a function is one method here and
  * one there.
  *

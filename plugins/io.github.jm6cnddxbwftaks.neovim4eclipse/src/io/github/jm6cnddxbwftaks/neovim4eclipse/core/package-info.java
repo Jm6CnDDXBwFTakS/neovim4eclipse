@@ -63,7 +63,7 @@
  *       ({@code NeovimApi}), what Neovim sends on its own ({@code Incoming}) and their types
  *       ({@code Handle}, {@code Mode}, {@code WinCursor}), used
  *       and the msgpack-rpc client itself ({@code RpcChannel}, {@code MsgpackNeovimApi}), the
- *       plug-in's own code on msgpack-core ({@code docs/RPC_CLIENT.md}).</li>
+ *       plug-in's own code on msgpack-core ({@code docs/design/RPC_CLIENT.md}).</li>
  * </ul>
  *
  * <p>See {@code docs/LEARNING.md}, part 2, for msgpack-rpc, {@code nvim_input}, blocking, and

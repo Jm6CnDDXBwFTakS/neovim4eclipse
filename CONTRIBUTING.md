@@ -166,6 +166,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
+| `docs/design/` | design notes: one per larger change, planned or built ([index](docs/design/README.md)) |
 
 The project has two names. People see **Neovim for Eclipse** (feature, bundle name, preference
 page, release titles); everything a machine reads uses **neovim4eclipse**: the repository, the
@@ -209,6 +210,8 @@ text that tests do not always catch.
   `about.html`.
 - [docs/LEARNING.md](docs/LEARNING.md), part 4, has recipes: adding a preference, a Neovim event, an
   Eclipse-side `:` command.
+- Plan a larger change (several commits, a new subsystem, a release process) in a design note in
+  [docs/design/](docs/design/README.md) first, and keep its status current as it is built.
 - Update the documentation (README, `docs/`, Javadoc) when behavior changes.
 - Add a line to [CHANGELOG.md](CHANGELOG.md), under *Unreleased*, for every change a user of the
   plug-in would notice (a feature, a fix, a changed default). Internal changes (refactoring, tests,
