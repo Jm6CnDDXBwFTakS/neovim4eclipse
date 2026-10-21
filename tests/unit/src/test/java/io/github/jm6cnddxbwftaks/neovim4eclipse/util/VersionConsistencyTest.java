@@ -54,10 +54,15 @@ class VersionConsistencyTest {
             "releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/pom.xml");
     private static final List<String> WORKFLOWS = List.of(
             ".github/workflows/build.yml",
-            ".github/workflows/release.yml");
-    /** User-facing documents that state the supported Java and Eclipse versions. */
+            ".github/workflows/release.yml",
+            ".github/workflows/update-site.yml");
+    /**
+     * User-facing documents that state the supported Java and Eclipse versions. The feature's
+     * description is one: Install New Software shows it before anyone installs.
+     */
     private static final List<String> DOCS = List.of(
-            "README.md", "CONTRIBUTING.md", "docs/HOWTO_ECLIPSE.md", "docs/LEARNING.md");
+            "README.md", "CONTRIBUTING.md", "docs/HOWTO_ECLIPSE.md", "docs/LEARNING.md",
+            "features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml");
 
     /** "JDK 21", "Java 21", "Java 21+", "JavaSE-21": the number is the first group. */
     private static final Pattern JAVA_MENTION = Pattern.compile("\\b(?:JDK|Java|JavaSE-) ?(\\d+)\\b");

@@ -7,7 +7,7 @@
    </feature>
    <category-def name="neovim4eclipse" label="Neovim for Eclipse">
       <description>
-         Neovim modal editing integrated into the Eclipse IDE.
+         Vim mode for Eclipse, powered by a real Neovim (installed separately, 0.9 or newer).
       </description>
    </category-def>
 </site>
