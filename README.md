@@ -6,6 +6,11 @@ Embeds **real Neovim** (`nvim --embed`) in Eclipse text editors so modal editing
 text objects, visual mode, registers, macros, ex commands) works on the buffer you see in the IDE.
 Neovim owns editing; Eclipse owns files and rendering.
 
+<!-- docs/images/demo.gif: a 42-second loop on a small Java file (ciw, a macro, :%s, gd, content
+     assist in insert mode, :e!). It starts and ends on the same frame. Record it again when the
+     behavior it shows changes. -->
+![Neovim editing a Java file in Eclipse: ciw, a recorded macro, :%s, gd to a declaration, content assist in insert mode and :e! to revert](docs/images/demo.gif)
+
 **Status: 0.1.1, an early release.** It works day to day on Linux, macOS and Windows; expect rough
 edges, see [Known limitations](#known-limitations).
 
