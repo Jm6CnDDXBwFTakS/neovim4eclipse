@@ -12,6 +12,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-21
+
+The update site release: install once from a URL, and *Check for Updates* finds what comes next.
+
 ### Added
 
 - A permanent update site, <https://jm6cnddxbwftaks.github.io/neovim4eclipse/>: add it once in
