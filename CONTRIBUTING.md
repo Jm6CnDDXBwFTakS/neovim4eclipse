@@ -75,7 +75,13 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
 - `UiTestSupport` (UI tests): `waitUntil(what, timeout, condition)` runs the event loop until a
   condition holds, and `settle(session, timeout)` waits until the session has handled everything
   queued so far and the UI thread has applied the result. Use these, not fixed sleeps: a sleep is
-  either too short on a slow CI machine or wasted time on a fast one.
+  either too short on a slow CI machine or wasted time on a fast one. `requireKeyboardFocus(control,
+  timeout)` activates the control's window, gives the control the focus and waits until SWT reports
+  it, or fails with "lost keyboard focus" and where the focus is (`focusReport`). Call it before a
+  step whose result depends on focus (the Vim key context, the `:` box). Why it is needed: SWT
+  counts focus only inside the active window, and `xvfb-run` has no window manager, so when a
+  dialog or shell that a test opened closes, no window is active any more and `setFocus()` alone
+  does nothing visible. On a desktop, typing in another window while the UI tests run does the same.
 - `EndToEndTestBase` (UI tests): the setup of the end-to-end tests (`test.txt` open and attached,
   Neovim in normal mode) and their helpers: `expectText`, `openFile`, `waitForAttach`, `runCommand`
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed

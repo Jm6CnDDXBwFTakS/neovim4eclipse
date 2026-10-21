@@ -10,8 +10,10 @@ import java.util.function.BooleanSupplier;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Shell;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 
@@ -97,6 +99,78 @@ final class UiTestSupport {
                 }
             }
         }
+    }
+
+    /** How often {@link #requireKeyboardFocus} asks again while the focus has not arrived. */
+    private static final long FOCUS_RETRY_MS = 250;
+
+    /**
+     * Makes {@code control}'s window the active one, gives {@code control} the keyboard focus, and
+     * waits until SWT reports that it has it. Fails with "lost keyboard focus" and who has the focus
+     * instead (see {@link #focusReport}) if it never arrives.
+     *
+     * <p>Why a test needs this: behavior that depends on focus (the Vim key context is active only
+     * while the editor's text widget has focus; the {@code :} box closes when it loses focus) breaks
+     * when the test window is not the active window. That happens on a real desktop while the
+     * developer works in another window, and on {@code xvfb-run}, which has no window manager: when
+     * a shell that had the X input focus closes (a dialog, a popup), nobody hands the focus back to
+     * the workbench window. Then {@code Control.setFocus()} only remembers the control for when its
+     * shell is activated again, and {@code isFocusControl()} stays {@code false}, because SWT counts
+     * the focus only inside the active shell.
+     *
+     * <p>{@code Shell.forceActive()} asks for the activation even against the window manager's
+     * focus-stealing rules (on X11 without a window manager it sets the input focus directly). The
+     * request is asynchronous, so it is repeated every {@value #FOCUS_RETRY_MS} ms until it arrives.
+     *
+     * <p>Example: {@code requireKeyboardFocus(widget, TIMEOUT_MS);} before a step whose result
+     * depends on the editor having focus.
+     */
+    static void requireKeyboardFocus(Control control, long timeoutMs) {
+        Display display = control.getDisplay();
+        Shell shell = control.getShell();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        long nextRequest = 0;
+        while (!control.isFocusControl()) {
+            long now = System.currentTimeMillis();
+            if (now > deadline) {
+                fail("Timed out after " + timeoutMs + " ms: " + describe(control) + " lost keyboard focus and did not get it back; "
+                        + focusReport(control));
+            }
+            if (now >= nextRequest) {
+                if (display.getActiveShell() != shell) {
+                    shell.forceActive();
+                }
+                control.forceFocus();
+                nextRequest = now + FOCUS_RETRY_MS;
+            }
+            if (!display.readAndDispatch()) {
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    fail("interrupted");
+                }
+            }
+        }
+    }
+
+    /**
+     * Where the keyboard focus is, for a failure message. Example: {@code "active shell: none (the
+     * test's window is 'Eclipse'); focus control: none"}, which means the test's window is not the
+     * active window.
+     */
+    static String focusReport(Control expected) {
+        Display display = Display.getCurrent(); // not expected.getDisplay(): it throws once expected is disposed
+        Shell active = display.getActiveShell();
+        Shell own = expected.isDisposed() ? null : expected.getShell();
+        String shell = active == null ? "none" : active == own ? "the test's window" : "'" + active.getText() + "'";
+        String ownTitle = own == null ? "disposed" : "'" + own.getText() + "'";
+        return "active shell: " + shell + " (the test's window is " + ownTitle + "); focus control: "
+                + describe(display.getFocusControl());
+    }
+
+    private static String describe(Control control) {
+        return control == null ? "none" : control.isDisposed() ? "a disposed control" : control.getClass().getSimpleName();
     }
 
     /** Runs the event loop for a while (lets queued work finish). */

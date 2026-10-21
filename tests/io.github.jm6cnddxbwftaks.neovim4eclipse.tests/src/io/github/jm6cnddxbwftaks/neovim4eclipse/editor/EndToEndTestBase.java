@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.requireKeyboardFocus;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -54,6 +55,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
  * ({@code session.inputAsync("<C-v>")}) or replaced by running the Eclipse command they are bound to.
  *
  * <p>The helpers wait by running the event loop, never by sleeping (see {@link UiTestSupport}).
+ *
+ * <p>Keyboard focus: the setup makes sure the editor has it ({@link UiTestSupport#requireKeyboardFocus}),
+ * so a test that starts without it fails at once with "lost keyboard focus" and where the focus is.
  */
 abstract class EndToEndTestBase {
 
@@ -100,6 +104,12 @@ abstract class EndToEndTestBase {
             NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
             return c != null && c.getEditor() == editor && !c.isClosed();
         });
+        // Focus-dependent behavior (the Vim key context, the : box closing on focus loss) needs the
+        // editor to have keyboard focus in the active window. An earlier test's dialog or shell can
+        // leave no window active (xvfb has no window manager to hand the focus back), and a developer
+        // may be typing in another window; fail here with a "lost keyboard focus" message instead of
+        // a timeout later. See UiTestSupport.requireKeyboardFocus.
+        requireKeyboardFocus(widget, TIMEOUT_MS);
         session = Activator.getDefault().getOrCreateSession();
         // One Neovim serves the whole IDE, so a previous test may have left it in another mode.
         session.inputAsync("<Esc>");
