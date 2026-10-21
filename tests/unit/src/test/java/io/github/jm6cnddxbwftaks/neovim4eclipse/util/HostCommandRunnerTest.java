@@ -47,6 +47,11 @@ class HostCommandRunnerTest {
         }
 
         @Override
+        public void closeBuffers(List<String> buffers, boolean force) {
+            calls.add((force ? "closeBuffers! " : "closeBuffers ") + buffers);
+        }
+
+        @Override
         public void edit(String file, boolean force) {
             calls.add((force ? "edit! " : "edit ") + "[" + file + "]");
         }
@@ -85,6 +90,15 @@ class HostCommandRunnerTest {
     @Test
     void quitBangDiscardsTheChanges() {
         assertEquals(List.of("close!"), run("q!"));
+    }
+
+    @Test
+    void bufferDeleteWithBuffersClosesThoseEditors() {
+        run("bd 3 other.txt");
+        run("bw! 3");
+        run("bd");
+        // run() returns every call so far
+        assertEquals(List.of("closeBuffers [3, other.txt]", "closeBuffers! [3]", "close", "closeAll"), run("%bd"));
     }
 
     @Test

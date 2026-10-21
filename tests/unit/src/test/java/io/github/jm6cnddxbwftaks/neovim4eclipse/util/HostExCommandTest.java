@@ -12,6 +12,8 @@ import java.util.Set;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostExCommand.Kind;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 class HostExCommandTest {
@@ -52,13 +54,26 @@ class HostExCommandTest {
     @Test
     void bufferDeleteCommandsCloseTheEditor() {
         expectAll(Kind.QUIT, "bd", "bdel", "bdelete", "bw", "bwipe", "bwipeout", "bun", "bunload", ":bd");
-        // A buffer number or name may mean another editor's buffer: left to Neovim.
-        expect("bd 3", Kind.NONE, false);
-        expect("bw other.txt", Kind.NONE, false);
         // Other b... commands are Neovim's.
         expect("b", Kind.NONE, false);
         expect("bn", Kind.NONE, false);
         expect("buffers", Kind.NONE, false);
+    }
+
+    /** With buffer numbers or names they close those buffers' editors; {@code :%bd} closes them all. */
+    @Test
+    void bufferDeleteWithBuffersNamesThem() {
+        HostExCommand one = HostExCommand.parse("bd 3");
+        assertEquals(Kind.BUFFER_DELETE, one.kind());
+        assertEquals(List.of("3"), one.buffers());
+        HostExCommand two = HostExCommand.parse(":bw!  other.txt   7 ");
+        assertEquals(Kind.BUFFER_DELETE, two.kind());
+        assertTrue(two.force());
+        assertEquals(List.of("other.txt", "7"), two.buffers());
+        assertEquals(List.of(), HostExCommand.parse("bd").buffers());
+        expect("%bd", Kind.QUIT_ALL, false);
+        expect(":%bw!", Kind.QUIT_ALL, true);
+        expect("%bd 3", Kind.NONE, false); // a range and a buffer together: Neovim reports the error
     }
 
     @Test

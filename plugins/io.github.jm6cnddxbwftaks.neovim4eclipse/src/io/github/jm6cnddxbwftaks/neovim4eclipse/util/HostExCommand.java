@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +22,8 @@ import java.util.Set;
  *   <tr><td>{@code :w}, {@code :update}</td><td>{@link Kind#WRITE}</td><td>save the editor</td></tr>
  *   <tr><td>{@code :wa}</td><td>{@link Kind#WRITE_ALL}</td><td>File &gt; Save All</td></tr>
  *   <tr><td>{@code :q}, {@code :bd}, {@code :bw}, {@code :bun}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
+ *   <tr><td>{@code :bd 3}, {@code :bd other.txt}</td><td>{@link Kind#BUFFER_DELETE}</td><td>close those buffers' editors</td></tr>
+ *   <tr><td>{@code :%bd}</td><td>{@link Kind#QUIT_ALL}</td><td>close all editors</td></tr>
  *   <tr><td>{@code :qa}</td><td>{@link Kind#QUIT_ALL}</td><td>close all editors</td></tr>
  *   <tr><td>{@code :wq}, {@code :x}</td><td>{@link Kind#WRITE_QUIT}</td><td>save and close</td></tr>
  *   <tr><td>{@code :wqa}, {@code :xa}</td><td>{@link Kind#WRITE_QUIT_ALL}</td><td>save all, close all</td></tr>
@@ -52,10 +55,17 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
          * {@code :q}, {@code :quit}, and the buffer commands {@code :bd[elete]}, {@code :bw[ipeout]},
          * {@code :bun[load]}. In Vim these remove the buffer from view; here each buffer is an Eclipse
          * editor, so they close it. Left to Neovim, they would delete the buffer and put an empty one
-         * in its place, whose (empty) text the editor would then show. With a buffer number or name
-         * ({@code :bd 3}) they are not host commands: see {@link #acceptsArgument}.
+         * in its place, whose (empty) text the editor would then show. With buffer numbers or names
+         * they are {@link #BUFFER_DELETE}; with the range {@code %} ({@code :%bd}, every buffer),
+         * {@link #QUIT_ALL}.
          */
         QUIT,
+        /**
+         * {@code :bd 3}, {@code :bd other.txt}, {@code :bw 2 5}: close the editors of the buffers named
+         * by number or by name ({@link #buffers()}), as {@code :bd} alone closes the current one. A
+         * name is matched as {@code :b} does (Vim's {@code bufnr()}: a unique part is enough).
+         */
+        BUFFER_DELETE,
         /** {@code :qa}, {@code :qall}, {@code :quitall}: close every editor. */
         QUIT_ALL,
         /** {@code :wq}, {@code :x}, {@code :exit}. */
@@ -84,6 +94,9 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
     private static final Map<String, Kind> KINDS = buildKinds();
     /** {@code :tabN[ext]}: matched before lowercasing, because {@code :tabn} means the opposite. */
     private static final Set<String> TAB_PREVIOUS_CAPITAL_N = abbrev("tabN", "tabNext");
+    /** {@code :bd[elete]}, {@code :bw[ipeout]}, {@code :bun[load]}: {@link Kind#QUIT} without an argument. */
+    private static final Set<String> BUFFER_DELETES = union(union(abbrev("bd", "bdelete"), abbrev("bw", "bwipeout")),
+            abbrev("bun", "bunload"));
     /** {@code :w[rite]} and {@code :wq}: see {@link #writesUnchanged()}. */
     private static final Set<String> WRITES_UNCHANGED = union(abbrev("w", "write"), Set.of("wq"));
 
@@ -109,6 +122,14 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
     }
 
     /**
+     * The buffers a {@link Kind#BUFFER_DELETE} names, as typed: {@code :bd 3 other.txt} gives
+     * {@code [3, other.txt]}. Each is a buffer number or a (part of a) buffer name.
+     */
+    public List<String> buffers() {
+        return argument.isEmpty() ? List.of() : List.of(argument.split("\\s+"));
+    }
+
+    /**
      * The tab count argument ({@code :tabn 3}): the number, or 0 when there is none.
      * {@link #parse} only accepts tab commands whose argument is empty or a number.
      */
@@ -124,6 +145,7 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
         if (raw == null) {
             return NOT_HOST;
         }
+        boolean everyBuffer = hasPercentRange(raw);
         String cmd = stripPrefix(raw);
         if (cmd.isEmpty()) {
             return NOT_HOST;
@@ -138,6 +160,10 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
         }
         Kind kind = TAB_PREVIOUS_CAPITAL_N.contains(name) ? Kind.TAB_PREVIOUS
                 : KINDS.getOrDefault(name.toLowerCase(Locale.ROOT), Kind.NONE);
+        if (BUFFER_DELETES.contains(name.toLowerCase(Locale.ROOT))) {
+            // :%bd is every buffer, so every editor; :bd 3 is buffer 3's editor, not this one.
+            kind = everyBuffer ? Kind.QUIT_ALL : argument.isEmpty() ? Kind.QUIT : Kind.BUFFER_DELETE;
+        }
         if (!acceptsArgument(kind, argument)) {
             return NOT_HOST;
         }
@@ -155,10 +181,19 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
             return true;
         }
         return switch (kind) {
-            case WRITE, WRITE_QUIT, EDIT -> true;
+            case WRITE, WRITE_QUIT, EDIT, BUFFER_DELETE -> true;
             case TAB_NEXT, TAB_PREVIOUS -> argument.chars().allMatch(Character::isDigit) && argument.length() <= 6;
             default -> false;
         };
+    }
+
+    /** Whether the command has the range {@code %} ({@code :%bd}), after an optional {@code :}. */
+    private static boolean hasPercentRange(String raw) {
+        String s = raw.strip();
+        if (s.startsWith(":")) {
+            s = s.substring(1).strip();
+        }
+        return s.startsWith("%");
     }
 
     /** Removes the leading {@code :} and a {@code %} range ({@code :%w} is {@code :w}). */

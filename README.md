@@ -235,7 +235,8 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:w`, `:up[date]` | save the editor (`:w file` ignores the name) |
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
-| `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes). With a buffer number or name (`:bd 3`) they go to Neovim |
+| `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes) |
+| `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). `:%bd` closes all editors |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
 | `:wqa[ll]`, `:xa[ll]` | save all, then close all |
