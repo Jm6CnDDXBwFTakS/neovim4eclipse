@@ -16,6 +16,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - `:bd` (and `:bw`, `:bun`) closes the editor, as `:q` does. It used to empty the editor and
   mark it modified.
+- The cursor position in Eclipse's status bar (`11 : 2 : 179`) follows Neovim's cursor. It used to
+  stay where Eclipse last saw a key or click; Mark Occurrences and the Outline view's linking now
+  follow too.
 
 ## [0.1.1] - 2026-10-21
 
