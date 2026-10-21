@@ -10,6 +10,10 @@ import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.filebuffers.FileBuffers;
+import org.eclipse.core.filebuffers.ITextFileBuffer;
+import org.eclipse.core.filebuffers.ITextFileBufferManager;
+import org.eclipse.core.filebuffers.LocationKind;
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
@@ -17,6 +21,7 @@ import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.widgets.Display;
@@ -243,7 +248,7 @@ final class NewFiles {
             String written = WrittenMessage.of(input.getName(), true, document.get(), charsetOf(editor, missing));
             boolean clean = !part.isDirty();
             if (clean && missing.workspaceFile() != null && part == editor) {
-                becomeWorkspaceFileEditor(editor, missing.workspaceFile());
+                becomeWorkspaceFileEditor(editor, missing.workspaceFile(), missing.path());
             }
             HostCommands.showMessage(editor, written, false); // after the switch: it re-attaches
             return clean;
@@ -268,15 +273,58 @@ final class NewFiles {
      * own undo history starts over, as for any new input. Not switched (only logged) when another
      * editor shows the same document or the editor cannot take a new input; that editor then
      * stays as it is, saving to disk.
+     *
+     * @param path the file's location, under which Eclipse kept the editor's old file buffer
      */
-    private static void becomeWorkspaceFileEditor(ITextEditor editor, IFile workspaceFile) {
+    private static void becomeWorkspaceFileEditor(ITextEditor editor, IFile workspaceFile, Path path) {
         try {
-            if (!EditorAttachManager.getInstance().replaceInputKeepingBuffer(editor, new FileEditorInput(workspaceFile))) {
+            if (EditorAttachManager.getInstance().replaceInputKeepingBuffer(editor, new FileEditorInput(workspaceFile))) {
+                releaseLeftOverBuffer(path, documentOfEditor(editor));
+            } else {
                 LOG.fine("Kept the location input of " + workspaceFile + ": shared or not reusable");
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not switch the editor to the workspace file " + workspaceFile, e);
         }
+    }
+
+    /**
+     * Releases the file buffer the editor had while it was opened by location, which Eclipse fails to
+     * release itself. Without this, the next {@code :e} of the same name, after the file was deleted,
+     * showed the old text in a clean editor.
+     *
+     * <p>Why Eclipse misses it: file buffers are kept under a key that
+     * {@code FileBuffers.normalizeLocation} computes, both when they are connected and when they are
+     * disconnected. For a location inside a project the key is the workspace path
+     * ({@code /proj/new.txt}) only once the file exists, and the location itself
+     * ({@code /ws/proj/new.txt}) before. The editor connected while the file did not exist, so its
+     * buffer is kept under the location; when the switch disconnects it, the file exists, the key
+     * comes out as the workspace path, nothing is found there, and the buffer stays connected, with
+     * its text, until Eclipse exits. The next editor opened by location on that path, once the file
+     * is gone again, connects to it and shows that text.
+     *
+     * <p>Releasing it here, by the location without normalizing ({@code LocationKind.LOCATION}),
+     * ends that one connection. Only a buffer that is not the editor's current one is released, and
+     * the switch is made only when no other editor shows the document, so no other user of the
+     * buffer is cut off.
+     */
+    private static void releaseLeftOverBuffer(Path path, IDocument current) {
+        ITextFileBufferManager manager = FileBuffers.getTextFileBufferManager();
+        IPath location = IPath.fromOSString(path.toString());
+        ITextFileBuffer leftOver = manager.getTextFileBuffer(location, LocationKind.LOCATION);
+        if (leftOver == null || leftOver.getDocument() == current) {
+            return;
+        }
+        try {
+            manager.disconnect(location, LocationKind.LOCATION, null);
+        } catch (CoreException e) {
+            LOG.log(Level.FINE, "Could not release the old file buffer of " + path, e);
+        }
+    }
+
+    private static IDocument documentOfEditor(ITextEditor editor) {
+        IDocumentProvider provider = editor.getDocumentProvider();
+        return provider == null ? null : provider.getDocument(editor.getEditorInput());
     }
 
     private static boolean parentExists(Missing missing) {

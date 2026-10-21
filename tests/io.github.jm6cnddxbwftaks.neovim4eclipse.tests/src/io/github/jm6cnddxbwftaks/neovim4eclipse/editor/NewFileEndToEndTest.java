@@ -16,6 +16,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import org.eclipse.core.filebuffers.FileBuffers;
+import org.eclipse.core.filebuffers.LocationKind;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.swt.custom.StyledText;
@@ -140,6 +142,38 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         expectText(opened, "hello");
         type(target, 'u');
         expectText(opened, "");
+        assertEquals(List.of(), dialogs);
+        closeAll();
+    }
+
+    /**
+     * Reported by the maintainer: write a new file, delete it in Eclipse, then {@code :e} the same
+     * name again. The new editor must be empty, in Eclipse and in Neovim. It showed the old text,
+     * from a file buffer Eclipse had failed to release (see {@code NewFiles.releaseLeftOverBuffer}).
+     */
+    @Test
+    void aNewFileWrittenDeletedAndOpenedAgainIsEmpty() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        runInBox(widget, "e again.txt");
+        ITextEditor first = activeEditorNamed("again.txt");
+        insert(widgetOf(first), "hello");
+        expectText(first, "hello");
+        runInBox(widgetOf(first), "w");
+        IFile file = project.getFile("again.txt");
+        assertEquals("hello", fileText("again.txt"));
+
+        file.delete(true, null); // as the Project Explorer's Delete does
+        waitUntil("Eclipse to close the deleted file's editor", TIMEOUT_MS,
+                () -> page().findEditor(first.getEditorInput()) == null);
+        var buffers = FileBuffers.getTextFileBufferManager();
+        assertNull(buffers.getTextFileBuffer(file.getLocation(), LocationKind.LOCATION),
+                "no file buffer left over from the editor opened by location");
+        page().activate(editor);
+        waitForAttach(editor, "test.txt");
+        runInBox(widget, "e again.txt");
+        ITextEditor second = activeEditorNamed("again.txt");
+        assertEquals("", documentOf(second).get(), "Eclipse's document");
+        assertEquals(List.of(""), session.getBufferLines(), "Neovim's buffer");
         assertEquals(List.of(), dialogs);
         closeAll();
     }

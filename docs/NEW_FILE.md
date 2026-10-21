@@ -47,6 +47,13 @@ The code follows the plan, with these differences:
     moves the Neovim buffer to it (`EditorBuffers.move`) and attaches again, so Neovim keeps the
     buffer's number, undo history and marks. The text is the same, so nothing is sent to Neovim.
     The switch is skipped (logged) when another editor shows the same document.
+  - The switch leaves a file buffer behind, which the plug-in then releases
+    (`NewFiles.releaseLeftOverBuffer`). Eclipse files a buffer under a key from
+    `FileBuffers.normalizeLocation`: the location (`/ws/proj/new.txt`) while the file does not
+    exist, its workspace path (`/proj/new.txt`) once it does. The editor connected under the
+    location; at the switch the file exists, so the disconnect looks under the workspace path,
+    finds nothing and returns. Found by the maintainer: write `new.txt`, delete it in Eclipse,
+    `:e new.txt` again, and the clean new editor showed the old text from that buffer.
   - `NewFileEndToEndTest` now checks that the editor shows its text and has the keyboard focus
     after `:e`, and that the first write switches the editor and keeps Neovim's undo.
 
