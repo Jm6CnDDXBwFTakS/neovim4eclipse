@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- `:bd` (and `:bw`, `:bun`) closes the editor, as `:q` does. It used to empty the editor and
+  mark it modified.
+
 ## [0.1.1] - 2026-10-21
 
 A bug-fix release.

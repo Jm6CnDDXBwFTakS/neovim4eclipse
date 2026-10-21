@@ -20,7 +20,7 @@ import java.util.Set;
  *   <tr><th>Typed</th><th>Kind</th><th>Eclipse action</th></tr>
  *   <tr><td>{@code :w}, {@code :update}</td><td>{@link Kind#WRITE}</td><td>save the editor</td></tr>
  *   <tr><td>{@code :wa}</td><td>{@link Kind#WRITE_ALL}</td><td>File &gt; Save All</td></tr>
- *   <tr><td>{@code :q}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
+ *   <tr><td>{@code :q}, {@code :bd}, {@code :bw}, {@code :bun}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
  *   <tr><td>{@code :qa}</td><td>{@link Kind#QUIT_ALL}</td><td>close all editors</td></tr>
  *   <tr><td>{@code :wq}, {@code :x}</td><td>{@link Kind#WRITE_QUIT}</td><td>save and close</td></tr>
  *   <tr><td>{@code :wqa}, {@code :xa}</td><td>{@link Kind#WRITE_QUIT_ALL}</td><td>save all, close all</td></tr>
@@ -48,7 +48,13 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
         WRITE,
         /** {@code :wa}, {@code :wall}: save every modified editor. */
         WRITE_ALL,
-        /** {@code :q}, {@code :quit}. */
+        /**
+         * {@code :q}, {@code :quit}, and the buffer commands {@code :bd[elete]}, {@code :bw[ipeout]},
+         * {@code :bun[load]}. In Vim these remove the buffer from view; here each buffer is an Eclipse
+         * editor, so they close it. Left to Neovim, they would delete the buffer and put an empty one
+         * in its place, whose (empty) text the editor would then show. With a buffer number or name
+         * ({@code :bd 3}) they are not host commands: see {@link #acceptsArgument}.
+         */
         QUIT,
         /** {@code :qa}, {@code :qall}, {@code :quitall}: close every editor. */
         QUIT_ALL,
@@ -201,7 +207,8 @@ public record HostExCommand(Kind kind, boolean force, String argument, boolean w
         Map<String, Kind> kinds = new HashMap<>();
         add(kinds, Kind.WRITE, abbrev("w", "write"), abbrev("up", "update"));
         add(kinds, Kind.WRITE_ALL, abbrev("wa", "wall"));
-        add(kinds, Kind.QUIT, abbrev("q", "quit"));
+        add(kinds, Kind.QUIT, abbrev("q", "quit"), abbrev("bd", "bdelete"), abbrev("bw", "bwipeout"),
+                abbrev("bun", "bunload"));
         add(kinds, Kind.QUIT_ALL, abbrev("qa", "qall"), abbrev("quita", "quitall"));
         add(kinds, Kind.WRITE_QUIT, Set.of("wq"), abbrev("x", "xit"), abbrev("exi", "exit"));
         add(kinds, Kind.WRITE_QUIT_ALL, abbrev("wqa", "wqall"), abbrev("xa", "xall"));

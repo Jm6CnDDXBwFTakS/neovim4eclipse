@@ -48,6 +48,19 @@ class HostExCommandTest {
         expectAll(Kind.QUIT, "q", "qu", "quit", ":q");
     }
 
+    /** {@code :bd} and its relatives close the editor, like {@code :q}, instead of emptying it. */
+    @Test
+    void bufferDeleteCommandsCloseTheEditor() {
+        expectAll(Kind.QUIT, "bd", "bdel", "bdelete", "bw", "bwipe", "bwipeout", "bun", "bunload", ":bd");
+        // A buffer number or name may mean another editor's buffer: left to Neovim.
+        expect("bd 3", Kind.NONE, false);
+        expect("bw other.txt", Kind.NONE, false);
+        // Other b... commands are Neovim's.
+        expect("b", Kind.NONE, false);
+        expect("bn", Kind.NONE, false);
+        expect("buffers", Kind.NONE, false);
+    }
+
     @Test
     void quitAllCommands() {
         expectAll(Kind.QUIT_ALL, "qa", "qal", "qall", "quita", "quitall", ":qa");

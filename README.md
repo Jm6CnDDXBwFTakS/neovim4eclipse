@@ -32,7 +32,7 @@ edges, see [Known limitations](#known-limitations).
 |----------------------------|---------------------------|
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
 | Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode |
-| File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:e file`, `:e!`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
+| File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:bd`, `:e file`, `:e!`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
 | `gd` (Open Declaration) and `K` (hover information), through the editor's own commands | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
@@ -222,6 +222,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:w`, `:up[date]` | save the editor (`:w file` ignores the name) |
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
+| `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes). With a buffer number or name (`:bd 3`) they go to Neovim |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
 | `:wqa[ll]`, `:xa[ll]` | save all, then close all |
