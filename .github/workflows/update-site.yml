@@ -1,0 +1,129 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# Publishes the permanent p2 update site on GitHub Pages:
+#   https://jm6cnddxbwftaks.github.io/neovim4eclipse/
+# Users add that URL once (Help > Install New Software > Add > Location), and the Eclipse
+# Marketplace listing points at it (docs/design/MARKETPLACE.md).
+#
+# It runs at the end of every release (release.yml calls it after publishing), and on demand:
+# Actions tab > Update site > Run workflow, to rebuild the site without a release (for example
+# after deleting a bad release). Run workflow only appears once this file is on main.
+#
+# Three jobs, each starting only when the one before succeeded:
+#   1. build:  downloads every published release's ZIP and turns them into one composite p2
+#              repository with releng/update-site.sh. The site is rebuilt from scratch each
+#              time, so it holds exactly the published releases.
+#   2. deploy: publishes it on GitHub Pages. Each deployment replaces the whole site, which is
+#              why step 1 rebuilds all of it. No gh-pages branch is involved, so the rulesets
+#              (only the owner pushes branches) need no exception.
+#   3. smoke:  installs the plug-in from the live URL into Eclipse 4.34, the oldest Eclipse the
+#              plug-in supports, with p2's director (releng/smoke-install.sh), and checks that
+#              the newest release is what gets installed.
+#
+# Set up once in the repository settings:
+#   - Settings > Pages > Build and deployment > Source: GitHub Actions.
+#   - Settings > Environments > github-pages > Deployment branches and tags: allow the tags v*
+#     (release.yml runs for a tag) besides main. Without it the deploy job stops with "Tag ... is
+#     not allowed to deploy to github-pages due to environment protection rules".
+name: Update site
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+# Each job asks for what it needs; nothing by default.
+permissions: {}
+
+# One deployment at a time; a second one waits rather than cancelling the first halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # The Eclipse Platform of the oldest supported release, 2024-12 (4.34), for the smoke test. It
+  # must match eclipse-repo.url in the root pom.xml; see docs/UPGRADING.md.
+  ECLIPSE_PLATFORM_URL: https://download.eclipse.org/eclipse/downloads/drops4/R-4.34-202411201800/eclipse-platform-4.34-linux-gtk-x86_64.tar.gz
+
+jobs:
+  build:
+    name: Build the site from the releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout and to download the releases
+    outputs:
+      latest: ${{ steps.site.outputs.latest }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download every release's ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Drafts and pre-releases are left out: the site offers only published releases.
+        run: |
+          mkdir dist
+          for tag in $(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases \
+                         --json tagName --jq '.[].tagName'); do
+            gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --dir dist
+          done
+          ls -l dist
+      - id: site
+        name: Build the composite repository
+        run: |
+          releng/update-site.sh dist site
+          latest=$(ls site/releases | sort -V | tail -n 1)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to prove the deployment comes from this repository's workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  smoke:
+    name: Install from the live site into Eclipse 4.34
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout
+    steps:
+      - uses: actions/checkout@v7
+      # Java 21: the plug-in needs it, and Eclipse 4.34's eclipse.ini does not start on Java 24+.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+      - name: Download Eclipse Platform 4.34
+        run: |
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/platform.tar.gz" "$ECLIPSE_PLATFORM_URL"
+          tar -xzf "$RUNNER_TEMP/platform.tar.gz" -C "$RUNNER_TEMP"
+      # Pages can take a moment to serve a new deployment; wait until the newest release answers.
+      - name: Wait for the new site
+        env:
+          URL: ${{ needs.deploy.outputs.url }}
+          LATEST: ${{ needs.build.outputs.latest }}
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl -sfI "${URL%/}/releases/$LATEST/content.jar" > /dev/null; then
+              echo "the site serves $LATEST"; exit 0
+            fi
+            echo "waiting for ${URL%/}/releases/$LATEST/ (attempt $attempt)"; sleep 15
+          done
+          echo "::error::the site does not serve releases/$LATEST after 5 minutes"; exit 1
+      - name: Install with p2's director
+        env:
+          URL: ${{ needs.deploy.outputs.url }}
+          LATEST: ${{ needs.build.outputs.latest }}
+        run: releng/smoke-install.sh "$RUNNER_TEMP/eclipse" "$URL" "$LATEST"

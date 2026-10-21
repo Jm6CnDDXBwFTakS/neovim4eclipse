@@ -59,6 +59,43 @@ runs without a workbench. Widget tests that need SWT but not the workbench are i
 does the same with the SWT jar for the build machine's OS and processor (a profile picks it) and
 needs a display.
 
+## The update site on GitHub Pages
+
+Users install from a URL that never changes, <https://jm6cnddxbwftaks.github.io/neovim4eclipse/>, and *Check for Updates*
+finds each new release there. It is a **composite p2 repository**: two small XML files that list
+other repositories (its children), one per release, which p2 reads as one:
+
+```text
+index.html               a page for people who open the URL in a browser
+p2.index                 tells p2 to read the composite files first
+compositeContent.xml     lists the children, for the metadata (what can be installed)
+compositeArtifacts.xml   lists the children, for the artifacts (the jars)
+releases/0.1.0/          the 0.1.0 release ZIP, unpacked
+releases/0.1.1/ ...
+```
+
+The *Update site* workflow (`.github/workflows/update-site.yml`) builds it and runs at the end of
+every release (`release.yml` calls it), or by hand (*Actions → Update site → Run workflow*, once the
+workflow is on `main`). It downloads every published release's ZIP, runs
+`releng/update-site.sh` on them, deploys the result to GitHub Pages, and then installs from the live
+URL into Eclipse 4.34 with `releng/smoke-install.sh`. Each deployment replaces the whole site, so it
+always holds exactly the published releases: to withdraw one, delete the GitHub Release and run the
+workflow.
+
+Both scripts run locally too:
+
+```bash
+mkdir -p /tmp/zips && gh release download v0.1.2 --pattern '*.zip' --dir /tmp/zips
+releng/update-site.sh /tmp/zips /tmp/site
+# into a throwaway Eclipse Platform 4.34 (it is changed), run with Java 21
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 releng/smoke-install.sh ~/eclipse-4.34 file:///tmp/site 0.1.2
+```
+
+The repository needs two settings for it, made once: *Settings → Pages → Source: GitHub Actions*,
+and in *Settings → Environments → github-pages*, deployment tags `v*` allowed besides `main`
+(the Release workflow runs for a tag). The design and its decisions are in
+[design/MARKETPLACE.md](design/MARKETPLACE.md), phase 1.
+
 ## PDE (optional, for interactive development)
 
 You can still import the projects into Eclipse PDE and launch from `MANIFEST.MF`

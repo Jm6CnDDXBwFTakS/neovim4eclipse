@@ -25,7 +25,7 @@ The safe loop for any upgrade:
 | What | Source of truth | Copies (checked by `VersionConsistencyTest` unless noted) |
 |------|-----------------|-----------------------------------------------------------|
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
-| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, and the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties) |
+| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and `ECLIPSE_PLATFORM_URL` in `update-site.yml` |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
 | Tycho | `<tycho.version>` in the root `pom.xml` | none |
@@ -99,7 +99,10 @@ To raise it (example: 2024-12 to 2025-12):
    resolved, for example `3.14.200.v20240915-0736` means `3.14.200`; the same for `org.eclipse.swt`
    and the others), or open the release's `plugins/` folder on download.eclipse.org. Nothing checks
    this automatically: a mismatch only means these tests run against slightly different jars.
-5. Run everything, then try the ZIP in that Eclipse and in the newest one.
+5. Set `ECLIPSE_PLATFORM_URL` in `.github/workflows/update-site.yml` to that release's Eclipse
+   Platform download for Linux x86_64 (from <https://download.eclipse.org/eclipse/downloads/>): the
+   update site's smoke test installs into it, so it must be the oldest supported release too.
+6. Run everything, then try the ZIP in that Eclipse and in the newest one.
 
 `Require-Bundle` in `MANIFEST.MF` has no version ranges, so nothing else stops an install on an
 Eclipse older than the target; the target release is the promise.

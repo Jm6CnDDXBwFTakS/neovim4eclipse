@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- A permanent update site, <https://jm6cnddxbwftaks.github.io/neovim4eclipse/>: add it once in *Install New Software*, and *Check
+  for Updates* finds every later release. The ZIPs on the Releases page still work.
+
 ## [0.1.2] - 2026-10-21
 
 A bug-fix release.

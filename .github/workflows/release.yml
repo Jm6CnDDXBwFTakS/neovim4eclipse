@@ -6,7 +6,7 @@
 # The tag supplies the version: the build rewrites 0.1.0-SNAPSHOT / 0.1.0.qualifier to 0.1.0
 # in the POMs, MANIFEST.MF and feature.xml (inside the runner only; nothing is committed back).
 #
-# Three jobs, each starting only when the one before succeeded:
+# Four jobs, each starting only when the one before succeeded:
 #   1. version: checks that the tagged commit is on main and that CHANGELOG.md has a section for
 #               the version, and reads the version from the tag.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
@@ -14,6 +14,10 @@
 #               neovim4eclipse-<version>.zip as an artifact of this run.
 #   3. publish: downloads that ZIP and creates the GitHub Release, with the version's CHANGELOG.md
 #               section as its notes.
+#   4. site:    the Update site workflow (update-site.yml, called as a reusable workflow): rebuilds
+#               the p2 update site on GitHub Pages from every release, now including this one, and
+#               installs from it into Eclipse 4.34 as a smoke test. If only this job fails, the
+#               release is out; fix the cause and rebuild the site with Run workflow.
 name: Release
 
 on:
@@ -101,3 +105,12 @@ jobs:
             "$zip" \
             --title "Neovim for Eclipse ${VERSION}" \
             --notes-file "$RUNNER_TEMP/notes.md"
+
+  site:
+    name: Update site
+    needs: publish
+    permissions:
+      contents: read    # to download the releases
+      pages: write      # to deploy to Pages
+      id-token: write   # required by the Pages deployment
+    uses: ./.github/workflows/update-site.yml

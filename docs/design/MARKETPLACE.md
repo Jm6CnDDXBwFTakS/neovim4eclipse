@@ -1,6 +1,6 @@
 # Plan: listing on the Eclipse Marketplace
 
-Status: **planned**, nothing built yet. Written on `release/0.1.2` (after 0.1.1). Decisions made with
+Status: **phase 1 built** (on `feature/update-site`, not deployed yet), phases 2–4 planned. Written on `release/0.1.2` (after 0.1.1). Decisions made with
 the maintainer are marked *(decided)*; none are open. When a phase is done, change its heading to
 say so and note where the result differs from this plan, as
 [TAB_COMPLETION.md](TAB_COMPLETION.md) does with *As built*.
@@ -86,7 +86,29 @@ Example `compositeContent.xml` (`compositeArtifacts.xml` is the same with `Artif
 Keeping every version (rather than only the latest) lets a user who needs an older one install it,
 and lets *Check for Updates* always find the newest *(decided)*.
 
-## Phase 1: the update site on GitHub Pages
+## Phase 1: the update site on GitHub Pages (built)
+
+### As built
+
+Where the code differs from the plan below, and why:
+
+- **Its own workflow**, `.github/workflows/update-site.yml`, which `release.yml` calls as a fourth
+  job (`site`) after `publish`. Adding *Run workflow* to `release.yml` itself would have made the
+  whole release startable by hand; this way only the site is. *Run workflow* appears only once the
+  file is on `main` (GitHub's rule for manual runs), so the first deployment comes with 0.1.3.
+- **The smoke test gives p2 only the update site**, no download.eclipse.org repository: the install
+  fails if the plug-in needs anything Eclipse Platform 4.34 lacks. Tried locally on 0.1.0–0.1.2: it
+  installs 0.1.2 (the newest) in about 4 seconds, and a site with a release folder missing fails as
+  intended (`p2.atomic.composite.loading`).
+- **Java 21 for the smoke test**: Eclipse 4.34's `eclipse.ini` passes
+  `-Djava.security.manager=allow`, which Java 24 and newer refuse, so `smoke-install.sh` runs
+  Eclipse with `$JAVA_HOME`.
+- **One more setting**: the `github-pages` environment allows only `main` to deploy by default; the
+  tags `v*` must be allowed too, since the Release workflow runs for a tag.
+- The scripts are `releng/update-site.sh` and `releng/smoke-install.sh`; how to run them is in
+  [PACKAGING.md](../PACKAGING.md), "The update site on GitHub Pages".
+
+### Plan
 
 **Publish with GitHub Actions, not a `gh-pages` branch.** The repository rulesets let only the
 owner push branches, so a workflow pushing to `gh-pages` would be refused (and exempting it would

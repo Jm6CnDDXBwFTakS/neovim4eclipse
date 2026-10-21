@@ -57,20 +57,28 @@ To use the plug-in in your own Eclipse, without building it.
 
 **Steps**
 
-1. Download `neovim4eclipse-<version>.zip` from the
-   [Releases](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases) page. Do not unpack it: the
-   ZIP is a complete p2 update site (Eclipse's installer format), read as it is.
-2. In Eclipse: *Help → Install New Software… → Add… → Archive…*, select the ZIP, then *Add*.
-3. Tick **Neovim for Eclipse**, then *Next*, *Next*, accept the license (EPL-2.0) and *Finish*.
-4. Eclipse asks whether to trust the content, because it is **unsigned** (the plug-in has no
+1. In Eclipse: *Help → Install New Software… → Add…*, enter `Neovim for Eclipse` as the *Name* and
+   this update site as the *Location*, then *Add*:
+
+   ```text
+   https://jm6cnddxbwftaks.github.io/neovim4eclipse/
+   ```
+
+   Offline, or to install one particular version: download `neovim4eclipse-<version>.zip` from the
+   [Releases](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases) page and choose
+   *Archive…* in place of the URL. Do not unpack it: the ZIP is a complete p2 update site
+   (Eclipse's installer format), read as it is.
+2. Tick **Neovim for Eclipse**, then *Next*, *Next*, accept the license (EPL-2.0) and *Finish*.
+3. Eclipse asks whether to trust the content, because it is **unsigned** (the plug-in has no
    code-signing certificate): tick the unsigned entry and choose *Trust Selected*.
-5. Restart Eclipse when asked.
-6. Open any text file: Neovim attaches to the editor automatically. *Neovim: Attach to Active Editor*
+4. Restart Eclipse when asked.
+5. Open any text file: Neovim attaches to the editor automatically. *Neovim: Attach to Active Editor*
    (`Ctrl+Shift+N`) attaches by hand; the toolbar toggle turns it off and on.
 
 **Updating and removing**
 
-- To update, install the newer ZIP the same way; Eclipse replaces the old version.
+- To update: *Help → Check for Updates* finds each new release on the update site. With a ZIP,
+  install the newer ZIP the same way; Eclipse replaces the old version.
 - To remove: *Help → About Eclipse IDE → Installation Details → Installed Software*, select
   **Neovim for Eclipse**, *Uninstall…*, and restart.
 
