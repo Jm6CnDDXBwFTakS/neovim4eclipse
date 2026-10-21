@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.text.TextViewer;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Point;
@@ -97,6 +100,37 @@ class StyledTextCaretTest {
         caret.select(3, 3);
         assertEquals(0, caret.selectionLength());
         assertEquals(3, caret.caretOffset());
+    }
+
+    /**
+     * The editor's status bar position, Mark Occurrences and Outline linking all follow selection
+     * changes. A caret moved by code sends no {@code SWT.Selection} event of its own, so
+     * {@code StyledTextCaret} sends one, with the selection's start and end as the widget does.
+     */
+    @Test
+    void movesAnnounceTheSelectionAsTheWidgetDoesForTheUser() {
+        List<Point> announced = new ArrayList<>();
+        widget.addListener(SWT.Selection, e -> announced.add(new Point(e.x, e.y)));
+        caret.moveCaret(7);
+        caret.select(8, 1); // upward: the event still has start before end
+        assertEquals(List.of(new Point(7, 7), new Point(1, 8)), announced);
+    }
+
+    /** The same, end to end: a real JFace {@link TextViewer} turns the event into a selection change. */
+    @Test
+    void aTextViewerSeesTheMoveAsASelectionChange() {
+        TextViewer viewer = new TextViewer(shell, SWT.MULTI);
+        viewer.setDocument(new Document("alpha\nbeta"));
+        StyledTextCaret viewerCaret = new StyledTextCaret(viewer.getTextWidget(),
+                new WidgetOffsets(viewer.getTextWidget(), viewer));
+        List<String> changes = new ArrayList<>();
+        viewer.addSelectionChangedListener(e -> {
+            ITextSelection selection = (ITextSelection) e.getSelection();
+            changes.add(selection.getOffset() + "+" + selection.getLength());
+        });
+        viewerCaret.moveCaret(7);
+        viewerCaret.select(1, 4);
+        assertEquals(List.of("7+0", "1+3"), changes);
     }
 
     @Test
