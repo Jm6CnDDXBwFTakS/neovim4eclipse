@@ -12,6 +12,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-21
+
+A bug-fix release.
+
 ### Fixed
 
 - `:e new.txt` for a file that does not exist yet inside a project now opens an empty editor you can
