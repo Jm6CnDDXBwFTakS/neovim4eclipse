@@ -87,7 +87,8 @@ release that is known to work. Newer Eclipse releases normally keep these APIs.
 To raise it (example: 2024-12 to 2025-12):
 
 1. Set `<eclipse-repo.url>https://download.eclipse.org/releases/2025-12</eclipse-repo.url>`.
-2. Update the release name and its `4.x` number in README and CONTRIBUTING (each quarterly
+2. Update the release name and its `4.x` number in README, CONTRIBUTING and the feature's
+   description in `feature.xml` (each quarterly
    release adds 1 to the `4.x` number; check <https://projects.eclipse.org/projects/eclipse>).
 3. Check the Java that release needs; raise the Java release with it if required.
 4. Set the `<eclipse.*.version>` properties next to `<eclipse.text.version>` (text, equinox.common,
@@ -160,7 +161,8 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 - **CI**: change `NVIM_VERSION` in `.github/workflows/build.yml`. Both jobs download
   `nvim-linux-x86_64.tar.gz` from the GitHub release; if a release renames that file, update the
   download and the `bin/nvim` paths there too.
-- **Oldest supported version**: README and CONTRIBUTING say 0.9, because the status bar's pending
+- **Oldest supported version**: README, CONTRIBUTING and the feature's description (`feature.xml`)
+  say 0.9, because the status bar's pending
   command needs `showcmdloc` (0.9). Raise it when the code starts using a newer API (for example a
   Lua function from `vim.*` or an `nvim_*` call added later); run the integration tests against
   that oldest version before lowering it.

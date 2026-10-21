@@ -17,6 +17,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A permanent update site, <https://jm6cnddxbwftaks.github.io/neovim4eclipse/>: add it once in *Install New Software*, and *Check
   for Updates* finds every later release. The ZIPs on the Releases page still work.
 
+### Changed
+
+- *Install New Software → Details* now says what the plug-in needs before you install it: Neovim
+  0.9 or newer, installed separately, and Eclipse 2024-12 (4.34) or newer on Java 21.
+
 ## [0.1.2] - 2026-10-21
 
 A bug-fix release.
