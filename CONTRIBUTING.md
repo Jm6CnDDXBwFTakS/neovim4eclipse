@@ -82,6 +82,8 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   counts focus only inside the active window, and `xvfb-run` has no window manager, so when a
   dialog or shell that a test opened closes, no window is active any more and `setFocus()` alone
   does nothing visible. On a desktop, typing in another window while the UI tests run does the same.
+  `KeyboardFocus` (`tests/swt`) is the same helper for the SWT tests: `CommandLineBoxTest` uses it
+  so that a `:` box closed by focus loss fails with "lost keyboard focus", not "Widget is disposed".
 - `EndToEndTestBase` (UI tests): the setup of the end-to-end tests (`test.txt` open and attached,
   Neovim in normal mode) and their helpers: `expectText`, `openFile`, `waitForAttach`, `runCommand`
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed
