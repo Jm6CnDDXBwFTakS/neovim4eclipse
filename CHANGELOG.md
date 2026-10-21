@@ -14,8 +14,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
-- A permanent update site, <https://jm6cnddxbwftaks.github.io/neovim4eclipse/>: add it once in *Install New Software*, and *Check
-  for Updates* finds every later release. The ZIPs on the Releases page still work.
+- A permanent update site, <https://jm6cnddxbwftaks.github.io/neovim4eclipse/>: add it once in
+  *Install New Software*, and *Check for Updates* finds every later release. The ZIPs on the
+  Releases page still work.
+- `:bd 3` and `:bd other.txt` (and `:bw`, `:bun`) close the editor of that buffer, and `:%bd` closes
+  all editors. Before, they went to Neovim, which could empty the editor of that file.
 
 ### Changed
 

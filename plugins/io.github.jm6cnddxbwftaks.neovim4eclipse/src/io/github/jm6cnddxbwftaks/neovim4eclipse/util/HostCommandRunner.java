@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -43,6 +44,14 @@ public final class HostCommandRunner {
         void closeAll(boolean force);
 
         /**
+         * {@code :bd 3 other.txt}: closes the editors of the buffers named by number or by (part of
+         * a) name, as typed; {@code force} discards their changes instead of asking. Finding the
+         * buffer needs Neovim, so the editors may close after this returns; a buffer with no editor
+         * gets Vim's error message.
+         */
+        void closeBuffers(List<String> buffers, boolean force);
+
+        /**
          * {@code :e [file]}: opens {@code file} (relative to the current one), or reloads the current
          * file when {@code file} is empty. Without {@code force}, refuses when there are changes (E37).
          */
@@ -79,6 +88,7 @@ public final class HostCommandRunner {
             case WRITE_ALL -> onUi.accept(ide::saveAll);
             case QUIT -> onUi.accept(() -> ide.close(force));
             case QUIT_ALL -> onUi.accept(() -> ide.closeAll(force));
+            case BUFFER_DELETE -> onUi.accept(() -> ide.closeBuffers(cmd.buffers(), force));
             // Closed with force = true once saved: the save already dealt with the changes.
             case WRITE_QUIT -> onUi.accept(() -> {
                 if (ide.save(cmd.createFolders(), cmd.writesUnchanged()) || force) {

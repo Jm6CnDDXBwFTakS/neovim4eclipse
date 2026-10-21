@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -69,6 +70,11 @@ public final class HostCommands {
         @Override
         public void closeAll(boolean force) {
             EclipseFileCommands.closeAll(editor, force);
+        }
+
+        @Override
+        public void closeBuffers(List<String> buffers, boolean force) {
+            EditorAttachManager.getInstance().closeBuffers(editor, buffers, force);
         }
 
         @Override

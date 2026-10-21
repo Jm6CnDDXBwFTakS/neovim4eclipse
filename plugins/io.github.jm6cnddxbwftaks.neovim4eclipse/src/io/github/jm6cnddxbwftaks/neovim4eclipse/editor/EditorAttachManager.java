@@ -42,6 +42,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorBuffers;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach
@@ -409,6 +410,56 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not follow Neovim into buffer " + bufnr, e);
         }
         session.returnToAttachedBufferAsync();
+    }
+
+    /**
+     * {@code :bd 3 other.txt}: closes the editors of the named buffers, as {@code :bd} alone closes
+     * the current one ({@code HostExCommand.Kind.BUFFER_DELETE}). A number is a buffer number; a
+     * name is looked up in Neovim with {@code bufnr()} ({@link BufferRefs}), asynchronously, so its
+     * editor closes a moment later. A buffer no editor shows gets Vim's error in {@code from}'s
+     * message line. With two editors on one file (Window > New Editor), the first is closed. UI
+     * thread.
+     *
+     * @param from    the editor the command was typed in, for error messages
+     * @param buffers the arguments as typed: {@code [3, other.txt]}
+     * @param force   {@code :bd!}: close without asking about changes
+     */
+    void closeBuffers(ITextEditor from, List<String> buffers, boolean force) {
+        NeovimSession session;
+        synchronized (this) {
+            session = followedSession;
+        }
+        Display display = Display.getCurrent();
+        for (String ref : buffers) {
+            if (session == null || display == null) {
+                HostCommands.showError(from, BufferRefs.notFoundMessage(ref));
+            } else if (BufferRefs.isNumber(ref)) {
+                closeBufferEditor(session, Integer.parseInt(ref), ref, force, from);
+            } else {
+                // The answer comes on a session thread; the closing belongs on the UI thread.
+                session.captureOutputAsync("echo " + BufferRefs.bufnrExpression(ref), printed -> {
+                    if (!display.isDisposed()) {
+                        display.asyncExec(() -> closeBufferEditor(session, BufferRefs.parseBufnr(printed), ref,
+                                force, from));
+                    }
+                });
+            }
+        }
+    }
+
+    /** Closes the editor showing buffer {@code bufnr}, or shows {@code ref}'s error. UI thread. */
+    private void closeBufferEditor(NeovimSession session, int bufnr, String ref, boolean force, ITextEditor from) {
+        Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
+        synchronized (this) {
+            showing = bufnr <= 0 || session != followedSession ? Optional.empty()
+                    : documents.editorShowing(bufnr, buffer -> buffer.isOpenIn(session));
+        }
+        if (showing.isEmpty()) {
+            HostCommands.showError(from, BufferRefs.notFoundMessage(ref));
+            return;
+        }
+        IEditorPart part = showing.get().editor();
+        part.getSite().getPage().closeEditor(part, !force);
     }
 
     /**
