@@ -154,6 +154,7 @@ each request exactly once.
 | Highlights | `nvim_buf_get_extmarks` → Eclipse annotations |
 | True block visual | Custom paint on `StyledText` or block selection API if available |
 | Cmdline | Parse UI `cmdline_show` redraw events instead of the inline box |
+| New-file buffer leak, shared editors | A new file's editor is opened by location and switched to the workspace file at its first `:w`, which then releases the file buffer Eclipse leaves behind (`NewFiles.releaseLeftOverBuffer`, see [NEW_FILE.md](NEW_FILE.md)). The switch is skipped when two editors show the new file (*Window › New Editor* before the first `:w`), so closing them leaves that buffer connected. Then, after the file is deleted, `:e` of the same name shows the old text in a clean editor (nothing is lost: a `:w` writes what is shown). Fix for every case: when an editor opened by location closes and its file now exists in the workspace, release the buffer under the unnormalized location if no other editor uses it (a hook in `EditorAttachManager`'s part-closed handling, plus a UI test) |
 
 ## Threading rules
 
