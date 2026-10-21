@@ -19,7 +19,8 @@ edges, see [Known limitations](#known-limitations).
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
 - [docs/design/](docs/design/README.md): design notes, one per larger change, each with its status
   (planned or built), the experiments behind it and the decisions made. For example how Tab
-  completion in the `:` command line works, or the plan for folding with `zo` and `zc`.
+  completion in the `:` command line works, the plan for folding with `zo` and `zc`, and the plan
+  for the Eclipse Marketplace listing.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [SECURITY.md](SECURITY.md): how to report a vulnerability privately.
 
