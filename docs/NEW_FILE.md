@@ -26,6 +26,30 @@ Size: about 250 lines of code and 350 of tests, in four commits (section 7).
 
 The code follows the plan, with these differences:
 
+- **Opened by location, also inside a project** (fixed after 0.1.0). Section 3, step 5 opened a
+  missing file inside a project as a workspace file. A text editor does not show such a file: for a
+  file editor input, `TextFileDocumentProvider.getStatus` reports "File ... does not exist." on
+  purpose (its comment: "we don't open an empty document for an non-existent IFile"), and the editor
+  puts that message, as a read-only page, in front of its text. So in 0.1.0 a user saw the message,
+  and keys and `:w` did nothing. The UI tests passed anyway: they send keys straight to the hidden
+  text widget, and the experiment (section 2) never checked that the widget was visible. Now:
+  - `:e` always opens a `FileStoreEditorInput`, as for outside files. `NewFiles.workspaceFileAt`
+    finds the project from the location wherever the code needs it (`missingFileOf`, the project
+    root for `:e` lookups).
+  - Such an editor reads and writes the disk, not the workspace. So it takes the encoding the file
+    will have in the project when it opens, and the creating write refreshes the workspace file
+    (an untouched editor's empty file is created on disk, then refreshed, then the editor
+    synchronized, in that order, or Eclipse asks "File Changed").
+  - Every later save would bypass the workspace too, and project features (markers, a Java
+    editor's code assist) need a workspace file. So the first write switches the editor to the
+    workspace file (`IReusableEditor.setInput`), as Eclipse's File › Open File does for a file in a
+    project. Eclipse reads it into a new document; `EditorAttachManager.replaceInputKeepingBuffer`
+    moves the Neovim buffer to it (`EditorBuffers.move`) and attaches again, so Neovim keeps the
+    buffer's number, undo history and marks. The text is the same, so nothing is sent to Neovim.
+    The switch is skipped (logged) when another editor shows the same document.
+  - `NewFileEndToEndTest` now checks that the editor shows its text and has the keyboard focus
+    after `:e`, and that the first write switches the editor and keeps Neovim's undo.
+
 - **The opening and the creating write are in `editor/NewFiles`**, not in `EclipseFileCommands`,
   which only calls it (`NewFiles.open`, `NewFiles.save`, `NewFiles.missingFileOf`). The written
   message is `util/WrittenMessage`.
@@ -50,7 +74,9 @@ The code follows the plan, with these differences:
   key if the check fails or changes the document or input on the way. For a missing workspace file
   it does (which of the two was not traced). The controller now runs the check when it attaches to
   an editor whose workspace file does not exist (`NeovimEditorController.validateNewWorkspaceFile`).
-  Existing files keep Eclipse's timing, because their check may ask the user. The bug only showed
+  Existing files keep Eclipse's timing, because their check may ask the user. *Removed after
+  0.1.0:* new files are now opened by location (first point above), where the key was never lost,
+  so the check had nothing left to do. The bug only showed
   when Eclipse types the text; keys typed before insert mode reached Eclipse go to Neovim and were
   never lost, which is why typing `ihello` in one go in a test did not reproduce it.
 - **The names in the messages:** `[New]` on opening shows the name as typed (`"sub/new.txt" [New]`);
@@ -109,6 +135,8 @@ A throwaway UI test (since deleted) opened editors on missing files in the test 
 | The folder is missing too (`sub/new.txt`) | opens the same way | not tried |
 | Close without saving | nothing on disk | not tried |
 | `:w` (Eclipse's `doSave`) | **Save As dialog**; no file | **the test hung** in the save |
+
+*Found after 0.1.0:* "opens, empty" was read from the document and the hidden text widget. On screen the workspace file's editor showed "File ... does not exist." instead (see *As built*, first point).
 
 - **The external editor.** The first run used `IDE.openEditor(page, file, true)`, as `:e` does
   today. It hung in Windows' `ShellExecuteEx`, opening the missing file with the system's

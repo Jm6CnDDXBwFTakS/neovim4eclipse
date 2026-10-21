@@ -26,6 +26,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IPathEditorInput;
+import org.eclipse.ui.IReusableEditor;
 import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.IWindowListener;
 import org.eclipse.ui.IWorkbench;
@@ -464,6 +465,62 @@ public final class EditorAttachManager {
         IEditorPart part = showing.get().editor();
         return EclipseFileCommands.savePart(part) ? null
                 : "Eclipse could not save " + part.getTitle() + " (see the Error Log)";
+    }
+
+    /**
+     * Gives {@code editor} a new input for the same file while keeping its Neovim buffer, and with
+     * it Neovim's undo history, marks and buffer number. UI thread.
+     *
+     * <p>Why it is needed: Eclipse reads the new input into a new {@link IDocument}, and buffers are
+     * kept per document ({@link EditorBuffers}). Without the move the next attach would find no
+     * buffer for the new document and make a fresh one, as if the file had just been opened.
+     *
+     * <p>The steps: stop listening to the old document (the controller and the document's
+     * {@link UnattachedDocumentSync}), set the input, move the buffer to the new document
+     * ({@link EditorBuffers#move}), and attach again if the editor was attached, with the caret
+     * following Neovim's cursor, which did not move. The text is the same, so the attach's push
+     * changes nothing in Neovim (it sends only the lines that differ).
+     *
+     * <p>Example: a new file's editor is opened by location; after its first {@code :w} it is
+     * switched to the workspace file ({@link NewFiles#save}).
+     *
+     * @return {@code false}, with the input unchanged, if the editor cannot take a new input or
+     *         another editor shows the same document (it would be left on a document without a
+     *         buffer)
+     */
+    boolean replaceInputKeepingBuffer(ITextEditor editor, IEditorInput input) throws Exception {
+        if (!(editor instanceof IReusableEditor reusable)) {
+            return false;
+        }
+        IDocument old = documentOf(editor);
+        boolean wasAttached;
+        synchronized (this) {
+            if (old != null && documents.isSharedWithAnotherEditor(old, editor)) {
+                return false;
+            }
+            wasAttached = isAttachedTo(editor);
+            if (wasAttached) {
+                activeController.close();
+                activeController = null;
+                attachedPart = null;
+                attachedBuffer = null;
+            }
+        }
+        reusable.setInput(input); // outside the lock: it notifies listeners
+        IDocument fresh = documentOf(editor);
+        synchronized (this) {
+            if (old != null && fresh != null && fresh != old) {
+                DocumentBuffer buffer = documents.move(old, fresh);
+                UnattachedDocumentSync sync = buffer == null ? null : unattachedSyncs.remove(buffer);
+                if (sync != null) {
+                    sync.close(); // listens to the old document; the attach below makes one for the new
+                }
+            }
+        }
+        if (wasAttached) {
+            attach(editor, false, true);
+        }
+        return true;
     }
 
     /** Forgets {@code part}; the buffer of a document whose last editor closed is wiped in Neovim. */

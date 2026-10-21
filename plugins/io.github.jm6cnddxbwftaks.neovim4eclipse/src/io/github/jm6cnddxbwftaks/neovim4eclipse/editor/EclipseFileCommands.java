@@ -290,9 +290,17 @@ public final class EclipseFileCommands {
         }
     }
 
-    /** The root folder of the workspace project the input's file is in, or {@code null}. */
+    /**
+     * The root folder of the workspace project the input's file is in, or {@code null}. A new
+     * file's editor is opened by location (see {@link NewFiles}), so its project is found from the
+     * location when the input is not a workspace file.
+     */
     private static Path projectRootOf(IEditorInput input) {
         IFile file = input == null ? null : input.getAdapter(IFile.class);
+        if (file == null) {
+            Path location = EditorAttachManager.fileOf(input);
+            file = location == null ? null : NewFiles.workspaceFileAt(location);
+        }
         IPath location = file == null || file.getProject() == null ? null : file.getProject().getLocation();
         return location == null ? null : Path.of(location.toOSString());
     }

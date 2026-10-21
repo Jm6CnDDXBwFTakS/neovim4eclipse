@@ -119,6 +119,24 @@ Eclipse lets objects offer other interfaces without hard dependencies (`NeovimEd
 Multi-page editors (the POM editor, PDE's `MANIFEST.MF` editor) are not `ITextEditor`s. Their source
 tab is a nested text editor, which `EditorAttachManager` digs out.
 
+**The editor input says which file, and how.** The same file can be opened through two kinds of
+input, and the document provider treats them differently:
+
+- `FileEditorInput` (an `IFileEditorInput`): a *workspace* file, an `IFile` in a project. Reads and
+  writes go through the workspace, so the Project Explorer, builders and problem markers see them.
+  The provider refuses a file that does not exist: the editor shows "File ... does not exist."
+  instead of its text.
+- `FileStoreEditorInput`: a file *by location* (a URI), as File › Open File uses for files outside the
+  workspace. Reads and writes go straight to disk; the workspace does not hear of them. A file that
+  does not exist opens as an empty document.
+
+So `:e new.txt` inside a project opens by location (an empty, editable editor) and, once the first
+`:w` has created the file, switches the editor to the workspace file with
+`IReusableEditor.setInput` (`NewFiles.becomeWorkspaceFileEditor`). A new input means a new
+`IDocument`, which is why the plug-in moves the Neovim buffer to it
+(`EditorAttachManager.replaceInputKeepingBuffer`) instead of starting a new one. Details:
+[NEW_FILE.md](NEW_FILE.md).
+
 ### 1.5 SWT: one UI thread
 
 SWT is Eclipse's widget toolkit. It wraps the native widgets of each platform (GTK, Cocoa, Win32),

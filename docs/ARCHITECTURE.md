@@ -245,7 +245,10 @@ to the box, which (via the focus listener in the controller) also deactivates th
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
   `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by
   the file's name, and a write creates the file through the document provider instead of Eclipse's
-  save, which would open Save As (see [NEW_FILE.md](NEW_FILE.md)).
+  save, which would open Save As (see [NEW_FILE.md](NEW_FILE.md)). The editor is opened by location
+  even inside a project, because a text editor refuses to show a workspace file that does not exist;
+  after the first write it is switched to the workspace file, keeping its Neovim buffer
+  (`EditorAttachManager.replaceInputKeepingBuffer`, `core/EditorBuffers.move`).
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
   `redir => g:neovim4eclipse_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a

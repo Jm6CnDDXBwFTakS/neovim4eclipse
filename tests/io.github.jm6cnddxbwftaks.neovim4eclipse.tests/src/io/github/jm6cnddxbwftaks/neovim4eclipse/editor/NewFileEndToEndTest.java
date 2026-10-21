@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.ide.IDE;
@@ -33,7 +34,16 @@ import org.junit.jupiter.api.Test;
  */
 class NewFileEndToEndTest extends EndToEndTestBase {
 
-    /** The active editor, once it is titled {@code title} and Neovim is attached to it. */
+    /**
+     * The active editor, once it is titled {@code title}, Neovim is attached to it, and it shows its
+     * text and has the keyboard focus.
+     *
+     * <p>The last two are checked because the keys in these tests are sent straight to the editor's
+     * text widget ({@code notifyListeners}), which works even while the widget is hidden. A text
+     * editor on a workspace file that does not exist shows a status page ("File ... does not
+     * exist.") in front of the widget, so a user could not type at all; the tests passed anyway
+     * until this check.
+     */
     private ITextEditor activeEditorNamed(String title) {
         waitUntil(title + " to open", TIMEOUT_MS, () -> {
             IEditorPart active = page().getActiveEditor();
@@ -41,7 +51,17 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         }, () -> "; the active editor is " + page().getActiveEditor().getTitle());
         ITextEditor opened = (ITextEditor) page().getActiveEditor();
         waitForAttach(opened, title);
+        StyledText text = widgetOf(opened);
+        assertTrue(text.isVisible(), title + " shows its text, not a status page; the focused control shows: "
+                + shownInstead(text));
+        UiTestSupport.requireKeyboardFocus(text, TIMEOUT_MS);
         return opened;
+    }
+
+    /** What the focused text control shows, such as Eclipse's "File ... does not exist." page. */
+    private static String shownInstead(StyledText editorText) {
+        return editorText.getDisplay().getFocusControl() instanceof StyledText shown && shown != editorText
+                ? "\"" + shown.getText() + "\"" : "(nothing)";
     }
 
     /** Types {@code text} in insert mode the way a person does: Eclipse types it, then Esc. */
@@ -88,19 +108,52 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         expectText(opened, "ello");
         runInBox(target, "w");
         assertEquals("ello", fileText("new.txt"));
+        assertTrue(file.isSynchronized(IResource.DEPTH_ZERO), "the workspace knows the saved file (no F5 needed)");
+        assertEquals(List.of(), dialogs);
+        closeAll();
+    }
+
+    /**
+     * After the first {@code :w} the editor is an ordinary workspace-file editor (so later saves go
+     * through the workspace and project features work), and Neovim still has the same buffer: the
+     * second {@code u} undoes the text typed before the write, as in Vim.
+     */
+    @Test
+    void theFirstWriteSwitchesToTheWorkspaceFileAndKeepsNeovimsBuffer() {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        runInBox(widget, "e kept.txt");
+        ITextEditor opened = activeEditorNamed("kept.txt");
+        StyledText target = widgetOf(opened);
+        insert(target, "hello");
+        expectText(opened, "hello");
+        int bufnr = session.getAttachedBufnr();
+
+        runInBox(target, "w");
+
+        IFile file = project.getFile("kept.txt");
+        assertEquals(file, opened.getEditorInput().getAdapter(IFile.class), "a workspace-file editor now");
+        assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
+        expectMessage(opened, "\"kept.txt\" [New] [noeol] 1L, 5B written");
+        type(target, 'x');
+        expectText(opened, "hell");
+        type(target, 'u');
+        expectText(opened, "hello");
+        type(target, 'u');
+        expectText(opened, "");
         assertEquals(List.of(), dialogs);
         closeAll();
     }
 
     /**
      * The first key typed in a new workspace file used to be lost: {@code ihello} gave {@code ello}.
-     * An existing empty file and a new file outside the workspace did not lose it.
+     * That happened while the editor was opened as a workspace file; opened by location, as
+     * {@code :e} does now, an existing empty file and a new file outside the workspace never lost it.
      */
     @Test
     void theFirstKeyTypedInANewWorkspaceFileIsKept() throws Exception {
         IFile missing = project.getFile("first.txt");
-        ITextEditor opened = (ITextEditor) IDE.openEditor(page(), missing, TEXT_EDITOR, true);
-        waitForAttach(opened, "first.txt");
+        runInBox(widget, "e first.txt");
+        ITextEditor opened = activeEditorNamed("first.txt");
 
         insert(widgetOf(opened), "hello");
         expectText(opened, "hello");
@@ -315,7 +368,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         runInBox(widgetOf(nestedEditor), "e ./Foo.txt");
 
         ITextEditor opened = activeEditorNamed("Foo.txt");
-        assertEquals(project.getFile("src/Foo.txt"), opened.getEditorInput().getAdapter(IFile.class));
+        assertEquals(project.getFile("src/Foo.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(opened.getEditorInput())));
         assertEquals("", documentOf(opened).get(), "a new file, not the root's Foo.txt");
         closeAll();
     }
