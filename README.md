@@ -1,4 +1,6 @@
-# Neovim for Eclipse
+<!-- The header is the logo with the name (docs/images/logo-wordmark.svg; one file for light and
+     dark themes). The alt text keeps the name for screen readers and wherever the image does not load. -->
+<h1><img src="docs/images/logo-wordmark.svg" alt="Neovim for Eclipse" height="64"></h1>
 
 Embeds **real Neovim** (`nvim --embed`) in Eclipse text editors so modal editing (motions, operators,
 text objects, visual mode, registers, macros, ex commands) works on the buffer you see in the IDE.

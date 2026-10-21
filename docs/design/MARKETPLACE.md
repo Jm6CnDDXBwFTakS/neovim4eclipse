@@ -173,9 +173,13 @@ offline way. Add a *Marketplace* badge and drag-to-install link once phase 3 is 
 
 **Images:**
 
-- A **logo** of our own; Claude drafts SVG options for the maintainer to pick from *(decided)*.
-  Not the Eclipse logo (a trademark). The Neovim logo is, as far as we know, licensed CC BY 3.0, so
-  it could be used with attribution; check its license file at the time.
+- The **logo**, [docs/images/logo.svg](../images/logo.svg) *(decided)*: an N whose left stem is a
+  colon (green, Neovim) and whose right stem is Eclipse's I-beam caret (indigo), so it also reads as
+  "VI" with a hint of "E". It borrows nothing from the Eclipse or Neovim logos, which are their
+  owners' marks; an early draft with the Eclipse logo's stripes was dropped for that reason. With
+  the name beside it in the logo's green (`logo-wordmark.svg`, one file for light and dark themes)
+  it heads the README. Still
+  to do: PNG sizes for the listing, once the *Add Content* form says which.
 - Screenshots and the README demo GIF.
 
 ## Phase 3: account, submission, test
