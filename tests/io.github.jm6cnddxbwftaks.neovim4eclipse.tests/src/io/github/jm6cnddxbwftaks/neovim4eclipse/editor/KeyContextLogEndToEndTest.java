@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.focusReport;
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.requireKeyboardFocus;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,6 +38,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 class KeyContextLogEndToEndTest extends EndToEndTestBase {
 
     private static final String TOGGLE = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode";
+    private static final String ACTIVATED = "FINE EditorKeyContext: Neovim key context activated";
 
     @Test
     void atFineTurningNeovimModeOnPrintsTheKeyContextLinesOnceAndNotToTheErrorLog() throws Exception {
@@ -55,14 +58,20 @@ class KeyContextLogEndToEndTest extends EndToEndTestBase {
         Platform.addLogListener(listener);
         try {
             runCommand(TOGGLE);
-            widget.setFocus();
+            // The key context turns on only while the editor's text widget has keyboard focus (see
+            // EditorKeyContext), and SWT counts focus only inside the active window. On xvfb, which
+            // has no window manager, an earlier test's dialog or popup can leave no window active, so
+            // a plain setFocus() would not do and the context would never turn on.
+            requireKeyboardFocus(widget, TIMEOUT_MS);
             settle();
+            waitUntil("the Neovim key context to activate", TIMEOUT_MS, () -> printed(bytes).contains(ACTIVATED),
+                    () -> "; key context not active (" + focusReport(widget) + "); printed:\n" + printed(bytes));
             String resolves = "FINE KeyContextDiagnostics: Ctrl-V (" + (Util.isMac() ? "M4+V" : "M1+V")
                     + ") resolves to the Neovim Ctrl-key command";
             waitUntil("the Ctrl-V resolution line", TIMEOUT_MS, () -> printed(bytes).contains(resolves),
                     () -> "; printed:\n" + printed(bytes));
 
-            assertEquals(1, count(printed(bytes), "FINE EditorKeyContext: Neovim key context activated"), printed(bytes));
+            assertEquals(1, count(printed(bytes), ACTIVATED), printed(bytes));
             assertEquals(1, count(printed(bytes), resolves), printed(bytes));
             assertTrue(errorLog.stream().noneMatch(m -> m.contains("key context") || m.contains("Ctrl-V")),
                     "FINE lines never reach the Error Log: " + errorLog);
