@@ -1,9 +1,9 @@
 # Plan: listing on the Eclipse Marketplace
 
 Status: **planned**, nothing built yet. Written on `release/0.1.2` (after 0.1.1). Decisions made with
-the maintainer are marked *(decided)*; open ones are marked *(open)* and listed in
-[Open questions](#open-questions). When a phase is done, change its heading to say so and note where
-the result differs from this plan, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does with *As built*.
+the maintainer are marked *(decided)*; none are open. When a phase is done, change its heading to
+say so and note where the result differs from this plan, as
+[TAB_COMPLETION.md](TAB_COMPLETION.md) does with *As built*.
 
 ## Summary
 
@@ -84,7 +84,7 @@ Example `compositeContent.xml` (`compositeArtifacts.xml` is the same with `Artif
 ```
 
 Keeping every version (rather than only the latest) lets a user who needs an older one install it,
-and lets *Check for Updates* always find the newest *(open: Q1)*.
+and lets *Check for Updates* always find the newest *(decided)*.
 
 ## Phase 1: the update site on GitHub Pages
 
@@ -112,10 +112,11 @@ removes it from the site, and nothing on the site exists that is not a release.
 - `releng/update-site.sh <dir with ZIPs> <out dir>`: steps 2 and 3, a plain shell script that runs
   the same locally and in CI, with explanatory comments on the composite format. Steps 1 and 4 stay
   in the workflow.
-- `.github/workflows/release.yml`: a fourth job `site`, after `publish` (so the new release is
-  already listed), with `pages: write` and `id-token: write` permissions and the `github-pages`
-  environment. It can also run on demand (`workflow_dispatch`) to rebuild the site without a release.
-- A smoke test in that job, after deploying *(open: Q3)*. Two levels:
+- `.github/workflows/release.yml`: a fourth job `site`, after `publish` on every release tag
+  *(decided)*, so the new release is already listed. It needs the `pages: write` and
+  `id-token: write` permissions and the `github-pages` environment. It can also run on demand (*Run workflow*, `workflow_dispatch`) to rebuild the site
+  without a release *(decided)*.
+- A smoke test in that job, after deploying. Two levels were weighed; the real install was chosen *(decided)*:
   - **Fetch the files:** `compositeContent.xml`, `compositeArtifacts.xml` and each child's
     `content.jar` answer from the live URL. Seconds; catches a missing or misnamed file.
   - **A real install:** download the oldest supported Eclipse Platform (4.34), and run p2's
@@ -131,7 +132,7 @@ removes it from the site, and nothing on the site exists that is not a release.
     ~100 MB download, and it can fail when download.eclipse.org is slow. In return it catches what
     users would hit: composite XML p2 cannot read, a wrong feature ID, and a dependency the oldest
     supported Eclipse lacks, which also tests the "2024-12 or newer" claim. It runs once per
-    release, not per push, so the cost is small.
+    release, not per push, so the cost is small. The file fetch then adds nothing and is left out.
 - Docs: [PACKAGING.md](../PACKAGING.md) (how the site is built), CONTRIBUTING "Releasing" (the site
   updates itself; how to rebuild it), and this file.
 
@@ -211,15 +212,6 @@ Today the jars are unsigned, so Eclipse asks the user to trust unsigned content.
 Nothing new by hand: the tag's Release workflow publishes the GitHub Release and rebuilds the site,
 so *Check for Updates* and the Marketplace see the new version. Update the listing only when its
 facts change (supported Eclipse versions, description), and answer reviews and questions there.
-
-## Open questions
-
-1. **Keep every version on the site, or only the latest?** Recommendation: every version (a composite
-   of all releases).
-2. **Publish the site automatically from the Release workflow on every tag?** Recommendation: yes,
-   plus a manual *Run workflow* to rebuild it.
-3. **Smoke test:** fetch the files only, or a real p2 install into Eclipse 4.34 (see phase 1)?
-   Recommendation: the real install, since it runs only once per release.
 
 Sources: [Eclipse Marketplace quickstart](https://marketplace.eclipse.org/quickstart). It is short and
 older than this plan; the *Add Content* form is the final word on what a listing needs.
