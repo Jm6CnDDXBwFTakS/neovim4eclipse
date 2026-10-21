@@ -88,7 +88,8 @@ class CommandLineBoxTest {
     private StyledText host;
     private final FakeCommands commands = new FakeCommands();
     private CommandLineBox commandLine;
-    private Text box;
+    /** The open box's text field; use {@link #box()}, which notices when it closed on focus loss. */
+    private Text openBox;
 
     @BeforeEach
     void createHost() {
@@ -97,6 +98,7 @@ class CommandLineBoxTest {
         host = new StyledText(shell, SWT.MULTI);
         host.setBounds(0, 0, 400, 300);
         shell.open();
+        KeyboardFocus.require(host, TIMEOUT_MS); // the box closes on focus loss: start in the active window
         commandLine = new CommandLineBox(host, commands);
     }
 
@@ -106,21 +108,40 @@ class CommandLineBoxTest {
         shell.dispose();
     }
 
-    /** Opens the box and waits for it; then lets the guard against an echo of the opening key pass. */
+    /**
+     * Opens the box and waits until it has keyboard focus; then lets the guard against an echo of the
+     * opening key pass. The box takes the focus when it opens and closes when it loses it, so a box
+     * without focus would close at the next focus event.
+     */
     private void open(Kind kind, boolean fromVisualMode) {
         commandLine.open(kind, fromVisualMode);
         waitUntil("the box to open", () -> findText(host) != null);
-        box = findText(host);
+        openBox = findText(host);
+        KeyboardFocus.require(openBox, TIMEOUT_MS);
         spin(200);
     }
 
+    /**
+     * The open box's text field. Fails with "lost keyboard focus" if it closed although the test did
+     * not close it: {@link CommandLineBox} closes the box whenever it loses focus (a click elsewhere,
+     * another window activated), which is what happens when someone works in another window while
+     * the tests run. Without this check the next call fails with a bare "Widget is disposed".
+     */
+    private Text box() {
+        if (openBox == null || openBox.isDisposed()) {
+            fail("The : box closed before the test was done: it lost keyboard focus; "
+                    + KeyboardFocus.report(shell.getDisplay(), shell));
+        }
+        return openBox;
+    }
+
     private void typeAndPressEnter(String text) {
-        box.insert(text);
+        box().insert(text);
         Event enter = new Event();
         enter.keyCode = SWT.CR;
         enter.character = SWT.CR;
         enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
+        box().notifyListeners(SWT.KeyDown, enter);
     }
 
     private static Text findText(Control control) {
@@ -168,33 +189,33 @@ class CommandLineBoxTest {
     @Test
     void startsWithThePrefix() {
         open(Kind.EX, false);
-        assertEquals(":", box.getText());
+        assertEquals(":", box().getText());
     }
 
     @Test
     void typingAfterThePrefixWorks() {
         open(Kind.EX, false);
-        box.insert("w");
-        assertEquals(":w", box.getText());
+        box().insert("w");
+        assertEquals(":w", box().getText());
     }
 
     @Test
     void typingOverASelectionThatIncludesThePrefixKeepsThePrefix() {
         open(Kind.EX, false);
-        box.selectAll(); // what macOS does when the field gains focus
-        box.insert("w");
+        box().selectAll(); // what macOS does when the field gains focus
+        box().insert("w");
         spin(100); // the redirected edit is applied just after the verify listener
-        assertEquals(":w", box.getText());
+        assertEquals(":w", box().getText());
     }
 
     @Test
     void deletingEverythingLeavesThePrefix() {
         open(Kind.EX, false);
-        box.insert("wq");
-        box.selectAll();
-        box.insert("");
+        box().insert("wq");
+        box().selectAll();
+        box().insert("");
         spin(100);
-        assertEquals(":", box.getText());
+        assertEquals(":", box().getText());
     }
 
     // Where Enter sends the line
@@ -233,7 +254,7 @@ class CommandLineBoxTest {
     @Test
     void colonInVisualModeLeavesItAndPrefillsTheRange() {
         open(Kind.EX, true);
-        assertEquals(":'<,'>", box.getText());
+        assertEquals(":'<,'>", box().getText());
         typeAndPressEnter("s/a/b/");
         assertEquals(List.of("leave visual mode", "run '<,'>s/a/b/"), commands.calls);
     }
@@ -255,7 +276,7 @@ class CommandLineBoxTest {
         traverse.keyCode = SWT.TAB;
         traverse.character = SWT.TAB;
         traverse.doit = true;
-        box.notifyListeners(SWT.Traverse, traverse);
+        box().notifyListeners(SWT.Traverse, traverse);
         assertFalse(traverse.doit, "Tab must not move the focus out of the box");
     }
 
@@ -286,12 +307,12 @@ class CommandLineBoxTest {
     @Test
     void tabCompletesTheLineInNeovimAndShowsTheCandidates() {
         open(Kind.EX, false);
-        box.insert("tabn");
+        box().insert("tabn");
         pressTab(false);
         assertEquals(List.of("complete tabn T"), commands.calls);
         answer("tabnew", "tabNext", "tabnew", "tabnext");
-        assertEquals(":tabnew", box.getText());
-        assertEquals(box.getText().length(), box.getCaretPosition());
+        assertEquals(":tabnew", box().getText());
+        assertEquals(box().getText().length(), box().getCaretPosition());
 
         StyledText list = findList();
         assertNotNull(list, "the candidate list");
@@ -304,7 +325,7 @@ class CommandLineBoxTest {
     @Test
     void eachTabContinuesTheCycleAndShiftTabGoesBack() {
         open(Kind.EX, false);
-        box.insert("tabn");
+        box().insert("tabn");
         pressTab(false);
         answer("tabNext", "tabNext", "tabnew");
         pressTab(false);
@@ -317,46 +338,46 @@ class CommandLineBoxTest {
     @Test
     void typingEndsTheCycleHidesTheListAndDropsALateAnswer() {
         open(Kind.EX, false);
-        box.insert("tabn");
+        box().insert("tabn");
         pressTab(false);
         answer("tabnew", "tabnew", "tabnext");
         assertNotNull(findList());
 
-        box.insert(" 2"); // an edit: the list goes, the next Tab starts over
+        box().insert(" 2"); // an edit: the list goes, the next Tab starts over
         spin(50);
         assertNull(findList());
         pressTab(false);
-        box.insert("x"); // typed before the answer came
+        box().insert("x"); // typed before the answer came
         answer("tabnew 2 something");
-        assertEquals(":tabnew 2x", box.getText());
+        assertEquals(":tabnew 2x", box().getText());
         assertEquals("complete tabnew 2 T", commands.calls.get(1));
     }
 
     @Test
     void anAnswerWithNoCandidatesShowsNoList() {
         open(Kind.EX, false);
-        box.insert("zzz");
+        box().insert("zzz");
         pressTab(false);
         answer("zzz");
-        assertEquals(":zzz", box.getText());
+        assertEquals(":zzz", box().getText());
         assertNull(findList());
     }
 
     @Test
     void tabInASearchBoxDoesNothingAndKeepsTheBoxOpen() {
         open(Kind.SEARCH_FORWARD, false);
-        box.insert("foo");
+        box().insert("foo");
         pressTab(false);
         spin(50);
         assertTrue(commandLine.isOpen());
-        assertEquals("/foo", box.getText());
+        assertEquals("/foo", box().getText());
         assertEquals(List.of(), commands.calls);
     }
 
     @Test
     void closingTheBoxRemovesTheListAndIgnoresALateAnswer() {
         open(Kind.EX, false);
-        box.insert("tabn");
+        box().insert("tabn");
         pressTab(false);
         answer("tabnew", "tabnew", "tabnext");
         pressTab(false);
