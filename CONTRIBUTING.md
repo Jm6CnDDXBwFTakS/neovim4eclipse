@@ -87,7 +87,7 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
 - `EndToEndTestBase` (UI tests): the setup of the end-to-end tests (`test.txt` open and attached,
   Neovim in normal mode) and their helpers: `expectText`, `openFile`, `waitForAttach`, `runCommand`
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed
-  into the box), `statusLineTexts` (the window's status line, where Eclipse-side errors appear).
+  into the box; it fails with "lost keyboard focus" if the box closed before Enter), `statusLineTexts` (the window's status line, where Eclipse-side errors appear).
   `SessionProbe` runs Lua in Neovim, for what the editor cannot show (the buffer list).
 - `ExpectedLog` (`tests/shared`, used by `tests/unit` and `tests/text`): for a test that makes the
   code fail on purpose. `try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) { ... }` keeps

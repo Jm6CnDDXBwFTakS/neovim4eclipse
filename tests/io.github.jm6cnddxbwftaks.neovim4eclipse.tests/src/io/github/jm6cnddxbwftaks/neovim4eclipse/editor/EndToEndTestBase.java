@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.requireKeyboardFocus;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
@@ -58,6 +59,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
  *
  * <p>Keyboard focus: the setup makes sure the editor has it ({@link UiTestSupport#requireKeyboardFocus}),
  * so a test that starts without it fails at once with "lost keyboard focus" and where the focus is.
+ * The {@code :} box helpers ({@link #openBox}, {@link #runInBox}) do the same for the box, which
+ * closes whenever it loses focus.
  */
 abstract class EndToEndTestBase {
 
@@ -293,15 +296,38 @@ abstract class EndToEndTestBase {
         type(target, ':');
         waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(target) != null);
         Text box = textChildOf(target);
+        // The box closes as soon as it loses keyboard focus (CommandLineBox), so it must have the
+        // focus, in the active window, until Enter; see UiTestSupport.requireKeyboardFocus.
+        // Not when the target is hidden: a hidden control cannot take the focus, and some tests type
+        // into one on purpose. Example: after ":e new.txt" for a missing file Eclipse shows its "File
+        // ... does not exist." page in front of the text widget the plug-in attached to. A box that
+        // never had the focus cannot lose it, so there is nothing to guard there.
+        if (target.isVisible()) {
+            requireKeyboardFocus(box, TIMEOUT_MS);
+        }
         box.insert(command);
-        waitUntil("the command in the : box", TIMEOUT_MS, () -> box.getText().equals(":" + command),
+        waitUntil("the command in the : box", TIMEOUT_MS, () -> requireOpen(box, target).getText().equals(":" + command),
                 () -> "; the box shows " + box.getText());
+        return box;
+    }
+
+    /**
+     * {@code box}, or a failure with "lost keyboard focus" if it has closed: the box closes whenever
+     * it loses focus (another window activated, a click elsewhere), and a later call on it would
+     * fail with a bare "Widget is disposed", or an Enter would be lost and the test time out waiting
+     * for the command's effect. {@code target} is the editor widget the box opened in, whose window
+     * the report compares with the active one.
+     */
+    static Text requireOpen(Text box, StyledText target) {
+        if (box.isDisposed()) {
+            fail("The : box closed before Enter: it lost keyboard focus; " + UiTestSupport.focusReport(target));
+        }
         return box;
     }
 
     /** Runs {@code command} through the box, as typed: {@code :}, the command, Enter. */
     void runInBox(StyledText target, String command) {
-        Text box = openBox(target, command);
+        Text box = requireOpen(openBox(target, command), target);
         Event enter = new Event();
         enter.keyCode = SWT.CR;
         enter.character = SWT.CR;
