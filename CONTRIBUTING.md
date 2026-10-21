@@ -165,6 +165,8 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
+| `releng/update-site.sh` | builds the permanent update site (a composite p2 repository) from the release ZIPs |
+| `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
 | `docs/design/` | design notes: one per larger change, planned or built ([index](docs/design/README.md)) |
 
@@ -274,8 +276,10 @@ Pull requests are optional: merging directly (preferably as a fast-forward) keep
 ## Releasing
 
 A release is a `v<version>` tag on `main`; pushing it starts the *Release* workflow
-(`.github/workflows/release.yml`), which builds and tests that version like every CI run and
-publishes a GitHub Release with the ZIP. For 0.1.2, released from `release/0.1.2`:
+(`.github/workflows/release.yml`), which builds and tests that version like every CI run,
+publishes a GitHub Release with the ZIP, and then rebuilds the update site on GitHub Pages
+(`.github/workflows/update-site.yml`, see [docs/PACKAGING.md](docs/PACKAGING.md)) with the new
+release in it. For 0.1.2, released from `release/0.1.2`:
 
 1. On `release/0.1.2`, in [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to
    `## [0.1.2] - 2026-11-02` (the release date, in ISO form) and add a new, empty
