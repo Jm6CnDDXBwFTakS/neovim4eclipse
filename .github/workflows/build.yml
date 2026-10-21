@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 # SPDX-License-Identifier: EPL-2.0
 #
-# Builds the plug-in and the installable ZIP on every push and pull request to main, and on
-# demand: Actions tab > Build > Run workflow. The update-site ZIP is attached to the run as it is
+# Builds the plug-in and the installable ZIP on every push and pull request to main or to a
+# release branch (release/0.1.2, ...), and on demand: Actions tab > Build > Run workflow. A
+# release branch collects the fixes and features of the next release (CONTRIBUTING.md,
+# "Branches"), so it is tested before main is moved to it; fix/ and feature/ branches are not
+# built automatically (run the workflow by hand on one if needed). The update-site ZIP is attached to the run as it is
 # (neovim4eclipse-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software
 # > Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
 # included, inside a virtual X display (xvfb-run) with a pinned Neovim.
@@ -14,9 +17,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'release/**']
   workflow_dispatch:
   workflow_call:
     inputs:

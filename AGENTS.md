@@ -84,5 +84,8 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - Add or update tests with every behavior change; update README and `docs/` when behavior changes,
   and add a user-visible change to `CHANGELOG.md` under *Unreleased*.
 - One commit per logical change. Do not push, and never to `main`, unless the maintainer asks.
+- Branches (CONTRIBUTING.md, "Branches"): work on `fix/<name>` or `feature/<name>` cut from the
+  current release branch (`release/<next version>`, e.g. `release/0.1.2`), merge it back into that
+  branch; `main` only moves to a release branch at a release. There is no `develop` branch.
 - Commit in UTC (`TZ=UTC git commit ...`; in PowerShell set `$env:TZ = 'UTC'` first), so commit
   dates do not depend on the machine's time zone.

@@ -235,6 +235,32 @@ text that tests do not always catch.
   // SPDX-License-Identifier: EPL-2.0
   ```
 
+## Branches
+
+Work flows up through three kinds of branches, and a branch is deleted once it has been merged
+into the next one up (right away, or at a cleanup):
+
+```text
+fix/<name>, feature/<name>  ──►  release/<next version>  ──►  main  (tagged v<version>)
+```
+
+- **`main`** holds released code only. It moves forward only at a release (step 2 of
+  "Releasing"), and every tag `v<version>` is on it.
+- **`release/<version>`**, for example `release/0.1.2`, collects the fixes and features of the
+  next release. It is cut from `main` right after a release, and its first commit sets the version
+  in the POMs to `<version>-SNAPSHOT` (see "Releasing", step 4). The *Build* workflow runs on every
+  push to it, so it is tested before `main` moves. If the scope grows, rename it (0.1.2 to 0.2.0)
+  and set the version again.
+- **`fix/<name>`** and **`feature/<name>`** hold one piece of work, cut from the release branch and
+  merged back into it, by pull request or directly. They are not built automatically; run the
+  *Build* workflow on one by hand when a change needs CI before the merge.
+- **An urgent fix** while the release branch holds work that is not ready: rename that branch to
+  the version after (`release/0.1.2` to `release/0.1.3`, setting its version again), cut a new
+  `release/0.1.2` from `main` for the fix alone, release it, then merge `main` into
+  `release/0.1.3` so it has the fix too.
+
+Pull requests are optional: merging directly (preferably as a fast-forward) keeps the same flow.
+
 ## Commits and pull requests
 
 - One logical change per commit, with a message that says what changed and why.
@@ -245,22 +271,41 @@ text that tests do not always catch.
 
 A release is a `v<version>` tag on `main`; pushing it starts the *Release* workflow
 (`.github/workflows/release.yml`), which builds and tests that version like every CI run and
-publishes a GitHub Release with the ZIP. For 0.1.0:
+publishes a GitHub Release with the ZIP. For 0.1.2, released from `release/0.1.2`:
 
-1. In [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to `## [0.1.0] - 2026-11-02` (the
-   release date, in ISO form) and add a new, empty `## [Unreleased]` above it. That section becomes
-   the release notes; `releng/release-notes.sh 0.1.0` prints them, exactly as they will appear.
-2. Commit that on `develop`, fast-forward `main` to it, push both, and wait for the *Build* workflow
-   on `main` to pass.
+1. On `release/0.1.2`, in [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to
+   `## [0.1.2] - 2026-11-02` (the release date, in ISO form) and add a new, empty
+   `## [Unreleased]` above it. That section becomes the release notes;
+   `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
+   the README's status line. Commit, push, and wait for the *Build* workflow on the branch to pass.
+2. Fast-forward `main` to the release branch (or merge a pull request from it), push `main`, and
+   wait for the *Build* workflow on `main` to pass:
+
+   ```bash
+   git push origin release/0.1.2:main
+   ```
+
 3. Tag the commit on `main` and push the tag:
 
    ```bash
-   git tag v0.1.0 main && git push origin v0.1.0
+   git tag v0.1.2 origin/main && git push origin v0.1.2
+   ```
+
+4. Start the next release: cut `release/0.1.3` from `main`, set its version, commit, and push it;
+   then delete `release/0.1.2` (and any merged `fix/` or `feature/` branches):
+
+   ```bash
+   git switch -c release/0.1.3 origin/main
+   ./mvnw org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion=0.1.3-SNAPSHOT
+   git commit -am "Start 0.1.3: set the version to 0.1.3-SNAPSHOT" && git push -u origin release/0.1.3
+   git push origin --delete release/0.1.2
    ```
 
 The workflow stops before building anything if the tagged commit is not on `main` or the changelog
-has no `0.1.0` section. Nothing is committed back: the version in the POMs stays
-`0.1.0-SNAPSHOT` until it is raised for the next release.
+has no `0.1.2` section. Nothing is committed back: the build replaces the committed
+`0.1.2-SNAPSHOT` / `0.1.2.qualifier` with the tag's `0.1.2` inside the runner only. Because each
+release branch carries its own snapshot version, a test build of it (`0.1.3.<timestamp>`) sorts
+above the last release, so Eclipse installs it as an update.
 
 ## License
 

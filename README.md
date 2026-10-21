@@ -133,15 +133,16 @@ The p2 update site is produced under
 
 GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
 
-- **Build** runs on every push and pull request to `main`, or on demand (Actions tab > Build >
+- **Build** runs on every push and pull request to `main` or to a release branch (`release/0.1.2`,
+  see CONTRIBUTING.md, "Branches"), or on demand (Actions tab > Build >
   Run workflow). It runs `./mvnw verify -Pui` (UI tests under `xvfb-run`) and the integration tests against a pinned Neovim
   release, and attaches the installable ZIP to the run as it is: `neovim4eclipse-<version>.zip`, ready for
   *Install New Software → Add → Archive* without unpacking.
 - **Release** runs when you push a tag such as `v0.1.0`, and stops at once unless the tagged
   commit is on `main`. It runs the Build workflow itself (as a
-  reusable workflow, so with the same Neovim and all the same tests) for that version (the tag
-  replaces `0.1.0-SNAPSHOT`), and only when that passes publishes a GitHub Release with
-  `neovim4eclipse-0.1.0.zip` attached.
+  reusable workflow, so with the same Neovim and all the same tests) for that version (the tag's
+  `0.1.0` replaces the committed `0.1.0-SNAPSHOT`), and only when that passes publishes a GitHub
+  Release with `neovim4eclipse-0.1.0.zip` attached.
 
 ## Layout
 

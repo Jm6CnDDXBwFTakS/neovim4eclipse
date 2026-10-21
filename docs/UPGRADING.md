@@ -52,9 +52,10 @@ libraries to keep in step since the plug-in's own RPC client replaced neovim-jav
 (`docs/RPC_CLIENT.md`).
 
 Its pull requests target `main`, the default branch. Rather than merging them there, apply an
-accepted update on `develop` as its own commit (with the checks below), then fast-forward `main`;
-Dependabot closes its pull request by itself once `main` has the new version. GitHub reads
-`dependabot.yml` from `main` only, so a change to it takes effect at the next fast-forward.
+accepted update on the current release branch (`release/0.1.2`, see CONTRIBUTING.md, "Branches")
+as its own commit (with the checks below); Dependabot closes its pull request by itself once
+`main` has the new version, at the next release. GitHub reads `dependabot.yml` from `main` only,
+so a change to it takes effect at the next release too.
 
 ## JDK / Java release
 

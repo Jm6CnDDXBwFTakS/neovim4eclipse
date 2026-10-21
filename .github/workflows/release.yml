@@ -33,7 +33,7 @@ jobs:
       version: ${{ steps.tag.outputs.version }}
     steps:
       # Releases come from main only: main holds what the Build workflow has tested (it runs on
-      # every push to main). A tag on a develop commit, or on any commit main does not contain,
+      # every push to main). A tag on a release-branch commit main does not have yet, or any other
       # stops the release here, before anything is built or published.
       # fetch-depth: 0 fetches the whole history and all branches, so origin/main exists and
       # merge-base can walk back from it.
