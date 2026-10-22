@@ -1,6 +1,6 @@
 # Plan: listing on the Eclipse Marketplace
 
-Status: **phase 1 built** (on `feature/update-site`, not deployed yet), phases 2–4 planned. Written on `release/0.1.2` (after 0.1.1). Decisions made with
+Status: **phase 1 built and deployed** (with 0.1.3), phases 2–4 planned; phase 4 planned in detail. Written on `release/0.1.2` (after 0.1.1). Decisions made with
 the maintainer are marked *(decided)*; none are open. When a phase is done, change its heading to
 say so and note where the result differs from this plan, as
 [TAB_COMPLETION.md](TAB_COMPLETION.md) does with *As built*.
@@ -20,7 +20,7 @@ So the work is mostly ours, not the Marketplace's:
 | 1 | A permanent p2 update site on GitHub Pages, published by the Release workflow | code | medium |
 | 2 | Install by URL in the README; the listing text, logo and screenshots | code + maintainer | small |
 | 3 | Eclipse account, submit the listing, test the Install button on all three OSes | maintainer | small |
-| 4 | Later: PGP-sign the artifacts | code + maintainer | medium |
+| 4 | Later: PGP-sign the artifacts (an Ed25519 release key, signed in its own release job) | code + maintainer | medium |
 
 Decided so far:
 
@@ -222,16 +222,169 @@ Questions about listings go to marketplace@eclipse-foundation.org.
 
 ## Phase 4 (later): PGP signing
 
-Today the jars are unsigned, so Eclipse asks the user to trust unsigned content. Two ways to sign:
+Planned in detail on 2026-10-22, against `release/0.1.3` at `64abd26` (Tycho 5.0.4).
 
-- **PGP** *(decided, later)*: `tycho-gpg-plugin` signs the artifacts and records the signatures in
-  `artifacts.jar`; p2 checks PGP signatures since 2022-09. The release workflow needs the private
-  key and passphrase as repository secrets. Eclipse then shows the key and asks the user to trust
-  *it*, which still needs a click, but names who signed. Publish the public key (repository, a key
-  server) so users can check it.
+Today the jars are unsigned, so Eclipse's install wizard asks the user to trust *unsigned content*.
+Two ways to sign:
+
+- **PGP** *(decided)*: `tycho-gpg-plugin` signs the artifacts and records the signatures in
+  `artifacts.jar`; p2 checks PGP signatures since Eclipse 4.21 (2021-09). Eclipse then shows *our
+  key* in the trust dialog and asks the user to trust it: still one click, but it names who signed,
+  and a tampered jar fails the install.
 - **jarsigner with a code-signing certificate**: no prompt at all, but a certificate from a
   certificate authority costs money every year. The Eclipse Foundation signs only its own
   projects' jars. Not planned.
+
+### How PGP signing works in p2
+
+A p2 PGP signature is *extrinsic*: the jar is not changed. The signature (an armored detached
+signature, as `gpg --armor --detach-sign` makes) is stored as the `pgp.signatures` property of the
+artifact's entry in `artifacts.xml`, and the signer's public key as `pgp.publicKeys`. Example:
+
+```xml
+<artifact classifier='osgi.bundle' id='io.github.jm6cnddxbwftaks.neovim4eclipse' version='0.1.4'>
+  <properties size='…'>
+    <property name='pgp.signatures' value='-----BEGIN PGP SIGNATURE-----&#xA;…'/>
+    <property name='pgp.publicKeys' value='-----BEGIN PGP PUBLIC KEY BLOCK-----&#xA;…'/>
+```
+
+When installing, p2 checks each signature against the jar (a bad one aborts the install), then
+collects the keys nobody has trusted yet and shows them in the trust dialog. A key the user trusted
+(*Remember*) or that an installed plug-in vouches for (below) is not asked about again. Users see
+and manage trusted keys under *Preferences › Install/Update › Trust*.
+
+### The key *(decided)*
+
+| | | |
+|-|-|-|
+| Identity | `Neovim for Eclipse releases <58570069+Jm6CnDDXBwFTakS@users.noreply.github.com>` | a key used only for releases, not the maintainer's personal key: if it leaks, revoking it touches nothing else. The GitHub *noreply* address, because a public key is public forever |
+| Algorithm | **Ed25519** | modern, small, fast. Not yet confirmed that p2's verifier accepts EdDSA keys, so the first signed release is preceded by a test (experiment S1); if it fails, RSA 4096 instead |
+| Expiry | **none**; a revocation certificate kept offline | Tycho copies the public key, with its expiry date, into each release's metadata, and p2 checks expiry (`p2.pgp.verifyExpiration`). An expiry date would make old releases warn or fail after it, even if the key were extended later. If the key leaks, publishing the revocation certificate retires it; p2 checks revocation too (`p2.pgp.verifyRevocation`) |
+| Passphrase | yes | the key is stored in GitHub encrypted, but a passphrase means a leaked secret alone cannot sign |
+
+### Where the secrets live *(decided)*
+
+In a GitHub **environment** named `release` (*Settings › Environments*), not as repository secrets:
+
+- secrets `MAVEN_GPG_KEY` (the armored secret key) and `MAVEN_GPG_PASSPHRASE`, the environment
+  variable names the `bc` signer reads by default;
+- *Deployment branches and tags*: only tags `v*`.
+
+A job can read the secrets only if it names the environment, and only when the run is for a `v*`
+tag. A workflow edited on some branch, or a pull request, cannot reach them.
+
+### The workflow
+
+Signing is its own job in `release.yml`, between `build` and `publish`:
+
+```
+version ──► build (unsigned, exactly as on main) ──► sign ──► publish ──► site
+                                                      │
+                          environment: release        │  1. download the unsigned ZIP, unzip it
+                          (secrets readable only here)│  2. ./mvnw -f releng/sign/pom.xml verify
+                                                      │     (tycho-gpg-plugin, sign-p2-artifacts,
+                                                      │      signer bc, repository = the unzipped site)
+                                                      │  3. releng/verify-signatures.sh
+                                                      │  4. zip it again, upload it for publish
+```
+
+- **Build stays the same.** `build.yml` gets no secrets and no signing profile, so `main`, pull
+  requests and the release all build identically; only the release then signs the result.
+- **`releng/sign/pom.xml`**: a small Maven project whose only job is the
+  `tycho-gpg-plugin:sign-p2-artifacts` goal with `signer = bc` (Bouncy Castle, in Java: no `gpg`
+  program needed on the runner), `repository` = the unzipped site, and `bestPractices = true` (the
+  build fails if the passphrase is ever passed in a way that leaks, such as a `-D` property). The
+  plug-in version comes from the root `pom.xml`'s `tycho.version` (`VersionConsistencyTest`).
+- **`releng/verify-signatures.sh`**: fails unless every `osgi.bundle` and
+  `org.eclipse.update.feature` artifact in `artifacts.jar` has a `pgp.signatures` property, and each
+  signature verifies with `gpg --verify` against `releng/signing-key.asc` (the public key in the
+  repository). A release with a missing or wrong signature never reaches `publish`.
+- **The update site** needs no change: the composite simply has signed and unsigned children. Old
+  releases (0.1.0–0.1.3) stay unsigned; re-signing them would change published artifacts.
+- **Smoke test** (`update-site.yml`): the director install from the live site also checks the
+  signatures, since a bad one aborts it. Whether the headless director refuses *untrusted* keys
+  (there is no dialog to answer) is experiment S3; if it does, the smoke test passes our key as
+  trusted.
+
+### The plug-in vouches for its own key *(decided)*
+
+p2's extension point `org.eclipse.equinox.p2.engine.pgp` lets an installed plug-in declare keys as
+trusted. The first install still shows the dialog (nothing is installed yet); every later update
+installs without asking. In `plugin.xml`:
+
+```xml
+<extension point="org.eclipse.equinox.p2.engine.pgp">
+  <trustedKeys path="keys/release-signing-key.asc"/>
+</extension>
+```
+
+The file is the same public key as `releng/signing-key.asc` (a test checks that the two are equal,
+like `VersionConsistencyTest`), listed in `build.properties`' `bin.includes`. The extension point
+is older than our minimum Eclipse, 4.34 (its schema says p2 2.7.300; Eclipse's notes date trusted-key
+contributions to 4.23).
+
+### Publishing the public key
+
+So that anyone can check that a release was signed by this project, the fingerprint is printed in
+the README (*Install*), in [SECURITY.md](../../SECURITY.md), and on the update site's page
+(`releng/update-site.sh`), and the key is uploaded to [keys.openpgp.org](https://keys.openpgp.org)
+(which asks the address to confirm; a noreply address cannot, so the key is findable there by
+fingerprint only). The README's install steps change from "tick the unsigned entry" to "check that
+the key's fingerprint is …, then trust it".
+
+### The maintainer's part
+
+An AI assistant must not create or handle the private key, so these steps are the maintainer's, on
+their own machine. The commands, with GnuPG 2.2 or newer:
+
+```bash
+# 1. The key: Ed25519, signing only, no expiry. Prompts for the passphrase.
+gpg --quick-generate-key "Neovim for Eclipse releases <58570069+Jm6CnDDXBwFTakS@users.noreply.github.com>" ed25519 sign never
+
+# 2. Its fingerprint (40 hex digits), for the commands below and the docs.
+gpg --list-keys --with-colons "Neovim for Eclipse releases" | awk -F: '/^fpr/ {print $10; exit}'
+
+# 3. Keep offline (a USB stick, a password manager): the secret key and the revocation certificate.
+gpg --armor --export-secret-keys FINGERPRINT > release-signing-secret.asc
+gpg --output release-signing-revoke.asc --gen-revoke FINGERPRINT
+
+# 4. The public key, for the repository (the assistant commits it).
+gpg --armor --export FINGERPRINT > releng/signing-key.asc
+
+# 5. The secrets, into the release environment (gh asks for the passphrase interactively).
+gh secret set MAVEN_GPG_KEY --env release < release-signing-secret.asc
+gh secret set MAVEN_GPG_PASSPHRASE --env release
+
+# 6. The key server.
+gpg --keyserver hkps://keys.openpgp.org --send-keys FINGERPRINT
+```
+
+Step 5 needs the `release` environment to exist first, with its tag rule (the assistant can create
+both with `gh api`, since that holds no secret).
+
+### Experiments, before the first signed release
+
+- **S1. Ed25519 in p2.** On a test branch, with a throwaway Ed25519 key (no secrets needed: a key
+  made in the run): build, sign, and install the result into Eclipse 4.34 with the director, and
+  into a full Eclipse through *Install New Software* by hand, to see the trust dialog. If p2 rejects
+  EdDSA, switch to RSA 4096 before generating the real key.
+- **S2. The signer on an unpacked site.** That `sign-p2-artifacts` signs a repository given by its
+  `repository` parameter outside the build that made it, and rewrites `artifacts.jar` (not only an
+  `artifacts.xml`), with the jars' checksums and properties left as they were.
+- **S3. The director and untrusted keys.** Whether a headless install of content signed by an
+  unknown key succeeds, fails, or needs a flag; the smoke test must keep working.
+- **S4. Trusted-key extension.** Install once, then update to a newer test version: no dialog the
+  second time.
+
+### Commits
+
+1. The `release` environment (by `gh api`, no commit), `releng/sign/pom.xml`,
+   `releng/verify-signatures.sh`, the `sign` job; tested on a branch with a throwaway key (S1–S3).
+2. The real public key (`releng/signing-key.asc`, after the maintainer's steps), the trusted-key
+   extension and its test (S4), the fingerprint in README, SECURITY.md and the update site page;
+   PACKAGING.md and CONTRIBUTING.md (*Releasing*) updated; CHANGELOG.
+
+The next release after commit 2 is the first signed one.
 
 ## Every release afterwards
 
