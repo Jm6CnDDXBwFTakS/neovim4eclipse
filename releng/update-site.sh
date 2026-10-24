@@ -125,6 +125,8 @@ latest=${versions[${#versions[@]}-1]}
   <li>In Eclipse: <i>Help → Install New Software… → Add…</i></li>
   <li>Paste this page's address as the <i>Location</i>, name it <i>Neovim for Eclipse</i>, and choose <i>Add</i>.</li>
   <li>Tick <b>Neovim for Eclipse</b> and follow the wizard (README, "Install", has every step).</li>
+  <li>When Eclipse asks to trust the PGP key <i>Neovim for Eclipse releases</i>, check that its fingerprint is
+      <code>A91F 53D8 931B 7FD0 D146  8618 6CC9 E446 147B 063C</code>, then trust it.</li>
 </ol>
 EOF
   echo "<p>Latest version: <b>$latest</b>. Every release is here: ${versions[*]}.</p>"

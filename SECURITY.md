@@ -24,6 +24,20 @@ There is no guaranteed response time. You can expect an acknowledgement when the
 read the report, and a note when a fix is released. You are credited in the release notes unless
 you ask not to be.
 
+## Release signing
+
+Since 0.1.4, every release is signed with the project's PGP key, *Neovim for Eclipse releases*,
+fingerprint:
+
+```text
+A91F 53D8 931B 7FD0 D146  8618 6CC9 E446 147B 063C
+```
+
+Eclipse shows this key when it installs the plug-in; trust it only if the fingerprint matches. The
+public key is [`releng/signing-key.asc`](releng/signing-key.asc) and on
+[keys.openpgp.org](https://keys.openpgp.org/search?q=A91F53D8931B7FD0D14686186CC9E446147B063C). If the key is ever
+compromised, it is revoked there, and a new key is announced in a release and on this page.
+
 ## What counts
 
 The plug-in starts a local `nvim` process and talks to it over that process's standard input and

@@ -69,8 +69,18 @@ To use the plug-in in your own Eclipse, without building it.
    *Archive…* in place of the URL. Do not unpack it: the ZIP is a complete p2 update site
    (Eclipse's installer format), read as it is.
 2. Tick **Neovim for Eclipse**, then *Next*, *Next*, accept the license (EPL-2.0) and *Finish*.
-3. Eclipse asks whether to trust the content, because it is **unsigned** (the plug-in has no
-   code-signing certificate): tick the unsigned entry and choose *Trust Selected*.
+3. Eclipse asks whether to trust the PGP key that signed the plug-in, *Neovim for Eclipse
+   releases*. Check that its fingerprint is
+
+   ```text
+   A91F 53D8 931B 7FD0 D146  8618 6CC9 E446 147B 063C
+   ```
+
+   then tick it and choose *Trust Selected*. Eclipse asks only once: the installed plug-in vouches
+   for its own key, so updates install without asking. (Releases 0.1.0 to 0.1.3 are unsigned; for
+   those Eclipse asks to trust *unsigned content* instead.) A jar changed after signing fails the
+   install. To check a release by hand, the key is `releng/signing-key.asc` in this repository and
+   on [keys.openpgp.org](https://keys.openpgp.org/search?q=A91F53D8931B7FD0D14686186CC9E446147B063C).
 4. Restart Eclipse when asked.
 5. Open any text file: Neovim attaches to the editor automatically. *Neovim: Attach to Active Editor*
    (`Ctrl+Shift+N`) attaches by hand; the toolbar toggle turns it off and on.

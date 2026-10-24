@@ -1070,4 +1070,23 @@
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.NeovimPropertyTester">
       </propertyTester>
    </extension>
+   <!--
+      Trust the project's own release key, so that updates install without asking.
+
+      Releases are PGP-signed (docs/design/MARKETPLACE.md, "Phase 4"). On the first install, Eclipse
+      shows that key and asks the user to trust it. Once this plug-in is installed, p2 reads this
+      extension and treats the key as trusted, so Check for Updates no longer asks. A signature by
+      any other key, or a changed jar, still fails or asks as before.
+
+      p2 reads the file with Bundle.getEntry(path), so the path is relative to the bundle's root;
+      build.properties puts keys/ into the jar. The file is the same public key as
+      releng/signing-key.asc (ReleaseSigningKeyTest checks it). Users see the key under
+      Preferences > Install/Update > Trust.
+
+      Eclipse without p2 (no org.eclipse.equinox.p2.engine) ignores this extension; that is why the
+      bundle does not need to require p2.
+   -->
+   <extension point="org.eclipse.equinox.p2.engine.pgp">
+      <trustedKeys path="keys/release-signing-key.asc"/>
+   </extension>
 </plugin>
