@@ -112,7 +112,8 @@ of its own, `sign`, which alone can read the secret key (a secret of the GitHub 
    Bouncy Castle signer, so no `gpg` program is needed for signing);
 3. checks every bundle's and feature's signature with `gpg` against `releng/signing-key.asc`
    (`releng/verify-signatures.sh`), so a missing or wrong signature stops the release;
-4. zips it again; the signed ZIP replaces the unsigned one for the rest of the run.
+4. zips it again. The job uploads it as `neovim4eclipse-<version>.signed.zip`, a name of its own so
+   it cannot be confused with the unsigned build; publish renames it back for the release.
 
 The public key is in two places: `releng/signing-key.asc`, which the job checks against, and a
 copy in the plug-in (`keys/release-signing-key.asc`), which `plugin.xml` declares as trusted
