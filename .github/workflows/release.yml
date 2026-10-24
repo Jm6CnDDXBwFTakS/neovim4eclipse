@@ -6,15 +6,20 @@
 # The tag supplies the version: the build rewrites 0.1.0-SNAPSHOT / 0.1.0.qualifier to 0.1.0
 # in the POMs, MANIFEST.MF and feature.xml (inside the runner only; nothing is committed back).
 #
-# Four jobs, each starting only when the one before succeeded:
+# Five jobs, each starting only when the one before succeeded:
 #   1. version: checks that the tagged commit is on main and that CHANGELOG.md has a section for
 #               the version, and reads the version from the tag.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
 #               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
-#               neovim4eclipse-<version>.zip as an artifact of this run.
-#   3. publish: downloads that ZIP and creates the GitHub Release, with the version's CHANGELOG.md
-#               section as its notes.
-#   4. site:    the Update site workflow (update-site.yml, called as a reusable workflow): rebuilds
+#               neovim4eclipse-<version>.zip as an artifact of this run. The build is unsigned and
+#               sees no secrets, exactly as on main.
+#   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh) and replaces the
+#               artifact with the signed ZIP. Only this job can read the key: it is a secret of the
+#               GitHub environment "release", which only v* tags may use. See
+#               docs/design/MARKETPLACE.md, "Phase 4".
+#   4. publish: downloads the signed ZIP and creates the GitHub Release, with the version's
+#               CHANGELOG.md section as its notes.
+#   5. site:    the Update site workflow (update-site.yml, called as a reusable workflow): rebuilds
 #               the p2 update site on GitHub Pages from every release, now including this one, and
 #               installs from it into Eclipse 4.34 as a smoke test. If only this job fails, the
 #               release is out; fix the cause and rebuild the site with Run workflow.
@@ -69,9 +74,56 @@ jobs:
     with:
       version: ${{ needs.version.outputs.version }}
 
+  sign:
+    name: Sign with PGP
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    # The environment holds the secrets MAVEN_GPG_KEY and MAVEN_GPG_PASSPHRASE. Its rule
+    # ("Deployment branches and tags": only tags v*) is what keeps them away from any other run,
+    # such as a workflow edited on a branch.
+    environment: release
+    permissions:
+      contents: read   # for the checkout
+    env:
+      ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.zip
+    steps:
+      - uses: actions/checkout@v7
+      # Fail here, before the secrets are touched, rather than publish an unsigned release.
+      - name: Check that the public key is in the repository
+        run: |
+          if [ ! -s releng/signing-key.asc ]; then
+            echo "::error::releng/signing-key.asc is missing: releases are signed. See docs/design/MARKETPLACE.md, \"The maintainer's part\"."
+            exit 1
+          fi
+      # For ./mvnw, which runs the signer (releng/sign/pom.xml).
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.ZIP }}
+          path: unsigned
+          skip-decompress: true   # keep the ZIP itself (see the publish job)
+      - name: Sign and verify
+        env:
+          MAVEN_GPG_KEY: ${{ secrets.MAVEN_GPG_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          mkdir signed
+          releng/sign.sh "unsigned/$ZIP" "signed/$ZIP" releng/signing-key.asc
+      # Same file name, so the artifact has the same name as the build's: overwrite replaces the
+      # unsigned one, and nothing later in this run can pick up the unsigned ZIP by mistake.
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          overwrite: true
+          path: signed/${{ env.ZIP }}
+          if-no-files-found: error
+
   publish:
     name: Publish the release
-    needs: [version, build]
+    needs: [version, sign]
     runs-on: ubuntu-latest
     permissions:
       contents: write   # needed to create the release
@@ -100,6 +152,11 @@ jobs:
             echo "::error::$zip not found; dist/ holds:"; ls -lR dist; exit 1
           fi
           unzip -l "$zip" | grep -q 'content\.jar$' || { echo "::error::$zip is not the update site"; exit 1; }
+          # The sign job checked every signature; this only guards against publishing the
+          # unsigned ZIP if the jobs are ever rewired.
+          unzip -p "$zip" artifacts.jar > "$RUNNER_TEMP/artifacts.jar"
+          unzip -p "$RUNNER_TEMP/artifacts.jar" artifacts.xml | grep -q "name='pgp.signatures'" \
+            || { echo "::error::$zip is not signed"; exit 1; }
           releng/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" \
             "$zip" \

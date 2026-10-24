@@ -277,7 +277,8 @@ Pull requests are optional: merging directly (preferably as a fast-forward) keep
 
 A release is a `v<version>` tag on `main`; pushing it starts the *Release* workflow
 (`.github/workflows/release.yml`), which builds and tests that version like every CI run,
-publishes a GitHub Release with the ZIP, and then rebuilds the update site on GitHub Pages
+signs the ZIP with the project's PGP key (see [docs/PACKAGING.md](docs/PACKAGING.md), "PGP
+signing of releases"), publishes a GitHub Release with it, and then rebuilds the update site on GitHub Pages
 (`.github/workflows/update-site.yml`, see [docs/PACKAGING.md](docs/PACKAGING.md)) with the new
 release in it. For 0.1.2, released from `release/0.1.2`:
 
