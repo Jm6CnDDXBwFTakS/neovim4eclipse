@@ -31,7 +31,11 @@
        The tests tagged "heavyJava" need the Java development tools (a Java editor, Format, Rename,
        Open Declaration) in the test Eclipse. They are left out of -Pui and run only with
        ./mvnw verify -PuiHeavyJava, which adds the tools (a larger download, a slower start) and
-       runs only those tests. Not run in CI. -->
+       runs only those tests. Not run in CI.
+
+       ScreenshotCaptureTest (tagged "screenshots") is not a test: it takes the Marketplace and README
+       screenshots. Only ./mvnw verify -Pscreenshots runs it, with the Java tools for a highlighted
+       Java editor; see that class for the xvfb-run command. -->
 
   <build>
     <plugins>
@@ -153,6 +157,8 @@
           <appArgLine>-pluginCustomization ${project.basedir}/test-customization.ini</appArgLine>
           <systemProperties>
             <nvim.path>${nvim.path}</nvim.path>
+            <!-- Where ScreenshotCaptureTest writes its PNG files. -->
+            <screenshots.dir>${project.build.directory}/screenshots</screenshots.dir>
           </systemProperties>
           <!-- Which tests run, by JUnit tag: all but the "heavyJava" ones, unless the uiHeavyJava
                profile swaps the two properties (see the comment at the top). -->
@@ -174,7 +180,7 @@
     <ui.skip>true</ui.skip>
     <!-- The JUnit tags run and left out; see the uiHeavyJava profile. Empty: no filter. -->
     <ui.groups></ui.groups>
-    <ui.excludedGroups>heavyJava</ui.excludedGroups>
+    <ui.excludedGroups>heavyJava,screenshots</ui.excludedGroups>
   </properties>
 
   <profiles>
@@ -195,6 +201,35 @@
       <properties>
         <ui.skip>${skipTests}</ui.skip>
         <ui.groups>heavyJava</ui.groups>
+        <ui.excludedGroups></ui.excludedGroups>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>target-platform-configuration</artifactId>
+            <configuration>
+              <dependency-resolution>
+                <extraRequirements combine.children="append">
+                  <requirement>
+                    <type>eclipse-feature</type>
+                    <id>org.eclipse.jdt</id>
+                    <versionRange>0.0.0</versionRange>
+                  </requirement>
+                </extraRequirements>
+              </dependency-resolution>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!-- ./mvnw verify -Pscreenshots: runs only ScreenshotCaptureTest, with the Java development tools
+         (the same extra requirement as uiHeavyJava), and writes target/screenshots/*.png. -->
+    <profile>
+      <id>screenshots</id>
+      <properties>
+        <ui.skip>${skipTests}</ui.skip>
+        <ui.groups>screenshots</ui.groups>
         <ui.excludedGroups></ui.excludedGroups>
       </properties>
       <build>

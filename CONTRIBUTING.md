@@ -18,6 +18,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ./mvnw verify                                   # plug-in, unit/text/SWT tests, update-site ZIP
 ./mvnw verify -Pui                              # ... and the UI tests (opens an Eclipse window)
 ./mvnw verify -PuiHeavyJava                     # only the UI tests that need Java tooling (slow)
+xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake the listing screenshots
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
@@ -42,6 +43,9 @@ only the tagged tests, while `-Pui` leaves them out. CI does not run them. Run t
 how Eclipse's own edits reach Neovim (`sync/`, `DocumentPush`, `CaretSync`) or the `gd`/`K` key
 lookup. The fragment uses JDT only through IDs (editor, commands, natures, preferences), so it
 does not depend on JDT and still starts without it.
+
+`ScreenshotCaptureTest`, tagged `screenshots`, is not a check: it takes the Marketplace screenshots
+(`docs/design/MARKETPLACE.md`, *Images*). Only `-Pscreenshots` runs it; `-Pui` leaves it out.
 
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 

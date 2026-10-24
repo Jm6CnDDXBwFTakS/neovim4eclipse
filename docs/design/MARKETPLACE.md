@@ -203,7 +203,7 @@ bottom; `*` marks a field the form requires.
 | Supported Platform(s) `*` | Windows, Mac, Linux/GTK |
 | Minimum Java Version `*` | Java 21 |
 | Feature ID `*` / Install state | `io.github.jm6cnddxbwftaks.neovim4eclipse.feature` / Required (the feature's ID, without the `.feature.group` suffix p2 adds) |
-| Screenshot (up to 4; png, gif or jpg; 16 MB) | [docs/images/demo.gif](../images/demo.gif) (2.7 MB, the README's demo) |
+| Screenshot (up to 4; png, gif or jpg; 16 MB) | in this order: [demo.gif](../images/demo.gif) (2.7 MB, the README's demo), [screenshot-visual-mode.png](../images/screenshot-visual-mode.png), [screenshot-command-line.png](../images/screenshot-command-line.png), [screenshot-preferences.png](../images/screenshot-preferences.png) (all in `docs/images/`; how they are made: *Images*, below) |
 | Additional Editors | none |
 
 Solution Description (the form's editor takes formatted text; paste this and set the list as a
@@ -246,7 +246,21 @@ list):
   rm docs/images/page.html
   python3 -c "from PIL import Image; Image.open('/tmp/big.png').convert('RGB').resize((110, 80), Image.LANCZOS).save('docs/images/marketplace-logo.png', optimize=True)"
   ```
-- Screenshots and the README demo GIF.
+- **Screenshots**, taken by `ScreenshotCaptureTest` in the UI test module rather than by hand, so
+  they can be taken again after the UI changes: a Java editor in visual line mode (the mode in the
+  status bar), the `:` box with a substitution typed, and the Neovim preference page. It runs only
+  with its own profile, which adds the Java tools for a highlighted Java editor:
+
+  ```bash
+  xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path=/usr/bin/nvim
+  cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/01-visual-mode.png docs/images/screenshot-visual-mode.png
+  cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/02-command-line.png docs/images/screenshot-command-line.png
+  cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/03-preferences.png docs/images/screenshot-preferences.png
+  ```
+
+  Xvfb's `-screen` gives it room for the 1280×800 window in full color (its default is 640×480 at
+  8 bits). They show Eclipse's default light theme on Linux/GTK, without a window title bar.
+- The README demo GIF, recorded by hand.
 
 ## Phase 3: account, submission, test
 
