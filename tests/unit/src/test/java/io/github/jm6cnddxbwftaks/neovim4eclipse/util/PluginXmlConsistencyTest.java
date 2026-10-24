@@ -59,6 +59,20 @@ class PluginXmlConsistencyTest {
     }
 
     @Test
+    void theWelcomeNamesTheToggleKeyThatPluginXmlBinds() throws Exception {
+        NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
+        Set<String> sequences = new HashSet<>();
+        for (int i = 0; i < list.getLength(); i++) {
+            Element e = (Element) list.item(i);
+            if (WelcomeNote.TOGGLE_COMMAND_ID.equals(e.getAttribute("commandId"))) {
+                sequences.add(e.getAttribute("sequence"));
+            }
+        }
+        assertEquals(Set.of(WelcomeNote.DEFAULT_TOGGLE_SEQUENCE), sequences,
+                "WelcomeNote.DEFAULT_TOGGLE_SEQUENCE must be the toggle's binding in plugin.xml");
+    }
+
+    @Test
     void everyCtrlKeyHasACommand() throws Exception {
         Set<String> commands = attributes(extension(load(), "org.eclipse.ui.commands"), "command", "id");
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {

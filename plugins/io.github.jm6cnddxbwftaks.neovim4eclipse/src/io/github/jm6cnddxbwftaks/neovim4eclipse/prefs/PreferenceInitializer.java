@@ -31,6 +31,9 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE,
                 PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT);
         defaults.putBoolean(PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.FLASH_ON_ERROR_DEFAULT);
+        // A plugin_customization.ini (a product's, or -pluginCustomization <file>) can still change this
+        // default: Eclipse applies it after this initializer. The UI tests set it to false that way.
+        defaults.putBoolean(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
         }

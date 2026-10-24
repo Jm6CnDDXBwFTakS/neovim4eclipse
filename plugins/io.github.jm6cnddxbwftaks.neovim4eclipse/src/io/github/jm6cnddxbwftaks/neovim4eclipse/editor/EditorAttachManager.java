@@ -334,6 +334,7 @@ public final class EditorAttachManager {
         try {
             session = Activator.getDefault().getOrCreateSession();
             StartFailureNotice.clear();
+            WelcomeNotice.afterStart(); // the welcome, once per installation (and per minor version)
         } catch (Exception e) {
             StartFailureNotice.report(Activator.getDefault().getNvimExecutable(), e);
             throw e;

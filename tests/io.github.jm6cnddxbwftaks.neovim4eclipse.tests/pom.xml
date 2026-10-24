@@ -148,6 +148,9 @@
                here, or a tycho.testArgLine declared in <properties>, would be filled in when the POM
                is read, before the agent is known, and the agent would be lost. -->
           <application>org.eclipse.ui.ide.workbench</application>
+          <!-- Arguments for the test Eclipse itself (not the JVM): default preferences from
+               test-customization.ini, which turns the welcome dialog off (see that file). -->
+          <appArgLine>-pluginCustomization ${project.basedir}/test-customization.ini</appArgLine>
           <systemProperties>
             <nvim.path>${nvim.path}</nvim.path>
           </systemProperties>

@@ -12,6 +12,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- A welcome note the first time Neovim starts in an editor: how to turn it off and on, where the
+  preferences are (including which `Ctrl` keys go to Neovim), and a link to the documentation.
+  *Neovim → Welcome...* shows it again. After an update to a new minor version, a short note links
+  to this change log instead. Both can be turned off on *Window → Preferences → Neovim*.
+
 ## [0.1.4] - 2026-10-24
 
 The signed release: Eclipse now names who signed the plug-in.

@@ -52,6 +52,27 @@ public final class PreferenceConstants {
     /** Off by default: a flash is easy to find distracting. */
     public static final boolean FLASH_ON_ERROR_DEFAULT = false;
 
+    // ---- The welcome note (editor/WelcomeNotice, util/WelcomeNote) ----
+
+    /**
+     * Whether the welcome appears when Neovim first starts in an editor, and the update note after an
+     * upgrade to a new minor version. A check box on the Neovim page. An administrator can turn it
+     * off for every user with a {@code plugin_customization.ini} line
+     * {@code io.github.jm6cnddxbwftaks.neovim4eclipse/showWelcome=false}; the UI tests do the same
+     * ({@code tests/...tests/test-customization.ini}), because a modal dialog would stop them.
+     */
+    public static final String SHOW_WELCOME = "showWelcome";
+
+    public static final boolean SHOW_WELCOME_DEFAULT = true;
+
+    /**
+     * The feature line ({@code "0.1"}) a note was last shown for. Kept in the
+     * <em>configuration</em> scope, which belongs to the Eclipse installation, not in the workspace
+     * like the other preferences: the welcome is about installing the plug-in, so a second workspace
+     * should not show it again. Not on any preference page.
+     */
+    public static final String WELCOME_SHOWN_LINE = "welcomeShownLine";
+
     // ---- Which Ctrl+letter keys go to Neovim (Window > Preferences > Neovim > Ctrl Keys) ----
 
     /** Prefix of the per-letter preferences; the lower-case letter follows, e.g. {@code ctrlKeyToNeovim.f}. */
