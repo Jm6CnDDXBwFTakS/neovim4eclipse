@@ -40,6 +40,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `nnoremap ; :` or `nnoremap <Space>s :%s/`, a count before `:` (`2:`), `!` with a motion. Before,
   Neovim waited in its own command line, which Eclipse does not show. A search opened this way inside
   an operator (`d/` from a mapping) keeps the operator.
+- A command whose only output is its status message (`:%s` printing "7 substitutions on 4 lines") no
+  longer also opens the output popup; the message line shows the message, as for errors.
 
 ## [0.1.4] - 2026-10-24
 

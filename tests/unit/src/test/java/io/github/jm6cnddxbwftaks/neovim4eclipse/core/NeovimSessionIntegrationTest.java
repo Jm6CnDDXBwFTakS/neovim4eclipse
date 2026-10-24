@@ -269,6 +269,24 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * {@code :%s} prints "N substitutions on M lines", which the message line shows ({@code v:statusmsg}):
+     * no popup repeats it. The {@code :echo} after it is real output and is passed on, so the
+     * substitution's turn has passed when the test looks.
+     */
+    @Test
+    void aSubstitutionsMessageIsNotOutput() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha", "data"));
+            List<String> outputs = new CopyOnWriteArrayList<>();
+            s.commandAsync("%s/a/b/g", outputs::add);
+            s.commandAsync("echo 'after'", outputs::add);
+            waitFor(() -> !outputs.isEmpty(), "the :echo output");
+            assertEquals(List.of("after"), outputs);
+            assertEquals(List.of("blphb", "dbtb"), s.getBufferLines());
+        }
+    }
+
     @Test
     void shellCommandOutputIsShownWithoutTheEchoedCommand() throws Exception {
         try (NeovimSession s = start()) {

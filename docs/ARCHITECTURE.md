@@ -262,7 +262,8 @@ to the box, which (via the focus listener in the controller) also deactivates th
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
   `redir => g:neovim4eclipse_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
-  non-empty result that is not just the error message is shown in the `OutputPopup`. Ending the
+  non-empty result that is not just the message the message line shows (`v:errmsg`, or `v:statusmsg` such
+  as "7 substitutions on 4 lines") is shown in the `OutputPopup`. Ending the
   redirection waits for the command; meanwhile a prompt is dismissed with Esc, and after 60 s the
   output is given up (`core/CommandRunner`, durations set in its constructor). Full
   `ext_messages` support was considered and not chosen: it needs `ext_linegrid`, i.e. grid redraw
