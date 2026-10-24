@@ -139,9 +139,12 @@ public final class KeyInterceptor implements VerifyKeyListener {
         }
     }
 
-    /** Forget a half-typed command; called when a key reaches Neovim by another route (Ctrl-key bindings). */
-    public void resetPendingArgument() {
-        router.reset();
+    /**
+     * {@code nvimKey} reaches Neovim by another route (the Ctrl-key commands): the router follows it,
+     * so that the key after it is routed as Vim's grammar says ({@code <C-w>} then {@code :}).
+     */
+    public void sentElsewhere(String nvimKey) {
+        router.sentElsewhere(nvimKey);
     }
 
     /**

@@ -47,23 +47,6 @@ class NvimKeysTest {
     }
 
     @Test
-    void argumentTakingCommands() {
-        for (String k : new String[] { "f", "F", "t", "T", "r", "@", "m", "'", "`", "\"", "q" }) {
-            assertTrue(NvimKeys.takesArgument(k, false), k);
-        }
-        for (String k : new String[] { "j", "d", "g", ":", "/", "<Esc>", "<C-v>", "", null, "ff" }) {
-            assertFalse(NvimKeys.takesArgument(k, false), String.valueOf(k));
-        }
-    }
-
-    @Test
-    void qStopsARecordingInsteadOfTakingAnArgument() {
-        assertTrue(NvimKeys.takesArgument("q", false), "qa starts recording into register a");
-        assertFalse(NvimKeys.takesArgument("q", true), "q while recording just stops it");
-        assertTrue(NvimKeys.takesArgument("f", true), "other commands are unaffected by recording");
-    }
-
-    @Test
     void lettersDigitsAndQuoteAreRecordingRegisters() {
         for (String k : new String[] {"a", "z", "A", "Z", "0", "9", "\""}) {
             assertTrue(NvimKeys.isRecordingRegister(k), k);

@@ -13,33 +13,7 @@ public final class NvimKeys {
     /** Single keys that change buffer text in a way the line-event stream may not fully describe. */
     private static final String BUFFER_MUTATING_CHARS = "pPxXs~.u";
 
-    /**
-     * Keys that start a command taking one more character: {@code f F t T} (find), {@code r}
-     * (replace), {@code @} (play macro), {@code m} (set mark), {@code '} and {@code `} (jump to mark),
-     * {@code "} (register) and {@code q} (record). While Neovim waits for that character, a typed
-     * {@code :}, {@code /}, {@code ?} or {@code Z} is an <em>argument</em>, not a request to open a
-     * prompt ({@code f/}, {@code @:}, {@code qa} ...).
-     */
-    private static final String ARGUMENT_COMMANDS = "fFtTr@m'`\"q";
-
     private NvimKeys() {
-    }
-
-    /**
-     * Whether {@code key} will be followed by an argument character.
-     *
-     * @param recording whether a macro is being recorded: then {@code q} <em>stops</em> the recording
-     *                  and takes no argument
-     */
-    public static boolean takesArgument(String key, boolean recording) {
-        if (key == null || key.length() != 1) {
-            return false;
-        }
-        char c = key.charAt(0);
-        if (c == 'q' && recording) {
-            return false;
-        }
-        return ARGUMENT_COMMANDS.indexOf(c) >= 0;
     }
 
     /**

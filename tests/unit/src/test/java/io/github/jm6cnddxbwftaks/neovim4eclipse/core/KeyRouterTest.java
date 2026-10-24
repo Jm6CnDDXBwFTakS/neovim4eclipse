@@ -31,7 +31,7 @@ class KeyRouterTest {
         /** Keys sent but not yet processed by Neovim: {@link #waitingForArgument} is then out of date. */
         boolean keysInFlight;
         boolean recording;
-        boolean visual;
+        String mode = "n";
         final List<String> sent = new ArrayList<>();
         final List<InsertReplay.Plan> leftInsert = new ArrayList<>();
 
@@ -56,8 +56,8 @@ class KeyRouterTest {
         }
 
         @Override
-        public boolean isVisualMode() {
-            return visual;
+        public String getMode() {
+            return mode;
         }
 
         @Override
@@ -78,6 +78,9 @@ class KeyRouterTest {
         @Override
         public void inputAsync(String keys) {
             sent.add(keys);
+            // As in NeovimSession: until Neovim has processed the key, its answers (mode, waiting
+            // for an argument) are about earlier keys. A test sets it back to false for "caught up".
+            keysInFlight = true;
         }
 
         @Override
@@ -253,11 +256,87 @@ class KeyRouterTest {
     }
 
     @Test
-    void resetLetsNeovimsAnswerCountAgain() {
+    void aKeySentElsewhereLetsNeovimsAnswerCountAgain() {
         type("q", "a");
-        router.reset();
+        router.sentElsewhere("<C-l>");
         type("q", ":");
         assertEquals(List.of("q", "a", "q", ":"), neovim.sent, "Neovim says not recording: q takes : as register");
+    }
+
+    // ---- what Vim's grammar makes of a key (util/KeyGrammar), typed faster than Neovim answers ----
+
+    /** After {@code di} the quote names the text object; it takes no argument, so {@code :} opens the prompt. */
+    @Test
+    void theColonAfterATextObjectOpensThePrompt() {
+        for (String quote : new String[] { "\"", "'", "`" }) {
+            prompts.clear();
+            type("d", "i", quote, ":");
+            assertEquals(List.of(":"), prompts, "di" + quote + ":");
+        }
+        prompts.clear();
+        type("v", "i", "\"", ":");
+        assertEquals(List.of(":"), prompts, "vi\":");
+    }
+
+    /** {@code gqq} formats the line; its last {@code q} starts no recording. */
+    @Test
+    void gqqStartsNoRecording() {
+        type("g", "q", "q", ":");
+        assertEquals(List.of("g", "q", "q"), neovim.sent);
+        assertEquals(List.of(":"), prompts);
+    }
+
+    /** {@code <C-w>q} closes a window; that {@code q} starts no recording either. */
+    @Test
+    void ctrlWqStartsNoRecording() {
+        type("<C-w>", "q", ":");
+        assertEquals(List.of(":"), prompts);
+    }
+
+    /** {@code [/} and {@code ]/} are motions (to a comment's start or end), not searches. */
+    @Test
+    void theSlashAfterABracketGoesToNeovim() {
+        type("[", "/", "d", "]", "/");
+        assertEquals(List.of("[", "/", "d", "]", "/"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    /** A {@code :} typed right after {@code o} is text in the new line, even before Neovim reports insert mode. */
+    @Test
+    void aColonTypedRightAfterAnInsertKeyIsText() {
+        type("o", ":");
+        assertEquals(List.of("o", ":"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    // ---- Neovim's answer, once it has caught up, replaces the guess ----
+
+    /** A half-typed mapping ({@code <Space>} of {@code <Space>s}): Neovim waits, so {@code :} belongs to it. */
+    @Test
+    void neovimWaitingAfterAKeyTheGrammarDoesNotKnow() {
+        type("<Space>");
+        neovim.keysInFlight = false; // Neovim has processed it ...
+        neovim.waitingForArgument = true; // ... and waits for the rest of the mapping
+        type(":");
+        assertEquals(List.of("<Space>", ":"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    /** Neovim reports an operator the keys did not show (a mapping to {@code d}): {@code /} is its search motion. */
+    @Test
+    void neovimsOperatorPendingMakesTheSlashASearchMotion() {
+        neovim.mode = "no";
+        type("/");
+        assertEquals(List.of("/"), prompts);
+    }
+
+    /** Neovim back in normal mode undoes a wrong guess: here an {@code f} whose argument Eclipse took. */
+    @Test
+    void neovimsNormalModeEndsAGuessedArgument() {
+        type("f");
+        neovim.keysInFlight = false; // Neovim has processed f and is no longer waiting
+        type(":");
+        assertEquals(List.of(":"), prompts);
     }
 
     // ---- g and the ROT13 operator g? ----
@@ -293,7 +372,7 @@ class KeyRouterTest {
     /** In visual mode {@code g?} encodes the selection at once, so the next {@code ?} is a search. */
     @Test
     void inVisualModeTheQuestionAfterGQuestionIsASearch() {
-        neovim.visual = true;
+        neovim.mode = "v";
         type("g", "?", "?");
         assertEquals(List.of("g", "?"), neovim.sent);
         assertEquals(List.of("?"), prompts);
@@ -395,17 +474,31 @@ class KeyRouterTest {
         assertEquals(List.of(":"), prompts);
     }
 
+    /**
+     * A Ctrl key sent by its command reaches Neovim like a typed one: after {@code f} it is the
+     * argument, so the next {@code :} opens the prompt; a held-back {@code Z} is dropped.
+     */
     @Test
-    void resetForgetsAPendingArgumentAndZ() {
+    void aKeySentElsewhereCountsAsTyped() {
         type("f");
-        router.reset();
+        router.sentElsewhere("<C-x>");
         type(":");
         assertEquals(List.of(":"), prompts);
 
         type("Z");
-        router.reset();
+        router.sentElsewhere("<C-x>");
         type("x");
         assertEquals(List.of("f", "x"), neovim.sent);
         assertFalse(fileCommands.contains("ZZ"));
+    }
+
+    /** {@code <C-w>} sent by its command is a prefix: the {@code :} after it belongs to it. */
+    @Test
+    void aPrefixSentElsewhereTakesTheNextKey() {
+        router.sentElsewhere("<C-w>");
+        neovim.keysInFlight = true; // the controller sends it to Neovim right after
+        type(":");
+        assertEquals(List.of(":"), neovim.sent);
+        assertEquals(List.of(), prompts);
     }
 }
