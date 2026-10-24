@@ -6,6 +6,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+
 /**
  * The session's listeners, one {@link ListenerList} per kind of event: mode, buffer change, cursor,
  * visual selection and IDE action. (Status bar and recording listeners are in {@link StatusTracker},
@@ -25,6 +27,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
     private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
+    private final ListenerList<CmdlineEvent> userCmdlineListeners = new ListenerList<>("user command line", Level.WARNING);
 
     // ---- firing ----
 
@@ -51,6 +54,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** A key mapped in Neovim asks the IDE to act (see {@link IdeAction}). */
     void ideAction(IdeAction action) {
         ideActionListeners.fire(action);
+    }
+
+    /** The user opened a command line in Neovim that the editor's box did not (see {@code CmdlineWatcher}). */
+    void userCmdline(CmdlineEvent event) {
+        userCmdlineListeners.fire(event);
     }
 
     // ---- registration ----
@@ -93,5 +101,13 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeIdeActionListener(Consumer<IdeAction> listener) {
         ideActionListeners.remove(listener);
+    }
+
+    void addUserCmdlineListener(Consumer<CmdlineEvent> listener) {
+        userCmdlineListeners.add(listener);
+    }
+
+    void removeUserCmdlineListener(Consumer<CmdlineEvent> listener) {
+        userCmdlineListeners.remove(listener);
     }
 }

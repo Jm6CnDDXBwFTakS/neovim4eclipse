@@ -165,9 +165,23 @@ final class CommandRunner {
         nvim.syncModeAndCursor();
     }
 
+    /**
+     * Answers a search line the user opened in Neovim ({@code d/} through a mapping, say), which
+     * Neovim keeps open while the editor's box edits the pattern: replaces what Neovim's line holds
+     * with {@code pattern} and runs it ({@code <C-u>pattern<CR>}), then refreshes Eclipse. Answering
+     * the open line, rather than typing a new search, keeps a pending operator.
+     */
+    void answerSearch(String pattern, boolean backward) throws Exception {
+        nvim.type("<C-u>" + SearchCommand.body(pattern, backward) + "<CR>");
+        dismissPrompt();
+        nvim.syncBuffer();
+        nvim.syncModeAndCursor();
+    }
+
     /** Types a search ({@code /pattern<CR>} or {@code ?pattern<CR>}), then refreshes Eclipse. */
     void search(String pattern, boolean backward) throws Exception {
         nvim.type(SearchCommand.build(pattern, backward));
+        dismissPrompt();
         nvim.syncBuffer();
         nvim.syncModeAndCursor();
     }
@@ -175,6 +189,15 @@ final class CommandRunner {
     /** Types {@code :cmd<CR>} and dismisses a "press Enter" prompt it leaves. */
     private void typeCommand(String cmd) throws Exception {
         nvim.type(NvimKeys.exCommand(cmd));
+        dismissPrompt();
+    }
+
+    /**
+     * Dismisses a "press Enter" prompt the typed command or search left, which Eclipse cannot show.
+     * A search that finds nothing leaves one since the command line is external
+     * ({@code ext_cmdline}); its message still reaches the message line through {@code v:errmsg}.
+     */
+    private void dismissPrompt() throws Exception {
         if (nvim.isBlocked()) {
             nvim.type("<Esc>");
         }

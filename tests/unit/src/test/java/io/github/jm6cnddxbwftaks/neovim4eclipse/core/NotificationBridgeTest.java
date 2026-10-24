@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -59,6 +60,9 @@ class NotificationBridgeTest {
             }
             @Override public void onIdeAction(IdeAction action) {
                 events.add("action:" + action.name() + ":" + action.count());
+            }
+            @Override public void onCmdline(CmdlineEvent event) {
+                events.add(event.shown() ? "cmdline" + event.firstc() + event.content() : "cmdline-hide");
             }
         });
     }

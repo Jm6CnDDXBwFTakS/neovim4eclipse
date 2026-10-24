@@ -244,4 +244,24 @@ class CommandRunnerTest {
 
         assertEquals(List.of("type /a\\/b<CR>", "syncBuffer", "syncModeAndCursor"), nvim.calls);
     }
+
+    /**
+     * A search that finds nothing ends at a "press Enter" prompt (the command line is external,
+     * ext_cmdline), which Eclipse cannot show: it is dismissed before the refresh.
+     */
+    @Test
+    void aSearchThatFindsNothingHasItsPromptDismissed() throws Exception {
+        nvim.blocked = () -> nvim.calls.size() == 1; // blocked right after typing the search
+        runner.search("nope", true);
+
+        assertEquals(List.of("type ?nope<CR>", "type <Esc>", "syncBuffer", "syncModeAndCursor"), nvim.calls);
+    }
+
+    /** A search line the user opened in Neovim is answered in place, keeping a pending operator. */
+    @Test
+    void answeringASearchLineReplacesItsTextAndRuns() throws Exception {
+        runner.answerSearch("a/b", false);
+
+        assertEquals(List.of("type <C-u>a\\/b<CR>", "syncBuffer", "syncModeAndCursor"), nvim.calls);
+    }
 }

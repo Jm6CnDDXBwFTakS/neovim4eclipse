@@ -35,6 +35,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `q` of `gqq` and `<C-w>q` no longer counts as the start of a macro recording. `[/` and `]/` (to
   a comment's start or end) no longer open the search box when typed quickly, and neither does a `:`
   typed right after `o`, `s` or another key that starts an insert.
+- A command line opened in Neovim rather than by `:`, `/` or `?` typed in the editor now opens the
+  command-line box, with what Neovim has typed so far: a mapping from your `init.lua` such as
+  `nnoremap ; :` or `nnoremap <Space>s :%s/`, a count before `:` (`2:`), `!` with a motion. Before,
+  Neovim waited in its own command line, which Eclipse does not show. A search opened this way inside
+  an operator (`d/` from a mapping) keeps the operator.
 
 ## [0.1.4] - 2026-10-24
 

@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 
 /**
  * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
@@ -89,6 +90,12 @@ final class NotificationBridge implements Incoming {
 
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
+
+        /**
+         * Neovim showed, changed or hid a command line (the UI is attached with {@code ext_cmdline};
+         * see {@link CmdlineEvent}).
+         */
+        void onCmdline(CmdlineEvent event);
     }
 
     private final Sink sink;
@@ -98,8 +105,9 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Dispatches a notification by name. Unknown names are ignored (see {@link Incoming}): Neovim
-     * sends {@code redraw} several times per key, so they are logged at FINEST only.
+     * Dispatches a notification by name. Unknown names are ignored (see {@link Incoming}). Of the
+     * {@code redraw} notifications, which Neovim sends several times per key, only the command-line
+     * events are read; the rest is Neovim's screen, which the plug-in does not draw.
      */
     @Override
     public void notification(String method, List<?> args) {
@@ -111,6 +119,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
+            case "redraw" -> CmdlineEvent.fromRedraw(args).forEach(sink::onCmdline);
             default -> LOG.finest(() -> "Ignored notification " + method);
         }
     }

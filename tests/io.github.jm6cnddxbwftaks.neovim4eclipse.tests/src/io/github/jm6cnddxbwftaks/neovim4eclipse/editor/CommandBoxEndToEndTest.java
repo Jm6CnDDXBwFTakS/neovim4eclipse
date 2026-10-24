@@ -34,6 +34,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.wizards.IWizardDescriptor;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 
 /**
@@ -49,6 +50,104 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     private static boolean activeEditorIs(String title) {
         IEditorPart active = page().getActiveEditor();
         return active != null && title.equals(active.getTitle());
+    }
+
+    // ---- command lines opened in Neovim by a mapping (docs/design/KEY_ROUTING.md, phase 2) ----
+
+    /**
+     * Maps {@code lhs} to {@code rhs} in Neovim's normal mode, runs {@code test}, and removes the
+     * mapping again: one Neovim serves every test.
+     */
+    private void withMapping(String lhs, String rhs, ThrowingRunnable test) throws Exception {
+        SessionProbe.lua(session, "vim.keymap.set('n', '" + lhs + "', '" + rhs + "')");
+        try {
+            test.run();
+        } finally {
+            SessionProbe.lua(session, "pcall(vim.keymap.del, 'n', '" + lhs + "')");
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    /** Waits for the box to open (from Neovim's command line) reading {@code text}, and returns it. */
+    private Text boxReading(String text) {
+        waitUntil("the box to open with " + text, TIMEOUT_MS, () -> {
+            Text box = textChildOf(widget);
+            return box != null && text.equals(box.getText());
+        }, () -> {
+            Text box = textChildOf(widget);
+            return "; the box " + (box == null ? "is closed" : "reads " + box.getText());
+        });
+        Text box = textChildOf(widget);
+        UiTestSupport.requireKeyboardFocus(box, TIMEOUT_MS);
+        return box;
+    }
+
+    private static void pressEnter(Text box) {
+        Event enter = new Event();
+        enter.keyCode = SWT.CR;
+        enter.character = SWT.CR;
+        enter.doit = true;
+        box.notifyListeners(SWT.KeyDown, enter);
+    }
+
+    /** {@code nnoremap ; :}: the key goes to Neovim, which opens its command line, and the box takes it over. */
+    @Test
+    void aMappingToColonOpensTheBox() throws Exception {
+        withMapping(";", ":", () -> {
+            type(widget, ';');
+            Text box = boxReading(":");
+            box.insert("s/alpha/omega/");
+            pressEnter(box);
+            expectText("omega\nbeta\ngamma\n");
+        });
+    }
+
+    /** {@code nnoremap <Space>s :%s/}: the box opens with Neovim's text so far. */
+    @Test
+    void aMappingWithTextPrefillsTheBox() throws Exception {
+        withMapping("<Space>s", ":%s/", () -> {
+            type(widget, " s");
+            Text box = boxReading(":%s/");
+            box.insert("a/A/g");
+            pressEnter(box);
+            expectText("AlphA\nbetA\ngAmmA\n");
+        });
+    }
+
+    /**
+     * {@code nnoremap <Space>d d/}: Neovim's search line belongs to the {@code d} operator, so the box
+     * answers that line instead of starting a new search, and the operator deletes up to the match.
+     */
+    @Test
+    void aSearchInsideAMappedOperatorIsAnswered() throws Exception {
+        withMapping("<Space>d", "d/", () -> {
+            type(widget, " d");
+            Text box = boxReading("/");
+            box.insert("gamma");
+            pressEnter(box);
+            expectText("gamma\n");
+        });
+    }
+
+    /** Esc in a box that took over Neovim's search line closes that line too: the next key is a command again. */
+    @Test
+    void escapeLeavesNeovimsSearchLine() throws Exception {
+        withMapping("<Space>d", "d/", () -> {
+            type(widget, " d");
+            Text box = boxReading("/");
+            Event esc = new Event();
+            esc.keyCode = SWT.ESC;
+            esc.character = SWT.ESC;
+            esc.doit = true;
+            box.notifyListeners(SWT.KeyDown, esc);
+            waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+            type(widget, "x");
+            expectText("lpha\nbeta\ngamma\n");
+        });
     }
 
     /**

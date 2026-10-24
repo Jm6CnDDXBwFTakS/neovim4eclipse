@@ -32,6 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
@@ -106,6 +107,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<String> recordingListener = this::onRecordingChanged;
     private final Consumer<StatusInfo> statusListener = this::onStatusChanged;
     private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
+    private final Consumer<CmdlineEvent> userCmdlineListener = this::onUserCmdline;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
             DocumentBuffer buffer, boolean takeNeovimCursor) {
@@ -160,6 +162,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addRecordingListener(recordingListener);
         session.addStatusListener(statusListener);
         session.addIdeActionListener(ideActionListener);
+        session.addUserCmdlineListener(userCmdlineListener);
 
         modeStatus.addTo(editor.getEditorSite());
 
@@ -324,6 +327,34 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
+     * The user opened a command line in Neovim that the box did not (a mapping such as
+     * {@code nnoremap ; :}, a count before {@code :}, {@code !} with a motion): the box takes it
+     * over, with Neovim's text so far. A {@code :} line is closed in Neovim at once ({@code <C-c>}),
+     * so the box runs its command the usual way (Tab completion, IDE commands, output capture need
+     * Neovim in normal mode). A search line stays open, because it may belong to an operator
+     * ({@code d/}), and the box answers it on Enter. RPC thread. Docs/design/KEY_ROUTING.md, phase 2.
+     *
+     * <p>Not while the box is open: then the line is the box's own doing. Tab completion types into
+     * Neovim's command line for a moment ({@code LuaScripts.COMPLETE_CMDLINE}), which Neovim may
+     * report like any other line; taking it over would replace the box the user is typing in.
+     */
+    private void onUserCmdline(CmdlineEvent event) {
+        CommandLine.Kind kind = CommandLine.Kind.forKey(event.firstc());
+        if (closed || !neovimModeActive || kind == null) {
+            return;
+        }
+        HostCommands.runOnUi(() -> {
+            if (closed || styledText.isDisposed() || commandLine.isOpen()) {
+                return;
+            }
+            if (kind == CommandLine.Kind.EX) {
+                session.inputAsync("<C-c>");
+            }
+            commandLine.openFromNeovim(kind, event.content(), kind != CommandLine.Kind.EX);
+        });
+    }
+
+    /**
      * Command, message or statusline text changed: the command and statusline go to the status bar
      * item, the message to the message line. Called on the session's thread.
      */
@@ -458,6 +489,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeRecordingListener(recordingListener);
             session.removeStatusListener(statusListener);
             session.removeIdeActionListener(ideActionListener);
+            session.removeUserCmdlineListener(userCmdlineListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }
@@ -513,6 +545,16 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void search(String pattern, boolean backward) {
             session.search(pattern, backward);
+        }
+
+        @Override
+        public void answerSearch(String pattern, boolean backward) {
+            session.answerSearchAsync(pattern, backward);
+        }
+
+        @Override
+        public void cancelNeovimLine() {
+            session.inputAsync("<C-c>");
         }
 
         /** {@code :e} names complete in the folders {@code :e} looks in; other lines need none. */

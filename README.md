@@ -234,6 +234,11 @@ empty box cancels; clicking elsewhere also cancels it; Up/Down browse a history 
 searches). `:` from visual mode leaves visual mode and pre-fills `:'<,'>`. While the box has focus the
 Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it.
 
+The box also opens when a mapping in your `init.lua` opens a command line (`nnoremap ; :`,
+`nnoremap <Space>s :%s/`), when a count comes before `:` (`2:` gives `:.,.+1`), and for `!` with a
+motion (`!!` gives `:.!`), with what Neovim has typed so far. A search line opened this way inside an
+operator (`nnoremap <Space>d d/`) keeps the operator: Enter in the box completes it.
+
 In the `:` box, Tab completes the line as Neovim's own command line does (commands, options and their
 values, buffers, help tags, variables, functions, file names), following your `'wildmode'`; Shift+Tab goes
 back. A line above the box lists the candidates, with the current one highlighted. `:e` completes file

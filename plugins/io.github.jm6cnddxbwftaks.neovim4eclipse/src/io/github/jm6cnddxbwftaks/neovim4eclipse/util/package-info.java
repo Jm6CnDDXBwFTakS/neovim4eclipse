@@ -20,6 +20,9 @@
  *       versus Eclipse's UTF-16 character offsets).</li>
  *   <li><b>Modes and commands:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes},
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine},
+ *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent} and
+ *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher} (command lines Neovim
+ *       opens, and which of them the user opened),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostExCommand},
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.ListingCommand},
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay}.</li>

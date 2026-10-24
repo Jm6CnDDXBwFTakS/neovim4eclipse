@@ -20,9 +20,16 @@ public final class SearchCommand {
      * @param backward {@code true} for {@code ?}, {@code false} for {@code /}
      */
     public static String build(String pattern, boolean backward) {
+        return (backward ? "?" : "/") + body(pattern, backward) + "<CR>";
+    }
+
+    /**
+     * The pattern as typed after the {@code /} or {@code ?}, escaped as {@link #build} does, for
+     * typing into a search line that is already open.
+     */
+    public static String body(String pattern, boolean backward) {
         char delimiter = backward ? '?' : '/';
-        StringBuilder sb = new StringBuilder(pattern.length() + 6);
-        sb.append(delimiter);
+        StringBuilder sb = new StringBuilder(pattern.length() + 4);
         for (int i = 0; i < pattern.length(); i++) {
             char c = pattern.charAt(i);
             if (c == '\\' || c == delimiter) {
@@ -34,6 +41,6 @@ public final class SearchCommand {
                 sb.append(c);
             }
         }
-        return sb.append("<CR>").toString();
+        return sb.toString();
     }
 }

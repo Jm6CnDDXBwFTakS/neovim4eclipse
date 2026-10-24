@@ -194,6 +194,15 @@ final class KeyInput {
         try {
             nvim.type(keys);
             mode = state.readMode();
+            if (mode != null && mode.blocking() && "r".equals(mode.mode())) {
+                // A hit-enter prompt ("Press ENTER"), which Eclipse cannot show. Since the command
+                // line is external (ext_cmdline, see NeovimConnection.TERMINAL_UI), a search that
+                // finds nothing ends at one, for example from a mapping such as /TODO<CR>. Dismiss
+                // it, as the next key would; the message reaches the message line through v:errmsg.
+                // Only the plain prompt: "r?" (a confirm, :s///c) and "rm" (more) wait for answers.
+                nvim.type("<Esc>");
+                mode = state.readMode();
+            }
         } catch (Exception e) {
             state.setSuppressBufferEvents(false);
             throw e;

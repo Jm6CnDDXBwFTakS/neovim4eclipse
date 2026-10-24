@@ -107,6 +107,15 @@ final class CommandLineBox {
          * @param steps the keys pressed, see {@link CommandCompletion.Request#steps()}
          */
         void complete(String line, String steps, Consumer<Completion> onResult);
+
+        /**
+         * Runs {@code pattern} in the search line Neovim has open (one the user opened in Neovim, see
+         * {@link CommandLineBox#openFromNeovim}), keeping an operator that waits for it ({@code d/}).
+         */
+        void answerSearch(String pattern, boolean backward);
+
+        /** Closes, without running it, the command line Neovim has open ({@code <C-c>}). */
+        void cancelNeovimLine();
     }
 
     private static final Logger LOG = Logger.getLogger(CommandLineBox.class.getName());
@@ -131,6 +140,11 @@ final class CommandLineBox {
     /** The text field inside {@link #frame}; {@code null} while closed. */
     private Text box;
     private Kind kind;
+    /**
+     * The box edits a search line that Neovim has open (opened by the user in Neovim: a mapping,
+     * {@code d/} from one); Enter answers that line, Esc or a click away cancels it in Neovim.
+     */
+    private boolean answeringNeovim;
     /** True while the program itself sets the text (prefill, history), which bypasses the prefix guard. */
     private boolean programmatic;
     private long openedAtMillis;
@@ -177,20 +191,42 @@ final class CommandLineBox {
         if (display == null || display.isDisposed()) {
             return;
         }
-        display.asyncExec(() -> openNow(kind, fromVisualMode));
+        display.asyncExec(() -> openNow(kind, fromVisualMode, null, false));
     }
 
-    private void openNow(Kind newKind, boolean fromVisualMode) {
+    /**
+     * Opens the box for a command line the user opened in Neovim rather than here (a mapping such
+     * as {@code nnoremap <Space>s :%s/}, a count before {@code :}), with Neovim's text so far.
+     * Docs/design/KEY_ROUTING.md, phase 2.
+     *
+     * @param content   what Neovim's line holds ({@code %s/}, {@code .,.+1}); goes after the prefix
+     * @param answering {@code true} if Neovim keeps its line open and Enter must answer it (a search,
+     *                  which may belong to an operator); {@code false} if Neovim's line was closed
+     *                  and the box runs its command as usual (a {@code :} line)
+     */
+    void openFromNeovim(Kind kind, String content, boolean answering) {
+        Display display = host.getDisplay();
+        if (display == null || display.isDisposed()) {
+            return;
+        }
+        display.asyncExec(() -> openNow(kind, false, content, answering));
+    }
+
+    /**
+     * @param neovimContent {@code null} for a box opened here; else Neovim's text (see {@link #openFromNeovim})
+     */
+    private void openNow(Kind newKind, boolean fromVisualMode, String neovimContent, boolean answering) {
         if (host.isDisposed()) {
             return;
         }
         if (isOpen()) {
-            if (newKind == kind && !fromVisualMode) {
+            if (newKind == kind && !fromVisualMode && neovimContent == null) {
                 box.setFocus(); // still open (e.g. focus returned to the editor window): keep what was typed
                 return;
             }
             close(false);
         }
+        answeringNeovim = answering;
         if (fromVisualMode && newKind == Kind.EX) {
             commands.leaveVisualMode();
         }
@@ -198,8 +234,11 @@ final class CommandLineBox {
         frame = new OverlayFrame<>(host, parent -> new Text(parent, SWT.SINGLE)); // border drawn by the frame
         box = frame.content();
 
-        String prefill = CommandLine.prefill(newKind, fromVisualMode);
-        prefillLength = prefill.length();
+        String prefill = neovimContent == null
+                ? CommandLine.prefill(newKind, fromVisualMode)
+                : newKind.prefix() + neovimContent;
+        // Neovim's text is the user's to edit (Backspace over %s/ deletes it); only the prefix stays.
+        prefillLength = neovimContent == null ? prefill.length() : 1;
         setBoxText(prefill);
 
         box.addVerifyListener(this::protectPrefix);
@@ -421,16 +460,25 @@ final class CommandLineBox {
     private void submit() {
         Kind submittedKind = kind;
         Submission submission = CommandLine.parse(submittedKind, box.getText());
+        boolean answering = answeringNeovim;
+        answeringNeovim = false; // so that close() does not cancel the line the answer is for
         close(true);
         if (submission == null) {
+            if (answering) {
+                commands.cancelNeovimLine(); // nothing to search for: leave Neovim's line, as Esc would
+            }
             return;
         }
         HISTORY.add(submittedKind, submission.body());
-        run(submission);
+        run(submission, answering);
     }
 
-    private void run(Submission submission) {
+    private void run(Submission submission, boolean answering) {
         try {
+            if (answering && submission.kind() != Kind.EX) {
+                commands.answerSearch(submission.body(), submission.kind() == Kind.SEARCH_BACKWARD);
+                return;
+            }
             if (submission.kind() == Kind.EX) {
                 if (commands.runInIde(submission.body())) {
                     LOG.fine("Ex handled by Eclipse: " + submission.body());
@@ -501,6 +549,10 @@ final class CommandLineBox {
     void close(boolean refocusEditor) {
         if (box == null) {
             return;
+        }
+        if (answeringNeovim) {
+            answeringNeovim = false;
+            commands.cancelNeovimLine(); // Esc, a click away: Neovim's own line must not stay open
         }
         output.close(false); // output kept for this command line goes with it (Enter, Esc, click away)
         if (listFrame != null) {
