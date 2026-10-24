@@ -13,12 +13,12 @@
 #               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
 #               neovim4eclipse-<version>.zip as an artifact of this run. The build is unsigned and
 #               sees no secrets, exactly as on main.
-#   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh) and replaces the
-#               artifact with the signed ZIP. Only this job can read the key: it is a secret of the
+#   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh) and uploads the result
+#               as neovim4eclipse-<version>.signed.zip. Only this job can read the key: it is a secret of the
 #               GitHub environment "release", which only v* tags may use. See
 #               docs/design/MARKETPLACE.md, "Phase 4".
-#   4. publish: downloads the signed ZIP and creates the GitHub Release, with the version's
-#               CHANGELOG.md section as its notes.
+#   4. publish: downloads the signed ZIP and creates the GitHub Release with it, named
+#               neovim4eclipse-<version>.zip, with the version's CHANGELOG.md section as its notes.
 #   5. site:    the Update site workflow (update-site.yml, called as a reusable workflow): rebuilds
 #               the p2 update site on GitHub Pages from every release, now including this one, and
 #               installs from it into Eclipse 4.34 as a smoke test. If only this job fails, the
@@ -87,6 +87,7 @@ jobs:
     env:
       # Not named ZIP: zip(1) reads $ZIP as extra arguments (see releng/sign.sh).
       SITE_ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.zip
+      SIGNED_ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.signed.zip
     steps:
       - uses: actions/checkout@v7
       # Fail here, before the secrets are touched, rather than publish an unsigned release.
@@ -112,14 +113,15 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         run: |
           mkdir signed
-          releng/sign.sh "unsigned/$SITE_ZIP" "signed/$SITE_ZIP" releng/signing-key.asc
-      # Same file name, so the artifact has the same name as the build's: overwrite replaces the
-      # unsigned one, and nothing later in this run can pick up the unsigned ZIP by mistake.
+          releng/sign.sh "unsigned/$SITE_ZIP" "signed/$SIGNED_ZIP" releng/signing-key.asc
+      # A name of its own (.signed.zip), so the artifact cannot be confused with the build's
+      # unsigned one. The v0.1.4 tag's second run used the same name with overwrite: true, which
+      # left two artifacts of that name, and publish downloaded the unsigned one (its signed-ZIP
+      # check stopped it). publish renames the file back to neovim4eclipse-<version>.zip.
       - uses: actions/upload-artifact@v7
         with:
           archive: false
-          overwrite: true
-          path: signed/${{ env.SITE_ZIP }}
+          path: signed/${{ env.SIGNED_ZIP }}
           if-no-files-found: error
 
   publish:
@@ -131,14 +133,14 @@ jobs:
     steps:
       # For CHANGELOG.md and releng/release-notes.sh, and so that gh knows the repository.
       - uses: actions/checkout@v7
-      # The build job uploads the ZIP unwrapped (upload-artifact's archive: false), so the artifact
+      # The sign job uploads the ZIP unwrapped (upload-artifact's archive: false), so the artifact
       # is named after the file; download-artifact v8 fetches such a file by that name.
       # skip-decompress: by default download-artifact unpacks any ZIP it downloads, which would
       # leave the update site's files in dist/ instead of the ZIP itself (the v0.1.0 tag's first
       # run failed that way: "no matches found for dist/neovim4eclipse-0.1.0.zip").
       - uses: actions/download-artifact@v8
         with:
-          name: neovim4eclipse-${{ needs.version.outputs.version }}.zip
+          name: neovim4eclipse-${{ needs.version.outputs.version }}.signed.zip
           path: dist
           skip-decompress: true
       - name: Publish release
@@ -149,6 +151,10 @@ jobs:
         # The check lists dist/ when the ZIP is not where expected, so a failure shows what arrived.
         run: |
           zip="dist/neovim4eclipse-${VERSION}.zip"
+          # The release asset keeps the usual name; .signed only told the artifacts apart.
+          if [ -f "dist/neovim4eclipse-${VERSION}.signed.zip" ]; then
+            mv "dist/neovim4eclipse-${VERSION}.signed.zip" "$zip"
+          fi
           if [ ! -f "$zip" ]; then
             echo "::error::$zip not found; dist/ holds:"; ls -lR dist; exit 1
           fi
