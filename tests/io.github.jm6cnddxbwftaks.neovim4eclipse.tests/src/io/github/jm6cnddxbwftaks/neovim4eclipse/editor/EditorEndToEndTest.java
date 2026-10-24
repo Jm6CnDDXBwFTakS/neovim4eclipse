@@ -618,7 +618,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Neovim mode off (the NVIM toolbar toggle), an edit in plain Eclipse, Neovim mode on again:
+     * Neovim mode off (the Neovim toolbar toggle), an edit in plain Eclipse, Neovim mode on again:
      * the edit reaches Neovim when it is switched back on ({@code DocumentPush}), so {@code G dd}
      * deletes the real last line and {@code u} brings it back.
      */

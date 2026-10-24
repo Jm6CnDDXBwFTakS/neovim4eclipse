@@ -17,7 +17,7 @@ public final class PreferenceConstants {
     /** Default: resolve {@code nvim} from {@code PATH}. */
     public static final String NVIM_EXECUTABLE_DEFAULT = "nvim";
 
-    /** Whether the NVIM toolbar contribution is visible. */
+    /** Whether the Neovim toolbar button (the logo) is visible. */
     public static final String SHOW_TOOLBAR = "showToolbar";
 
     public static final boolean SHOW_TOOLBAR_DEFAULT = true;

@@ -77,7 +77,7 @@ class WelcomeNoteTest {
     @Test
     void theWelcomeNamesTheToggleKeyAndThePreferences() {
         String message = WelcomeNote.welcomeMessage("Ctrl+Shift+M");
-        assertTrue(message.contains("Ctrl+Shift+M, the NVIM toolbar button"), message);
+        assertTrue(message.contains("Ctrl+Shift+M, the Neovim toolbar button"), message);
         assertTrue(message.contains("init.lua"), message);
         assertTrue(message.contains("Preferences > Neovim"), message);
         assertTrue(message.contains("Ctrl Keys"), message);
@@ -88,7 +88,7 @@ class WelcomeNoteTest {
     void withoutAKeyBindingTheWelcomeLeavesItOut() {
         for (String none : new String[] { null, "", " " }) {
             String message = WelcomeNote.welcomeMessage(none);
-            assertTrue(message.contains("Turn it off and on with the NVIM toolbar button"), message);
+            assertTrue(message.contains("Turn it off and on with the Neovim toolbar button"), message);
             assertFalse(message.contains("null"), message);
         }
     }

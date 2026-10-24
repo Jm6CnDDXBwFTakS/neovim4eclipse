@@ -462,11 +462,16 @@
          </menu>
       </menuContribution>
       <menuContribution locationURI="toolbar:org.eclipse.ui.main.toolbar?after=additions">
+         <!-- The toolbar shows the icon only; the label is what Window > Perspective > Customize
+              Perspective and screen readers show. icons/neovim.png is 16x16, the size of Eclipse's
+              toolbar icons; on a 200% screen Eclipse loads icons/neovim@2x.png (32x32) by itself.
+              Both are rendered from docs/images/logo.svg by releng/render-icon.py. -->
          <toolbar id="io.github.jm6cnddxbwftaks.neovim4eclipse.toolbar">
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
                   id="io.github.jm6cnddxbwftaks.neovim4eclipse.toolbar.toggleMode"
-                  label="NVIM"
+                  icon="icons/neovim.png"
+                  label="Neovim"
                   tooltip="Toggle Neovim / Eclipse editing mode"
                   style="push">
                <visibleWhen checkEnabled="false">

@@ -74,7 +74,7 @@ class WelcomeNoticeTest {
         String key = WelcomeNotice.toggleKey();
         assertNotNull(key, "the toggle command has no key binding");
         String text = labelText(dialog.getShell());
-        assertTrue(text.contains(key + ", the NVIM toolbar button"), text);
+        assertTrue(text.contains(key + ", the Neovim toolbar button"), text);
     }
 
     @Test

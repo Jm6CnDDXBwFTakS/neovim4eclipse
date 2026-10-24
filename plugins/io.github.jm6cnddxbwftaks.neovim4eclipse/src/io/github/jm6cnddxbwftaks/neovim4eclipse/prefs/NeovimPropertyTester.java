@@ -7,7 +7,7 @@ import org.eclipse.core.expressions.PropertyTester;
 
 /**
  * Property tester for menu/toolbar {@code visibleWhen} expressions.
- * Properties: {@code io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar} (the NVIM toolbar button)
+ * Properties: {@code io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar} (the Neovim toolbar button)
  * and {@code io.github.jm6cnddxbwftaks.neovim4eclipse.showMenu} (the Neovim menu in the menu bar).
  *
  * <p>{@code plugin.xml} decides when contributions are visible with <em>core expressions</em>,

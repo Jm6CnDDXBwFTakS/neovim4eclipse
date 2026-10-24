@@ -19,6 +19,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   *Neovim → Welcome...* shows it again. After an update to a new minor version, a short note links
   to this change log instead. Both can be turned off on *Window → Preferences → Neovim*.
 
+### Changed
+
+- The toolbar button that toggles Neovim and Eclipse mode shows the project's logo instead of the
+  text *NVIM* (sharp on 200% screens too). Its tooltip and the preference that hides it are
+  unchanged, apart from the name: *Show the Neovim button on the main toolbar*.
+
 ## [0.1.4] - 2026-10-24
 
 The signed release: Eclipse now names who signed the plug-in.

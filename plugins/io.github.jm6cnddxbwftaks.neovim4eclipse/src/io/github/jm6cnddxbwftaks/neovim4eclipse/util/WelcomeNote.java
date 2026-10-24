@@ -99,7 +99,7 @@ public final class WelcomeNote {
      * <pre>
      * Neovim now handles the keys in this editor: a real Neovim edits the file you see, ...
      *
-     * - Turn it off and on with Ctrl+Shift+M, the NVIM toolbar button or Quick Access (Ctrl+3) ...
+     * - Turn it off and on with Ctrl+Shift+M, the Neovim toolbar button or Quick Access (Ctrl+3) ...
      * </pre>
      *
      * @param toggleKey the toggle command's key binding as Eclipse formats it ({@code "Ctrl+Shift+M"},
@@ -107,8 +107,8 @@ public final class WelcomeNote {
      */
     public static String welcomeMessage(String toggleKey) {
         String toggle = toggleKey == null || toggleKey.isBlank()
-                ? "the NVIM toolbar button or Quick Access (search \"Toggle Neovim\")"
-                : toggleKey + ", the NVIM toolbar button or Quick Access (search \"Toggle Neovim\")";
+                ? "the Neovim toolbar button or Quick Access (search \"Toggle Neovim\")"
+                : toggleKey + ", the Neovim toolbar button or Quick Access (search \"Toggle Neovim\")";
         return "Neovim now handles the keys in this editor: a real Neovim, with your own init.lua, "
                 + "edits the file you see. Eclipse still owns files, content assist and its own commands.\n\n"
                 + "- Turn it off and on with " + toggle + ". Off, the editor uses Eclipse's own keys.\n"

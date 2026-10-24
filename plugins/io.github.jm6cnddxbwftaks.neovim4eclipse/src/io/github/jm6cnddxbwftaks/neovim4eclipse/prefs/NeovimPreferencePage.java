@@ -50,7 +50,7 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
 
         addField(new BooleanFieldEditor(
                 PreferenceConstants.SHOW_TOOLBAR,
-                "Show NVIM button on the main toolbar",
+                "Show the Neovim button on the main toolbar",
                 getFieldEditorParent()));
 
         // Hidden, its two entries stay reachable: Window > Preferences > Neovim, and the toggle's
