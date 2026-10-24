@@ -25,7 +25,8 @@ The safe loop for any upgrade:
 | What | Source of truth | Copies (checked by `VersionConsistencyTest` unless noted) |
 |------|-----------------|-----------------------------------------------------------|
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
-| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and `ECLIPSE_PLATFORM_URL` in `update-site.yml` |
+| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and the 4.34 `platform-url` of the smoke test in `update-site.yml` |
+| Eclipse release (newest tested) | the second `platform-url` (4.41) in the `smoke` job of `.github/workflows/update-site.yml` | not checked; see "Eclipse release", *Newest release* |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
 | Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform) |
@@ -100,10 +101,26 @@ To raise it (example: 2024-12 to 2025-12):
    resolved, for example `3.14.200.v20240915-0736` means `3.14.200`; the same for `org.eclipse.swt`
    and the others), or open the release's `plugins/` folder on download.eclipse.org. Nothing checks
    this automatically: a mismatch only means these tests run against slightly different jars.
-5. Set `ECLIPSE_PLATFORM_URL` in `.github/workflows/update-site.yml` to that release's Eclipse
-   Platform download for Linux x86_64 (from <https://download.eclipse.org/eclipse/downloads/>): the
-   update site's smoke test installs into it, so it must be the oldest supported release too.
+5. Set the 4.34 entry of the `smoke` job's matrix in `.github/workflows/update-site.yml` (`eclipse`
+   and `platform-url`) to that release's Eclipse Platform download for Linux x86_64 (from
+   <https://download.eclipse.org/eclipse/downloads/>): the update site's smoke test installs into it,
+   so it must be the oldest supported release too.
 6. Run everything, then try the ZIP in that Eclipse and in the newest one.
+
+**Newest release.** The smoke test's second entry is the newest Eclipse release, so a release of the
+plug-in is also installed into the top of the range the Marketplace listing ticks. Move it when a
+new Eclipse ships (every March, June, September and December), as its own commit:
+
+1. Find the new drop in <https://download.eclipse.org/eclipse/downloads/data.json>: the first entry
+   of `"releases"`, for example `drops4/R-4.41-202608281142`. The download is
+   `<that path>/eclipse-platform-4.41-linux-gtk-x86_64.tar.gz`.
+2. Set `eclipse` and `platform-url` of the second matrix entry. Check that release's `eclipse.ini`
+   still accepts the Java in `.java-version` (`-Dosgi.requiredJavaVersion`).
+3. Try it locally before the next release, with `releng/smoke-install.sh` against the live site
+   (docs/PACKAGING.md), then tick the release in the Marketplace listing.
+
+It is pinned rather than looked up at run time, so a release of the plug-in never fails just
+because Eclipse shipped that day.
 
 `Require-Bundle` in `MANIFEST.MF` has no version ranges, so nothing else stops an install on an
 Eclipse older than the target; the target release is the promise.

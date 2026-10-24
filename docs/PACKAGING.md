@@ -78,7 +78,8 @@ The *Update site* workflow (`.github/workflows/update-site.yml`) builds it and r
 every release (`release.yml` calls it), or by hand (*Actions → Update site → Run workflow*, once the
 workflow is on `main`). It downloads every published release's ZIP, runs
 `releng/update-site.sh` on them, deploys the result to GitHub Pages, and then installs from the live
-URL into Eclipse 4.34 with `releng/smoke-install.sh`. Each deployment replaces the whole site, so it
+URL with `releng/smoke-install.sh`, twice side by side: into Eclipse 4.34 (the oldest supported) and
+into the newest Eclipse release (4.41), the two ends of the range the Marketplace listing claims. Each deployment replaces the whole site, so it
 always holds exactly the published releases: to withdraw one, delete the GitHub Release and run the
 workflow.
 

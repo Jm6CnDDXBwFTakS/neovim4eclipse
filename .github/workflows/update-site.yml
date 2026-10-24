@@ -17,9 +17,11 @@
 #   2. deploy: publishes it on GitHub Pages. Each deployment replaces the whole site, which is
 #              why step 1 rebuilds all of it. No gh-pages branch is involved, so the rulesets
 #              (only the owner pushes branches) need no exception.
-#   3. smoke:  installs the plug-in from the live URL into Eclipse 4.34, the oldest Eclipse the
-#              plug-in supports, with p2's director (releng/smoke-install.sh), and checks that
-#              the newest release is what gets installed.
+#   3. smoke:  installs the plug-in from the live URL with p2's director
+#              (releng/smoke-install.sh), and checks that the newest release is what gets
+#              installed. Twice, side by side: into Eclipse 4.34, the oldest Eclipse the plug-in
+#              supports, and into the newest Eclipse release, so both ends of the range the
+#              Marketplace listing claims are tried.
 #
 # Set up once in the repository settings:
 #   - Settings > Pages > Build and deployment > Source: GitHub Actions.
@@ -39,11 +41,6 @@ permissions: {}
 concurrency:
   group: pages
   cancel-in-progress: false
-
-env:
-  # The Eclipse Platform of the oldest supported release, 2024-12 (4.34), for the smoke test. It
-  # must match eclipse-repo.url in the root pom.xml; see docs/UPGRADING.md.
-  ECLIPSE_PLATFORM_URL: https://download.eclipse.org/eclipse/downloads/drops4/R-4.34-202411201800/eclipse-platform-4.34-linux-gtk-x86_64.tar.gz
 
 jobs:
   build:
@@ -93,21 +90,42 @@ jobs:
         uses: actions/deploy-pages@v5
 
   smoke:
-    name: Install from the live site into Eclipse 4.34
+    name: Install from the live site into Eclipse ${{ matrix.eclipse }}
     needs: [build, deploy]
     runs-on: ubuntu-latest
     permissions:
       contents: read   # for the checkout
+    strategy:
+      # Let both installs finish: "fails on the newest Eclipse only" and "fails on both" point at
+      # different causes (a new Eclipse change, or a broken site).
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported release, 2024-12. It must match eclipse-repo.url in the root
+          # pom.xml (docs/UPGRADING.md, "Eclipse"): installing into it tests the "or newer" promise
+          # from below, since only the update site is given to p2.
+          - eclipse: '4.34'
+            platform-url: https://download.eclipse.org/eclipse/downloads/drops4/R-4.34-202411201800/eclipse-platform-4.34-linux-gtk-x86_64.tar.gz
+          # The newest Eclipse release, the top of the range the Marketplace listing ticks. Pinned
+          # rather than looked up, so a release never fails because Eclipse shipped that day; move
+          # it to each new release (docs/UPGRADING.md, "Eclipse"), then tick that release in the
+          # listing. The drops are listed in https://download.eclipse.org/eclipse/downloads/data.json
+          # ("releases", newest first).
+          - eclipse: '4.41'
+            platform-url: https://download.eclipse.org/eclipse/downloads/drops4/R-4.41-202608281142/eclipse-platform-4.41-linux-gtk-x86_64.tar.gz
     steps:
       - uses: actions/checkout@v7
-      # Java 21: the plug-in needs it, and Eclipse 4.34's eclipse.ini does not start on Java 24+.
+      # Java 21 for both: the plug-in needs it, Eclipse 4.34's eclipse.ini does not start on Java
+      # 24+, and 4.41 asks for 21 or newer (-Dosgi.requiredJavaVersion=21).
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version-file: .java-version
-      - name: Download Eclipse Platform 4.34
+      - name: Download Eclipse Platform ${{ matrix.eclipse }}
+        env:
+          PLATFORM_URL: ${{ matrix.platform-url }}
         run: |
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/platform.tar.gz" "$ECLIPSE_PLATFORM_URL"
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/platform.tar.gz" "$PLATFORM_URL"
           tar -xzf "$RUNNER_TEMP/platform.tar.gz" -C "$RUNNER_TEMP"
       # Pages can take a moment to serve a new deployment; wait until the newest release answers.
       - name: Wait for the new site

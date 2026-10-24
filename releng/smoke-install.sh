@@ -15,8 +15,10 @@
 # How: p2's *director* application, which every Eclipse contains, installs an installable unit
 # (IU) from a repository without opening a window. A feature's IU is its ID plus ".feature.group".
 # Only the update site is given as a repository, nothing from download.eclipse.org: if the plug-in
-# needed anything the Eclipse installation lacks, the install fails. Run it on the oldest Eclipse
-# the plug-in supports (4.34, 2024-12) and that also tests the "2024-12 or newer" promise.
+# needed anything the Eclipse installation lacks, the install fails. The workflow runs it twice:
+# on the oldest Eclipse the plug-in supports (4.34, 2024-12), which tests the "2024-12 or newer"
+# promise from below, and on the newest Eclipse release, the top of the range the Marketplace
+# listing claims.
 #
 # The Eclipse installation is changed (the plug-in is added): use a throwaway copy.
 
