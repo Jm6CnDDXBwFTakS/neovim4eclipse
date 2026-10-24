@@ -25,6 +25,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   text *NVIM* (sharp on 200% screens too). Its tooltip and the preference that hides it are
   unchanged, apart from the name: *Show the Neovim button on the main toolbar*.
 
+### Fixed
+
+- `g??` (ROT13 the current line) works: the second `?` no longer opens the backward-search box
+  instead of finishing the command, and a quickly typed `g?` no longer can either. `g?` with a
+  search motion (`g?/x`) and `?` after `g?` in visual mode still open the box.
+
 ## [0.1.4] - 2026-10-24
 
 The signed release: Eclipse now names who signed the plug-in.

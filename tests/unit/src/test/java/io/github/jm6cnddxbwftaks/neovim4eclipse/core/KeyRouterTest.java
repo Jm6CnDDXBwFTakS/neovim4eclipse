@@ -31,6 +31,7 @@ class KeyRouterTest {
         /** Keys sent but not yet processed by Neovim: {@link #waitingForArgument} is then out of date. */
         boolean keysInFlight;
         boolean recording;
+        boolean visual;
         final List<String> sent = new ArrayList<>();
         final List<InsertReplay.Plan> leftInsert = new ArrayList<>();
 
@@ -52,6 +53,11 @@ class KeyRouterTest {
         @Override
         public boolean isWaitingForArgument() {
             return waitingForArgument;
+        }
+
+        @Override
+        public boolean isVisualMode() {
+            return visual;
         }
 
         @Override
@@ -252,6 +258,62 @@ class KeyRouterTest {
         router.reset();
         type("q", ":");
         assertEquals(List.of("q", "a", "q", ":"), neovim.sent, "Neovim says not recording: q takes : as register");
+    }
+
+    // ---- g and the ROT13 operator g? ----
+
+    /**
+     * {@code g??} encodes the current line with ROT13 ({@code g?} doubled, like {@code dd}). Neither
+     * {@code ?} is a backward search, even typed faster than Neovim answers (keys in flight, so its
+     * "waiting for a key" is out of date): the second {@code ?} once opened the search prompt.
+     */
+    @Test
+    void gQuestionQuestionGoesToNeovimEvenTypedQuickly() {
+        neovim.keysInFlight = true;
+        assertEquals(List.of(true, true, true), type("g", "?", "?"));
+        assertEquals(List.of("g", "?", "?"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    @Test
+    void gQuestionGQuestionAlsoGoesToNeovim() {
+        type("g", "?", "g", "?");
+        assertEquals(List.of("g", "?", "g", "?"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    /** After {@code g?} a {@code /} is the operator's motion, a forward search: the prompt opens. */
+    @Test
+    void aSearchAfterGQuestionStillOpensThePrompt() {
+        type("g", "?", "/");
+        assertEquals(List.of("g", "?"), neovim.sent);
+        assertEquals(List.of("/"), prompts);
+    }
+
+    /** In visual mode {@code g?} encodes the selection at once, so the next {@code ?} is a search. */
+    @Test
+    void inVisualModeTheQuestionAfterGQuestionIsASearch() {
+        neovim.visual = true;
+        type("g", "?", "?");
+        assertEquals(List.of("g", "?"), neovim.sent);
+        assertEquals(List.of("?"), prompts);
+    }
+
+    /** No {@code g} command is a prompt: the key after {@code g} goes to Neovim, whatever it is. */
+    @Test
+    void thePromptKeyAfterGGoesToNeovim() {
+        neovim.keysInFlight = true;
+        type("g", ":");
+        assertEquals(List.of("g", ":"), neovim.sent);
+        assertEquals(List.of(), prompts);
+    }
+
+    /** {@code gg} ends the {@code g} command, so a {@code :} after it opens the prompt again. */
+    @Test
+    void afterACompleteGCommandPromptKeysOpenThePrompt() {
+        type("g", "g", ":");
+        assertEquals(List.of("g", "g"), neovim.sent);
+        assertEquals(List.of(":"), prompts);
     }
 
     @Test

@@ -47,6 +47,9 @@ public final class KeyRouter {
 
         boolean isWaitingForArgument();
 
+        /** Whether Neovim is in a visual mode ({@code v}, {@code V}, {@code Ctrl-V}). */
+        boolean isVisualMode();
+
         /**
          * Whether keys sent with {@link #inputAsync} have not been processed by Neovim yet. While
          * they have not, {@link #isWaitingForArgument()} describes an earlier key.
@@ -91,7 +94,22 @@ public final class KeyRouter {
          * A {@code q} that starts a recording: like {@link #ARGUMENT}, and if the next key names a
          * register ({@code qa}), a recording has begun ({@link #recordingByKeys}).
          */
-        REGISTER
+        REGISTER,
+        /**
+         * A {@code g} was typed in normal mode. Every {@code g} command takes one more key ({@code gg},
+         * {@code gu}, {@code g?} ...), and none is a prompt: {@code g?} is the ROT13 operator, not
+         * {@code g} followed by a backward search. Neovim says it waits for that key, but only once it
+         * has processed the {@code g}; typed quickly, the {@code ?} would arrive first and open the
+         * prompt. So the router tracks it from the keys, like {@link #ARGUMENT}.
+         */
+        G,
+        /**
+         * {@code g?} was typed in normal mode, so the ROT13 operator waits for its motion. A
+         * {@code ?} now doubles the operator, as {@code dd} does {@code d}: {@code g??} encodes the
+         * current line. Any other key is the motion as usual, so {@code g?/x} still opens the
+         * prompt for a search motion. In visual mode {@code g?} applies at once and needs neither.
+         */
+        ROT13_OPERATOR
     }
 
     private final Neovim neovim;
@@ -175,6 +193,23 @@ public final class KeyRouter {
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }
 
+        // The second key of a g command (the g of gg): it ends that command and starts no new one.
+        boolean completesG = pending == Pending.G;
+        if (pending == Pending.G || pending == Pending.ROT13_OPERATOR) {
+            Pending was = pending;
+            pending = Pending.NONE;
+            if (was == Pending.G && "?".equals(nvimKey) && !neovim.isVisualMode()) {
+                pending = Pending.ROT13_OPERATOR;
+                neovim.inputAsync(nvimKey);
+                return true;
+            }
+            if (was == Pending.G ? isPromptKey(nvimKey) : "?".equals(nvimKey)) {
+                neovim.inputAsync(nvimKey); // g: g/ (no such commands, but never a prompt), or g??
+                return true;
+            }
+            // Otherwise the key is routed as usual: the second key of gg, gu ..., or g?'s motion.
+        }
+
         if (pending == Pending.ARGUMENT || pending == Pending.REGISTER || isNeovimWaitingForThisKey()) {
             if (pending == Pending.REGISTER && NvimKeys.isRecordingRegister(nvimKey)) {
                 recordingByKeys = true;
@@ -209,6 +244,8 @@ public final class KeyRouter {
             pending = Pending.NONE;
         } else if ("q".equals(nvimKey)) {
             pending = Pending.REGISTER;
+        } else if ("g".equals(nvimKey) && !completesG) {
+            pending = Pending.G;
         } else {
             pending = NvimKeys.takesArgument(nvimKey, recording) ? Pending.ARGUMENT : Pending.NONE;
         }
