@@ -159,7 +159,7 @@ GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
 - **Build** runs on every push and pull request to `main`, and on demand on any branch (Actions
   tab > Build > Run workflow; release branches are built this way, see CONTRIBUTING.md,
   "Releasing"). It runs `./mvnw verify -Pui` (UI tests under `xvfb-run`) and the integration tests against a pinned Neovim
-  release, and attaches the installable ZIP to the run as it is: `neovim4eclipse-<version>.zip`, ready for
+  release, on Linux, and again on Windows and macOS (the `platforms` job), and attaches the installable ZIP to the run as it is: `neovim4eclipse-<version>.zip`, ready for
   *Install New Software → Add → Archive* without unpacking.
 - **Release** runs when you push a tag such as `v0.1.0`, and stops at once unless the tagged
   commit is on `main`. It runs the Build workflow itself (as a
