@@ -33,10 +33,10 @@ The safe loop for any upgrade:
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself | `distributionUrl` in `.mvn/wrapper/maven-wrapper.properties` | none |
-| Neovim used by CI | `NVIM_VERSION` in `.github/workflows/build.yml` | not checked |
+| Neovim used by CI | `NVIM_VERSION` in `.github/workflows/build.yml` | not checked; its download names are per OS (below) |
 | Oldest supported Neovim | "Neovim 0.9" in README and CONTRIBUTING | not checked; see below |
 | GitHub Actions | `uses: ...@vN` lines in `.github/workflows/` | not checked; Dependabot proposes updates |
-| CI operating system | `runs-on: ubuntu-latest` in the workflows | not checked |
+| CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `platforms` job's matrix in `build.yml` adds `windows-latest` and `macos-latest` | not checked |
 
 Dependabot (`.github/dependabot.yml`) opens weekly pull requests for the Maven properties (not for
 major library versions) and the GitHub Actions. It cannot see the JDK, the Eclipse release or
@@ -178,9 +178,10 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 
 ## Neovim
 
-- **CI**: change `NVIM_VERSION` in `.github/workflows/build.yml`. Both jobs download
-  `nvim-linux-x86_64.tar.gz` from the GitHub release; if a release renames that file, update the
-  download and the `bin/nvim` paths there too.
+- **CI**: change `NVIM_VERSION` in `.github/workflows/build.yml`. The Linux jobs download
+  `nvim-linux-x86_64.tar.gz` from the GitHub release, the `platforms` job `nvim-win64.zip` (Windows)
+  and `nvim-macos-arm64.tar.gz` (macOS, Apple silicon); if a release renames one, update its
+  download and `bin/nvim` path there too (the `nvim-archive` and `nvim` matrix values).
 - **Oldest supported version**: README, CONTRIBUTING and the feature's description (`feature.xml`)
   say 0.9, because the status bar's pending
   command needs `showcmdloc` (0.9). Raise it when the code starts using a newer API (for example a

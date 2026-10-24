@@ -29,6 +29,7 @@ The UI tests in `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` run only 
 start an Eclipse workbench, which opens a window for about 15 seconds, so a plain `./mvnw verify`
 leaves them out (it still compiles them). On a headless Linux machine run
 `xvfb-run -a ./mvnw verify -Pui`, which keeps the window on a virtual display. CI always runs them,
+on Linux, Windows and macOS (the *Build* workflow's `platforms` job covers the latter two),
 but run `-Pui` yourself before you push a change to the editor, the session or the end-to-end
 behavior: CI only shows a failure after the push.
 

@@ -9,7 +9,8 @@
 # to it (CONTRIBUTING.md, "Releasing", step 1). The update-site ZIP is attached to the run as it is
 # (neovim4eclipse-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software
 # > Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
-# included, inside a virtual X display (xvfb-run) with a pinned Neovim.
+# included, inside a virtual X display (xvfb-run) with a pinned Neovim. The platforms job runs the
+# same tests on Windows and macOS, so every OS the plug-in claims to support is tested on each run.
 #
 # It is also a reusable workflow (workflow_call): release.yml runs this same build for a tag, with
 # the version taken from the tag, so a release is built and tested exactly like every CI run. Keep
@@ -104,3 +105,73 @@ jobs:
       - run: >
           ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration
           -Dnvim.path=$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim
+
+  # The two jobs above run on Linux only; this one runs the same tests on the other two systems
+  # the plug-in (and its Marketplace listing) supports, because the parts that differ per OS are
+  # exactly the ones Linux cannot test: finding nvim.exe on PATH/PATHEXT and in the usual install
+  # folders (util/NvimExecutable), Windows' SHELL handling, CRLF line endings, and SWT's own
+  # Win32 and Cocoa key events, clipboard and focus in the SWT and UI tests. See docs/PLATFORM.md.
+  #
+  # Each runner builds everything again (the plug-in is pure Java, so the jar is the same on every
+  # OS; only the Linux job uploads the ZIP). No xvfb-run: Windows and macOS runners have a real
+  # desktop session. On macOS the test POMs add -XstartOnFirstThread themselves (Cocoa runs the
+  # UI only on the first thread). Runner images: windows-latest is x86_64, macos-latest is
+  # Apple silicon (arm64), so the Neovim downloads below are those two.
+  platforms:
+    name: All tests on ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # A UI test that hangs (a dialog nobody closes) would otherwise hold the runner for 6 hours.
+    timeout-minutes: 60
+    strategy:
+      # Let both finish: a failure on one OS only says something different from one on both.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            nvim-archive: nvim-win64.zip
+            nvim: nvim-win64/bin/nvim.exe
+          - name: macOS
+            os: macos-latest
+            nvim-archive: nvim-macos-arm64.tar.gz
+            nvim: nvim-macos-arm64/bin/nvim
+    defaults:
+      run:
+        # Git Bash on Windows, so ./mvnw and the steps below are the same script on every OS.
+        # .gitattributes checks shell scripts out with LF endings, which bash needs.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .java-version   # the JDK version, kept in one file
+          cache: maven
+      # As in the build job, so a release is tested at the version it ships with.
+      - name: Set version ${{ inputs.version }}
+        if: ${{ inputs.version }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
+      - name: Install Neovim ${{ env.NVIM_VERSION }}
+        env:
+          ARCHIVE: ${{ matrix.nvim-archive }}
+          NVIM: ${{ matrix.nvim }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/$ARCHIVE" \
+            "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/${ARCHIVE}"
+          case "$ARCHIVE" in
+            *.zip) unzip -q "$RUNNER_TEMP/$ARCHIVE" -d "$RUNNER_TEMP" ;;
+            *)     tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP" ;;
+          esac
+          "$RUNNER_TEMP/$NVIM" --version | head -1
+      # The same as the Linux build job: compile, unit, text-model, SWT and UI tests, feature, ZIP.
+      - name: Build, unit and UI tests
+        env:
+          NVIM: ${{ matrix.nvim }}
+        run: ./mvnw -B -ntp verify -Pui "-Dnvim.path=$RUNNER_TEMP/$NVIM"
+      # The same as the Linux integration job.
+      - name: Integration tests (real Neovim)
+        env:
+          NVIM: ${{ matrix.nvim }}
+        run: ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration "-Dnvim.path=$RUNNER_TEMP/$NVIM"
