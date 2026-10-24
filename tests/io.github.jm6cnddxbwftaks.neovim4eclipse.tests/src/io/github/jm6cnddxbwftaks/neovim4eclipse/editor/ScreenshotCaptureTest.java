@@ -108,8 +108,7 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
         capture(window, "01-visual-mode.png");
         typeSlowly(text, "\u001b"); // Esc
 
-        // 2. The : command line, with a substitution typed but not yet run. (The result after Enter is
-        // not taken: the command's output popup repeats the message line, which reads as clutter.)
+        // 2. The : command line, with a substitution typed but not yet run.
         Text box = openBox(text, "%s/total/sum/g");
         capture(window, "02-command-line.png");
         Event escape = new Event();

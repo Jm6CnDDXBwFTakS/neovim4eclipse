@@ -223,8 +223,11 @@ final class LuaScripts {
 
     /**
      * Ends the capture started by {@link #START_OUTPUT_CAPTURE} and returns what was printed, or ""
-     * when nothing was, or when it was only the error message (which the status bar already shows
-     * through {@code v:errmsg}). Cleaned up for the popup:
+     * when nothing was, or when it was only the message that the editor's message line already
+     * shows: the error ({@code v:errmsg}, {@code E486: Pattern not found}) or the status message
+     * ({@code v:statusmsg}, {@code 7 substitutions on 4 lines} after {@code :%s}); otherwise the
+     * popup repeated it. Real output ({@code :echo}, {@code :set ts?}) sets neither. Cleaned up for
+     * the popup:
      * <ul>
      *   <li>the empty lines it starts with (where the command line was drawn) and trailing blanks are
      *       removed; the indentation of the first line is kept ({@code "  tabstop=8"});</li>
@@ -240,7 +243,7 @@ final class LuaScripts {
             out = out:gsub('^\\n+', '')
             out = out:gsub('^:![^\\n]*\\n*', '')
             out = out:gsub('%s+$', '')
-            if out:match('^%s*$') or out == vim.v.errmsg then
+            if out:match('^%s*$') or out == vim.v.errmsg or out == vim.v.statusmsg then
               return ''
             end
             return out
