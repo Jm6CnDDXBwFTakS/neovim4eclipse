@@ -5,7 +5,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -349,7 +348,15 @@ class NeovimBufferIntegrationTest {
 
             s.closeBufferAsync(b);
             waitFor(() -> s.getAttachedBufnr() != bBuf, "the attached buffer to fall back");
-            assertNotEquals(bBuf, currentBufnr(s));
+            // The session records the fallback before Neovim has switched: on a slow machine (the
+            // macOS CI runner) Neovim's current buffer was still b right after. Wait for Neovim too.
+            waitFor(() -> {
+                try {
+                    return currentBufnr(s) != bBuf;
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "Neovim to leave buffer b");
             assertFalse(b.isOpenIn(s));
             assertThrows(Exception.class, () -> s.command("buffer " + bBuf));
         }
