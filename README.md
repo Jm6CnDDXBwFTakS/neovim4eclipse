@@ -482,6 +482,12 @@ These are real and deliberate to know about before extending the code:
 4. **No empty last line without a final newline.** A file that does not end with a line break
    cannot show a trailing empty line (the text would be identical to a file that does). This only
    matters briefly, e.g. right after `o` on the last line of such a file.
+5. **Other Vim plug-ins (Vrapper).** Installed together with [Vrapper](https://github.com/vrapper/vrapper),
+   Neovim for Eclipse gets the keys while it is attached: each key is handled once, by Neovim
+   (tried with Vrapper 0.74.0 on Eclipse 4.34). Vrapper's own mode display stays in the status bar,
+   though, and keeps showing `-- NORMAL --` whatever Neovim's mode is. Turn Vrapper off with its
+   toolbar button, or uninstall it, to avoid the second display. Other Vim emulations have not
+   been tried.
 
 ## Maintenance rules
 
