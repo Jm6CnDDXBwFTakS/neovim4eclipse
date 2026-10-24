@@ -471,7 +471,7 @@ class NeovimSessionIntegrationTest {
             assertEquals(40L, ui.get("height"));
             for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                     "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-                assertEquals(false, ui.get(option), option);
+                assertEquals("ext_cmdline".equals(option), ui.get(option), option); // see TERMINAL_UI
             }
         }
     }

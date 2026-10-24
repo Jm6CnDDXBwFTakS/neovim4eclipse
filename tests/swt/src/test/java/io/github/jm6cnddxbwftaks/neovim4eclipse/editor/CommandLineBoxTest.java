@@ -82,6 +82,16 @@ class CommandLineBoxTest {
             calls.add("complete " + line + " " + steps);
             pendingCompletions.add(onResult);
         }
+
+        @Override
+        public void answerSearch(String pattern, boolean backward) {
+            calls.add((backward ? "answer search back " : "answer search ") + pattern);
+        }
+
+        @Override
+        public void cancelNeovimLine() {
+            calls.add("cancel Neovim's line");
+        }
     }
 
     private Shell shell;
@@ -115,6 +125,16 @@ class CommandLineBoxTest {
      */
     private void open(Kind kind, boolean fromVisualMode) {
         commandLine.open(kind, fromVisualMode);
+        awaitOpen();
+    }
+
+    /** As {@link #open}, for a command line the user opened in Neovim (see {@link CommandLineBox#openFromNeovim}). */
+    private void openFromNeovim(Kind kind, String content, boolean answering) {
+        commandLine.openFromNeovim(kind, content, answering);
+        awaitOpen();
+    }
+
+    private void awaitOpen() {
         waitUntil("the box to open", () -> findText(host) != null);
         openBox = findText(host);
         KeyboardFocus.require(openBox, TIMEOUT_MS);
@@ -239,6 +259,50 @@ class CommandLineBoxTest {
         open(Kind.EX, false);
         typeAndPressEnter("set ts=4"); // sets an option; :echo and :set ts? are listings
         assertEquals(List.of("run set ts=4"), commands.calls);
+    }
+
+    // A command line the user opened in Neovim (a mapping such as <Space>s -> :%s/)
+
+    @Test
+    void neovimsTextIsPrefilledAndEditable() {
+        openFromNeovim(Kind.EX, "%s/", false);
+        assertEquals(":%s/", box().getText());
+        typeAndPressEnter("a/b/");
+        assertEquals(List.of("run %s/a/b/"), commands.calls, "a : line Neovim closed runs as usual");
+    }
+
+    @Test
+    void neovimsSearchLineIsAnsweredNotSearchedAgain() {
+        openFromNeovim(Kind.SEARCH_FORWARD, "", true);
+        typeAndPressEnter("foo");
+        assertEquals(List.of("answer search foo"), commands.calls);
+    }
+
+    @Test
+    void escCancelsNeovimsSearchLine() {
+        openFromNeovim(Kind.SEARCH_BACKWARD, "fo", true);
+        assertEquals("?fo", box().getText());
+        Event esc = new Event();
+        esc.keyCode = SWT.ESC;
+        esc.character = SWT.ESC;
+        esc.doit = true;
+        box().notifyListeners(SWT.KeyDown, esc);
+        waitUntil("the box to close", () -> !commandLine.isOpen());
+        assertEquals(List.of("cancel Neovim's line"), commands.calls);
+    }
+
+    @Test
+    void anEmptyAnswerCancelsNeovimsSearchLine() {
+        openFromNeovim(Kind.SEARCH_FORWARD, "", true);
+        typeAndPressEnter("");
+        assertEquals(List.of("cancel Neovim's line"), commands.calls);
+    }
+
+    @Test
+    void aBoxOpenedHereCancelsNothingInNeovim() {
+        open(Kind.SEARCH_FORWARD, false);
+        commandLine.close(true);
+        assertEquals(List.of(), commands.calls);
     }
 
     @Test

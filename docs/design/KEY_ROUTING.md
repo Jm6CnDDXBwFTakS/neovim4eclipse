@@ -1,6 +1,6 @@
 # Plan: routing `:`, `/`, `?` and `q` without guessing wrong
 
-Status: **phase 1 built**, phase 2 next; on `fix/key-routing` from `release/0.1.5` at `04d82d1`
+Status: **phases 1 and 2 built**; on `fix/key-routing` from `release/0.1.5` at `04d82d1`
 (after the `g??` fix). The decisions are at the end. When a phase is done, change its heading
 and add an *As built* section, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 
@@ -103,7 +103,39 @@ caught up. And no guess covers keys that mappings give a new meaning.
 Size: one class replaced by a tested one, two to three commits. No behavior change for keys that work
 today.
 
-## Phase 2: let Neovim say when a command line opens
+## Phase 2: let Neovim say when a command line opens (built)
+
+### As built
+
+- `NeovimConnection.TERMINAL_UI` sets `ext_cmdline` only. `util/CmdlineEvent` reads `cmdline_show`
+  and `cmdline_hide` out of `redraw`; `util/CmdlineWatcher` decides which lines are the user's.
+- **The plug-in's own lines** are announced by `CommandRunner`'s typing (`NeovimSession`'s
+  `CommandRunnerNeovim.type` calls `expectOwn` for keys starting with `:` `/` `?`); each expectation
+  is matched by the next line of that type, in order, and expires after 2 s. Tab completion needs no
+  filter by type: in the probe Neovim reported only its line's end (X5), but in the running plug-in
+  it may report the line too. So the controller takes over no line while the box is open: then the
+  line is the box's own doing (found by the existing Tab completion UI test).
+- **`:` lines** are closed in Neovim at once (`<C-c>`) and the box opens with Neovim's text, then
+  works as before (Tab completion needs Neovim in normal mode). A recording made meanwhile holds
+  `:`, Ctrl-C and the box's typed command (X6): it replays correctly.
+- **Search lines** stay open; the box answers them with `<C-u>pattern<CR>`
+  (`CommandRunner.answerSearch`, `SearchCommand.body`), which keeps a pending operator (X9), or closes
+  them with `<C-c>` on Esc, a click away or an empty line.
+- **A search that finds nothing now ends at a "Press ENTER" prompt** (mode `r`), found by two
+  integration tests: with the command line external, Neovim shows the pattern and E486 as two
+  messages. Probe (X10): the same with `cmdheight` 0 or 2, `nowrapscan`, `nohlsearch`; only
+  `shortmess+=S` avoids it, and not `shortmess+=sS`, so an option is no fix (users set their own).
+  Instead the prompt, which Eclipse cannot show, is dismissed: `CommandRunner` after its typed
+  search or answer (as it already did after `:` commands), and `KeyInput` after any key that leaves
+  Neovim at a plain hit-enter prompt (`r`, not `r?` or `rm`), such as a mapping `/TODO<CR>`. The
+  message still reaches the message line through `v:errmsg`.
+- Tests: `CmdlineEventTest`, `CmdlineWatcherTest` (unit), five `CommandLineBoxTest` cases (SWT), and
+  four mappings typed into real Neovim in `CommandBoxEndToEndTest` (UI).
+- Known gap: keys typed between Neovim opening its line and the box taking it over (a millisecond or
+  so) go into Neovim's line; for a `:` line they are lost with the `<C-c>` unless the
+  `cmdline_show` that the box read already had them.
+
+### Plan
 
 Attach the UI with `ext_cmdline: true`. Neovim then sends `cmdline_show` (content, cursor, first
 character `:` `/` `?`, prompt, level) and `cmdline_hide` as redraw events (probe: they arrive with
@@ -140,14 +172,17 @@ Done (2026-10-24, Neovim 0.12.4, Linux):
 - **X4 Requests while Neovim waits**: only `nvim_get_mode` is answered at once; `nvim_eval` waited
   until the command finished. So the router cannot ask for `v:operator` mid-command.
 
-To do before phase 2:
+Done before phase 2 (the same day):
 
-- **X5** The `cmdline_show` events of the plug-in's own `:silent cmd<CR>` and of Tab completion:
-  do they arrive, and can a flag set around them filter them reliably?
-- **X6** `<C-c>` in a command line while recording: what the register holds afterwards.
-- **X7** Latency of "send `:` to Neovim, open the box on `cmdline_show`", and keys typed in between
-  (they reach Neovim's line and come back in the content).
-- **X8** The current behavior in Eclipse with `nnoremap ; :`, to describe it in Known limitations.
+- **X5** The plug-in's own `:silent cmd<CR>` produces `cmdline_show` (with its whole text) and
+  `cmdline_hide`; Tab completion's Lua call only a `cmdline_hide` (aborted).
+- **X6** `qa`, `:`, `<C-c>`, `:silent echo 2<CR>`, `q`: register `a` holds `:^C:silent echo 2^M`.
+- **X7** `cmdline_show` arrives about 0.2 ms after `:`; keys sent right after `:` are in its content.
+- **X9** While Neovim's command line is open (also a search line inside `d/`), `nvim_exec_lua` is
+  answered at once; `<C-u>foo<CR>` into the open `d/` line deletes up to `foo`; while recording, the
+  register holds `:^Usilent let ...^M` and `@:` is the command.
+- **X8** (the old behavior in Eclipse with `nnoremap ; :`) was not tried: phase 2 replaced it the
+  same day, and its end-to-end test types that mapping.
 
 ## Decisions
 

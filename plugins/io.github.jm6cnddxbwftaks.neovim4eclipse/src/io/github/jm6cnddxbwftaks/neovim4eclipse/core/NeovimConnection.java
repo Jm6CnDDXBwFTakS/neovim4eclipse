@@ -62,7 +62,10 @@ final class NeovimConnection implements AutoCloseable {
     /**
      * A plain terminal-like UI: no 24-bit color ({@code rgb} defaults to {@code true}, so it is sent
      * explicitly) and none of the {@code ext_*} features, which would make Neovim send their events
-     * instead of drawing the command line, messages, ... into the grid.
+     * instead of drawing messages, the popup menu ... into the grid; except {@code ext_cmdline}.
+     * With it Neovim reports every command line it opens ({@code cmdline_show}, read by
+     * {@link NotificationBridge}), which lets the editor's box take over one the user opened through
+     * a mapping (docs/design/KEY_ROUTING.md). It works without {@code ext_linegrid}.
      */
     static final Map<String, Object> TERMINAL_UI = terminalUi();
 
@@ -70,7 +73,7 @@ final class NeovimConnection implements AutoCloseable {
         Map<String, Object> options = new LinkedHashMap<>();
         for (String name : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                 "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-            options.put(name, false);
+            options.put(name, "ext_cmdline".equals(name));
         }
         return Collections.unmodifiableMap(options); // keeps the order: the same bytes every time
     }

@@ -21,6 +21,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
@@ -128,6 +130,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final AtomicInteger keysInFlight = new AtomicInteger();
     /** Runs submitted {@code :} commands, listings, searches and {@code :normal!}. */
     private final CommandRunner commands = new CommandRunner(new CommandRunnerNeovim());
+    /** Tells Neovim's command lines the user opened from the ones the plug-in types. */
+    private final CmdlineWatcher cmdlineWatcher = new CmdlineWatcher();
 
     private NeovimSession(NeovimConnection connection, Handle homeBuffer, ClipboardPort clipboard) {
         this.connection = connection;
@@ -353,6 +357,20 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     public void removeIdeActionListener(Consumer<IdeAction> listener) {
         events.removeIdeActionListener(listener);
+    }
+
+    /**
+     * Notified (on an RPC thread) when the user opens a command line in Neovim that the editor's box
+     * did not open: a mapping ({@code nnoremap ; :}), a count ({@code 2:}), {@code !} with a motion.
+     * The listener takes it over (see docs/design/KEY_ROUTING.md, phase 2). The plug-in's own typed
+     * command lines are not reported ({@link CmdlineWatcher}).
+     */
+    public void addUserCmdlineListener(Consumer<CmdlineEvent> listener) {
+        events.addUserCmdlineListener(listener);
+    }
+
+    public void removeUserCmdlineListener(Consumer<CmdlineEvent> listener) {
+        events.removeUserCmdlineListener(listener);
     }
 
     // ---- per-document buffers (see DocumentBuffers) ----
@@ -620,6 +638,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("normal! " + keys, Level.WARNING, () -> commands.normal(keys));
     }
 
+    /**
+     * Answers a search line the user opened in Neovim (see {@link #addUserCmdlineListener}): runs
+     * {@code pattern} in it, keeping a pending operator ({@code d/}).
+     */
+    public void answerSearchAsync(String pattern, boolean backward) {
+        submit("answer search " + pattern, Level.WARNING, () -> commands.answerSearch(pattern, backward));
+    }
+
     /** Runs a search ({@code /} or {@code ?}) and moves the cursor to the match. */
     public void search(String pattern, boolean backward) {
         if (pattern == null || pattern.isEmpty()) {
@@ -774,6 +800,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.fine(() -> "IDE action " + action);
             events.ideAction(action);
         }
+
+        @Override
+        public void onCmdline(CmdlineEvent event) {
+            if (cmdlineWatcher.onEvent(event, System.currentTimeMillis()) == CmdlineWatcher.Decision.USER_LINE) {
+                LOG.fine(() -> "user command line " + event.firstc() + event.content());
+                events.userCmdline(event);
+            }
+        }
     }
 
     private static <T> T await(CompletableFuture<T> future) throws Exception {
@@ -784,6 +818,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final class CommandRunnerNeovim implements CommandRunner.Neovim {
         @Override
         public void type(String keys) throws Exception {
+            // :silent cmd<CR> and /pattern<CR> open a command line of the plug-in's own: tell the
+            // watcher, so that Neovim's report of it is not taken for one the user opened.
+            if (keys.startsWith(":") || keys.startsWith("/") || keys.startsWith("?")) {
+                cmdlineWatcher.expectOwn(keys.substring(0, 1), System.currentTimeMillis());
+            }
             await(api.input(keys));
         }
 

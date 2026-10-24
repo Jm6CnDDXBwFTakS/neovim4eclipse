@@ -153,7 +153,7 @@ each request exactly once.
 | Content assist | Temporarily release keys or use Neovim LSP bridge |
 | Highlights | `nvim_buf_get_extmarks` → Eclipse annotations |
 | True block visual | Custom paint on `StyledText` or block selection API if available |
-| Cmdline | Parse UI `cmdline_show` redraw events instead of the inline box |
+| Cmdline | The box takes over command lines Neovim opens (`ext_cmdline`, see "Command lines Neovim opens"); a further step would make the box a view of Neovim's own line (history, `<C-r>`, command-line mappings), replacing `CommandRunner`'s typed commands |
 | New-file buffer leak, shared editors | A new file's editor is opened by location and switched to the workspace file at its first `:w`, which then releases the file buffer Eclipse leaves behind (`NewFiles.releaseLeftOverBuffer`, see [NEW_FILE.md](design/NEW_FILE.md)). The switch is skipped when two editors show the new file (*Window › New Editor* before the first `:w`), so closing them leaves that buffer connected. Then, after the file is deleted, `:e` of the same name shows the old text in a clean editor (nothing is lost: a `:w` writes what is shown). Fix for every case: when an editor opened by location closes and its file now exists in the workspace, release the buffer under the unnormalized location if no other editor uses it (a hook in `EditorAttachManager`'s part-closed handling, plus a UI test) |
 
 ## Threading rules
@@ -250,6 +250,15 @@ to the box, which (via the focus listener in the controller) also deactivates th
   even inside a project, because a text editor refuses to show a workspace file that does not exist;
   after the first write it is switched to the workspace file, keeping its Neovim buffer
   (`EditorAttachManager.replaceInputKeepingBuffer`, `core/EditorBuffers.move`).
+- **Command lines Neovim opens:** the UI is attached with `ext_cmdline` (and nothing else of the
+  UI protocol), so Neovim reports each command line it opens as a `cmdline_show` redraw event
+  (`util/CmdlineEvent`, read in `NotificationBridge`). `util/CmdlineWatcher` drops the plug-in's own
+  (each typed `:silent cmd<CR>` and `/pattern<CR>` is announced first) and reports the user's: a
+  mapping (`nnoremap ; :`), a count before `:`, `!` with a motion. The controller then opens the box
+  with Neovim's text. A `:` line is closed in Neovim at once (`<C-c>`) and the box runs its command as
+  usual; a search line stays open, since it may belong to an operator (`d/`), and Enter answers it
+  (`<C-u>pattern<CR>`, `CommandRunner.answerSearch`), Esc closes it. See
+  [design/KEY_ROUTING.md](design/KEY_ROUTING.md), phase 2.
 - **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
   are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
   `redir => g:neovim4eclipse_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
