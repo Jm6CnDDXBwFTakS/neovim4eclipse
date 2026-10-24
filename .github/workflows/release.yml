@@ -85,7 +85,8 @@ jobs:
     permissions:
       contents: read   # for the checkout
     env:
-      ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.zip
+      # Not named ZIP: zip(1) reads $ZIP as extra arguments (see releng/sign.sh).
+      SITE_ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.zip
     steps:
       - uses: actions/checkout@v7
       # Fail here, before the secrets are touched, rather than publish an unsigned release.
@@ -102,7 +103,7 @@ jobs:
           java-version-file: .java-version
       - uses: actions/download-artifact@v8
         with:
-          name: ${{ env.ZIP }}
+          name: ${{ env.SITE_ZIP }}
           path: unsigned
           skip-decompress: true   # keep the ZIP itself (see the publish job)
       - name: Sign and verify
@@ -111,14 +112,14 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         run: |
           mkdir signed
-          releng/sign.sh "unsigned/$ZIP" "signed/$ZIP" releng/signing-key.asc
+          releng/sign.sh "unsigned/$SITE_ZIP" "signed/$SITE_ZIP" releng/signing-key.asc
       # Same file name, so the artifact has the same name as the build's: overwrite replaces the
       # unsigned one, and nothing later in this run can pick up the unsigned ZIP by mistake.
       - uses: actions/upload-artifact@v7
         with:
           archive: false
           overwrite: true
-          path: signed/${{ env.ZIP }}
+          path: signed/${{ env.SITE_ZIP }}
           if-no-files-found: error
 
   publish:
