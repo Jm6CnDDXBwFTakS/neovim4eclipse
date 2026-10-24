@@ -12,6 +12,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-24
+
+The signed release: Eclipse now names who signed the plug-in.
+
 ### Security
 
 - Releases are signed with the project's PGP key (fingerprint
