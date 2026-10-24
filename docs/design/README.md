@@ -9,7 +9,7 @@ note the place to learn *why* the code is the way it is, which the code itself c
 
 | Note | What it covers | Status |
 |------|----------------|--------|
-| [MARKETPLACE.md](MARKETPLACE.md) | A permanent p2 update site on GitHub Pages, and the Eclipse Marketplace listing | phase 1 built; signing (phase 4) planned in detail |
+| [MARKETPLACE.md](MARKETPLACE.md) | A permanent p2 update site on GitHub Pages, and the Eclipse Marketplace listing | phase 1 built; signing (phase 4) machinery built, real key next |
 | [FOLDING.md](FOLDING.md) | Folding with `zo`, `zc` and the other `z` commands, mirroring Eclipse's folds into Neovim | planned |
 | [NEW_FILE.md](NEW_FILE.md) | `:e newfile` opens an empty editor that `:w` creates | implemented |
 | [TAB_COMPLETION.md](TAB_COMPLETION.md) | Tab completion in the `:` command line | implemented |

@@ -96,6 +96,30 @@ and in *Settings → Environments → github-pages*, deployment tags `v*` allowe
 (the Release workflow runs for a tag). The design and its decisions are in
 [design/MARKETPLACE.md](design/MARKETPLACE.md), phase 1.
 
+## PGP signing of releases
+
+Releases are signed with the project's PGP key, so that Eclipse names the signer when it asks
+the user to trust the content, and refuses a jar that was changed after signing. The signature
+does not change the jars: p2 keeps each one, armored, in the artifact's entry in `artifacts.jar`
+(the property `pgp.signatures`), next to the public key (`pgp.publicKeys`).
+
+The build itself stays unsigned, on every branch. The *Release* workflow signs its result in a job
+of its own, `sign`, which alone can read the secret key (a secret of the GitHub environment
+`release`, open only to `v*` tags). The job runs `releng/sign.sh`:
+
+1. unzips the update site ZIP;
+2. signs it in place with `releng/sign/pom.xml` (`tycho-gpg-plugin`, goal `sign-p2-artifacts`,
+   Bouncy Castle signer, so no `gpg` program is needed for signing);
+3. checks every bundle's and feature's signature with `gpg` against `releng/signing-key.asc`
+   (`releng/verify-signatures.sh`), so a missing or wrong signature stops the release;
+4. zips it again; the signed ZIP replaces the unsigned one for the rest of the run.
+
+The job fails at once while `releng/signing-key.asc` does not exist, rather than publish an
+unsigned release. To try it locally with a throwaway key, see the commands at the top of
+`releng/sign.sh`; `releng/verify-signatures.sh <site dir> <public key>` checks any unzipped site.
+The design, the key and the experiments behind it are in
+[design/MARKETPLACE.md](design/MARKETPLACE.md), phase 4.
+
 ## PDE (optional, for interactive development)
 
 You can still import the projects into Eclipse PDE and launch from `MANIFEST.MF`

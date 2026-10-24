@@ -147,6 +147,29 @@ class VersionConsistencyTest {
         }
     }
 
+    /**
+     * {@code releng/sign/pom.xml} has no parent (inheriting the root POM would load Tycho as a
+     * build extension and resolve the whole target platform just to sign), so it holds a literal
+     * copy of the Tycho version. Example: after setting {@code <tycho.version>5.1.0</tycho.version>},
+     * this fails until the signing POM says 5.1.0 too.
+     */
+    @Test
+    void signingPomUsesTheRootPomsTycho() throws Exception {
+        String expected = property("tycho.version");
+        assertNotNull(expected, "<tycho.version> missing from the root pom.xml");
+        NodeList plugins = xml("releng/sign/pom.xml").getElementsByTagName("plugin");
+        int found = 0;
+        for (int i = 0; i < plugins.getLength(); i++) {
+            Element plugin = (Element) plugins.item(i);
+            if ("tycho-gpg-plugin".equals(directChildText(plugin, "artifactId"))) {
+                assertEquals(expected, directChildText(plugin, "version"),
+                        "releng/sign/pom.xml: tycho-gpg-plugin's version differs from the root pom.xml's tycho.version");
+                found++;
+            }
+        }
+        assertEquals(1, found, "releng/sign/pom.xml should declare tycho-gpg-plugin once");
+    }
+
     @Test
     void releasePatternIgnoresDates() {
         assertFalse(ECLIPSE_RELEASE.matcher("moves on 2026-10-19").find());

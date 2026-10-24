@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
+<!--
+  Signs an already built p2 repository (update site) with PGP. The release workflow runs it, through
+  releng/sign.sh, on the unzipped update site after the normal build; see docs/design/MARKETPLACE.md,
+  "Phase 4".
+
+  What signing does: tycho-gpg-plugin's sign-p2-artifacts goal signs every jar of the repository
+  and writes each detached signature into the artifact's metadata (artifacts.jar and
+  artifacts.xml.xz), as the property pgp.signatures, with the public key as pgp.publicKeys. The jars
+  themselves do not change. p2 checks these signatures when it installs, and shows the key in the
+  trust dialog.
+
+  Run by hand (sign.sh does this for you):
+
+    MAVEN_GPG_PASSPHRASE=... ./mvnw -B -f releng/sign/pom.xml package \
+        -Dsite=/path/to/unzipped/site -Dtycho.pgp.signer.bc.secretKeys=/path/to/secret-key.asc
+
+  Why a separate project and not a profile of the main build: the build stays exactly the same on
+  main, pull requests and releases, and never sees a secret. Only this small project does, and only
+  in the release workflow's sign job.
+
+  Why no <parent>: the root pom.xml loads Tycho as a build extension, which would resolve the whole
+  Eclipse target platform before anything runs. Signing needs none of it. The cost is a literal
+  copy of the Tycho version below; VersionConsistencyTest fails if it differs from the root
+  pom.xml's tycho.version.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.github.jm6cnddxbwftaks.neovim4eclipse</groupId>
+  <artifactId>sign</artifactId>
+  <version>1</version>
+  <packaging>pom</packaging>
+
+  <name>Neovim for Eclipse: sign the update site</name>
+
+  <properties>
+    <!-- The unzipped update site to sign, in place. Required: -Dsite=... -->
+    <site>${project.build.directory}/no-site-given</site>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-gpg-plugin</artifactId>
+        <!-- Same as tycho.version in the root pom.xml (VersionConsistencyTest checks). -->
+        <version>5.0.4</version>
+        <executions>
+          <execution>
+            <id>sign-update-site</id>
+            <phase>package</phase>
+            <goals>
+              <goal>sign-p2-artifacts</goal>
+            </goals>
+            <configuration>
+              <repository>${site}</repository>
+              <!--
+                bc: Bouncy Castle, PGP in Java, so the runner needs no gpg program or keyring.
+                It signs in Java only when it is also given the armored secret key as a file
+                (-Dtycho.pgp.signer.bc.secretKeys=...). Without that file it still calls the gpg
+                program to find a default key (experiment S2 in MARKETPLACE.md). The passphrase
+                comes from the environment variable MAVEN_GPG_PASSPHRASE.
+              -->
+              <signer>bc</signer>
+              <!--
+                Fail the build if a secret is passed in a way that leaks, for example a
+                passphrase given as -Dgpg.passphrase=... (it would show in the process list and
+                in logs).
+              -->
+              <bestPractices>true</bestPractices>
+              <!--
+                The defaults, written out because the design depends on them: sign our own jars
+                even though they are not jar-signed, and put the public key both on each
+                artifact and on the repository, so p2 can show it in the trust dialog.
+              -->
+              <skipIfJarsigned>true</skipIfJarsigned>
+              <addPublicKeyToArtifacts>true</addPublicKeyToArtifacts>
+              <addPublicKeyToRepo>true</addPublicKeyToRepo>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

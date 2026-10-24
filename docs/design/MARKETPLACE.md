@@ -1,6 +1,6 @@
 # Plan: listing on the Eclipse Marketplace
 
-Status: **phase 1 built and deployed** (with 0.1.3), phases 2–4 planned; phase 4 planned in detail. Written on `release/0.1.2` (after 0.1.1). Decisions made with
+Status: **phase 1 built and deployed** (with 0.1.3), phases 2–3 planned; phase 4: the signing machinery is built (commit 1), the real key and trust (commit 2) are next. Written on `release/0.1.2` (after 0.1.1). Decisions made with
 the maintainer are marked *(decided)*; none are open. When a phase is done, change its heading to
 say so and note where the result differs from this plan, as
 [TAB_COMPLETION.md](TAB_COMPLETION.md) does with *As built*.
@@ -266,8 +266,10 @@ and manage trusted keys under *Preferences › Install/Update › Trust*.
 
 In a GitHub **environment** named `release` (*Settings › Environments*), not as repository secrets:
 
-- secrets `MAVEN_GPG_KEY` (the armored secret key) and `MAVEN_GPG_PASSPHRASE`, the environment
-  variable names the `bc` signer reads by default;
+- secrets `MAVEN_GPG_KEY` (the armored secret key) and `MAVEN_GPG_PASSPHRASE`. Tycho 5.0.4's `bc`
+  signer reads only the passphrase from the environment; the key it wants as a *file*
+  (`tycho.pgp.signer.bc.secretKeys`), so the sign job writes `MAVEN_GPG_KEY` to a file in
+  `$RUNNER_TEMP` and deletes it afterwards (experiment S2);
 - *Deployment branches and tags*: only tags `v*`.
 
 A job can read the secrets only if it names the environment, and only when the run is for a `v*`
@@ -275,15 +277,17 @@ tag. A workflow edited on some branch, or a pull request, cannot reach them.
 
 ### The workflow
 
-Signing is its own job in `release.yml`, between `build` and `publish`:
+Signing is its own job in `release.yml`, between `build` and `publish`; the job only checks out,
+sets up Java and calls `releng/sign.sh`, which does steps 1–4:
 
 ```
 version ──► build (unsigned, exactly as on main) ──► sign ──► publish ──► site
                                                       │
                           environment: release        │  1. download the unsigned ZIP, unzip it
-                          (secrets readable only here)│  2. ./mvnw -f releng/sign/pom.xml verify
+                          (secrets readable only here)│  2. ./mvnw -f releng/sign/pom.xml package
                                                       │     (tycho-gpg-plugin, sign-p2-artifacts,
-                                                      │      signer bc, repository = the unzipped site)
+                                                      │      signer bc, repository = the unzipped site,
+                                                      │      the secret key from a temporary file)
                                                       │  3. releng/verify-signatures.sh
                                                       │  4. zip it again, upload it for publish
 ```
@@ -294,7 +298,9 @@ version ──► build (unsigned, exactly as on main) ──► sign ──► 
   `tycho-gpg-plugin:sign-p2-artifacts` goal with `signer = bc` (Bouncy Castle, in Java: no `gpg`
   program needed on the runner), `repository` = the unzipped site, and `bestPractices = true` (the
   build fails if the passphrase is ever passed in a way that leaks, such as a `-D` property). The
-  plug-in version comes from the root `pom.xml`'s `tycho.version` (`VersionConsistencyTest`).
+  plug-in version is a literal copy of the root `pom.xml`'s `tycho.version`, checked by
+  `VersionConsistencyTest`: the POM has no parent, because the root POM loads Tycho as a build
+  extension, which would resolve the whole target platform just to sign.
 - **`releng/verify-signatures.sh`**: fails unless every `osgi.bundle` and
   `org.eclipse.update.feature` artifact in `artifacts.jar` has a `pgp.signatures` property, and each
   signature verifies with `gpg --verify` against `releng/signing-key.asc` (the public key in the
@@ -364,22 +370,36 @@ both with `gh api`, since that holds no secret).
 
 ### Experiments, before the first signed release
 
-- **S1. Ed25519 in p2.** On a test branch, with a throwaway Ed25519 key (no secrets needed: a key
-  made in the run): build, sign, and install the result into Eclipse 4.34 with the director, and
-  into a full Eclipse through *Install New Software* by hand, to see the trust dialog. If p2 rejects
-  EdDSA, switch to RSA 4096 before generating the real key.
-- **S2. The signer on an unpacked site.** That `sign-p2-artifacts` signs a repository given by its
-  `repository` parameter outside the build that made it, and rewrites `artifacts.jar` (not only an
-  `artifacts.xml`), with the jars' checksums and properties left as they were.
-- **S3. The director and untrusted keys.** Whether a headless install of content signed by an
-  unknown key succeeds, fails, or needs a flag; the smoke test must keep working.
-- **S4. Trusted-key extension.** Install once, then update to a newer test version: no dialog the
-  second time.
+Run on 2026-10-24, locally (Linux aarch64), on `feature/pgp-signing` at `c93ec7d`, with a
+throwaway Ed25519 key in a temporary `GNUPGHOME` and the unsigned ZIP from `./mvnw verify
+-DskipTests`. Eclipse 4.34 platform, run with Java 21 (4.34's `eclipse.ini` sets
+`-Djava.security.manager=allow`, which Java 24 and newer refuse at start-up).
+
+- **S1. Ed25519 in p2: works headless.** The director installed the Ed25519-signed site. A control
+  showed that p2 really checks the signature: replacing the bundle's `pgp.signatures` with a valid
+  signature *of other bytes* made the install fail (`Can't download artifact osgi.bundle,…`), while
+  the same `artifacts.jar` rewritten with the original signature installed. *Still open:* the trust
+  dialog in a full Eclipse (*Install New Software*), by hand, after the real key exists.
+- **S2. The signer on an unpacked site: works, with one change to the design.** A one-plug-in POM
+  (`packaging pom`, goal `sign-p2-artifacts`, `repository` = the unzipped site) signed both
+  artifacts (bundle and feature) and rewrote both `artifacts.jar` and `artifacts.xml.xz`; the
+  checksums are unchanged, and `gpg --verify` accepts the bundle's signature. The change:
+  `signer = bc` alone still runs the `gpg` program (to find the key, it signs a dummy file with the
+  default key: `gpg: signing failed: No secret key`). The `bc` signer stays in Java only when given
+  the armored secret key as a file, `-Dtycho.pgp.signer.bc.secretKeys=<file>`; the passphrase
+  comes from `MAVEN_GPG_PASSPHRASE`. The source (`ProxySignerWithPublicKeyAccess.getSigner`) shows
+  that `MAVEN_GPG_KEY` is not read.
+- **S3. The director and untrusted keys: no flag needed.** The headless install of content signed
+  by an unknown key succeeded, so the smoke test needs no change.
+- **S4. Trusted-key extension: still open.** It needs a full Eclipse and two signed versions, so it
+  is checked by hand with the real key (commit 2).
 
 ### Commits
 
-1. The `release` environment (by `gh api`, no commit), `releng/sign/pom.xml`,
-   `releng/verify-signatures.sh`, the `sign` job; tested on a branch with a throwaway key (S1–S3).
+1. *(Built.)* `releng/sign/pom.xml`, `releng/sign.sh`, `releng/verify-signatures.sh`, the `sign`
+   job, which fails while `releng/signing-key.asc` is missing; tested locally with a throwaway key
+   (S1–S3). The `release` environment is created by `gh api` (no commit) before the maintainer's
+   step 5.
 2. The real public key (`releng/signing-key.asc`, after the maintainer's steps), the trusted-key
    extension and its test (S4), the fingerprint in README, SECURITY.md and the update site page;
    PACKAGING.md and CONTRIBUTING.md (*Releasing*) updated; CHANGELOG.

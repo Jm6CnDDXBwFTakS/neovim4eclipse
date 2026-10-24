@@ -28,7 +28,7 @@ The safe loop for any upgrade:
 | Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and `ECLIPSE_PLATFORM_URL` in `update-site.yml` |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
-| Tycho | `<tycho.version>` in the root `pom.xml` | none |
+| Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform) |
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself | `distributionUrl` in `.mvn/wrapper/maven-wrapper.properties` | none |
@@ -144,8 +144,11 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 
 ## Build tools
 
-- **Tycho**: change `<tycho.version>`. Read the release notes for removed parameters; Tycho also
-  sets which Java the build itself needs.
+- **Tycho**: change `<tycho.version>`, and the same version in `releng/sign/pom.xml`. Read the
+  release notes for removed parameters; Tycho also sets which Java the build itself needs. A new
+  Tycho may change how `tycho-gpg-plugin` finds the key (see the comments in
+  `releng/sign/pom.xml`), so test signing with a throwaway key before the next release:
+  `releng/sign.sh` has the commands at its top.
 - **Maven plug-ins**: change the matching `<maven-...-plugin.version>` property in the root
   `pom.xml` only.
 - **Maven**: `./mvnw -N wrapper:wrapper -Dmaven=3.9.16` rewrites
