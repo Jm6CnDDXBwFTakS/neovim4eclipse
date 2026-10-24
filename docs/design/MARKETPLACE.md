@@ -224,7 +224,15 @@ list):
 > Releases are signed with the project's PGP key; check that Eclipse shows the fingerprint
 > `A91F 53D8 931B 7FD0 D146  8618 6CC9 E446 147B 063C` before trusting it.
 >
-> Documentation, known limitations and issues: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse
+> Known limitations, worth reading before you install (for example, Neovim is attached to the
+> active editor only, and file and tab commands are a fixed set):
+> https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#known-limitations
+>
+> Documentation and issues: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse
+
+**Known limitations, linked straight from the description** (README's `#known-limitations`
+anchor, which GitHub makes from the heading; renaming the heading breaks the link): users who know
+the limits before installing review and report fewer surprises.
 
 **Requirements, stated up front in the description:** Neovim 0.9+ must be installed and on the
 `PATH` (or set in *Preferences → Neovim*); the plug-in does not ship Neovim.
