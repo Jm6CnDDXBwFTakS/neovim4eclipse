@@ -280,9 +280,14 @@ keys* and to keep the editor in step with playback.
 - **Playback (`@x`):** `@` is a pending-character command (see "Pending commands"). The next key starts the
   playback: buffer events are suppressed (`suppressBufferEvents`), and when Neovim is idle the whole buffer is
   fetched once (timeout 60 s) and applied as one minimal edit (`syncBufferAfterMacro`).
-- **Arguments vs prompts:** after `f F t T r @ m ' \` " q` the next key is an argument, so `KeyRouter`
-  forwards it to Neovim instead of opening the `:` or `/` prompt (`NvimKeys.takesArgument`, plus Neovim's own
-  `blocking` flag as reported by `nvim_get_mode`). `q` while recording stops it and takes no argument.
+- **Arguments vs prompts:** a `:` `/` `?` opens the editor's prompt only where Vim would start a command
+  line: not after `f F t T r @ m ' \` "`, a prefix (`g z [ ] Z <C-w>`), `i`/`a` in an operator, or a
+  half-typed mapping, where it is that command's argument and goes to Neovim; and `g??` is the `g?`
+  operator doubled. `KeyRouter` takes Neovim's answer (`nvim_get_mode`: `blocking`, operator-pending)
+  when Neovim has processed every key sent, and `util/KeyGrammar`'s reading of the keys while some are
+  still in flight. A `q` starts a recording only where it is a command (not in `gqq` or `<C-w>q`), and
+  stops one while recording. `KeyGrammarNeovimTest` (integration) compares the grammar with a real
+  Neovim over a list of sequences; see [design/KEY_ROUTING.md](design/KEY_ROUTING.md).
 
 ## Handing typing over to Eclipse
 

@@ -27,7 +27,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
  * Façade over one embedded {@code nvim --embed} process, through the plug-in's own msgpack-rpc
@@ -281,11 +280,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Whether Neovim is waiting for the argument character of a command ({@code f}, {@code @}, ...). */
     public boolean isWaitingForArgument() {
         return state.isWaitingForArgument();
-    }
-
-    @Override
-    public boolean isVisualMode() {
-        return VimModes.isVisual(getMode());
     }
 
     /** Notified (on a session thread) when the command, message or statusline text changes. */

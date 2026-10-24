@@ -518,6 +518,12 @@ writes it *before* opening the dialog (so a crash does not repeat it), and opens
 `Display.asyncExec`, never inside the code that triggered it. Turn it off for the UI tests in
 `test-customization.ini`, or the first test that triggers it waits for a click until it times out.
 
+**Teach the router a key sequence it misroutes.** If a `:`, `/` or `?` opens the box where Vim
+would not (or the other way round), find what Neovim expects after the keys before it: add the
+sequence to `KeyGrammarNeovimTest.corpus()` and run the integration tests. If the test reports a
+difference, change `util/KeyGrammar` and add a row to `KeyGrammarTest`. Example: `zfzf` showed that
+`z` inside an operator is a prefix, so `KeyGrammar.operatorKey` got `"z"` next to `[` and `]`.
+
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
 `vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `case "eclipse_<name>"` to
 `NotificationBridge.notification` (with a private method that reads the arguments) and a method to

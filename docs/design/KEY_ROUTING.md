@@ -1,7 +1,7 @@
 # Plan: routing `:`, `/`, `?` and `q` without guessing wrong
 
-Status: **planned**, on `fix/key-routing` from `release/0.1.5` at `04d82d1` (after the `g??` fix).
-Nothing is built yet; the decisions are at the end. When a phase is done, change its heading
+Status: **phase 1 built**, phase 2 next; on `fix/key-routing` from `release/0.1.5` at `04d82d1`
+(after the `g??` fix). The decisions are at the end. When a phase is done, change its heading
 and add an *As built* section, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 
 ## Summary
@@ -58,7 +58,25 @@ The router's own tracking (`Pending`) is applied first, and Neovim's state only 
 no opinion (`isNeovimWaitingForThisKey`). A wrong guess therefore wins even when Neovim has long
 caught up. And no guess covers keys that mappings give a new meaning.
 
-## Phase 1: fix the guesses, prefer Neovim's answer
+## Phase 1: fix the guesses, prefer Neovim's answer (built)
+
+### As built
+
+- `util/KeyGrammar` replaces `KeyRouter.Pending` and `NvimKeys.takesArgument` (removed). The router
+  keeps one flag of its own, for the held-back `Z` of `ZZ`/`ZQ`.
+- **Counts are an exception to "blocking means argument"**, found by the differential test: after
+  `2` or `d3` Neovim reports `blocking` (it waits for more digits), yet `:` or `/` still opens a
+  command line (`2:` is `:.,.+1`). The grammar keeps its own state while a count is being typed.
+- **`z` inside an operator is a prefix** (`dzj`, and `zfzf` spelled out), also found by the test.
+- The Ctrl-key commands, which send their key to Neovim without the router, now tell it which key
+  went (`KeyRouter.sentElsewhere`), so `<C-v>` and `<C-w>` count for the next key.
+- `KeyGrammarNeovimTest` types 335 sequences (every operator with every kind of continuation, and
+  the rest of the grammar) into Neovim 0.12; all agree. It waits for `nvim_get_mode` to give the same
+  answer twice, since it is answered before queued keys are processed.
+- Not done: a `:` typed into Neovim's command line opened by `!{motion}` (`:.!`) or a mapping is
+  still the user's problem until phase 2.
+
+### Plan
 
 1. **Neovim first when it is current.** When no keys are in flight, decide prompt keys from Neovim's
    `(mode, blocking)`: `blocking` → the key goes to Neovim; otherwise `:` `/` `?` open the box,

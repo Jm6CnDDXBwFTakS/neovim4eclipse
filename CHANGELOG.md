@@ -30,6 +30,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `g??` (ROT13 the current line) works: the second `?` no longer opens the backward-search box
   instead of finishing the command, and a quickly typed `g?` no longer can either. `g?` with a
   search motion (`g?/x`) and `?` after `g?` in visual mode still open the box.
+- `:` after `di"`, `yi'`, ``di` ``, `vi"` (any quote naming a text object), after `gqq`, or after
+  `<C-w>q` opens the command-line box again; it went to Neovim's own, invisible command line. The
+  `q` of `gqq` and `<C-w>q` no longer counts as the start of a macro recording. `[/` and `]/` (to
+  a comment's start or end) no longer open the search box when typed quickly, and neither does a `:`
+  typed right after `o`, `s` or another key that starts an insert.
 
 ## [0.1.4] - 2026-10-24
 

@@ -384,7 +384,7 @@ public final class NeovimEditorController implements AutoCloseable {
     /** Sends one key (Neovim notation) to Neovim; used by the key-binding command for Vim Ctrl keys. */
     public void sendKey(String nvimKey) {
         if (!closed && neovimModeActive) {
-            keyInterceptor.resetPendingArgument();
+            keyInterceptor.sentElsewhere(nvimKey);
             session.inputAsync(nvimKey);
         }
     }

@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyGrammar;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
@@ -20,8 +21,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  *       assist keeps working). {@code Esc} pushes the document to Neovim and leaves insert mode.
  *       Exception: an insert driven by Neovim (from blockwise visual, while recording a macro, or
  *       started before Eclipse could take over) forwards every key.</li>
- *   <li>{@code :}, {@code /}, {@code ?} open the editor's own prompt; {@code ZZ} and {@code ZQ}
- *       become Eclipse save/close.</li>
+ *   <li>{@code :}, {@code /}, {@code ?} open the editor's own prompt where they start a command or
+ *       a search motion; {@code ZZ} and {@code ZQ} become Eclipse save/close. Where they belong to the
+ *       command before them ({@code f:}, {@code [/}, {@code g??}, a half-typed mapping) they go to
+ *       Neovim. Which is which: Neovim's own answer ({@code nvim_get_mode}) once it has processed
+ *       every key sent, else {@link KeyGrammar}'s reading of the keys
+ *       (docs/design/KEY_ROUTING.md).</li>
  * </ul>
  *
  * <p>Why a class of its own: the SWT listener ({@code editor/KeyInterceptor}) is thin glue that
@@ -45,10 +50,14 @@ public final class KeyRouter {
 
         boolean isEclipseTypingReady();
 
+        /**
+         * Whether Neovim waits for one more key of the current command ({@code nvim_get_mode}'s
+         * {@code blocking}): after {@code f}, {@code g}, {@code di}, a half-typed mapping ...
+         */
         boolean isWaitingForArgument();
 
-        /** Whether Neovim is in a visual mode ({@code v}, {@code V}, {@code Ctrl-V}). */
-        boolean isVisualMode();
+        /** Neovim's mode as {@code nvim_get_mode} last reported it ({@code "n"}, {@code "no"}, {@code "v"} ...). */
+        String getMode();
 
         /**
          * Whether keys sent with {@link #inputAsync} have not been processed by Neovim yet. While
@@ -75,43 +84,6 @@ public final class KeyRouter {
         void close();
     }
 
-    /**
-     * A key that needs the next one before anything can happen. At most one at a time, which is why
-     * this is one value rather than two flags.
-     */
-    private enum Pending {
-        NONE,
-        /** A {@code Z} was typed and the next key decides between {@code ZZ} and {@code ZQ}. */
-        Z,
-        /**
-         * The previous key was a command that takes one more character ({@code f}, {@code @},
-         * {@code q} ...), so the next key is that argument: {@code f/}, {@code @:} and {@code qa} must
-         * reach Neovim instead of opening the prompt. Tracked here as well as in the session because
-         * keys can arrive faster than Neovim's answer about its state.
-         */
-        ARGUMENT,
-        /**
-         * A {@code q} that starts a recording: like {@link #ARGUMENT}, and if the next key names a
-         * register ({@code qa}), a recording has begun ({@link #recordingByKeys}).
-         */
-        REGISTER,
-        /**
-         * A {@code g} was typed in normal mode. Every {@code g} command takes one more key ({@code gg},
-         * {@code gu}, {@code g?} ...), and none is a prompt: {@code g?} is the ROT13 operator, not
-         * {@code g} followed by a backward search. Neovim says it waits for that key, but only once it
-         * has processed the {@code g}; typed quickly, the {@code ?} would arrive first and open the
-         * prompt. So the router tracks it from the keys, like {@link #ARGUMENT}.
-         */
-        G,
-        /**
-         * {@code g?} was typed in normal mode, so the ROT13 operator waits for its motion. A
-         * {@code ?} now doubles the operator, as {@code dd} does {@code d}: {@code g??} encodes the
-         * current line. Any other key is the motion as usual, so {@code g?/x} still opens the
-         * prompt for a search motion. In visual mode {@code g?} applies at once and needs neither.
-         */
-        ROT13_OPERATOR
-    }
-
     private final Neovim neovim;
     private volatile Predicate<String> promptHandler;
     private volatile FileCommands fileCommands;
@@ -119,7 +91,14 @@ public final class KeyRouter {
     private volatile Supplier<InsertReplay.Plan> insertReplaySupplier;
     /** Whether a {@code Ctrl+letter} goes to Neovim; letters it rejects are left to Eclipse. */
     private volatile Predicate<Character> ctrlKeyFilter = letter -> true;
-    private volatile Pending pending = Pending.NONE;
+    /**
+     * Follows Vim's command grammar over the keys sent to Neovim, to know what the next key is while
+     * Neovim has not processed them yet; synced to Neovim's own answer whenever it has. Used on the
+     * UI thread only, as {@link #route} is.
+     */
+    private final KeyGrammar grammar = new KeyGrammar();
+    /** A {@code Z} was typed as a command and held back: the next key decides {@code ZZ} or {@code ZQ}. */
+    private boolean zPending;
     /**
      * Whether a macro is being recorded, as far as the keys routed here tell, or {@code null} once
      * Neovim has caught up ({@link #isRecording()}). The session learns it from Neovim after each key,
@@ -156,9 +135,13 @@ public final class KeyRouter {
         this.ctrlKeyFilter = toNeovim;
     }
 
-    /** Forget a half-typed command; called when a key reaches Neovim by another route (Ctrl-key bindings). */
-    public void reset() {
-        pending = Pending.NONE;
+    /**
+     * A key reached Neovim by another route (the Ctrl-key commands): follow it too, so that
+     * {@code <C-v>} (block visual) or {@code <C-w>} (a prefix) count for the next key.
+     */
+    public void sentElsewhere(String nvimKey) {
+        zPending = false;
+        grammar.feed(nvimKey, isRecording());
         recordingByKeys = null; // that key may have started or stopped a recording: ask Neovim again
     }
 
@@ -178,14 +161,14 @@ public final class KeyRouter {
         }
 
         if (neovim.isNeovimDrivenInsert()) {
-            pending = Pending.NONE;
-            neovim.inputAsync(nvimKey);
-            return true;
+            zPending = false;
+            return send(nvimKey, false); // text, and the Esc that ends it
         }
 
         if (neovim.isTypingMode()) {
             if ("<Esc>".equals(nvimKey)) {
-                pending = Pending.NONE;
+                zPending = false;
+                grammar.reset();
                 Supplier<InsertReplay.Plan> supplier = insertReplaySupplier;
                 neovim.leaveInsertModeAsync(supplier == null ? null : supplier.get());
                 return true;
@@ -193,62 +176,60 @@ public final class KeyRouter {
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }
 
-        // The second key of a g command (the g of gg): it ends that command and starts no new one.
-        boolean completesG = pending == Pending.G;
-        if (pending == Pending.G || pending == Pending.ROT13_OPERATOR) {
-            Pending was = pending;
-            pending = Pending.NONE;
-            if (was == Pending.G && "?".equals(nvimKey) && !neovim.isVisualMode()) {
-                pending = Pending.ROT13_OPERATOR;
-                neovim.inputAsync(nvimKey);
-                return true;
-            }
-            if (was == Pending.G ? isPromptKey(nvimKey) : "?".equals(nvimKey)) {
-                neovim.inputAsync(nvimKey); // g: g/ (no such commands, but never a prompt), or g??
-                return true;
-            }
-            // Otherwise the key is routed as usual: the second key of gg, gu ..., or g?'s motion.
+        // Neovim's own answer is right about the keys it has processed. When it has processed all
+        // keys sent so far, it is current and replaces the grammar's guess (which knows nothing of
+        // the user's mappings, for example). While keys are on their way, the guess stands.
+        if (!neovim.hasKeysInFlight()) {
+            grammar.syncTo(neovim.getMode(), neovim.isWaitingForArgument());
         }
 
-        if (pending == Pending.ARGUMENT || pending == Pending.REGISTER || isNeovimWaitingForThisKey()) {
-            if (pending == Pending.REGISTER && NvimKeys.isRecordingRegister(nvimKey)) {
+        FileCommands files = fileCommands;
+        if (zPending) {
+            zPending = false;
+            return afterZ(files, nvimKey);
+        }
+
+        boolean recording = isRecording();
+        KeyGrammar.Expect next = grammar.expect();
+        Predicate<String> prompt = promptHandler;
+
+        if (next == KeyGrammar.Expect.ARGUMENT || next == KeyGrammar.Expect.TEXT) {
+            // f: r? m' g? [/ di" ... : the key belongs to the command before it, whatever it is, or
+            // is text for an insert Neovim has begun. After q it names the register (q: q/ q? open
+            // Neovim's command-line window).
+            if (grammar.expectsRecordingRegister() && NvimKeys.isRecordingRegister(nvimKey)) {
                 recordingByKeys = true;
             }
-            pending = Pending.NONE;
-            neovim.inputAsync(nvimKey); // the argument of f/F/t/T/r/@/m/'/`/"/q, whatever the key is
-            return true;
+            return send(nvimKey, recording);
         }
 
-        Predicate<String> prompt = promptHandler;
-        if (isPromptKey(nvimKey) && prompt != null) {
-            pending = Pending.NONE;
+        boolean doublesOperator = "?".equals(nvimKey) && grammar.questionDoublesOperator(); // g??
+        if (isPromptKey(nvimKey) && prompt != null && !doublesOperator) {
+            grammar.promptOpened();
             if (prompt.test(nvimKey)) {
                 return true;
             }
         }
 
-        FileCommands files = fileCommands;
-        if (files != null && handleZZ(files, nvimKey)) {
+        if (next == KeyGrammar.Expect.COMMAND && files != null && "Z".equals(nvimKey)) {
+            zPending = true; // held back until the next key: ZZ and ZQ become Eclipse's save and close
             return true;
         }
 
         char ctrlLetter = VimCtrlKeys.letterOf(nvimKey);
         if (ctrlLetter != 0 && !ctrlKeyFilter.test(ctrlLetter)) {
-            pending = Pending.NONE;
             return false; // the user gave this Ctrl key to Eclipse (Window > Preferences > Neovim > Ctrl Keys)
         }
 
-        boolean recording = isRecording();
-        if ("q".equals(nvimKey) && recording) {
+        if ("q".equals(nvimKey) && next == KeyGrammar.Expect.COMMAND && recording) {
             recordingByKeys = false; // this q stops the recording
-            pending = Pending.NONE;
-        } else if ("q".equals(nvimKey)) {
-            pending = Pending.REGISTER;
-        } else if ("g".equals(nvimKey) && !completesG) {
-            pending = Pending.G;
-        } else {
-            pending = NvimKeys.takesArgument(nvimKey, recording) ? Pending.ARGUMENT : Pending.NONE;
         }
+        return send(nvimKey, recording);
+    }
+
+    /** Sends {@code nvimKey} to Neovim and lets the grammar follow it. Always consumes the key. */
+    private boolean send(String nvimKey, boolean recording) {
+        grammar.feed(nvimKey, recording);
         neovim.inputAsync(nvimKey);
         return true;
     }
@@ -267,46 +248,32 @@ public final class KeyRouter {
         return byKeys;
     }
 
-    /**
-     * Whether Neovim waits for one more key, and that key is the one being routed now. Neovim's
-     * answer describes the keys it has processed: with keys still on their way to it, the answer is
-     * about an earlier key, which those keys may already have completed. Example: {@code ggqa}
-     * typed quickly. After the first {@code g} Neovim waits for a key; the second {@code g} is that
-     * key. If the {@code q} arrives before Neovim has processed the second {@code g}, the old
-     * answer would make the {@code q} a third argument, and the router would miss that a recording
-     * starts. Keys this router knows to take an argument are tracked in {@link #pending} instead.
-     */
-    private boolean isNeovimWaitingForThisKey() {
-        return neovim.isWaitingForArgument() && !neovim.hasKeysInFlight();
-    }
-
     private static boolean isPromptKey(String nvimKey) {
         return ":".equals(nvimKey) || "/".equals(nvimKey) || "?".equals(nvimKey);
     }
 
     /**
-     * Implements {@code ZZ} (save and close) and {@code ZQ} (close). Any other key after {@code Z}
-     * replays the {@code Z} to Neovim followed by that key.
+     * The key after a held-back {@code Z}: {@code ZZ} (save and close) and {@code ZQ} (close) run in
+     * Eclipse; any other key is sent to Neovim after the {@code Z}.
      *
-     * @return {@code true} if the key was consumed here
+     * @return {@code true}: the key is consumed here
      */
-    private boolean handleZZ(FileCommands files, String nvimKey) {
-        if (pending == Pending.Z) {
-            pending = Pending.NONE;
-            switch (nvimKey) {
-                case "Z" -> files.saveAndClose();
-                case "Q", "q" -> files.close();
-                default -> {
-                    neovim.inputAsync("Z");
-                    neovim.inputAsync(nvimKey);
-                }
+    private boolean afterZ(FileCommands files, String nvimKey) {
+        switch (nvimKey) {
+            case "Z" -> {
+                grammar.reset();
+                files.saveAndClose();
             }
-            return true;
+            case "Q", "q" -> {
+                grammar.reset();
+                files.close();
+            }
+            default -> {
+                boolean recording = isRecording();
+                send("Z", recording);
+                send(nvimKey, recording);
+            }
         }
-        if ("Z".equals(nvimKey)) {
-            pending = Pending.Z;
-            return true;
-        }
-        return false;
+        return true;
     }
 }
