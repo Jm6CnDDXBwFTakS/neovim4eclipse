@@ -16,7 +16,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | `:`, `/`, `?` in normal mode | the plug-in's command box at the bottom of the editor |
 | `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
 | `gd`, `K`, `gt`, `gT` in normal mode | Neovim first, which hands them to Eclipse (below) |
-| Eclipse mode (the *NVIM* toolbar button) | Eclipse, always |
+| Eclipse mode (the Neovim toolbar button, the logo) | Eclipse, always |
 
 ## `Ctrl` keys
 

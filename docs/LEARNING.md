@@ -58,7 +58,7 @@ Extension points used here, all defined by the Eclipse Platform:
 | `org.eclipse.ui.handlers` | The Java class that runs when a command executes (`AttachHandler`, `SendKeyHandler`, ...). |
 | `org.eclipse.ui.contexts` | Named situations in which key bindings apply (`context.normal`, `context.ctrl.f`, ...). |
 | `org.eclipse.ui.bindings` | Key sequences that trigger a command while a context is active. |
-| `org.eclipse.ui.menus` | The *Neovim* menu and the *NVIM* toolbar button. |
+| `org.eclipse.ui.menus` | The *Neovim* menu and the Neovim toolbar button (its icon, `icons/neovim.png`, is the logo). |
 | `org.eclipse.ui.startup` | `EarlyStartup`, run after the workbench starts. |
 | `org.eclipse.ui.preferencePages` | The *Neovim* and *Ctrl Keys* pages. |
 | `org.eclipse.core.runtime.preferences` | `PreferenceInitializer`, which supplies default values. |

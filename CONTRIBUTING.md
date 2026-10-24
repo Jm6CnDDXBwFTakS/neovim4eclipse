@@ -170,6 +170,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
+| `releng/render-icon.py` | renders `docs/images/logo.svg` to the toolbar icon PNGs (`plugins/.../icons/`), with headless Firefox |
 | `releng/update-site.sh` | builds the permanent update site (a composite p2 repository) from the release ZIPs |
 | `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |

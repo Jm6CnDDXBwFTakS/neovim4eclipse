@@ -10,7 +10,7 @@ import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 /**
- * Toggles between Neovim key handling and plain Eclipse editing on the active editor (the NVIM
+ * Toggles between Neovim key handling and plain Eclipse editing on the active editor (the Neovim
  * toolbar button and its key binding). Neovim stays attached in Eclipse mode, so switching back
  * is instant. See {@link AttachHandler} for how handlers work.
  */

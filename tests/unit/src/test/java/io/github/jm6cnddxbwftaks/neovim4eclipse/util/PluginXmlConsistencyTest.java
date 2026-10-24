@@ -7,12 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import javax.imageio.ImageIO;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,19 @@ class PluginXmlConsistencyTest {
             dir = dir.getParentFile();
         }
         throw new IllegalStateException("plugin.xml not found above " + System.getProperty("user.dir"));
+    }
+
+    /** The plug-in's folder, found the same way as {@link #load()}. */
+    private static File pluginDir() {
+        File dir = new File(System.getProperty("user.dir")).getAbsoluteFile();
+        while (dir != null) {
+            File candidate = new File(dir, "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse");
+            if (new File(candidate, "plugin.xml").isFile()) {
+                return candidate;
+            }
+            dir = dir.getParentFile();
+        }
+        throw new IllegalStateException("plug-in folder not found above " + System.getProperty("user.dir"));
     }
 
     private static Element extension(Document doc, String point) {
@@ -70,6 +86,38 @@ class PluginXmlConsistencyTest {
         }
         assertEquals(Set.of(WelcomeNote.DEFAULT_TOGGLE_SEQUENCE), sequences,
                 "WelcomeNote.DEFAULT_TOGGLE_SEQUENCE must be the toggle's binding in plugin.xml");
+    }
+
+    /**
+     * Every {@code icon="..."} in plugin.xml names a 16x16 PNG that exists, has a 32x32 {@code @2x}
+     * twin for 200% screens, and lies in a folder that build.properties packages. A missing file or
+     * folder fails silently at runtime: the button just shows no picture once installed.
+     */
+    @Test
+    void everyIconExistsInBothSizesAndIsPackaged() throws Exception {
+        File plugin = pluginDir();
+        String binIncludes = Files.readString(new File(plugin, "build.properties").toPath());
+        NodeList all = load().getElementsByTagName("*");
+        int icons = 0;
+        for (int i = 0; i < all.getLength(); i++) {
+            String icon = ((Element) all.item(i)).getAttribute("icon");
+            if (icon.isEmpty()) {
+                continue;
+            }
+            icons++;
+            assertIcon(new File(plugin, icon), 16);
+            assertIcon(new File(plugin, icon.replaceFirst("\\.png$", "@2x.png")), 32);
+            String folder = icon.substring(0, icon.indexOf('/') + 1);
+            assertTrue(binIncludes.contains(folder), "build.properties bin.includes lacks " + folder);
+        }
+        assertTrue(icons > 0, "no icon= in plugin.xml (the toolbar button has one)");
+    }
+
+    private static void assertIcon(File file, int size) throws Exception {
+        assertTrue(file.isFile(), "missing " + file);
+        BufferedImage image = ImageIO.read(file);
+        assertEquals(size + "x" + size, image.getWidth() + "x" + image.getHeight(), file.getName());
+        assertTrue(image.getColorModel().hasAlpha(), file.getName() + " has no transparency");
     }
 
     @Test

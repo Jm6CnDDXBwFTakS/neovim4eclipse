@@ -10,7 +10,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 
 /**
  * Helpers for the preferences that show or hide the plug-in's contributions, the <em>Neovim</em>
- * menu in the menu bar and the <em>NVIM</em> toolbar button: reads them, and makes Eclipse
+ * menu in the menu bar and the Neovim toolbar button (the logo): reads them, and makes Eclipse
  * re-evaluate the {@code visibleWhen} expressions that use them (see {@link NeovimPropertyTester}).
  */
 public final class ContributionVisibility {

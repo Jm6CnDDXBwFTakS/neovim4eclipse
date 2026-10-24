@@ -26,7 +26,7 @@ For a headless CI build of the plug-in and update site, use Maven/Tycho (`./mvnw
 
 ## Manual commands
 
-- **Neovim → Toggle Neovim / Eclipse Mode** (also the *NVIM* toolbar button, `Ctrl+Shift+M`)
+- **Neovim → Toggle Neovim / Eclipse Mode** (also the Neovim toolbar button, which shows the logo, `Ctrl+Shift+M`)
 - **Neovim → Preferences...** opens the Neovim preference page with its sub-pages (Status Bar, Ctrl Keys)
   expanded.
 - *Attach to Active Editor* (`Ctrl+Shift+N`) and *Detach from Active Editor* have no menu entries,
