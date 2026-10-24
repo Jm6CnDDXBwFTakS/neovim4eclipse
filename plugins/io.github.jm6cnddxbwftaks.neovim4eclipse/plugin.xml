@@ -20,6 +20,11 @@
             description="Open the Neovim preferences with their sub-pages expanded">
       </command>
       <command
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome"
+            name="Neovim: Welcome"
+            description="Show the welcome note again: the toggle, the preferences and the documentation">
+      </command>
+      <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
             name="Neovim: Toggle Neovim / Eclipse Mode"
             description="Toggle between Neovim key handling and normal Eclipse editing">
@@ -313,6 +318,10 @@
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences">
       </handler>
       <handler
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.WelcomeHandler"
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome">
+      </handler>
+      <handler
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ToggleNeovimModeHandler"
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode">
       </handler>
@@ -443,6 +452,11 @@
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences"
                   label="Preferences..."
+                  style="push">
+            </command>
+            <command
+                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome"
+                  label="Welcome..."
                   style="push">
             </command>
          </menu>

@@ -83,7 +83,10 @@ To use the plug-in in your own Eclipse, without building it.
    on [keys.openpgp.org](https://keys.openpgp.org/search?q=A91F53D8931B7FD0D14686186CC9E446147B063C).
 4. Restart Eclipse when asked.
 5. Open any text file: Neovim attaches to the editor automatically. *Neovim: Attach to Active Editor*
-   (`Ctrl+Shift+N`) attaches by hand; the toolbar toggle turns it off and on.
+   (`Ctrl+Shift+N`) attaches by hand; the toolbar toggle turns it off and on. The first time, a
+   welcome note says how to turn it off and where the preferences and documentation are
+   (*Neovim → Welcome...* shows it again). After an update to a new minor version (0.2, 0.3, ...),
+   a short note links to the change log instead.
 
 **Updating and removing**
 
@@ -444,6 +447,10 @@ the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`)
 through *Window → Preferences*.
 Changing the executable restarts Neovim and re-attaches the active editor. *Flash the editor on errors*
 adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
+*Show a welcome after installing...* turns off the welcome and the update notes (step 5 of
+[Install](#install)); an administrator can turn it off for everyone with the line
+`io.github.jm6cnddxbwftaks.neovim4eclipse/showWelcome=false` in the product's
+`plugin_customization.ini`.
 
 *Window → Preferences → Neovim → Status Bar*: which parts of the Vim status appear in the status bar.
 

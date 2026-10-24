@@ -181,6 +181,15 @@ On macOS, `M1` in `plugin.xml` means Command and `M4` means Control. On Windows 
 - Pages are `PreferencePage` subclasses. `FieldEditorPreferencePage` builds a form from field
   editors (`NeovimPreferencePage`); a hand-written page builds its own widgets (`CtrlKeysPreferencePage`).
 - Code that must react to a change adds an `IPropertyChangeListener` to the store (`Activator.start`).
+- Preferences live in **scopes**, from the most specific: `InstanceScope` (the workspace; the
+  preference store's), `ConfigurationScope` (the Eclipse installation's `configuration/` folder,
+  shared by every workspace started from it) and `DefaultScope` (defaults, never saved). Choose by
+  what the value is about: the welcome note (`editor/WelcomeNotice`) records that it was shown in
+  `ConfigurationScope`, because it greets an installation, not a workspace.
+- A `plugin_customization.ini` changes *defaults* without code, one `<bundle id>/<key>=<value>` per
+  line: a product ships one, and `-pluginCustomization <file>` passes one at start-up. Eclipse applies
+  it after the `PreferenceInitializer`, so it wins. The UI tests use one to turn the welcome off
+  (`tests/...tests/test-customization.ini`).
 
 ### 1.8 Building and installing: Tycho, features, p2
 
@@ -385,7 +394,8 @@ popup for `:ls` and similar uses it (`LuaScripts.CAPTURE_OUTPUT`).
 3. A text editor becomes active, so `IPartListener2.partActivated` fires and `EditorAttachManager`
    attaches. The first attach calls `Activator.getOrCreateSession`, which runs `NeovimSession.start`:
    process, RPC stack, `nvim_set_client_info`, `nvim_ui_attach`, home buffer, notification handlers,
-   `LuaScripts.SETUP`.
+   `LuaScripts.SETUP`. Once that succeeded, `WelcomeNotice.afterStart` queues the welcome check
+   (`util/WelcomeNote` decides; the dialog opens after the attach, at most once per run).
 4. `NeovimEditorController.attach` prepends the key interceptor, registers listeners, shows the
    document's buffer (`showBuffer`) and pushes the document text into it.
 
@@ -500,6 +510,13 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `PreferenceInitializer`; add a field to a preference page; read it with
 `Activator.getDefault().getPreferenceStore()`; if it must apply at once, handle it in the
 `Activator`'s property-change listener.
+
+**Show a dialog once (or once per version).** Put the decision in a pure class in `util/` that takes
+what was recorded and the running version, and returns what to show (`WelcomeNote.decide`); unit-test
+it in `tests/unit`. The glue in `editor/` (`WelcomeNotice`) reads the record from a preference scope,
+writes it *before* opening the dialog (so a crash does not repeat it), and opens the dialog with
+`Display.asyncExec`, never inside the code that triggered it. Turn it off for the UI tests in
+`test-customization.ini`, or the first test that triggers it waits for a click until it times out.
 
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
 `vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `case "eclipse_<name>"` to

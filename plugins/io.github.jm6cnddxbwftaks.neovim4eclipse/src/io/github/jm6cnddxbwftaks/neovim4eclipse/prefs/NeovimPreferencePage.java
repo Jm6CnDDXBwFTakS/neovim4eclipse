@@ -65,6 +65,12 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
                 PreferenceConstants.FLASH_ON_ERROR,
                 "Flash the editor on errors",
                 getFieldEditorParent()));
+
+        // The welcome after installing, and the short note after an update to a new minor version.
+        addField(new BooleanFieldEditor(
+                PreferenceConstants.SHOW_WELCOME,
+                "Show a welcome after installing, and a note after updates to a new minor version",
+                getFieldEditorParent()));
     }
 
     @Override
