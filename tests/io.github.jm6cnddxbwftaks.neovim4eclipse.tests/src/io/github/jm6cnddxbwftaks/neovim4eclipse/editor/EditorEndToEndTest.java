@@ -58,6 +58,17 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("beta\ngamma\n");
     }
 
+    /**
+     * {@code g??} encodes the line with ROT13, typed at once (faster than Neovim reports its state):
+     * neither {@code ?} may open the backward-search prompt, which the second one once did.
+     */
+    @Test
+    void gQuestionQuestionEncodesTheLine() {
+        type(widget, "ggg??");
+        expectText("nycun\nbeta\ngamma\n");
+        assertNull(textChildOf(widget), "a ? opened the search prompt");
+    }
+
     @Test
     void xDeletesTheCharacterUnderTheCursor() {
         type(widget, "gg0x");
