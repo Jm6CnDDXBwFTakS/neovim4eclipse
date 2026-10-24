@@ -176,19 +176,55 @@ offline way. Add a *Marketplace* badge and drag-to-install link once phase 3 is 
   supported Eclipse (2024-12 / 4.34 or newer).
 - Keep `<license>` as it is (EPL-2.0, matching the listing).
 
-**Listing text and fields** (drafted in this file before submitting, so they are reviewed like code):
+**Listing text and fields** (drafted in this file before submitting, so they are reviewed like code).
+The rows follow marketplace.eclipse.org's *Create Solution* form as it was on 2026-10-24, top to
+bottom; `*` marks a field the form requires.
 
-| Field | Draft |
-|-------|-------|
-| Name | Neovim for Eclipse |
-| Short description | Real Neovim inside Eclipse text editors: motions, operators, macros, registers and `:` commands, with your own `init.lua`. |
-| Update site URL | the Phase 1 root URL |
-| Feature ID | `io.github.jm6cnddxbwftaks.neovim4eclipse.feature` |
-| License | EPL-2.0 |
-| Eclipse versions | 2024-12 (4.34) and newer |
-| Platforms | Windows, Linux, macOS |
-| Categories / tags | Editor; tags `vim`, `neovim`, `modal editing`, `keybindings` |
-| Links | Homepage and support: the GitHub repository and its issues |
+| Form field | Value |
+|------------|-------|
+| Solution Name `*` | Neovim for Eclipse (the form asks for the product name only, no tagline) |
+| Solution URL | https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse |
+| Organization Name | empty (a personal project) |
+| Eclipse Foundation Member Organization `*` | No |
+| Solution Logo | [docs/images/marketplace-logo.png](../images/marketplace-logo.png): the form scales every logo to 110×80 pixels (png, gif or jpg), so this is `logo.svg` centered on white at exactly that size, rendered with headless Firefox and scaled down (below) |
+| Summary | Real Neovim inside Eclipse text editors: motions, operators, macros, registers and `:` commands, with your own `init.lua`. |
+| Solution Description `*` | the text below the table |
+| Status | Beta, or the closest choice the list offers: the README calls it an early release |
+| License Type | EPL 2.0 |
+| Solution Type | This product requires an existing Eclipse installation to function |
+| Support URL | https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues |
+| RSS Feed | https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases.atom (GitHub's feed of the releases) |
+| Categories `*` (5 or fewer) | Editor, plus whatever else in the list fits a key-binding/editing tool; not checked yet which names the list has |
+| Markets `*` | Tools |
+| Tags | vim, neovim, vi, modal editing, keybindings |
+| **Solution version:** Version number | 0.1.4 (update with each release, or leave empty: the update site always offers the latest) |
+| Update Site URL `*` | https://jm6cnddxbwftaks.github.io/neovim4eclipse/ (the composite site; never changes) |
+| Supported Eclipse Release(s) `*` | 2024-12 (4.34) through 2026-09 (4.41). Not 2026-12 (4.42): it is listed but not yet released; tick it after testing on it |
+| Supported Platform(s) `*` | Windows, Mac, Linux/GTK |
+| Minimum Java Version `*` | Java 21 |
+| Feature ID `*` / Install state | `io.github.jm6cnddxbwftaks.neovim4eclipse.feature` / Required (the feature's ID, without the `.feature.group` suffix p2 adds) |
+| Screenshot (up to 4; png, gif or jpg; 16 MB) | [docs/images/demo.gif](../images/demo.gif) (2.7 MB, the README's demo) |
+| Additional Editors | none |
+
+Solution Description (the form's editor takes formatted text; paste this and set the list as a
+list):
+
+> Neovim for Eclipse embeds a real Neovim (`nvim --embed`) in Eclipse's text editors, so Vim's
+> modal editing works on the file you see in the IDE: motions, operators, text objects, visual mode,
+> counts, registers, macros, marks, undo and `:` commands such as `:%s`, with your own `init.lua`.
+> Neovim owns the editing; Eclipse keeps owning files, rendering, content
+> assist and its own commands. `gd` and `K` use Eclipse's Open Declaration and hover, `:w`, `:q`,
+> `:e` and `gt` act on Eclipse's editors, and the `"+` register is the system clipboard.
+>
+> Requirements:
+> - Neovim 0.9 or newer, installed separately (`nvim` on the PATH, or its path set in
+>   Window › Preferences › Neovim); the plug-in does not include Neovim.
+> - Eclipse 2024-12 (4.34) or newer, on Java 21 or newer.
+>
+> Releases are signed with the project's PGP key; check that Eclipse shows the fingerprint
+> `A91F 53D8 931B 7FD0 D146  8618 6CC9 E446 147B 063C` before trusting it.
+>
+> Documentation, known limitations and issues: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse
 
 **Requirements, stated up front in the description:** Neovim 0.9+ must be installed and on the
 `PATH` (or set in *Preferences → Neovim*); the plug-in does not ship Neovim.
@@ -200,17 +236,25 @@ offline way. Add a *Marketplace* badge and drag-to-install link once phase 3 is 
   "VI" with a hint of "E". It borrows nothing from the Eclipse or Neovim logos, which are their
   owners' marks; an early draft with the Eclipse logo's stripes was dropped for that reason. With
   the name beside it in the logo's green (`logo-wordmark.svg`, one file for light and dark themes)
-  it heads the README. Still
-  to do: PNG sizes for the listing, once the *Add Content* form says which.
+  it heads the README. For the listing: `marketplace-logo.png`, 110×80 pixels, the size the form
+  scales every logo to. To render it again after changing `logo.svg` (no SVG tool is needed besides
+  Firefox and Python's Pillow):
+
+  ```bash
+  printf '<body style="margin:0;background:#fff;width:440px;height:320px;display:flex;align-items:center;justify-content:center"><img src="logo.svg" width="304" height="304">' > docs/images/page.html
+  firefox --headless --window-size=440,320 --screenshot /tmp/big.png "file://$PWD/docs/images/page.html"
+  rm docs/images/page.html
+  python3 -c "from PIL import Image; Image.open('/tmp/big.png').convert('RGB').resize((110, 80), Image.LANCZOS).save('docs/images/marketplace-logo.png', optimize=True)"
+  ```
 - Screenshots and the README demo GIF.
 
 ## Phase 3: account, submission, test
 
 All maintainer steps; an AI assistant cannot create accounts or sign in.
 
-1. Create an **Eclipse Foundation account** at accounts.eclipse.org.
+1. Create an **Eclipse Foundation account** at accounts.eclipse.org. *(Done, 2026-10-24.)*
 2. On marketplace.eclipse.org, log in, *Add Content → Solution*, and fill in the fields from phase 2.
-   The form may ask for things this plan does not list (image sizes, more fields); note them here.
+   The form's fields, as of 2026-10-24, are in phase 2's table.
 3. Listings go through **moderation** before they appear (the Marketplace quickstart says about one
    business day).
 4. Test the listing from a clean Eclipse on **Windows, Linux and macOS**: *Help → Eclipse
