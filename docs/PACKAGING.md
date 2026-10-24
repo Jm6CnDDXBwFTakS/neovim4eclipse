@@ -25,7 +25,7 @@ Artifacts:
 1. *Help → Install New Software… → Add…*, then either
    - *Archive…* and select `releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-<version>.zip`, or
    - *Local…* and select `releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/repository`
-2. Choose **Neovim for Eclipse**, finish, restart (the bundle is unsigned: trust it when Eclipse asks; README, "Install", has every step)
+2. Choose **Neovim for Eclipse**, finish, restart (a local build is unsigned, unlike a release: trust the *unsigned content* when Eclipse asks; README, "Install", has every step)
 
 ### Unit tests only
 
@@ -113,6 +113,13 @@ of its own, `sign`, which alone can read the secret key (a secret of the GitHub 
 3. checks every bundle's and feature's signature with `gpg` against `releng/signing-key.asc`
    (`releng/verify-signatures.sh`), so a missing or wrong signature stops the release;
 4. zips it again; the signed ZIP replaces the unsigned one for the rest of the run.
+
+The public key is in two places: `releng/signing-key.asc`, which the job checks against, and a
+copy in the plug-in (`keys/release-signing-key.asc`), which `plugin.xml` declares as trusted
+(extension point `org.eclipse.equinox.p2.engine.pgp`), so that updates install without the trust
+dialog. `ReleaseSigningKeyTest` checks that the two are equal and that README, SECURITY.md and the
+update site's page print its fingerprint. To replace the key, change both files and the three
+fingerprints.
 
 The job fails at once while `releng/signing-key.asc` does not exist, rather than publish an
 unsigned release. To try it locally with a throwaway key, see the commands at the top of

@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Security
+
+- Releases are signed with the project's PGP key (fingerprint
+  `A91F 53D8 931B 7FD0 D146  8618 6CC9 E446 147B 063C`). Eclipse names the key when it asks you to
+  trust the plug-in, instead of warning about *unsigned content*, and it refuses a jar that was
+  changed after signing. Once installed, the plug-in vouches for its own key, so updates install
+  without asking. README, "Install", has the steps.
+
 ## [0.1.3] - 2026-10-21
 
 The update site release: install once from a URL, and *Check for Updates* finds what comes next.
