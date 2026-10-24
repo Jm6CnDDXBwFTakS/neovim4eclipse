@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Neovim for Eclipse
 Bundle-SymbolicName: io.github.jm6cnddxbwftaks.neovim4eclipse;singleton:=true
-Bundle-Version: 0.1.4.qualifier
+Bundle-Version: 0.1.5.qualifier
 Bundle-Activator: io.github.jm6cnddxbwftaks.neovim4eclipse.Activator
 Bundle-Vendor: Jm6CnDDXBwFTakS
 Bundle-DocURL: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse
