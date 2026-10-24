@@ -62,6 +62,11 @@ rm -f "$work/secret-key.asc"
 
 # 4. Zip again, with the same layout. -X leaves out extra file attributes (owner ids), so the ZIP
 #    depends only on the files.
+#    env -u ZIP -u ZIPOPT: zip(1) reads these environment variables as extra command-line
+#    arguments. The v0.1.4 tag's first run had ZIP=neovim4eclipse-0.1.4.zip set by the workflow, so
+#    zip wrote the archive under that name inside $site, which the trap then deleted, and the
+#    signed ZIP was missing ("No files were found").
 rm -f "$signed"
-(cd "$site" && zip -q -r -X "$signed" .)
+(cd "$site" && env -u ZIP -u ZIPOPT zip -q -r -X "$signed" .)
+[ -s "$signed" ] || { echo "error: $signed was not written" >&2; exit 1; }
 echo "signed: $signed"
