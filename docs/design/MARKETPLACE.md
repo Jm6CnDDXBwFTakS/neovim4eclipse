@@ -378,8 +378,9 @@ throwaway Ed25519 key in a temporary `GNUPGHOME` and the unsigned ZIP from `./mv
 - **S1. Ed25519 in p2: works headless.** The director installed the Ed25519-signed site. A control
   showed that p2 really checks the signature: replacing the bundle's `pgp.signatures` with a valid
   signature *of other bytes* made the install fail (`Can't download artifact osgi.bundle,…`), while
-  the same `artifacts.jar` rewritten with the original signature installed. *Still open:* the trust
-  dialog in a full Eclipse (*Install New Software*), by hand, after the real key exists.
+  the same `artifacts.jar` rewritten with the original signature installed. The trust dialog was
+  checked by the maintainer with the real key on 2026-10-24: a ZIP signed locally by `releng/sign.sh`,
+  installed through *Install New Software › Archive…*, showed the key and its fingerprint.
 - **S2. The signer on an unpacked site: works, with one change to the design.** A one-plug-in POM
   (`packaging pom`, goal `sign-p2-artifacts`, `repository` = the unzipped site) signed both
   artifacts (bundle and feature) and rewrote both `artifacts.jar` and `artifacts.xml.xz`; the
@@ -391,8 +392,13 @@ throwaway Ed25519 key in a temporary `GNUPGHOME` and the unsigned ZIP from `./mv
   that `MAVEN_GPG_KEY` is not read.
 - **S3. The director and untrusted keys: no flag needed.** The headless install of content signed
   by an unknown key succeeded, so the smoke test needs no change.
-- **S4. Trusted-key extension: still open** (the extension itself is built: element and attribute names checked against p2's `CertificateChecker` in Eclipse 4.34, which reads `trustedKeys`/`path` with `Bundle.getEntry`). It needs a full Eclipse and two signed versions, so it
-  is checked by hand with the real key (commit 2).
+- **S4. Trusted-key extension: partly checked.** The extension is built; its element and attribute
+  names were checked against p2's `CertificateChecker` in Eclipse 4.34, which reads
+  `trustedKeys`/`path` with `Bundle.getEntry`. The maintainer uninstalled and reinstalled the
+  locally signed build on 2026-10-24 and saw no dialog the second time, but the trust remembered
+  from the first install may explain that as well. The open test: with 0.1.4 installed, remove the
+  key from *Preferences › Install/Update › Trust* if it is listed as remembered by the user, then
+  update to 0.1.5: no dialog means the extension works.
 
 ### Commits
 
