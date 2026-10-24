@@ -51,7 +51,7 @@ class NvimExecutableTest {
 
     @Test
     void nameOnPathIsKeptEvenIfAlsoInAFallbackFolder() throws IOException {
-        Path onPath = Files.createTempDirectory("onpath");
+        Path onPath = pathDirectory("onpath");
         Path fallback = Files.createTempDirectory("fallback");
         try {
             Files.createFile(onPath.resolve("nvim"));
@@ -65,7 +65,7 @@ class NvimExecutableTest {
 
     @Test
     void nameMissingFromPathIsFoundInTheFirstFallbackFolderThatHasIt() throws IOException {
-        Path empty = Files.createTempDirectory("empty");
+        Path empty = pathDirectory("empty");
         Path homebrew = Files.createTempDirectory("homebrew");
         Path other = Files.createTempDirectory("other");
         try {
@@ -169,9 +169,23 @@ class NvimExecutableTest {
 
     // ---- PATH search ----
 
+    /**
+     * A new folder to put in a test's PATH: relative ({@code target/fakepath123}), not in the system
+     * temp folder. These tests pass {@code windows=false} to check the macOS/Linux rules on every OS,
+     * and those rules split PATH at {@code :}. An absolute Windows path has a {@code :} after its
+     * drive letter ({@code C:\Users\...}), so it would be cut in two and never found; a relative
+     * one has none. The search resolves it against the working directory (the module folder, where
+     * Maven runs the tests), the same way it does a relative PATH entry.
+     */
+    private static Path pathDirectory(String prefix) throws IOException {
+        Path target = Path.of("target");
+        Files.createDirectories(target);
+        return Files.createTempDirectory(target, prefix);
+    }
+
     @Test
     void isAvailableFindsCommandInPathDirectory() throws IOException {
-        Path dir = Files.createTempDirectory("fakepath");
+        Path dir = pathDirectory("fakepath");
         Path exe = Files.createFile(dir.resolve("nvim"));
         try {
             assertTrue(NvimExecutable.isAvailable("nvim", dir.toString(), false));
@@ -191,7 +205,7 @@ class NvimExecutableTest {
 
     @Test
     void isAvailableOnWindowsTriesExecutableSuffixes() throws IOException {
-        Path dir = Files.createTempDirectory("fakepathwin");
+        Path dir = pathDirectory("fakepathwin");
         Path exe = Files.createFile(dir.resolve("nvim.exe"));
         try {
             assertTrue(NvimExecutable.isAvailable("nvim", dir.toString(), true));
