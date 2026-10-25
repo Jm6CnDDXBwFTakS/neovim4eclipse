@@ -216,9 +216,11 @@ class NvimExecutableTest {
      * A new folder to put in a test's PATH: relative ({@code target/fakepath123}), not in the system
      * temp folder. These tests pass {@code windows=false} to check the macOS/Linux rules on every OS,
      * and those rules split PATH at {@code :}. An absolute Windows path has a {@code :} after its
-     * drive letter ({@code C:\Users\...}), so it would be cut in two and never found; a relative
-     * one has none. The search resolves it against the working directory (the module folder, where
-     * Maven runs the tests), the same way it does a relative PATH entry.
+     * drive letter ({@code C:\Users\...}), so it would be cut in two, {@code C} and
+     * {@code \Users\...}, and the second found only when the build runs on drive C: (it passes on
+     * most desktops, fails on CI runners that build on D:). A relative one has no colon. The search
+     * resolves it against the working directory (the module folder, where Maven runs the tests),
+     * the same way it does a relative PATH entry.
      */
     private static Path pathDirectory(String prefix) throws IOException {
         Path target = Path.of("target");
@@ -607,8 +609,16 @@ class NvimExecutableTest {
 
     @Test
     void locateFindsTheFileBehindACommandName() throws IOException {
+        // A relative PATH folder (pathDirectory): an absolute one, such as C:\Users\..., would be
+        // cut at its drive letter's colon, and the rest found only when the build runs on drive C:.
+        Path onPath = pathDirectory("path");
+        try {
+            Path onPathExe = Files.createFile(onPath.resolve("nvim"));
+            assertEquals(onPathExe.toAbsolutePath(), NvimExecutable.locate("nvim", onPath.toString(), false));
+        } finally {
+            deleteTree(onPath);
+        }
         Path exe = file("path/nvim");
-        assertEquals(exe.toAbsolutePath(), NvimExecutable.locate("nvim", exe.getParent().toString(), false));
         assertEquals(exe, NvimExecutable.locate(exe.toString(), "", false));
         assertNull(NvimExecutable.locate("nvim", "", false));
         assertNull(NvimExecutable.locate(tmp.resolve("missing").toString(), "", false));
