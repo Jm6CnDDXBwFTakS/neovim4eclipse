@@ -57,4 +57,13 @@ class NeovimVersionTest {
                 new NeovimVersion(0, 9, 5).tooOldMessage());
         assertEquals("0.12.6", new NeovimVersion(0, 12, 6).toString());
     }
+
+    @Test
+    void readsTheFirstLineOfNvimDashDashVersion() {
+        assertEquals(new NeovimVersion(0, 12, 6), NeovimVersion.fromVersionOutput("NVIM v0.12.6\nBuild type: Release\n"));
+        assertEquals(new NeovimVersion(0, 13, 0),
+                NeovimVersion.fromVersionOutput("NVIM v0.13.0-dev-1234+gabcdef0\n"), "a nightly counts as its numbers");
+        assertEquals(null, NeovimVersion.fromVersionOutput("VIM - Vi IMproved 9.1\n"));
+        assertEquals(null, NeovimVersion.fromVersionOutput(null));
+    }
 }

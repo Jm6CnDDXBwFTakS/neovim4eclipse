@@ -198,6 +198,11 @@ On macOS, `M1` in `plugin.xml` means Command and `M4` means Control. On Windows 
   equals its default is not written to disk.
 - Pages are `PreferencePage` subclasses. `FieldEditorPreferencePage` builds a form from field
   editors (`NeovimPreferencePage`); a hand-written page builds its own widgets (`CtrlKeysPreferencePage`).
+  A field editor can be extended rather than replaced: `prefs/NeovimLocationFieldEditor` subclasses
+  `StringButtonFieldEditor` (text plus a button), opens a `DirectoryDialog` from `changePressed`, and adds
+  a note in a row of its own. The note's work (running `nvim --version`) happens on a background thread;
+  `Display.asyncExec` brings the answer back to the UI thread, and a counter drops answers for text
+  that has changed since.
 - Code that must react to a change adds an `IPropertyChangeListener` to the store (`Activator.start`).
 - Preferences live in **scopes**, from the most specific: `InstanceScope` (the workspace; the
   preference store's), `ConfigurationScope` (the Eclipse installation's `configuration/` folder,
@@ -234,7 +239,8 @@ feature's installable unit `<feature id>.feature.group`, which is why the instal
 
 `nvim --embed` starts Neovim without a terminal user interface. It reads requests on standard input
 and writes replies on standard output. The program that started it (here, Eclipse) becomes its UI
-and its only client. `util/NvimExecutable.embedCommand` builds the command line;
+and its only client. `util/NvimExecutable.resolve` turns the preference (blank, Neovim's folder, or
+the program) into the program to run, `util/NvimExecutable.embedCommand` builds the command line, and
 `NeovimSession.start` launches it with `ProcessBuilder`.
 
 ### 2.2 msgpack-rpc

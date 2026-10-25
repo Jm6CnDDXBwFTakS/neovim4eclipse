@@ -11,11 +11,17 @@ public final class PreferenceConstants {
     private PreferenceConstants() {
     }
 
-    /** Absolute path or command name for the Neovim executable. */
+    /**
+     * Where Neovim is: blank, its install folder, an absolute path to {@code nvim}, or a command name
+     * (see {@code util/NvimExecutable}). The key keeps its old name so existing settings still apply.
+     */
     public static final String NVIM_EXECUTABLE = "nvimExecutable";
 
-    /** Default: resolve {@code nvim} from {@code PATH}. */
-    public static final String NVIM_EXECUTABLE_DEFAULT = "nvim";
+    /**
+     * Default: blank, which searches the plug-in's own folder ({@code ~/.local/opt/neovim}) first,
+     * then {@code PATH}, then the usual install folders.
+     */
+    public static final String NVIM_EXECUTABLE_DEFAULT = "";
 
     /** Whether the Neovim toolbar button (the logo) is visible. */
     public static final String SHOW_TOOLBAR = "showToolbar";

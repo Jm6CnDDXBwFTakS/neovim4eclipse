@@ -137,5 +137,5 @@ as described in [HOWTO_ECLIPSE.md](HOWTO_ECLIPSE.md). Tycho and PDE share the sa
 
 ## Runtime requirement
 
-`nvim` must be on the `PATH` of the Eclipse process, or an absolute path set in
-*Preferences → Neovim*.
+Neovim 0.12.6 or newer: in `~/.local/opt/neovim`, on the `PATH` of the Eclipse process, or its
+folder set in *Preferences → Neovim* (docs/PLATFORM.md, "Neovim executable").

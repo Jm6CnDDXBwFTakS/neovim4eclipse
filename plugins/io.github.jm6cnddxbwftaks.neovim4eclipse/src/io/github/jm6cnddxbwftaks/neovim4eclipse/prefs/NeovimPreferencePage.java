@@ -36,17 +36,12 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
 
     @Override
     protected void createFieldEditors() {
-        // Path or command name — FileFieldEditor is awkward for PATH names like "nvim",
-        // so use a string field with a note; users can paste an absolute path.
-        StringFieldEditor nvimPath = new StringFieldEditor(
+        // A folder (Neovim's install folder), a program, a command name, or blank to search; the note
+        // under it says which Neovim that finds (NeovimLocationFieldEditor, util/NvimExecutable).
+        addField(new NeovimLocationFieldEditor(
                 PreferenceConstants.NVIM_EXECUTABLE,
-                "Neovim executable:",
-                getFieldEditorParent());
-        nvimPath.setEmptyStringAllowed(false);
-        nvimPath.getTextControl(getFieldEditorParent()).setToolTipText(
-                "Command name on PATH (e.g. nvim) or absolute path to the binary. "
-                        + "Restart the Neovim session (detach/reattach or restart Eclipse) after changing.");
-        addField(nvimPath);
+                "Neovim folder or program:",
+                getFieldEditorParent()));
 
         addField(new BooleanFieldEditor(
                 PreferenceConstants.SHOW_TOOLBAR,

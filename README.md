@@ -55,9 +55,15 @@ To use the plug-in in your own Eclipse, without building it.
 - **Neovim 0.12.6 or newer**: `nvim --version` in a terminal should print it. The plug-in follows
   new Neovim releases closely, so a system package is often too old. A Neovim of its own is fine:
   extract the release archive from [Neovim's releases](https://github.com/neovim/neovim/releases)
-  anywhere, no install needed, and set the absolute path to its `bin/nvim` (`nvim.exe`) in
-  *Window → Preferences → Neovim*. Set that path too if Eclipse cannot find `nvim` (see the note below).
-  An older Neovim is refused with a message that names both versions.
+  into `~/.local/opt/neovim` (Windows: `%USERPROFILE%\.local\opt\neovim`), no install needed:
+  the plug-in looks there first. Or extract it anywhere and choose that folder in
+  *Window → Preferences → Neovim*, which shows the Neovim it finds and its version. Several
+  versions side by side in one folder are fine; the newest is used. An older Neovim is refused
+  with a message that names both versions.
+
+  ```bash
+  mkdir -p ~/.local/opt/neovim && tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/opt/neovim
+  ```
 
 **Steps**
 
@@ -115,11 +121,11 @@ are needed to [install](#install) it.
 - **JDK 21 or newer** for the build. Maven itself is not needed: `./mvnw` (Windows: `mvnw.cmd`) downloads
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
 - Eclipse IDE with PDE, **2024-12 (4.34) or newer** (the supported minimum; the build targets it), running on Java 21+, with a **JDK 21** registered for the JavaSE-21 execution environment
-- **Neovim 0.12.6+** reachable from the Eclipse process (`nvim --version`), or an absolute path set in
-  *Window → Preferences → Neovim*
+- **Neovim 0.12.6+** in `~/.local/opt/neovim`, reachable from the Eclipse process (`nvim --version`),
+  or its folder set in *Window → Preferences → Neovim*
 
 > Eclipse started from a desktop launcher may not inherit your shell `PATH`. Start it from a
-> terminal, or set the absolute path to `nvim` in the preferences.
+> terminal, or set Neovim's folder in the preferences.
 
 ## Run it (PDE)
 
@@ -458,7 +464,7 @@ one, in a `:terminal` too, inherits it.
 ## Preferences
 
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
-expanded): the Neovim executable (command or absolute path), whether to show the toolbar toggle, and
+expanded): where Neovim is (blank to search, its folder, or the program), whether to show the toolbar toggle, and
 whether to show the *Neovim* menu in the menu bar. With the menu hidden, its entries stay reachable:
 the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
 through *Window → Preferences*.

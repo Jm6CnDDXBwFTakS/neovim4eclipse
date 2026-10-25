@@ -66,7 +66,8 @@ public final class StartFailureReport {
      * Executable: nvim
      * Error: Cannot run program "nvim": error=2, No such file or directory
      *
-     * Install Neovim 0.12.6 or newer, or set the full path to nvim on the Neovim preference page. ...
+     * Install Neovim 0.12.6 or newer. The simplest install is the release archive from ... extracted
+     * into ~/.local/opt/neovim, which is searched first; or extract it anywhere and choose its folder ...
      * </pre>
      *
      * With an old Neovim the error line says so: {@code Error: Neovim 0.12.4 is too old: Neovim for
@@ -79,9 +80,10 @@ public final class StartFailureReport {
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"
-                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer, or set the full path to nvim on the "
-                + "Neovim preference page. The simplest install is the release archive from "
-                + RELEASES_URL + ", extracted anywhere: then set its bin/nvim there. "
+                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer. The simplest install is the release "
+                + "archive from " + RELEASES_URL + ", extracted into " + NvimExecutable.dedicatedFolder()
+                + ", which is searched first; or extract it anywhere and choose its folder on the "
+                + "Neovim preference page. "
                 + "Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH.";
     }
 

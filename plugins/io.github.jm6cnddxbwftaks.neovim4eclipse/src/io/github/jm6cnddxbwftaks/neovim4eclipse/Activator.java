@@ -107,13 +107,13 @@ public class Activator extends AbstractUIPlugin {
         return plugin;
     }
 
-    /** Configured Neovim executable (command on {@code PATH} or absolute path). */
+    /**
+     * The configured Neovim: blank (search), an install folder, an absolute path or a command name;
+     * {@code util/NvimExecutable.resolve} turns it into the program to start.
+     */
     public String getNvimExecutable() {
         String path = getPreferenceStore().getString(PreferenceConstants.NVIM_EXECUTABLE);
-        if (path == null || path.isBlank()) {
-            return PreferenceConstants.NVIM_EXECUTABLE_DEFAULT;
-        }
-        return path.strip();
+        return path == null ? "" : path.strip();
     }
 
     /** Which parts of the Vim status information the user chose to show in the status bar. */
