@@ -285,9 +285,10 @@ public final class NvimExecutable {
     }
 
     /**
-     * Whether {@code dir} is a folder of its own rather than a link to one. The walk does not follow
-     * symbolic links, but Java may report a Windows junction as a plain folder; its real path gives
-     * it away.
+     * Whether {@code dir} is a folder of its own rather than a link to one. The attributes catch a
+     * symbolic link, and a Windows junction, which Java reports as "other". The real path is a second
+     * check that does not depend on how a Java version reports a junction: a link's real path is
+     * where it leads. {@code NvimExecutableTest} creates junctions to check both.
      */
     private static boolean isPlainFolder(Path dir, BasicFileAttributes attrs) {
         if (attrs.isSymbolicLink() || attrs.isOther()) {
