@@ -13,9 +13,16 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 ## Neovim executable
 
 - Preference **Neovim folder or program** (`util/NvimExecutable`) accepts:
-  - **blank** (the default): `~/.local/opt/neovim` (Windows:
-    `%USERPROFILE%\.local\opt\neovim`), the folder meant for a Neovim of the plug-in's own,
-    searched as a folder (below); then `nvim` on `PATH`, then the usual install folders (below);
+  - **blank** (the default): the folder meant for a Neovim of the plug-in's own
+    (`util/PluginFolders`), searched as a folder (below); then `nvim` on `PATH`, then the usual
+    install folders (below). That folder is `<data home>/neovim4eclipse-plugin/neovim`, the data home
+    being `$XDG_DATA_HOME` if set to an absolute path, else `$HOME/.local/share` if `HOME` is set
+    (on Windows too), else the home folder's `.local/share`. So by default
+    `~/.local/share/neovim4eclipse-plugin/neovim`, on Windows
+    `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`. It is not named `neovim4eclipse`, a
+    likely `NVIM_APPNAME`, whose Neovim data would land in the same folder. Eclipse sees only the
+    variables of whatever started it: set in a shell's startup file, they are missing when Eclipse
+    starts from the macOS Dock or the Windows Start menu. The preference page shows the folder used;
   - **a folder**: the newest working Neovim among `folder/bin/nvim`, `folder/nvim` (a `bin` folder) and
     every install below the folder down to depth 4 (`NvimExecutable.maxSearchDepth()`;
     `folder/a/b/bin/nvim` is depth 4). An install is a `bin/nvim` (`bin\nvim.exe` on Windows) with
@@ -31,7 +38,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
   inherits `SHELL=/usr/bin/bash`, which Neovim would combine with `cmd.exe`'s flags, so `:!` commands failed.
   Neovim then uses `cmd.exe`; set `'shell'` and its flags in `init.lua` for another shell.
 - Simplest install: extract the release archive from https://github.com/neovim/neovim/releases into
-  `~/.local/opt/neovim` and leave the preference blank.
+  `~/.local/share/neovim4eclipse-plugin/neovim` and leave the preference blank.
 - The usual install folders, each checked for `bin/nvim` or `nvim` directly inside it (not searched
   further down, since folders such as `/usr/local` can be large) and asked `--version`, on macOS and
   Linux alike: `/opt/homebrew`, `/usr/local`, `/home/linuxbrew/.linuxbrew`, `~/.linuxbrew`,

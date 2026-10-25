@@ -9,10 +9,10 @@ import java.nio.file.Path;
  * Says which Neovim a preference value finds, for the note under the field on the preference page:
  *
  * <pre>
- *   Found /home/you/.local/opt/neovim/bin/nvim, Neovim 0.12.6.
- *   Found /home/you/.local/opt/neovim/nvim-0.13.0/bin/nvim, Neovim 0.13.0 (newest of 2 in this folder).
+ *   Found /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim, Neovim 0.12.6.
+ *   Found /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-0.13.0/bin/nvim, Neovim 0.13.0 (newest of 2 in this folder).
  *   Found /usr/bin/nvim, Neovim 0.9.5: too old, Neovim for Eclipse needs 0.12.6 or newer.
- *   No Neovim found. Extract a release archive into /home/you/.local/opt/neovim, or choose ...
+ *   No Neovim found. Extract a release archive into /home/you/.local/share/neovim4eclipse-plugin/neovim, or choose ...
  * </pre>
  *
  * <p>{@link #describe} runs {@code nvim --version} ({@link InstalledVersions}), which takes some

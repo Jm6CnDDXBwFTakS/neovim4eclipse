@@ -26,7 +26,7 @@
        (so a broken test still fails the build) but starts no Eclipse, so no window opens; the UI
        tests are the only ones that open one. CI always passes -Pui. -Pui -DskipTests skips them
        again. The end-to-end tests also need nvim (they are skipped without it). Without
-       -Dnvim.path they search as a blank preference does (~/.local/opt/neovim first, then PATH);
+       -Dnvim.path they search as a blank preference does (~/.local/share/neovim4eclipse-plugin/neovim first, then PATH);
        -Dnvim.path=/path/to/neovim (a folder or the program) selects one.
 
        The tests tagged "heavyJava" need the Java development tools (a Java editor, Format, Rename,

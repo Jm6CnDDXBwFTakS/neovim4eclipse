@@ -295,7 +295,7 @@ class NvimExecutableTest {
 
     @Test
     void anArchiveExtractedAsItIsIsFoundInsideTheFolder() throws IOException {
-        // tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/opt/neovim keeps the archive's top folder.
+        // tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/share/neovim4eclipse-plugin/neovim keeps the archive's top folder.
         Path exe = install("neovim/nvim-linux-x86_64", "nvim");
         assertEquals(real(exe).toString(), resolveNowhere(tmp.resolve("neovim").toString(), false));
     }
@@ -505,15 +505,15 @@ class NvimExecutableTest {
     }
 
     @Test
-    void dedicatedFolderIsUnderTheHomeFolder() {
-        assertEquals(Path.of(System.getProperty("user.home"), ".local", "opt", "neovim"),
+    void dedicatedFolderIsThePluginsNeovimFolder() {
+        assertEquals(PluginFolders.dataHome().resolve("neovim4eclipse-plugin").resolve("neovim"),
                 NvimExecutable.dedicatedFolder());
     }
 
     @Test
     void aLeadingTildeIsTheHomeFolder() {
         String home = System.getProperty("user.home");
-        assertEquals(home + "/.local/opt/neovim", NvimExecutable.expandHome("~/.local/opt/neovim"));
+        assertEquals(home + "/.local/share/neovim4eclipse-plugin/neovim", NvimExecutable.expandHome("~/.local/share/neovim4eclipse-plugin/neovim"));
         assertEquals(home, NvimExecutable.expandHome("~"));
         assertEquals("~user/x", NvimExecutable.expandHome("~user/x"), "only the current user's ~");
         assertEquals("/opt/~", NvimExecutable.expandHome("/opt/~"));

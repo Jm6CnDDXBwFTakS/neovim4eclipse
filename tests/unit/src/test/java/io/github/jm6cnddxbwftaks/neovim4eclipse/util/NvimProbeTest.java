@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 /** The note under the Neovim field on the preference page (see {@link NvimProbe}). */
 class NvimProbeTest {
 
-    private static final Path PROGRAM = Path.of("/home/you/.local/opt/neovim/bin/nvim");
-    private static final Path DEDICATED = Path.of("/home/you/.local/opt/neovim");
+    private static final Path PROGRAM = Path.of("/home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim");
+    private static final Path DEDICATED = Path.of("/home/you/.local/share/neovim4eclipse-plugin/neovim");
     private static final NeovimVersion MIN = NeovimVersion.MINIMUM;
 
     @Test

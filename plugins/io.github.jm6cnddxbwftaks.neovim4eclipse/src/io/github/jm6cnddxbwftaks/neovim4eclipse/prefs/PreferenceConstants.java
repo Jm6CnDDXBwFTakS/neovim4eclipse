@@ -18,7 +18,7 @@ public final class PreferenceConstants {
     public static final String NVIM_EXECUTABLE = "nvimExecutable";
 
     /**
-     * Default: blank, which searches the plug-in's own folder ({@code ~/.local/opt/neovim}) first,
+     * Default: blank, which searches the plug-in's own folder ({@code ~/.local/share/neovim4eclipse-plugin/neovim}) first,
      * then {@code PATH}, then the usual install folders.
      */
     public static final String NVIM_EXECUTABLE_DEFAULT = "";

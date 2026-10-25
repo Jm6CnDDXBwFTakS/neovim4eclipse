@@ -55,15 +55,20 @@ To use the plug-in in your own Eclipse, without building it.
 - **Neovim 0.12.6 or newer**: `nvim --version` in a terminal should print it. The plug-in follows
   new Neovim releases closely, so a system package is often too old. A Neovim of its own is fine:
   extract the release archive from [Neovim's releases](https://github.com/neovim/neovim/releases)
-  into `~/.local/opt/neovim` (Windows: `%USERPROFILE%\.local\opt\neovim`), no install needed:
-  the plug-in looks there first. Or extract it anywhere and choose that folder in
+  into `~/.local/share/neovim4eclipse-plugin/neovim` (Windows:
+  `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`; with `XDG_DATA_HOME` set,
+  `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`), no install needed: the plug-in looks there first.
+  Eclipse sees only the environment variables of whatever started it, so one set in your shell's
+  startup file does not count when Eclipse starts from the Dock or the Start menu; the preference
+  page shows the folder it uses. Or extract it anywhere and choose that folder in
   *Window → Preferences → Neovim*, which shows the Neovim it finds and its version. Archives may sit
   a few folders down (as Windows Explorer's *Extract All* leaves them), and several versions side
   by side in one folder are fine; the newest is used. An older Neovim is refused
   with a message that names both versions.
 
   ```bash
-  mkdir -p ~/.local/opt/neovim && tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/opt/neovim
+  mkdir -p ~/.local/share/neovim4eclipse-plugin/neovim
+  tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/share/neovim4eclipse-plugin/neovim
   ```
 
 **Steps**
@@ -122,7 +127,8 @@ are needed to [install](#install) it.
 - **JDK 21 or newer** for the build. Maven itself is not needed: `./mvnw` (Windows: `mvnw.cmd`) downloads
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
 - Eclipse IDE with PDE, **2024-12 (4.34) or newer** (the supported minimum; the build targets it), running on Java 21+, with a **JDK 21** registered for the JavaSE-21 execution environment
-- **Neovim 0.12.6+** in `~/.local/opt/neovim`, reachable from the Eclipse process (`nvim --version`),
+- **Neovim 0.12.6+** in `~/.local/share/neovim4eclipse-plugin/neovim`, reachable from the Eclipse
+  process (`nvim --version`),
   or its folder set in *Window → Preferences → Neovim*
 
 > Eclipse started from a desktop launcher may not inherit your shell `PATH`. Start it from a

@@ -25,8 +25,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - *Window → Preferences → Neovim* takes a folder that holds Neovim: its install folder (the one with
   `bin/nvim`), or a folder with release archives extracted into it, up to four levels down (so also
   as Windows Explorer's *Extract All* leaves them), with a *Browse...* button, and shows which Neovim
-  it finds and its version. Left blank (the new default), it looks in `~/.local/opt/neovim`
-  first (`%USERPROFILE%\.local\opt\neovim` on Windows), then on `PATH`, then in the usual
+  it finds and its version. Left blank (the new default), it looks in the plug-in's own Neovim
+  folder first, `~/.local/share/neovim4eclipse-plugin/neovim` (`$XDG_DATA_HOME/...` when set; on
+  Windows `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`), then on `PATH`, then in the usual
   install folders, now also Neovim's own `/opt` folders and per-user Windows installs. Several
   Neovims side by side in one folder: the newest that runs is used. A path to `nvim` set before
   keeps working.
