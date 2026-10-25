@@ -364,6 +364,58 @@ class NvimExecutableTest {
         assertEquals(List.of(real(exe)), NvimExecutable.installsIn(tmp.resolve("neovim"), "nvim", false));
     }
 
+    /**
+     * The Windows counterpart of {@link #aLinkedInstallCountsOnce}: a junction, which any user may
+     * create (a symbolic link needs Developer Mode or an administrator), so this one runs everywhere
+     * on Windows. The search stays out of the junction, and the program reached through it would
+     * count once anyway (both have the same real path).
+     */
+    @Test
+    void onWindowsAJunctionedInstallCountsOnce() throws IOException, InterruptedException {
+        assumeTrue(PlatformUtil.isWindows(), "junctions are a Windows feature");
+        Path exe = install("neovim/nvim-0.12.6", "nvim.exe");
+        Path junction = junction(tmp.resolve("neovim/nvim-current"), tmp.resolve("neovim/nvim-0.12.6"));
+        try {
+            assertEquals(List.of(real(exe)), NvimExecutable.installsIn(tmp.resolve("neovim"), "nvim", true));
+        } finally {
+            removeJunction(junction);
+        }
+    }
+
+    @Test
+    void onWindowsAJunctionOutOfTheFolderIsNotFollowed() throws IOException, InterruptedException {
+        // A junction to a Neovim elsewhere (or to a large folder, or to itself) is not searched. Two
+        // checks in installsIn see to it, each enough alone: the folder's attributes (Java reports a
+        // junction as "other", not as a plain folder) and its real path.
+        assumeTrue(PlatformUtil.isWindows(), "junctions are a Windows feature");
+        install("elsewhere/nvim-win64", "nvim.exe");
+        Files.createDirectories(tmp.resolve("neovim"));
+        Path junction = junction(tmp.resolve("neovim/nvim-win64"), tmp.resolve("elsewhere/nvim-win64"));
+        try {
+            assertTrue(Files.isRegularFile(junction.resolve("bin/nvim.exe")), "the junction leads to the install");
+            assertEquals(List.of(), NvimExecutable.installsIn(tmp.resolve("neovim"), "nvim", true));
+        } finally {
+            removeJunction(junction);
+        }
+    }
+
+    /** Creates {@code link} as a junction to the folder {@code target} with {@code mklink /J}. */
+    private static Path junction(Path link, Path target) throws IOException, InterruptedException {
+        Process mklink = new ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString())
+                .redirectErrorStream(true).start();
+        String output = new String(mklink.getInputStream().readAllBytes());
+        assertEquals(0, mklink.waitFor(), "mklink /J failed: " + output);
+        return link;
+    }
+
+    /**
+     * Removes a junction itself, not what it leads to: {@code rmdir} on a junction deletes the link,
+     * whereas a recursive delete (such as {@code @TempDir}'s cleanup) might walk into it first.
+     */
+    private static void removeJunction(Path junction) throws IOException, InterruptedException {
+        new ProcessBuilder("cmd", "/c", "rmdir", junction.toString()).redirectErrorStream(true).start().waitFor();
+    }
+
     @Test
     void aMissingFolderHasNoInstalls() {
         assertEquals(List.of(), NvimExecutable.installsIn(tmp.resolve("missing"), "nvim", false));
