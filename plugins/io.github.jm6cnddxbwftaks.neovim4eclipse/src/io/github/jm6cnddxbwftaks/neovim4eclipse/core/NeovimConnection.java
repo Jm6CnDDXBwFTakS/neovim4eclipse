@@ -120,14 +120,14 @@ final class NeovimConnection implements AutoCloseable {
      * normally writes nothing there under {@code --embed}; whatever it does write (a crash report,
      * say) is logged at WARNING, one line at a time, by a small daemon thread.
      *
-     * @param nvimPath      preference value: command name or absolute path (see {@link NvimExecutable})
+     * @param nvimPath      preference value: blank, a folder or an absolute path (see {@link NvimExecutable})
      * @param extraArgs     extra command-line arguments, e.g. {@code --clean} for tests
      * @param clientVersion this plug-in's version (OSGi {@code major.minor.micro.qualifier}), reported to Neovim
      * @throws Exception if the process cannot start or does not answer in time
      */
     static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion) throws Exception {
         List<String> cmd = NvimExecutable.embedCommand(nvimPath, extraArgs);
-        // Inherit the environment so "nvim"/"nvim.exe" resolve through PATH/PATHEXT.
+        // Inherit the environment: Neovim and the programs it runs (:!, :terminal) need PATH and the rest.
         ProcessBuilder pb = new ProcessBuilder(cmd);
         NvimExecutable.prepareEnvironment(pb.environment(), PlatformUtil.isWindows());
         Process process = pb.start();

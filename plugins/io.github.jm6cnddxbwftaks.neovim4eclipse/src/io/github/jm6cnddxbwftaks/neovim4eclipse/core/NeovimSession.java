@@ -156,7 +156,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Launches Neovim, attaches as a UI, creates a scratch buffer and installs the Lua hooks.
      *
-     * @param nvimPath  preference value: command name or absolute path (see {@link NvimExecutable})
+     * @param nvimPath  preference value: blank, a folder or an absolute path (see {@link NvimExecutable})
      * @param extraArgs extra command-line arguments, e.g. {@code --clean} for tests
      * @param clipboard the system clipboard: receives text yanked in Neovim, and is read when Neovim
      *                  pastes from {@code "+} or {@code "*}

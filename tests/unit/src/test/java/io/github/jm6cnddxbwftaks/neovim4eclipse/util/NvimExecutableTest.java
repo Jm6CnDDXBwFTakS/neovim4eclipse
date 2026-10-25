@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -62,20 +63,16 @@ class NvimExecutableTest {
     }
 
     @Test
-    void commandNamesAreKeptAndTrimmed() {
-        assertEquals("nvim", resolveNowhere("nvim", false));
-        assertEquals("nvim.exe", resolveNowhere("nvim.exe", true));
-        assertEquals("nvim", resolveNowhere("  nvim  ", false));
-    }
-
-    @Test
-    void nameOnPathIsKeptEvenIfAlsoInAFallbackFolder() throws IOException {
+    void aCommandNameIsNeitherLookedUpNorSearchedFor() throws IOException {
+        // Only a blank preference searches; a value names one Neovim, by an absolute path.
         Path onPath = pathDirectory("onpath");
         Path fallback = Files.createTempDirectory("fallback");
         try {
             Files.createFile(onPath.resolve("nvim"));
             Files.createFile(fallback.resolve("nvim"));
             assertEquals("nvim", resolve("nvim", onPath.toString(), false, List.of(fallback)));
+            assertEquals("nvim", resolve("  nvim  ", onPath.toString(), false, List.of(fallback)));
+            assertNull(NvimExecutable.locate("nvim"), "a command name is not looked up on PATH");
         } finally {
             deleteTree(onPath);
             deleteTree(fallback);
@@ -83,7 +80,18 @@ class NvimExecutableTest {
     }
 
     @Test
-    void nameMissingFromPathIsFoundInTheFirstFallbackFolderThatHasIt() throws IOException {
+    void blankFindsNvimOnPathAsAnAbsolutePath() throws IOException {
+        Path onPath = pathDirectory("onpath");
+        try {
+            Path exe = Files.createFile(onPath.resolve("nvim"));
+            assertEquals(exe.toAbsolutePath().toString(), resolve("", onPath.toString(), false, List.of()));
+        } finally {
+            deleteTree(onPath);
+        }
+    }
+
+    @Test
+    void blankMissingFromPathIsFoundInTheFirstUsualFolderThatHasIt() throws IOException {
         Path empty = pathDirectory("empty");
         Path homebrew = Files.createTempDirectory("homebrew");
         Path other = Files.createTempDirectory("other");
@@ -91,7 +99,7 @@ class NvimExecutableTest {
             Path exe = Files.createFile(homebrew.resolve("nvim"));
             Files.createFile(other.resolve("nvim"));
             assertEquals(exe.toAbsolutePath().toString(),
-                    resolve("nvim", empty.toString(), false, List.of(empty, homebrew, other)));
+                    resolve("", empty.toString(), false, List.of(empty, homebrew, other)));
         } finally {
             deleteTree(empty);
             deleteTree(homebrew);
@@ -100,14 +108,30 @@ class NvimExecutableTest {
     }
 
     @Test
-    void fallbackFoldersOnWindowsTryExecutableSuffixes() throws IOException {
+    void blankOnWindowsFindsNvimExeInAUsualFolder() throws IOException {
         Path dir = Files.createTempDirectory("neovimbin");
         try {
             Path exe = Files.createFile(dir.resolve("nvim.exe"));
-            assertEquals(exe.toAbsolutePath().toString(), resolve("nvim", "", true, List.of(dir)));
+            assertEquals(exe.toAbsolutePath().toString(), resolve("", "", true, List.of(dir)));
         } finally {
             deleteTree(dir);
         }
+    }
+
+    @Test
+    void startingRefusesAValueThatIsNotAnAbsolutePath() {
+        for (String value : List.of("nvim", "nvim.exe", " bin/nvim ")) {
+            NeovimNotFoundException e = assertThrows(NeovimNotFoundException.class,
+                    () -> NvimExecutable.embedCommand(value, null), value);
+            assertEquals("The Neovim folder or program must be an absolute path (a leading ~ is fine): "
+                    + value.strip(), e.getMessage());
+        }
+    }
+
+    @Test
+    void aBlankPreferenceThatFindsNothingSaysSo() {
+        assertEquals("No Neovim found in the default folders", NvimExecutable.notFound("").getMessage());
+        assertEquals("No Neovim found in the default folders", NvimExecutable.notFound(null).getMessage());
     }
 
     @Test
@@ -428,14 +452,14 @@ class NvimExecutableTest {
     void searchFoldersAreInstallFoldersToo() throws IOException {
         Path exe = file("homebrew/bin/nvim");
         assertEquals(exe.toAbsolutePath().toString(),
-                resolve("nvim", "", false, List.of(tmp.resolve("missing"), tmp.resolve("homebrew"))));
+                resolve("", "", false, List.of(tmp.resolve("missing"), tmp.resolve("homebrew"))));
     }
 
     @Test
     void theUsualInstallFoldersAreNotSearched() throws IOException {
         // /usr/local, say, may hold a lot: only its own bin/nvim counts.
         install("usr-local/nvim-linux-x86_64", "nvim");
-        assertEquals("nvim", resolve("nvim", "", false, List.of(tmp.resolve("usr-local"))));
+        assertEquals("nvim", resolve("", "", false, List.of(tmp.resolve("usr-local"))));
     }
 
     @Test
@@ -444,7 +468,7 @@ class NvimExecutableTest {
         Path works = file("homebrew/bin/nvim");
         Function<Path, NeovimVersion> versionOf = p -> p.equals(works.toAbsolutePath()) ? new NeovimVersion(0, 12, 6)
                 : null;
-        assertEquals(works.toAbsolutePath().toString(), NvimExecutable.find("nvim", "", false, null,
+        assertEquals(works.toAbsolutePath().toString(), NvimExecutable.find("", "", false, null,
                 List.of(tmp.resolve("broken"), tmp.resolve("homebrew")), versionOf).command());
     }
 
@@ -479,16 +503,26 @@ class NvimExecutableTest {
     @Test
     void blankFallsBackToPathWhenTheDedicatedNeovimDoesNotRun() throws IOException {
         file("opt/neovim/bin/nvim");
-        Path onPath = file("path/nvim");
-        assertEquals("nvim", NvimExecutable.find("", onPath.getParent().toString(), false,
-                tmp.resolve("opt/neovim"), List.of(), p -> null).command());
+        Path onPath = pathDirectory("onpath"); // relative: an absolute Windows path has a ':' (see pathDirectory)
+        try {
+            Path exe = Files.createFile(onPath.resolve("nvim"));
+            assertEquals(exe.toAbsolutePath().toString(), NvimExecutable.find("", onPath.toString(), false,
+                    tmp.resolve("opt/neovim"), List.of(), p -> null).command());
+        } finally {
+            deleteTree(onPath);
+        }
     }
 
     @Test
     void blankFallsBackToPathWhenTheDedicatedFolderIsEmpty() throws IOException {
-        Path onPath = file("path/nvim");
-        assertEquals("nvim", resolve(null, onPath.getParent().toString(), false,
-                tmp.resolve("opt/neovim"), List.of()));
+        Path onPath = pathDirectory("onpath");
+        try {
+            Path exe = Files.createFile(onPath.resolve("nvim"));
+            assertEquals(exe.toAbsolutePath().toString(), resolve(null, onPath.toString(), false,
+                    tmp.resolve("opt/neovim"), List.of()));
+        } finally {
+            deleteTree(onPath);
+        }
     }
 
     @Test

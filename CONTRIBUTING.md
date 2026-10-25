@@ -12,7 +12,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
   preference: the release archive extracted into `~/.local/share/neovim4eclipse-plugin/neovim`
   (Windows: `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`) first, then `nvim` on `PATH`,
   then the usual install folders.
-  `-Dnvim.path=...` (a folder, the program, or a command name) picks another. A newer Neovim works
+  `-Dnvim.path=...` (a folder, or the absolute path of the program) picks another. A newer Neovim works
   too, but only 0.12.6 is what CI checks. Tests that find none are skipped, not failed: check the
   "Skipped" count.
 - **Eclipse IDE for Eclipse Committers** (it includes PDE, the plug-in development tools), 2024-12 or

@@ -29,8 +29,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   folder first, `~/.local/share/neovim4eclipse-plugin/neovim` (`$XDG_DATA_HOME/...` when set; on
   Windows `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`), then on `PATH`, then in the usual
   install folders, now also Neovim's own `/opt` folders and per-user Windows installs. Several
-  Neovims side by side in one folder: the newest that runs is used. A path to `nvim` set before
-  keeps working. The page says what the field takes and links to
+  Neovims side by side in one folder: the newest that runs is used. An absolute path to `nvim` set
+  before keeps working. The page says what the field takes and links to
   [Finding Neovim](README.md#finding-neovim) in the README; when nothing is found, the note says
   whether the default folders or the value entered came up empty, and how to go on.
 - A Neovim older than the minimum is refused at start, with a message naming its version and the
@@ -38,6 +38,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Removed
 
+- The Neovim preference no longer takes a command name such as `nvim` (the old default) or a
+  relative path: a value must be an absolute path, to a folder or to the program, and anything else
+  stops Neovim from starting with an error saying so. To use the `nvim` on `PATH`, leave the field
+  blank. The old default was never saved, so an untouched preference is blank already.
 - The home folder itself and `/snap` are no longer among the usual install folders searched on
   macOS and Linux; `~/bin/nvim` still is.
 

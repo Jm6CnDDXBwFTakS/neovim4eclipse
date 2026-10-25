@@ -30,8 +30,10 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
     *Extract All* put it in one more folder (`nvim-win64\nvim-win64\bin\nvim.exe`). Links and Windows
     junctions are not followed. Every candidate is asked `--version`: one that does not answer as
     Neovim (another processor, a broken install) is skipped, and of several the newest wins;
-  - **a program**: an absolute path to `nvim`, or a command name looked up on `PATH`, then in the usual
-    install folders. A leading `~` is the home folder.
+  - **a program**: an absolute path to `nvim`, used as it is. A leading `~` is the home folder.
+    Anything else that is not an absolute path, such as a command name (`nvim`) or a relative path,
+    is not looked up anywhere: Neovim is not started, and the error says the value must be absolute
+    (`util/NeovimNotFoundException`). Only a blank preference searches, `PATH` included.
 - The preference page shows which Neovim the field finds and its version, or that it is too old.
 - Process is started with `ProcessBuilder` and the inherited environment so `PATH` / `PATHEXT` apply on Windows.
 - On Windows, `SHELL` is not passed on (`NvimExecutable.prepareEnvironment`): Eclipse started from Git Bash
