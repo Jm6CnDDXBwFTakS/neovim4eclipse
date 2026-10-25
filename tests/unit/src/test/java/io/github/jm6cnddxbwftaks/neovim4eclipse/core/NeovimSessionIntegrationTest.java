@@ -24,6 +24,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -45,6 +46,45 @@ class NeovimSessionIntegrationTest {
     private static NeovimSession start(List<String> args) throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
         return NeovimSession.start(NVIM, args);
+    }
+
+    // ---- errors in the user's configuration ----
+
+    /**
+     * A typo in init.lua made Neovim wait at a "Press ENTER" prompt Eclipse does not show, and the
+     * start timed out. Now the prompt is dismissed, Neovim starts (without that init.lua: a syntax
+     * error stops all of it), and the error is reported.
+     */
+    @Test
+    void aSyntaxErrorInTheConfigurationIsReportedAndNeovimStartsAnyway(@TempDir Path dir) throws Exception {
+        Path init = dir.resolve("init.lua");
+        Files.writeString(init, "vim.g.before = 1\nnnoremap ; :\n");
+        try (NeovimSession s = start(List.of("-u", init.toString()))) {
+            assertTrue(s.startupErrors().contains("E5112"), s.startupErrors());
+            s.setBufferLines(List.of("one", "two"));
+            keys(s, "d", "d");
+            assertEquals(List.of("two"), s.getBufferLines(), "Neovim works after the error");
+            assertEquals(0L, ((Number) s.lua("return vim.g.before or 0")).longValue(), "a syntax error runs nothing");
+        }
+    }
+
+    /** A runtime error keeps what ran before it, as in a terminal. */
+    @Test
+    void aRuntimeErrorKeepsWhatRanBeforeIt(@TempDir Path dir) throws Exception {
+        Path init = dir.resolve("init.lua");
+        Files.writeString(init, "vim.g.before = 1\nerror('boom from init')\nvim.g.after = 1\n");
+        try (NeovimSession s = start(List.of("-u", init.toString()))) {
+            assertTrue(s.startupErrors().contains("boom from init"), s.startupErrors());
+            assertEquals(1L, ((Number) s.lua("return vim.g.before or 0")).longValue());
+            assertEquals(0L, ((Number) s.lua("return vim.g.after or 0")).longValue());
+        }
+    }
+
+    @Test
+    void aCleanStartReportsNoErrors() throws Exception {
+        try (NeovimSession s = start()) {
+            assertEquals("", s.startupErrors());
+        }
     }
 
     @Test

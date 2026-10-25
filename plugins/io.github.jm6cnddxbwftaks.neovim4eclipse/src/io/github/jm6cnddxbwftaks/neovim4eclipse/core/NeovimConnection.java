@@ -14,10 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.MsgpackNeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
@@ -80,6 +82,14 @@ final class NeovimConnection implements AutoCloseable {
 
     /** Upper bound for the requests made while opening. */
     private static final long OPEN_TIMEOUT_SEC = 5;
+    /**
+     * How long Neovim may take to run the user's {@code init.lua} after the UI attached
+     * ({@link #waitForStartup}). Longer than {@link #OPEN_TIMEOUT_SEC}: a configuration with a
+     * plug-in manager can take a few seconds, the first time especially.
+     */
+    private static final long STARTUP_TIMEOUT_SEC = 10;
+    /** How often {@link #waitForStartup} looks for a prompt while Neovim starts. */
+    private static final long STARTUP_POLL_MS = 50;
     /** How long {@link #requestQuit} waits for Neovim to exit after {@code :qa!} (it takes milliseconds). */
     private static final long QUIT_TIMEOUT_MS = 1500;
 
@@ -88,6 +98,8 @@ final class NeovimConnection implements AutoCloseable {
     private final NeovimApi api;
     /** Where Neovim's notifications and requests go; see {@link #setIncoming}. */
     private volatile Incoming incoming;
+    /** The errors the user's configuration reported while Neovim started, or "" (see {@link #waitForStartup}). */
+    private String startupErrors = "";
 
     private NeovimConnection(Process process) {
         this.process = process;
@@ -124,11 +136,73 @@ final class NeovimConnection implements AutoCloseable {
             await(connection.api.setClientInfo(CLIENT_NAME, clientVersion(clientVersion), "remote", Map.of(), Map.of()));
             // Without a UI attached, nvim_input is not processed reliably under --embed.
             await(connection.api.uiAttach(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
+            connection.startupErrors = connection.waitForStartup();
         } catch (Exception e) {
             connection.close();
             throw e;
         }
         return connection;
+    }
+
+    /**
+     * Waits until Neovim has run the user's configuration, and dismisses the "Press ENTER" prompt
+     * an error in it leaves.
+     *
+     * <p>Under {@code --embed}, Neovim runs {@code init.lua} (or {@code init.vim}) only once a UI has
+     * attached. An error there, a typo say, makes Neovim show the error and wait at a hit-enter
+     * prompt, which this plug-in does not draw; while it waits, Neovim answers no request but
+     * {@code nvim_get_mode}, so every later request of the start-up would time out
+     * ("Neovim not started: TimeoutException"). So this sends a request that is answered only once
+     * Neovim is idle, and while it waits, asks for the mode (answered at once): at a prompt
+     * ({@code r}, {@code rm}), an Esc dismisses it, as a user in a terminal would press Enter. Neovim
+     * then carries on with what its configuration set up before the error: for a Lua syntax error,
+     * nothing of {@code init.lua}.
+     *
+     * @return the configuration's errors, as {@code :messages} lists them, if it reported any
+     *         ({@code v:errmsg} is set); "" otherwise
+     * @throws TimeoutException if Neovim is still busy after {@link #STARTUP_TIMEOUT_SEC}
+     */
+    private String waitForStartup() throws Exception {
+        CompletableFuture<Object> idle = api.execLua("return 0", List.of());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STARTUP_TIMEOUT_SEC);
+        while (true) {
+            try {
+                idle.get(STARTUP_POLL_MS, TimeUnit.MILLISECONDS);
+                break;
+            } catch (TimeoutException stillStarting) {
+                Mode mode = await(api.getMode());
+                if (mode != null && mode.blocking() && mode.mode() != null && mode.mode().startsWith("r")) {
+                    LOG.info("Neovim waits at a prompt while starting (an error in its configuration?); dismissing it");
+                    await(api.input("<Esc>"));
+                }
+                if (System.nanoTime() > deadline) {
+                    throw new TimeoutException("Neovim did not finish starting within " + STARTUP_TIMEOUT_SEC
+                            + " s (is its configuration, init.lua, waiting for something?)");
+                }
+            }
+        }
+        Object errors = await(api.execLua(STARTUP_ERRORS, List.of()));
+        String text = errors == null ? "" : errors.toString().strip();
+        if (!text.isEmpty()) {
+            LOG.warning(() -> "Neovim's configuration reported errors while starting:\n" + text);
+        }
+        return text;
+    }
+
+    /** The start-up messages if an error was reported ({@code v:errmsg}), else "". */
+    private static final String STARTUP_ERRORS = """
+            if vim.v.errmsg == '' then
+              return ''
+            end
+            return vim.api.nvim_exec2('messages', { output = true }).output
+            """;
+
+    /**
+     * The errors the user's configuration ({@code init.lua}) reported while Neovim started, as
+     * {@code :messages} listed them then, or "" if it reported none. Neovim started anyway.
+     */
+    String startupErrors() {
+        return startupErrors;
     }
 
     /** Logs each line Neovim writes to stderr, until the stream ends with the process. */

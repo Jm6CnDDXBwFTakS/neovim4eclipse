@@ -335,6 +335,7 @@ public final class EditorAttachManager {
             session = Activator.getDefault().getOrCreateSession();
             StartFailureNotice.clear();
             WelcomeNotice.afterStart(); // the welcome, once per installation (and per minor version)
+            StartupErrorNotice.afterStart(session); // errors in init.lua, once per Neovim
         } catch (Exception e) {
             StartFailureNotice.report(Activator.getDefault().getNvimExecutable(), e);
             throw e;

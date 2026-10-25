@@ -227,6 +227,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     // ---- state accessors and listeners ----
 
+    /**
+     * The errors the user's configuration ({@code init.lua}) reported while this Neovim started, or
+     * "" if none: Neovim started anyway (see {@code NeovimConnection.waitForStartup}).
+     */
+    public String startupErrors() {
+        return connection.startupErrors();
+    }
+
     public String getMode() {
         return state.mode();
     }
