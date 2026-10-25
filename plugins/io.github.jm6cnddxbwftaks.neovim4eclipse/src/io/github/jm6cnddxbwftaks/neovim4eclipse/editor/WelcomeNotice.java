@@ -119,8 +119,13 @@ final class WelcomeNotice {
         create(shell, WelcomeNote.Kind.WELCOME, null).open();
     }
 
+    /** The toggle's key binding, formatted for this OS ({@code Ctrl+Shift+M}; {@code ⇧⌘M} on macOS). */
+    static String toggleKey() {
+        return keyBinding(WelcomeNote.TOGGLE_COMMAND_ID, WelcomeNote.DEFAULT_TOGGLE_SEQUENCE);
+    }
+
     /**
-     * The toggle's key binding, formatted for this OS ({@code Ctrl+Shift+M}; {@code ⇧⌘M} on macOS).
+     * A command's key binding, formatted for this OS ({@code Ctrl+Shift+M}; {@code ⇧⌘M} on macOS).
      *
      * <p>First the binding the user's key scheme has now, which includes the user's own changes
      * (<em>Preferences › General › Keys</em>). Eclipse only answers that for bindings whose context
@@ -128,18 +133,22 @@ final class WelcomeNotice {
      * active (another dialog has focus, or a test display without a window manager), it answers
      * {@code null}. Then the default from {@code plugin.xml} is named instead, which is right
      * unless the user rebound the key.
+     *
+     * @param commandId       the command, as in {@code plugin.xml}
+     * @param defaultSequence its binding in {@code plugin.xml}, in Eclipse's notation ({@code M1+M2+M})
+     * @return the binding, or {@code null} if none can be named
      */
-    static String toggleKey() {
+    static String keyBinding(String commandId, String defaultSequence) {
         IBindingService bindings = PlatformUI.isWorkbenchRunning()
                 ? PlatformUI.getWorkbench().getService(IBindingService.class)
                 : null;
         String active = bindings == null ? null
-                : bindings.getBestActiveBindingFormattedFor(WelcomeNote.TOGGLE_COMMAND_ID);
+                : bindings.getBestActiveBindingFormattedFor(commandId);
         if (active != null) {
             return active;
         }
         try {
-            return KeySequence.getInstance(WelcomeNote.DEFAULT_TOGGLE_SEQUENCE).format();
+            return KeySequence.getInstance(defaultSequence).format();
         } catch (ParseException e) { // a typo in the constant; PluginXmlConsistencyTest catches it first
             return null;
         }

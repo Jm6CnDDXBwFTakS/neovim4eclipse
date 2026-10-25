@@ -12,35 +12,45 @@ import org.junit.jupiter.api.Test;
 class ToggleButtonStateTest {
 
     @Test
-    void withoutNeovimTheButtonIsGreyedOutAndSaysHowToAttach() {
-        ToggleButtonState state = ToggleButtonState.of(false, true, "Ctrl+Shift+M");
+    void withoutNeovimTheButtonIsGreyedOutAndNamesTheAttachKey() {
+        ToggleButtonState state = ToggleButtonState.of(false, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
         assertFalse(state.enabled());
         assertFalse(state.checked(), "a greyed-out button is never drawn pressed");
-        assertTrue(state.tooltip().contains("Attach to Active Editor"), state.tooltip());
+        assertEquals(ToggleButtonState.ICON_ON, state.icon(), "Eclipse pales the color logo itself");
+        assertEquals("Neovim mode unavailable (Ctrl+Shift+N attaches Neovim).", state.tooltip());
     }
 
     @Test
-    void neovimModeIsPressed() {
-        ToggleButtonState state = ToggleButtonState.of(true, true, "Ctrl+Shift+M");
+    void withoutAnAttachKeyTheTooltipNamesTheCommand() {
+        assertEquals("Neovim mode unavailable (Neovim: Attach to Active Editor attaches Neovim).",
+                ToggleButtonState.of(false, false, "Ctrl+Shift+M", null).tooltip());
+    }
+
+    @Test
+    void neovimModeIsPressedWithTheColorLogo() {
+        ToggleButtonState state = ToggleButtonState.of(true, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
         assertTrue(state.enabled());
         assertTrue(state.checked());
-        assertEquals("Neovim mode: Neovim gets the keys. Click (Ctrl+Shift+M) for plain Eclipse editing",
+        assertEquals(ToggleButtonState.ICON_ON, state.icon());
+        assertEquals("Neovim mode: Neovim gets the keys. Click or (Ctrl+Shift+M) to switch to Eclipse mode.",
                 state.tooltip());
     }
 
     @Test
-    void eclipseModeIsRaised() {
-        ToggleButtonState state = ToggleButtonState.of(true, false, "⇧⌘M");
+    void eclipseModeIsRaisedWithTheGreyLogo() {
+        ToggleButtonState state = ToggleButtonState.of(true, false, "⇧⌘M", "⇧⌘N");
         assertTrue(state.enabled());
         assertFalse(state.checked());
-        assertEquals("Eclipse mode: Eclipse gets the keys. Click (⇧⌘M) to give them to Neovim", state.tooltip());
+        assertEquals(ToggleButtonState.ICON_OFF, state.icon());
+        assertEquals("Eclipse mode: Eclipse gets the keys. Click or (⇧⌘M) to switch to Neovim mode.",
+                state.tooltip());
     }
 
     @Test
     void aToggleWithoutKeyBindingNamesNone() {
-        assertEquals("Neovim mode: Neovim gets the keys. Click for plain Eclipse editing",
-                ToggleButtonState.of(true, true, null).tooltip());
-        assertEquals("Eclipse mode: Eclipse gets the keys. Click to give them to Neovim",
-                ToggleButtonState.of(true, false, " ").tooltip());
+        assertEquals("Neovim mode: Neovim gets the keys. Click to switch to Eclipse mode.",
+                ToggleButtonState.of(true, true, null, null).tooltip());
+        assertEquals("Eclipse mode: Eclipse gets the keys. Click to switch to Neovim mode.",
+                ToggleButtonState.of(true, false, " ", null).tooltip());
     }
 }

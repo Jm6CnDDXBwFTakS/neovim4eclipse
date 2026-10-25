@@ -27,8 +27,9 @@ For a headless CI build of the plug-in and update site, use Maven/Tycho (`./mvnw
 ## Manual commands
 
 - **Neovim → Neovim Mode**, a checkbox (also the Neovim toolbar button, which shows the logo, `Ctrl+Shift+M`).
-  The button is pressed in Neovim mode, raised in Eclipse mode, and greyed out while the active
-  editor has no Neovim (`Ctrl+Shift+M` then does nothing; *Attach to Active Editor* attaches it).
+  The button is pressed with the color logo in Neovim mode, raised with a grey logo in Eclipse mode,
+  and greyed out while the active editor has no Neovim (`Ctrl+Shift+M` then does nothing;
+  *Attach to Active Editor*, `Ctrl+Shift+N`, attaches it).
 - **Neovim → Preferences...** opens the Neovim preference page with its sub-pages (Status Bar, Ctrl Keys)
   expanded.
 - *Attach to Active Editor* (`Ctrl+Shift+N`) and *Detach from Active Editor* have no menu entries,

@@ -79,7 +79,10 @@ A handler can also drive how its menu entries and toolbar buttons look. The togg
 `style="toggle"` item: Eclipse draws it pressed while it is *checked*. `ToggleNeovimModeHandler`
 implements `IElementUpdater`, whose `updateElement(UIElement, ...)` Eclipse calls for every item of
 the command when someone calls `ICommandService.refreshElements(commandId, null)`; it sets
-`setChecked` and `setTooltip` there. Its *enablement* (`setBaseEnabled(false)`) greys out every item
+`setChecked`, `setTooltip` and, for the toolbar button only, `setIcon` there (a grey logo in
+Eclipse mode, since macOS barely shows a pressed button). The `parameters` it gets are the item's
+command parameters: the button passes `showsIcon=true` in `plugin.xml`, the menu entry nothing,
+which is how one handler tells the two apart. Its *enablement* (`setBaseEnabled(false)`) greys out every item
 and disables the key binding at once. Eclipse never polls either, so `ToggleButtonRefresh` asks for
 both whenever Neovim attaches, detaches or changes mode:
 
