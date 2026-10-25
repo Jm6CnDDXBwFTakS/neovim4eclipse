@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-25
+
 ### Added
 
 - A welcome note the first time Neovim starts in an editor: how to turn it off and on, where the
@@ -28,7 +30,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   raised with a grey logo in Eclipse mode (macOS barely shows a pressed button), and greyed out
   while the editor in front has no Neovim attached. Its tooltip names the mode and the key that
   toggles it; greyed out, it says why: not a text editor (an image, a form page), or a text editor
-  that `Ctrl+Shift+N` would attach Neovim to. In the *Neovim* menu the entry is now a checkbox, *Neovim Mode*.
+  that `Ctrl+Shift+N` would attach Neovim to. In the *Neovim* menu the entry is now a checkbox,
+  *Neovim Mode*.
 
 ### Fixed
 
@@ -45,15 +48,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   typed right after `o`, `s` or another key that starts an insert.
 - A command line opened in Neovim rather than by `:`, `/` or `?` typed in the editor now opens the
   command-line box, with what Neovim has typed so far: a mapping from your `init.lua` such as
-  `nnoremap ; :` or `nnoremap <Space>s :%s/`, a count before `:` (`2:`), `!` with a motion. Before,
+  `vim.keymap.set('n', ';', ':')` or `vim.keymap.set('n', '<Space>s', ':%s/')`, a count before `:`
+  (`2:`), `!` with a motion. Before,
   Neovim waited in its own command line, which Eclipse does not show. A search opened this way inside
   an operator (`d/` from a mapping) keeps the operator.
 - An error in your Neovim configuration (`init.lua`) no longer stops Neovim from starting with
   "Neovim not started: TimeoutException": Neovim waited at a "Press ENTER" prompt Eclipse does not
   show. Neovim now starts with what the configuration set up before the error, and a warning shows
   the error.
-- The toolbar button's message when no editor is attached no longer points to *Neovim → Attach*,
-  a menu entry that is gone; it names *Neovim: Attach to Active Editor* (`Ctrl+Shift+N`).
 - A command whose only output is its status message (`:%s` printing "7 substitutions on 4 lines") no
   longer also opens the output popup; the message line shows the message, as for errors.
 
