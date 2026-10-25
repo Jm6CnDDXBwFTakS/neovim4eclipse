@@ -310,6 +310,7 @@ public final class NeovimEditorController implements AutoCloseable {
             LOG.info("Mode → ECLIPSE (keys to IDE)");
         }
         keyContext.update();
+        ToggleButtonRefresh.request(); // the toolbar button: pressed or raised
         return neovimModeActive;
     }
 
@@ -482,6 +483,7 @@ public final class NeovimEditorController implements AutoCloseable {
             return;
         }
         closed = true;
+        ToggleButtonRefresh.request(); // greys the toolbar button out, unless another editor attaches
         try {
             session.removeModeListener(modeListener);
             session.removeCursorListener(cursorListener);

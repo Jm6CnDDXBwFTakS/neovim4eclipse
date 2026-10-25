@@ -362,6 +362,7 @@ public final class EditorAttachManager {
         attachedBuffer = buffer;
         activeController = NeovimEditorController.attach(textEditor, session, buffer, takeNeovimCursor);
         attachedPart = editor;
+        ToggleButtonRefresh.request(); // the toolbar button shows this editor's mode
         LOG.fine("Attached Neovim to: " + textEditor.getTitle());
         return activeController;
     }

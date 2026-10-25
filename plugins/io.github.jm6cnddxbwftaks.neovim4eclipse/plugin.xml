@@ -445,8 +445,8 @@
             </visibleWhen>
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
-                  label="Toggle Neovim / Eclipse Mode"
-                  style="push">
+                  label="Neovim Mode"
+                  style="toggle">
             </command>
             <separator name="prefs" visible="true"/>
             <command
@@ -465,7 +465,10 @@
          <!-- The toolbar shows the icon only; the label is what Window > Perspective > Customize
               Perspective and screen readers show. icons/neovim.png is 16x16, the size of Eclipse's
               toolbar icons; on a 200% screen Eclipse loads icons/neovim@2x.png (32x32) by itself.
-              Both are rendered from docs/images/logo.svg by releng/render-icon.py. -->
+              Both are rendered from docs/images/logo.svg by releng/render-icon.py.
+              style="toggle": Eclipse draws the button pressed in Neovim mode and raised in Eclipse
+              mode, and greyed out while no editor has Neovim; ToggleNeovimModeHandler sets the
+              state and the tooltip (the tooltip below is only the one shown before that). -->
          <toolbar id="io.github.jm6cnddxbwftaks.neovim4eclipse.toolbar">
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
@@ -473,7 +476,7 @@
                   icon="icons/neovim.png"
                   label="Neovim"
                   tooltip="Toggle Neovim / Eclipse editing mode"
-                  style="push">
+                  style="toggle">
                <visibleWhen checkEnabled="false">
                   <test
                         property="io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar"

@@ -358,7 +358,8 @@ Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that send
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
 of the letters you send to Neovim (*Window → Preferences → Neovim → Ctrl Keys*; by default every letter
 except `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, see [docs/KEYS.md](docs/KEYS.md)). The bindings work only while Neovim owns normal/visual mode and the
-editor has focus; in insert mode and in Eclipse mode (toggle with the toolbar button) Eclipse's own
+editor has focus; in insert mode and in Eclipse mode (toggle with the toolbar button, which is
+pressed in Neovim mode and raised in Eclipse mode) Eclipse's own
 shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
 the system Paste.
 
