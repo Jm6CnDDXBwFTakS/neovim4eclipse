@@ -24,7 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 @Tag("integration")
 class InstalledVersionsIntegrationTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
 
     @Test
     void readsTheVersionOfTheTestNeovim() {

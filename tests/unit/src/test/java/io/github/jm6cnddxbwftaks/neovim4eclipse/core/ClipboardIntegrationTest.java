@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ClipboardPort.Selection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
  * Eclipse as Neovim's clipboard provider, against a real {@code nvim}: {@code "+p} and {@code "*p}
@@ -29,7 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 @Tag("integration")
 class ClipboardIntegrationTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
     private static final String NL = System.lineSeparator();
 
     /** The system clipboard; records every copy so that double writes would show. */
