@@ -13,11 +13,16 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 ## Neovim executable
 
 - Preference **Neovim folder or program** (`util/NvimExecutable`) accepts:
-  - **blank** (the default): `~/.local/opt/neovim` (Windows: `%USERPROFILE%\.local\opt\neovim`), the folder
-    meant for a Neovim of the plug-in's own, then `nvim` on `PATH`, then the usual install folders (below);
-  - **a folder**: Neovim's install folder. `folder/bin/nvim` is used if present, else `folder/nvim` (a `bin`
-    folder), else the release archives extracted into it (`folder/nvim-*/bin/nvim`). With several archives
-    each is asked `--version` and the newest wins; one that cannot run here (another processor) is skipped;
+  - **blank** (the default): `~/.local/opt/neovim` (Windows:
+    `%USERPROFILE%\.local\opt\neovim`), the folder meant for a Neovim of the plug-in's own,
+    searched as a folder (below); then `nvim` on `PATH`, then the usual install folders (below);
+  - **a folder**: `folder/bin/nvim` if it works, else `folder/nvim` (a `bin` folder) if it works, else
+    every install below the folder down to depth 4 (`NvimExecutable.maxSearchDepth()`;
+    `folder/a/b/bin/nvim` is depth 4). An install is a `bin/nvim` (`bin\nvim.exe` on Windows) with
+    `share/nvim/runtime` beside its `bin`, as every release archive has, also when Windows Explorer's
+    *Extract All* put it in one more folder (`nvim-win64\nvim-win64\bin\nvim.exe`). Links and Windows
+    junctions are not followed. Every candidate is asked `--version`: one that does not answer as
+    Neovim (another processor, a broken install) is skipped, and of several the newest wins;
   - **a program**: an absolute path to `nvim`, or a command name looked up on `PATH`, then in the usual
     install folders. A leading `~` is the home folder.
 - The preference page shows which Neovim the field finds and its version, or that it is too old.
@@ -27,10 +32,11 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
   Neovim then uses `cmd.exe`; set `'shell'` and its flags in `init.lua` for another shell.
 - Simplest install: extract the release archive from https://github.com/neovim/neovim/releases into
   `~/.local/opt/neovim` and leave the preference blank.
-- The usual install folders, searched with the same folder rules, on macOS and Linux alike:
-  `/opt/homebrew`, `/usr/local`, `/home/linuxbrew/.linuxbrew`, `~/.linuxbrew`, `/opt/local`, `~/.local`,
-  `~` (so `~/bin` and archives extracted in the home folder), `/opt/nvim-linux-x86_64`,
-  `/opt/nvim-linux-arm64`, `/opt/nvim` (Neovim's own Linux instructions), `/snap`. Windows:
+- The usual install folders, each checked for `bin/nvim` or `nvim` directly inside it (not searched
+  further down, since folders such as `/usr/local` can be large) and asked `--version`, on macOS and
+  Linux alike: `/opt/homebrew`, `/usr/local`, `/home/linuxbrew/.linuxbrew`, `~/.linuxbrew`,
+  `/opt/local`, `~/.local`, `~/bin`, `/opt/nvim-linux-x86_64`, `/opt/nvim-linux-arm64`, `/opt/nvim`
+  (Neovim's own Linux instructions). Windows:
   `%ProgramFiles%\Neovim`, `%LOCALAPPDATA%\Programs\Neovim`, Scoop's shims and `apps\neovim\current`,
   Chocolatey's `bin`. This matters when Eclipse is started from the macOS Dock, a desktop
   menu or a PDE launch, which do not get the `PATH` your shell sets up.
