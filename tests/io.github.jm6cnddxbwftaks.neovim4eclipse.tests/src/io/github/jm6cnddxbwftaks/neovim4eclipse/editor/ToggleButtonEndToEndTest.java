@@ -22,6 +22,7 @@ import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.swt.widgets.ToolItem;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
+import org.eclipse.ui.ide.IDE;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
@@ -51,12 +52,33 @@ class ToggleButtonEndToEndTest extends EndToEndTestBase {
         waitUntil("the color logo", TIMEOUT_MS, () -> hasColor(button.getImage()));
 
         EditorAttachManager.getInstance().detachQuietly();
-        expectButton(button, false, false, "Neovim mode unavailable");
+        expectButton(button, false, false, "Neovim mode unavailable (");
         assertFalse(PlatformUI.getWorkbench().getService(ICommandService.class)
                 .getCommand(WelcomeNote.TOGGLE_COMMAND_ID).isEnabled(), "the key binding still works");
 
         EditorAttachManager.getInstance().attach(editor, true);
         expectButton(button, true, true, "Neovim mode: ");
+    }
+
+    /**
+     * A page without text (a manifest's Overview, here {@link TestMultiPageEditor}'s): the button
+     * greys out and says why, without offering the attach key, which cannot help there.
+     */
+    @Test
+    void aPageWithoutTextGreysTheButtonOutAndSaysWhy() throws Exception {
+        ToolItem button = toggleButton();
+        TestMultiPageEditor multiPage = (TestMultiPageEditor) IDE.openEditor(page(),
+                createFile("pom.mpage", "<project/>\n"), true);
+        try {
+            waitForAttach(EditorAttachManager.textEditorOf(multiPage), "the Source page");
+            expectButton(button, true, true, "Neovim mode: ");
+
+            multiPage.showOverview();
+            expectButton(button, false, false, "Neovim mode unavailable: not a text editor.");
+        } finally {
+            page().closeEditor(multiPage, false);
+        }
+        expectButton(button, true, true, "Neovim mode: "); // back in test.txt
     }
 
     /**

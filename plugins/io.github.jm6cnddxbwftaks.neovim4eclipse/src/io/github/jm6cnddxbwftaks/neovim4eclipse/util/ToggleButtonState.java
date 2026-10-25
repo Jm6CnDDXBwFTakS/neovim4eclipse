@@ -9,7 +9,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * so it is unit-tested without Eclipse; {@code editor/ToggleNeovimModeHandler} applies it.
  *
  * <pre>
- *   no editor with Neovim   greyed out  color logo  "Neovim mode unavailable (Ctrl+Shift+N attaches Neovim)."
+ *   not a text editor       greyed out  color logo  "Neovim mode unavailable: not a text editor."
+ *   no editor open          greyed out  color logo  "Neovim mode unavailable: no editor open."
+ *   text editor, no Neovim  greyed out  color logo  "Neovim mode unavailable (Ctrl+Shift+N attaches Neovim)."
  *   Neovim mode             pressed     color logo  "Neovim mode: Neovim gets the keys. Click or (Ctrl+Shift+M) to switch to Eclipse mode."
  *   Eclipse mode            raised      grey logo   "Eclipse mode: Eclipse gets the keys. Click or (Ctrl+Shift+M) to switch to Neovim mode."
  * </pre>
@@ -30,6 +32,22 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  */
 public record ToggleButtonState(boolean enabled, boolean checked, String icon, String tooltip) {
 
+    /**
+     * What the active editor is, as far as Neovim is concerned. Only a text editor (or the text
+     * page of a multi-page editor) can have Neovim; the attach key helps only there, for example
+     * after <em>Detach from Active Editor</em> or when Neovim failed to start.
+     */
+    public enum Editor {
+        /** The active editor has Neovim attached. */
+        ATTACHED,
+        /** A text editor without Neovim: the attach key would attach it. */
+        TEXT_WITHOUT_NEOVIM,
+        /** An image, a form page (a manifest's Overview) ...: Neovim cannot work there. */
+        NOT_TEXT,
+        /** No editor is open. */
+        NONE
+    }
+
     /** The logo in color: Neovim mode (and the greyed-out button). Also plugin.xml's icon. */
     public static final String ICON_ON = "icons/neovim.png";
     /** The logo in grey ({@code releng/render-icon.py --grey}): Eclipse mode. */
@@ -45,18 +63,26 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
     public static final String DEFAULT_ATTACH_SEQUENCE = "M1+M2+N";
 
     /**
-     * @param attached   the active editor has Neovim attached
-     * @param neovimMode Neovim gets the keys (ignored when not attached)
+     * @param editor     the active editor's kind
+     * @param neovimMode Neovim gets the keys (ignored unless {@link Editor#ATTACHED})
      * @param toggleKey  the toggle's key binding as shown to the user ({@code Ctrl+Shift+M}), or
      *                   {@code null} if it has none
      * @param attachKey  the attach command's key binding ({@code Ctrl+Shift+N}), or {@code null}
      */
-    public static ToggleButtonState of(boolean attached, boolean neovimMode, String toggleKey, String attachKey) {
-        if (!attached) {
-            String hint = isBlank(attachKey)
-                    ? "Neovim: Attach to Active Editor attaches Neovim"
-                    : attachKey + " attaches Neovim";
-            return new ToggleButtonState(false, false, ICON_ON, "Neovim mode unavailable (" + hint + ").");
+    public static ToggleButtonState of(Editor editor, boolean neovimMode, String toggleKey, String attachKey) {
+        switch (editor) {
+            case NOT_TEXT:
+                return unavailable("Neovim mode unavailable: not a text editor.");
+            case NONE:
+                return unavailable("Neovim mode unavailable: no editor open.");
+            case TEXT_WITHOUT_NEOVIM:
+                String hint = isBlank(attachKey)
+                        ? "Neovim: Attach to Active Editor attaches Neovim"
+                        : attachKey + " attaches Neovim";
+                return unavailable("Neovim mode unavailable (" + hint + ").");
+            case ATTACHED:
+            default:
+                break;
         }
         // "Click or (Ctrl+Shift+M)"; just "Click" if the user removed the key binding.
         String click = isBlank(toggleKey) ? "Click" : "Click or (" + toggleKey + ")";
@@ -65,6 +91,10 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
                         "Neovim mode: Neovim gets the keys. " + click + " to switch to Eclipse mode.")
                 : new ToggleButtonState(true, false, ICON_OFF,
                         "Eclipse mode: Eclipse gets the keys. " + click + " to switch to Neovim mode.");
+    }
+
+    private static ToggleButtonState unavailable(String tooltip) {
+        return new ToggleButtonState(false, false, ICON_ON, tooltip);
     }
 
     private static boolean isBlank(String text) {
