@@ -31,27 +31,12 @@ public final class NvimProbe {
      * @param configured the preference value as typed (not yet saved)
      */
     public static String describe(String configured) {
-        Path program = NvimExecutable.locate(NvimExecutable.resolve(configured));
+        NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
+        Path program = NvimExecutable.locate(resolved.command());
         if (program == null) {
             return note(null, null, 0, NvimExecutable.dedicatedFolder());
         }
-        return note(program, InstalledVersions.of(program), siblings(program), NvimExecutable.dedicatedFolder());
-    }
-
-    /**
-     * How many installs {@code program} was chosen from: for {@code folder/nvim-x/bin/nvim}, the
-     * number of {@code nvim-*} installs in {@code folder}; 1 otherwise.
-     */
-    static int siblings(Path program) {
-        Path bin = program.getParent();
-        Path archive = bin == null ? null : bin.getParent();
-        Path folder = archive == null ? null : archive.getParent();
-        if (folder == null || !"bin".equals(String.valueOf(bin.getFileName()))
-                || !String.valueOf(archive.getFileName()).startsWith("nvim-")) {
-            return 1;
-        }
-        String name = String.valueOf(program.getFileName());
-        return Math.max(1, NvimExecutable.archivesIn(folder, name, false).size());
+        return note(program, InstalledVersions.of(program), resolved.among(), NvimExecutable.dedicatedFolder());
     }
 
     /**

@@ -57,8 +57,9 @@ To use the plug-in in your own Eclipse, without building it.
   extract the release archive from [Neovim's releases](https://github.com/neovim/neovim/releases)
   into `~/.local/opt/neovim` (Windows: `%USERPROFILE%\.local\opt\neovim`), no install needed:
   the plug-in looks there first. Or extract it anywhere and choose that folder in
-  *Window → Preferences → Neovim*, which shows the Neovim it finds and its version. Several
-  versions side by side in one folder are fine; the newest is used. An older Neovim is refused
+  *Window → Preferences → Neovim*, which shows the Neovim it finds and its version. Archives may sit
+  a few folders down (as Windows Explorer's *Extract All* leaves them), and several versions side
+  by side in one folder are fine; the newest is used. An older Neovim is refused
   with a message that names both versions.
 
   ```bash

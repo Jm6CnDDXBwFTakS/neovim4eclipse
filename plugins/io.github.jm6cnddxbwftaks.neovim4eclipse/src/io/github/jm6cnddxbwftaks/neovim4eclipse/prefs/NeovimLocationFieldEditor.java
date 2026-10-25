@@ -95,7 +95,8 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     protected String changePressed() {
         DirectoryDialog dialog = new DirectoryDialog(getShell(), SWT.NONE);
         dialog.setText("Neovim folder");
-        dialog.setMessage("Choose Neovim's folder (the one with bin/nvim, or a folder with an extracted release).");
+        dialog.setMessage("Choose Neovim's folder (the one with bin/nvim, or a folder with extracted releases"
+                + " up to " + NvimExecutable.maxSearchDepth() + " levels down).");
         Path start = startFolder(getStringValue());
         if (start != null) {
             dialog.setFilterPath(start.toString());
