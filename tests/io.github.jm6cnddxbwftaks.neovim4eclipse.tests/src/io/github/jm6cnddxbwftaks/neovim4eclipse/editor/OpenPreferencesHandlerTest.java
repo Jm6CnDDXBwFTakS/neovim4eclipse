@@ -15,6 +15,7 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Link;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.TreeItem;
 import org.eclipse.ui.PlatformUI;
@@ -78,6 +79,17 @@ class OpenPreferencesHandlerTest {
         assertTrue(field.isVisible(), "field hidden (its window is not the dialog's)");
         assertTrue(field.getSize().x > 50 && field.getSize().y > 5, "field size " + field.getSize());
         assertTrue(field.getShell() == dialog.getShell(), "the page is shown in another window");
+    }
+
+    @Test
+    void theDescriptionSaysWhatTheFieldTakesAndLinksToHowNeovimIsFound() {
+        Control page = ((NeovimPreferencePage) dialog.getSelectedPage()).getControl();
+        assertTrue(find(page, Label.class).stream().anyMatch(l -> l.getText().contains("Leave the Neovim folder "
+                + "blank to search the default folders")), "no description of what the field takes");
+        Link link = find(page, Link.class).stream()
+                .filter(l -> l.getText().equals(NeovimPreferencePage.FINDING_NEOVIM_LINK)).findFirst().orElse(null);
+        assertNotNull(link, "no link to how Neovim is found");
+        assertTrue(link.isVisible(), "link hidden");
     }
 
     @Test

@@ -471,7 +471,8 @@ one, in a `:terminal` too, inherits it.
 ## Preferences
 
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
-expanded): where Neovim is (blank to search, its folder, or the program), whether to show the toolbar toggle, and
+expanded): where Neovim is (blank to search, its folder, or the program; see
+[Finding Neovim](#finding-neovim)), whether to show the toolbar toggle, and
 whether to show the *Neovim* menu in the menu bar. With the menu hidden, its entries stay reachable:
 the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
 through *Window → Preferences*.
@@ -488,6 +489,49 @@ adds a brief flash to errors in the message line ([Messages and errors](#message
 Neovim in normal and visual mode; cleared ones keep their Eclipse shortcut. *Select All* and *Deselect
 All* set every box; *Restore Defaults* ticks all but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`. Changes apply
 immediately. [docs/KEYS.md](docs/KEYS.md) explains those three defaults and which keys go where.
+
+### Finding Neovim
+
+The *Neovim folder or program* field on *Window → Preferences → Neovim* takes one of three things,
+and the note under it shows which Neovim that finds, for example
+`Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-x86_64/bin/nvim`.
+
+- **Blank** (the default) searches the default folders, in this order:
+  1. **The default Neovim folder**. This is intended for a Neovim install dedicated to the plug-in,
+     to avoid conflicts with other Neovim installations, if needed. It is searched as a "folder that
+     holds Neovim", described below. The first of these whose variable is set (to an absolute path)
+     is used:
+     - Linux and macOS: `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`, then
+       `$HOME/.local/share/neovim4eclipse-plugin/neovim`.
+     - Windows: `%XDG_DATA_HOME%\neovim4eclipse-plugin\neovim`, then
+       `%HOME%\.local\share\neovim4eclipse-plugin\neovim`, then
+       `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`.
+  2. `nvim` on `PATH`.
+  3. The usual install folders, each checked for `bin/nvim` or `nvim` directly inside it (not
+     searched further down, since folders such as `/usr/local` can be large):
+     - Linux and macOS: `/opt/homebrew` (Homebrew on Apple silicon), `/usr/local` (Homebrew on
+       Intel macOS, `make install` from source), `/home/linuxbrew/.linuxbrew` and `~/.linuxbrew`
+       (Homebrew on Linux), `/opt/local` (MacPorts), `~/.local`, `~/bin`, and Neovim's own
+       `/opt/nvim-linux-x86_64`, `/opt/nvim-linux-arm64` and `/opt/nvim`. A folder that does not
+       exist is skipped.
+     - Windows: `%ProgramFiles%\Neovim` (the installer, for all users),
+       `%LOCALAPPDATA%\Programs\Neovim` (the installer, for one user), `%USERPROFILE%\scoop\shims` and
+       `%USERPROFILE%\scoop\apps\neovim\current` (Scoop), `%ProgramData%\chocolatey\bin` (Chocolatey).
+- **A folder that holds Neovim**: its own `bin/nvim` (or `nvim`, for a `bin` folder or Scoop's
+  `shims`), and the `nvim` executable found recursively, up to four levels deep, with the intent that
+  a release archive can be extracted directly into the folder (also as Windows Explorer's
+  *Extract All* leaves it, with one more folder around it). Below the folder itself, a `bin/nvim`
+  is only considered a Neovim install when Neovim's `share/nvim/runtime` folder is alongside its
+  `bin` folder. Links are not followed.
+- **A direct path to an `nvim` executable**, used as is. The field also takes a command name, such
+  as `nvim`, looked up on `PATH` and then in the usual install folders. A leading `~` stands for the
+  home folder.
+
+Every Neovim a search finds is asked its version (`nvim --version`); one that does not answer, such
+as an archive for another processor, is skipped, and the newest of the rest is used. Eclipse sees
+only the environment variables (`PATH`, `XDG_DATA_HOME`, `HOME`) of whatever started it: set in a
+shell's startup file, they are missing when Eclipse starts from the macOS Dock, a desktop menu or
+the Windows Start menu. [docs/PLATFORM.md](docs/PLATFORM.md#neovim-executable) has the details.
 
 ## Known limitations
 

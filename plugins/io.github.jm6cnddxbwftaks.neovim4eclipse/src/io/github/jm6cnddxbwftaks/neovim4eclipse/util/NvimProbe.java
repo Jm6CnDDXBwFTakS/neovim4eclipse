@@ -15,8 +15,11 @@ import java.util.List;
  *   Found: Neovim 0.13.0 (newest of 2 in this folder), /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-0.13.0/bin/nvim
  *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
  *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
- *   No Neovim found. Extract a release archive into /home/you/.local/share/neovim4eclipse-plugin/neovim, or choose ...
+ *   No Neovim found in the default folders. Extract a Neovim release archive into /home/you/.local/share/neovim4eclipse-plugin/neovim
+ *   No Neovim found at /opt/nvim. Clear the field to search the default folders, or enter a value as described.
  * </pre>
+ *
+ * <p>"As described" points at the page's description, which says what the field takes.
  *
  * <p>The version comes first and the path last: the version is what you look for, and a long path
  * then cannot push it out of view. No full stop follows the path, which would read as part of it.
@@ -40,23 +43,28 @@ public final class NvimProbe {
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Path program = NvimExecutable.locate(resolved.command());
         if (program == null) {
-            return note(null, null, 0, NvimExecutable.dedicatedFolder());
+            return note(configured, null, null, 0, NvimExecutable.dedicatedFolder());
         }
-        return note(program, InstalledVersions.of(program), resolved.among(), NvimExecutable.dedicatedFolder());
+        return note(configured, program, InstalledVersions.of(program), resolved.among(),
+                NvimExecutable.dedicatedFolder());
     }
 
     /**
      * The note's text.
      *
-     * @param program   the program found, or {@code null}
-     * @param version   its version, or {@code null} if it did not run as Neovim
-     * @param among     how many installs in the same folder it was chosen from (1: no choice)
-     * @param dedicated the plug-in's own Neovim folder, suggested when nothing is found
+     * @param configured the field's text; blank means the default search
+     * @param program    the program found, or {@code null}
+     * @param version    its version, or {@code null} if it did not run as Neovim
+     * @param among      how many installs in the same folder it was chosen from (1: no choice)
+     * @param dedicated  the default Neovim folder, suggested when the default search finds nothing
      */
-    static String note(Path program, NeovimVersion version, int among, Path dedicated) {
+    static String note(String configured, Path program, NeovimVersion version, int among, Path dedicated) {
         if (program == null) {
-            return "No Neovim found. Extract a release archive into " + dedicated
-                    + ", or choose the folder of another Neovim " + NeovimVersion.MINIMUM + " or newer.";
+            if (configured == null || configured.isBlank()) {
+                return "No Neovim found in the default folders. Extract a Neovim release archive into " + dedicated;
+            }
+            return "No Neovim found at " + configured.strip()
+                    + ". Clear the field to search the default folders, or enter a value as described.";
         }
         if (version == null) {
             return "Found: no Neovim version (it did not answer --version), " + program;
