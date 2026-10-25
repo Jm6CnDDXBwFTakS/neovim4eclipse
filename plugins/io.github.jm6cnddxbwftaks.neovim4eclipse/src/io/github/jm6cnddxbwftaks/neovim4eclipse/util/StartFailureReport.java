@@ -67,7 +67,7 @@ public final class StartFailureReport {
      * Error: Cannot run program "nvim": error=2, No such file or directory
      *
      * Install Neovim 0.12.6 or newer. The simplest install is the release archive from ... extracted
-     * into ~/.local/opt/neovim, which is searched first; or extract it anywhere and choose its folder ...
+     * into ~/.local/share/neovim4eclipse-plugin/neovim, which is searched first; or extract it anywhere and choose its folder ...
      * </pre>
      *
      * With an old Neovim the error line says so: {@code Error: Neovim 0.12.4 is too old: Neovim for

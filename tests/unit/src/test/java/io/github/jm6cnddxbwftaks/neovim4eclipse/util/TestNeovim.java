@@ -6,11 +6,11 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 /**
  * The Neovim the integration tests start: {@code -Dnvim.path=...} if given (a folder, a program or a
  * command name), else blank. Blank is searched exactly as the plug-in searches an empty preference
- * ({@link NvimExecutable#resolve}): {@code ~/.local/opt/neovim} first, then {@code PATH}, then the
- * usual install folders. So a Neovim extracted into {@code ~/.local/opt/neovim} needs no {@code -D}.
+ * ({@link NvimExecutable#resolve}): {@code ~/.local/share/neovim4eclipse-plugin/neovim} first, then {@code PATH}, then the
+ * usual install folders. So a Neovim extracted into {@code ~/.local/share/neovim4eclipse-plugin/neovim} needs no {@code -D}.
  *
  * <p>Example: {@code ./mvnw test -f tests/unit/pom.xml -Pintegration} finds
- * {@code ~/.local/opt/neovim/nvim-linux-x86_64/bin/nvim}; with
+ * {@code ~/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-x86_64/bin/nvim}; with
  * {@code -Dnvim.path=/opt/nvim-0.13.0} that one is used instead.
  */
 public final class TestNeovim {

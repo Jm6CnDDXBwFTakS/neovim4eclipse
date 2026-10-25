@@ -25,7 +25,7 @@ import java.util.function.Function;
  * <h2>What the preference may hold</h2>
  * <ul>
  *   <li><b>Blank</b> (the default): the plug-in's own Neovim folder {@link #dedicatedFolder}
- *       ({@code ~/.local/opt/neovim}), then {@code nvim} on {@code PATH}, then the usual install
+ *       ({@code ~/.local/share/neovim4eclipse-plugin/neovim}), then {@code nvim} on {@code PATH}, then the usual install
  *       folders ({@link #searchFolders}). The dedicated folder comes first so that an older Neovim
  *       from the system's package manager, on {@code PATH}, cannot shadow the one installed for
  *       Eclipse (the plug-in raises its minimum Neovim readily; docs/UPGRADING.md).</li>
@@ -37,7 +37,7 @@ import java.util.function.Function;
  *       accepted folders), or a bare command name such as {@code nvim}, looked up on {@code PATH}
  *       and then in the usual install folders.</li>
  * </ul>
- * A leading {@code ~} stands for the home folder: {@code ~/.local/opt/neovim}.
+ * A leading {@code ~} stands for the home folder: {@code ~/.local/share/neovim4eclipse-plugin/neovim}.
  *
  * <h2>Why search outside {@code PATH}</h2>
  * A program inherits {@code PATH} from whatever started it. Eclipse started from the macOS Dock or
@@ -152,7 +152,7 @@ public final class NvimExecutable {
      *       or a {@code bin} folder itself (or Scoop's {@code shims}). On Windows also with
      *       {@code .exe}, {@code .cmd} and {@code .bat}.</li>
      *   <li>With {@code search}: every install below the folder ({@link #installsIn}), e.g.
-     *       {@code ~/.local/opt/neovim/nvim-linux-x86_64/bin/nvim} or, after Windows
+     *       {@code ~/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-x86_64/bin/nvim} or, after Windows
      *       Explorer's "Extract All", {@code nvim-win64\nvim-win64\bin\nvim.exe}.</li>
      * </ul>
      * All of them compete: each is asked its version ({@code nvim --version}), one that does not
@@ -325,12 +325,13 @@ public final class NvimExecutable {
     }
 
     /**
-     * The folder meant for a Neovim used by this plug-in alone: {@code ~/.local/opt/neovim} on macOS
-     * and Linux, {@code %USERPROFILE%\.local\opt\neovim} on Windows. Extract a release archive
-     * there (its top folder may stay, see {@link #findInFolder}) and leave the preference blank.
+     * The folder meant for a Neovim used by this plug-in alone ({@link PluginFolders#neovimFolder()}):
+     * {@code ~/.local/share/neovim4eclipse-plugin/neovim}, or under {@code $XDG_DATA_HOME} when that is
+     * set. Extract a release archive there (its top folder may stay, see {@link #findInFolder}) and
+     * leave the preference blank.
      */
     public static Path dedicatedFolder() {
-        return Path.of(System.getProperty("user.home", ""), ".local", "opt", "neovim");
+        return PluginFolders.neovimFolder();
     }
 
     /**
