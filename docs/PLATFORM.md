@@ -16,7 +16,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
   - **blank** (the default): `~/.local/opt/neovim` (Windows:
     `%USERPROFILE%\.local\opt\neovim`), the folder meant for a Neovim of the plug-in's own,
     searched as a folder (below); then `nvim` on `PATH`, then the usual install folders (below);
-  - **a folder**: `folder/bin/nvim` if it works, else `folder/nvim` (a `bin` folder) if it works, else
+  - **a folder**: the newest working Neovim among `folder/bin/nvim`, `folder/nvim` (a `bin` folder) and
     every install below the folder down to depth 4 (`NvimExecutable.maxSearchDepth()`;
     `folder/a/b/bin/nvim` is depth 4). An install is a `bin/nvim` (`bin\nvim.exe` on Windows) with
     `share/nvim/runtime` beside its `bin`, as every release archive has, also when Windows Explorer's

@@ -146,20 +146,20 @@ public final class NvimExecutable {
     }
 
     /**
-     * Finds a working Neovim in a folder. Every candidate is asked its version
-     * ({@code nvim --version}), and one that does not answer as Neovim (an archive for another
-     * processor, a broken install, another program called {@code nvim}) is skipped.
-     * <ol>
-     *   <li>{@code folder/bin/nvim}, then {@code folder/nvim}: the folder is Neovim's install folder,
-     *       or a {@code bin} folder itself (or Scoop's {@code shims}). The first that works wins;
-     *       nothing further down is looked at.</li>
+     * Finds the newest working Neovim in a folder. The candidates are:
+     * <ul>
+     *   <li>{@code folder/bin/nvim} and {@code folder/nvim}: the folder is Neovim's install folder,
+     *       or a {@code bin} folder itself (or Scoop's {@code shims}). On Windows also with
+     *       {@code .exe}, {@code .cmd} and {@code .bat}.</li>
      *   <li>With {@code search}: every install below the folder ({@link #installsIn}), e.g.
      *       {@code ~/.local/opt/neovim/nvim-linux-x86_64/bin/nvim} or, after Windows
-     *       Explorer's "Extract All", {@code nvim-win64\nvim-win64\bin\nvim.exe}. The newest
-     *       version wins (names are not trusted: a folder renamed {@code nvim-0.13.0} may hold
-     *       0.12.6).</li>
-     * </ol>
-     * On Windows the first step also tries {@code .exe}, {@code .cmd} and {@code .bat}.
+     *       Explorer's "Extract All", {@code nvim-win64\nvim-win64\bin\nvim.exe}.</li>
+     * </ul>
+     * All of them compete: each is asked its version ({@code nvim --version}), one that does not
+     * answer as Neovim (an archive for another processor, a broken install, another program called
+     * {@code nvim}) is skipped, and the newest wins. Names are not trusted: a folder renamed
+     * {@code nvim-0.13.0} may hold 0.12.6. The same file reached twice counts once. On a tie the
+     * first candidate in the order above wins.
      *
      * @param search    whether to search below the folder; {@code false} for the usual install
      *                  folders ({@link #searchFolders}), which may be large, such as {@code /usr/local}
@@ -168,19 +168,19 @@ public final class NvimExecutable {
      */
     static Found findInFolder(Path folder, String program, boolean windows, boolean search,
             Function<Path, NeovimVersion> versionOf) {
+        Map<Path, Path> candidates = new LinkedHashMap<>(); // real path -> path, so each program counts once
         for (Path dir : List.of(folder.resolve("bin"), folder)) {
-            Path direct = firstExisting(dir, program, windows);
-            if (direct != null && versionOf.apply(direct) != null) {
-                return new Found(direct, 1);
-            }
+            addOnce(firstExisting(dir, program, windows), candidates);
         }
-        if (!search) {
-            return null;
+        if (search) {
+            for (Path install : installsIn(folder, program, windows)) {
+                addOnce(install, candidates);
+            }
         }
         Path newest = null;
         NeovimVersion newestVersion = null;
         int working = 0;
-        for (Path candidate : installsIn(folder, program, windows)) {
+        for (Path candidate : candidates.values()) {
             NeovimVersion version = versionOf.apply(candidate);
             if (version == null) {
                 continue;
@@ -192,6 +192,18 @@ public final class NvimExecutable {
             }
         }
         return newest == null ? null : new Found(newest, working);
+    }
+
+    /** Adds {@code program} unless it is {@code null} or the same file is already there. */
+    private static void addOnce(Path program, Map<Path, Path> candidates) {
+        if (program == null) {
+            return;
+        }
+        try {
+            candidates.putIfAbsent(program.toRealPath(), program);
+        } catch (IOException | SecurityException e) {
+            // vanished or unreadable meanwhile: not a candidate
+        }
     }
 
     /**

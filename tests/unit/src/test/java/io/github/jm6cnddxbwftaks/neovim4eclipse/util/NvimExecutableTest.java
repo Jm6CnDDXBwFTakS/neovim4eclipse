@@ -378,12 +378,27 @@ class NvimExecutableTest {
     }
 
     @Test
-    void aWorkingBinNvimWinsWithoutSearching() throws IOException {
-        Path exe = file("neovim/bin/nvim");
+    void binNvimCompetesWithTheInstallsBelow() throws IOException {
+        Path top = file("neovim/bin/nvim");
         Path below = install("neovim/nvim-0.13.0", "nvim");
-        Map<Path, NeovimVersion> versions = Map.of(exe.toAbsolutePath(), new NeovimVersion(0, 12, 6),
+        Map<Path, NeovimVersion> versions = Map.of(top.toAbsolutePath(), new NeovimVersion(0, 12, 6),
                 real(below), new NeovimVersion(0, 13, 0));
-        assertEquals(new NvimExecutable.Found(exe.toAbsolutePath(), 1), findIn("neovim", versions::get));
+        assertEquals(new NvimExecutable.Found(real(below), 2), findIn("neovim", versions::get));
+    }
+
+    @Test
+    void onATieBinNvimWins() throws IOException {
+        Path top = file("neovim/bin/nvim");
+        install("neovim/nvim-0.12.6", "nvim");
+        assertEquals(new NvimExecutable.Found(top.toAbsolutePath(), 2), findIn("neovim", ANY_FILE_RUNS));
+    }
+
+    @Test
+    void anInstallFoldersOwnBinNvimCountsOnce() throws IOException {
+        // C:\Program Files\Neovim: bin\nvim.exe is both the direct candidate and an install the search finds.
+        Path exe = install("Neovim", "nvim.exe");
+        assertEquals(new NvimExecutable.Found(exe.toAbsolutePath(), 1),
+                NvimExecutable.findInFolder(tmp.resolve("Neovim"), "nvim.exe", true, true, ANY_FILE_RUNS));
     }
 
     @Test
