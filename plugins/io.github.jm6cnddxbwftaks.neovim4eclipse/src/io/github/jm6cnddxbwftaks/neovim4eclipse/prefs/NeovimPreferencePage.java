@@ -88,7 +88,7 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
         if (description != null && description.getLayoutData() instanceof GridData data) {
             data.widthHint = DESCRIPTION_WIDTH;
         }
-        // A folder (Neovim's install folder), a program, a command name, or blank to search; the note
+        // A folder that holds Neovim, the absolute path of the program, or blank to search; the note
         // under it says which Neovim that finds (NeovimLocationFieldEditor, util/NvimExecutable).
         addField(new NeovimLocationFieldEditor(
                 PreferenceConstants.NVIM_EXECUTABLE,

@@ -42,7 +42,7 @@ final class StartFailureNotice {
     /**
      * Shows the notice unless it was already shown for this executable. Safe to call from any thread.
      *
-     * @param configured the preference value (command name or path)
+     * @param configured the preference value (blank, a folder or a path)
      * @param error      why the start failed
      */
     static void report(String configured, Throwable error) {

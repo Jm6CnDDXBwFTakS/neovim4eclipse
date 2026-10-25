@@ -523,9 +523,10 @@ and the note under it shows which Neovim that finds, for example
   *Extract All* leaves it, with one more folder around it). Below the folder itself, a `bin/nvim`
   is only considered a Neovim install when Neovim's `share/nvim/runtime` folder is alongside its
   `bin` folder. Links are not followed.
-- **A direct path to an `nvim` executable**, used as is. The field also takes a command name, such
-  as `nvim`, looked up on `PATH` and then in the usual install folders. A leading `~` stands for the
-  home folder.
+- **A direct path to an `nvim` executable**, used as is. It must be an absolute path; a leading `~`
+  stands for the home folder. A command name such as `nvim`, or a relative path, is not looked up
+  anywhere: Neovim does not start, and the error says the value must be absolute. To use the `nvim`
+  on `PATH`, leave the field blank.
 
 Every Neovim a search finds is asked its version (`nvim --version`); one that does not answer, such
 as an archive for another processor, is skipped, and the newest of the rest is used. Eclipse sees

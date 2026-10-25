@@ -33,11 +33,13 @@ import java.util.function.Function;
  *       {@code C:\Program Files\Neovim}) or further down (release archives extracted into it, as
  *       they are or by Windows Explorer's "Extract All"). See {@link #findInFolder} for the exact
  *       rules.</li>
- *   <li><b>A program</b>: an absolute path to {@code nvim} (what this preference held before it
- *       accepted folders), or a bare command name such as {@code nvim}, looked up on {@code PATH}
- *       and then in the usual install folders.</li>
+ *   <li><b>A program</b>: an absolute path to {@code nvim}, used as it is.</li>
  * </ul>
  * A leading {@code ~} stands for the home folder: {@code ~/.local/share/neovim4eclipse-plugin/neovim}.
+ * Anything else, such as a command name ({@code nvim}) or a relative path ({@code bin/nvim}), is
+ * refused when Neovim starts ({@link NeovimNotFoundException}): a value names one Neovim, and only
+ * a blank preference searches, {@code PATH} included. Releases before 0.1.6 took a command name and
+ * defaulted to {@code nvim}; that default was never saved, so it became blank by itself.
  *
  * <h2>Why search outside {@code PATH}</h2>
  * A program inherits {@code PATH} from whatever started it. Eclipse started from the macOS Dock or
@@ -65,25 +67,23 @@ public final class NvimExecutable {
     /**
      * What {@link #find(String)} settled on.
      *
-     * @param command an absolute path, or a command name for the OS to look up
+     * @param command the absolute path of the program; when nothing was found, what was looked for
+     *                (the value as entered, or {@code nvim} for a blank preference), which
+     *                {@link #embedCommand} refuses to start
      * @param among   how many working Neovims in one folder it was chosen from (1: no choice)
      */
     public record Resolved(String command, int among) {
     }
 
     /**
-     * Turns the configured preference value into a token {@link ProcessBuilder} can launch.
-     *
-     * <p>Only <em>absolute</em> paths are checked against the file system. A relative name such
-     * as {@code nvim} is deliberately left alone so it is looked up on {@code PATH}; otherwise a
-     * file called {@code nvim} in Eclipse's working directory would silently win.
+     * Turns the configured preference value into the program to start.
      *
      * <p>Searching a folder runs {@code nvim --version} on what it finds ({@link InstalledVersions},
      * which remembers the answers), so call this off the SWT UI thread where possible.
      *
-     * @param configured preference value: blank, a folder, an absolute path or a command name
-     * @return an absolute path to the program, or a command name for the OS to look up (or to
-     *         report as missing when the process is started)
+     * @param configured preference value: blank, a folder or an absolute path to the program
+     * @return the absolute path of the program; if nothing was found, what was looked for (see
+     *         {@link Resolved#command})
      */
     public static String resolve(String configured) {
         return find(configured).command();
@@ -102,17 +102,15 @@ public final class NvimExecutable {
      * @param windows       whether Windows rules apply ({@code nvim.exe}, {@code ;} separators, suffixes)
      * @param dedicated     the plug-in's own Neovim folder, searched first for a blank preference; may
      *                      be {@code null}
-     * @param searchFolders folders checked in order, without searching inside them, when a bare name
-     *                      is not on {@code PATH}
+     * @param searchFolders the usual install folders, checked in order, without searching inside
+     *                      them, when a blank preference finds nothing before
      * @param versionOf     a program's version, or {@code null} if it does not run as Neovim
      */
     static Resolved find(String configured, String pathEnv, boolean windows, Path dedicated,
             List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
         String program = windows ? "nvim.exe" : "nvim";
         if (configured == null || configured.isBlank()) {
-            Found found = dedicated == null ? null : findInFolder(dedicated, program, windows, true, versionOf);
-            return found != null ? resolved(found)
-                    : find(program, pathEnv, windows, null, searchFolders, versionOf);
+            return searchDefaultFolders(program, pathEnv, windows, dedicated, searchFolders, versionOf);
         }
         String name = expandHome(configured.strip());
         File file = new File(name);
@@ -129,16 +127,30 @@ public final class NvimExecutable {
             }
             return new Resolved(name, 1);
         }
-        if (name.contains("/") || name.contains(File.separator) || isAvailable(name, pathEnv, windows)) {
-            return new Resolved(name, 1);
+        return new Resolved(name, 1); // not absolute: never looked up, refused at start
+    }
+
+    /**
+     * A blank preference: the dedicated folder (searched), then {@code program} on {@code PATH}, then
+     * the usual install folders (checked, not searched).
+     */
+    private static Resolved searchDefaultFolders(String program, String pathEnv, boolean windows, Path dedicated,
+            List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
+        Found found = dedicated == null ? null : findInFolder(dedicated, program, windows, true, versionOf);
+        if (found != null) {
+            return resolved(found);
+        }
+        Path onPath = locate(program, pathEnv, windows);
+        if (onPath != null) {
+            return new Resolved(onPath.toString(), 1);
         }
         for (Path dir : searchFolders) {
-            Found found = findInFolder(dir, name, windows, false, versionOf);
+            found = findInFolder(dir, program, windows, false, versionOf);
             if (found != null) {
                 return resolved(found);
             }
         }
-        return new Resolved(name, 1);
+        return new Resolved(program, 1);
     }
 
     private static Resolved resolved(Found found) {
@@ -403,12 +415,19 @@ public final class NvimExecutable {
      * argument with a space in it; {@link ProcessBuilder} quotes it on Windows, and
      * {@code NeovimSessionIntegrationTest} checks that Neovim receives it whole.
      *
-     * @param configured preference path or command name
+     * @param configured preference value: blank, a folder or an absolute path to the program
      * @param extraArgs  optional extra arguments, e.g. {@code --clean}; may be {@code null}
+     * @throws NeovimNotFoundException if the value is not an absolute path, or a blank value finds
+     *         no Neovim: the operating system would otherwise look a bare {@code nvim} up on
+     *         {@code PATH} itself
      */
     public static List<String> embedCommand(String configured, List<String> extraArgs) {
+        String program = resolve(configured);
+        if (!new File(program).isAbsolute()) {
+            throw notFound(configured);
+        }
         List<String> cmd = new ArrayList<>();
-        cmd.add(resolve(configured));
+        cmd.add(program);
         cmd.add("--embed");
         cmd.add("--cmd");
         cmd.add("let g:" + GUARD_VARIABLE + "=1");
@@ -443,15 +462,28 @@ public final class NvimExecutable {
         }
     }
 
-    /** Best-effort check that the configured executable exists, searching the real {@code PATH}. */
+    /**
+     * Why {@link #embedCommand} refuses {@code configured}: a blank value found nothing, or the value
+     * is not an absolute path.
+     */
+    static NeovimNotFoundException notFound(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return new NeovimNotFoundException("No Neovim found in the default folders");
+        }
+        return new NeovimNotFoundException(
+                "The Neovim folder or program must be an absolute path (a leading ~ is fine): " + configured.strip());
+    }
+
+    /** Best-effort check that the configured value names a Neovim program that exists. */
     public static boolean looksAvailable(String configured) {
-        return isAvailable(resolve(configured), System.getenv("PATH"), PlatformUtil.isWindows());
+        return locate(resolve(configured)) != null;
     }
 
     /**
-     * Testable core of {@link #looksAvailable}.
+     * Whether {@link #locate(String, String, boolean)} finds {@code command}: the PATH search a blank
+     * preference does.
      *
-     * @param command command name or absolute path (already resolved)
+     * @param command a command name to look up on {@code pathEnv}, or an absolute path
      * @param pathEnv value of the {@code PATH} variable; may be {@code null}
      * @param windows whether to use {@code ;} separators and try Windows executable suffixes
      */
@@ -460,17 +492,21 @@ public final class NvimExecutable {
     }
 
     /**
-     * The file a resolved command stands for: the path itself if it is absolute, else the first match
-     * on the real {@code PATH}. Used to show which {@code nvim} was found, e.g. on the preference page.
+     * The program {@link #resolve(String)} found, if it is an absolute path to a file. A command name
+     * is not looked up: only a blank preference searches {@code PATH}, and its result is already
+     * absolute. Used to show which {@code nvim} was found, e.g. on the preference page.
      *
      * @param resolved what {@link #resolve(String)} returned
-     * @return the absolute path, or {@code null} if no such file exists
+     * @return the path, or {@code null} if it is not absolute or no such file exists
      */
     public static Path locate(String resolved) {
-        return locate(resolved, System.getenv("PATH"), PlatformUtil.isWindows());
+        return locate(resolved, null, PlatformUtil.isWindows());
     }
 
-    /** Testable core of {@link #locate(String)}. */
+    /**
+     * {@code command} itself if it is an absolute path to a file, else its first match on
+     * {@code pathEnv} (used for a blank preference's {@code PATH} step).
+     */
     static Path locate(String command, String pathEnv, boolean windows) {
         if (new File(command).isAbsolute()) {
             Path path = Path.of(command);

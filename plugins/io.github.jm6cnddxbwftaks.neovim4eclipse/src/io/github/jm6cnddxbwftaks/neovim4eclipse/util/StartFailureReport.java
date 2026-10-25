@@ -50,7 +50,7 @@ public final class StartFailureReport {
     /**
      * Whether a failure to start {@code configured} should be shown, and if so, remembers that it was.
      *
-     * @param configured the preference value (command name or path) that failed
+     * @param configured the preference value (blank, a folder or a path) that failed
      */
     public boolean shouldReport(String configured) {
         if (Objects.equals(reportedFor, configured)) {
