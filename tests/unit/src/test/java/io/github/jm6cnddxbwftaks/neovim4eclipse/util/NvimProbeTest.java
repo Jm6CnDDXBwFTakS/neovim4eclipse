@@ -17,20 +17,26 @@ class NvimProbeTest {
     private static final NeovimVersion MIN = NeovimVersion.MINIMUM;
 
     @Test
-    void aSupportedNeovimShowsItsPathAndVersion() {
-        assertEquals("Found " + PROGRAM + ", Neovim " + MIN + ".", NvimProbe.note(PROGRAM, MIN, 1, DEDICATED));
+    void aSupportedNeovimShowsItsVersionThenItsPath() {
+        assertEquals("Found: Neovim " + MIN + ", " + PROGRAM, NvimProbe.note(PROGRAM, MIN, 1, DEDICATED));
     }
 
     @Test
     void aChoiceAmongSeveralSaysSo() {
-        assertEquals("Found " + PROGRAM + ", Neovim " + MIN + " (newest of 2 in this folder).",
+        assertEquals("Found: Neovim " + MIN + " (newest of 2 in this folder), " + PROGRAM,
                 NvimProbe.note(PROGRAM, MIN, 2, DEDICATED));
     }
 
     @Test
     void anOldNeovimSaysItIsTooOld() {
-        assertEquals("Found " + PROGRAM + ", Neovim 0.9.5: too old, Neovim for Eclipse needs " + MIN + " or newer.",
+        assertEquals("Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs " + MIN + " or newer), " + PROGRAM,
                 NvimProbe.note(PROGRAM, new NeovimVersion(0, 9, 5), 1, DEDICATED));
+    }
+
+    @Test
+    void anOldNewestOfSeveralSaysBoth() {
+        assertEquals("Found: Neovim 0.9.5 (newest of 3 in this folder; too old: Neovim for Eclipse needs " + MIN
+                + " or newer), " + PROGRAM, NvimProbe.note(PROGRAM, new NeovimVersion(0, 9, 5), 3, DEDICATED));
     }
 
     @Test
@@ -41,7 +47,7 @@ class NvimProbeTest {
 
     @Test
     void aProgramThatIsNotNeovimIsNamed() {
-        assertEquals("Found " + PROGRAM + ", but it did not answer --version as Neovim does.",
+        assertEquals("Found: no Neovim version (it did not answer --version), " + PROGRAM,
                 NvimProbe.note(PROGRAM, null, 1, DEDICATED));
     }
 }

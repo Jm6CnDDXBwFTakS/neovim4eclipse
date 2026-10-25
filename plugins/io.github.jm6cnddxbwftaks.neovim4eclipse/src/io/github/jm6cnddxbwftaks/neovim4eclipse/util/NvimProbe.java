@@ -4,16 +4,22 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Says which Neovim a preference value finds, for the note under the field on the preference page:
  *
  * <pre>
- *   Found /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim, Neovim 0.12.6.
- *   Found /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-0.13.0/bin/nvim, Neovim 0.13.0 (newest of 2 in this folder).
- *   Found /usr/bin/nvim, Neovim 0.9.5: too old, Neovim for Eclipse needs 0.12.6 or newer.
+ *   Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim
+ *   Found: Neovim 0.13.0 (newest of 2 in this folder), /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-0.13.0/bin/nvim
+ *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
+ *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
  *   No Neovim found. Extract a release archive into /home/you/.local/share/neovim4eclipse-plugin/neovim, or choose ...
  * </pre>
+ *
+ * <p>The version comes first and the path last: the version is what you look for, and a long path
+ * then cannot push it out of view. No full stop follows the path, which would read as part of it.
  *
  * <p>{@link #describe} runs {@code nvim --version} ({@link InstalledVersions}), which takes some
  * milliseconds and may hang on a broken install, so the caller runs it off the UI thread.
@@ -53,13 +59,16 @@ public final class NvimProbe {
                     + ", or choose the folder of another Neovim " + NeovimVersion.MINIMUM + " or newer.";
         }
         if (version == null) {
-            return "Found " + program + ", but it did not answer --version as Neovim does.";
+            return "Found: no Neovim version (it did not answer --version), " + program;
         }
-        String choice = among > 1 ? " (newest of " + among + " in this folder)" : "";
+        List<String> remarks = new ArrayList<>();
+        if (among > 1) {
+            remarks.add("newest of " + among + " in this folder");
+        }
         if (!version.isSupported()) {
-            return "Found " + program + ", Neovim " + version + choice + ": too old, Neovim for Eclipse needs "
-                    + NeovimVersion.MINIMUM + " or newer.";
+            remarks.add("too old: Neovim for Eclipse needs " + NeovimVersion.MINIMUM + " or newer");
         }
-        return "Found " + program + ", Neovim " + version + choice + ".";
+        String remark = remarks.isEmpty() ? "" : " (" + String.join("; ", remarks) + ")";
+        return "Found: Neovim " + version + remark + ", " + program;
     }
 }

@@ -21,7 +21,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 /**
  * The "Neovim folder or program" field: a text field, a <em>Browse...</em> button that picks a
  * folder, and a note underneath saying which Neovim the current text finds, for example
- * {@code Found /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim, Neovim 0.12.6.}
+ * {@code Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim}
  *
  * <h2>How a field editor is extended</h2>
  * {@link StringButtonFieldEditor} already lays out label, text and button in the page's grid and

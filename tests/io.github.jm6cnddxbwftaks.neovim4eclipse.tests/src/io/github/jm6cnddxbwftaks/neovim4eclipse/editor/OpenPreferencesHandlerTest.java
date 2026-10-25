@@ -72,7 +72,7 @@ class OpenPreferencesHandlerTest {
         assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
         // The note under the field names what the field finds (NvimProbe), after a short delay.
         UiTestSupport.waitUntil("the note saying which Neovim was found", 10_000, () -> find(page, Label.class)
-                .stream().anyMatch(l -> l.getText().startsWith("Found ") || l.getText().startsWith("No Neovim found")));
+                .stream().anyMatch(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found")));
         Text field = find(page, Text.class).stream().findFirst().orElse(null);
         assertNotNull(field, "no text field");
         assertTrue(field.isVisible(), "field hidden (its window is not the dialog's)");
