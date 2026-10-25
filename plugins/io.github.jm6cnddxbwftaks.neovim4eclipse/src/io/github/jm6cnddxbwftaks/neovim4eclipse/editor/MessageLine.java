@@ -52,6 +52,8 @@ final class MessageLine {
     private boolean error;
     /** The editor's background while a flash shows; {@code null} when no flash is running. */
     private Color backgroundBeforeFlash;
+    /** How many flashes have started; for tests (see {@link #flashCount}). */
+    private int flashes;
 
     /** The next key or click hides the line; Shift, Ctrl and the like on their own are not keys yet. */
     private final Listener hideOnInput = event -> {
@@ -190,6 +192,7 @@ final class MessageLine {
         }
         Color before = host.getBackground();
         backgroundBeforeFlash = before;
+        flashes++;
         host.setBackground(rgb(OverlayColors.blend(rgbOf(before), rgbOf(errorColor()), FLASH_STRENGTH)));
         host.getDisplay().timerExec(FLASH_MS, this::endFlash);
     }
@@ -205,6 +208,15 @@ final class MessageLine {
     /** Whether the flash is showing right now; for tests. */
     boolean isFlashing() {
         return backgroundBeforeFlash != null;
+    }
+
+    /**
+     * How many flashes have started, for tests that run the event loop: a flash lasts only
+     * {@link #FLASH_MS}, and a slow machine can start and end it between two looks at
+     * {@link #isFlashing()} (on macOS one turn of the event loop may run several timers).
+     */
+    int flashCount() {
+        return flashes;
     }
 
     /**

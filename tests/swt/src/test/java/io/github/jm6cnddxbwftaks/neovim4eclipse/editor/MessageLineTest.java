@@ -163,6 +163,7 @@ class MessageLineTest {
         line.show("E1: x", true);
         assertTrue(line.isFlashing());
         assertNotEquals(before.getRGB(), host.getBackground().getRGB(), "tinted");
+        assertEquals(1, line.flashCount());
 
         runFor(MessageLine.FLASH_MS + 300);
         assertFalse(line.isFlashing());
