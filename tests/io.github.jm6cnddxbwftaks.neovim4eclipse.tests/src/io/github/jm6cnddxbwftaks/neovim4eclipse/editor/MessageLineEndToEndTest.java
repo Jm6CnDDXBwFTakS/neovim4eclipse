@@ -75,9 +75,13 @@ class MessageLineEndToEndTest extends EndToEndTestBase {
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
         store.setValue(PreferenceConstants.FLASH_ON_ERROR, true);
         try {
+            int before = line().flashCount();
             runInBox(widget, "s/zzz/y/");
 
-            waitUntil("the flash", TIMEOUT_MS, () -> line().isFlashing());
+            waitForMessage("E486: Pattern not found: zzz");
+            // Counted, not caught in the act: the flash lasts 150 ms, and a slow CI machine (macOS)
+            // could start and end it between two checks of isFlashing().
+            waitUntil("the flash", TIMEOUT_MS, () -> line().flashCount() > before);
             waitUntil("the flash to end", TIMEOUT_MS, () -> !line().isFlashing());
         } finally {
             store.setToDefault(PreferenceConstants.FLASH_ON_ERROR);
