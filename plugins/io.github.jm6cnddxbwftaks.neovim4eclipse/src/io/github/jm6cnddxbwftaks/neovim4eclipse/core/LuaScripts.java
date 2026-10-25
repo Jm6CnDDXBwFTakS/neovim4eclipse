@@ -57,8 +57,7 @@ final class LuaScripts {
             vim.cmd('imapclear')
             vim.cmd('iabclear')
             -- Lets nvim_eval_statusline('%S') report the pending command (showcmd) for the status bar.
-            -- The option exists from Neovim 0.9; on older versions the "cmd" item stays empty.
-            pcall(function() vim.opt.showcmdloc = 'statusline' end)
+            vim.opt.showcmdloc = 'statusline'
             vim.api.nvim_create_autocmd('ModeChanged', {
               callback = function()
                 vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode)
@@ -199,15 +198,12 @@ final class LuaScripts {
             """;
 
     /**
-     * Runs an ex command (argument 1) and returns what it printed. Neovim 0.9+ has
-     * {@code nvim_exec2}; older versions only {@code nvim_exec}.
+     * Runs an ex command (argument 1) and returns what it printed ({@code nvim_exec2} with
+     * {@code output = true}).
      */
     static final String CAPTURE_OUTPUT = """
             local cmd = select(1, ...)
-            if vim.api.nvim_exec2 then
-              return vim.api.nvim_exec2(cmd, { output = true }).output
-            end
-            return vim.api.nvim_exec(cmd, true)
+            return vim.api.nvim_exec2(cmd, { output = true }).output
             """;
 
     /**
@@ -317,7 +313,7 @@ final class LuaScripts {
             local buf = tonumber(select(1, ...))
             vim.bo[buf].buftype = 'acwrite'
             vim.api.nvim_create_autocmd('BufWriteCmd', {
-              buffer = buf,
+              buf = buf, -- named "buffer" before Neovim 0.12.2
               desc = 'Eclipse saves the document',
               callback = function(ev)
                 local function fail(msg)
