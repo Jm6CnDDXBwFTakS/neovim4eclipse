@@ -22,8 +22,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Changed
 
 - The toolbar button that toggles Neovim and Eclipse mode shows the project's logo instead of the
-  text *NVIM* (sharp on 200% screens too). Its tooltip and the preference that hides it are
-  unchanged, apart from the name: *Show the Neovim button on the main toolbar*.
+  text *NVIM* (sharp on 200% screens too). The preference that hides it is now named *Show the
+  Neovim button on the main toolbar*.
+- The toolbar button shows the active editor's mode: pressed in Neovim mode, raised in Eclipse
+  mode, and greyed out while the editor has no Neovim attached. Its tooltip names the mode and the
+  key that toggles it. In the *Neovim* menu the entry is now a checkbox, *Neovim Mode*.
 
 ### Fixed
 

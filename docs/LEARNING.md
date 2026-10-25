@@ -75,6 +75,21 @@ A command is only a name. Menus, toolbar buttons and key bindings point at the c
 handler supplies the behavior. Several handlers can compete for one command; Eclipse picks the
 active one.
 
+A handler can also drive how its menu entries and toolbar buttons look. The toggle button is a
+`style="toggle"` item: Eclipse draws it pressed while it is *checked*. `ToggleNeovimModeHandler`
+implements `IElementUpdater`, whose `updateElement(UIElement, ...)` Eclipse calls for every item of
+the command when someone calls `ICommandService.refreshElements(commandId, null)`; it sets
+`setChecked` and `setTooltip` there. Its *enablement* (`setBaseEnabled(false)`) greys out every item
+and disables the key binding at once. Eclipse never polls either, so `ToggleButtonRefresh` asks for
+both whenever Neovim attaches, detaches or changes mode:
+
+```text
+controller.setNeovimModeActive(false)
+  └─ ToggleButtonRefresh.request()  ──asyncExec──►  handler.setBaseEnabled(attached)   (greyed out?)
+                                                    refreshElements(toggleMode)
+                                                      └─ handler.updateElement(button) (pressed? tooltip)
+```
+
 ### 1.3 The workbench: windows, pages, parts
 
 The Eclipse UI is called the *workbench*. It has one or more *windows*; each window has a *page*;
