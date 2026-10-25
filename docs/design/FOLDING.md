@@ -334,7 +334,7 @@ Three commits, in UTC, as AGENTS.md asks:
 - **`zn`/`zi` and a resend:** while `'nofoldenable'` is set, a resend from Eclipse (everything
   expanded) must not erase the closed states Neovim keeps for `zi`.
 - **`v:errmsg` from a mapping** reaches the status line the way other errors do (the snapshot
-  clears it). Also check on Neovim 0.9, the oldest supported version.
+  clears it).
 - **Undo** (`u` is in the default `'foldopen'`): a fold deleted with `dd` and restored with `u`
   comes back in Eclipse after the reconcile, not at once.
 - **Speed:** a resend recreates every fold. Measure it for a large Java file (hundreds of

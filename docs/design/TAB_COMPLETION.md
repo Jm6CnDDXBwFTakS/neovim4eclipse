@@ -206,11 +206,10 @@ Two commits, in UTC, as AGENTS.md asks:
 
 ## 8. To check while implementing
 
-Still open after implementing: all four points below were not checked (no Neovim 0.9 at hand; the
-grid, the speed in a large folder and the old Tab behavior need a person at a running Eclipse).
+Still open after implementing: the three points below were not checked (the grid, the speed in a
+large folder and the old Tab behavior need a person at a running Eclipse). A fourth, whether it
+works on Neovim 0.9, went away when the minimum became 0.12.6, the version it was built with.
 
-- **Neovim 0.9**, the oldest supported version: `<C-\>e` with `v:lua` and `nvim_feedkeys` in
-  command-line mode should work there; only 0.12 was tried.
 - **The grid:** the plug-in attaches as a UI with every `ext_*` option off
   (`NeovimConnection.TERMINAL_UI`), so the typed command line is drawn into Neovim's grid rather
   than sent as events. The plug-in does not show the grid, so nothing should be visible; confirm
