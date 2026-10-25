@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class NvimExecutableTest {
 
@@ -104,8 +106,8 @@ class NvimExecutableTest {
     }
 
     @Test
-    void fallbackFoldersAreAbsolute() {
-        for (Path dir : NvimExecutable.fallbackDirectories()) {
+    void searchFoldersAreAbsolute() {
+        for (Path dir : NvimExecutable.searchFolders()) {
             assertTrue(dir.isAbsolute(), dir.toString());
         }
     }
@@ -227,5 +229,155 @@ class NvimExecutableTest {
         } finally {
             Files.deleteIfExists(file);
         }
+    }
+
+    // ---- folders (the preference may name Neovim's install folder) ----
+
+    @TempDir
+    Path tmp;
+
+    /** Creates {@code relative} under {@link #tmp} as an empty file, with its parent folders. */
+    private Path file(String relative) throws IOException {
+        Path path = tmp.resolve(relative);
+        Files.createDirectories(path.getParent());
+        return Files.createFile(path);
+    }
+
+    @Test
+    void aFolderFindsItsBinNvim() throws IOException {
+        Path exe = file("neovim/bin/nvim");
+        assertEquals(exe.toAbsolutePath().toString(), resolveNowhere(tmp.resolve("neovim").toString(), false));
+    }
+
+    @Test
+    void aBinFolderItselfWorksToo() throws IOException {
+        Path exe = file("neovim/bin/nvim");
+        assertEquals(exe.toAbsolutePath().toString(), resolveNowhere(tmp.resolve("neovim/bin").toString(), false));
+    }
+
+    @Test
+    void anArchiveExtractedAsItIsIsFoundInsideTheFolder() throws IOException {
+        // tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/opt/neovim keeps the archive's top folder.
+        Path exe = file("neovim/nvim-linux-x86_64/bin/nvim");
+        assertEquals(exe.toAbsolutePath().toString(), resolveNowhere(tmp.resolve("neovim").toString(), false));
+    }
+
+    @Test
+    void ofSeveralArchivesTheNewestNeovimWins() throws IOException {
+        // Versions side by side, renamed so they can coexist; the names are not trusted, the programs are asked.
+        Path older = file("neovim/nvim-0.13.0/bin/nvim"); // name says newer, program is older
+        Path newer = file("neovim/nvim-0.12.6/bin/nvim");
+        Map<Path, NeovimVersion> versions = Map.of(older.toAbsolutePath(), new NeovimVersion(0, 12, 6),
+                newer.toAbsolutePath(), new NeovimVersion(0, 13, 1));
+        assertEquals(newer.toAbsolutePath(),
+                NvimExecutable.findInFolder(tmp.resolve("neovim"), "nvim", false, versions::get));
+    }
+
+    @Test
+    void archivesThatDoNotRunAsNeovimAreSkipped() throws IOException {
+        // An archive for another processor cannot run here: its version is unknown (null).
+        file("neovim/nvim-linux-arm64/bin/nvim");
+        Path runs = file("neovim/nvim-linux-x86_64/bin/nvim");
+        Map<Path, NeovimVersion> versions = Map.of(runs.toAbsolutePath(), new NeovimVersion(0, 12, 6));
+        assertEquals(runs.toAbsolutePath(),
+                NvimExecutable.findInFolder(tmp.resolve("neovim"), "nvim", false, versions::get));
+    }
+
+    @Test
+    void whenNoArchiveRunsNoneIsChosen() throws IOException {
+        file("neovim/nvim-a/bin/nvim");
+        file("neovim/nvim-b/bin/nvim");
+        assertNull(NvimExecutable.findInFolder(tmp.resolve("neovim"), "nvim", false, p -> null));
+    }
+
+    @Test
+    void aSingleArchiveIsTakenWithoutRunningIt() throws IOException {
+        Path only = file("neovim/nvim-linux-x86_64/bin/nvim");
+        assertEquals(only.toAbsolutePath(), NvimExecutable.findInFolder(tmp.resolve("neovim"), "nvim", false, p -> {
+            throw new AssertionError("ran " + p);
+        }));
+    }
+
+    @Test
+    void binNvimWinsOverAnArchiveFolder() throws IOException {
+        Path exe = file("neovim/bin/nvim");
+        file("neovim/nvim-linux-x86_64/bin/nvim");
+        assertEquals(exe.toAbsolutePath(), NvimExecutable.findInFolder(tmp.resolve("neovim"), "nvim", false, p -> {
+            throw new AssertionError("bin/nvim is a deliberate choice, no version needed: ran " + p);
+        }));
+    }
+
+    @Test
+    void aFolderOnWindowsFindsNvimExe() throws IOException {
+        Path exe = file("Neovim/bin/nvim.exe");
+        assertEquals(exe.toAbsolutePath().toString(), resolveNowhere(tmp.resolve("Neovim").toString(), true));
+    }
+
+    @Test
+    void aFolderWithoutNeovimNamesTheExpectedProgram() throws IOException {
+        Files.createDirectories(tmp.resolve("empty"));
+        assertEquals(tmp.resolve("empty").resolve("bin").resolve("nvim").toString(),
+                resolveNowhere(tmp.resolve("empty").toString(), false));
+    }
+
+    @Test
+    void searchFoldersAreInstallFoldersToo() throws IOException {
+        Path exe = file("homebrew/bin/nvim");
+        assertEquals(exe.toAbsolutePath().toString(),
+                NvimExecutable.resolve("nvim", "", false, List.of(tmp.resolve("missing"), tmp.resolve("homebrew"))));
+    }
+
+    // ---- blank preference: the dedicated folder first ----
+
+    @Test
+    void blankUsesTheDedicatedFolderBeforePath() throws IOException {
+        Path dedicated = file("opt/neovim/bin/nvim");
+        Path onPath = file("path/nvim");
+        assertEquals(dedicated.toAbsolutePath().toString(), NvimExecutable.resolve("", onPath.getParent().toString(),
+                false, tmp.resolve("opt/neovim"), List.of()));
+    }
+
+    @Test
+    void blankFallsBackToPathWhenTheDedicatedFolderIsEmpty() throws IOException {
+        Path onPath = file("path/nvim");
+        assertEquals("nvim", NvimExecutable.resolve(null, onPath.getParent().toString(), false,
+                tmp.resolve("opt/neovim"), List.of()));
+    }
+
+    @Test
+    void blankThenSearchesTheUsualFolders() throws IOException {
+        Path exe = file("homebrew/bin/nvim");
+        assertEquals(exe.toAbsolutePath().toString(), NvimExecutable.resolve("  ", "", false,
+                tmp.resolve("opt/neovim"), List.of(tmp.resolve("homebrew"))));
+    }
+
+    @Test
+    void anExplicitNameDoesNotUseTheDedicatedFolder() throws IOException {
+        file("opt/neovim/bin/nvim");
+        assertEquals("nvim", NvimExecutable.resolve("nvim", "", false, tmp.resolve("opt/neovim"), List.of()));
+    }
+
+    @Test
+    void dedicatedFolderIsUnderTheHomeFolder() {
+        assertEquals(Path.of(System.getProperty("user.home"), ".local", "opt", "neovim"),
+                NvimExecutable.dedicatedFolder());
+    }
+
+    @Test
+    void aLeadingTildeIsTheHomeFolder() {
+        String home = System.getProperty("user.home");
+        assertEquals(home + "/.local/opt/neovim", NvimExecutable.expandHome("~/.local/opt/neovim"));
+        assertEquals(home, NvimExecutable.expandHome("~"));
+        assertEquals("~user/x", NvimExecutable.expandHome("~user/x"), "only the current user's ~");
+        assertEquals("/opt/~", NvimExecutable.expandHome("/opt/~"));
+    }
+
+    @Test
+    void locateFindsTheFileBehindACommandName() throws IOException {
+        Path exe = file("path/nvim");
+        assertEquals(exe.toAbsolutePath(), NvimExecutable.locate("nvim", exe.getParent().toString(), false));
+        assertEquals(exe, NvimExecutable.locate(exe.toString(), "", false));
+        assertNull(NvimExecutable.locate("nvim", "", false));
+        assertNull(NvimExecutable.locate(tmp.resolve("missing").toString(), "", false));
     }
 }

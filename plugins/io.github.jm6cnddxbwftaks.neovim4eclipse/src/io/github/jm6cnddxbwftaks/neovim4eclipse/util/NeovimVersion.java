@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A Neovim version ({@code major.minor.patch}) and the oldest one this plug-in runs on.
@@ -45,6 +47,9 @@ public record NeovimVersion(int major, int minor, int patch) implements Comparab
      */
     public static final String LUA_QUERY = "local v = vim.version() return { v.major, v.minor, v.patch }";
 
+    /** The start of {@code nvim --version}'s first line, {@code NVIM v0.12.6}; the numbers are groups. */
+    private static final Pattern VERSION_LINE = Pattern.compile("^\\s*NVIM v(\\d+)\\.(\\d+)\\.(\\d+)");
+
     /**
      * Reads the answer to {@link #LUA_QUERY}: a list of three numbers (msgpack integers arrive as
      * {@code Long} or {@code Integer}).
@@ -58,6 +63,24 @@ public record NeovimVersion(int major, int minor, int patch) implements Comparab
                     ((Number) parts.get(2)).intValue());
         }
         throw new IllegalArgumentException("Unexpected answer to vim.version(): " + answer);
+    }
+
+    /**
+     * Reads the first line of {@code nvim --version}: {@code NVIM v0.12.6}, or for a nightly build
+     * {@code NVIM v0.13.0-dev-1234+gabcdef}, which counts as 0.13.0.
+     *
+     * @return the version, or {@code null} if the text does not start that way (not Neovim)
+     */
+    public static NeovimVersion fromVersionOutput(String output) {
+        if (output == null) {
+            return null;
+        }
+        Matcher m = VERSION_LINE.matcher(output);
+        if (!m.find()) {
+            return null;
+        }
+        return new NeovimVersion(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
+                Integer.parseInt(m.group(3)));
     }
 
     /** Whether this version is {@link #MINIMUM} or newer. */

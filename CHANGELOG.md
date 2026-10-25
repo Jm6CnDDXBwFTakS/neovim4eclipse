@@ -22,6 +22,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
+- *Window → Preferences → Neovim* takes Neovim's folder (the one with `bin/nvim`, or one with release
+  archives extracted into it), with a *Browse...* button, and shows which Neovim it finds and its
+  version. Left blank (the new default), it looks in `~/.local/opt/neovim` first
+  (`%USERPROFILE%\.local\opt\neovim` on Windows), then on `PATH`, then in the usual install folders,
+  now also Neovim's own `/opt` folders and per-user Windows installs. Several Neovims side by side in
+  one folder: the newest is used. A path to `nvim` set before keeps working.
 - A Neovim older than the minimum is refused at start, with a message naming its version and the
   one needed, instead of failing later in unclear ways.
 

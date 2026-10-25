@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.jface.preference.PreferenceDialog;
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
@@ -62,12 +63,16 @@ class OpenPreferencesHandlerTest {
     }
 
     @Test
-    void showsTheNeovimPageWithTheExecutableField() {
+    void showsTheNeovimPageWithTheLocationField() {
         assertTrue(dialog.getSelectedPage() instanceof NeovimPreferencePage, String.valueOf(dialog.getSelectedPage()));
         Control page = ((NeovimPreferencePage) dialog.getSelectedPage()).getControl();
         Label label = find(page, Label.class).stream()
-                .filter(l -> l.getText().startsWith("Neovim executable")).findFirst().orElse(null);
-        assertNotNull(label, "no 'Neovim executable' label");
+                .filter(l -> l.getText().startsWith("Neovim folder or program")).findFirst().orElse(null);
+        assertNotNull(label, "no 'Neovim folder or program' label");
+        assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
+        // The note under the field names what the field finds (NvimProbe), after a short delay.
+        UiTestSupport.waitUntil("the note saying which Neovim was found", 10_000, () -> find(page, Label.class)
+                .stream().anyMatch(l -> l.getText().startsWith("Found ") || l.getText().startsWith("No Neovim found")));
         Text field = find(page, Text.class).stream().findFirst().orElse(null);
         assertNotNull(field, "no text field");
         assertTrue(field.isVisible(), "field hidden (its window is not the dialog's)");
