@@ -21,7 +21,10 @@ public class ToggleNeovimModeHandler extends AbstractHandler {
         NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
         if (controller == null || controller.isClosed()) {
             MessageDialog.openInformation(HandlerUtil.getActiveShell(event), "Neovim",
-                    "No editor is attached. Open a text file (auto-attach) or use Neovim → Attach.");
+                    "Neovim is not attached to this editor. It attaches to text editors by itself; if it"
+                            + " did not, it may have failed to start (Window > Preferences > Neovim names the"
+                            + " executable). To try again: Neovim: Attach to Active Editor (Ctrl+Shift+N), or"
+                            + " Quick Access (Ctrl+3).");
             return null;
         }
         // No confirmation dialog: the status line shows the resulting mode.

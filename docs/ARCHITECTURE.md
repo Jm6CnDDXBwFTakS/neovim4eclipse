@@ -250,6 +250,11 @@ to the box, which (via the focus listener in the controller) also deactivates th
   even inside a project, because a text editor refuses to show a workspace file that does not exist;
   after the first write it is switched to the workspace file, keeping its Neovim buffer
   (`EditorAttachManager.replaceInputKeepingBuffer`, `core/EditorBuffers.move`).
+- **Start-up and the user's configuration:** under `--embed` Neovim runs `init.lua` only after
+  `nvim_ui_attach`. An error there leaves it at a hit-enter prompt that no one sees, answering only
+  `nvim_get_mode`. `NeovimConnection.waitForStartup` therefore waits for an idle answer, dismisses
+  such a prompt with Esc meanwhile, and keeps the errors (`:messages`) for a one-time warning
+  (`editor/StartupErrorNotice`, `util/StartupErrorReport`).
 - **Command lines Neovim opens:** the UI is attached with `ext_cmdline` (and nothing else of the
   UI protocol), so Neovim reports each command line it opens as a `cmdline_show` redraw event
   (`util/CmdlineEvent`, read in `NotificationBridge`). `util/CmdlineWatcher` drops the plug-in's own

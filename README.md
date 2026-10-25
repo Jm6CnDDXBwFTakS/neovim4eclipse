@@ -234,10 +234,11 @@ empty box cancels; clicking elsewhere also cancels it; Up/Down browse a history 
 searches). `:` from visual mode leaves visual mode and pre-fills `:'<,'>`. While the box has focus the
 Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it.
 
-The box also opens when a mapping in your `init.lua` opens a command line (`nnoremap ; :`,
-`nnoremap <Space>s :%s/`), when a count comes before `:` (`2:` gives `:.,.+1`), and for `!` with a
+The box also opens when a mapping in your `init.lua` opens a command line
+(`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript
+`nnoremap ; :`), when a count comes before `:` (`2:` gives `:.,.+1`), and for `!` with a
 motion (`!!` gives `:.!`), with what Neovim has typed so far. A search line opened this way inside an
-operator (`nnoremap <Space>d d/`) keeps the operator: Enter in the box completes it.
+operator (`vim.keymap.set('n', '<Space>d', 'd/')`) keeps the operator: Enter in the box completes it.
 
 In the `:` box, Tab completes the line as Neovim's own command line does (commands, options and their
 values, buffers, help tags, variables, functions, file names), following your `'wildmode'`; Shift+Tab goes
@@ -425,6 +426,12 @@ require('lazy').setup('plugins')
 With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.neovim4eclipse`. The
 variable is set with `--cmd`, not in the environment, so a Neovim you start in a `:terminal` inside
 Eclipse does not see it.
+
+**Errors in your config.** If `init.lua` reports an error while Neovim starts (a typo, or a
+Vimscript line such as `nnoremap ; :` in a Lua file: write `vim.keymap.set('n', ';', ':')`, or wrap
+it in `vim.cmd[[...]]`), Neovim starts anyway, with what your config set up before the error (after
+a syntax error, none of it), and a warning shows the error. Fix it and restart Eclipse. The terminal
+does the same after you press Enter.
 
 The variables starting with `eclipse_` work in two directions:
 

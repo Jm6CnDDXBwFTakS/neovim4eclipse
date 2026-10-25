@@ -40,6 +40,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `nnoremap ; :` or `nnoremap <Space>s :%s/`, a count before `:` (`2:`), `!` with a motion. Before,
   Neovim waited in its own command line, which Eclipse does not show. A search opened this way inside
   an operator (`d/` from a mapping) keeps the operator.
+- An error in your Neovim configuration (`init.lua`) no longer stops Neovim from starting with
+  "Neovim not started: TimeoutException": Neovim waited at a "Press ENTER" prompt Eclipse does not
+  show. Neovim now starts with what the configuration set up before the error, and a warning shows
+  the error.
+- The toolbar button's message when no editor is attached no longer points to *Neovim → Attach*,
+  a menu entry that is gone; it names *Neovim: Attach to Active Editor* (`Ctrl+Shift+N`).
 - A command whose only output is its status message (`:%s` printing "7 substitutions on 4 lines") no
   longer also opens the output popup; the message line shows the message, as for errors.
 
