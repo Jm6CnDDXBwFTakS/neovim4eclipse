@@ -62,7 +62,8 @@ class StartFailureReportTest {
         assertTrue(message.contains("\nExecutable: /usr/bin/nvim\n"), message);
         assertTrue(message.contains("\nError: Cannot run program \"nvim\": error=2, No such file or directory\n"),
                 message);
-        assertTrue(message.contains("Neovim preference page"), message);
+        assertTrue(message.contains("Neovim preference page (Window > Preferences > Neovim)"), message);
+        assertTrue(message.contains("leave the Neovim preference blank"), message);
         assertTrue(message.contains(NvimExecutable.dedicatedFolder().toString()), message);
         assertTrue(message.contains("Install Neovim " + NeovimVersion.MINIMUM + " or newer"), message);
         assertTrue(message.contains(StartFailureReport.RELEASES_URL), message);

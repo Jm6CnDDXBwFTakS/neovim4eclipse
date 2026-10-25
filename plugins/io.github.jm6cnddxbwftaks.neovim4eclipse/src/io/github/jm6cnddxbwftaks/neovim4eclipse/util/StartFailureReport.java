@@ -36,6 +36,9 @@ public final class StartFailureReport {
      */
     public static final String RELEASES_URL = "https://github.com/neovim/neovim/releases";
 
+    /** Where the Neovim preference page is, for readers who close the dialog without Open Preferences. */
+    static final String PREFERENCES_PATH = "Window > Preferences > Neovim";
+
     /** The executable whose failure was last reported; {@code null} after a successful start. */
     private String reportedFor;
 
@@ -66,8 +69,11 @@ public final class StartFailureReport {
      * Executable: nvim
      * Error: Cannot run program "nvim": error=2, No such file or directory
      *
-     * Install Neovim 0.12.6 or newer. The simplest install is the release archive from ... extracted
-     * into ~/.local/share/neovim4eclipse-plugin/neovim, which is searched first; or extract it anywhere and choose its folder ...
+     * Install Neovim 0.12.6 or newer. The simplest way: extract the release archive from ... into
+     * ~/.local/share/neovim4eclipse-plugin/neovim and leave the Neovim preference blank, which searches
+     * that folder first, then PATH, then the usual install folders. Or extract it anywhere and enter its
+     * folder on the Neovim preference page (Window > Preferences > Neovim).
+     * Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH or ...
      * </pre>
      *
      * With an old Neovim the error line says so: {@code Error: Neovim 0.12.4 is too old: Neovim for
@@ -80,11 +86,13 @@ public final class StartFailureReport {
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"
-                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer. The simplest install is the release "
-                + "archive from " + RELEASES_URL + ", extracted into " + NvimExecutable.dedicatedFolder()
-                + ", which is searched first; or extract it anywhere and choose its folder on the "
-                + "Neovim preference page. "
-                + "Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH.";
+                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer. The simplest way: extract the release "
+                + "archive from " + RELEASES_URL + " into " + NvimExecutable.dedicatedFolder()
+                + " and leave the Neovim preference blank, which searches that folder first, then PATH, then "
+                + "the usual install folders. Or extract it anywhere and enter its folder on the Neovim "
+                + "preference page (" + PREFERENCES_PATH + ").\n"
+                + "Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH "
+                + "or environment variables.";
     }
 
     /**

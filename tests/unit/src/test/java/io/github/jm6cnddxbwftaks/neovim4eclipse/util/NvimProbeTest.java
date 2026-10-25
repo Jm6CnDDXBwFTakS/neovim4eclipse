@@ -18,36 +18,44 @@ class NvimProbeTest {
 
     @Test
     void aSupportedNeovimShowsItsVersionThenItsPath() {
-        assertEquals("Found: Neovim " + MIN + ", " + PROGRAM, NvimProbe.note(PROGRAM, MIN, 1, DEDICATED));
+        assertEquals("Found: Neovim " + MIN + ", " + PROGRAM, NvimProbe.note("", PROGRAM, MIN, 1, DEDICATED));
     }
 
     @Test
     void aChoiceAmongSeveralSaysSo() {
         assertEquals("Found: Neovim " + MIN + " (newest of 2 in this folder), " + PROGRAM,
-                NvimProbe.note(PROGRAM, MIN, 2, DEDICATED));
+                NvimProbe.note("", PROGRAM, MIN, 2, DEDICATED));
     }
 
     @Test
     void anOldNeovimSaysItIsTooOld() {
         assertEquals("Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs " + MIN + " or newer), " + PROGRAM,
-                NvimProbe.note(PROGRAM, new NeovimVersion(0, 9, 5), 1, DEDICATED));
+                NvimProbe.note("", PROGRAM, new NeovimVersion(0, 9, 5), 1, DEDICATED));
     }
 
     @Test
     void anOldNewestOfSeveralSaysBoth() {
         assertEquals("Found: Neovim 0.9.5 (newest of 3 in this folder; too old: Neovim for Eclipse needs " + MIN
-                + " or newer), " + PROGRAM, NvimProbe.note(PROGRAM, new NeovimVersion(0, 9, 5), 3, DEDICATED));
+                + " or newer), " + PROGRAM, NvimProbe.note("", PROGRAM, new NeovimVersion(0, 9, 5), 3, DEDICATED));
     }
 
     @Test
-    void nothingFoundSuggestsTheDedicatedFolder() {
-        assertEquals("No Neovim found. Extract a release archive into " + DEDICATED
-                + ", or choose the folder of another Neovim " + MIN + " or newer.", NvimProbe.note(null, null, 0, DEDICATED));
+    void nothingFoundByTheDefaultSearchSuggestsTheDefaultNeovimFolder() {
+        String expected = "No Neovim found in the default folders. Extract a Neovim release archive into " + DEDICATED;
+        assertEquals(expected, NvimProbe.note("", null, null, 0, DEDICATED));
+        assertEquals(expected, NvimProbe.note("  ", null, null, 0, DEDICATED));
+        assertEquals(expected, NvimProbe.note(null, null, null, 0, DEDICATED));
+    }
+
+    @Test
+    void nothingFoundAtAnEnteredValueSuggestsClearingTheField() {
+        assertEquals("No Neovim found at /opt/nvim. Clear the field to search the default folders, or enter a value "
+                + "as described.", NvimProbe.note("  /opt/nvim ", null, null, 0, DEDICATED));
     }
 
     @Test
     void aProgramThatIsNotNeovimIsNamed() {
         assertEquals("Found: no Neovim version (it did not answer --version), " + PROGRAM,
-                NvimProbe.note(PROGRAM, null, 1, DEDICATED));
+                NvimProbe.note("", PROGRAM, null, 1, DEDICATED));
     }
 }

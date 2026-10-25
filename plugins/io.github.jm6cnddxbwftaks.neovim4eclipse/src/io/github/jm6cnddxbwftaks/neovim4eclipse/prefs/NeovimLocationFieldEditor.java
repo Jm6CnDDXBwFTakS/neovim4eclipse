@@ -58,11 +58,8 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     @Override
     protected void doFillIntoGrid(Composite parent, int numColumns) {
         super.doFillIntoGrid(parent, numColumns);
-        getTextControl().setToolTipText("Leave blank to use " + NvimExecutable.dedicatedFolder()
-                + " if it holds a Neovim, else nvim on PATH. Or Neovim's install folder (the one with bin/nvim), "
-                + "the program itself, or a command name. Applies when Neovim next starts "
-                + "(detach and reattach, or restart Eclipse).");
-        getTextControl().setMessage("Search: " + NvimExecutable.dedicatedFolder() + ", then PATH");
+        // No tooltip: the page description says what the field takes, the note below what it finds.
+        getTextControl().setMessage("Leave blank to search for Neovim"); // shown while the field is empty
         note = new Label(parent, SWT.WRAP);
         GridData data = new GridData(SWT.FILL, SWT.TOP, true, false, numColumns, 1);
         data.widthHint = 400; // lets the label wrap instead of widening the page

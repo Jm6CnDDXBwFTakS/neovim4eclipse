@@ -30,14 +30,16 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Windows `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`), then on `PATH`, then in the usual
   install folders, now also Neovim's own `/opt` folders and per-user Windows installs. Several
   Neovims side by side in one folder: the newest that runs is used. A path to `nvim` set before
-  keeps working.
+  keeps working. The page says what the field takes and links to
+  [Finding Neovim](README.md#finding-neovim) in the README; when nothing is found, the note says
+  whether the default folders or the value entered came up empty, and how to go on.
+- A Neovim older than the minimum is refused at start, with a message naming its version and the
+  one needed, instead of failing later in unclear ways.
 
 ### Removed
 
 - The home folder itself and `/snap` are no longer among the usual install folders searched on
   macOS and Linux; `~/bin/nvim` still is.
-- A Neovim older than the minimum is refused at start, with a message naming its version and the
-  one needed, instead of failing later in unclear ways.
 
 ## [0.1.5] - 2026-10-25
 
