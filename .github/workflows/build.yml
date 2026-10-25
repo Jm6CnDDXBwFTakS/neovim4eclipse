@@ -42,8 +42,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Same Neovim as the developer machine. To change it, see docs/UPGRADING.md.
-  NVIM_VERSION: v0.12.4
+  # The oldest supported Neovim, util/NeovimVersion.MINIMUM: CI tests exactly that version.
+  # VersionConsistencyTest checks they agree. To change it, see docs/UPGRADING.md.
+  NVIM_VERSION: v0.12.6
 
 jobs:
   build:

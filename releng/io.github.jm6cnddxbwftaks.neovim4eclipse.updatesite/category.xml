@@ -7,7 +7,7 @@
    </feature>
    <category-def name="neovim4eclipse" label="Neovim for Eclipse">
       <description>
-         Vim mode for Eclipse, powered by a real Neovim (installed separately, 0.9 or newer).
+         Vim mode for Eclipse, powered by a real Neovim (installed separately, 0.12.6 or newer).
       </description>
    </category-def>
 </site>

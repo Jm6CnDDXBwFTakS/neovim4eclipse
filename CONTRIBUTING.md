@@ -7,7 +7,9 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ## Set up
 
 - **JDK 21** or newer.
-- **Neovim 0.9** or newer, as `nvim` on `PATH`, for the integration and end-to-end tests.
+- **Neovim 0.12.6**, the oldest supported version and the one CI tests, for the integration and
+  end-to-end tests: as `nvim` on `PATH`, or an extracted release archive passed with
+  `-Dnvim.path=/path/to/nvim/bin/nvim`. A newer one works too, but only this one is what CI checks.
 - **Eclipse IDE for Eclipse Committers** (it includes PDE, the plug-in development tools), 2024-12 or
   newer, if you want to run the plug-in from the IDE.
 - No Maven installation is needed: `./mvnw` (`mvnw.cmd` on Windows) downloads the pinned version.

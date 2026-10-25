@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
@@ -23,7 +24,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.MsgpackNeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimVersion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
@@ -42,7 +45,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  * neovim-java library; {@code docs/design/RPC_CLIENT.md} tells why and how it was replaced).
  *
  * <p>After the connection is up, {@link #open} introduces the client to Neovim
- * ({@code nvim_set_client_info}) and attaches as a UI ({@code nvim_ui_attach}), without which
+ * ({@code nvim_set_client_info}), refuses a Neovim older than {@link NeovimVersion#MINIMUM}
+ * ({@link UnsupportedNeovimException}), and attaches as a UI ({@code nvim_ui_attach}), without which
  * Neovim does not process {@code nvim_input} reliably under {@code --embed}.
  *
  * <p>Thread-safe: the API may be called from any thread, but its futures must only be waited on
@@ -134,6 +138,8 @@ final class NeovimConnection implements AutoCloseable {
         connection.channel.start();
         try {
             await(connection.api.setClientInfo(CLIENT_NAME, clientVersion(clientVersion), "remote", Map.of(), Map.of()));
+            // Before attaching: a too old Neovim then never runs the user's init.lua for nothing.
+            connection.checkVersion();
             // Without a UI attached, nvim_input is not processed reliably under --embed.
             await(connection.api.uiAttach(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
             connection.startupErrors = connection.waitForStartup();
@@ -142,6 +148,39 @@ final class NeovimConnection implements AutoCloseable {
             throw e;
         }
         return connection;
+    }
+
+    /**
+     * Refuses a Neovim older than {@link NeovimVersion#MINIMUM}. Neovim answers requests before a UI
+     * attaches (only {@code init.lua} waits for that), so this runs first. A Neovim too old to have
+     * {@code vim.version()} at all (before 0.8) fails the request and is refused the same way.
+     *
+     * @throws UnsupportedNeovimException with a message such as
+     *         {@code Neovim 0.12.4 is too old: Neovim for Eclipse needs 0.12.6 or newer.}
+     */
+    private void checkVersion() throws Exception {
+        NeovimVersion version;
+        try {
+            version = NeovimVersion.fromLua(await(api.execLua(NeovimVersion.LUA_QUERY, List.of())));
+        } catch (ExecutionException e) {
+            // Neovim answered with an error (no vim.version()); anything else (the pipe broke) is not
+            // about the version, so it is passed on as it is.
+            if (!(e.getCause() instanceof NeovimErrorException)) {
+                throw e;
+            }
+            throw new UnsupportedNeovimException(unknownVersionMessage(), e.getCause());
+        } catch (IllegalArgumentException e) {
+            throw new UnsupportedNeovimException(unknownVersionMessage(), e);
+        }
+        LOG.info(() -> "Neovim version " + version);
+        if (!version.isSupported()) {
+            throw new UnsupportedNeovimException(version.tooOldMessage());
+        }
+    }
+
+    private static String unknownVersionMessage() {
+        return "This Neovim does not report its version (vim.version()), so it is older than "
+                + NeovimVersion.MINIMUM + ", which Neovim for Eclipse needs.";
     }
 
     /**

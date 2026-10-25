@@ -30,6 +30,12 @@ public final class StartFailureReport {
     /** The dialog's title. */
     public static final String TITLE = "Neovim not started";
 
+    /**
+     * Where Neovim's release archives are. The plug-in expects a Neovim of its own if the system's
+     * is older than {@link NeovimVersion#MINIMUM}: an archive extracted anywhere works, no install.
+     */
+    public static final String RELEASES_URL = "https://github.com/neovim/neovim/releases";
+
     /** The executable whose failure was last reported; {@code null} after a successful start. */
     private String reportedFor;
 
@@ -60,8 +66,11 @@ public final class StartFailureReport {
      * Executable: nvim
      * Error: Cannot run program "nvim": error=2, No such file or directory
      *
-     * Install Neovim, or set the full path to nvim on the Neovim preference page. ...
+     * Install Neovim 0.12.6 or newer, or set the full path to nvim on the Neovim preference page. ...
      * </pre>
+     *
+     * With an old Neovim the error line says so: {@code Error: Neovim 0.12.4 is too old: Neovim for
+     * Eclipse needs 0.12.6 or newer.}
      *
      * @param executable the executable that was run, as {@link NvimExecutable#resolve} found it
      * @param error      why the start failed; its innermost cause is shown ({@link #rootMessage})
@@ -70,7 +79,9 @@ public final class StartFailureReport {
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"
-                + "Install Neovim, or set the full path to nvim on the Neovim preference page. "
+                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer, or set the full path to nvim on the "
+                + "Neovim preference page. The simplest install is the release archive from "
+                + RELEASES_URL + ", extracted anywhere: then set its bin/nvim there. "
                 + "Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH.";
     }
 

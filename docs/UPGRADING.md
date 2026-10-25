@@ -33,8 +33,7 @@ The safe loop for any upgrade:
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself | `distributionUrl` in `.mvn/wrapper/maven-wrapper.properties` | none |
-| Neovim used by CI | `NVIM_VERSION` in `.github/workflows/build.yml` | not checked; its download names are per OS (below) |
-| Oldest supported Neovim | "Neovim 0.9" in README and CONTRIBUTING | not checked; see below |
+| Neovim (oldest supported, and the one CI tests) | `NeovimVersion.MINIMUM` in the plug-in's `util/NeovimVersion.java` | `NVIM_VERSION` in `.github/workflows/build.yml`; "Neovim 0.12.6" in README, CONTRIBUTING and `feature.xml`, and the update site's `category.xml`. Its download names are per OS (below) |
 | GitHub Actions | `uses: ...@vN` lines in `.github/workflows/` | not checked; Dependabot proposes updates |
 | CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `platforms` job's matrix in `build.yml` adds `windows-latest` and `macos-latest` | not checked |
 
@@ -178,15 +177,40 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 
 ## Neovim
 
-- **CI**: change `NVIM_VERSION` in `.github/workflows/build.yml`. The Linux jobs download
-  `nvim-linux-x86_64.tar.gz` from the GitHub release, the `platforms` job `nvim-win64.zip` (Windows)
-  and `nvim-macos-arm64.tar.gz` (macOS, Apple silicon); if a release renames one, update its
-  download and `bin/nvim` path there too (the `nvim-archive` and `nvim` matrix values).
-- **Oldest supported version**: README, CONTRIBUTING and the feature's description (`feature.xml`)
-  say 0.9, because the status bar's pending
-  command needs `showcmdloc` (0.9). Raise it when the code starts using a newer API (for example a
-  Lua function from `vim.*` or an `nvim_*` call added later); run the integration tests against
-  that oldest version before lowering it.
+One version is both the **oldest supported** Neovim and the one CI tests: `NeovimVersion.MINIMUM`.
+The plug-in refuses an older Neovim at start, with a message naming both versions
+(`Neovim 0.12.4 is too old: Neovim for Eclipse needs 0.12.6 or newer.`), so users never meet a
+half-working plug-in.
+
+**When to raise it** *(decided 2026-10-25)*: readily, whenever a new release
+
+- lets Neovim do something the plug-in would otherwise work around (a new API, option, event or
+  default; for example `vim.diagnostic.jump`'s `on_jump` instead of a `CursorMoved` check), or
+- fixes a security issue.
+
+The project's goal is that Neovim handles as much as possible itself; supporting old versions
+would mean keeping the workarounds. Users are expected to have a Neovim of their own for Eclipse
+when their system's is older: the release archive extracted anywhere, its `bin/nvim` set in the
+preferences (README, *Installation*). So a newer minimum costs them a download, not a system
+upgrade.
+
+**How** (example: 0.12.6 to 0.13.0):
+
+1. Read the release notes (`:help news`, and each patch release's changelog on GitHub) for changes
+   to what the plug-in uses: the API calls in `core/rpc`, the Lua in `LuaScripts`, `ext_cmdline`,
+   autocommand events, options it sets. Note what can now be done by Neovim instead of the plug-in.
+2. Set `MINIMUM = new NeovimVersion(0, 13, 0)` in `util/NeovimVersion.java`, `NVIM_VERSION: v0.13.0`
+   in `build.yml`, and the version in README, CONTRIBUTING, `feature.xml` and `category.xml`;
+   `VersionConsistencyTest` lists any copy you missed.
+3. Install that Neovim locally (the release archive is enough) and run everything with it:
+   `-Dnvim.path=/path/to/nvim-0.13.0/bin/nvim`.
+4. Add a *Changed* entry to `CHANGELOG.md` saying the new minimum, so users see it before updating.
+5. Remove the workarounds the new version makes unnecessary, each as its own commit after this one.
+
+**Downloads in CI**: the Linux jobs download `nvim-linux-x86_64.tar.gz` from the GitHub release,
+the `platforms` job `nvim-win64.zip` (Windows) and `nvim-macos-arm64.tar.gz` (macOS, Apple
+silicon); if a release renames one, update its download and `bin/nvim` path there too (the
+`nvim-archive` and `nvim` matrix values).
 
 ## GitHub Actions and the runner
 

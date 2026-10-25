@@ -329,6 +329,14 @@ draw them from those events.
 `nvim_set_client_info` tells Neovim who is connected (`neovim4eclipse` and the bundle version).
 `:checkhealth` and `nvim_list_chans()` show it.
 
+Next, still before `nvim_ui_attach`, the plug-in asks `vim.version()` and refuses a Neovim older
+than `util/NeovimVersion.MINIMUM`. Neovim answers requests before a UI attaches (only `init.lua`
+waits for that), so an old Neovim is turned away before it runs the user's configuration. Why a
+hard minimum instead of feature checks: the plug-in prefers to let Neovim do the work with its
+newest APIs, and an old Neovim would fail later in a confusing way (a Lua error in a script, a
+timeout). The "Neovim not started" notice then says `Neovim 0.12.4 is too old: Neovim for Eclipse
+needs 0.12.6 or newer.` (docs/UPGRADING.md, "Neovim", says when the minimum goes up).
+
 ### 2.5 Sending keys: `nvim_input`
 
 `nvim_input(keys)` appends keys to Neovim's typeahead, exactly as if typed. It returns at once,
@@ -411,7 +419,7 @@ popup for `:ls` and similar uses it (`LuaScripts.CAPTURE_OUTPUT`).
    listener; `EditorAttachManager.installWorkbenchListeners` adds the part and window listeners.
 3. A text editor becomes active, so `IPartListener2.partActivated` fires and `EditorAttachManager`
    attaches. The first attach calls `Activator.getOrCreateSession`, which runs `NeovimSession.start`:
-   process, RPC stack, `nvim_set_client_info`, `nvim_ui_attach`, home buffer, notification handlers,
+   process, RPC stack, `nvim_set_client_info`, version check, `nvim_ui_attach`, home buffer, notification handlers,
    `LuaScripts.SETUP`. Once that succeeded, `WelcomeNotice.afterStart` queues the welcome check
    (`util/WelcomeNote` decides; the dialog opens after the attach, at most once per run).
 4. `NeovimEditorController.attach` prepends the key interceptor, registers listeners, shows the

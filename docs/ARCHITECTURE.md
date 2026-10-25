@@ -208,8 +208,8 @@ from the same single `STATE_SNAPSHOT` call, with two flags so that only enabled 
 
 - **statusline:** `nvim_eval_statusline(vim.o.statusline or a Vim-like default)`, so a user's `%!` expressions
   and plugins such as lualine are honored.
-- **cmd:** `nvim_eval_statusline('%S')`. `%S` needs `showcmdloc=statusline` (set in `LuaScripts.SETUP`, Neovim
-  0.9+). While Neovim is *blocked* waiting for a character no API call is possible, so the key just sent is
+- **cmd:** `nvim_eval_statusline('%S')`. `%S` needs `showcmdloc=statusline` (set in `LuaScripts.SETUP`).
+  While Neovim is *blocked* waiting for a character no API call is possible, so the key just sent is
   appended to the last known text (`2` then `f` shows `2f`).
 
 The same call always reads `v:statusmsg` and `v:errmsg`, *cleared after reading* so each message is seen
@@ -250,6 +250,10 @@ to the box, which (via the focus listener in the controller) also deactivates th
   even inside a project, because a text editor refuses to show a workspace file that does not exist;
   after the first write it is switched to the workspace file, keeping its Neovim buffer
   (`EditorAttachManager.replaceInputKeepingBuffer`, `core/EditorBuffers.move`).
+- **Too old a Neovim:** `NeovimConnection.checkVersion` asks `vim.version()` before attaching and
+  refuses anything below `util/NeovimVersion.MINIMUM` (`core/UnsupportedNeovimException`, shown by the
+  "Neovim not started" notice). One minimum instead of per-feature checks, raised readily
+  (docs/UPGRADING.md, "Neovim").
 - **Start-up and the user's configuration:** under `--embed` Neovim runs `init.lua` only after
   `nvim_ui_attach`. An error there leaves it at a hit-enter prompt that no one sees, answering only
   `nvim_get_mode`. `NeovimConnection.waitForStartup` therefore waits for an idle answer, dismisses

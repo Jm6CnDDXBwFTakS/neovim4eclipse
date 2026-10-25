@@ -39,6 +39,10 @@ import org.w3c.dom.NodeList;
  *
  * <p>Example: after setting {@code <java.release>25</java.release>}, this test lists every file that
  * still says {@code JavaSE-21}.
+ *
+ * <p>Neovim is the exception to "the root {@code pom.xml}": the plug-in needs its minimum at run
+ * time, so the source of truth is {@link NeovimVersion#MINIMUM}, and CI and the docs are checked
+ * against that.
  */
 class VersionConsistencyTest {
 
@@ -71,6 +75,19 @@ class VersionConsistencyTest {
      * September and December. A full date ("2026-12-01") is not a release name.
      */
     private static final Pattern ECLIPSE_RELEASE = Pattern.compile("\\b(20\\d\\d-(?:03|06|09|12))\\b(?!-\\d)");
+    /**
+     * A stated Neovim requirement: "Neovim 0.12.6", "Neovim 0.12.6+" or "0.12.6 or newer"; the
+     * version is the first or the second group.
+     */
+    private static final Pattern NEOVIM_MENTION = Pattern.compile(
+            "\\bNeovim (\\d+\\.\\d+(?:\\.\\d+)?)|\\b(\\d+\\.\\d+(?:\\.\\d+)?) or newer");
+    /** Files that must state the Neovim minimum: the docs above, and the update site's category. */
+    private static final List<String> NEOVIM_DOCS = List.of(
+            "README.md", "CONTRIBUTING.md",
+            "features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml",
+            "releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml");
+    /** {@code NVIM_VERSION: v0.12.6} in a workflow: the version is the group. */
+    private static final Pattern NVIM_VERSION_ENV = Pattern.compile("(?m)^\\s*NVIM_VERSION:\\s*v(\\S+)\\s*$");
 
     // ---- Java ----
 
@@ -127,6 +144,52 @@ class VersionConsistencyTest {
         assertTrue(release.find(), "eclipse-repo.url should end in a release name such as 2024-12: " + url);
         List<String> wrong = mentionsOtherThan(ECLIPSE_RELEASE, release.group(1));
         assertTrue(wrong.isEmpty(), "Eclipse release in the docs differs from eclipse-repo.url: " + wrong);
+    }
+
+    // ---- Neovim ----
+
+    /** CI tests exactly the oldest supported Neovim, so the minimum is never an untested claim. */
+    @Test
+    void ciTestsTheMinimumNeovim() throws Exception {
+        Matcher m = NVIM_VERSION_ENV.matcher(read(".github/workflows/build.yml"));
+        assertTrue(m.find(), ".github/workflows/build.yml: NVIM_VERSION: v<version> not found");
+        assertEquals(NeovimVersion.MINIMUM.toString(), m.group(1),
+                "build.yml's NVIM_VERSION differs from NeovimVersion.MINIMUM");
+    }
+
+    @Test
+    void docsNameTheMinimumNeovim() throws Exception {
+        String expected = NeovimVersion.MINIMUM.toString();
+        List<String> wrong = new ArrayList<>();
+        for (String doc : NEOVIM_DOCS) {
+            String[] lines = read(doc).split("\n", -1);
+            boolean stated = false;
+            for (int i = 0; i < lines.length; i++) {
+                Matcher m = NEOVIM_MENTION.matcher(lines[i]);
+                while (m.find()) {
+                    String version = m.group(1) != null ? m.group(1) : m.group(2);
+                    if (version.equals(expected)) {
+                        stated = true;
+                    } else {
+                        wrong.add(doc + ":" + (i + 1) + " '" + m.group() + "'");
+                    }
+                }
+            }
+            if (!stated) {
+                wrong.add(doc + ": does not state Neovim " + expected);
+            }
+        }
+        assertTrue(wrong.isEmpty(), "Neovim version in the docs differs from NeovimVersion.MINIMUM: " + wrong);
+    }
+
+    @Test
+    void neovimPatternFindsBothWordings() {
+        Matcher m = NEOVIM_MENTION.matcher("**Neovim 0.12.6 or newer**");
+        assertTrue(m.find());
+        assertEquals("0.12.6", m.group(1));
+        m = NEOVIM_MENTION.matcher("(installed separately, 0.12.6 or newer)");
+        assertTrue(m.find());
+        assertEquals("0.12.6", m.group(2));
     }
 
     // ---- Maven plug-ins ----
