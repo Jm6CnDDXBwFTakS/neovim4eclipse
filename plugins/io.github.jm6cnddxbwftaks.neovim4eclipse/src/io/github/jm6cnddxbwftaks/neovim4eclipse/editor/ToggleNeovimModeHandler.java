@@ -4,11 +4,14 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.jface.resource.ResourceLocator;
 import org.eclipse.ui.commands.IElementUpdater;
 import org.eclipse.ui.handlers.HandlerUtil;
 import org.eclipse.ui.menus.UIElement;
@@ -27,7 +30,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState;
  *   <li><b>{@link IElementUpdater}</b>: Eclipse calls {@link #updateElement} for every item bound to
  *       this command (the button, the menu entry) when someone calls
  *       {@code ICommandService.refreshElements}; the handler sets each item's checked state and
- *       tooltip there.</li>
+ *       tooltip there, and the toolbar button's icon (color in Neovim mode, grey in Eclipse mode:
+ *       macOS barely shows a pressed button).</li>
  *   <li><b>Enablement</b>: {@link #setBaseEnabled} greys every item out at once and also makes the
  *       key binding do nothing, while no editor has Neovim attached.</li>
  * </ul>
@@ -35,6 +39,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState;
  * they show is decided by {@link ToggleButtonState}.
  */
 public class ToggleNeovimModeHandler extends AbstractHandler implements IElementUpdater {
+
+    /**
+     * The command parameter that the toolbar button passes ({@code plugin.xml}) and the menu entry
+     * does not: {@link #updateElement} gets an item's parameters, and only the button gets an icon
+     * (a menu checkbox with an icon next to it would look odd).
+     */
+    static final String SHOWS_ICON_PARAMETER = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode.showsIcon";
+
+    /** Loaded once per path; descriptors are cheap, the images are made and freed by Eclipse. */
+    private static final Map<String, ImageDescriptor> ICONS = new ConcurrentHashMap<>();
 
     private final Runnable recompute = this::recomputeEnabled;
 
@@ -70,6 +84,21 @@ public class ToggleNeovimModeHandler extends AbstractHandler implements IElement
         ToggleButtonState state = state();
         element.setChecked(state.checked());
         element.setTooltip(state.tooltip());
+        if (parameters != null && "true".equals(parameters.get(SHOWS_ICON_PARAMETER))) {
+            ImageDescriptor icon = icon(state.icon());
+            if (icon != null) {
+                element.setIcon(icon);
+            }
+        }
+    }
+
+    /**
+     * The icon at {@code path} in this plug-in. {@link ResourceLocator} returns a URL-based
+     * descriptor, which loads {@code name@2x.png} by itself on a 200% screen, as plugin.xml icons do.
+     */
+    private static ImageDescriptor icon(String path) {
+        return ICONS.computeIfAbsent(path,
+                p -> ResourceLocator.imageDescriptorFromBundle(ToggleNeovimModeHandler.class, p).orElse(null));
     }
 
     @Override
@@ -86,7 +115,8 @@ public class ToggleNeovimModeHandler extends AbstractHandler implements IElement
     private static ToggleButtonState state() {
         NeovimEditorController controller = activeController();
         return ToggleButtonState.of(controller != null,
-                controller != null && controller.isNeovimModeActive(), WelcomeNotice.toggleKey());
+                controller != null && controller.isNeovimModeActive(), WelcomeNotice.toggleKey(),
+                WelcomeNotice.keyBinding(ToggleButtonState.ATTACH_COMMAND_ID, ToggleButtonState.DEFAULT_ATTACH_SEQUENCE));
     }
 
     private static NeovimEditorController activeController() {

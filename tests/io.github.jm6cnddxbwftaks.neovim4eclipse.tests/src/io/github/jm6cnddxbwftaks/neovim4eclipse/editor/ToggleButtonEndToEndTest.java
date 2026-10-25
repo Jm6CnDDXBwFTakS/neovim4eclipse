@@ -11,6 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.graphics.ImageData;
+import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
@@ -25,7 +28,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 
 /**
  * The Neovim toolbar button as the user sees it, the SWT {@link ToolItem} itself: pressed in Neovim
- * mode, raised in Eclipse mode, greyed out without Neovim, with a tooltip that names the mode.
+ * mode, raised in Eclipse mode, greyed out without Neovim, with a tooltip that names the mode, and
+ * a color logo in Neovim mode, a grey one in Eclipse mode.
  * {@code ToggleButtonStateTest} covers the decision; this covers the wiring (plugin.xml's
  * {@code style="toggle"}, the handler's {@code IElementUpdater} and enablement, and the refresh).
  */
@@ -34,23 +38,51 @@ class ToggleButtonEndToEndTest extends EndToEndTestBase {
     @Test
     void theButtonFollowsTheModeAndGreysOutWithoutNeovim() throws Exception {
         ToolItem button = toggleButton();
-        expectButton(button, true, true, "Neovim mode");
+        expectButton(button, true, true, "Neovim mode: ");
 
         runCommand(WelcomeNote.TOGGLE_COMMAND_ID); // the key binding
-        expectButton(button, true, false, "Eclipse mode");
+        expectButton(button, true, false, "Eclipse mode: ");
+        waitUntil("the grey logo", TIMEOUT_MS, () -> !hasColor(button.getImage()));
 
         // A click: SWT flips a toggle item's selection itself, then reports it.
         button.setSelection(true);
         button.notifyListeners(SWT.Selection, new Event());
-        expectButton(button, true, true, "Neovim mode");
+        expectButton(button, true, true, "Neovim mode: ");
+        waitUntil("the color logo", TIMEOUT_MS, () -> hasColor(button.getImage()));
 
         EditorAttachManager.getInstance().detachQuietly();
-        expectButton(button, false, false, "Neovim is not attached");
+        expectButton(button, false, false, "Neovim mode unavailable");
         assertFalse(PlatformUI.getWorkbench().getService(ICommandService.class)
                 .getCommand(WelcomeNote.TOGGLE_COMMAND_ID).isEnabled(), "the key binding still works");
 
         EditorAttachManager.getInstance().attach(editor, true);
-        expectButton(button, true, true, "Neovim mode");
+        expectButton(button, true, true, "Neovim mode: ");
+    }
+
+    /**
+     * Whether the image has colored pixels (red, green and blue clearly apart), as the logo has and
+     * its grey twin has not. A whole image, not one pixel: the shape may scale differently.
+     */
+    private static boolean hasColor(Image image) {
+        if (image == null || image.isDisposed()) {
+            return false;
+        }
+        ImageData data = image.getImageData();
+        int colored = 0;
+        for (int y = 0; y < data.height; y++) {
+            for (int x = 0; x < data.width; x++) {
+                if (data.getAlpha(x, y) < 128) {
+                    continue;
+                }
+                RGB rgb = data.palette.getRGB(data.getPixel(x, y));
+                int max = Math.max(rgb.red, Math.max(rgb.green, rgb.blue));
+                int min = Math.min(rgb.red, Math.min(rgb.green, rgb.blue));
+                if (max - min > 40) {
+                    colored++;
+                }
+            }
+        }
+        return colored > 4;
     }
 
     private static void expectButton(ToolItem button, boolean enabled, boolean pressed, String tooltipStart) {
@@ -64,7 +96,7 @@ class ToggleButtonEndToEndTest extends EndToEndTestBase {
 
     /** The toolbar item of the toggle command, found by its tooltip (the only text it has). */
     private static ToolItem toggleButton() {
-        String[] tooltips = { "Neovim mode", "Eclipse mode", "Neovim is not attached", "Toggle Neovim / Eclipse" };
+        String[] tooltips = { "Neovim mode", "Eclipse mode", "Toggle Neovim / Eclipse" };
         List<ToolItem> items = new ArrayList<>();
         waitUntil("the Neovim toolbar button", TIMEOUT_MS, () -> {
             items.clear();

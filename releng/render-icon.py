@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: EPL-2.0
 """Renders an SVG to a PNG icon with a transparent background, using only headless Firefox and Pillow.
 
-    releng/render-icon.py <svg> <size> <out.png> [<size> <out.png> ...]
+    releng/render-icon.py [--grey] <svg> <size> <out.png> [<size> <out.png> ...]
 
 Example, the toolbar icon and its HiDPI variant (Eclipse picks name@2x.png on its own when the
 screen scale is 200%):
@@ -11,6 +11,13 @@ screen scale is 200%):
     releng/render-icon.py docs/images/logo.svg \
         16 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim.png \
         32 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim@2x.png
+
+With --grey the icons are greyscale: the toolbar button shows them in Eclipse mode, so that the
+mode is visible where a pressed toggle button is hard to tell from a raised one (macOS):
+
+    releng/render-icon.py --grey docs/images/logo.svg \
+        16 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim-off.png \
+        32 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim-off@2x.png
 
 Why this way: no SVG renderer (rsvg-convert, Inkscape, ImageMagick) is assumed to be installed, but
 Firefox is. Firefox's --screenshot has no transparency, so the SVG is rendered twice, once on black
@@ -73,7 +80,23 @@ def shrink(image, size):
     return image.convert("RGBa").resize((size, size), Image.LANCZOS).convert("RGBA")
 
 
+def grey(image):
+    """The same icon in shades of grey, its transparency kept.
+
+    Uses the luminance (ITU-R 601: 0.299 R + 0.587 G + 0.114 B, Pillow's "L" mode), so that the
+    logo's light and dark parts stay light and dark, and the shape stays recognizable. Eclipse's
+    own greyed-out (disabled) look is paler still, so the two do not get confused.
+    """
+    alpha = image.getchannel("A")
+    out = image.convert("L").convert("RGBA")
+    out.putalpha(alpha)
+    return out
+
+
 def main(argv):
+    greyscale = len(argv) > 1 and argv[1] == "--grey"
+    if greyscale:
+        argv = argv[:1] + argv[2:]
     if len(argv) < 4 or len(argv) % 2 != 0:
         sys.exit(__doc__)
     svg, targets = argv[1], list(zip(argv[2::2], argv[3::2]))
@@ -81,7 +104,8 @@ def main(argv):
         icon = matte(render(svg, "#000000", directory), render(svg, "#ffffff", directory))
     for size, out in targets:
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-        shrink(icon, int(size)).save(out, optimize=True)
+        small = shrink(icon, int(size))
+        (grey(small) if greyscale else small).save(out, optimize=True)
         print(f"{out}: {size}x{size}")
 
 

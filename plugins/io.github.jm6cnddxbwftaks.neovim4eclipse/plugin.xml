@@ -28,6 +28,14 @@
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
             name="Neovim: Toggle Neovim / Eclipse Mode"
             description="Toggle between Neovim key handling and normal Eclipse editing">
+         <!-- Not a choice for the user: the toolbar button passes it so that the handler's
+              updateElement can tell the button (which gets a color or grey icon) from the menu
+              checkbox (which gets none). See ToggleNeovimModeHandler.SHOWS_ICON_PARAMETER. -->
+         <commandParameter
+               id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode.showsIcon"
+               name="Shows the mode as its icon"
+               optional="true">
+         </commandParameter>
       </command>
       <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.a"
@@ -468,7 +476,8 @@
               Both are rendered from docs/images/logo.svg by releng/render-icon.py.
               style="toggle": Eclipse draws the button pressed in Neovim mode and raised in Eclipse
               mode, and greyed out while no editor has Neovim; ToggleNeovimModeHandler sets the
-              state and the tooltip (the tooltip below is only the one shown before that). -->
+              state, the tooltip and the icon (grey icons/neovim-off.png in Eclipse mode); the
+              icon and tooltip below are only the ones shown before that. -->
          <toolbar id="io.github.jm6cnddxbwftaks.neovim4eclipse.toolbar">
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
@@ -477,6 +486,10 @@
                   label="Neovim"
                   tooltip="Toggle Neovim / Eclipse editing mode"
                   style="toggle">
+               <parameter
+                     name="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode.showsIcon"
+                     value="true">
+               </parameter>
                <visibleWhen checkEnabled="false">
                   <test
                         property="io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar"

@@ -76,16 +76,49 @@ class PluginXmlConsistencyTest {
 
     @Test
     void theWelcomeNamesTheToggleKeyThatPluginXmlBinds() throws Exception {
+        assertEquals(Set.of(WelcomeNote.DEFAULT_TOGGLE_SEQUENCE), keySequencesOf(WelcomeNote.TOGGLE_COMMAND_ID),
+                "WelcomeNote.DEFAULT_TOGGLE_SEQUENCE must be the toggle's binding in plugin.xml");
+    }
+
+    @Test
+    void theToggleButtonNamesTheAttachKeyThatPluginXmlBinds() throws Exception {
+        assertEquals(Set.of(ToggleButtonState.DEFAULT_ATTACH_SEQUENCE),
+                keySequencesOf(ToggleButtonState.ATTACH_COMMAND_ID),
+                "ToggleButtonState.DEFAULT_ATTACH_SEQUENCE must be the attach binding in plugin.xml");
+    }
+
+    private static Set<String> keySequencesOf(String commandId) throws Exception {
         NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
         Set<String> sequences = new HashSet<>();
         for (int i = 0; i < list.getLength(); i++) {
             Element e = (Element) list.item(i);
-            if (WelcomeNote.TOGGLE_COMMAND_ID.equals(e.getAttribute("commandId"))) {
+            if (commandId.equals(e.getAttribute("commandId"))) {
                 sequences.add(e.getAttribute("sequence"));
             }
         }
-        assertEquals(Set.of(WelcomeNote.DEFAULT_TOGGLE_SEQUENCE), sequences,
-                "WelcomeNote.DEFAULT_TOGGLE_SEQUENCE must be the toggle's binding in plugin.xml");
+        return sequences;
+    }
+
+    /**
+     * The toggle button's two icons, which the handler sets in code (plugin.xml names only the
+     * first), exist in both sizes; plugin.xml's icon is the color one.
+     */
+    @Test
+    void theToggleButtonsIconsExistInBothSizes() throws Exception {
+        File plugin = pluginDir();
+        for (String icon : new String[] { ToggleButtonState.ICON_ON, ToggleButtonState.ICON_OFF }) {
+            assertIcon(new File(plugin, icon), 16);
+            assertIcon(new File(plugin, icon.replaceFirst("\\.png$", "@2x.png")), 32);
+        }
+        NodeList all = load().getElementsByTagName("command");
+        Set<String> toggleIcons = new HashSet<>();
+        for (int i = 0; i < all.getLength(); i++) {
+            Element e = (Element) all.item(i);
+            if (WelcomeNote.TOGGLE_COMMAND_ID.equals(e.getAttribute("commandId")) && !e.getAttribute("icon").isEmpty()) {
+                toggleIcons.add(e.getAttribute("icon"));
+            }
+        }
+        assertEquals(Set.of(ToggleButtonState.ICON_ON), toggleIcons);
     }
 
     /**
@@ -165,11 +198,20 @@ class PluginXmlConsistencyTest {
         }
     }
 
+    /**
+     * Parameterized key bindings did not deliver their parameter on Linux (see VimCtrlKeys), so no
+     * key binding has one. The only command parameter is the toggle's {@code showsIcon}, which the
+     * toolbar button passes (a menu item, not a key binding) so that the handler can tell the
+     * button from the menu entry.
+     */
     @Test
-    void noCommandParametersAreUsed() throws Exception {
-        // Parameterized key bindings did not deliver their parameter on Linux; see VimCtrlKeys.
+    void noKeyBindingHasACommandParameter() throws Exception {
         Document doc = load();
-        assertEquals(0, doc.getElementsByTagName("commandParameter").getLength());
+        assertEquals(0, extension(doc, "org.eclipse.ui.bindings").getElementsByTagName("parameter").getLength());
+        NodeList declared = doc.getElementsByTagName("commandParameter");
+        assertEquals(1, declared.getLength());
+        assertEquals("io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode.showsIcon",
+                ((Element) declared.item(0)).getAttribute("id"));
     }
 
     @Test
