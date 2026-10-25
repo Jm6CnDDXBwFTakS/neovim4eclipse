@@ -1,6 +1,6 @@
 # Plan: listing on the Eclipse Marketplace
 
-Status: **phase 1 built and deployed** (with 0.1.3), phases 2–3 planned; phase 4 built (signing, the real key, the plug-in trusting it); the first signed release is 0.1.4. Written on `release/0.1.2` (after 0.1.1). Decisions made with
+Status: **phase 1 built and deployed** (with 0.1.3), phases 2–3 planned; phase 4 built (signing, the real key, the plug-in trusting it); the first signed release is 0.1.4, and updates from it (to 0.1.5) install without a trust dialog (S4). Written on `release/0.1.2` (after 0.1.1). Decisions made with
 the maintainer are marked *(decided)*; none are open. When a phase is done, change its heading to
 say so and note where the result differs from this plan, as
 [TAB_COMPLETION.md](TAB_COMPLETION.md) does with *As built*.
@@ -458,13 +458,21 @@ throwaway Ed25519 key in a temporary `GNUPGHOME` and the unsigned ZIP from `./mv
   that `MAVEN_GPG_KEY` is not read.
 - **S3. The director and untrusted keys: no flag needed.** The headless install of content signed
   by an unknown key succeeded, so the smoke test needs no change.
-- **S4. Trusted-key extension: partly checked.** The extension is built; its element and attribute
-  names were checked against p2's `CertificateChecker` in Eclipse 4.34, which reads
-  `trustedKeys`/`path` with `Bundle.getEntry`. The maintainer uninstalled and reinstalled the
-  locally signed build on 2026-10-24 and saw no dialog the second time, but the trust remembered
-  from the first install may explain that as well. The open test: with 0.1.4 installed, remove the
-  key from *Preferences › Install/Update › Trust* if it is listed as remembered by the user, then
-  update to 0.1.5: no dialog means the extension works.
+- **S4. Trusted-key extension: works (checked 2026-10-25 on macOS).** The extension is built; its
+  element and attribute names were checked against p2's `CertificateChecker` in Eclipse 4.34,
+  which reads `trustedKeys`/`path` with `Bundle.getEntry`. The test: no plug-in installed and no
+  trust remembered, then 0.1.4 installed from the live site, then *Check for Updates* to 0.1.5.
+  What it showed:
+  - **The first install asks.** Installing 0.1.4 showed the trust dialog, accepted *without*
+    "remember". Expected: before the plug-in is installed, nothing on the machine vouches for
+    its key, so a user's first install always shows this dialog once.
+  - **The installed plug-in vouches for its key.** Afterwards *Preferences › Install/Update ›
+    Trust* listed the project key with no *Remove* button: a key that an installed plug-in
+    declares (this extension), which the user cannot remove, unlike one they chose to remember.
+  - **Updates do not ask.** The update to 0.1.5 showed no dialog.
+
+  An earlier check (2026-10-24, reinstalling a local build) saw no dialog the second time too, but
+  a trust remembered from the first install could have explained that; this test rules it out.
 
 ### Commits
 
