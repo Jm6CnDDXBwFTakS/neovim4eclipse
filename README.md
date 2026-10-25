@@ -495,6 +495,8 @@ immediately. [docs/KEYS.md](docs/KEYS.md) explains those three defaults and whic
 The *Neovim folder or program* field on *Window → Preferences → Neovim* takes one of three things,
 and the note under it shows which Neovim that finds, for example
 `Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-x86_64/bin/nvim`.
+When Neovim would not start with what the field finds (nothing found, a program that is not
+Neovim, or one too old), the note is in the theme's error color and the field gets an error mark.
 
 - **Blank** (the default) searches the default folders, in this order:
   1. **The default Neovim folder**. This is intended for a Neovim install dedicated to the plug-in,
