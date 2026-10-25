@@ -25,7 +25,7 @@
   <parent>
     <groupId>io.github.jm6cnddxbwftaks.neovim4eclipse</groupId>
     <artifactId>neovim4eclipse</artifactId>
-    <version>0.1.5-SNAPSHOT</version>
+    <version>0.1.6-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
