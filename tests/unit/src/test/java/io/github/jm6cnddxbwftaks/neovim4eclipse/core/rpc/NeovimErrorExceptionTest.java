@@ -33,5 +33,7 @@ class NeovimErrorExceptionTest {
     void isOneOfThePluginsOwnExceptions() {
         assertInstanceOf(NeovimExceptionBase.class, new NeovimErrorException(0, "x"));
         assertInstanceOf(NeovimExceptionBase.class, new NeovimConnectionClosedException("x"));
+        assertInstanceOf(NeovimExceptionBase.class,
+                new io.github.jm6cnddxbwftaks.neovim4eclipse.core.UnsupportedNeovimException("x"));
     }
 }

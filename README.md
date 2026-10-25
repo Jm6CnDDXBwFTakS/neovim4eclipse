@@ -52,8 +52,12 @@ To use the plug-in in your own Eclipse, without building it.
 
 - Eclipse IDE **2024-12 (4.34) or newer**, any package (Java, C/C++, Committers, ...), running on
   Java 21 or newer (the Eclipse packages bring their own Java 21+).
-- **Neovim 0.9 or newer**: `nvim --version` in a terminal should print it. If Eclipse cannot find it
-  (see the note below), set the absolute path in *Window → Preferences → Neovim*.
+- **Neovim 0.12.6 or newer**: `nvim --version` in a terminal should print it. The plug-in follows
+  new Neovim releases closely, so a system package is often too old. A Neovim of its own is fine:
+  extract the release archive from [Neovim's releases](https://github.com/neovim/neovim/releases)
+  anywhere, no install needed, and set the absolute path to its `bin/nvim` (`nvim.exe`) in
+  *Window → Preferences → Neovim*. Set that path too if Eclipse cannot find `nvim` (see the note below).
+  An older Neovim is refused with a message that names both versions.
 
 **Steps**
 
@@ -111,7 +115,7 @@ are needed to [install](#install) it.
 - **JDK 21 or newer** for the build. Maven itself is not needed: `./mvnw` (Windows: `mvnw.cmd`) downloads
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
 - Eclipse IDE with PDE, **2024-12 (4.34) or newer** (the supported minimum; the build targets it), running on Java 21+, with a **JDK 21** registered for the JavaSE-21 execution environment
-- **Neovim 0.9+** reachable from the Eclipse process (`nvim --version`), or an absolute path set in
+- **Neovim 0.12.6+** reachable from the Eclipse process (`nvim --version`), or an absolute path set in
   *Window → Preferences → Neovim*
 
 > Eclipse started from a desktop launcher may not inherit your shell `PATH`. Start it from a
@@ -200,7 +204,7 @@ Eclipse status bar; changes apply immediately:
 | `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
 The parts are joined in that order. `-- ECLIPSE --` is always shown while Neovim mode is off. Only the enabled
-parts are requested from Neovim. `cmd` needs Neovim 0.9 or newer (`showcmdloc`). Messages and errors are not in
+parts are requested from Neovim. Messages and errors are not in
 the status bar: they appear in the editor (next section).
 
 ## Messages and errors
@@ -443,7 +447,7 @@ The variables starting with `eclipse_` work in two directions:
 | `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
-the environment variable `NVIM_APPNAME` set, for example to `eclipse-nvim` (Neovim 0.9 or newer).
+the environment variable `NVIM_APPNAME` set, for example to `eclipse-nvim`.
 Neovim then reads `~/.config/eclipse-nvim/init.lua` (on Windows `%LOCALAPPDATA%\eclipse-nvim\init.lua`)
 instead of your normal one. It also keeps its data apart: installed plug-ins, history, registers
 and marks are not shared with your terminal Neovim. Set it only where Eclipse starts (a small

@@ -12,6 +12,19 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- **Neovim 0.12.6 or newer is required** (was 0.9). The plug-in now lets newer Neovim features do
+  work it would otherwise imitate, and will raise this minimum again when a release helps that or
+  fixes a security issue. If your system's Neovim is older, extract the release archive from
+  <https://github.com/neovim/neovim/releases> anywhere and set its `bin/nvim` in
+  *Window → Preferences → Neovim*.
+
+### Added
+
+- A Neovim older than the minimum is refused at start, with a message naming its version and the
+  one needed, instead of failing later in unclear ways.
+
 ## [0.1.5] - 2026-10-25
 
 ### Added
