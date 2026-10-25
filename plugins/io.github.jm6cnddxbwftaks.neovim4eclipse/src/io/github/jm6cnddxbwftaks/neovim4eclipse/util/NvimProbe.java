@@ -26,11 +26,22 @@ import java.util.List;
  *
  * <p>{@link #describe} runs {@code nvim --version} ({@link InstalledVersions}), which takes some
  * milliseconds and may hang on a broken install, so the caller runs it off the UI thread.
- * {@link #note} only builds the text, and is what the unit tests check.
+ * {@link #note} only builds the note, and is what the unit tests check.
  */
 public final class NvimProbe {
 
     private NvimProbe() {
+    }
+
+    /**
+     * What the note says, and whether it reports a problem: Neovim would not start with this value
+     * (nothing found, a program that is not Neovim, or one too old). The page shows a problem in the
+     * theme's error color, with an error mark on the field.
+     *
+     * @param text    the note's text
+     * @param problem whether starting Neovim with this value would fail
+     */
+    public record Note(String text, boolean problem) {
     }
 
     /**
@@ -39,7 +50,7 @@ public final class NvimProbe {
      *
      * @param configured the preference value as typed (not yet saved)
      */
-    public static String describe(String configured) {
+    public static Note describe(String configured) {
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Path program = NvimExecutable.locate(resolved.command());
         if (program == null) {
@@ -50,7 +61,7 @@ public final class NvimProbe {
     }
 
     /**
-     * The note's text.
+     * The note.
      *
      * @param configured the field's text; blank means the default search
      * @param program    the program found, or {@code null}
@@ -58,16 +69,17 @@ public final class NvimProbe {
      * @param among      how many installs in the same folder it was chosen from (1: no choice)
      * @param dedicated  the default Neovim folder, suggested when the default search finds nothing
      */
-    static String note(String configured, Path program, NeovimVersion version, int among, Path dedicated) {
+    static Note note(String configured, Path program, NeovimVersion version, int among, Path dedicated) {
         if (program == null) {
             if (configured == null || configured.isBlank()) {
-                return "No Neovim found in the default folders. Extract a Neovim release archive into " + dedicated;
+                return problem("No Neovim found in the default folders. Extract a Neovim release archive into "
+                        + dedicated);
             }
-            return "No Neovim found at " + configured.strip()
-                    + ". Clear the field to search the default folders, or enter a value as described.";
+            return problem("No Neovim found at " + configured.strip()
+                    + ". Clear the field to search the default folders, or enter a value as described.");
         }
         if (version == null) {
-            return "Found: no Neovim version (it did not answer --version), " + program;
+            return problem("Found: no Neovim version (it did not answer --version), " + program);
         }
         List<String> remarks = new ArrayList<>();
         if (among > 1) {
@@ -77,6 +89,10 @@ public final class NvimProbe {
             remarks.add("too old: Neovim for Eclipse needs " + NeovimVersion.MINIMUM + " or newer");
         }
         String remark = remarks.isEmpty() ? "" : " (" + String.join("; ", remarks) + ")";
-        return "Found: Neovim " + version + remark + ", " + program;
+        return new Note("Found: Neovim " + version + remark + ", " + program, !version.isSupported());
+    }
+
+    private static Note problem(String text) {
+        return new Note(text, true);
     }
 }

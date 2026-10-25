@@ -82,14 +82,26 @@ class OpenPreferencesHandlerTest {
     }
 
     @Test
-    void theDescriptionSaysWhatTheFieldTakesAndLinksToHowNeovimIsFound() {
-        Control page = ((NeovimPreferencePage) dialog.getSelectedPage()).getControl();
-        assertTrue(find(page, Label.class).stream().anyMatch(l -> l.getText().contains("Leave the Neovim folder "
-                + "blank to search the default folders")), "no description of what the field takes");
-        Link link = find(page, Link.class).stream()
-                .filter(l -> l.getText().equals(NeovimPreferencePage.FINDING_NEOVIM_LINK)).findFirst().orElse(null);
-        assertNotNull(link, "no link to how Neovim is found");
-        assertTrue(link.isVisible(), "link hidden");
+    void underTheNoteTheHelpSaysWhatTheFieldTakesAndLinksToHowNeovimIsFound() {
+        NeovimPreferencePage neovimPage = (NeovimPreferencePage) dialog.getSelectedPage();
+        assertEquals("Configure Neovim for Eclipse integration.", neovimPage.getDescription());
+        Control page = neovimPage.getControl();
+        Link help = find(page, Link.class).stream()
+                .filter(l -> l.getText().equals(NeovimPreferencePage.NEOVIM_FIELD_HELP)).findFirst().orElse(null);
+        assertNotNull(help, "no help with a link to how Neovim is found");
+        assertTrue(help.isVisible(), "help hidden");
+        UiTestSupport.waitUntil("the note saying which Neovim was found", 10_000, () -> note(page) != null);
+        Label note = note(page);
+        assertTrue(note.getParent() == help.getParent() && note.getBounds().y < help.getBounds().y,
+                "the note (what the field finds) comes before the help (what it takes): note " + note.getBounds()
+                        + ", help " + help.getBounds());
+    }
+
+    /** The note under the Neovim field, once it says what the field finds; {@code null} before. */
+    private static Label note(Control page) {
+        return find(page, Label.class).stream()
+                .filter(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found"))
+                .findFirst().orElse(null);
     }
 
     @Test
