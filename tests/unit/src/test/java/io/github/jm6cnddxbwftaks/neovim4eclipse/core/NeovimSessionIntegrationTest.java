@@ -22,6 +22,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.Test;
 @Tag("integration")
 class NeovimSessionIntegrationTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
 
     private static NeovimSession start() throws Exception {
         return start(List.of("--clean"));

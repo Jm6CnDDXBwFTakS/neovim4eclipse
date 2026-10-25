@@ -19,12 +19,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /** One Neovim buffer per Eclipse document, against a real {@code nvim} (skipped when none is found). */
 @Tag("integration")
 class NeovimBufferIntegrationTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
 
     private static NeovimSession start() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");

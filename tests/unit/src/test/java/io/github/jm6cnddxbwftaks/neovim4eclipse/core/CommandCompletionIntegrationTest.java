@@ -21,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
  * Tab in the {@code :} box, against a real {@code nvim} ({@link NeovimSession#completeAsync}, the
@@ -30,7 +31,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 @Tag("integration")
 class CommandCompletionIntegrationTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
 
     @TempDir
     Path dir;

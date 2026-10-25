@@ -20,6 +20,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyGrammar;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyGrammar.Expect;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
  * Compares {@link KeyGrammar} with a real Neovim: each sequence of the corpus is typed into Neovim
@@ -39,7 +40,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 @Tag("integration")
 class KeyGrammarNeovimTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
     private static final List<String> TEXT = List.of(
             "say \"hello\" and 'bye' `tick` (paren) [x] now",
             "alpha beta gamma",

@@ -27,6 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.MsgpackNeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
  * Every {@link NeovimApi} method against a real {@code nvim --embed}, through our own client
@@ -41,7 +42,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 @Tag("integration")
 class NeovimApiIntegrationTest {
 
-    private static final String NVIM = System.getProperty("nvim.path", "nvim");
+    private static final String NVIM = TestNeovim.PATH;
 
     /** Waits for an answer, as the plug-in does ({@link Rpc#await}). */
     private static <T> T await(CompletableFuture<T> future) throws Exception {
