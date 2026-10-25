@@ -35,6 +35,11 @@ public class TestMultiPageEditor extends MultiPageEditorPart {
         setPartName(getEditorInput().getName());
     }
 
+    /** Shows the Overview page, as a click on its tab would ({@code setActivePage} is protected). */
+    public void showOverview() {
+        setActivePage(1);
+    }
+
     @Override
     public void doSave(IProgressMonitor monitor) {
         source.doSave(monitor);

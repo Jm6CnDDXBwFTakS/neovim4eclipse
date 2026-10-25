@@ -11,6 +11,8 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.handlers.HandlerUtil;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.AttachRefusal;
+
 /**
  * Command "Neovim: Attach to Active Editor" (Ctrl+Shift+N, Cmd+Shift+N on macOS, or Quick Access). Auto-attach normally
  * makes it unnecessary, so it has no menu entry.
@@ -27,9 +29,12 @@ public class AttachHandler extends AbstractHandler {
     public Object execute(ExecutionEvent event) throws ExecutionException {
         IWorkbenchWindow window = HandlerUtil.getActiveWorkbenchWindow(event);
         IEditorPart editor = HandlerUtil.getActiveEditor(event);
-        if (editor == null) {
-            MessageDialog.openInformation(window.getShell(), "Neovim",
-                    "No active editor. Open a text file first.");
+        String refusal = AttachRefusal.reason(editor == null ? null : editor.getTitle(),
+                editor != null && EditorAttachManager.textEditorOf(editor) != null);
+        if (refusal != null) {
+            // A message, not an exception: Eclipse would only write the exception to its Error Log,
+            // and the key would seem to do nothing (an image, a manifest's Overview page).
+            MessageDialog.openInformation(window.getShell(), "Neovim", refusal);
             return null;
         }
         try {

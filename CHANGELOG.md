@@ -26,11 +26,15 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Neovim button on the main toolbar*.
 - The toolbar button shows the active editor's mode: pressed with the color logo in Neovim mode,
   raised with a grey logo in Eclipse mode (macOS barely shows a pressed button), and greyed out
-  while the editor has no Neovim attached. Its tooltip names the mode and the key that toggles it,
-  or, greyed out, the key that attaches Neovim. In the *Neovim* menu the entry is now a checkbox, *Neovim Mode*.
+  while the editor in front has no Neovim attached. Its tooltip names the mode and the key that
+  toggles it; greyed out, it says why: not a text editor (an image, a form page), or a text editor
+  that `Ctrl+Shift+N` would attach Neovim to. In the *Neovim* menu the entry is now a checkbox, *Neovim Mode*.
 
 ### Fixed
 
+- *Neovim: Attach to Active Editor* (`Ctrl+Shift+N`) on an editor without text (an image, a
+  manifest's Overview page) says that Neovim works only in text editors, instead of seeming to do
+  nothing.
 - `g??` (ROT13 the current line) works: the second `?` no longer opens the backward-search box
   instead of finishing the command, and a quickly typed `g?` no longer can either. `g?` with a
   search motion (`g?/x`) and `?` after `g?` in visual mode still open the box.

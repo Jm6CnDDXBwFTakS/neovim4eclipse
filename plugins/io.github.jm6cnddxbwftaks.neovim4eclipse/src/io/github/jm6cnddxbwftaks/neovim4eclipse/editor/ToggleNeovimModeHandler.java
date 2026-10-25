@@ -12,11 +12,16 @@ import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.resource.ResourceLocator;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.IElementUpdater;
 import org.eclipse.ui.handlers.HandlerUtil;
 import org.eclipse.ui.menus.UIElement;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState.Editor;
 
 /**
  * Toggles between Neovim key handling and plain Eclipse editing on the active editor (the Neovim
@@ -33,7 +38,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState;
  *       tooltip there, and the toolbar button's icon (color in Neovim mode, grey in Eclipse mode:
  *       macOS barely shows a pressed button).</li>
  *   <li><b>Enablement</b>: {@link #setBaseEnabled} greys every item out at once and also makes the
- *       key binding do nothing, while no editor has Neovim attached.</li>
+ *       key binding do nothing, while the active editor has no Neovim attached (an image, a form
+ *       page, a text editor after <em>Detach</em>). Neovim can stay attached to a text editor in
+ *       the background while an image is active; the button then still greys out, since it is
+ *       about the editor in front.</li>
  * </ul>
  * {@link ToggleButtonRefresh} triggers both when Neovim attaches, detaches or switches mode; what
  * they show is decided by {@link ToggleButtonState}.
@@ -59,7 +67,7 @@ public class ToggleNeovimModeHandler extends AbstractHandler implements IElement
 
     @Override
     public Object execute(ExecutionEvent event) throws ExecutionException {
-        NeovimEditorController controller = activeController();
+        NeovimEditorController controller = controllerOfActiveEditor();
         if (controller == null) {
             // Normally unreachable (the command is disabled then), but a refresh may still be on its way.
             MessageDialog.openInformation(HandlerUtil.getActiveShell(event), "Neovim",
@@ -107,20 +115,53 @@ public class ToggleNeovimModeHandler extends AbstractHandler implements IElement
         super.dispose();
     }
 
-    /** Greys the command out, or enables it, for the editor now attached; fires a change if it changed. */
+    /** Greys the command out, or enables it, for the active editor; fires a change if it changed. */
     private void recomputeEnabled() {
-        setBaseEnabled(activeController() != null);
+        setBaseEnabled(controllerOfActiveEditor() != null);
     }
 
     private static ToggleButtonState state() {
-        NeovimEditorController controller = activeController();
-        return ToggleButtonState.of(controller != null,
-                controller != null && controller.isNeovimModeActive(), WelcomeNotice.toggleKey(),
+        NeovimEditorController controller = controllerOfActiveEditor();
+        return ToggleButtonState.of(editorKind(), controller != null && controller.isNeovimModeActive(),
+                WelcomeNotice.toggleKey(),
                 WelcomeNotice.keyBinding(ToggleButtonState.ATTACH_COMMAND_ID, ToggleButtonState.DEFAULT_ATTACH_SEQUENCE));
     }
 
-    private static NeovimEditorController activeController() {
+    private static Editor editorKind() {
+        IEditorPart active = activeEditor();
+        if (active == null) {
+            return Editor.NONE;
+        }
+        if (EditorAttachManager.textEditorOf(active) == null) {
+            return Editor.NOT_TEXT;
+        }
+        return controllerOfActiveEditor() != null ? Editor.ATTACHED : Editor.TEXT_WITHOUT_NEOVIM;
+    }
+
+    /** The controller of the editor in front, or {@code null} if Neovim is attached elsewhere or nowhere. */
+    private static NeovimEditorController controllerOfActiveEditor() {
         NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
-        return controller == null || controller.isClosed() ? null : controller;
+        if (controller == null || controller.isClosed()) {
+            return null;
+        }
+        IEditorPart active = activeEditor();
+        return active != null && EditorAttachManager.textEditorOf(active) == controller.getEditor() ? controller : null;
+    }
+
+    /**
+     * The workbench's active editor (the last one used, even while a view has the focus). While a
+     * dialog has the focus there is no active window; the first window's editor counts then.
+     */
+    private static IEditorPart activeEditor() {
+        if (!PlatformUI.isWorkbenchRunning()) {
+            return null;
+        }
+        IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+        if (window == null) {
+            IWorkbenchWindow[] windows = PlatformUI.getWorkbench().getWorkbenchWindows();
+            window = windows.length > 0 ? windows[0] : null;
+        }
+        IWorkbenchPage page = window == null ? null : window.getActivePage();
+        return page == null ? null : page.getActiveEditor();
     }
 }

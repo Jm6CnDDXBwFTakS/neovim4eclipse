@@ -9,11 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState.Editor;
+
 class ToggleButtonStateTest {
 
     @Test
-    void withoutNeovimTheButtonIsGreyedOutAndNamesTheAttachKey() {
-        ToggleButtonState state = ToggleButtonState.of(false, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
+    void aTextEditorWithoutNeovimIsGreyedOutAndNamesTheAttachKey() {
+        ToggleButtonState state = ToggleButtonState.of(Editor.TEXT_WITHOUT_NEOVIM, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
         assertFalse(state.enabled());
         assertFalse(state.checked(), "a greyed-out button is never drawn pressed");
         assertEquals(ToggleButtonState.ICON_ON, state.icon(), "Eclipse pales the color logo itself");
@@ -23,12 +25,28 @@ class ToggleButtonStateTest {
     @Test
     void withoutAnAttachKeyTheTooltipNamesTheCommand() {
         assertEquals("Neovim mode unavailable (Neovim: Attach to Active Editor attaches Neovim).",
-                ToggleButtonState.of(false, false, "Ctrl+Shift+M", null).tooltip());
+                ToggleButtonState.of(Editor.TEXT_WITHOUT_NEOVIM, false, "Ctrl+Shift+M", null).tooltip());
+    }
+
+    /** The attach key cannot help in an image or a form page, so the tooltip does not offer it. */
+    @Test
+    void anEditorWithoutTextIsGreyedOutAndSaysSo() {
+        ToggleButtonState state = ToggleButtonState.of(Editor.NOT_TEXT, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
+        assertFalse(state.enabled());
+        assertFalse(state.checked());
+        assertEquals("Neovim mode unavailable: not a text editor.", state.tooltip());
+    }
+
+    @Test
+    void withoutAnyEditorTheButtonIsGreyedOutAndSaysSo() {
+        ToggleButtonState state = ToggleButtonState.of(Editor.NONE, false, "Ctrl+Shift+M", "Ctrl+Shift+N");
+        assertFalse(state.enabled());
+        assertEquals("Neovim mode unavailable: no editor open.", state.tooltip());
     }
 
     @Test
     void neovimModeIsPressedWithTheColorLogo() {
-        ToggleButtonState state = ToggleButtonState.of(true, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
+        ToggleButtonState state = ToggleButtonState.of(Editor.ATTACHED, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
         assertTrue(state.enabled());
         assertTrue(state.checked());
         assertEquals(ToggleButtonState.ICON_ON, state.icon());
@@ -38,7 +56,7 @@ class ToggleButtonStateTest {
 
     @Test
     void eclipseModeIsRaisedWithTheGreyLogo() {
-        ToggleButtonState state = ToggleButtonState.of(true, false, "⇧⌘M", "⇧⌘N");
+        ToggleButtonState state = ToggleButtonState.of(Editor.ATTACHED, false, "⇧⌘M", "⇧⌘N");
         assertTrue(state.enabled());
         assertFalse(state.checked());
         assertEquals(ToggleButtonState.ICON_OFF, state.icon());
@@ -49,8 +67,8 @@ class ToggleButtonStateTest {
     @Test
     void aToggleWithoutKeyBindingNamesNone() {
         assertEquals("Neovim mode: Neovim gets the keys. Click to switch to Eclipse mode.",
-                ToggleButtonState.of(true, true, null, null).tooltip());
+                ToggleButtonState.of(Editor.ATTACHED, true, null, null).tooltip());
         assertEquals("Eclipse mode: Eclipse gets the keys. Click to switch to Neovim mode.",
-                ToggleButtonState.of(true, false, " ", null).tooltip());
+                ToggleButtonState.of(Editor.ATTACHED, false, " ", null).tooltip());
     }
 }

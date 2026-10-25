@@ -104,6 +104,7 @@ public final class EditorAttachManager {
         @Override
         public void partActivated(IWorkbenchPartReference partRef) {
             maybeAutoAttach(partRef);
+            ToggleButtonRefresh.request(); // the button is about the editor in front, Neovim or not
         }
 
         @Override
@@ -122,6 +123,7 @@ public final class EditorAttachManager {
                     });
                 }
                 releaseDocumentsOf(closed);
+                ToggleButtonRefresh.request(); // the last editor closed: "no editor open"
             }
         }
 
@@ -285,6 +287,7 @@ public final class EditorAttachManager {
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Attach after page change failed for " + multiPage.getTitle(), e);
         }
+        ToggleButtonRefresh.request(); // a text page or a form page: the button's tooltip differs
     }
 
     /**
