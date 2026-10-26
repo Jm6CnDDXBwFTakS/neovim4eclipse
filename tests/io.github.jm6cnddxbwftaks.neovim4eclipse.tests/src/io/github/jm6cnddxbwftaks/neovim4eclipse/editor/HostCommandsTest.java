@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -31,13 +30,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  * {@link HostCommands}: Vim's file and tab commands carried out by a real Eclipse. Neovim is not
  * involved (auto-attach is off), so the documents are edited directly and only Eclipse's side is
  * tested: each command is given as Neovim hands it over ({@code :Eclipse wall}). That typed lines
- * arrive in that form is tested against a real Neovim ({@code NeovimSessionIntegrationTest}).
+ * arrive in that form is tested in Lua ({@code tests/unit/src/test/lua/host_commands_spec.lua}).
  *
  * <p>Which calls each command makes ({@code :wq} saves, then closes; a failed save keeps the file
  * open) is decided by {@code util/HostCommandRunner} and tested in {@code HostCommandRunnerTest}
- * without a workbench. These tests check one real path per Eclipse operation: saving files, the
- * {@code :e} file lookup and its refusal with changes, and tab switching. Closing is also covered by
- * the end-to-end tests ({@code ZZ}, {@code ZQ}).
+ * without a workbench. These tests check what the end-to-end tests do not: {@code :e}'s refusal
+ * with changes and {@code :e!}'s revert, and the tab commands. Saving ({@code :wal}) and opening
+ * ({@code :e}) go the whole way, from the {@code :} box through Neovim, in
+ * {@code CommandBoxEndToEndTest}; closing in the end-to-end tests of {@code ZZ} and {@code ZQ}.
  */
 class HostCommandsTest {
 
@@ -72,24 +72,6 @@ class HostCommandsTest {
             project.delete(true, true, null);
         }
         EditorAttachManager.getInstance().setAutoAttach(autoAttachBefore);
-    }
-
-    @Test
-    void writeAllSavesEveryModifiedEditor() throws Exception {
-        run("wall", first);
-
-        waitUntil("both editors saved", TIMEOUT_MS, () -> !first.isDirty() && !second.isDirty());
-        assertEquals("one changed\n", contentsOf(project.getFile("one.txt")));
-        assertEquals("two changed\n", contentsOf(project.getFile("two.txt")));
-    }
-
-    @Test
-    void editOpensAFileNextToTheCurrentOne() throws Exception {
-        createFile("three.txt", "three\n");
-        run("edit three.txt", first);
-
-        waitUntil("three.txt to be the active editor", TIMEOUT_MS,
-                () -> page().getActiveEditor() != null && "three.txt".equals(page().getActiveEditor().getTitle()));
     }
 
     @Test
@@ -144,11 +126,6 @@ class HostCommandsTest {
         return editor;
     }
 
-    private static String contentsOf(IFile file) throws Exception {
-        try (InputStream in = file.getContents(true)) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
 
     private static IWorkbenchPage page() {
         return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();

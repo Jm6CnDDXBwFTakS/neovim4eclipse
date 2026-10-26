@@ -47,16 +47,6 @@ class MessageLineEndToEndTest extends EndToEndTestBase {
         assertFalse(line().isError());
     }
 
-    @Test
-    void theNextKeyHidesTheMessage() {
-        runInBox(widget, "s/zzz/y/");
-        waitForMessage("E486: Pattern not found: zzz");
-
-        typeSlowly("j");
-
-        waitUntil("the message line to hide", TIMEOUT_MS, () -> !line().isShowing());
-    }
-
     /** {@code n} twice with no match: the second error shows again after the first key hid it. */
     @Test
     void theSameErrorTwiceShowsTwice() {
