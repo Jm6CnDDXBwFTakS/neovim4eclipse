@@ -170,6 +170,28 @@ class StateSyncTest {
         assertEquals(new CursorPos(1, 0), state.lastCursor());
     }
 
+    /**
+     * The mode published is the snapshot's, not the one read before it. Eclipse ran {@code :w}: the
+     * mode read at Enter was "c", and the Esc that closed Neovim's line made it "n" before Neovim
+     * answered the snapshot. Publishing the old "c" left the status bar on {@code -- COMMAND --}.
+     */
+    @Test
+    void theModeInTheSnapshotWinsOverTheOneReadBefore() {
+        nvim.mode = new Mode("c", false);
+        state.readMode(); // at Enter: Neovim was on its command line
+        List<Object> raw = snapshot(1, 0, ATTACHED);
+        while (raw.size() <= StateSnapshot.MODE) {
+            raw.add("");
+        }
+        raw.set(StateSnapshot.MODE, "n");
+        nvim.snapshot = raw;
+
+        state.publishState();
+
+        assertEquals(List.of("onModeChanged n", "mode n", "cursor 1:0", "no selection"), listeners.heard);
+        assertEquals("n", state.mode());
+    }
+
     @Test
     void aFailedSnapshotPublishesNothingAndDoesNotThrow() {
         nvim.snapshot = null;

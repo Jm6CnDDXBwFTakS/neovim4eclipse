@@ -164,8 +164,10 @@ final class LuaScripts {
     /**
      * Everything the UI needs after a key, in ONE round trip:
      * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, recording,
-     * statusline, bufnr, block}}. {@code bufnr} tells whether the cursor is still in the buffer
-     * Eclipse shows (Neovim may just have jumped to another file).
+     * statusline, bufnr, block, full_mode}}. {@code bufnr} tells whether the cursor is still in the
+     * buffer Eclipse shows (Neovim may just have jumped to another file). {@code full_mode} is
+     * {@code nvim_get_mode().mode} ({@code "n"}, {@code "no"}, {@code "c"}, ...), the mode the editor
+     * publishes; {@code mode} ({@code mode()}, one letter) is the visual mode for the selection.
      *
      * <p>The cursor is {@code nvim_win_get_cursor} (1-based line, 0-based byte column); the visual
      * bounds are {@code getpos} (1-based lines and byte columns) and only meaningful in visual mode.
@@ -206,7 +208,7 @@ final class LuaScripts {
               end
             end
             return { c[1], c[2], s[2], s[3], e[2], e[3], mode, vim.fn.reg_recording(), statusline,
-                     vim.api.nvim_get_current_buf(), block }
+                     vim.api.nvim_get_current_buf(), block, vim.api.nvim_get_mode().mode }
             """;
 
     /**

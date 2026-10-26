@@ -449,6 +449,9 @@ the next key, which is queued behind the same call, so each such command would c
 
 Per-key cost is `nvim_input` + `nvim_get_mode` + one Lua snapshot (`LuaScripts.STATE_SNAPSHOT`) for
 mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings with their duration.
+The mode published is the snapshot's own (`nvim_get_mode()` inside it), not the one `nvim_get_mode`
+returned before: Neovim answers the snapshot only after the keys sent before it, so it cannot be
+older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND --` in normal mode.)
 
 ## Text synchronization details
 
