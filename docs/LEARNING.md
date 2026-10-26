@@ -268,6 +268,15 @@ this twice: when Neovim pastes from the system clipboard (`"+p`), it asks Eclips
 calling `nvim_get_chan_info(0)` itself (0 is "the caller" in a direct API call) and passes it to the
 setup Lua: inside Lua run by `nvim_exec_lua`, `nvim_get_chan_info(0)` does not know who called.
 
+**Showing an error from Lua.** `nvim_echo({ { msg } }, true, { err = true })` (Neovim 0.11) shows
+`msg` the way Neovim shows its own errors: it sets `v:errmsg`, uses the `ErrorMsg` highlight, and a UI
+that reads message kinds sees `echoerr`. Like `:echoerr`, it also *fails the command it runs in*:
+inside the write hook's `BufWriteCmd` autocommand, a save Eclipse refused makes the `:write` fail, so
+`:bufdo update` stops there, exactly as it stops at `E212: Can't open file for writing`. Echoing the
+text with the `ErrorMsg` highlight instead would only look like an error (kind `echomsg`), and the
+write would count as done. Through the API (`nvim_command("write")`) the failure comes back as the
+request's error rather than as a message.
+
 In Neovim, `:help api` lists every function and `:help rpc` describes the protocol. `nvim --api-info`
 dumps the API as MessagePack.
 

@@ -98,7 +98,9 @@ listed, named after the file path, without a swap file or filetype detection, an
 Neovim never writes them itself; a write (`:update` in `:bufdo`, `:wall`, a mapping's `:w`) runs their
 `BufWriteCmd` hook (`LuaScripts.DOCUMENT_BUFFER`), which sends the `eclipse_write` request and waits:
 `EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at most 30 s) and
-answers with nothing or an error message, which Neovim shows. A freshly loaded buffer is not
+answers with nothing or an error message. An error fails the write as a real failed write does
+(`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before
+quitting, and `:bufdo update` stops at that buffer, which stays `'modified'`. A freshly loaded buffer is not
 `'modified'`, so `:update` skips files nobody changed. Only the attached buffer's cursor reports reach Eclipse.
 
 Neovim can change any of those buffers (`:bufdo %s/old/new/g`), and Eclipse can change a document

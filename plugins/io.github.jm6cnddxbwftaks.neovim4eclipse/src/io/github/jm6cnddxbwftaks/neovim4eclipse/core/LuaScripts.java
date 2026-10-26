@@ -305,9 +305,16 @@ final class LuaScripts {
      * Neovim resolves symbolic links in a buffer's name but not in the written name (on macOS
      * {@code /var} is a link to {@code /private/var}, so the buffer is {@code /private/var/.../A.txt}
      * while {@code :update} writes {@code /var/.../A.txt}), and on Windows it reports the written
-     * name with forward slashes while the buffer keeps backslashes. A
-     * failed save is shown as Neovim shows a failed write, and the buffer stays modified, so
-     * {@code :update} tries again next time.
+     * name with forward slashes while the buffer keeps backslashes.
+     *
+     * <p>A failed save fails the write, as a real failed write ({@code E212: Can't open file for
+     * writing}) does: {@code nvim_echo}'s {@code err = true} (Neovim 0.11) works like
+     * {@code :echoerr}, so inside the autocommand it aborts the {@code :write} that triggered it. The
+     * error reaches whoever ran the command, {@code :w | q} does not go on to quit, and
+     * {@code :bufdo update} stops at that buffer. {@code v:errmsg} holds the text alone
+     * ({@code Eclipse could not save A.txt: read-only}); Neovim's own message puts its usual line in
+     * front, {@code Error in BufWriteCmd Autocommands for "<buffer=3>":}, as for any error in an
+     * autocommand. The buffer stays modified, so {@code :update} tries again next time.
      */
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
@@ -316,9 +323,10 @@ final class LuaScripts {
               buf = buf, -- named "buffer" before Neovim 0.12.2
               desc = 'Eclipse saves the document',
               callback = function(ev)
+                -- An error message, as Neovim shows its own: err = true sets v:errmsg and the ErrorMsg
+                -- highlight, and marks the message as an error (msg_show kind "echoerr").
                 local function fail(msg)
-                  vim.v.errmsg = msg
-                  vim.api.nvim_echo({ { msg, 'ErrorMsg' } }, true, {})
+                  vim.api.nvim_echo({ { msg } }, true, { err = true })
                 end
                 -- Resolved: the buffer name has its links resolved, ev.match not (/private/var/x, /var/x on macOS).
                 -- Normalized: on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt, C:\\x\\a.txt).
@@ -342,14 +350,21 @@ final class LuaScripts {
      * Runs normal-mode keys without mappings (argument: the keys), like {@code :normal! keys}. An
      * error ({@code gd} on a blank: "E348: No string under cursor") is shown as Neovim shows it when
      * typed, as an error message, instead of failing the request.
+     *
+     * <p>{@code pcall} turns the error into a Lua string, prefixed with where it came from
+     * ({@code "Vim:E348: ..."}); the {@code gsub} keeps the part from the error number on.
+     * {@code nvim_echo}'s {@code err = true} (Neovim 0.11) then shows it the way Neovim shows its own
+     * errors: it sets {@code v:errmsg}, uses the {@code ErrorMsg} highlight, and marks the message
+     * as an error for a UI ({@code msg_show} kind {@code "echoerr"}). A plain {@code nvim_echo}
+     * with the {@code ErrorMsg} highlight would do neither of the last two (its kind is
+     * {@code "echomsg"}).
      */
     static final String NORMAL_WITHOUT_MAPPINGS = """
             local keys = ...
             local ok, err = pcall(vim.cmd.normal, { keys, bang = true })
             if not ok then
               local msg = tostring(err):gsub('^.-(E%d+:)', '%1')
-              vim.v.errmsg = msg
-              vim.api.nvim_echo({ { msg, 'ErrorMsg' } }, true, {})
+              vim.api.nvim_echo({ { msg } }, true, { err = true })
             end
             """;
 

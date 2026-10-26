@@ -32,6 +32,21 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.SETUP.contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
     }
 
+    /**
+     * The plug-in's own errors are shown with {@code nvim_echo}'s {@code err = true}, which sets
+     * {@code v:errmsg} and marks the message as an error ({@code msg_show} kind {@code "echoerr"}).
+     * Setting {@code v:errmsg} by hand with an {@code ErrorMsg} echo would arrive as an ordinary
+     * message ({@code "echomsg"}) for a UI that reads message kinds.
+     */
+    @Test
+    void errorsAreEchoedAsErrors() {
+        for (String script : new String[] { LuaScripts.NORMAL_WITHOUT_MAPPINGS, LuaScripts.DOCUMENT_BUFFER }) {
+            assertTrue(script.contains("vim.api.nvim_echo({ { msg } }, true, { err = true })"), script);
+            assertFalse(script.contains("vim.v.errmsg = msg"), "no v:errmsg set by hand: " + script);
+            assertFalse(script.contains("'ErrorMsg'"), "err = true picks the highlight: " + script);
+        }
+    }
+
     /** See the COMPLETE_CMDLINE comment for why each of these matters. */
     @Test
     void completionKeysAreNotTypedAndEverythingChangedIsRestored() {
