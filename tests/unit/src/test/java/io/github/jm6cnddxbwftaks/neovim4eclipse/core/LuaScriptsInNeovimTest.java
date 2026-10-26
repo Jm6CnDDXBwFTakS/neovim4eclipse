@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -79,8 +80,14 @@ class LuaScriptsInNeovimTest {
             specs = files.filter(p -> p.getFileName().toString().endsWith("_spec.lua")).sorted().toList();
         }
         assertFalse(specs.isEmpty(), "no *_spec.lua in " + LUA_DIR.toAbsolutePath());
-        return specs.stream().map(spec -> DynamicContainer.dynamicContainer(spec.getFileName().toString(),
-                testNames(spec).stream().map(name -> DynamicTest.dynamicTest(name, () -> runOne(spec, name)))));
+        return specs.stream().map(spec -> {
+            List<String> names = testNames(spec);
+            // The harness gets the test's number (1 is the first), not its name: a name may hold a
+            // double quote ('"+p asks Eclipse ...'), and on Windows ProcessBuilder does not escape
+            // one, so the command line would split the name there and the harness would not find it.
+            return DynamicContainer.dynamicContainer(spec.getFileName().toString(), IntStream.rangeClosed(1, names.size())
+                    .mapToObj(n -> DynamicTest.dynamicTest(names.get(n - 1), () -> runOne(spec, n))));
+        });
     }
 
     /** The spec's test names, as the harness lists them. */
@@ -97,8 +104,8 @@ class LuaScriptsInNeovimTest {
         return names;
     }
 
-    private static void runOne(Path spec, String name) {
-        Run run = nvim(spec, name);
+    private static void runOne(Path spec, int number) {
+        Run run = nvim(spec, "--number", Integer.toString(number));
         if (run.exit() != 0 || !run.output().contains("PASS")) {
             fail("Lua test failed (exit " + run.exit() + "; module " + module + "):\n" + run.output());
         }
@@ -108,13 +115,15 @@ class LuaScriptsInNeovimTest {
     }
 
     /**
-     * Starts {@code nvim --clean --headless -l harness.lua module spec what} and returns its exit
-     * status and output (stdout and stderr together: the harness's verdict and anything Neovim
-     * printed, such as an echoed message).
+     * Starts {@code nvim --clean --headless -l harness.lua module spec what...} ({@code --list}, or
+     * {@code --number 3}) and returns its exit status and output (stdout and stderr together: the
+     * harness's verdict and anything Neovim printed, such as an echoed message).
      */
-    private static Run nvim(Path spec, String what) {
-        List<String> cmd = List.of(nvim, "--clean", "--headless", "--cmd", "let g:" + NvimExecutable.GUARD_VARIABLE + "=1",
-                "-l", LUA_DIR.resolve("harness.lua").toString(), module.toString(), spec.toString(), what);
+    private static Run nvim(Path spec, String... what) {
+        List<String> cmd = new ArrayList<>(List.of(nvim, "--clean", "--headless", "--cmd",
+                "let g:" + NvimExecutable.GUARD_VARIABLE + "=1", "-l", LUA_DIR.resolve("harness.lua").toString(),
+                module.toString(), spec.toString()));
+        cmd.addAll(List.of(what));
         try {
             ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true).directory(WORK.toFile());
             NvimExecutable.prepareEnvironment(builder.environment(), io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil.isWindows());

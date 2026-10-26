@@ -34,15 +34,25 @@ How it is run
 core/LuaScriptsInNeovimTest (JUnit, tagged "integration") writes the scripts' current text to a
 Lua module and starts, per test:
 
-  nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l harness.lua <module> <spec> <test name>
+  nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l harness.lua <module> <spec> --number <n>
 
-With "--list" instead of a test name it prints the spec's test names, one per line after "TEST\t".
+which runs the spec's n-th test (1 is the first declared). With "--list" instead it prints the
+spec's test names, one per line after "TEST\t", in that order. By hand, a test name works in place
+of "--number <n>". JUnit passes the number, not the name, because a name may hold a double quote
+('"+p asks Eclipse ...'), and Windows splits a command-line argument at such a quote: Java does not
+escape it when it builds the command line (Linux passes arguments one by one and has no such issue).
 A test passes when the process ends with status 0; a failed check prints "FAIL: ..." and a
 traceback, and ends with status 1. By hand, from tests/unit, after one JUnit run has written the
 module to target/lua-tests/scripts.lua:
 
   nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l src/test/lua/harness.lua \
     target/lua-tests/scripts.lua src/test/lua/host_commands_spec.lua --list
+
+and then, with one of the names printed (or "--number 2" for the second test):
+
+  nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l src/test/lua/harness.lua \
+    target/lua-tests/scripts.lua src/test/lua/host_commands_spec.lua \
+    "arguments are passed as typed, a count becomes the argument, and | goes on"
 
 A spec file gets the harness as its argument:
 
@@ -195,16 +205,29 @@ if wanted == '--list' then
   os.exit(0)
 end
 
-for _, test in ipairs(tests) do
-  if test[1] == wanted then
-    local ok, err = xpcall(test[2], debug.traceback)
-    if ok then
-      io.stdout:write('PASS\n')
-      os.exit(0)
-    end
-    io.stdout:write('FAIL: ', tostring(err), '\n')
-    os.exit(1)
+--- The test to run: by number ("--number 3", as JUnit asks) or by name (by hand).
+local function find_test()
+  if wanted == '--number' then
+    local n = tonumber(arg[4])
+    return n and tests[n], ('number ' .. tostring(arg[4]))
   end
+  for _, test in ipairs(tests) do
+    if test[1] == wanted then
+      return test
+    end
+  end
+  return nil, ('named ' .. tostring(wanted))
 end
-io.stdout:write('FAIL: no test named ', tostring(wanted), ' in ', spec_path, '\n')
+
+local test, which = find_test()
+if not test then
+  io.stdout:write('FAIL: no test ', which, ' in ', spec_path, ' (it has ', #tests, ')\n')
+  os.exit(1)
+end
+local ok, err = xpcall(test[2], debug.traceback)
+if ok then
+  io.stdout:write('PASS\n')
+  os.exit(0)
+end
+io.stdout:write('FAIL: ', test[1], ': ', tostring(err), '\n')
 os.exit(1)
