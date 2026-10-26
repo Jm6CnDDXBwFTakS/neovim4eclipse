@@ -25,7 +25,6 @@ import org.junit.jupiter.api.DynamicContainer;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestFactory;
-import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
@@ -43,9 +42,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
  * ({@code -Dnvim.path}, see {@link TestNeovim}).
  *
  * <p>The scripts are the Java constants as they are now, read by reflection and written to a Lua
- * module ({@code scripts.lua} in a temporary folder) that the harness loads; so a test always
+ * module ({@code target/lua-tests/scripts.lua}) that the harness loads; so a test always
  * checks the text the session would send, and adding a script to {@link LuaScripts} needs no
- * change here. Example of the module:
+ * change here. The module stays after the run, so a Lua test can be run by hand (see harness.lua).
+ * Example of the module:
  *
  * <pre>
  * return { host_rules = [==[bdelete=buffers ...]==], scripts = { SETUP = [==[local chan = ...]==], ... } }
@@ -57,8 +57,8 @@ class LuaScriptsInNeovimTest {
     /** Where the harness and the spec files are: {@code src/test/lua}, from the module's folder. */
     private static final Path LUA_DIR = Path.of(System.getProperty("lua.tests.dir", "src/test/lua")).toAbsolutePath();
 
-    @TempDir
-    static Path work;
+    /** Where the module is written and Neovim runs: kept after the run, cleared by {@code mvn clean}. */
+    private static final Path WORK = Path.of("target", "lua-tests").toAbsolutePath();
 
     private static String nvim;
     private static Path module;
@@ -67,7 +67,8 @@ class LuaScriptsInNeovimTest {
     static void writeTheScripts() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(TestNeovim.PATH), "nvim not available");
         nvim = NvimExecutable.resolve(TestNeovim.PATH);
-        module = work.resolve("scripts.lua");
+        Files.createDirectories(WORK);
+        module = WORK.resolve("scripts.lua");
         Files.writeString(module, scriptsModule(), StandardCharsets.UTF_8);
     }
 
@@ -115,7 +116,7 @@ class LuaScriptsInNeovimTest {
         List<String> cmd = List.of(nvim, "--clean", "--headless", "--cmd", "let g:" + NvimExecutable.GUARD_VARIABLE + "=1",
                 "-l", LUA_DIR.resolve("harness.lua").toString(), module.toString(), spec.toString(), what);
         try {
-            ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true).directory(work.toFile());
+            ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true).directory(WORK.toFile());
             NvimExecutable.prepareEnvironment(builder.environment(), io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil.isWindows());
             Process process = builder.start();
             process.getOutputStream().close(); // no input: a script that waited for a key would hang
