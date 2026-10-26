@@ -21,7 +21,8 @@ Neovim that runs the test, and what they send to Eclipse is recorded instead of 
 
 One limit: when the keys run out, 'x' ends a pending mode as Esc would (an operator, the command
 line, the command-line window). So a test cannot show that something stays open, or that a script
-closed it; those checks stay in the integration tests, whose keys arrive one at a time. Work a
+closed it; those checks stay in the integration tests, whose keys arrive one at a time. To look
+while the mode is still on, use t.during(keys, check), which runs the check from a mapping. Work a
 script deferred (vim.schedule) runs only once the event loop does: t.wait_for(condition).
 
 The Java side of each case (what the plug-in does with a notification) is tested in tests/unit
@@ -103,6 +104,25 @@ end
 --- once Neovim has handled every one of them.
 function t.type(keys)
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), 'xt', false)
+end
+
+--- Types `keys`, then runs check() while their mode is still on (visual mode, an operator, the
+--- command line), and returns its result. t.type alone ends such a mode when the keys run out (see
+--- the top of this file); here check() runs from a mapping on the key after them, as a script
+--- Eclipse sends then would. Example: t.during('gg<C-v>jl', function() return t.run('STATE_SNAPSHOT', '0') end).
+local CHECK_KEY = '<F35>' -- a key no keyboard sends
+function t.during(keys, check)
+  local modes = { 'n', 'x', 's', 'o', 'i', 'c' }
+  local done, result = false, nil
+  vim.keymap.set(modes, CHECK_KEY, function()
+    result, done = check(), true
+  end)
+  t.type(keys .. CHECK_KEY)
+  vim.keymap.del(modes, CHECK_KEY)
+  if not done then
+    error('the check never ran: the keys left no mode for its key', 2)
+  end
+  return result
 end
 
 --- Runs Neovim's event loop until condition() holds (work deferred with vim.schedule, a timer), and
