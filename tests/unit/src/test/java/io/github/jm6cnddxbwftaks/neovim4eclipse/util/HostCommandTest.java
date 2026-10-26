@@ -30,8 +30,6 @@ class HostCommandTest {
 
     @Test
     void eachFullNameHasItsKind() {
-        assertEquals(Kind.WRITE, kind("write"));
-        assertEquals(Kind.WRITE, kind("update"));
         assertEquals(Kind.WRITE_ALL, kind("wall"));
         assertEquals(Kind.QUIT, kind("quit"));
         assertEquals(Kind.QUIT_ALL, kind("qall"));
@@ -73,7 +71,7 @@ class HostCommandTest {
     @Test
     void otherCommandsAreNotEclipses() {
         assertNull(kind("substitute"));
-        assertNull(kind("w"), "abbreviations never arrive: Neovim sends full names");
+        assertNull(kind("q"), "abbreviations never arrive: Neovim sends full names");
         assertNull(kind("Quit"));
         assertNull(HostCommand.of(null, false, null));
     }
@@ -84,20 +82,25 @@ class HostCommandTest {
         assertFalse(HostCommand.of("quit", false, List.of()).force());
     }
 
+    /** Writes are Neovim's: its write hook asks Eclipse (core/DocumentWrite). */
     @Test
-    void writeAndWqWriteUnchangedFilesUpdateAndXDoNot() {
-        assertTrue(HostCommand.of("write", false, List.of()).writesUnchanged());
+    void writeAndUpdateAreNeovims() {
+        assertNull(kind("write"));
+        assertNull(kind("update"));
+    }
+
+    @Test
+    void wqWritesUnchangedFilesXDoesNot() {
         assertTrue(HostCommand.of("wq", false, List.of()).writesUnchanged());
-        assertFalse(HostCommand.of("update", false, List.of()).writesUnchanged());
         assertFalse(HostCommand.of("xit", false, List.of()).writesUnchanged());
         assertFalse(HostCommand.of("exit", false, List.of()).writesUnchanged());
     }
 
     @Test
     void plusPlusPCreatesFoldersOnlyForWrites() {
-        assertTrue(HostCommand.of("write", false, List.of("++p")).createFolders());
+        assertTrue(HostCommand.of("wq", false, List.of("++p")).createFolders());
         assertTrue(HostCommand.of("xit", false, List.of("++p")).createFolders());
-        assertFalse(HostCommand.of("write", false, List.of("other.txt")).createFolders());
+        assertFalse(HostCommand.of("wq", false, List.of("other.txt")).createFolders());
         assertFalse(HostCommand.of("edit", false, List.of("++p")).createFolders());
     }
 
@@ -119,7 +122,7 @@ class HostCommandTest {
         }
         assertEquals("none", rules.get("quit"));
         assertEquals("any", rules.get("edit"));
-        assertEquals("any", rules.get("write"));
+        assertEquals("any", rules.get("wq"));
         assertEquals("count", rules.get("tabnext"));
         assertEquals("count", rules.get("tabNext"));
         assertEquals("buffers", rules.get("bdelete"));

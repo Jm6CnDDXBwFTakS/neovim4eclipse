@@ -116,10 +116,13 @@ it) in a `core/EditorBuffers` (the bookkeeping, unit-tested without Eclipse) and
 `NeovimSession.showBuffer` first. If that fails, the document is not pushed (it would overwrite the
 buffer Neovim is in, another file's), but the editor listens for Neovim's changes again. Buffers are
 listed, named after the file path, without a swap file or filetype detection, and `buftype=acwrite`:
-Neovim never writes them itself; a write (`:update` in `:bufdo`, `:wall`, a mapping's `:w`) runs their
-`BufWriteCmd` hook (`LuaScripts.DOCUMENT_BUFFER`), which sends the `eclipse_write` request and waits:
-`EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at most 30 s) and
-answers with nothing or an error message. An error fails the write as a real failed write does
+Neovim never writes them itself; a write (`:w`, `:update`, `:bufdo update`, `vim.cmd.write()`) runs their
+`BufWriteCmd` hook (`LuaScripts.DOCUMENT_BUFFER`), which sends the `eclipse_write` request with `v:cmdarg`
+(`++p`) and waits: `EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at
+most 30 s) and answers `[error, message]` (`core/DocumentWrite`); the hook echoes the message, Vim's
+`"a.txt" 12L, 140B written` (`util/WrittenMessage`), which Neovim does not give for an `acwrite` buffer.
+`:wq`, `:x` and `:wa` stay Eclipse's commands (`util/HostCommand`): they close editors or save editors
+that have no buffer. An error fails the write as a real failed write does
 (`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before
 quitting, and `:bufdo update` stops at that buffer, which stays `'modified'`. `'modified'` follows Eclipse's
 dirty flag: `EditorAttachManager` listens to each editor's `PROP_DIRTY` and calls
@@ -325,7 +328,7 @@ view to the controller, which shows it in the box. The box edits nothing:
   Where `:e` looks for a name is still the plug-in's rule, the file's folder first (`util/EditPath`).
 - **Host commands are parsed by Neovim** (`LuaScripts.HOST_COMMANDS`): Enter on a `:` line goes to Neovim
   like any key. Just before the line runs, a `CmdlineLeavePre` autocommand parses it with
-  `nvim_parse_cmd()`; a command Eclipse carries out (`:w`, `:q`, `:e`, `:tabn` ..., the table in
+  `nvim_parse_cmd()`; a command Eclipse carries out (`:q`, `:wq`, `:e`, `:tabn` ..., the table in
   `util/HostCommand`) is replaced with `setcmdline()` by `:Eclipse[!] {full name} {args}`, a user command
   that sends `eclipse_command` and puts the typed line back in the history. Example: `:tabn 3` runs as
   `:Eclipse tabnext 3`. Since this happens on Neovim's command line, a mapping's `:q<CR>`, a macro,

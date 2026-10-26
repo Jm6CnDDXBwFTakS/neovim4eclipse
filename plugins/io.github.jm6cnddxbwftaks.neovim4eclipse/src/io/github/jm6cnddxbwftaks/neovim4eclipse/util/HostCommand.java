@@ -27,7 +27,6 @@ import java.util.TreeMap;
  * <table>
  *   <caption>Host commands (Neovim's full names)</caption>
  *   <tr><th>Command</th><th>Kind</th><th>Eclipse action</th></tr>
- *   <tr><td>{@code write}, {@code update}</td><td>{@link Kind#WRITE}</td><td>save the editor</td></tr>
  *   <tr><td>{@code wall}</td><td>{@link Kind#WRITE_ALL}</td><td>File &gt; Save All</td></tr>
  *   <tr><td>{@code quit}, {@code bdelete}, {@code bwipeout}, {@code bunload}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
  *   <tr><td>{@code bdelete 3}, {@code bdelete other.txt}, {@code %bdelete}</td><td>{@link Kind#BUFFER_DELETE}</td><td>close those buffers' editors</td></tr>
@@ -38,6 +37,11 @@ import java.util.TreeMap;
  *   <tr><td>{@code tabnext}, {@code tabprevious}, ...</td><td>{@code TAB_*}</td><td>switch editor tabs</td></tr>
  * </table>
  *
+ * <p>Writes ({@code :w}, {@code :update}) are not in the table: Neovim runs them, and its write
+ * hook asks Eclipse to save ({@code core/DocumentWrite}, the {@code BufWriteCmd} of
+ * {@code LuaScripts.DOCUMENT_BUFFER}), so they behave as Neovim's own in every respect: {@code :update}
+ * skips an unchanged file, {@code :w !cmd} pipes the text to a command, {@code :5,10w} is refused.
+ *
  * <p>What does not come here, and stays Neovim's: a command with a range it does not take
  * ({@code :5,10w}), arguments it does not take ({@code :q foo}, which Neovim reports), a command
  * {@code :bufdo} runs, the part after {@code |} ({@code :echo 1 | q}), and {@code <Cmd>} or Lua
@@ -47,16 +51,13 @@ import java.util.TreeMap;
  * @param force           whether the command had {@code !}
  * @param args            the arguments, as Neovim split them: {@code :e my\ file.txt} gives
  *                        {@code [my file.txt]}; for {@link Kind#BUFFER_DELETE} buffer numbers or names
- * @param writesUnchanged whether the command writes even when nothing changed, as Vim's {@code :w}
- *                        and {@code :wq} do; {@code :update}, {@code :x} and {@code :exit} write only
- *                        changes. Only a new file's editor uses it (an untouched one still creates
+ * @param writesUnchanged whether the command writes even when nothing changed, as Vim's
+ *                        {@code :wq} does; {@code :x} and {@code :exit} write only changes. Only a new file's editor uses it (an untouched one still creates
  *                        the empty file), since Eclipse saves only modified editors
  */
 public record HostCommand(Kind kind, boolean force, List<String> args, boolean writesUnchanged) {
 
     public enum Kind {
-        /** {@code :w}, {@code :update}. */
-        WRITE,
         /** {@code :wa}: save every modified editor. */
         WRITE_ALL,
         /**
@@ -159,11 +160,12 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
     }
 
     /**
-     * Whether a write may create the missing folders of a new file: {@code :w ++p}, {@code :wq ++p},
-     * {@code :x ++p}, as in Neovim ({@code :help ++p}). Any other argument is ignored.
+     * Whether a write may create the missing folders of a new file: {@code :wq ++p}, {@code :x ++p},
+     * as in Neovim ({@code :help ++p}). Any other argument is ignored. ({@code :w ++p} is Neovim's
+     * write, which passes {@code ++p} to Eclipse itself; see {@code core/DocumentWrite}.)
      */
     public boolean createFolders() {
-        return (kind == Kind.WRITE || kind == Kind.WRITE_QUIT) && !args.isEmpty() && args.get(0).equals("++p");
+        return kind == Kind.WRITE_QUIT && !args.isEmpty() && args.get(0).equals("++p");
     }
 
     /** The file of {@code :e file}, or "" for {@code :e} alone (reload). */
@@ -186,8 +188,6 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
 
     private static Map<String, Entry> buildTable() {
         Map<String, Entry> table = new LinkedHashMap<>();
-        table.put("write", new Entry(Kind.WRITE, Arguments.ANY, true));
-        table.put("update", new Entry(Kind.WRITE, Arguments.ANY, false));
         table.put("wall", new Entry(Kind.WRITE_ALL, Arguments.NONE, false));
         table.put("quit", new Entry(Kind.QUIT, Arguments.NONE, false));
         // Without a buffer they close this editor (QUIT); with buffers, those editors (BUFFER_DELETE).

@@ -80,7 +80,6 @@ public final class HostCommandRunner {
     public void run(HostCommand cmd) {
         boolean force = cmd.force();
         switch (cmd.kind()) {
-            case WRITE -> onUi.accept(() -> ide.save(cmd.createFolders(), cmd.writesUnchanged()));
             case WRITE_ALL -> onUi.accept(ide::saveAll);
             case QUIT -> onUi.accept(() -> ide.close(force));
             case QUIT_ALL -> onUi.accept(() -> ide.closeAll(force));

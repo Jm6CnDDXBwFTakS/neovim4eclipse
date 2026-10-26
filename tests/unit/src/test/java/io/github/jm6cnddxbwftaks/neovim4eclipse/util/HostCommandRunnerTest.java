@@ -85,11 +85,6 @@ class HostCommandRunnerTest {
     // ---- writing and quitting ----
 
     @Test
-    void writeSavesTheCurrentEditor() {
-        assertEquals(List.of("save"), run("write"));
-    }
-
-    @Test
     void writeAllSavesEveryEditor() {
         assertEquals(List.of("saveAll"), run("wall"));
     }
@@ -155,11 +150,6 @@ class HostCommandRunnerTest {
     }
 
     @Test
-    void writePlusPlusPMayCreateFolders() {
-        assertEquals(List.of("save ++p"), run("write ++p"));
-    }
-
-    @Test
     void writeQuitPlusPlusPClosesOnlyAfterTheSaveWorked() {
         assertEquals(List.of("save ++p", "close!"), run("wq ++p"));
         ide.calls.clear();
@@ -167,16 +157,13 @@ class HostCommandRunnerTest {
         assertEquals(List.of("update ++p"), run("xit ++p"));
     }
 
-    /** For a new file's editor: :w and :wq create it even untouched, :up and :x only with changes. */
+    /** For a new file's editor: :wq creates it even untouched, :x only with changes. */
     @Test
-    void writeAndWqWriteUnchangedFilesWhileUpdateAndXDoNot() {
-        run("write");
+    void wqWritesUnchangedFilesWhileXDoesNot() {
         run("wq");
-        run("update");
         run("xit");
         run("exit");
-        assertEquals(List.of("save", "save", "close!", "update", "update", "close!", "update", "close!"),
-                ide.calls);
+        assertEquals(List.of("save", "close!", "update", "close!", "update", "close!"), ide.calls);
     }
 
     // ---- :e ----
@@ -218,14 +205,14 @@ class HostCommandRunnerTest {
         HostCommandRunner later = new HostCommandRunner(ide, queued::add); // a UI thread that is busy
 
         // Every kind of command: none may touch the IDE from the calling thread.
-        for (String command : List.of("write", "wall", "quit", "qall", "wq", "xall", "edit x.txt", "tabnext",
+        for (String command : List.of("wall", "quit", "qall", "wq", "xall", "edit x.txt", "tabnext",
                 "tabprevious", "tabfirst", "tablast")) {
             later.run(command(command));
         }
         assertEquals(List.of(), ide.calls, "nothing happens until the UI thread runs the work");
 
         queued.forEach(Runnable::run);
-        assertEquals(List.of("save", "saveAll", "close", "closeAll", "save", "close!", "saveAll", "closeAll!",
+        assertEquals(List.of("saveAll", "close", "closeAll", "save", "close!", "saveAll", "closeAll!",
                 "edit [x.txt]", "tab NEXT 0", "tab PREVIOUS 0", "tab FIRST 0", "tab LAST 0"), ide.calls,
                 "in order, and a save and its close in one piece of work");
     }

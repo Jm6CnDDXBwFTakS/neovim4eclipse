@@ -294,9 +294,24 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A mapping's {@code :w<CR>} saves through Eclipse, as the typed one does: Neovim hands the line
-     * over ({@code :Eclipse write}), whoever typed it. Before 0.1.7 only lines typed in the box were
-     * Eclipse's, and a mapping's {@code :w} reached Neovim's write hook instead.
+     * A typed {@code :w} is Neovim's write: its write hook asks Eclipse to save, and Neovim shows
+     * Vim's message, the bytes counted in the file's encoding.
+     */
+    @Test
+    void colonWSavesAndShowsVimsWrittenMessage() throws Exception {
+        document.replace(0, 0, "1");
+        settle();
+        runInBox(widget, "w");
+        waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty());
+        assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
+        String expected = "\"test.txt\" 3L, 18B written";
+        waitUntil("the message " + expected, TIMEOUT_MS, () -> expected.equals(messageText(editor)),
+                () -> "; the message line shows " + messageText(editor));
+    }
+
+    /**
+     * A mapping's {@code :w<CR>} saves through Eclipse, as the typed one does: both are Neovim's write,
+     * whose hook asks Eclipse to save ({@code LuaScripts.DOCUMENT_BUFFER}).
      */
     @Test
     void aMappingsColonWSavesTheEditor() throws Exception {

@@ -259,8 +259,8 @@ class KeyInputTest {
     // ---- Enter on Neovim's own : command line ----
 
     /**
-     * Enter on a {@code :} line is typed like any key, {@code :w} too: Neovim hands a command Eclipse
-     * carries out back as {@code :Eclipse write} (LuaScripts.HOST_COMMANDS). No buffer sync follows:
+     * Enter on a {@code :} line is typed like any key, {@code :q} too: Neovim hands a command Eclipse
+     * carries out back as {@code :Eclipse quit} (LuaScripts.HOST_COMMANDS). No buffer sync follows:
      * Eclipse runs such a command later (a revert, {@code :e!}, must not be overwritten).
      */
     @Test

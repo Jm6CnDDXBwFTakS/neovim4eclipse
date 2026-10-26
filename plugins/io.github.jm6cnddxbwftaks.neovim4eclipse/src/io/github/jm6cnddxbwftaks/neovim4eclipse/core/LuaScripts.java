@@ -427,10 +427,14 @@ final class LuaScripts {
      * {@code buftype=acwrite} is never written by Neovim; every write runs the buffer's
      * {@code BufWriteCmd} autocommands instead ({@code :help acwrite}, {@code :help BufWriteCmd}).
      * The one here asks Eclipse to save the document (the {@code eclipse_write} request, answered by
-     * {@link NotificationBridge}) and, if that worked, clears {@code 'modified'}, as a real write does.
-     * So {@code :bufdo %s/a/b/g | update}, {@code :wall} and a {@code <leader>w} mapping in
-     * {@code init.lua} all save through Eclipse. ({@code :w} on Neovim's command line never gets here:
-     * it is handed to Eclipse as {@code :Eclipse write}, see {@link #HOST_COMMANDS}.)
+     * {@link DocumentWrite}) and, if that worked, clears {@code 'modified'}, as a real write does, and
+     * shows the message Eclipse answers, Vim's {@code "a.txt" 12L, 140B written}, which Neovim does
+     * not give for such a buffer. So {@code :w}, {@code :update}, {@code :bufdo %s/a/b/g | update} and
+     * {@code vim.cmd.write()} all save through Eclipse. {@code v:cmdarg} passes {@code ++p} along.
+     * {@code 'modified'} itself follows Eclipse's dirty flag ({@link #SET_MODIFIED}), so
+     * {@code :update} asks for exactly the files Eclipse would save. Neovim refuses a partial write
+     * ({@code :5,10w}: E140, with {@code !} E676) and pipes {@code :w !cmd} without this hook
+     * (experiment X9 of the cleanup plan).
      *
      * <p>A write under another name ({@code :w other.txt}) is refused: Eclipse saves a document only
      * as its own file. The names are compared after {@code resolve()} and {@code vim.fs.normalize}:
@@ -480,11 +484,17 @@ final class LuaScripts {
                   return fail('Eclipse saves a file only under its own name; use File > Save As')
                 end
                 -- Neovim waits for the answer: Eclipse saves on its UI thread (see EditorAttachManager).
-                local err = vim.rpcrequest(vim.g.neovim4eclipse_channel, 'eclipse_write', ev.buf)
-                if type(err) == 'string' and err ~= '' then
+                -- v:cmdarg has the write's ++opt arguments (" ++p" for :w ++p).
+                local answer = vim.rpcrequest(vim.g.neovim4eclipse_channel, 'eclipse_write', ev.buf, vim.v.cmdarg)
+                local err, written = answer[1], answer[2] -- { error, message }, each '' when none
+                if err ~= '' then
                   return fail(err)
                 end
                 vim.bo[ev.buf].modified = false
+                if written ~= '' then
+                  -- Vim's own message after a write, which Neovim does not give for an acwrite buffer.
+                  vim.api.nvim_echo({ { written } }, true, {})
+                end
               end,
             })
             -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its

@@ -40,6 +40,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorBuffers;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
@@ -518,17 +519,18 @@ public final class EditorAttachManager {
      * file changed on disk). A save that takes longer still finishes; Neovim is told it did not, and
      * leaves the buffer modified.
      *
-     * @return {@code null} if the document was saved, else the message Neovim shows
+     * @param createFolders {@code :w ++p}: a new file's missing folders may be created
+     * @return the written message, or the error that fails the write
      */
-    private String saveForNeovim(DocumentBuffer buffer) {
+    private DocumentWrite.Result saveForNeovim(DocumentBuffer buffer, boolean createFolders) {
         Display display = Display.getDefault();
         if (display == null || display.isDisposed()) {
-            return "Eclipse is shutting down; " + buffer.name() + " was not saved";
+            return DocumentWrite.Result.failed("Eclipse is shutting down; " + buffer.name() + " was not saved");
         }
-        CompletableFuture<String> result = new CompletableFuture<>();
+        CompletableFuture<DocumentWrite.Result> result = new CompletableFuture<>();
         display.asyncExec(() -> {
             try {
-                result.complete(saveOnUi(buffer));
+                result.complete(saveOnUi(buffer, createFolders));
             } catch (RuntimeException e) {
                 result.completeExceptionally(e);
             }
@@ -537,18 +539,23 @@ public final class EditorAttachManager {
             return result.get(SAVE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             LOG.warning("Eclipse did not save " + buffer.name() + " within " + SAVE_TIMEOUT_MS + " ms; Neovim was told so");
-            return "Eclipse did not finish saving " + buffer.name() + " in time; check whether it was saved";
+            return DocumentWrite.Result.failed("Eclipse did not finish saving " + buffer.name()
+                    + " in time; check whether it was saved");
         } catch (ExecutionException e) {
             LOG.log(Level.WARNING, "Saving " + buffer.name() + " for Neovim failed", e.getCause());
-            return "Eclipse could not save " + buffer.name() + " (see the Error Log)";
+            return DocumentWrite.Result.failed("Eclipse could not save " + buffer.name() + " (see the Error Log)");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return "Interrupted; " + buffer.name() + " may not have been saved";
+            return DocumentWrite.Result.failed("Interrupted; " + buffer.name() + " may not have been saved");
         }
     }
 
-    /** Saves {@code buffer}'s document through the first editor open on it. UI thread. */
-    private String saveOnUi(DocumentBuffer buffer) {
+    /**
+     * Saves {@code buffer}'s document through the first editor open on it, as {@code :w} does: a file
+     * that does not exist yet is created ({@code NewFiles}, which shows its own {@code [New]}
+     * message), any other is saved by Eclipse, and Vim's written message is the answer. UI thread.
+     */
+    private DocumentWrite.Result saveOnUi(DocumentBuffer buffer, boolean createFolders) {
         Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
         synchronized (this) {
             NeovimSession session = followedSession;
@@ -556,11 +563,22 @@ public final class EditorAttachManager {
                     : documents.editorShowing(buffer.bufnr(), b -> b == buffer && b.isOpenIn(session));
         }
         if (showing.isEmpty()) {
-            return "Eclipse has no editor open on " + buffer.name() + "; nothing was saved";
+            return DocumentWrite.Result.failed("Eclipse has no editor open on " + buffer.name() + "; nothing was saved");
         }
         IEditorPart part = showing.get().editor();
-        return EclipseFileCommands.savePart(part) ? null
-                : "Eclipse could not save " + part.getTitle() + " (see the Error Log)";
+        ITextEditor text = textEditorOf(part);
+        if (text == null) {
+            return EclipseFileCommands.savePart(part) ? DocumentWrite.Result.saved("")
+                    : DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle() + " (see the Error Log)");
+        }
+        boolean created = NewFiles.missingFileOf(text) != null;
+        // Even if unchanged: Neovim asks only for :w, or for :update of a modified buffer, and
+        // 'modified' follows Eclipse's dirty flag; so this is a write Vim would make.
+        if (!EclipseFileCommands.save(text, createFolders, true)) {
+            return DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle()
+                    + (created ? "" : " (see the Error Log)"));
+        }
+        return DocumentWrite.Result.saved(created ? "" : EclipseFileCommands.writtenMessage(text));
     }
 
     /**
