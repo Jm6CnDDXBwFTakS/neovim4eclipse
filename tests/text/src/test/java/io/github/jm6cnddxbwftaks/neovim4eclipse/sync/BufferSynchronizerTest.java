@@ -205,7 +205,9 @@ class BufferSynchronizerTest {
 
             assertEquals(List.of(List.of("alpha"), List.of("alpha", "")), neovim.pushed);
             neovim.neovimChanged(new BufferChange(2, 2, List.of(""))); // Go
-            assertEquals("alpha\n\n", noFinalNewline.get());
+            // A document with no line break yet gets the platform's (CRLF on Windows), as when typed.
+            String nl = BufferSynchronizer.lineDelimiter(noFinalNewline);
+            assertEquals("alpha" + nl + nl, noFinalNewline.get());
         }
     }
 
@@ -224,9 +226,11 @@ class BufferSynchronizerTest {
 
             assertEquals(List.of(List.of("alpha"), List.of("alpha")), neovim.pushed);
             neovim.neovimChanged(new BufferChange(1, 1, List.of(""))); // o
-            assertEquals("alpha\n", doc.get());
+            // The document has no line break left, so the new one is the platform's (CRLF on Windows).
+            String nl = BufferSynchronizer.lineDelimiter(doc);
+            assertEquals("alpha" + nl, doc.get());
             neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha", "")));
-            assertEquals("alpha\n", doc.get(), "no second empty line");
+            assertEquals("alpha" + nl, doc.get(), "no second empty line");
         }
     }
 

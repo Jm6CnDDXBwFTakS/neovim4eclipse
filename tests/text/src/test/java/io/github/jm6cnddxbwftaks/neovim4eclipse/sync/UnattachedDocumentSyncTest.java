@@ -188,7 +188,9 @@ class UnattachedDocumentSyncTest {
             background.start();
 
             neovim.neovimChanged(buffer, new BufferChange(2, 2, List.of(""))); // o on line 2, the empty one
-            assertEquals("alpha\n\n", noFinalNewline.get());
+            // "alpha" had no line break, so the first one was the platform's (CRLF on Windows).
+            String nl = BufferSynchronizer.lineDelimiter(noFinalNewline);
+            assertEquals("alpha" + nl + nl, noFinalNewline.get());
         }
     }
 

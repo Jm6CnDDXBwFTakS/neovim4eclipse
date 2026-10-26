@@ -738,14 +738,19 @@ class EditorEndToEndTest extends EndToEndTestBase {
                 () -> Boolean.FALSE.equals(io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.bo.modified")));
     }
 
-    /** Ctrl+Z as real key events (Display.post), so that Eclipse's key binding runs Undo. */
+    /**
+     * Eclipse's Undo key as real key events (Display.post), so that Eclipse's key binding runs Undo:
+     * Ctrl+Z, or Cmd+Z on macOS. Undo is bound to M1+Z, and M1 is Command on a Mac (there, Ctrl+Z
+     * runs nothing in Eclipse).
+     */
     private void postCtrlZ() {
+        int m1 = org.eclipse.jface.util.Util.isMac() ? SWT.COMMAND : SWT.CTRL;
         org.eclipse.swt.widgets.Display d = widget.getDisplay();
         org.eclipse.swt.widgets.Event e = new org.eclipse.swt.widgets.Event();
-        e.type = SWT.KeyDown; e.keyCode = SWT.CTRL; d.post(e);
+        e.type = SWT.KeyDown; e.keyCode = m1; d.post(e);
         e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyDown; e.character = 'z'; e.keyCode = 'z'; d.post(e);
         e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.character = 'z'; e.keyCode = 'z'; d.post(e);
-        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.keyCode = SWT.CTRL; d.post(e);
+        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.keyCode = m1; d.post(e);
         UiTestSupport.spin(500);
     }
 
