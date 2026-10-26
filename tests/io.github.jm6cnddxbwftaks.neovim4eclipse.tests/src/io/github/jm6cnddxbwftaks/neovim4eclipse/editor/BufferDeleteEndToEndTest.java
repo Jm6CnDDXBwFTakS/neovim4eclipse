@@ -49,6 +49,19 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
         expectClosed(other, "other.txt's editor (buffer " + bufnr + ")");
     }
 
+    /**
+     * A buffer Neovim deletes by itself (a Lua plug-in, {@code <Cmd>bd}) closes its editor too: the
+     * safety net of {@code LuaScripts.DOCUMENT_BUFFER}.
+     */
+    @Test
+    void aBufferNeovimDeletesByItselfClosesItsEditor() throws Exception {
+        StyledText other = widgetOf(openOtherAndReturn());
+        int bufnr = ((Number) SessionProbe.lua(session, "return vim.fn.bufnr('other.txt')")).intValue();
+        SessionProbe.lua(session, "vim.cmd.bdelete(" + bufnr + ")");
+        expectClosed(other, "other.txt's editor (buffer " + bufnr + ")");
+        assertFalse(widget.isDisposed(), "test.txt stays open");
+    }
+
     @Test
     void aBufferNobodyHasGetsVimsErrorAndClosesNothing() throws Exception {
         ITextEditor other = openOtherAndReturn();

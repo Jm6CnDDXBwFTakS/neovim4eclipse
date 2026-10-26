@@ -40,6 +40,7 @@ class NotificationBridgeTest {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
             @Override public void onBufferEnter(int bufnr) { events.add("enter:" + bufnr); }
+            @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
             }
@@ -108,6 +109,14 @@ class NotificationBridgeTest {
         notify("eclipse_command", "substitute", false, List.of()); // not Eclipse's: dropped
         notify("eclipse_command", "quit");                          // malformed: dropped
         assertEquals(List.of("command:EDIT:[my file.txt]", "command:QUIT!:[]"), events);
+    }
+
+    /** The safety nets: Neovim deleted a document buffer, or is quitting its window, by itself. */
+    @Test
+    void bufferClosedCarriesTheBuffer() {
+        notify("eclipse_buffer_closed", 4);
+        notify("eclipse_buffer_closed");
+        assertEquals(List.of("closed:4"), events);
     }
 
     @Test

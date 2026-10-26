@@ -297,6 +297,9 @@ history keeps what you typed. A command after `|` runs after it (`:w | echo "sav
 so Neovim's: a line run by `<Cmd>` or Lua (`vim.cmd.quit()`), the commands `:bufdo` runs, a command
 after `|` (`:echo 1 | q`), and a range a command does not take (`:5,10w`).
 
+A buffer that Neovim deletes by itself (a Lua plug-in, `<Cmd>bd<CR>`, `:bufdo bd`) closes its
+editor too, and so does a `:quit` Neovim runs itself; Eclipse asks about changes as for `:q`.
+
 Neovim can also write a buffer by itself: `:update` inside `:bufdo` or `:argdo`, or `vim.cmd.write()`
 in Lua. Those writes save the file through Eclipse too (so save actions run as usual), and Neovim
 never writes a file itself. A write under another name (`:w other.txt` from Lua) is refused; use

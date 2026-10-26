@@ -62,6 +62,13 @@ final class NotificationBridge implements Incoming {
         void onBufferEnter(int bufnr);
 
         /**
+         * Neovim deleted document buffer {@code bufnr}, or is quitting its window, by itself
+         * ({@code <Cmd>bd}, {@code vim.cmd.quit()}): the safety nets in {@link LuaScripts#HOST_COMMANDS}
+         * and {@link LuaScripts#DOCUMENT_BUFFER}.
+         */
+        void onBufferClosed(int bufnr);
+
+        /**
          * Text was yanked or deleted into a register other than {@code "+} and {@code "*}.
          *
          * @param regtype {@code v} (characters), {@code V} (lines) or Ctrl-V and a width (a block)
@@ -132,6 +139,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_mode" -> onMode(args);
             case "eclipse_cursor" -> onCursor(args);
             case "eclipse_buf_enter" -> onBufEnter(args);
+            case "eclipse_buffer_closed" -> onBufferClosed(args);
             case "eclipse_yank" -> onYank(args);
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
@@ -169,6 +177,13 @@ final class NotificationBridge implements Incoming {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             sink.onBufferEnter(buf);
+        }
+    }
+
+    private void onBufferClosed(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        if (buf != null) {
+            sink.onBufferClosed(buf);
         }
     }
 

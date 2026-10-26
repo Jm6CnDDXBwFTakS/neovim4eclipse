@@ -346,6 +346,7 @@ public final class EditorAttachManager {
         if (session != followedSession) { // first attach, or Neovim was restarted
             followedSession = session;
             session.setBufferEnterHandler(this::onNeovimEnteredBuffer);
+            session.setBufferClosedHandler(this::onNeovimClosedBuffer);
             session.setWriteHandler(this::saveForNeovim);
             // A new Neovim has none of the old buffers; each document gets a new one on its next attach.
             unattachedSyncs.values().forEach(UnattachedDocumentSync::close);
@@ -451,6 +452,31 @@ public final class EditorAttachManager {
                 });
             }
         }
+    }
+
+    /**
+     * Neovim deleted buffer {@code bufnr}, or quit its window, by itself ({@code <Cmd>bd},
+     * {@code vim.cmd.quit()}, {@code :bufdo bd}): closes the editor showing it, asking about changes
+     * as {@code :q} does. Nothing happens for a buffer no editor shows, such as one this class wiped
+     * after its last editor closed. RPC thread; the closing is done on the UI thread.
+     */
+    private void onNeovimClosedBuffer(int bufnr) {
+        NeovimSession session;
+        synchronized (this) {
+            session = followedSession;
+        }
+        Display display = Display.getDefault();
+        if (session == null || display == null || display.isDisposed()) {
+            return;
+        }
+        display.asyncExec(() -> {
+            Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
+            synchronized (this) {
+                showing = session != followedSession ? Optional.empty()
+                        : documents.editorShowing(bufnr, buffer -> buffer.isOpenIn(session));
+            }
+            showing.ifPresent(s -> s.editor().getSite().getPage().closeEditor(s.editor(), true));
+        });
     }
 
     /** Closes the editor showing buffer {@code bufnr}, or shows {@code ref}'s error. UI thread. */

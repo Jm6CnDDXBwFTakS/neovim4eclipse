@@ -114,6 +114,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * characters at the cursor. (The Lua hook stands down too; this is the second guard.)
      */
     private volatile boolean nvimManagesClipboard;
+    /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
+    private volatile Consumer<Integer> bufferClosedHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
     private volatile Runnable leaveInsertPush;
     /** Saves a document when Neovim writes its buffer; see {@link #setWriteHandler}. */
@@ -425,6 +427,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void setBufferEnterHandler(Consumer<Integer> handler) {
         buffers.setEnterHandler(handler);
+    }
+
+    /**
+     * Handles Neovim deleting a document's buffer, or quitting its window, by itself
+     * ({@code <Cmd>bd}, {@code vim.cmd.quit()}; the safety nets of {@link LuaScripts#HOST_COMMANDS}).
+     * The handler should close the editor showing that buffer, if any. Called on an RPC thread; not
+     * while the session is closing (Eclipse's own {@code :qa!} fires {@code QuitPre} too).
+     */
+    public void setBufferClosedHandler(Consumer<Integer> handler) {
+        this.bufferClosedHandler = handler;
     }
 
     /** Switches Neovim back to the attached buffer (it entered one that Eclipse does not show). */
@@ -777,6 +789,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void onBufferEnter(int bufnr) {
             buffers.onEntered(bufnr, NeovimSession.this::returnToAttachedBufferAsync);
+        }
+
+        @Override
+        public void onBufferClosed(int bufnr) {
+            Consumer<Integer> handler = bufferClosedHandler;
+            if (!closed && handler != null) {
+                LOG.fine(() -> "Neovim closed buffer " + bufnr + " by itself");
+                handler.accept(bufnr);
+            }
         }
 
         @Override
