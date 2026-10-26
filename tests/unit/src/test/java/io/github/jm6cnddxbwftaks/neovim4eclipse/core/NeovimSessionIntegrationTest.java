@@ -100,83 +100,26 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * Keys reach Neovim one by one through the session, special keys included, and what they do
+     * comes back: the cursor and the text. Every key outside insert mode goes to Neovim as it is (no
+     * key grammar in Java any more), so this is the one check of that path; what each key does is
+     * Neovim's own behavior, not tested here (it used to be, a test per motion, paste and undo).
+     */
     @Test
-    void motionsAndLineDeletionWork() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("hello", "world", "from", "neovim4eclipse"));
-            s.input("g");
-            s.input("g");
-            s.input("j");
-            CursorPos pos = s.getCursor();
-            assertEquals(2, pos.line1Based());
-
-            s.input("d");
-            s.input("d");
-            assertEquals(List.of("hello", "from", "neovim4eclipse"), s.getBufferLines());
-        }
-    }
-
-    @Test
-    void linewisePasteIsDoneByNeovim() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("a", "b"));
-            s.input("y");
-            s.input("y");
-            s.input("p");
-            assertEquals(List.of("a", "a", "b"), s.getBufferLines());
-            s.input("P");
-            assertEquals(List.of("a", "a", "a", "b"), s.getBufferLines());
-        }
-    }
-
-    @Test
-    void countedPasteAndDotRepeatAreDoneByNeovim() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("a", "b"));
-            s.input("y");
-            s.input("y");
-            s.input("2");
-            s.input("p");
-            assertEquals(List.of("a", "a", "a", "b"), s.getBufferLines());
-            s.input(".");
-            assertEquals(List.of("a", "a", "a", "a", "a", "b"), s.getBufferLines());
-        }
-    }
-
-    @Test
-    void charwisePasteIsDoneByNeovim() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("abc"));
-            s.input("y");
-            s.input("l"); // yl: yank one character
-            s.input("$");
-            s.input("p");
-            assertEquals(List.of("abca"), s.getBufferLines());
-        }
-    }
-
-    @Test
-    void ctrlOAndCtrlIMoveThroughTheJumpList() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("1", "2", "3", "4", "5"));
-            s.input("G"); // a jump: line 1 goes on the jump list
-            s.input("<C-o>");
-            assertEquals(1, s.getCursor().line1Based());
-            s.input("<C-i>");
-            assertEquals(5, s.getCursor().line1Based());
-        }
-    }
-
-    @Test
-    void undoRestoresADeletedLine() throws Exception {
+    void keysReachNeovimAndTheCursorAndTextComeBack() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("a", "b", "c"));
-            s.input("j");
-            s.input("d");
-            s.input("d");
-            assertEquals(List.of("a", "c"), s.getBufferLines());
-            s.input("u");
-            assertEquals(List.of("a", "b", "c"), s.getBufferLines());
+            keys(s, "g", "g", "j");
+            assertEquals(2, s.getCursor().line1Based(), "gg, j");
+            keys(s, "y", "y", "2", "p");
+            assertEquals(List.of("a", "b", "b", "b", "c"), s.getBufferLines(), "a counted linewise paste");
+            keys(s, "d", "d", ".");
+            assertEquals(List.of("a", "b", "c"), s.getBufferLines(), "dd and its dot repeat");
+            keys(s, "u");
+            assertEquals(List.of("a", "b", "b", "c"), s.getBufferLines(), "undo");
+            keys(s, "G", "<C-o>"); // a special key: back through the jump list
+            assertEquals(3, s.getCursor().line1Based());
         }
     }
 
