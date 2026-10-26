@@ -789,7 +789,7 @@ class NeovimSessionIntegrationTest {
             List<BufferChange> changes = new CopyOnWriteArrayList<>();
             s.addBufferChangeListener(changes::add);
             keys(s, "3", "@", "a");
-            Thread.sleep(200); // let any stray notifications arrive
+            NeovimBarrier.pass(s); // any stray notification has arrived by now
             assertEquals(1, changes.size(), "macro playback must publish a single full-buffer change: " + changes);
             assertEquals(-1, changes.get(0).lastLine());
         }
