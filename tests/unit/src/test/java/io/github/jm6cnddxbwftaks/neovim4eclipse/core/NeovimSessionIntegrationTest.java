@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -43,6 +44,12 @@ import org.junit.jupiter.api.Test;
 class NeovimSessionIntegrationTest {
 
     private static final String NVIM = TestNeovim.PATH;
+
+    /**
+     * How long a test waits for Neovim to get somewhere. Generous, because a loaded machine (a busy
+     * CI runner) can take seconds; a passing test never waits that long.
+     */
+    private static final long WAIT_MS = 15_000;
 
     private static NeovimSession start() throws Exception {
         return start(List.of("--clean"));
@@ -175,23 +182,27 @@ class NeovimSessionIntegrationTest {
     /**
      * Regression: after f/F/t/r or the first g of gg, Neovim waits for another character and
      * defers most API calls. Polling state then used to cost the full 5 s RPC timeout per command.
+     *
+     * <p>The seven keys are compared with seven keys that leave nothing pending, timed just before,
+     * rather than with a fixed limit: on a loaded machine seven plain keys alone can take seconds.
+     * One stall would add 5 s; the 4 s margin allows for the load changing between the two.
      */
     @Test
     void pendingCommandsDoNotStallTheInputThread() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("hello world", "second line", "third line"));
-            long start = System.nanoTime();
-            s.input("f");
-            s.input("o"); // fo: cursor to the first 'o'
-            s.input("G");
-            s.input("g");
-            s.input("g");
-            s.input("F");
-            s.input("o");
-            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-            assertTrue(elapsedMs < 2000, "pending commands took " + elapsedMs + " ms");
+            long plainMs = millisToType(s, "l", "l", "G", "k", "k", "h", "0");
+            long pendingMs = millisToType(s, "f", "o", "G", "g", "g", "F", "o"); // fo, G, gg, Fo
+            assertTrue(pendingMs < plainMs + 4000,
+                    "pending commands took " + pendingMs + " ms, plain keys " + plainMs + " ms");
             assertEquals(1, s.getCursor().line1Based());
         }
+    }
+
+    private static long millisToType(NeovimSession s, String... keys) throws Exception {
+        long start = System.nanoTime();
+        keys(s, keys);
+        return (System.nanoTime() - start) / 1_000_000;
     }
 
     // ---- status bar parts ----
@@ -517,15 +528,18 @@ class NeovimSessionIntegrationTest {
      * A shell command that prints several lines ({@code :!dir} on Windows, {@code :!ls} elsewhere)
      * shows one line per entry: no {@code \r} left from Windows' {@code \r\n}, which the popup
      * would show as stray {@code ^M} characters or double spacing.
+     *
+     * <p>The output can arrive in pieces (on a loaded machine the first is often one line), and the
+     * popup is sent the whole output again after each, so the test waits for one with several lines.
      */
     @Test
     void multiLineShellCommandOutputHasNoCarriageReturns() throws Exception {
         try (NeovimSession s = start()) {
             Shown shown = new Shown(s);
             s.commandAsync(PlatformUtil.isWindows() ? "!dir" : "!ls -a");
-            waitFor(() -> !shown.outputs.isEmpty(), "the shell command's output");
+            waitFor(() -> !shown.outputs.isEmpty() && shown.outputs.get(shown.outputs.size() - 1).text().contains("\n"),
+                    "the shell command's output, several lines");
             String output = shown.outputs.get(shown.outputs.size() - 1).text();
-            assertTrue(output.contains("\n"), "several lines: " + output);
             assertFalse(output.contains("\r"), "no carriage return: " + output.replace("\r", "\\r"));
         }
     }
@@ -546,7 +560,11 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    /** The plug-in no longer redirects anything itself, so the user's {@code :redir} simply works. */
+    /**
+     * The plug-in no longer redirects anything itself, so the user's {@code :redir} simply works.
+     * {@code g:mine} is set only by {@code :redir END}, the last queued command, which may still be
+     * waiting when the echo shows, so the test waits for the variable too.
+     */
     @Test
     void aTypedRedirCollectsWhatIsPrinted() throws Exception {
         try (NeovimSession s = start()) {
@@ -555,8 +573,16 @@ class NeovimSessionIntegrationTest {
             s.commandAsync("echo 'kept'");
             s.commandAsync("redir END");
             waitFor(() -> shown.line("kept", false), "the echo, shown as well, as in Vim");
-            assertTrue(String.valueOf(s.lua("return vim.g.mine")).contains("kept"),
-                    "the user's :redir must have collected the echo");
+            waitFor(() -> String.valueOf(uncheckedLua(s, "return vim.g.mine")).contains("kept"),
+                    "the user's :redir to collect the echo");
+        }
+    }
+
+    private static Object uncheckedLua(NeovimSession s, String code) {
+        try {
+            return s.lua(code);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
     }
 
@@ -645,9 +671,16 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * Neovim counts a press as a double or triple click when it comes within {@code 'mousetime'}
+     * of the one before, at the same place. The default, 500 ms, is too short on a loaded machine,
+     * where one press can take a second to arrive, so the test allows 10 s. The triple click is on
+     * another line, so it counts from one again without waiting out {@code 'mousetime'}.
+     */
     @Test
     void aDoubleClickSelectsAWordAndATripleClickTheLine() throws Exception {
         try (NeovimSession s = start()) {
+            s.lua("vim.o.mousetime = 10000");
             s.setBufferLines(List.of("alpha beta gamma", "second"));
             List<VisualSelection> seen = new CopyOnWriteArrayList<>();
             s.addSelectionListener(seen::add);
@@ -656,7 +689,6 @@ class NeovimSessionIntegrationTest {
             assertEquals(6, lastSelection(seen).startCol0Based());
             assertEquals(9, lastSelection(seen).endCol0Based(), "beta");
             keys(s, "<Esc>");
-            Thread.sleep(600); // past 'mousetime', so the next click counts from one again
             click(s, 2, 1, 3, "");
             assertTrue(lastSelection(seen).isLineWise(), "mode=" + s.getMode());
         }
@@ -711,7 +743,7 @@ class NeovimSessionIntegrationTest {
     // ---- macros ----
 
     private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws Exception {
-        long deadline = System.currentTimeMillis() + 3000;
+        long deadline = System.currentTimeMillis() + WAIT_MS;
         while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) {
             Thread.sleep(25);
         }
@@ -932,7 +964,15 @@ class NeovimSessionIntegrationTest {
 
     // ---- dot-repeat of text typed (by Eclipse) in insert mode ----
 
-    /** Simulates Eclipse ending an insert in which it typed {@code typed} at the cursor of the current line. */
+    /**
+     * Simulates Eclipse ending an insert in which it typed {@code typed} at the cursor of the current
+     * line, and waits until Neovim has finished leaving insert mode.
+     *
+     * <p>Waiting for the buffer to match is not enough: after pushing the document, leaving insert
+     * mode still puts Neovim's cursor where Vim leaves it after Esc. On a loaded machine a key sent
+     * in between (the {@code j} before a {@code .}) was undone by that cursor move. So the wait is
+     * for the input-handled notice, which comes after the whole queued work.
+     */
     private static void finishEclipseInsert(NeovimSession s, String before, String after, int base, int caret,
             List<String> documentAfter) throws Exception {
         s.setLeaveInsertPush(() -> {
@@ -942,11 +982,14 @@ class NeovimSessionIntegrationTest {
                 throw new IllegalStateException(e);
             }
         });
-        s.leaveInsertModeAsync(InsertReplay.plan(before, after, base, caret));
-        long deadline = System.currentTimeMillis() + 3000;
-        while ((s.isTypingMode() || !s.getBufferLines().equals(documentAfter))
-                && System.currentTimeMillis() < deadline) {
-            Thread.sleep(25);
+        CountDownLatch handled = new CountDownLatch(1);
+        Runnable listener = handled::countDown;
+        s.addInputHandledListener(listener);
+        try {
+            s.leaveInsertModeAsync(InsertReplay.plan(before, after, base, caret));
+            assertTrue(handled.await(WAIT_MS, TimeUnit.MILLISECONDS), "Neovim left insert mode");
+        } finally {
+            s.removeInputHandledListener(listener);
         }
     }
 
@@ -1100,7 +1143,7 @@ class NeovimSessionIntegrationTest {
             s.addBufferChangeListener(changes::add);
             s.input("d");
             s.input("d");
-            long deadline = System.currentTimeMillis() + 2000;
+            long deadline = System.currentTimeMillis() + WAIT_MS;
             while (changes.isEmpty() && System.currentTimeMillis() < deadline) {
                 Thread.sleep(25);
             }
