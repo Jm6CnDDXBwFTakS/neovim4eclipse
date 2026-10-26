@@ -24,7 +24,9 @@
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher} (command lines Neovim
  *       opens, and which of them the user opened),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostExCommand},
- *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.ListingCommand},
+ *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent} and
+ *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute} (Neovim's messages, and
+ *       where they go: the message line or the output popup),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay}.</li>
  *   <li><b>Exceptions:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimExceptionBase},
  *       the base of every exception class the plug-in defines.</li>

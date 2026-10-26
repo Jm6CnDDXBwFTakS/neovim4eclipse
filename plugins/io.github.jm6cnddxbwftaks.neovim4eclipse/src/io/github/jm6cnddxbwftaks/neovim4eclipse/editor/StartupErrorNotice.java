@@ -16,8 +16,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartupErrorReport;
 
 /**
  * Warns, once per Neovim session, that Neovim started but the user's configuration reported errors
- * ({@code NeovimConnection.waitForStartup} dismissed the "Press ENTER" prompt they caused). Before,
- * such an error made the start time out, and the editor kept Eclipse's keys with only a
+ * ({@code NeovimConnection.waitForStartup} reads them from {@code :messages}). Before the plug-in
+ * handled it, such an error left Neovim at a "Press ENTER" prompt and made the start time out, and the editor kept Eclipse's keys with only a
  * "Neovim not started: TimeoutException" to go on.
  *
  * <p>The text is {@link StartupErrorReport} (unit-tested); this class only moves to the UI thread,

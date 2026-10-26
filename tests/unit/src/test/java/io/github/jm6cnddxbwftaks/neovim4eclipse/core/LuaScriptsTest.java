@@ -79,25 +79,24 @@ class LuaScriptsTest {
     }
 
     @Test
-    void snapshotOnlyEvaluatesTheStatusPartsThatAreRequested() {
+    void snapshotOnlyEvaluatesTheStatuslineWhenRequested() {
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("select(1, ...) == '1'"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("select(2, ...) == '1'"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_statusline then"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_cmd then"));
-        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("select(3"), "messages are always read");
+        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("select(2"), "one argument");
     }
 
+    /**
+     * Messages and showcmd arrive as UI events (ext_messages): the snapshot no longer reads or clears
+     * v:statusmsg and v:errmsg, nor evaluates %S, and 'showcmdloc' stays at its default ("last"),
+     * where Neovim sends msg_showcmd.
+     */
     @Test
-    void snapshotUsesNeovimsOwnStatuslineAndShowcmdAndClearsMessagesAfterReading() {
+    void messagesAndShowcmdAreNotPolled() {
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("nvim_eval_statusline"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("'%S'"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.v.statusmsg = ''"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.v.errmsg = ''"));
-    }
-
-    @Test
-    void showcmdIsRoutedToTheStatuslineSoItCanBeRead() {
-        assertTrue(LuaScripts.SETUP.contains("showcmdloc"));
+        for (String gone : new String[] { "statusmsg", "errmsg", "'%S'" }) {
+            assertFalse(LuaScripts.STATE_SNAPSHOT.contains(gone), gone);
+        }
+        assertFalse(LuaScripts.SETUP.contains("showcmdloc"));
     }
 
     @Test

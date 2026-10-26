@@ -277,8 +277,8 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
 
     /**
      * {@code :q} takes no argument, so {@code :q foo} goes to Neovim, which reports E488; nothing
-     * closes. The error reaches the plug-in's status bar as the session's status message (read from
-     * {@code v:errmsg}, which the session then clears).
+     * closes. The error reaches the plug-in's status bar as the session's status message (Neovim
+     * sends it as a message event of kind {@code emsg}).
      */
     @Test
     void quitWithAnArgumentIsAnErrorAndKeepsTheEditorOpen() {

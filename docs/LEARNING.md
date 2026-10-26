@@ -336,10 +336,26 @@ to FINEST: every message in and out is logged.
 ### 2.4 Attaching as a UI
 
 A Neovim instance with no UI attached does not process typed input reliably. `NeovimSession.start`
-therefore calls `nvim_ui_attach(120, 40, ...)` even though Eclipse draws nothing that Neovim sends.
-Neovim then sends `redraw` notifications describing its screen; this plug-in ignores them and reads
-the state it needs directly instead. A UI that wanted Neovim's own command line and messages would
-draw them from those events.
+therefore calls `nvim_ui_attach(120, 40, ...)` even though Eclipse draws nothing of Neovim's screen.
+Neovim then sends `redraw` notifications describing that screen. The options passed to
+`nvim_ui_attach` choose parts that come as *events* instead of drawn cells (`:help ui-ext-options`);
+the plug-in asks for two (`NeovimConnection.TERMINAL_UI`) and ignores the rest of the screen:
+
+- `ext_cmdline`: each command line Neovim opens, as `cmdline_show` (its text, its type `:` `/` `?`)
+  and `cmdline_hide`. That is how the editor notices a `:` the user's mapping opened.
+- `ext_messages`: each message, as `msg_show` with a *kind* that says what it is. Example, `/nope`
+  then Enter sends two:
+
+  ```
+  ["msg_show", "search_cmd", [[0, "/nope", 0]], false, false, false, 3, "typed_cmd"]
+  ["msg_show", "emsg", [[25, "E486: Pattern not found: nope", 6]], false, true, false, 4, "typed_cmd"]
+  ```
+
+  The fields are kind, content (chunks of `[attribute, text, highlight]`), replace_last, history,
+  append, id and trigger. `util/MessageEvent` reads them, `util/MessageRoute` decides where each goes:
+  the echo of the search nowhere, the error to the message line in red; `:ls` (kind `list_cmd`) to
+  the output popup. Without `ext_messages`, a UI that draws no grid sees no message at all, and Neovim
+  stops at a "Press ENTER" prompt whenever its message area overflows (2.6).
 
 `nvim_set_client_info` tells Neovim who is connected (`neovim4eclipse` and the bundle version).
 `:checkhealth` and `nvim_list_chans()` show it.
@@ -375,10 +391,14 @@ so no cursor is read; once the target character arrives, the next read publishes
 `d` Neovim is in operator-pending mode, `{mode = "no", blocking = false}`: it still answers requests.) All requests also run on
 one thread (`neovim4eclipse-input`), which keeps keys in order and keeps blocking off the UI thread.
 
-A *hit-enter prompt* blocks the same way. `:bufdo %s/a/b/g` typed as keys prints one "N substitutions"
-message per buffer, more than fits, so Neovim asks "Press ENTER" and answers nothing else until a key
-comes. That is why the `:` box runs commands through `core/CommandRunner`, which types them with `:silent`
-and collects the output itself (and why the UI tests use `session.commandAsync`, not typed keys).
+A *hit-enter prompt* would block the same way: in a terminal, `:bufdo %s/a/b/g` prints one
+"N substitutions" message per buffer, more than fits, so Neovim asks "Press ENTER" and answers nothing
+else until a key comes. A UI attached with `ext_messages` never sees one, because Neovim sends the
+messages as events and has no message area of its own to fill (2.4). (Until 0.1.7 the plug-in attached
+without it, typed every command as `:silent cmd`, collected the output with `:redir` and sent Esc
+whenever Neovim stopped at a prompt.) The `:` box still runs commands through `core/CommandRunner`,
+which waits until Neovim is idle before refreshing Eclipse: a long `:!make` holds every request until
+it ends.
 
 ### 2.7 Buffers and line events
 
@@ -418,10 +438,12 @@ Every column crossing the boundary goes through `util/Utf8Columns`.
   Neovim's clipboard provider (`g:clipboard`, see `:help clipboard`), whose functions are Lua
   closures that notify or ask Eclipse.
 - **Snapshots**: `STATE_SNAPSHOT` returns cursor, visual selection, mode, recording register and
-  status texts in one round trip, instead of many separate requests per key.
+  statusline in one round trip, instead of many separate requests per key. (Messages and the pending
+  command are not in it: they arrive as UI events, see 2.4.)
 
-`nvim_exec2(cmd, { output = true })` runs an Ex command and returns what it printed. The output
-popup for `:ls` and similar uses it (`LuaScripts.CAPTURE_OUTPUT`).
+`nvim_exec2(cmd, { output = true })` runs an Ex command and returns what it printed, instead of
+showing it. The plug-in uses it once, at start-up, to read `:messages` when the user's configuration
+reported errors (`NeovimConnection.waitForStartup`).
 
 ---
 
@@ -477,10 +499,9 @@ a few lines that record calls and return canned answers. Example, from `core/Com
 ```java
 // The port: what running a ':' command needs from Neovim, nothing more.
 interface Neovim {
-    void type(String keys) throws Exception;   // nvim_input
-    boolean isBlocked();                       // nvim_get_mode().blocking
-    void startCapture() throws Exception;      // :redir => ...
-    CompletableFuture<Object> stopCapture();   // :redir END, answered when the command ends
+    void type(String keys) throws Exception;            // nvim_input
+    void awaitIdle(Duration timeout) throws Exception;  // any request: answered once Neovim is idle
+    void clearMessages();                               // a new command starts
     ...
 }
 
@@ -498,9 +519,9 @@ public void type(String keys) {
 A test then reads as a sentence about behavior, and runs in milliseconds:
 
 ```java
-runner.run("echo 'hello'", outputs::add);
-assertEquals(List.of("startCapture", "type :silent echo 'hello'<CR>", "stopCapture",
-        "syncBuffer", "syncModeAndCursor"), nvim.calls);
+runner.run("echo 'hello'");
+assertEquals(List.of("clearMessages", "type :echo 'hello'<CR>", "awaitIdle 5000", "syncBuffer",
+        "syncModeAndCursor"), nvim.calls);
 ```
 
 Why an interface per user rather than one big "Neovim" interface: each port shows exactly what a class

@@ -245,8 +245,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         page.activate(editor);
         waitForAttach(editor, "test.txt");
         try {
-            // As the : box runs it (CommandRunner): with the keys alone, the "3 substitutions" message of
-            // each buffer would end in a hit-enter prompt, during which Neovim answers no requests.
+            // As the : box runs it (CommandRunner): typed, and waited for until Neovim is idle again.
             session.commandAsync("bufdo %s/a/A/ge");
 
             waitForAttach(third, "third.txt, where :bufdo ends");

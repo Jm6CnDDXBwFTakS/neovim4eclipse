@@ -38,8 +38,8 @@ public final class BufferRefs {
     }
 
     /**
-     * The buffer number Neovim printed for {@link #bufnrExpression}, or -1 when it printed anything
-     * else (no match, or an error message).
+     * The buffer number from {@link #bufnrExpression}'s value, or -1 for anything else (no match,
+     * or an error message).
      */
     public static int parseBufnr(String printed) {
         String number = printed == null ? "" : printed.strip();

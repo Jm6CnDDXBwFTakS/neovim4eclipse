@@ -35,14 +35,16 @@ public final class NvimKeys {
     }
 
     /**
-     * Keys that type an ex command on the command line: {@code :silent <cmd><CR>}.
+     * Keys that type an ex command on the command line: {@code :<cmd><CR>}.
      *
      * <p>Typing it (instead of calling {@code nvim_command}) makes Neovim record it in a macro,
-     * remember it for {@code @:} and in the history. {@code silent} keeps normal messages from
-     * raising a "press Enter" prompt; errors are still reported (and still abort a running macro).
+     * remember it for {@code @:} and in the history, exactly as typed. (Until the plug-in attached
+     * with {@code ext_messages} it typed {@code :silent <cmd>}, to keep messages from raising a
+     * "Press ENTER" prompt; with {@code ext_messages} there is no such prompt, and {@code :silent}
+     * would now hide the messages Eclipse shows.)
      */
     public static String exCommand(String command) {
-        return ":silent " + escapeLiteral(command.strip()) + "<CR>";
+        return ":" + escapeLiteral(command.strip()) + "<CR>";
     }
 
     /** Whether the key is Enter (which may execute a pending {@code :} command). */

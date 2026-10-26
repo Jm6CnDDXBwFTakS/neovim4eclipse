@@ -308,13 +308,13 @@ class NeovimBufferIntegrationTest {
                     String.valueOf(failed.getMessage()));
             assertEquals(Boolean.TRUE, s.lua("return vim.bo.modified"), ":update tries again");
 
-            // Typed (or from a mapping) rather than through the API: the error is a message, and the
-            // message line gets its text alone (from v:errmsg, which the session reads and clears).
-            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
-            s.addStatusListener(seen::add);
+            // Typed (or from a mapping) rather than through the API: the error is a message, two
+            // lines with Neovim's header for an error in an autocommand, so it opens the popup.
+            List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
+            s.addOutputListener(outputs::add);
             s.input(":write<CR>");
-            waitFor(() -> seen.stream().anyMatch(i -> i.error() && i.message().equals("Eclipse could not save A.txt: read-only")),
-                    "the error in the message line");
+            waitFor(() -> outputs.stream().anyMatch(o -> o.text().equals("Error in BufWriteCmd Autocommands for \"<buffer="
+                    + a.bufnr() + ">\":\nEclipse could not save A.txt: read-only")), "the error in the popup: " + outputs);
         }
     }
 
@@ -406,18 +406,22 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /** A listing shows the document buffers; a listing's error is an error on the message line. */
     @Test
-    void listingCommandOutputIsCapturedAndErrorsAreReadable() throws Exception {
+    void listingsShowTheDocumentBuffersAndTheirErrors() throws Exception {
         try (NeovimSession s = start()) {
             DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/A.txt");
             s.showBuffer(a);
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.captureOutputAsync("ls", outputs::add);
-            s.captureOutputAsync("marks q", outputs::add);
-            waitFor(() -> outputs.size() == 2, "both outputs");
-            assertTrue(outputs.get(0).contains("A.txt") && outputs.get(0).contains(String.valueOf(a.bufnr())),
-                    outputs.get(0));
-            assertTrue(outputs.get(1).startsWith("E283:"), outputs.get(1)); // no marks matching "q"
+            List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
+            List<StatusInfo> lines = new CopyOnWriteArrayList<>();
+            s.addOutputListener(outputs::add);
+            s.addStatusListener(lines::add);
+            s.commandAsync("ls");
+            s.commandAsync("marks q");
+            waitFor(() -> lines.stream().anyMatch(i -> i.error() && i.message().startsWith("E283:")),
+                    "no marks matching \"q\": " + lines);
+            assertTrue(outputs.get(0).text().contains("A.txt") && outputs.get(0).text().contains(String.valueOf(a.bufnr())),
+                    outputs.toString());
         }
     }
 }

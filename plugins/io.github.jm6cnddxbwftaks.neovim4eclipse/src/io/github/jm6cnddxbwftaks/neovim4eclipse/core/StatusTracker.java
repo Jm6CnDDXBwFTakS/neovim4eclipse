@@ -8,23 +8,33 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
- * The status side of a {@link NeovimSession}: the {@code showcmd} text, the last message (for the
- * editor's message line), the statusline, and the register of a macro being recorded. It turns the raw parts read from Neovim
- * into {@link StatusInfo} events and fires them only when something changed.
+ * The status side of a {@link NeovimSession}: the {@code showcmd} text, the message for the
+ * editor's message line, the output for the popup, the statusline, and the register of a macro
+ * being recorded. It turns what Neovim reports into {@link StatusInfo} and {@link CommandOutput}
+ * events and fires them only when something changed.
  *
- * <p>Two rules shape it:
+ * <p>Where each part comes from:
  * <ul>
- *   <li>A message stays visible until the next key ({@link #clearMessage()}): Neovim reports it once,
- *       and the following snapshot no longer contains it.</li>
- *   <li>While Neovim waits for the rest of a command ({@code 2f}), it cannot be asked for
- *       {@code showcmd}; the text is then built here from the keys sent ({@link #showPendingKey}).</li>
+ *   <li>Messages and {@code showcmd} are pushed by Neovim as UI events ({@code ext_messages}, see
+ *       {@link MessageEvent}), on the RPC reader thread. {@link MessageRoute} decides what goes to
+ *       the message line and what to the popup; what arrived is passed on at each {@code flush},
+ *       the end of one of Neovim's redraws, so that a search's echo and its {@code [1/5]} count,
+ *       sent together, show as one.</li>
+ *   <li>The statusline is pulled with each key's state snapshot ({@link #publishStatusline}).</li>
  * </ul>
  *
- * <p>Thread-safe in the way the session needs: written on the input thread, read from any thread.
- * Listeners are called on the thread that made the change.
+ * <p>A message stays visible until the next key ({@link #clearMessage()}), as in Vim. The pending
+ * command shows while Neovim waits for the rest of it: after {@code 2} then {@code f}, Neovim sends
+ * {@code msg_showcmd "2f"} even though it answers almost no request then.
+ *
+ * <p>Thread-safe: messages arrive on the RPC reader thread, keys clear them on the input thread.
+ * The state is guarded by {@code this}; listeners are called outside the lock, on the thread that
+ * made the change.
  */
 final class StatusTracker {
 
@@ -32,17 +42,20 @@ final class StatusTracker {
 
     /** Which optional status bar parts to ask Neovim for. */
     private volatile Set<StatusItem> items = StatusItem.defaults();
-    /** The message shown in the editor: kept until the next key is processed. */
-    private volatile String currentMessage = "";
-    /** Whether {@link #currentMessage} is an error. */
-    private volatile boolean currentError;
-    /** Last {@code showcmd} text read from Neovim (extended by keys that leave Neovim waiting). */
-    private volatile String lastShowcmd = "";
+    /** The messages of the current command; guarded by {@code this}. */
+    private final MessageRoute route = new MessageRoute();
+    /** The latest {@code msg_showcmd} text; guarded by {@code this}. */
+    private String showcmd = "";
+    /** The latest statusline from the snapshot; guarded by {@code this}. */
+    private String statusline = "";
+    /** The output last passed to the output listeners, so it is passed once; guarded by {@code this}. */
+    private String lastOutput = "";
     private volatile StatusInfo lastStatus = StatusInfo.EMPTY;
     /** Register of the macro being recorded ({@code qa} ... {@code q}), or "" if none. */
     private volatile String recordingRegister = "";
 
     private final ListenerList<StatusInfo> statusListeners = new ListenerList<>("status", Level.FINE);
+    private final ListenerList<CommandOutput> outputListeners = new ListenerList<>("output", Level.FINE);
     private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
 
     Set<StatusItem> items() {
@@ -54,44 +67,78 @@ final class StatusTracker {
     }
 
     /**
-     * Clears the message: a message stays visible until the next key. Listeners hear of it at once, so
-     * that the same message given again by that key (a second {@code n} with no match) shows again.
+     * A new command starts (a key, or a line from the box): its messages replace the last
+     * command's, which are hidden now. Listeners hear of it at once, so that the same message given
+     * again by the next key (a second {@code n} with no match) shows again.
      */
     void clearMessage() {
-        if (!currentMessage.isEmpty()) {
-            currentMessage = "";
-            currentError = false;
-            fire(new StatusInfo(lastStatus.statusline(), lastStatus.cmd(), "", false));
+        StatusInfo info;
+        synchronized (this) {
+            route.clear();
+            lastOutput = "";
+            info = status(MessageRoute.View.NONE);
+        }
+        fire(info);
+    }
+
+    /** Neovim showed command line {@code text}, such as {@code ":ls"}: the title for its output. */
+    synchronized void commandLine(String text) {
+        route.commandLine(text);
+    }
+
+    /** One message event from Neovim; see the class comment. */
+    void onMessageEvent(MessageEvent event) {
+        StatusInfo info = null;
+        CommandOutput output = null;
+        synchronized (this) {
+            switch (event) {
+                case MessageEvent.Show show -> route.add(show);
+                case MessageEvent.History history -> route.add(history);
+                case MessageEvent.Showcmd cmd -> showcmd = cmd.text();
+                case MessageEvent.Flush flush -> {
+                    MessageRoute.View view = route.view();
+                    info = status(view);
+                    if (view.hasOutput() && !view.output().equals(lastOutput)) {
+                        lastOutput = view.output();
+                        output = new CommandOutput(view.title(), view.output());
+                    }
+                }
+            }
+        }
+        if (info != null) {
+            fire(info);
+        }
+        if (output != null) {
+            CommandOutput shown = output;
+            LOG.fine(() -> "output for the popup: " + shown.title());
+            outputListeners.fire(shown);
         }
     }
 
-    /** Publishes the parts read from Neovim; an empty message keeps the current one. */
-    void publish(StatusInfo parsed) {
-        if (!parsed.message().isEmpty()) {
-            currentMessage = parsed.message();
-            currentError = parsed.error();
+    /** The statusline read with the state snapshot ("" when the status bar does not show it). */
+    void publishStatusline(String text) {
+        StatusInfo info;
+        synchronized (this) {
+            statusline = text;
+            info = status(route.view());
         }
-        lastShowcmd = parsed.cmd();
-        fire(new StatusInfo(parsed.statusline(), parsed.cmd(), currentMessage, currentError));
+        fire(info);
     }
 
-    /**
-     * Neovim is waiting for the rest of a command, so no API call can be made to ask for
-     * {@code showcmd}; the status bar instead shows what is known: the previous pending text plus the
-     * key just sent ({@code 2} then {@code f} shows {@code 2f}).
-     */
-    void showPendingKey(String keys) {
-        if (keys.length() == 1 && items.contains(StatusItem.CMD)) {
-            lastShowcmd = lastShowcmd + keys;
-            fire(new StatusInfo(lastStatus.statusline(), lastShowcmd, currentMessage, currentError));
-        }
+    /** The status for {@code view}: the message line shows its line (the popup, its output). */
+    private StatusInfo status(MessageRoute.View view) {
+        String cmd = items.contains(StatusItem.CMD) ? showcmd : "";
+        return new StatusInfo(statusline, cmd, view.line(), view.error());
     }
 
     private void fire(StatusInfo info) {
-        if (!info.equals(lastStatus)) {
+        synchronized (this) {
+            if (info.equals(lastStatus)) {
+                return;
+            }
             lastStatus = info;
-            statusListeners.fire(info);
         }
+        statusListeners.fire(info);
     }
 
     // ---- macro recording ----
@@ -118,6 +165,14 @@ final class StatusTracker {
 
     void removeStatusListener(Consumer<StatusInfo> listener) {
         statusListeners.remove(listener);
+    }
+
+    void addOutputListener(Consumer<CommandOutput> listener) {
+        outputListeners.add(listener);
+    }
+
+    void removeOutputListener(Consumer<CommandOutput> listener) {
+        outputListeners.remove(listener);
     }
 
     void addRecordingListener(Consumer<String> listener) {

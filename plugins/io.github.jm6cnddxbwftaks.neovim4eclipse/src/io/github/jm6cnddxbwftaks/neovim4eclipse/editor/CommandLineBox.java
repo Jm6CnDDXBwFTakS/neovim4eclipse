@@ -31,7 +31,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine.Kind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine.Submission;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ListingCommand;
 
 /**
  * The inline command line for {@code :}, {@code /} and {@code ?}: one text box near the bottom edge
@@ -55,11 +54,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ListingCommand;
  *       stays until the new command is run or canceled.</li>
  *   <li>{@code :} in visual mode first leaves visual mode and pre-fills {@code '<,'>}, as Vim does.</li>
  *   <li>File and tab commands ({@code :w}, {@code :wa}, {@code :q}, {@code :e}, {@code :tabn}, ...)
- *       are executed by Eclipse ({@code HostCommands}, through {@link Commands#runInIde}). Commands
- *       that only display something ({@code :ls}, {@code :marks}, {@code :echo}, {@code :set ts?},
- *       ... see {@link ListingCommand}) are run with output capture and their output is shown in an
- *       {@link OutputPopup}. Everything else ({@code :set ts=4}, {@code :s/a/b/}) is run in Neovim;
- *       whatever it prints (an error, the number of substitutions) is shown in the same popup.</li>
+ *       are executed by Eclipse ({@code HostCommands}, through {@link Commands#runInIde}). Everything
+ *       else ({@code :ls}, {@code :set ts=4}, {@code :s/a/b/}) is typed into Neovim. What it prints
+ *       arrives from Neovim as messages: one line on the editor's message line, a listing or longer
+ *       output in an {@link OutputPopup} ({@link #showOutput}).</li>
  * </ul>
  *
  * <h2>Implementation notes</h2>
@@ -90,11 +88,8 @@ final class CommandLineBox {
          */
         boolean runInIde(String exCommand);
 
-        /** Runs a listing ({@code :ls}, {@code :marks}) with its output captured, for the popup. */
-        void capture(String exCommand, Consumer<String> onOutput);
-
-        /** Runs any other command in Neovim; what it prints ({@code :echo}) goes to {@code onOutput}. */
-        void run(String exCommand, Consumer<String> onOutput);
+        /** Runs any other command in Neovim; what it prints comes back through {@link #showOutput}. */
+        void run(String exCommand);
 
         /** Searches for {@code pattern}, like {@code /} ({@code backward}: {@code ?}). */
         void search(String pattern, boolean backward);
@@ -484,13 +479,7 @@ final class CommandLineBox {
                     LOG.fine("Ex handled by Eclipse: " + submission.body());
                     return;
                 }
-                if (ListingCommand.isListing(submission.body())) {
-                    String title = ":" + submission.body();
-                    commands.capture(submission.body(), text -> showOutput(title, text));
-                    return;
-                }
-                String title = ":" + submission.body();
-                commands.run(submission.body(), text -> showOutput(title, text));
+                commands.run(submission.body());
             } else {
                 commands.search(submission.body(), submission.kind() == Kind.SEARCH_BACKWARD);
             }
@@ -499,12 +488,13 @@ final class CommandLineBox {
         }
     }
 
-    /** Called on a session thread with what a command printed. */
-    private void showOutput(String title, String text) {
-        Display display = host.isDisposed() ? null : host.getDisplay();
-        if (display != null && !display.isDisposed()) {
-            display.asyncExec(() -> output.show(title, text));
-        }
+    /**
+     * Shows output in the popup (see {@link OutputPopup#show}). UI thread.
+     *
+     * @param title the command line that printed it ({@code :ls}), or ""
+     */
+    void showOutput(String title, String text) {
+        output.show(title, text);
     }
 
     /** Places the box near the bottom edge of the editor ({@link OverlayFrame#bottomGap}). */

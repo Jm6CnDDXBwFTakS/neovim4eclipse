@@ -27,27 +27,21 @@ final class StateSnapshot {
     static final int TABSTOP = 8;
     static final int RECORDING = 9;
     static final int STATUSLINE = 10;
-    static final int SHOWCMD = 11;
-    static final int STATUSMSG = 12;
-    static final int ERRMSG = 13;
-    static final int BUFNR = 14;
+    static final int BUFNR = 11;
 
     private StateSnapshot() {
     }
 
     /**
-     * Status bar parts, statusline and showcmd, and the message: an error wins over a status message,
-     * and {@link StatusInfo#error()} says which one it is.
-     * Missing or malformed data gives empty text.
+     * The evaluated statusline for the status bar; "" when it was not asked for, or for missing or
+     * malformed data. (Messages and {@code showcmd} are not in the snapshot: Neovim sends them as
+     * UI events, see {@code StatusTracker}.)
      */
-    static StatusInfo status(Object raw) {
-        if (!(raw instanceof List<?> list) || list.size() <= ERRMSG) {
-            return StatusInfo.EMPTY;
+    static String statusline(Object raw) {
+        if (raw instanceof List<?> list && list.size() > STATUSLINE) {
+            return text(list.get(STATUSLINE));
         }
-        String errmsg = text(list.get(ERRMSG));
-        String statusmsg = text(list.get(STATUSMSG));
-        boolean error = !errmsg.isEmpty();
-        return new StatusInfo(text(list.get(STATUSLINE)), text(list.get(SHOWCMD)), error ? errmsg : statusmsg, error);
+        return "";
     }
 
     /** The register being recorded into; "" if not recording or not understood. */

@@ -80,9 +80,9 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 - **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`).
 - **Ex / search**: `:`, `/`, `?` open `CommandLineBox`, an inline `Text` child of the editor widget
   (see "Command line" below). A submitted line goes through its small `CommandLineBox.Commands`
-  interface (the IDE for file and tab commands, else the session's `commandAsync`,
-  `captureOutputAsync` or `search`, carried out by `core/CommandRunner`), so the box itself needs
-  only SWT and is tested in `tests/swt`.
+  interface (the IDE for file and tab commands, else the session's `commandAsync` or `search`,
+  carried out by `core/CommandRunner`), so the box itself needs only SWT and is tested in `tests/swt`.
+  What a command prints comes back from Neovim as message events (see "Messages and output").
 
 ### 5. Auto-attach
 
@@ -205,26 +205,47 @@ Search options set at session start: `hlsearch`, `incsearch`, `ignorecase`, `sma
 ## Status bar items
 
 `ModeStatusContribution` shows the parts selected by the `statusItem*` preferences (`util/StatusItem`;
-composition and whitespace cleaning in the tested `util/StatusLineFormat`). Besides the mode, the parts come
-from the same single `STATE_SNAPSHOT` call, with two flags so that only enabled parts are evaluated:
+composition and whitespace cleaning in the tested `util/StatusLineFormat`). Besides the mode:
 
-- **statusline:** `nvim_eval_statusline(vim.o.statusline or a Vim-like default)`, so a user's `%!` expressions
-  and plugins such as lualine are honored.
-- **cmd:** `nvim_eval_statusline('%S')`. `%S` needs `showcmdloc=statusline` (set in `LuaScripts.SETUP`).
-  While Neovim is *blocked* waiting for a character no API call is possible, so the key just sent is
-  appended to the last known text (`2` then `f` shows `2f`).
-
-The same call always reads `v:statusmsg` and `v:errmsg`, *cleared after reading* so each message is seen
-once (an error wins, and `StatusInfo.error` says which it was). The session keeps the message until the next
-key (`core/StatusTracker`), and says so at once when that key clears it, so the same error twice shows twice.
-The message does not go to the status bar but to `editor/MessageLine`: a one-line `CLabel` in an
-`OverlayFrame` along the bottom of the editor, where the `:` box opens, in the theme's error color
-(`JFacePreferences.ERROR_COLOR`, or `OverlayColors.errorText` outside a theme) for errors. It hides on the
-next key or click, never takes the focus, and with the `flashOnError` preference tints the editor's
-background for `FLASH_MS` on an error. Host command errors (`HostCommands.showError`) go to the same line.
+- **statusline:** from the per-key `STATE_SNAPSHOT` call, `nvim_eval_statusline(vim.o.statusline or a
+  Vim-like default)`, so a user's `%!` expressions and plugins such as lualine are honored. A flag says
+  whether to evaluate it at all.
+- **cmd:** pushed by Neovim as a `msg_showcmd` event (see below), also while Neovim is *blocked* waiting
+  for a character, when no API call is possible: `2` then `f` arrives as `2f`.
 
 `NeovimSession` publishes a `StatusInfo` to listeners only when it changes. A preference change reaches the
 session through `Activator.applyStatusItems` and redraws via `EditorAttachManager.refreshStatusLine`.
+
+## Messages and output
+
+The UI is attached with `ext_messages` (`NeovimConnection.TERMINAL_UI`), so Neovim sends every message as
+a UI event inside `redraw` notifications instead of drawing it into a grid nobody sees: `msg_show` with a
+*kind* (`emsg`, `echo`, `list_cmd`, `shell_out` ...), `msg_showcmd` for the pending command,
+`msg_history_show` for `:messages`, and `flush` at the end of each redraw. `util/MessageEvent` reads them;
+`NotificationBridge` hands them to `core/StatusTracker`, which collects the messages of one command (from a
+key or a submitted line until the next) in a `util/MessageRoute` and passes on the result at each `flush`:
+
+| What arrived | Where it goes | Example |
+| --- | --- | --- |
+| one message of one line | the message line; errors (`emsg`, `echoerr`, `lua_error`, `rpc_error`) in the error color | `3 lines yanked`, `E486: Pattern not found: x`, `:echo "hi"` |
+| a listing or shell output (`list_cmd`, `shell_*`, `:messages`), even one line | the output popup, titled with the command line | `:ls`, `:set ts?`, `:!make` |
+| more than one line, in one message or several | the output popup, as Vim shows it above "Press ENTER" | a failed save with its `Error in BufWriteCmd Autocommands` header, a Lua traceback |
+| the echo of a search (`search_cmd`) or of a shell command (first line of `shell_cmd`), empty messages | nowhere | |
+
+`replace_last` (a search's `[2/5]` count replacing its echo), `append` (shell output in chunks) and the
+message id (`:w`'s `bufwrite` progress, sent twice) update what was collected; growing output reaches the
+popup again, whole, and the open popup updates in place. The message line is `editor/MessageLine`: a
+one-line `CLabel` in an `OverlayFrame` along the bottom of the editor, where the `:` box opens, in the
+theme's error color (`JFacePreferences.ERROR_COLOR`, or `OverlayColors.errorText` outside a theme) for
+errors. A message stays until the next key or click (the session says so at once, so the same error twice
+shows twice), never takes the focus, and with the `flashOnError` preference an error tints the editor's
+background for `FLASH_MS`. Host command errors (`HostCommands.showError`) go to the same line.
+
+With `ext_messages` Neovim never waits at a "Press ENTER" or "-- More --" prompt (experiment X2 of the
+cleanup plan): there is no message area to fill. So nothing in the plug-in dismisses one any more, and
+messages that used to be lost arrive too: a timer's, an autocommand's, one echoed later with
+`vim.schedule` (the diagnostics plan's jump message). `ext_messages` turns on `ext_linegrid`; its grid
+events are ignored, and are fewer per key than the old cell-by-cell drawing.
 
 ## Command line
 
@@ -242,7 +263,7 @@ to the box, which (via the focus listener in the controller) also deactivates th
 - It is opened with `asyncExec`: on some platforms the key's character event follows the key-down after
   focus moved and would land in the box, so a one-character echo of the opening key is ignored for 150 ms.
 - `:` in visual mode sends `<Esc>` and pre-fills `:'<,'>` (also required because typing `:` in visual mode
-  makes Neovim insert its own range, which would precede `:silent` and be rejected).
+  makes Neovim insert its own range in front of the box's).
 - Pure logic is in `util/CommandLine` (kinds, prefill, parsing) and `util/CommandHistory`, both unit tested;
   host commands are classified by `util/HostExCommand`, turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
@@ -257,28 +278,25 @@ to the box, which (via the focus listener in the controller) also deactivates th
   "Neovim not started" notice). One minimum instead of per-feature checks, raised readily
   (docs/UPGRADING.md, "Neovim").
 - **Start-up and the user's configuration:** under `--embed` Neovim runs `init.lua` only after
-  `nvim_ui_attach`. An error there leaves it at a hit-enter prompt that no one sees, answering only
-  `nvim_get_mode`. `NeovimConnection.waitForStartup` therefore waits for an idle answer, dismisses
-  such a prompt with Esc meanwhile, and keeps the errors (`:messages`) for a one-time warning
+  `nvim_ui_attach`. An error there is a message event that arrives before Eclipse listens, and
+  Neovim goes on (with `ext_messages` there is no hit-enter prompt to wait at).
+  `NeovimConnection.waitForStartup` therefore waits for an idle answer and keeps the errors
+  (`:messages`) for a one-time warning
   (`editor/StartupErrorNotice`, `util/StartupErrorReport`).
 - **Command lines Neovim opens:** the UI is attached with `ext_cmdline` (and nothing else of the
   UI protocol), so Neovim reports each command line it opens as a `cmdline_show` redraw event
   (`util/CmdlineEvent`, read in `NotificationBridge`). `util/CmdlineWatcher` drops the plug-in's own
-  (each typed `:silent cmd<CR>` and `/pattern<CR>` is announced first) and reports the user's: a
+  (each typed `:cmd<CR>` and `/pattern<CR>` is announced first) and reports the user's: a
   mapping (`nnoremap ; :`), a count before `:`, `!` with a motion. The controller then opens the box
   with Neovim's text. A `:` line is closed in Neovim at once (`<C-c>`) and the box runs its command as
   usual; a search line stays open, since it may belong to an operator (`d/`), and Enter answers it
   (`<C-u>pattern<CR>`, `CommandRunner.answerSearch`), Esc closes it. See
   [design/KEY_ROUTING.md](design/KEY_ROUTING.md), phase 2.
-- **Output:** listing commands (`util/ListingCommand`) run through `nvim_exec2` with output capture and
-  are not typed. Every other command is typed (`:silent cmd<CR>`, so macros and `@:` see it) between
-  `redir => g:neovim4eclipse_output` and `redir END` (`LuaScripts.START/STOP_OUTPUT_CAPTURE`); a
-  non-empty result that is not just the message the message line shows (`v:errmsg`, or `v:statusmsg` such
-  as "7 substitutions on 4 lines") is shown in the `OutputPopup`. Ending the
-  redirection waits for the command; meanwhile a prompt is dismissed with Esc, and after 60 s the
-  output is given up (`core/CommandRunner`, durations set in its constructor). Full
-  `ext_messages` support was considered and not chosen: it needs `ext_linegrid`, i.e. grid redraw
-  traffic on every key, and a redraw-event parser.
+- **Output:** every command is typed (`:cmd<CR>`, as written, so the history, macros and `@:` see
+  it; listings such as `:ls` too), and `core/CommandRunner` waits until Neovim is idle (at most 60 s,
+  for `:!make`) before refreshing Eclipse. What it prints arrives as message events and goes to the
+  message line or the `OutputPopup` (see "Messages and output"). The plug-in redirects nothing itself,
+  so a user's own `:redir` works as in Vim.
 - **Tab completion** (`:` box only): each Tab sends the line as it was before the first Tab plus the keys
   pressed so far (`util/CommandCompletion`) to `NeovimSession.completeAsync`, whose one Lua call
   (`LuaScripts.COMPLETE_CMDLINE`) types them into Neovim's command line, reads the result and cancels.
@@ -296,8 +314,8 @@ keys* and to keep the editor in step with playback.
 - **Insert while recording:** `isNeovimDrivenInsert()` is also set when `isRecording()`, so every key goes to
   Neovim and the recording is complete. (When *not* recording, Eclipse types and the text is replayed at Esc
   for `.`; replayed keys would also be recorded, but only exact keystrokes make a faithful macro.)
-- **`:` commands:** `commandAsync` types `:silent <cmd><CR>` instead of calling `nvim_command`, which Neovim
-  would neither record nor remember for `@:`. A "press Enter" prompt is dismissed with Esc.
+- **`:` commands:** `commandAsync` types `:<cmd><CR>` instead of calling `nvim_command`, which Neovim
+  would neither record nor remember for `@:`.
 - **Playback (`@x`):** `@` is a pending-character command (see "Pending commands"). The next key starts the
   playback: buffer events are suppressed (`suppressBufferEvents`), and when Neovim is idle the whole buffer is
   fetched once (timeout 60 s) and applied as one minimal edit (`syncBufferAfterMacro`).
@@ -429,10 +447,11 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
-| Status bar parts, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
+| Status bar parts, messages and output, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
+| Message events from `redraw`; where each message goes | `util/MessageEvent`, `util/MessageRoute` | `MessageEventTest`, `MessageRouteTest`, `NeovimSessionIntegrationTest` (needs nvim) |
 | Messages and errors in the editor, error flash | `editor/MessageLine` (colors: `util/OverlayColors`) | `tests/swt` `MessageLineTest`, `OverlayColorsTest`, UI `MessageLineEndToEndTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
-| `:` commands with output capture, listings, `:normal!`, search | `core/CommandRunner` (Neovim seen through `CommandRunner.Neovim`) | `CommandRunnerTest` (fake: capture around typing, user `:redir`, prompt Esc, timeout) |
+| Typed `:` commands and searches, `:normal!` | `core/CommandRunner` (Neovim seen through `CommandRunner.Neovim`) | `CommandRunnerTest` (fake: order of calls, timeout) |
 | Mode, cursor and typing state; reading it from Neovim and publishing it | `core/StateSync` (Neovim seen through `StateSync.Neovim`, listeners through `StateSync.Listeners`) | `StateSyncTest` (fake: blocked gate, unattached buffer, visual selection, when Eclipse may type, suppressed events) |
 | Session listeners (mode, buffer change, cursor, selection, IDE action) | `core/SessionEvents` (on `core/ListenerList`) | `SessionEventsTest`, `ListenerListTest` |
 | Session facade | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |

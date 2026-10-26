@@ -27,6 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
@@ -48,9 +49,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
  *
  * <h2>State flow</h2>
  * Neovim owns the buffer. Text changes arrive through {@code nvim_buf_lines_event}; mode, cursor
- * and yanks arrive through the autocmds in {@link LuaScripts#SETUP}. After each key the session
- * also polls mode, cursor and visual selection, because notifications can lag a key behind. Both
- * paths go through {@link StateSync}.
+ * and yanks arrive through the autocmds in {@link LuaScripts#SETUP}; messages and the pending
+ * command arrive as UI events ({@code ext_messages}) and go to {@link StatusTracker}. After each key
+ * the session also polls mode, cursor and visual selection, because notifications can lag a key
+ * behind. Both paths go through {@link StateSync}.
  *
  * <p>Each Eclipse document has its own Neovim buffer ({@link DocumentBuffer}), so undo history and
  * marks survive switching editors. Exactly one of them is <em>attached</em> at a time: its events
@@ -292,6 +294,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Whether Neovim is waiting for the argument character of a command ({@code f}, {@code @}, ...). */
     public boolean isWaitingForArgument() {
         return state.isWaitingForArgument();
+    }
+
+    /**
+     * Notified (on a session thread) of output for the popup: a listing, shell output, or messages
+     * of more than one line ({@code util/MessageRoute}). Passed again, whole, while it grows.
+     */
+    public void addOutputListener(Consumer<CommandOutput> listener) {
+        status.addOutputListener(listener);
+    }
+
+    public void removeOutputListener(Consumer<CommandOutput> listener) {
+        status.removeOutputListener(listener);
     }
 
     /** Notified (on a session thread) when the command, message or statusline text changes. */
@@ -590,27 +604,31 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         });
     }
 
-    /** Runs an ex command, then refreshes buffer, mode and cursor in Eclipse. */
+    /**
+     * Types {@code :cmd<CR>}, then refreshes buffer, mode and cursor in Eclipse. What the command
+     * prints reaches the status and output listeners ({@link #addOutputListener}). See
+     * {@link CommandRunner#run}.
+     */
     public void commandAsync(String cmd) {
-        commandAsync(cmd, null);
+        submit("command " + cmd, Level.WARNING, () -> commands.run(cmd));
     }
 
     /**
-     * Types {@code :cmd<CR>}, then refreshes Eclipse and passes what the command printed to
-     * {@code onOutput}, on a session thread. See {@link CommandRunner#run}.
-     *
-     * @param onOutput receives the printed text; {@code null} to ignore it
+     * Evaluates a Vim expression ({@code bufnr('other.txt')}, {@link LuaScripts#EVAL}) and passes its
+     * value as text, or the error message, to {@code onResult}, on a session thread. Not typed: it
+     * asks Neovim something, so it belongs in no macro or history.
      */
-    public void commandAsync(String cmd, Consumer<String> onOutput) {
-        submit("command " + cmd, Level.WARNING, () -> commands.run(cmd, onOutput));
-    }
-
-    /**
-     * Runs an ex command that only displays information and passes what it printed, or its error
-     * message, to {@code onOutput} on a session thread. See {@link CommandRunner#capture}.
-     */
-    public void captureOutputAsync(String cmd, Consumer<String> onOutput) {
-        submit("capture " + cmd, Level.WARNING, () -> commands.capture(cmd, onOutput));
+    public void evalAsync(String expression, Consumer<String> onResult) {
+        submit("eval " + expression, Level.WARNING, () -> {
+            String result;
+            try {
+                Object raw = await(api.execLua(LuaScripts.EVAL, List.of(expression)));
+                result = raw == null ? "" : String.valueOf(raw);
+            } catch (Exception e) {
+                result = Rpc.errorMessage(e);
+            }
+            onResult.accept(result);
+        });
     }
 
     /**
@@ -810,7 +828,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
+        public void onMessageEvent(MessageEvent event) {
+            status.onMessageEvent(event);
+        }
+
+        @Override
         public void onCmdline(CmdlineEvent event) {
+            if (event.shown() && event.level() == 1) {
+                status.commandLine(event.firstc() + event.content()); // the title of its output
+            }
             if (cmdlineWatcher.onEvent(event, System.currentTimeMillis()) == CmdlineWatcher.Decision.USER_LINE) {
                 LOG.fine(() -> "user command line " + event.firstc() + event.content());
                 events.userCmdline(event);
@@ -826,7 +852,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final class CommandRunnerNeovim implements CommandRunner.Neovim {
         @Override
         public void type(String keys) throws Exception {
-            // :silent cmd<CR> and /pattern<CR> open a command line of the plug-in's own: tell the
+            // :cmd<CR> and /pattern<CR> open a command line of the plug-in's own: tell the
             // watcher, so that Neovim's report of it is not taken for one the user opened.
             if (keys.startsWith(":") || keys.startsWith("/") || keys.startsWith("?")) {
                 cmdlineWatcher.expectOwn(keys.substring(0, 1), System.currentTimeMillis());
@@ -835,23 +861,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public boolean isBlocked() {
-            return NeovimSession.this.isBlocked();
+        public void awaitIdle(Duration timeout) throws Exception {
+            api.execLua("return 0", List.of()).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         }
 
         @Override
-        public void startCapture() throws Exception {
-            await(api.execLua(LuaScripts.START_OUTPUT_CAPTURE, List.of()));
-        }
-
-        @Override
-        public CompletableFuture<Object> stopCapture() {
-            return api.execLua(LuaScripts.STOP_OUTPUT_CAPTURE, List.of());
-        }
-
-        @Override
-        public Object captureOutput(String cmd) throws Exception {
-            return await(api.execLua(LuaScripts.CAPTURE_OUTPUT, List.of(cmd)));
+        public void clearMessages() {
+            status.clearMessage();
         }
 
         @Override
@@ -878,9 +894,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean showcmd) throws Exception {
+        public Object stateSnapshot(boolean statusline) throws Exception {
             // Short timeout: see STATE_TIMEOUT_MS.
-            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(showcmd)))
+            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline)))
                     .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 

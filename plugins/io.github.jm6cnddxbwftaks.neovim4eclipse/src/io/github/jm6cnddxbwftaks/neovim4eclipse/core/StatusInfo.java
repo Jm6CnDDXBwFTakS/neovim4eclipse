@@ -10,9 +10,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * @param statusline Neovim's evaluated {@code 'statusline'}, or "" if not requested
  * @param cmd        the pending command ({@code showcmd}), e.g. {@code 2d}
  * @param message    the latest message or error, kept until the next key
- * @param error      whether {@code message} is an error ({@code v:errmsg}, e.g.
- *                   {@code E486: Pattern not found: x}) rather than a plain message
- *                   ({@code v:statusmsg}, e.g. {@code 3 lines yanked})
+ * @param error      whether {@code message} is an error (a message of kind {@code emsg},
+ *                   {@code echoerr}, ... e.g. {@code E486: Pattern not found: x}) rather than a
+ *                   plain one ({@code 3 lines yanked}); see {@code util/MessageRoute}
  */
 public record StatusInfo(String statusline, String cmd, String message, boolean error) {
 

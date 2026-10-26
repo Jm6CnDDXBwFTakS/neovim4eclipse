@@ -14,8 +14,9 @@ import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Rectangle;
 
 /**
- * Shows what a listing command printed ({@code :ls}, {@code :marks}, ...) along the bottom of the
- * editor, where Vim shows its message area and where the command line box sits.
+ * Shows output along the bottom of the editor, where Vim shows its message area and where the
+ * command line box sits: what a listing printed ({@code :ls}, {@code :marks}, ...), shell output
+ * ({@code :!make}), or messages of more than one line ({@code util/MessageRoute} decides).
  *
  * <p>Read-only, in the editor's font, with the same border and tinted background as the command line
  * ({@link OverlayFrame}). Arrow keys, Page Up/Down, Home/End, {@code j}/{@code k},
@@ -64,18 +65,31 @@ final class OutputPopup {
     }
 
     /**
-     * @param title  the command, shown as the first line (as Vim echoes it)
+     * Shows {@code output}. While the popup is open, its text is replaced and it keeps the focus and
+     * its scroll position: output that grows while a command runs ({@code :!make}) arrives again,
+     * whole.
+     *
+     * @param title  the command, shown as the first line (as Vim echoes it); "" for none
      * @param output what the command printed; nothing is shown when it is blank
      */
     void show(String title, String output) {
         if (host.isDisposed() || output == null || output.isBlank()) {
             return;
         }
+        String text = (title == null || title.isEmpty() ? "" : title + "\n") + output.stripTrailing() + "\n"
+                + "Press any key to continue";
+        if (isOpen() && !heldForCommandLine) {
+            int top = view.getTopIndex();
+            view.setText(text);
+            view.setTopIndex(top);
+            reposition();
+            return;
+        }
         close(false);
         frame = new OverlayFrame<>(host,
                 parent -> new StyledText(parent, SWT.MULTI | SWT.READ_ONLY | SWT.V_SCROLL | SWT.H_SCROLL));
         view = frame.content();
-        view.setText(title + "\n" + output.stripTrailing() + "\n" + "Press any key to continue");
+        view.setText(text);
         view.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         view.addFocusListener(FocusListener.focusLostAdapter(e -> {
             if (!heldForCommandLine) {

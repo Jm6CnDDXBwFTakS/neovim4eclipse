@@ -24,16 +24,17 @@
  *             interface, so the session depends on it and not the other way round;</li>
  *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, and which is attached
  *             (the Neovim side; {@code EditorBuffers}, below, is the Eclipse side);</li>
- *         <li>{@code CommandRunner}: submitted {@code :} commands (with their output), listings,
- *             searches and {@code :normal!}; sees Neovim through its small {@code Neovim} interface;</li>
+ *         <li>{@code CommandRunner}: submitted {@code :} commands and searches, typed into Neovim,
+ *             and {@code :normal!}; sees Neovim through its small {@code Neovim} interface;</li>
  *         <li>{@code StateSync}: mode, cursor and whether Eclipse may type; reads them from
  *             Neovim and passes them to the listeners, through its small {@code Neovim} and
  *             {@code Listeners} interfaces;</li>
  *         <li>{@code StateSnapshot}: reading the per-key state answer;</li>
  *         <li>{@code SessionEvents}: the mode, buffer change, cursor, selection and IDE action
  *             listeners (the session's {@code add...Listener} methods pass through to it);</li>
- *         <li>{@code StatusTracker}: status bar parts (showcmd, message, statusline) and macro
- *             recording, fired to listeners only when they change;</li>
+ *         <li>{@code StatusTracker}: status bar parts (showcmd, message, statusline), output for the
+ *             popup ({@code CommandOutput}) and macro recording, fired to listeners only when they
+ *             change; messages and showcmd come from Neovim's UI events ({@code ext_messages});</li>
  *         <li>{@code InputThread}: the single thread for all blocking RPC, which keeps keys in order;</li>
  *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call.</li>
  *       </ul></li>

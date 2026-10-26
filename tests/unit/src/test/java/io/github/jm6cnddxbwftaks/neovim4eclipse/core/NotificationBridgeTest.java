@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -63,6 +64,9 @@ class NotificationBridgeTest {
             }
             @Override public void onCmdline(CmdlineEvent event) {
                 events.add(event.shown() ? "cmdline" + event.firstc() + event.content() : "cmdline-hide");
+            }
+            @Override public void onMessageEvent(MessageEvent event) {
+                events.add("message:" + event);
             }
         });
     }
@@ -206,10 +210,22 @@ class NotificationBridgeTest {
 
     @Test
     void unknownNotificationsAreIgnored() {
-        // Neovim sends these too: redraw to every UI, changedtick events to nvim_buf_attach.
-        notify("redraw", List.of("flush"));
+        // Neovim sends these too: grid redraws to every UI, changedtick events to nvim_buf_attach.
+        notify("redraw", List.of("grid_line", List.of(1, 0, 0, List.of(), false)));
         notify("nvim_buf_changedtick_event", 1, 5);
         assertTrue(events.isEmpty(), events.toString());
+    }
+
+    /** The command line first: the output of a command is titled with it, from the same redraw. */
+    @Test
+    void aRedrawsCommandLineEventsGoBeforeItsMessageEvents() {
+        notify("redraw",
+                List.of("msg_show", List.of("list_cmd", List.of(List.of(0, "x", 0)), false, false, false, 1, "typed_cmd")),
+                List.of("cmdline_show", List.of(List.of(List.of(0, "ls", 0)), 2, ":", "", 0, 1)),
+                List.of("flush"));
+        assertEquals(List.of("cmdline:ls",
+                "message:" + new MessageEvent.Show("list_cmd", "x", false, false, "1", "typed_cmd"),
+                "message:" + new MessageEvent.Flush()), events);
     }
 
     @Test

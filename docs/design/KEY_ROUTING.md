@@ -148,7 +148,7 @@ sends the box's text into it (`<C-u>pattern<CR>`), so the operator is not lost. 
 every misroute toward Neovim and every mapping that opens a command line ends in the box.
 
 Questions to settle by experiment first (see below): the plug-in's own typed commands
-(`:silent cmd<CR>`, Tab completion's Lua round trip) also produce `cmdline_show` events, which must
+(`:silent cmd<CR>`, typed as `:cmd<CR>` since 0.1.7; Tab completion's Lua round trip) also produce `cmdline_show` events, which must
 be told apart from the user's; what `<C-c>` leaves in a macro being recorded; and whether a prompt
 key could then simply always go to Neovim, with the box opened only on `cmdline_show` (one round
 trip later), which would remove the router's prompt guessing altogether.

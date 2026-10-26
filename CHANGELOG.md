@@ -12,12 +12,26 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Every message Neovim gives now reaches the editor, whatever printed it: a mapping, a timer, an
+  autocommand, a plug-in in your `init.lua`, a macro. Before, only the messages of keys and `:`
+  commands were shown.
+
 ### Changed
 
 - A save that Eclipse cannot do, asked for by Neovim (`:wall`, `:bufdo update`, a mapping's `:w`),
   now fails the command, as a failed write does in Neovim: `:bufdo update` stops at that file instead of
   going on, and `:w | q` in a mapping no longer goes on to close the editor. The error is shown as
-  before, as an error.
+  Neovim gives it, with its `Error in BufWriteCmd Autocommands` line, in the output box.
+- Messages are placed as Vim places them: one line on the message line (now also one-line `:echo`,
+  `:pwd`, `:lua print()`), anything longer in the output box (two errors at once, a Lua error with its
+  traceback), and listings and shell output (`:ls`, `:set ts?`, `:!make`) in the output box as before.
+  Shell output that keeps coming is added to the open box.
+- Listings from the `:` box (`:ls`, `:marks`, `:set ts?` ...) are typed into Neovim like every other
+  command, so they are in the history, `@:` repeats them and a macro being recorded contains them.
+- Commands from the `:` box are kept in Neovim's history as you typed them, without a `silent` in
+  front.
 
 ## [0.1.6] - 2026-10-26
 

@@ -20,7 +20,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.MsgpackNeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
@@ -66,20 +65,30 @@ final class NeovimConnection implements AutoCloseable {
     private static final int UI_WIDTH = 120;
     private static final int UI_HEIGHT = 40;
     /**
-     * A plain terminal-like UI: no 24-bit color ({@code rgb} defaults to {@code true}, so it is sent
-     * explicitly) and none of the {@code ext_*} features, which would make Neovim send their events
-     * instead of drawing messages, the popup menu ... into the grid; except {@code ext_cmdline}.
-     * With it Neovim reports every command line it opens ({@code cmdline_show}, read by
-     * {@link NotificationBridge}), which lets the editor's box take over one the user opened through
-     * a mapping (docs/design/KEY_ROUTING.md). It works without {@code ext_linegrid}.
+     * The UI the plug-in attaches as: no 24-bit color ({@code rgb} defaults to {@code true}, so it is
+     * sent explicitly), and three parts of Neovim's screen sent as events instead of drawn into the
+     * grid, which nobody sees:
+     * <ul>
+     *   <li>{@code ext_cmdline}: every command line Neovim opens ({@code cmdline_show}, read by
+     *       {@link NotificationBridge}), which lets the editor's box take over one the user opened
+     *       through a mapping (docs/design/KEY_ROUTING.md).</li>
+     *   <li>{@code ext_messages}: every message, with its kind ({@code msg_show}), the pending
+     *       command ({@code msg_showcmd}) and {@code :messages} ({@code msg_history_show}); see
+     *       {@code util/MessageEvent}. Neovim then never waits at a "Press ENTER" prompt: there is
+     *       no message area to fill (experiment X2 of the cleanup plan).</li>
+     *   <li>{@code ext_linegrid}, which {@code ext_messages} needs (Neovim turns it on anyway). The grid
+     *       events it brings are ignored; they are fewer per key than the old cell-by-cell ones.</li>
+     * </ul>
+     * The other {@code ext_*} options stay off: the popup menu, tabline, windows ... are not used.
      */
     static final Map<String, Object> TERMINAL_UI = terminalUi();
 
     private static Map<String, Object> terminalUi() {
+        List<String> on = List.of("ext_cmdline", "ext_messages", "ext_linegrid");
         Map<String, Object> options = new LinkedHashMap<>();
         for (String name : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                 "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-            options.put(name, "ext_cmdline".equals(name));
+            options.put(name, on.contains(name));
         }
         return Collections.unmodifiableMap(options); // keeps the order: the same bytes every time
     }
@@ -92,8 +101,6 @@ final class NeovimConnection implements AutoCloseable {
      * plug-in manager can take a few seconds, the first time especially.
      */
     private static final long STARTUP_TIMEOUT_SEC = 10;
-    /** How often {@link #waitForStartup} looks for a prompt while Neovim starts. */
-    private static final long STARTUP_POLL_MS = 50;
     /** How long {@link #requestQuit} waits for Neovim to exit after {@code :qa!} (it takes milliseconds). */
     private static final long QUIT_TIMEOUT_MS = 1500;
 
@@ -184,41 +191,27 @@ final class NeovimConnection implements AutoCloseable {
     }
 
     /**
-     * Waits until Neovim has run the user's configuration, and dismisses the "Press ENTER" prompt
-     * an error in it leaves.
+     * Waits until Neovim has run the user's configuration.
      *
      * <p>Under {@code --embed}, Neovim runs {@code init.lua} (or {@code init.vim}) only once a UI has
-     * attached. An error there, a typo say, makes Neovim show the error and wait at a hit-enter
-     * prompt, which this plug-in does not draw; while it waits, Neovim answers no request but
-     * {@code nvim_get_mode}, so every later request of the start-up would time out
-     * ("Neovim not started: TimeoutException"). So this sends a request that is answered only once
-     * Neovim is idle, and while it waits, asks for the mode (answered at once): at a prompt
-     * ({@code r}, {@code rm}), an Esc dismisses it, as a user in a terminal would press Enter. Neovim
-     * then carries on with what its configuration set up before the error: for a Lua syntax error,
-     * nothing of {@code init.lua}.
+     * attached. A request is answered only once Neovim is idle, so the answer to a trivial one
+     * means the configuration has run. An error in it (a typo, say) does not stop Neovim: it sends
+     * the error as a message event (which arrives before Eclipse listens, so it is read back from
+     * {@code :messages} below) and goes on with what the configuration set up before the error, for
+     * a Lua syntax error nothing of {@code init.lua}. (Before the plug-in attached with
+     * {@code ext_messages}, the error left Neovim at a "Press ENTER" prompt, answering no request,
+     * and this method dismissed it with Esc.)
      *
      * @return the configuration's errors, as {@code :messages} lists them, if it reported any
      *         ({@code v:errmsg} is set); "" otherwise
      * @throws TimeoutException if Neovim is still busy after {@link #STARTUP_TIMEOUT_SEC}
      */
     private String waitForStartup() throws Exception {
-        CompletableFuture<Object> idle = api.execLua("return 0", List.of());
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STARTUP_TIMEOUT_SEC);
-        while (true) {
-            try {
-                idle.get(STARTUP_POLL_MS, TimeUnit.MILLISECONDS);
-                break;
-            } catch (TimeoutException stillStarting) {
-                Mode mode = await(api.getMode());
-                if (mode != null && mode.blocking() && mode.mode() != null && mode.mode().startsWith("r")) {
-                    LOG.info("Neovim waits at a prompt while starting (an error in its configuration?); dismissing it");
-                    await(api.input("<Esc>"));
-                }
-                if (System.nanoTime() > deadline) {
-                    throw new TimeoutException("Neovim did not finish starting within " + STARTUP_TIMEOUT_SEC
-                            + " s (is its configuration, init.lua, waiting for something?)");
-                }
-            }
+        try {
+            api.execLua("return 0", List.of()).get(STARTUP_TIMEOUT_SEC, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            throw new TimeoutException("Neovim did not finish starting within " + STARTUP_TIMEOUT_SEC
+                    + " s (is its configuration, init.lua, waiting for something?)");
         }
         Object errors = await(api.execLua(STARTUP_ERRORS, List.of()));
         String text = errors == null ? "" : errors.toString().strip();
