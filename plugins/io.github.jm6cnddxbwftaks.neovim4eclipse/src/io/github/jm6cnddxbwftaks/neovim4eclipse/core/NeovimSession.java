@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -127,8 +126,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Single thread that performs all blocking RPC, preserving key order. */
     private final InputThread inputThread = new InputThread();
-    /** Keys queued by {@link #inputAsync} that Neovim has not processed yet; see {@link #hasKeysInFlight}. */
-    private final AtomicInteger keysInFlight = new AtomicInteger();
     /** The newest mouse drag not sent yet (see {@link #mouseAsync}). */
     private final LatestValue<MouseInput> pendingDrag = new LatestValue<>();
     /** Runs submitted {@code :} commands, listings, searches and {@code :normal!}. */
@@ -582,22 +579,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Queues one key (Neovim notation) for ordered processing. */
     public void inputAsync(String keys) {
-        keysInFlight.incrementAndGet();
-        boolean queued = submit("input '" + keys + "'", Level.WARNING, () -> {
-            try {
-                input(keys);
-            } finally {
-                keysInFlight.decrementAndGet();
-            }
-        });
-        if (!queued) {
-            keysInFlight.decrementAndGet(); // the session is closing: this key never reaches Neovim
-        }
-    }
-
-    @Override
-    public boolean hasKeysInFlight() {
-        return keysInFlight.get() > 0;
+        submit("input '" + keys + "'", Level.WARNING, () -> input(keys));
     }
 
     /**

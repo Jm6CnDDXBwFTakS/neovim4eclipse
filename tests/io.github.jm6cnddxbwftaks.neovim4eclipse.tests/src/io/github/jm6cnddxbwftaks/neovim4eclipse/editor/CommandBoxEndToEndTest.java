@@ -137,6 +137,16 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         });
     }
 
+    /** {@code d/} typed at full speed: Neovim's search line belongs to {@code d}, and the box answers it. */
+    @Test
+    void aSearchAfterAnOperatorTypedFastIsAnswered() throws Exception {
+        type(widget, "ggd/");
+        Text box = boxReading("/");
+        box.insert("gamma");
+        pressEnter(box);
+        expectText("gamma\n");
+    }
+
     /** Esc in a box that took over Neovim's search line closes that line too: the next key is a command again. */
     @Test
     void escapeLeavesNeovimsSearchLine() throws Exception {

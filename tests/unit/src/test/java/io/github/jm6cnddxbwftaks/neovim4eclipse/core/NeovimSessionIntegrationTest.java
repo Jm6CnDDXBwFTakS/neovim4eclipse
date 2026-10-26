@@ -314,6 +314,30 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * {@code ZZ} and {@code ZQ} are Eclipse's save-and-close and close, mapped in Neovim, so Neovim
+     * reads them: {@code fZ} takes the {@code Z} as its argument, and only a whole {@code ZZ} or
+     * {@code ZQ} reaches the IDE. They stay mapped with {@code neovim4eclipse_ide_keys = 0}: Neovim's
+     * own {@code ZZ} would quit the embedded Neovim.
+     */
+    @Test
+    void zzAndZqAreHandedToTheIdeEvenWithIdeKeysOff() throws Exception {
+        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:neovim4eclipse_ide_keys = 0"))) {
+            List<IdeAction> actions = new CopyOnWriteArrayList<>();
+            s.addIdeActionListener(actions::add);
+            s.setBufferLines(List.of("aZb"));
+            keys(s, "f", "Z", "x");
+            assertEquals(List.of("ab"), s.getBufferLines(), "fZ found the Z, x deleted it");
+            assertTrue(actions.isEmpty(), "fZ is no file command: " + actions);
+            keys(s, "Z", "Z");
+            keys(s, "Z", "Q");
+            waitFor(() -> actions.size() == 2, "two IDE actions");
+            assertEquals(List.of(new IdeAction(IdeAction.SAVE_AND_CLOSE, 0), new IdeAction(IdeAction.CLOSE, 0)), actions);
+            assertTrue(s.isAlive(), "Neovim did not quit");
+        }
+    }
+
     // ---- messages (ext_messages): the message line and the output popup ----
 
     /** What a session shows: the message line's messages and the popup's output, in order. */

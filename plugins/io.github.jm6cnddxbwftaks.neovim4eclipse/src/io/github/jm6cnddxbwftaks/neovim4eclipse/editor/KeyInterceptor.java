@@ -14,7 +14,6 @@ import org.eclipse.swt.custom.VerifyKeyListener;
 import org.eclipse.swt.events.VerifyEvent;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
-import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.KeyRouter;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
@@ -24,8 +23,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
 /**
  * The SWT end of key routing: turns each key event of the editor's text widget into Neovim
  * notation ({@link KeyMapping}), asks {@link KeyRouter} who handles it, and swallows the event
- * ({@code event.doit = false}) when Neovim does. The decisions themselves (insert mode, command
- * arguments, {@code :} prompts, {@code ZZ}, Ctrl keys) are in {@link KeyRouter}, which is
+ * ({@code event.doit = false}) when Neovim does. The decisions themselves (insert mode, Esc, Ctrl keys) are in {@link KeyRouter}, which is
  * unit-tested without SWT.
  *
  * <p>This runs on the SWT UI thread and must return quickly: it only queues work
@@ -50,26 +48,6 @@ public final class KeyInterceptor implements VerifyKeyListener {
     public KeyInterceptor(NeovimSession session) {
         this.session = session;
         this.router = new KeyRouter(session);
-    }
-
-    /** Handler for {@code :}, {@code /}, {@code ?}; returns {@code true} if it consumed the key. */
-    public void setSpecialKeyHandler(Predicate<String> handler) {
-        router.setPromptHandler(handler);
-    }
-
-    /** Editor used for {@code ZZ}/{@code ZQ}; without one those keys are forwarded to Neovim. */
-    public void setEditor(ITextEditor editor) {
-        router.setFileCommands(editor == null ? null : new KeyRouter.FileCommands() {
-            @Override
-            public void saveAndClose() {
-                EclipseFileCommands.zz(editor);
-            }
-
-            @Override
-            public void close() {
-                EclipseFileCommands.zq(editor);
-            }
-        });
     }
 
     /** Supplier of the replay plan for the insert that Esc is ending; called on the UI thread. */
@@ -137,14 +115,6 @@ public final class KeyInterceptor implements VerifyKeyListener {
         if (!widget.isDisposed()) {
             widget.removeListener(SWT.KeyDown, afterKeyDown);
         }
-    }
-
-    /**
-     * {@code nvimKey} reaches Neovim by another route (the Ctrl-key commands): the router follows it,
-     * so that the key after it is routed as Vim's grammar says ({@code <C-w>} then {@code :}).
-     */
-    public void sentElsewhere(String nvimKey) {
-        router.sentElsewhere(nvimKey);
     }
 
     /**
