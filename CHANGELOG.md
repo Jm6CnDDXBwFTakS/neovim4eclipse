@@ -12,6 +12,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- A save that Eclipse cannot do, asked for by Neovim (`:wall`, `:bufdo update`, a mapping's `:w`),
+  now fails the command, as a failed write does in Neovim: `:bufdo update` stops at that file instead of
+  going on, and `:w | q` in a mapping no longer goes on to close the editor. The error is shown as
+  before, as an error.
+
 ## [0.1.6] - 2026-10-26
 
 ### Changed

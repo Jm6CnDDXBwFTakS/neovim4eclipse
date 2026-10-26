@@ -288,8 +288,13 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * A save Eclipse could not do fails the write the way a real failed write does
+     * ({@code E212: Can't open file for writing}): the command reports the error to whoever ran it,
+     * so {@code :w | q} does not go on and {@code :bufdo update} stops there.
+     */
     @Test
-    void aFailedSaveIsShownAndTheBufferStaysModified() throws Exception {
+    void aFailedSaveFailsTheWriteAndTheBufferStaysModified() throws Exception {
         try (NeovimSession s = start()) {
             s.setWriteHandler(document -> "Eclipse could not save A.txt: read-only");
             DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/A.txt");
@@ -297,10 +302,47 @@ class NeovimBufferIntegrationTest {
             s.setBufferLines(List.of("a"));
             s.input("x");
 
-            s.command("write");
+            Exception failed = assertThrows(Exception.class, () -> s.command("write"));
 
-            assertEquals("Eclipse could not save A.txt: read-only", s.lua("return vim.v.errmsg"));
+            assertTrue(String.valueOf(failed.getMessage()).contains("Eclipse could not save A.txt: read-only"),
+                    String.valueOf(failed.getMessage()));
             assertEquals(Boolean.TRUE, s.lua("return vim.bo.modified"), ":update tries again");
+
+            // Typed (or from a mapping) rather than through the API: the error is a message, and the
+            // message line gets its text alone (from v:errmsg, which the session reads and clears).
+            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
+            s.addStatusListener(seen::add);
+            s.input(":write<CR>");
+            waitFor(() -> seen.stream().anyMatch(i -> i.error() && i.message().equals("Eclipse could not save A.txt: read-only")),
+                    "the error in the message line");
+        }
+    }
+
+    /** {@code :bufdo update} stops at a buffer whose save failed, as it stops at a real write error. */
+    @Test
+    void bufdoUpdateStopsAtAFailedSave() throws Exception {
+        try (NeovimSession s = start()) {
+            String dir = System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/";
+            DocumentBuffer a = new DocumentBuffer(dir + "A.txt");
+            DocumentBuffer b = new DocumentBuffer(dir + "B.txt");
+            List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
+            s.setWriteHandler(document -> {
+                saved.add(document);
+                return document.equals(a) ? "Eclipse could not save A.txt: read-only" : null;
+            });
+            // Shown first, so A has the lower buffer number and :bufdo reaches it first.
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a"));
+            s.input("x");
+            s.showBuffer(b);
+            s.setBufferLines(List.of("b"));
+            s.input("x");
+            assertTrue(a.bufnr() < b.bufnr(), "buffer order");
+
+            assertThrows(Exception.class, () -> s.command("bufdo update"));
+
+            assertEquals(List.of(a), saved, "A is first in the buffer list; B is not tried after A failed");
+            assertEquals(Boolean.TRUE, s.lua("return vim.bo[" + b.bufnr() + "].modified"));
         }
     }
 
@@ -318,10 +360,11 @@ class NeovimBufferIntegrationTest {
             s.showBuffer(a);
             s.setBufferLines(List.of("a"));
 
-            s.command("write " + dir.resolve("other.txt"));
+            Exception refused = assertThrows(Exception.class, () -> s.command("write " + dir.resolve("other.txt")));
 
             assertEquals(List.of(), saved);
-            assertTrue(String.valueOf(s.lua("return vim.v.errmsg")).contains("only under its own name"));
+            assertTrue(String.valueOf(refused.getMessage()).contains("only under its own name"),
+                    String.valueOf(refused.getMessage()));
             assertFalse(Files.exists(dir.resolve("other.txt")));
         }
     }

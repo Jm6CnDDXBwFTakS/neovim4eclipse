@@ -279,6 +279,26 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * Neovim's own {@code gd} with nothing under the cursor fails as it does when typed: the error
+     * ({@code E349: No identifier under cursor}) reaches the message line as an error, and Neovim
+     * keeps it in {@code :messages}, because the script echoes it with {@code err = true}.
+     */
+    @Test
+    void anErrorOfNeovimsOwnKeyIsShownAsAnError() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of(""));
+            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
+            s.addStatusListener(seen::add);
+            s.normalAsync("gd");
+            // v:errmsg is what the message line reads (and clears) after each request.
+            waitFor(() -> seen.stream().anyMatch(i -> i.error() && i.message().equals("E349: No identifier under cursor")),
+                    "E349 as an error in the message line, without the \"Vim:\" prefix pcall adds");
+            String history = (String) s.lua("return vim.api.nvim_exec2('messages', { output = true }).output");
+            assertTrue(history.contains("E349: No identifier under cursor"), "kept in :messages: " + history);
+        }
+    }
+
     @Test
     void ideKeysCanBeLeftToNeovim() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
