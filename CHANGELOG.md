@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-26
+
 ### Added
 
 - Every message Neovim gives now reaches the editor, whatever printed it: a mapping, a timer, an
