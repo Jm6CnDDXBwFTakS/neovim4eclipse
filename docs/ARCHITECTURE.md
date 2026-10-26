@@ -74,6 +74,28 @@ Vim's `:help clear-undo`), so `u` right after opening a file does nothing, as in
 When mode is `v` / `V` / Ctrl-V, after each key the state snapshot reads `getpos('v')` and `getpos('.')`. Characterwise and linewise
 selections are mapped onto `StyledText.setSelection`; a blockwise selection is painted as an overlay (see "Blockwise visual").
 
+**The mouse is Neovim's too** (normal and visual mode). `editor/NeovimMouse` puts a display filter in front of
+the editor widget and swallows the left button's press, drag, release and double-click event (`event.type =
+SWT.None`), so the widget neither moves its caret nor selects. Each becomes a `core/MouseInput` (the document
+line and byte column of the character under the pointer, Shift and Alt as `S`/`A`), which the session hands to
+`KeyInput.mouse`: `LuaScripts.MOUSE` finds the character on Neovim's screen with `screenpos()` and calls
+`nvim_input_mouse`, then the state is read as after a key. Neovim does the rest: one click moves the cursor, two
+select a word (from a bracket, up to its match), three the line (`V`), four a block, a drag selects, Shift+click
+extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a click while recording is recorded.
+
+- *Neovim's screen is not the editor's.* Neovim's window (40 rows) does not scroll with the editor, so a
+  character may be off its screen. The script then scrolls Neovim's window for a press; for a drag in visual mode
+  it moves the cursor there (which extends the selection, as the drag would; scrolling first would lose the drag's
+  start); a first drag goes to the nearest edge of Neovim's screen. Measured: about 0.2 ms per event, the state
+  read included.
+- *Drags are merged.* Mouse moves can come faster than Neovim answers; `util/LatestValue` keeps only the newest
+  drag until the input thread sends it, and a release still comes after it.
+- *Stays Eclipse's:* insert and replace mode and Eclipse mode (all of the mouse), Ctrl+click and Cmd+click
+  (hyperlinks; on macOS also the context menu), the right and middle buttons, moves without a button (hovers).
+- *Dropped:* an event while Neovim waits for the rest of a command (`d`, `f`): Neovim would not run the script
+  until then.
+- With `'mouse'` empty (or without `n`/`v`) a press only moves the cursor, as before the mouse was forwarded.
+
 ### 4. UI chrome
 
 - **Mode status**: `ModeStatusContribution` on the editor status line.
@@ -455,6 +477,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 |---------|-------|-------|
 | SWT event to Neovim key | `util/KeyMapping` | `KeyMappingTest` |
 | Which key goes to Neovim or Eclipse | `core/KeyRouter` (SWT glue: `editor/KeyInterceptor`) | `KeyRouterTest` |
+| The mouse in normal and visual mode | `editor/NeovimMouse` (which events, the character under the pointer), `core/MouseInput`, `util/LatestValue` (drags merged), `KeyInput.mouse`, `LuaScripts.MOUSE` (Neovim's screen cell) | `tests/swt` `NeovimMouseTest`, `MouseInputTest`, `LatestValueTest`, `KeyInputTest`, `NeovimSessionIntegrationTest` (real Neovim: click off its screen, word, line, drag, Shift+click, `'mouse'` off), UI `MouseEndToEndTest`, `EditorEndToEndTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |

@@ -194,6 +194,14 @@ and `editor/VimKeyContexts` for how contexts are switched on and off.
 
 On macOS, `M1` in `plugin.xml` means Command and `M4` means Control. On Windows and Linux `M1` is Ctrl.
 
+**Filters for your own code.** `Display.addFilter(type, listener)` puts a listener in front of every
+widget for one event type, the same place the key-binding dispatcher sits. A filter can take an event
+away from the widget by setting `event.type = SWT.None`: SWT then delivers it to no listener. Example:
+`editor/NeovimMouse` filters the editor widget's mouse events and swallows the left button's, so
+`StyledText` neither moves its caret nor selects, and hands them to Neovim's own mouse instead. A
+filter sees the events of *every* widget, so it checks `event.widget` first, and it must be removed
+again (`removeFilter`) when it is no longer needed.
+
 ### 1.7 Preferences
 
 - Values live in an `IPreferenceStore` (`Activator.getDefault().getPreferenceStore()`), saved per

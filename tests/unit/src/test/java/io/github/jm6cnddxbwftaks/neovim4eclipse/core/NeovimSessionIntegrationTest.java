@@ -510,6 +510,99 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    // ---- the mouse (Neovim's own, see LuaScripts.MOUSE) ----
+
+    /** Presses and releases the left button {@code times} times on line {@code line1}, byte {@code col0}. */
+    private static void click(NeovimSession s, int line1, int col0, int times, String modifiers) throws Exception {
+        for (int i = 0; i < times; i++) {
+            s.mouse(new MouseInput(MouseInput.Action.PRESS, modifiers, line1, col0));
+            s.mouse(new MouseInput(MouseInput.Action.RELEASE, modifiers, line1, col0));
+        }
+    }
+
+    private static VisualSelection lastSelection(List<VisualSelection> seen) {
+        return seen.isEmpty() ? VisualSelection.none() : seen.get(seen.size() - 1);
+    }
+
+    @Test
+    void aClickMovesTheCursorEvenToALineOffNeovimsScreen() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> lines = new java.util.ArrayList<>();
+            for (int i = 1; i <= 300; i++) {
+                lines.add("line " + i);
+            }
+            s.setBufferLines(lines);
+            click(s, 3, 2, 1, "");
+            assertEquals(new CursorPos(3, 2), s.getLastCursor());
+            click(s, 250, 1, 1, ""); // Neovim's window shows 40 lines: the script scrolls it
+            assertEquals(new CursorPos(250, 1), s.getLastCursor());
+            assertEquals("n", s.getMode());
+        }
+    }
+
+    @Test
+    void aDoubleClickSelectsAWordAndATripleClickTheLine() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha beta gamma", "second"));
+            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
+            s.addSelectionListener(seen::add);
+            click(s, 1, 7, 2, "");
+            assertEquals("v", s.getMode());
+            assertEquals(6, lastSelection(seen).startCol0Based());
+            assertEquals(9, lastSelection(seen).endCol0Based(), "beta");
+            keys(s, "<Esc>");
+            Thread.sleep(600); // past 'mousetime', so the next click counts from one again
+            click(s, 2, 1, 3, "");
+            assertTrue(lastSelection(seen).isLineWise(), "mode=" + s.getMode());
+        }
+    }
+
+    @Test
+    void aDragSelectsFromThePressToTheRelease() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("abcd", "efgh", "ijkl"));
+            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
+            s.addSelectionListener(seen::add);
+            s.mouse(new MouseInput(MouseInput.Action.PRESS, "", 1, 1));
+            s.mouse(new MouseInput(MouseInput.Action.DRAG, "", 2, 0));
+            s.mouse(new MouseInput(MouseInput.Action.DRAG, "", 3, 2));
+            s.mouse(new MouseInput(MouseInput.Action.RELEASE, "", 3, 2));
+            VisualSelection last = lastSelection(seen);
+            assertEquals("v", last.mode());
+            assertEquals(List.of(1, 1, 3, 2), List.of(last.startLine1Based(), last.startCol0Based(),
+                    last.endLine1Based(), last.endCol0Based()));
+            keys(s, "d");
+            assertEquals(List.of("al"), s.getBufferLines(), "d deletes what the drag selected");
+        }
+    }
+
+    @Test
+    void shiftClickExtendsTheSelection() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("abcd", "efgh", "ijkl"));
+            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
+            s.addSelectionListener(seen::add);
+            click(s, 1, 1, 1, "");
+            click(s, 2, 2, 1, "S");
+            assertEquals("v", s.getMode());
+            assertEquals(List.of(1, 1, 2, 2), List.of(lastSelection(seen).startLine1Based(),
+                    lastSelection(seen).startCol0Based(), lastSelection(seen).endLine1Based(),
+                    lastSelection(seen).endCol0Based()));
+        }
+    }
+
+    /** With {@code 'mouse'} off Neovim ignores the mouse; a click then still moves the cursor. */
+    @Test
+    void withoutMouseAClickOnlyMovesTheCursor() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha beta", "second"));
+            s.lua("vim.o.mouse = ''");
+            click(s, 1, 7, 2, "");
+            assertEquals("n", s.getMode());
+            assertEquals(new CursorPos(1, 7), s.getLastCursor());
+        }
+    }
+
     // ---- macros ----
 
     private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws Exception {

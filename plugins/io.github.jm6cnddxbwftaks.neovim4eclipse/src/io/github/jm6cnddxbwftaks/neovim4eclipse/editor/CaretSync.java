@@ -19,8 +19,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
  * <ul>
  *   <li><b>Neovim to Eclipse</b> ({@link #showNeovimCursor}): after {@code j}, {@code w},
  *       {@code gg} ... the caret moves to where Neovim put the cursor.</li>
- *   <li><b>Eclipse to Neovim</b>: a mouse click or any other caret move in the widget moves
- *       Neovim's cursor (to the start of the selection when Eclipse selected text).</li>
+ *   <li><b>Eclipse to Neovim</b>: any caret move in the widget moves Neovim's cursor (to the
+ *       start of the selection when Eclipse selected text). In normal and visual mode the left
+ *       mouse button does not move the caret: it goes to Neovim's own mouse ({@link NeovimMouse}),
+ *       and the cursor comes back the other way; clicks in insert mode and Eclipse's own caret
+ *       moves (Open Declaration, a search hit) still come through here.</li>
  * </ul>
  *
  * <p><b>The echo problem.</b> Moving the caret from Neovim's side fires the widget's caret listener,
