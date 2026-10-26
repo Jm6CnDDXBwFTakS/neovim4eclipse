@@ -206,13 +206,17 @@ start "" /affinity 3 /wait /b mvnw.cmd verify -Pui -Dnvim.path=C:\path\to\nvim
 start "" /affinity 1 /wait /b mvnw.cmd test -f tests\unit\pom.xml -Pintegration -Dnvim.path=C:\path\to\nvim
 ```
 
-`start` belongs to `cmd`, so from PowerShell run it through `cmd /c`. `--%` (PowerShell's
-stop-parsing token) hands the rest of the line to `cmd` as written, so PowerShell neither drops the
-empty `""` nor splits `-Dnvim.path=...` at the dot:
+From PowerShell, pin the shell itself, with the same mask, then build: the shell's
+`ProcessorAffinity` is passed on to every program it starts. (`start` is not available here: in
+PowerShell it names `Start-Process`, and passing a `start` line through `cmd /c` can fail without a
+sign, ending with status 0 although no build ran.) Quote a `-D` argument, or PowerShell splits it at
+the dot:
 
 ```powershell
-cmd /c --% start "" /affinity 3 /wait /b mvnw.cmd verify -Pall -Dnvim.path=C:\path\to\nvim
+(Get-Process -Id $PID).ProcessorAffinity = 3; .\mvnw.cmd verify -Pall "-Dnvim.path=C:\path\to\nvim"
 ```
+
+The pin lasts as long as that PowerShell window; open a new window to use every core again.
 
 To check that the mask took effect, open Task Manager, *Details*, right-click a `java.exe` or
 `nvim.exe` process and choose *Set affinity*: only the chosen cores are ticked.
