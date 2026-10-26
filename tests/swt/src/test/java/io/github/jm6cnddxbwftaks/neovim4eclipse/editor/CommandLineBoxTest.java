@@ -323,6 +323,34 @@ class CommandLineBoxTest {
     }
 
     /**
+     * After Enter the line is Neovim's to close. A command can move the focus before Neovim reports
+     * the line closed: {@code :e new.txt} opens another editor, which takes it. That is not a click
+     * away, so no {@code <C-c>}; on a loaded machine one used to reach Neovim back in normal mode,
+     * where it shows "Type :qa and press <Enter> to exit Nvim" in place of the command's message.
+     */
+    @Test
+    void theFocusMovingAfterEnterDoesNotAbandonTheLine() {
+        Text box = show(line(":e new.txt", 10));
+        key(box, SWT.CR, '\r', 0);
+        host.notifyListeners(SWT.FocusIn, new Event()); // the new editor taking the focus
+        assertEquals(List.of("type <CR>"), commands.calls);
+
+        commandLine.show(View.CLOSED); // Neovim's report arrives
+        assertFalse(commandLine.isOpen());
+    }
+
+    /** A key typed after Enter (the line stayed open, as after {@code <C-v><CR>}) makes a click away abandon it again. */
+    @Test
+    void aKeyAfterEnterMakesAClickAwayAbandonTheLineAgain() {
+        Text box = show(line(":abc", 4));
+        key(box, SWT.CR, '\r', 0);
+        key(box, 'x', 'x', 0);
+        host.notifyListeners(SWT.FocusIn, new Event());
+        waitUntil("the box to close", () -> !commandLine.isOpen());
+        assertEquals(List.of("type <CR>", "type x", "type <C-c>"), commands.calls);
+    }
+
+    /**
      * The focus leaving Eclipse (another application, an input method's switcher such as Super+Space
      * on Linux) keeps the line: only a control of Eclipse's own taking the focus abandons it.
      */

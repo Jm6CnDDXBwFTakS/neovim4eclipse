@@ -60,7 +60,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * (Ctrl+V, Cmd+V, Shift+Insert, a middle click) and an input method's composed text (IME) reach the
  * box as an edit, which is refused and sent to Neovim as a paste ({@link Commands#paste}); Ctrl+C with
  * text selected in the box copies it. Clicking elsewhere in Eclipse (another control takes the
- * focus) abandons the line in Neovim ({@code <C-c>}), as before.
+ * focus) abandons the line in Neovim ({@code <C-c>}), as before; not after Enter, when the command
+ * itself may move the focus ({@link #submitted}).
  *
  * <h2>Eclipse's shortcuts</h2>
  * Eclipse runs its key bindings before any widget sees the key, and the box is part of the editor,
@@ -139,6 +140,15 @@ final class CommandLineBox {
      * it closed: views of the old line still on their way must not open the box again.
      */
     private boolean abandoned;
+    /**
+     * True after Enter was sent, until Neovim reports the line closed or another key is typed: the
+     * line is Neovim's to close now, so the focus moving away does not abandon it. A command often
+     * moves the focus itself before Neovim's report arrives ({@code :e new.txt} opens another
+     * editor); a {@code <C-c>} sent then would reach Neovim back in normal mode, where it shows
+     * "Type :qa and press <Enter> to exit Nvim" over the command's own message. Another key resets
+     * it because the line can stay open after Enter ({@code <C-v><CR>} inserts a literal one).
+     */
+    private boolean submitted;
     /** The candidate list above the box; {@code null} while hidden. */
     private OverlayFrame<StyledText> listFrame;
 
@@ -251,6 +261,7 @@ final class CommandLineBox {
         }
         if (!view.open()) {
             abandoned = false;
+            submitted = false;
             close(true);
             return;
         }
@@ -318,6 +329,7 @@ final class CommandLineBox {
         }
         String key = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character);
         if (key != null) {
+            submitted = key.equals("<CR>");
             commands.type(key);
         }
     }
@@ -344,7 +356,7 @@ final class CommandLineBox {
 
     /** See {@link #abandonOnFocusElsewhere}. */
     private void onFocusAnywhere(Event event) {
-        if (isOpen() && event.widget instanceof Control control && !isInBox(control)) {
+        if (isOpen() && !submitted && event.widget instanceof Control control && !isInBox(control)) {
             abandon();
         }
     }
