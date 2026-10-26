@@ -221,9 +221,14 @@ class EditorEndToEndTest extends EndToEndTestBase {
         page.addPartListener(listener);
         try {
             session.inputAsync(":bufdo let b:visited = 1<CR>");
-            // Hold the UI thread meanwhile, so that every BufEnter has been read before Eclipse handles
-            // the first: the case the check is for. (Without the wait it is also the usual case.)
-            Thread.sleep(500);
+            // Hold the UI thread until every BufEnter of :bufdo has been read, so that Eclipse handles
+            // them all at once: the case the check is for. The question is queued after the keys and
+            // Neovim answers it only once they are done, with the BufEnter notifications before the
+            // answer (as NeovimBarrier in tests/unit). This used to be a 500 ms sleep, which on a
+            // loaded machine could end before the last BufEnter, and then tested an easier case.
+            java.util.concurrent.CompletableFuture<String> answered = new java.util.concurrent.CompletableFuture<>();
+            session.evalAsync("1", answered::complete);
+            answered.get(TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
             waitForAttach(third, "third.txt, where :bufdo ends");
             assertEquals(List.of(third), activated);
         } finally {
