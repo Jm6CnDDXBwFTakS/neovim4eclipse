@@ -55,9 +55,10 @@ class MouseEndToEndTest extends EndToEndTestBase {
     @Test
     void aTripleClickSelectsTheLineAndDDeletesIt() {
         click(7, 3); // beta
-        waitUntil("the line selected", TIMEOUT_MS, () -> selected().startsWith("beta"),
+        // Wait for linewise visual mode itself: the second click already selects the word "beta"
+        // (charwise, mode v), so waiting only for the selection could end before Neovim had the third.
+        waitUntil("the line selected", TIMEOUT_MS, () -> "V".equals(session.getMode()) && selected().startsWith("beta"),
                 () -> "; selected [" + selected() + "], mode " + session.getMode());
-        assertEquals("V", session.getMode());
         type(widget, "d");
         expectText("alpha\ngamma\n");
     }
