@@ -17,6 +17,10 @@ import java.util.function.BooleanSupplier;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
+import org.eclipse.swt.dnd.Transfer;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
@@ -57,7 +61,10 @@ class CommandLineBoxTest {
     private Shell shell;
     private StyledText host;
     private final FakeCommands commands = new FakeCommands();
+    private MessageLine messageLine;
     private CommandLineBox commandLine;
+    /** How often the box reported a change of its state (open, closed, focus). */
+    private int stateChanges;
 
     @BeforeEach
     void createHost() {
@@ -67,12 +74,14 @@ class CommandLineBoxTest {
         host.setBounds(0, 0, 400, 300);
         shell.open();
         KeyboardFocus.require(host, TIMEOUT_MS); // the box abandons its line on focus loss: start in the active window
-        commandLine = new CommandLineBox(host, commands);
+        messageLine = new MessageLine(host, () -> false);
+        commandLine = new CommandLineBox(host, commands, messageLine, () -> stateChanges++);
     }
 
     @AfterEach
     void dispose() {
         commandLine.dispose();
+        messageLine.dispose();
         shell.dispose();
     }
 
@@ -250,12 +259,59 @@ class CommandLineBoxTest {
         assertEquals(List.of("type <C-c>"), commands.calls);
     }
 
+    /** Ctrl keys the workbench delivers (the Vim key contexts) go to Neovim's line. */
+    @Test
+    void aVimCtrlKeyGoesToNeovim() {
+        show(line(":abc", 4));
+        commandLine.ctrlKey("<C-r>");
+        commandLine.ctrlKey("<C-u>");
+        assertEquals(List.of("type <C-r>", "type <C-u>"), commands.calls);
+    }
+
+    /**
+     * Ctrl+V from the workbench pastes where Ctrl is the paste modifier (Windows, Linux); on macOS it
+     * is Vim's {@code <C-v>}, and Cmd+V pastes through Eclipse's Paste command.
+     */
+    @Test
+    void ctrlVFromTheWorkbenchPastesWhereCtrlIsThePasteModifier() {
+        show(line(":e ", 3));
+        Clipboard clipboard = new Clipboard(host.getDisplay());
+        try {
+            clipboard.setContents(new Object[] { "a.txt" }, new Transfer[] { TextTransfer.getInstance() });
+            commandLine.ctrlKey("<C-v>");
+        } finally {
+            clipboard.dispose();
+        }
+        assertEquals(List.of(SWT.MOD1 == SWT.CTRL ? "paste a.txt" : "type <C-v>"), commands.calls);
+    }
+
+    /** Ctrl+C from the workbench copies a selection where Ctrl is the copy modifier, else it is Neovim's. */
+    @Test
+    void ctrlCFromTheWorkbenchCopiesASelectionOnly() {
+        Text box = show(line(":echo", 5));
+        commandLine.ctrlKey("<C-c>"); // nothing selected
+        box.setSelection(1, 5);
+        commandLine.ctrlKey("<C-c>");
+        List<String> expected = SWT.MOD1 == SWT.CTRL ? List.of("type <C-c>") : List.of("type <C-c>", "type <C-c>");
+        assertEquals(expected, commands.calls);
+    }
+
+    /** The controller hears when the box opens and closes (it switches key contexts and handlers then). */
+    @Test
+    void openingAndClosingAreReported() {
+        show(line(":", 1));
+        assertTrue(stateChanges > 0, "opened");
+        int whileOpen = stateChanges;
+        commandLine.show(View.CLOSED);
+        assertTrue(stateChanges > whileOpen, "closed");
+    }
+
     /** A click elsewhere abandons the line in Neovim; its views still on their way do not reopen it. */
     @Test
-    void losingTheFocusAbandonsTheLine() {
-        Text box = show(line(":abc", 4));
-        // What a click elsewhere delivers (moving the real focus is unreliable under a virtual display).
-        box.notifyListeners(SWT.FocusOut, new Event());
+    void anotherControlTakingTheFocusAbandonsTheLine() {
+        show(line(":abc", 4));
+        // What a click in the editor delivers (moving the real focus is unreliable under a virtual display).
+        host.notifyListeners(SWT.FocusIn, new Event());
         waitUntil("the box to close", () -> !commandLine.isOpen());
         assertEquals(List.of("type <C-c>"), commands.calls);
 
@@ -264,6 +320,37 @@ class CommandLineBoxTest {
         commandLine.show(View.CLOSED);
         show(line(":", 1)); // the next line opens again
         assertTrue(commandLine.isOpen());
+    }
+
+    /**
+     * The focus leaving Eclipse (another application, an input method's switcher such as Super+Space
+     * on Linux) keeps the line: only a control of Eclipse's own taking the focus abandons it.
+     */
+    @Test
+    void focusLeavingEclipseKeepsTheLine() {
+        Text box = show(line(":abc", 4));
+        box.notifyListeners(SWT.FocusOut, new Event()); // no FocusIn elsewhere in this application
+        assertTrue(commandLine.isOpen());
+        box.notifyListeners(SWT.FocusIn, new Event()); // Eclipse's window active again
+        assertTrue(commandLine.isOpen());
+        assertEquals(List.of(), commands.calls);
+    }
+
+    // With the message line
+
+    /** A message that arrives while a line is typed (a timer's :echo) shows above the box, not over it. */
+    @Test
+    void aMessageWhileTheBoxIsOpenShowsAboveIt() {
+        Text box = show(line(":ec", 3));
+        messageLine.show("hello", false);
+        Rectangle message = messageLine.frame().control().getBounds();
+        Rectangle boxFrame = box.getParent().getBounds();
+        assertTrue(message.y + message.height <= boxFrame.y, message + " above " + boxFrame);
+        assertTrue(commandLine.isOpen());
+
+        commandLine.show(View.CLOSED);
+        Rectangle after = messageLine.frame().control().getBounds();
+        assertTrue(after.y > message.y, "back at the bottom edge once the box closes: " + after);
     }
 
     // With the output popup

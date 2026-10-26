@@ -13,7 +13,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Insert and replace mode | Eclipse, which types the text; `Esc` hands control back to Neovim |
 | Insert mode started from blockwise visual (`Ctrl+V` then `I`, `A`, `c`), or while recording a macro | Neovim, so it sees every key |
 | Keys typed within milliseconds of entering insert mode, before Eclipse has Neovim's text | Neovim, for the rest of that insert, so nothing is lost |
-| `:`, `/`, `?` in normal mode | the plug-in's command box at the bottom of the editor |
+| `:`, `/`, `?` in normal mode | Neovim, which opens its command line; the editor shows it in the `:` box, whose keys all go to Neovim (Paste and Copy stay Eclipse's, acting on the box) |
 | `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
 | `gd`, `K`, `gt`, `gT` in normal mode | Neovim first, which hands them to Eclipse (below) |
 | Eclipse mode (the Neovim toolbar button, the logo) | Eclipse, always |
@@ -22,7 +22,8 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 
 Eclipse looks at a `Ctrl` key before the editor does, so a letter only reaches Neovim if the plug-in
 claims it. *Window → Preferences → Neovim → Ctrl Keys* has one check box per letter: ticked letters go
-to Neovim in normal and visual mode, cleared ones keep their Eclipse shortcut. Changes apply at once.
+to Neovim in normal and visual mode and in the `:` box, cleared ones keep their Eclipse shortcut. In the
+box, `Ctrl+V` pastes and `Ctrl+C` with text selected copies (on Windows and Linux). Changes apply at once.
 
 By default every letter goes to Neovim **except these three**:
 

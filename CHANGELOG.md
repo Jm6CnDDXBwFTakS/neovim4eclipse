@@ -38,6 +38,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   abbreviations work. The box also shows prompts (`input()`, `confirm()`), and opens for every command
   line Neovim opens, `:'<,'>` from visual mode included.
 - While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back.
+- In the `:` box the `Ctrl` letters ticked under *Preferences → Neovim → Ctrl Keys* go to Neovim's line
+  (`Ctrl-U`, `Ctrl-N`, `Ctrl-P`, `Ctrl-R`), instead of running Eclipse shortcuts on the editor behind it.
+- Switching to another application or input method (Super+Space for Japanese input) while the `:`
+  box is open keeps the line; only a click elsewhere in Eclipse cancels it.
 - `:e` file names complete from the editor's project folder: Neovim's window now works there (`:lcd`).
   `:e` still looks next to the current file first.
 - `q:` (Neovim's command-line window, which Eclipse cannot show) now closes at once with a message

@@ -19,6 +19,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
 
@@ -80,6 +81,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final InsertTracker insertTracker;
     /** The inline {@code :} / {@code /} / {@code ?} command line along the bottom of the editor. */
     private final CommandLineBox commandLine;
+    /** Eclipse's Copy, Paste, Cut and Select All, pointed at {@link #commandLine} while it is open. */
+    private final CommandLineEditHandlers commandLineEdits;
     /** Neovim's messages and errors, and the plug-in's own, along the bottom of the editor. */
     private final MessageLine messageLine;
     /** The message last handed to {@link #messageLine}, so that other status changes do not show it again. */
@@ -139,9 +142,13 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.install(styledText); // an Esc that Eclipse took first (linked mode) still ends insert mode
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
-        this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
-        this.commandLine = new CommandLineBox(styledText, new SessionCommands(session));
+        this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
+                this::commandLineHasFocus);
         this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
+        this.commandLine = new CommandLineBox(styledText, new SessionCommands(session), messageLine,
+                this::onCommandLineStateChanged);
+        this.commandLineEdits = new CommandLineEditHandlers(
+                editor.getSite().getService(IHandlerService.class), commandLine);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         session.setHostExHandler(cmd -> HostCommands.tryHandleEx(cmd, editor));
@@ -344,6 +351,24 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
+    /** Whether the {@code :} box has the keyboard focus (the Vim Ctrl keys then go to its line). */
+    private boolean commandLineHasFocus() {
+        return commandLine != null && commandLine.hasFocus();
+    }
+
+    /**
+     * The {@code :} box opened, closed, gained or lost the focus: Eclipse's Copy and Paste act on it
+     * while it is open ({@link CommandLineEditHandlers}), and the Vim Ctrl keys reach its line while it
+     * has the focus ({@link EditorKeyContext}). UI thread.
+     */
+    private void onCommandLineStateChanged() {
+        if (closed || commandLineEdits == null) {
+            return; // the editor is going away, or the box reports while the controller is being built
+        }
+        commandLineEdits.update();
+        keyContext.update();
+    }
+
     /**
      * Command, message or statusline text changed: the command and statusline go to the status bar
      * item, the message to the message line. Called on the session's thread.
@@ -418,6 +443,10 @@ public final class NeovimEditorController implements AutoCloseable {
 
     /** Sends one key (Neovim notation) to Neovim; used by the key-binding command for Vim Ctrl keys. */
     public void sendKey(String nvimKey) {
+        if (!closed && neovimModeActive && commandLine.isOpen()) {
+            commandLine.ctrlKey(nvimKey); // the : box has the focus: its line, or its paste and copy
+            return;
+        }
         if (!closed && neovimModeActive) {
             keyInterceptor.sentElsewhere(nvimKey);
             session.inputAsync(nvimKey);
@@ -501,6 +530,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         try {
             caretSync.dispose();
+            commandLineEdits.dispose();
             commandLine.dispose();
             messageLine.dispose();
             selectionView.dispose();

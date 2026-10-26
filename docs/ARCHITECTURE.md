@@ -254,7 +254,8 @@ bottom edge (about half its height above it, clear of the scroll bar; width minu
 toward gray, both derived from the editor's colors (`util/OverlayColors`). The border is drawn by the
 plug-in because native borders differ per platform (Windows 11 draws none). It is positioned by hand on resize
 *and on every paint* of the host, so scrolling cannot leave it behind. It is non-modal: opening it moves focus
-to the box, which (via the focus listener in the controller) also deactivates the Vim key context.
+to the box. The message line moves up above the box while it is open (`MessageLine.makeRoomBelow`), so a
+message that arrives meanwhile (a timer's `:echo`) does not cover it.
 
 **The line is Neovim's** (step A2 of the cleanup plan; until 0.1.7 the box edited its own text and ran it
 on Enter). The UI is attached with `ext_cmdline` and `ext_popupmenu`, so Neovim reports its command line as
@@ -270,11 +271,22 @@ view to the controller, which shows it in the box. The box edits nothing:
 - **Text that is no key** (Ctrl+V or Cmd+V paste, Shift+Insert, an input method's committed text, a drop)
   reaches the box as an edit, which the `VerifyListener` refuses and sends as `nvim_paste`. Ctrl+C with a
   selection copies; without one it is Neovim's `<C-c>`.
+- **Eclipse's key bindings** run before the box sees a key, and the box is inside the editor, so Paste
+  would paste into the file and Ctrl+W close the editor. While the box has the focus the Vim Ctrl-key
+  contexts stay active (`EditorKeyContext`), and `SendKeyHandler` hands those keys to
+  `CommandLineBox.ctrlKey`: Neovim's line gets them (`<C-r>`, `<C-u>`, `<C-n>`), except Ctrl+V (paste)
+  and Ctrl+C with a selection (copy) where Ctrl is the platform's own modifier for them. While the box is
+  open, `editor/CommandLineEditHandlers` activates handlers for Copy, Paste, Cut and Select All in the
+  editor site's handler service; their expression ranks as depending on the focus control, above the
+  editor's own handlers, so Cmd+V and Shift+Insert paste into the box.
 - **Opening and closing** follow Neovim: the box opens on `cmdline_show`, whoever opened the line (`:` or
   `/` typed in the editor, which now simply goes to Neovim; a mapping; a count; `:` in visual mode, where
   Neovim inserts `'<,'>` itself; an operator's `d/`; `input()`, `confirm()`), and closes on `cmdline_hide`.
-- **Click-away:** when the box loses focus it sends `<C-c>` and closes; views of that line still on their
-  way are ignored until Neovim reports it closed.
+- **Click-away:** when another control of Eclipse's takes the focus (a display `FocusIn` filter, not the
+  box's own focus-lost event) the box sends `<C-c>` and closes; views of that line still on their way are
+  ignored until Neovim reports it closed. Focus that leaves Eclipse altogether (another application, an
+  input method's switcher window such as Super+Space on Linux) keeps the line, and the box has the focus
+  again when Eclipse's window does.
 - **Candidates** are fitted into one line above the box around the selected one (`util/CandidateLine`).
 - **Search preview:** while a `/` or `?` line is open, `win_viewport` carries Neovim's `'incsearch'`
   match (no `CursorMoved` fires then); the session dispatches it as the cursor, so the caret and view
@@ -447,7 +459,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
-| The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown), UI `CommandBoxEndToEndTest` |
+| The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
 | A document that is not attached and its buffer in step (`:bufdo`, refactorings) | `sync/UnattachedDocumentSync` (session seen through `core/DocumentBufferPort`) | `tests/text` `UnattachedDocumentSyncTest` (fake port: both directions, coalescing, attach and detach, a change that no longer fits), `NeovimBufferIntegrationTest` (routing, echo), UI `EditorEndToEndTest` (`:bufdo` over three files) |

@@ -34,8 +34,8 @@ public final class SendKeyHandler extends AbstractHandler {
                     + ", key=" + key + ", controller=" + controller);
             return null;
         }
-        // The key context is only active while this editor's text widget has focus, so the attached
-        // controller is the right target; no further editor identity check is needed.
+        // The key context is only active while this editor's text widget or its : box has focus, so
+        // the attached controller is the right target; no further editor identity check is needed.
         LOG.fine(() -> "Ctrl-key command " + commandId + " -> " + key);
         controller.sendKey(key);
         return null;

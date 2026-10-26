@@ -27,8 +27,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * command in contexts of its own ({@link #KEY_CONTEXT_ID} and one child context per Ctrl letter,
  * see {@link VimKeyContexts}); while a context is active its binding wins over Eclipse's.
  *
- * <p><b>The rule.</b> The contexts are active exactly while Neovim owns the keys, Neovim is not in
- * insert mode, and this editor's text widget has keyboard focus. In insert mode, in Eclipse mode,
+ * <p><b>The rule.</b> The contexts are active exactly while Neovim owns the keys and either Neovim
+ * is not in insert mode and this editor's text widget has keyboard focus, or the editor's {@code :}
+ * box has it (so that {@code <C-r>}, {@code <C-u>}, {@code <C-n>} reach Neovim's command line, see
+ * {@link CommandLineBox}). In insert mode, in Eclipse mode,
  * on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own shortcuts (paste,
  * content assist, other views) are untouched there. Activation is workbench-wide (the standard,
  * well-trodden path); the focus check keeps it from leaking into other parts.
@@ -51,6 +53,8 @@ final class EditorKeyContext {
     private final Supplier<String> mode;
     /** Whether Neovim owns this editor's keys (attached and not in Eclipse mode). */
     private final BooleanSupplier neovimOwnsKeys;
+    /** Whether the editor's {@code :} box has the keyboard focus. */
+    private final BooleanSupplier commandLineFocused;
     private final VimKeyContexts contexts = new VimKeyContexts();
     private boolean disposed;
 
@@ -66,10 +70,12 @@ final class EditorKeyContext {
         }
     };
 
-    EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys) {
+    EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys,
+            BooleanSupplier commandLineFocused) {
         this.widget = widget;
         this.mode = mode;
         this.neovimOwnsKeys = neovimOwnsKeys;
+        this.commandLineFocused = commandLineFocused;
         widget.addFocusListener(focusListener);
     }
 
@@ -80,8 +86,9 @@ final class EditorKeyContext {
 
     /** Applies the rule for {@code nvimMode}. UI thread. */
     void update(String nvimMode) {
-        boolean wanted = !disposed && neovimOwnsKeys.getAsBoolean() && !VimModes.isTyping(nvimMode)
-                && !widget.isDisposed() && widget.isFocusControl();
+        boolean editorKeys = !VimModes.isTyping(nvimMode) && !widget.isDisposed() && widget.isFocusControl();
+        boolean wanted = !disposed && neovimOwnsKeys.getAsBoolean()
+                && (editorKeys || commandLineFocused.getAsBoolean());
         try {
             IContextService service = contextService();
             if (service == null) {

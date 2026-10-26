@@ -73,7 +73,11 @@ handler:      command ...commands.ctrl.f  ──►  SendKeyHandler.execute()  �
 
 A command is only a name. Menus, toolbar buttons and key bindings point at the command, and the
 handler supplies the behavior. Several handlers can compete for one command; Eclipse picks the
-active one.
+active one whose *activation expression* depends on the most specific variable (the focus control
+beats the active part, which beats the active window; see `ISources`). Example: Paste
+(`org.eclipse.ui.edit.paste`, Ctrl+V) normally runs the editor's handler, which pastes into the
+document. While the `:` box is open, `editor/CommandLineEditHandlers` activates a handler of its own
+whose expression claims to depend on the focus control, so Paste pastes into the box instead.
 
 A handler can also drive how its menu entries and toolbar buttons look. The toggle button is a
 `style="toggle"` item: Eclipse draws it pressed while it is *checked*. `ToggleNeovimModeHandler`
@@ -550,7 +554,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `HostCommandRunner.Ide` | `util/HostCommandRunner` | a record inside `editor/HostCommands` |
 | `DocumentPush.Neovim`, `DocumentPush.Mirror` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer` |
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
-| `CommandLineBox.Commands` | `editor/CommandLineBox` | a record in `NeovimEditorController` (a fake that records "`:ls` captured, `:w` to the IDE" in tests) |
+| `CommandLineBox.Commands` | `editor/CommandLineBox` | `SessionCommands` in `NeovimEditorController` (a fake that records the keys and pastes sent, in tests) |
 | `ClipboardPort` | `core/ClipboardRegisters` | `editor/ClipboardBridge` (`ClipboardPort.NONE`, or a fake that keeps one text per selection, in tests) |
 
 A port is not the only way to keep Eclipse out of a class. When the class only *stores* Eclipse
