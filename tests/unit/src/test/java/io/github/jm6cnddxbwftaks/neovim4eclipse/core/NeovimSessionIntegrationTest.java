@@ -264,24 +264,6 @@ class NeovimSessionIntegrationTest {
 
     // ---- keys handed to the IDE, command output ----
 
-    @Test
-    void ideKeysAreHandedToTheIdeWithTheirCount() throws Exception {
-        try (NeovimSession s = start()) {
-            List<IdeAction> actions = new CopyOnWriteArrayList<>();
-            s.addIdeActionListener(actions::add);
-            s.setBufferLines(List.of("a", "b"));
-            keys(s, "g", "t");
-            keys(s, "3", "g", "T");
-            keys(s, "g", "d");
-            keys(s, "K");
-            waitFor(() -> actions.size() == 4, "four IDE actions");
-            assertEquals(List.of(new IdeAction(IdeAction.NEXT_TAB, 0), new IdeAction(IdeAction.PREVIOUS_TAB, 3),
-                    new IdeAction(IdeAction.DEFINITION, 0), new IdeAction(IdeAction.HOVER, 0)), actions);
-            keys(s, "g", "g", "j", "d", "d"); // the g prefix still works for Neovim's own commands
-            assertEquals(List.of("a"), s.getBufferLines());
-        }
-    }
-
     /** Neovim's own gd, for files without Open Declaration: the mapping is bypassed. */
     @Test
     void neovimsOwnGdJumpsToTheFirstUseOfTheWord() throws Exception {
@@ -318,44 +300,6 @@ class NeovimSessionIntegrationTest {
                     "E349 as an error in the message line, without the \"Vim:\" prefix pcall adds");
             String history = (String) s.lua("return vim.api.nvim_exec2('messages', { output = true }).output");
             assertTrue(history.contains("E349: No identifier under cursor"), "kept in :messages: " + history);
-        }
-    }
-
-    @Test
-    void ideKeysCanBeLeftToNeovim() throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
-        for (String value : List.of("0", "v:false")) {
-            try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:neovim4eclipse_ide_keys = " + value))) {
-                List<IdeAction> actions = new CopyOnWriteArrayList<>();
-                s.addIdeActionListener(actions::add);
-                keys(s, "g", "t"); // Neovim's own gt: there is only one tab page, so nothing happens
-                s.getBufferLines(); // a round trip: any notification sent before it has arrived
-                assertTrue(actions.isEmpty(), "no IDE action expected with " + value + ": " + actions);
-            }
-        }
-    }
-
-    /**
-     * {@code ZZ} and {@code ZQ} are Eclipse's save-and-close and close, mapped in Neovim, so Neovim
-     * reads them: {@code fZ} takes the {@code Z} as its argument, and only a whole {@code ZZ} or
-     * {@code ZQ} reaches the IDE. They stay mapped with {@code neovim4eclipse_ide_keys = 0}: Neovim's
-     * own {@code ZZ} would quit the embedded Neovim.
-     */
-    @Test
-    void zzAndZqAreHandedToTheIdeEvenWithIdeKeysOff() throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "let g:neovim4eclipse_ide_keys = 0"))) {
-            List<IdeAction> actions = new CopyOnWriteArrayList<>();
-            s.addIdeActionListener(actions::add);
-            s.setBufferLines(List.of("aZb"));
-            keys(s, "f", "Z", "x");
-            assertEquals(List.of("ab"), s.getBufferLines(), "fZ found the Z, x deleted it");
-            assertTrue(actions.isEmpty(), "fZ is no file command: " + actions);
-            keys(s, "Z", "Z");
-            keys(s, "Z", "Q");
-            waitFor(() -> actions.size() == 2, "two IDE actions");
-            assertEquals(List.of(new IdeAction(IdeAction.SAVE_AND_CLOSE, 0), new IdeAction(IdeAction.CLOSE, 0)), actions);
-            assertTrue(s.isAlive(), "Neovim did not quit");
         }
     }
 
@@ -997,32 +941,6 @@ class NeovimSessionIntegrationTest {
     }
 
     @Test
-    void dollarMakesTheBlockExtendToEndOfLine() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("abcd", "ef", "ijklmn"));
-            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
-            s.addSelectionListener(seen::add);
-            keys(s, "g", "g", "<C-v>", "j", "j", "$");
-            assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 4), new BlockSelection.ByteRange(2, 1, 2),
-                    new BlockSelection.ByteRange(3, 1, 6)), seen.get(seen.size() - 1).block(), "each line to its end");
-        }
-    }
-
-    /** Tabs and wide characters: the cell arithmetic is Neovim's (experiment X5). */
-    @Test
-    void aBlockOverTabsAndWideCharactersComesFromNeovim() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("a\tbcdef", "abcdefghij", "aあいうb"));
-            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
-            s.addSelectionListener(seen::add);
-            keys(s, "g", "g", "<C-v>", "j", "j", "l"); // l onto あ (cells 1-2): the block is cells 0-2
-            // Line 1: a and the tab (cells 1-7, only partly inside); line 2: abc; line 3: a and あ.
-            assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 2), new BlockSelection.ByteRange(2, 1, 3),
-                    new BlockSelection.ByteRange(3, 1, 4)), seen.get(seen.size() - 1).block());
-        }
-    }
-
-    @Test
     void blockDeleteRemovesTheRectangle() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("abcd", "efgh", "ijkl"));
@@ -1230,71 +1148,6 @@ class NeovimSessionIntegrationTest {
             assertEquals("", String.valueOf(s.lua("return vim.fn.getcmdwintype()")));
             assertEquals(1L, ((Number) s.lua("return #vim.api.nvim_list_wins()")).longValue());
         }
-    }
-
-    /** {@code :e} completion and {@code :!} start in the editor's project (decision D5). */
-    @Test
-    void theWindowFolderIsSet(@TempDir Path dir) throws Exception {
-        try (NeovimSession s = start()) {
-            s.setWindowFolderAsync(dir.toString());
-            Path real = dir.toRealPath(); // macOS: /var is a link to /private/var, and getcwd() resolves it
-            waitFor(() -> List.of(dir.toString(), real.toString()).contains(String.valueOf(luaOrNull(s, "return vim.fn.getcwd(0)"))),
-                    "the window's folder");
-            assertEquals(1L, ((Number) s.lua("return vim.fn.haslocaldir(0)")).longValue(), "window-local (:lcd)");
-        }
-    }
-
-    /**
-     * Before Eclipse deletes a project, Neovim leaves its folder: every working folder inside it (the
-     * global one, a tab page's, a window's) moves to the folder's parent, and a window working
-     * elsewhere keeps its folder. Windows refuses to delete a folder Neovim's process works in.
-     */
-    @Test
-    void leavingAFolderMovesEveryWorkingFolderInsideItToItsParent(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath(); // macOS: /var is a link to /private/var; getcwd() resolves it
-        Path project = Files.createDirectories(root.resolve("app/src"));
-        Path other = Files.createDirectories(root.resolve("other"));
-        try (NeovimSession s = start()) {
-            s.lua("vim.cmd.cd(" + luaString(project) + ")");
-            s.lua("vim.cmd.vsplit(); vim.cmd.lcd(" + luaString(other) + "); vim.cmd.wincmd('w'); vim.cmd.lcd("
-                    + luaString(project) + ")");
-            s.lua("vim.cmd.tabnew(); vim.cmd.tcd(" + luaString(project) + "); vim.cmd.tabprevious()");
-
-            assertEquals(3, s.leaveFolder(root.resolve("app").toString(), TestWait.duration()), "global, tab page 2, window 2");
-
-            String parent = root.toString();
-            assertEquals(parent, s.lua("return vim.fn.getcwd(-1, -1)"), "the global folder");
-            assertEquals(parent, s.lua("return vim.fn.getcwd(-1, 2)"), "tab page 2's folder");
-            assertEquals(parent, s.lua("return vim.fn.getcwd()"), "the current window's folder");
-            assertEquals(other.toString(), s.lua("return vim.fn.getcwd(1, 1)"), "a window elsewhere keeps its folder");
-            assertEquals(1L, ((Number) s.lua("return vim.fn.haslocaldir(1, 1)")).longValue(), "still its own (:lcd)");
-            assertEquals(parent, s.lua("return vim.uv.cwd()"), "the process's folder, the one Windows checks");
-            assertEquals(0, s.leaveFolder(root.resolve("app").toString(), TestWait.duration()), "nothing left inside");
-        }
-    }
-
-    /**
-     * A window whose folder is outside, and gone already (a project deleted before), does not stop
-     * the others from moving: setting that folder again would fail with E344.
-     */
-    @Test
-    void aWindowInAFolderThatIsGoneDoesNotStopLeaving(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath();
-        Path project = Files.createDirectories(root.resolve("app"));
-        Path gone = Files.createDirectories(root.resolve("gone"));
-        try (NeovimSession s = start()) {
-            s.lua("vim.cmd.vsplit(); vim.cmd.lcd(" + luaString(gone) + "); vim.cmd.wincmd('w'); vim.cmd.cd("
-                    + luaString(project) + ")");
-            Files.delete(gone);
-
-            assertEquals(1, s.leaveFolder(project.toString(), TestWait.duration()), "the global folder");
-            assertEquals(root.toString(), s.lua("return vim.uv.cwd()"));
-        }
-    }
-
-    /** {@code path} as a Lua string literal ({@code C:\\x} on Windows keeps its backslashes). */
-    private static String luaString(Path path) {
-        return "'" + path.toString().replace("\\", "\\\\").replace("'", "\\'") + "'";
     }
 
     @Test

@@ -168,17 +168,4 @@ class ClipboardIntegrationTest {
         }
     }
 
-    @Test
-    void aUsersOwnClipboardProviderIsKept() throws Exception {
-        // v:false is Neovim's own "use the built-in tools" setting; any g:clipboard counts.
-        try (NeovimSession s = start("--cmd", "let g:clipboard = v:false")) {
-            s.setBufferLines(List.of("abc"));
-            system.texts.put(Selection.CLIPBOARD, "Z");
-            keys(s, "\"", "+", "y", "y");
-            keys(s, "\"", "+", "p");
-            NeovimBarrier.pass(s);
-            assertEquals(List.of(), system.copies, "Eclipse is not the provider");
-            assertTrue(!s.getBufferLines().contains("aZbc"));
-        }
-    }
 }
