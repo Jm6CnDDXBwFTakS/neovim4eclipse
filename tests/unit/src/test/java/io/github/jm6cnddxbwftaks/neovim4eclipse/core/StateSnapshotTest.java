@@ -11,6 +11,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
+
 /** Parsing of the per-key state snapshot ({@link StateSnapshot}); no Neovim process involved. */
 class StateSnapshotTest {
 
@@ -90,24 +92,21 @@ class StateSnapshotTest {
         assertEquals("V", s.mode());
     }
 
+    /** Ctrl-V j l from the start of "abc" / "def": Neovim's getregionpos lines, flat. */
     @Test
-    void snapshotSelectionCarriesDollarModeAndTabstopForBlocks() {
+    void aBlockCarriesItsLinesAsNeovimReportsThem() {
         VisualSelection s = StateSnapshot.selection(
-                List.of(1, 0, 1, 1, 3, 2, "\u0016", 2147483647, 4), "v");
+                List.of(1, 0, 1, 1, 2, 2, "\u0016", "", "", 1, List.of(1, 1, 2, 2, 1, 2)), "v");
         assertTrue(s.isBlockWise());
-        assertTrue(s.toEndOfLine());
-        assertEquals(4, s.tabstop());
+        assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 2), new BlockSelection.ByteRange(2, 1, 2)), s.block());
     }
 
     @Test
-    void snapshotSelectionDefaultsWhenBlockExtrasAreMissingOrOdd() {
-        VisualSelection plain = StateSnapshot.selection(List.of(1, 0, 1, 1, 3, 2, "\u0016"), "v");
-        assertFalse(plain.toEndOfLine());
-        assertEquals(8, plain.tabstop());
-        VisualSelection normalCurswant = StateSnapshot.selection(
-                List.of(1, 0, 1, 1, 3, 2, "\u0016", 5, 0), "v");
-        assertFalse(normalCurswant.toEndOfLine());
-        assertEquals(1, normalCurswant.tabstop(), "tabstop is never below 1");
+    void blockLinesAreEmptyWhenMissingAndStopAtAMalformedTriple() {
+        assertEquals(List.of(), StateSnapshot.selection(List.of(1, 0, 1, 1, 3, 2, "\u0016"), "v").block());
+        assertEquals(List.of(), StateSnapshot.blockLines("junk"));
+        assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 2)), StateSnapshot.blockLines(List.of(1, 1, 2, 2, "x", 2)));
+        assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 2)), StateSnapshot.blockLines(List.of(1, 1, 2, 2, 1)));
     }
 
     @Test
@@ -121,13 +120,13 @@ class StateSnapshotTest {
 
     @Test
     void snapshotReportsTheRecordingRegister() {
-        assertEquals("a", StateSnapshot.recording(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "a")));
-        assertEquals("", StateSnapshot.recording(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "")));
+        assertEquals("a", StateSnapshot.recording(List.of(1, 0, 1, 1, 1, 1, "n", "a")));
+        assertEquals("", StateSnapshot.recording(List.of(1, 0, 1, 1, 1, 1, "n", "")));
     }
 
     @Test
     void snapshotWithoutARecordingElementMeansNotRecording() {
-        assertEquals("", StateSnapshot.recording(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8)));
+        assertEquals("", StateSnapshot.recording(List.of(1, 0, 1, 1, 1, 1, "n")));
         assertEquals("", StateSnapshot.recording(null));
         assertEquals("", StateSnapshot.recording("junk"));
     }
@@ -135,28 +134,28 @@ class StateSnapshotTest {
     // ---- statusline ----
 
     @Test
-    void theStatuslineIsTheEleventhElement() {
-        assertEquals("[No Name] 1,1", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "", "[No Name] 1,1", 1)));
+    void theStatuslineIsTheNinthElement() {
+        assertEquals("[No Name] 1,1", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", "", "[No Name] 1,1", 1)));
     }
 
     @Test
     void theStatuslineIsEmptyWhenMissingOrNotUnderstood() {
-        assertEquals("", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "")));
+        assertEquals("", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", "")));
         assertEquals("", StateSnapshot.statusline(null));
         assertEquals("", StateSnapshot.statusline("junk"));
-        java.util.List<Object> withNull = new java.util.ArrayList<>(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "", "", 1));
-        withNull.set(10, null);
+        java.util.List<Object> withNull = new java.util.ArrayList<>(List.of(1, 0, 1, 1, 1, 1, "n", "", "", 1));
+        withNull.set(StateSnapshot.STATUSLINE, null);
         assertEquals("", StateSnapshot.statusline(withNull));
     }
 
     // ---- buffer ----
 
     @Test
-    void snapshotBufferIsTheTwelfthElement() {
-        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(11, (Object) ""));
+    void snapshotBufferIsTheTenthElement() {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(9, (Object) ""));
         raw.add(6);
         assertEquals(6, StateSnapshot.buffer(raw));
-        assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer(raw.subList(0, 11)));
+        assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer(raw.subList(0, 9)));
         assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer("garbage"));
     }
 }

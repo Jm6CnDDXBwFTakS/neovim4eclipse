@@ -7,10 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection.ByteRange;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection.LineRange;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Turning Neovim's block lines into document characters. Each case uses what Neovim 0.12.6's
+ * {@code getregionpos()} returned for that text and block (experiment X5 of the cleanup plan); the
+ * screen-cell arithmetic behind those numbers is Neovim's and is not tested here.
+ */
 class BlockSelectionTest {
 
     private static BlockSelection.Lines lines(String... text) {
@@ -20,125 +26,81 @@ class BlockSelectionTest {
         };
     }
 
-    private static List<LineRange> block(BlockSelection.Lines l, int line1, int col1, int line2, int col2) {
-        return BlockSelection.compute(l, line1, col1, line2, col2, false, 4);
+    private static List<LineRange> compute(BlockSelection.Lines lines, ByteRange... ranges) {
+        return BlockSelection.compute(lines, List.of(ranges));
     }
 
     @Test
-    void simpleRectangleOverAscii() {
-        // cols 1..2 on lines 1..3
-        List<LineRange> r = block(lines("abcdef", "ghijkl", "mnopqr"), 1, 1, 3, 2);
-        assertEquals(List.of(new LineRange(0, 1, 3), new LineRange(1, 1, 3), new LineRange(2, 1, 3)), r);
+    void asciiBytesAreCharacters() {
+        // Ctrl-V j l from the second column: bytes 2..3 of each line.
+        assertEquals(List.of(new LineRange(0, 1, 3), new LineRange(1, 1, 3)),
+                compute(lines("abcdef", "ghijkl"), new ByteRange(1, 2, 3), new ByteRange(2, 2, 3)));
     }
 
+    /** {@code "a\tbcdef"}, block over cells 0..4: the tab is only partly inside and is included whole. */
     @Test
-    void cornersMayBeGivenInEitherOrder() {
-        BlockSelection.Lines l = lines("abcdef", "ghijkl", "mnopqr");
-        assertEquals(block(l, 1, 1, 3, 4), block(l, 3, 4, 1, 1));
-        assertEquals(block(l, 1, 4, 3, 1), block(l, 3, 1, 1, 4), "anti-diagonal corners give the same block");
+    void aTabPartlyInsideIsIncludedWhole() {
+        assertEquals(List.of(new LineRange(0, 0, 2)), compute(lines("a\tbcdef"), new ByteRange(1, 1, 2)));
     }
 
+    /** {@code "ab\tcdef"}, block over cells 4..5, inside the tab: the tab alone. */
     @Test
-    void singleCharacterBlock() {
-        assertEquals(List.of(new LineRange(1, 2, 3)), block(lines("abc", "def"), 2, 2, 2, 2));
+    void aBlockInsideATabCoversTheTab() {
+        assertEquals(List.of(new LineRange(0, 2, 3)), compute(lines("ab\tcdef"), new ByteRange(1, 3, 3)));
     }
 
+    /** {@code "aあいうb"} over cells 1..2: Neovim's last byte is あ's last (byte 4); あ is one char. */
     @Test
-    void shortLinesAreOmittedAndEmptyLinesToo() {
-        List<LineRange> r = block(lines("abcdef", "ab", "", "abcdef"), 1, 3, 4, 4);
-        assertEquals(List.of(new LineRange(0, 3, 5), new LineRange(3, 3, 5)), r);
+    void aWideCharacterIsOneCharacterOfThreeBytes() {
+        assertEquals(List.of(new LineRange(0, 1, 2)), compute(lines("aあいうb"), new ByteRange(1, 2, 4)));
     }
 
+    /**
+     * {@code "aあいうb"} over cells 2..3, which split あ and い: Neovim points at each partly covered
+     * character's first byte (2 and 5), and both are included whole.
+     */
     @Test
-    void lineThatEndsInsideTheBlockIsClipped() {
-        // The second corner is past the end of "abcd", so it clamps to the cell after the last character:
-        // the block is cells 2..4. Line 1 is cut at cell 4 and line 2 ends where its text ends.
-        List<LineRange> r = block(lines("abcdef", "abcd"), 1, 2, 2, 5);
-        assertEquals(List.of(new LineRange(0, 2, 5), new LineRange(1, 2, 4)), r);
+    void partlyCoveredWideCharactersAtBothEndsAreIncluded() {
+        assertEquals(List.of(new LineRange(0, 1, 3)), compute(lines("aあいうb"), new ByteRange(1, 2, 5)));
     }
 
+    /** {@code $}: each line to its own end. */
     @Test
-    void toEndOfLineExtendsEveryLine() {
-        List<LineRange> r = BlockSelection.compute(lines("abcdef", "abcd", "ab", "abcdefgh"), 1, 2, 4, 2, true, 4);
-        assertEquals(List.of(new LineRange(0, 2, 6), new LineRange(1, 2, 4), new LineRange(3, 2, 8)), r);
+    void dollarRangesEndAtEachLinesEnd() {
+        assertEquals(List.of(new LineRange(0, 1, 6), new LineRange(1, 1, 2), new LineRange(2, 1, 10)),
+                compute(lines("abcdef", "ab", "abcdefghij"),
+                        new ByteRange(1, 2, 6), new ByteRange(2, 2, 2), new ByteRange(3, 2, 10)));
     }
 
+    /** A line that does not reach the block starts past its end ({@code "a"}: byte 2; {@code ""}: byte 1). */
     @Test
-    void tabsCountAsCellsToTheNextTabStop() {
-        // line 1: "\tx" -> tab covers cells 0..3, 'x' is cell 4. line 2: "abcdefgh".
-        // Corners on 'x' (cell 4) and on 'e' (byte col 4, cell 4): the block is cell 4 only.
-        List<LineRange> r = block(lines("\tx", "abcdefgh"), 1, 1, 2, 4);
-        assertEquals(List.of(new LineRange(0, 1, 2), new LineRange(1, 4, 5)), r);
+    void shortAndEmptyLinesAreLeftOut() {
+        assertEquals(List.of(new LineRange(0, 3, 5)),
+                compute(lines("abcdef", "a", ""), new ByteRange(1, 4, 5), new ByteRange(2, 2, 2), new ByteRange(3, 1, 1)));
     }
 
-    @Test
-    void aTabOverlappingTheBlockIsIncludedWhole() {
-        // Block is cells 2..3 on lines 1-3; the tab on line 2 spans cells 0..3 and overlaps it.
-        List<LineRange> r = block(lines("abcdefgh", "\tx", "abcdefgh"), 1, 2, 3, 3);
-        assertEquals(List.of(new LineRange(0, 2, 4), new LineRange(1, 0, 1), new LineRange(2, 2, 4)), r);
-    }
-
-    @Test
-    void tabWidthChangesTheGeometry() {
-        BlockSelection.Lines l = lines("\tx", "abcdefghij");
-        // 'x' is at cell 8 with tabstop 8, at cell 4 with tabstop 4.
-        assertEquals(List.of(new LineRange(0, 1, 2), new LineRange(1, 8, 9)),
-                BlockSelection.compute(l, 1, 1, 2, 8, false, 8));
-        assertEquals(List.of(new LineRange(0, 1, 2), new LineRange(1, 4, 5)),
-                BlockSelection.compute(l, 1, 1, 2, 4, false, 4));
-    }
-
-    @Test
-    void multiByteCharactersUseByteColumnsForCornersButCellsForGeometry() {
-        // "é" is 2 bytes, 1 cell. Corner on byte col 3 is 'b' (index 2, cell 2).
-        List<LineRange> r = block(lines("aébc", "123456"), 1, 3, 2, 2);
-        assertEquals(List.of(new LineRange(0, 2, 3), new LineRange(1, 2, 3)), r);
-    }
-
-    @Test
-    void wideCharactersTakeTwoCells() {
-        // "日本" = cells 0-1 and 2-3 (3 bytes each). Corner on the second wide char (byte 3) and on
-        // line 2 col 3 ('d', cell 3): block is cells 2..3.
-        List<LineRange> r = block(lines("日本x", "abcdef"), 1, 3, 2, 3);
-        assertEquals(List.of(new LineRange(0, 1, 2), new LineRange(1, 2, 4)), r);
-    }
-
-    @Test
-    void aWideCharacterPartiallyInsideTheBlockIsIncluded() {
-        // Block is cell 1 only; the wide character on line 2 covers cells 0-1 and is included whole.
-        List<LineRange> r = block(lines("abc", "日x", "abc"), 1, 1, 3, 1);
-        assertEquals(List.of(new LineRange(0, 1, 2), new LineRange(1, 0, 1), new LineRange(2, 1, 2)), r);
-    }
-
+    /** Neovim's last byte is the combining mark's, so the mark stays with its base character. */
     @Test
     void combiningMarksStayWithTheirBaseCharacter() {
-        String decomposed = "e\u0301x"; // e + combining acute, then x
-        List<LineRange> r = block(lines(decomposed), 1, 0, 1, 0);
-        assertEquals(List.of(new LineRange(0, 0, 2)), r);
+        assertEquals(List.of(new LineRange(0, 1, 3)), compute(lines("aéb"), new ByteRange(1, 2, 4)));
     }
 
+    /** {@code "a😀b"}: the emoji is four bytes and two UTF-16 chars, never split. */
     @Test
     void surrogatePairsAreNotSplit() {
-        String s = "\uD83D\uDE00ab"; // emoji (wide, 2 cells), a, b
-        List<LineRange> r = block(lines(s), 1, 0, 1, 0);
-        assertEquals(List.of(new LineRange(0, 0, 2)), r);
+        assertEquals(List.of(new LineRange(0, 1, 3)), compute(lines("a😀b"), new ByteRange(1, 2, 5)));
+    }
+
+    /** The document can lag Neovim for a moment; a line it does not have yet is left out, not an error. */
+    @Test
+    void linesTheDocumentDoesNotHaveAreLeftOut() {
+        assertEquals(List.of(new LineRange(0, 0, 1)),
+                compute(lines("abc"), new ByteRange(0, 1, 1), new ByteRange(1, 1, 1), new ByteRange(2, 1, 1)));
     }
 
     @Test
-    void outOfRangeLinesAreClamped() {
-        assertEquals(List.of(new LineRange(0, 0, 1)), block(lines("abc"), 0, 0, 99, 0));
-    }
-
-    @Test
-    void emptyDocumentAndZeroTabstopAreSafe() {
-        assertEquals(List.of(), BlockSelection.compute(lines(), 1, 0, 1, 0, false, 4));
-        assertEquals(List.of(new LineRange(0, 0, 1)), BlockSelection.compute(lines("a"), 1, 0, 1, 0, false, 0));
-    }
-
-    @Test
-    void cornerPastTheEndOfItsLineStillDefinesAColumn() {
-        // Corner 2 is past the end of the empty line 2 (cell 0); the block is then cells 0..2 from line 1.
-        List<LineRange> r = block(lines("abcdef", ""), 1, 2, 2, 0);
-        assertEquals(List.of(new LineRange(0, 0, 3)), r);
+    void anEndBeforeTheStartOrPastTheLineIsSafe() {
+        assertEquals(List.of(), compute(lines("abc"), new ByteRange(1, 3, 2)));
+        assertEquals(List.of(new LineRange(0, 1, 3)), compute(lines("abc"), new ByteRange(1, 2, 99)));
     }
 }

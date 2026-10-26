@@ -365,9 +365,9 @@ the paste inserts nothing.
 ## Blockwise visual (`Ctrl-V`)
 
 Works like Vim: `Ctrl-V` then motions, `$` to extend to line ends, `o`/`O` to switch corners, and `d`, `y`,
-`c`, `r`, `I`, `A`, `p` ... applied by Neovim. The rectangle is measured in screen columns (tabs and wide
-characters count correctly) and drawn as an overlay. On attach, Neovim's `tabstop` is set to the editor's
-tab width so both agree.
+`c`, `r`, `I`, `A`, `p` ... applied by Neovim. Neovim also measures the rectangle, in screen columns (tabs
+and wide characters count correctly), so the overlay shows exactly what its commands act on. On attach,
+Neovim's `tabstop` is set to the editor's tab width so both agree.
 
 **Key bindings.** Eclipse handles shortcuts before the editor sees keys (`Ctrl-V` is *Paste* on
 Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that sends the key to Neovim.

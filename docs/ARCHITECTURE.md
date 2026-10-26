@@ -363,12 +363,18 @@ the replay early.
 
 ## Blockwise visual
 
-- **Geometry:** `util/BlockSelection` converts Neovim's two corners (line + UTF-8 byte column) into per-line
-  character ranges using virtual columns (tabs, wide characters, `$`). Tested without Eclipse.
+- **Geometry:** Neovim's. In blockwise mode `STATE_SNAPSHOT` adds `getregionpos(getpos('v'), getpos('.'),
+  { type = mode(), eol = true })` (Neovim 0.10): for each line, the first and last byte the block covers,
+  with tabs, wide characters, combining marks and `$` worked out the way Neovim's own `d`, `y`, `I` act
+  on them. `util/BlockSelection` only turns those bytes into the line's characters (a character partly
+  inside is included whole; a line too short to reach the block is left out). Example: `Ctrl-V`, `j`,
+  `l` from the start of `abc` and `def` arrives as `{1, 1, 2, 2, 1, 2}` (line, first, last byte).
+  5000 lines take about 3 ms in Neovim (experiment X5). Until 0.1.7 the cell arithmetic was Java's, from
+  the two corners, `curswant` and `'tabstop'`.
 - **Display:** SWT's block selection is pixel based, so the native selection is cleared and the rectangle
   is painted as an overlay by `editor/BlockOverlay` (visible lines only).
 - **Tab width:** `NeovimEditorController` sets Neovim's `tabstop` to the editor's tab width on attach, so
-  Neovim's block commands and the overlay use the same columns.
+  the rectangle Neovim measures is the one the editor shows.
 - **Keys:** the workbench dispatches key bindings *before* widget key listeners, so `Ctrl-V` etc. would never
   reach `KeyInterceptor`. A context (`io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal`) is activated
   workbench-wide while Neovim owns normal/visual keys **and** the editor's text widget has focus, and
@@ -444,6 +450,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Command line that starts Neovim, with `vim.g.neovim4eclipse` for the user's config | `util/NvimExecutable` | `NvimExecutableTest`, `NeovimSessionIntegrationTest` |
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
+| A block's lines as document characters | `util/BlockSelection` | `BlockSelectionTest`, `NeovimSessionIntegrationTest` (needs nvim) |
 | Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |

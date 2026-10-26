@@ -32,6 +32,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   command, so they are in the history, `@:` repeats them and a macro being recorded contains them.
 - Commands from the `:` box are kept in Neovim's history as you typed them, without a `silent` in
   front.
+- The `Ctrl-V` block's highlight is now measured by Neovim itself, so it always covers exactly what
+  Neovim's block commands act on, also for characters whose screen width the plug-in had to guess
+  (emoji, rarer wide characters, your `'ambiwidth'`).
 
 ## [0.1.6] - 2026-10-26
 

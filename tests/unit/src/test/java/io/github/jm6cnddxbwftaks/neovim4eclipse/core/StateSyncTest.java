@@ -122,8 +122,6 @@ class StateSyncTest {
         raw.set(StateSnapshot.VISUAL_BOUNDS + 2, endLine);
         raw.set(StateSnapshot.VISUAL_BOUNDS + 3, endCol1);
         raw.set(StateSnapshot.VISUAL_BOUNDS + 4, mode);
-        raw.set(StateSnapshot.CURSWANT, 0);
-        raw.set(StateSnapshot.TABSTOP, 8);
         return raw;
     }
 

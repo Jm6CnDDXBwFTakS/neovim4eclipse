@@ -23,8 +23,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit.LineSource;
  * </ul>
  *
  * <p>Example: in {@code "alpha\nbeta"}, {@code v} on "l" (line 1, byte 1) and the cursor on "e"
- * (line 2, byte 1) gives start 1, end 8 (after "be"), caret at the end. Blockwise selections are
- * {@link BlockSelection}'s job. Pure; no Eclipse types.
+ * (line 2, byte 1) gives start 1, end 8 (after "be"), caret at the end. Blockwise selections come
+ * from Neovim line by line ({@link BlockSelection}). Pure; no Eclipse types.
  */
 public final class VisualSelectionGeometry {
 

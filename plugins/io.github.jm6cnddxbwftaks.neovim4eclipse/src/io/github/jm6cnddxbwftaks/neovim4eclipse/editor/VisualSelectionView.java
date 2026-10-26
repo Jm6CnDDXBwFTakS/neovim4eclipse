@@ -24,7 +24,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VisualSelectionGeometry;
  *       selection is set through {@link EditorCaret}.</li>
  *   <li>A blockwise selection ({@code Ctrl-V}) cannot be an editor selection: the native selection
  *       is cleared, the caret is put on Neovim's cursor corner, and a {@link BlockHighlight}
- *       ({@link BlockOverlay} in the editor) shows the rectangle that {@link BlockSelection} computes.</li>
+ *       ({@link BlockOverlay} in the editor) shows the characters Neovim reports for each line,
+ *       turned into document characters by {@link BlockSelection}.</li>
  * </ul>
  *
  * <p>Decides only; the widget work is behind {@link EditorCaret} and {@link BlockHighlight}, so it is
@@ -71,9 +72,7 @@ final class VisualSelectionView {
     }
 
     private void showBlock(IDocument doc, VisualSelection sel) {
-        List<LineRange> ranges = BlockSelection.compute(new DocumentPositions.DocumentLines(doc),
-                sel.startLine1Based(), sel.startCol0Based(), sel.endLine1Based(), sel.endCol0Based(),
-                sel.toEndOfLine(), sel.tabstop());
+        List<LineRange> ranges = BlockSelection.compute(new DocumentPositions.DocumentLines(doc), sel.block());
         // The caret goes on Neovim's cursor corner; the native selection is cleared.
         int cursor = VisualSelectionGeometry.offsetOf(new DocumentLineSource(doc), sel.endLine1Based(),
                 sel.endCol0Based());
