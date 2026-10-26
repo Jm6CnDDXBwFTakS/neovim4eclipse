@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- On a slow or busy machine, a `:` command that opens another editor (`:e new.txt`) no longer ends
+  with "Type :qa and press <Enter> to exit Nvim" in place of its own message: the new editor taking
+  the focus is no longer taken for a click away from the `:` box.
+
 ## [0.1.7] - 2026-10-26
 
 ### Added
