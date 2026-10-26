@@ -15,7 +15,8 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ## Commands
 
 ```bash
-./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # everything: plug-in, all tests incl. UI (not -PuiHeavyJava), feature, ZIP
+./mvnw verify -Pall -Dnvim.path=/usr/bin/nvim     # every test of every group (integration, heavyJava, timeoutReliant; not screenshots); slow
+./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # as CI: plug-in, unit, text, SWT and UI tests, feature, ZIP (not integration: add the -Pintegration line)
 ./mvnw verify                                     # the same without the UI tests (no Eclipse window)
 ./mvnw verify -PuiHeavyJava                       # only the UI tests that need Java tooling (slow; not in CI)
 ./mvnw verify -PtimeoutReliant -Dnvim.path=/usr/bin/nvim   # only the tests tagged timeoutReliant (measure time; not in CI)

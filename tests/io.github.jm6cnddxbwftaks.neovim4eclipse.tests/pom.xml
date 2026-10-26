@@ -271,6 +271,39 @@
         </plugins>
       </build>
     </profile>
+    <!-- ./mvnw verify -Pall: every test of every group in one run, here and in tests/unit (there
+         also the integration tests): the -Pui tests, heavyJava (so with the Java development tools,
+         as uiHeavyJava) and timeoutReliant. Only "screenshots" stays out: it is not a test, and it
+         rewrites the Marketplace images. Combining the other profiles (-Pui,uiHeavyJava) does not
+         add them up: each sets ui.groups, and the last one wins. Slow; for a release or a big
+         change, not CI. See CONTRIBUTING.md, "Running every test" (a paragraph under the build commands). -->
+    <profile>
+      <id>all</id>
+      <properties>
+        <ui.skip>${skipTests}</ui.skip>
+        <ui.groups></ui.groups>
+        <ui.excludedGroups>screenshots</ui.excludedGroups>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>target-platform-configuration</artifactId>
+            <configuration>
+              <dependency-resolution>
+                <extraRequirements combine.children="append">
+                  <requirement>
+                    <type>eclipse-feature</type>
+                    <id>org.eclipse.jdt</id>
+                    <versionRange>0.0.0</versionRange>
+                  </requirement>
+                </extraRequirements>
+              </dependency-resolution>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <!-- macOS: Cocoa lets only the process's first thread create the SWT Display, and Java runs main()
          on another thread unless -XstartOnFirstThread is given. Without it the test Eclipse stops at
          start-up with "SWTException: Invalid thread access" (exit code 13). An installed Eclipse gets

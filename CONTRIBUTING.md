@@ -33,7 +33,17 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake t
 ./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
 ./mvnw verify -Pui -Dtest.wait.seconds=60       # any of these with more time per wait (default 15)
 xvfb-run -a ./mvnw verify -PtimeoutReliant       # only the tests that depend on the machine's speed
+xvfb-run -a ./mvnw verify -Pall                  # every test of every group in one run (see below)
 ```
+
+**Running every test.** `-Pall` runs every test in one build: the unit, text, SWT and UI tests as
+`-Pui` does, the integration tests (`-Pintegration`), the Java editor tests (`-PuiHeavyJava`, so the
+test Eclipse gets the Java development tools) and the `timeoutReliant` ones. Only the screenshots
+stay out, since they are not tests and rewrite the Marketplace images. Listing the profiles instead
+(`-Pui,uiHeavyJava,timeoutReliant`) does not add them up: each one sets which tags run, and the last
+one wins. Pass `-Dnvim.path` as for `-Pintegration`. It is the slowest run (a large first download
+for the Java tools), so use it before a release or after a wide change, not for every commit. One
+coverage report per module covers all its groups (`tests/unit/target/site/jacoco-all`).
 
 The UI tests in `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` run only with `-Pui`. They
 start an Eclipse workbench, which opens a window for about 15 seconds, so a plain `./mvnw verify`
@@ -198,6 +208,7 @@ browser:
 | Text-model tests (`./mvnw verify` or `./mvnw test -f tests/text/pom.xml`) | `tests/text/target/site/jacoco/index.html` |
 | SWT tests (`./mvnw verify` or `./mvnw test -f tests/swt/pom.xml`) | `tests/swt/target/site/jacoco/index.html` |
 | UI tests (`./mvnw verify -Pui`) | `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/site/jacoco/index.html` |
+| Every unit-module group at once (`-Pall`) | `tests/unit/target/site/jacoco-all/index.html` (the UI tests' report is the usual one) |
 
 **Why one report per kind of test, not one merged report.** JaCoCo matches what it recorded to class
 files by a checksum of their bytecode. The unit tests compile their own copy of `core/` and `util/`
@@ -375,12 +386,11 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    `## [0.1.2] - 2026-11-02` (the release date, in ISO form) and add a new, empty
    `## [Unreleased]` above it. That section becomes the release notes;
    `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
-   the README's status line. Run the tests CI leaves out on your machine, after the Java editor and
-   the timeout-reliant ones (see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
+   the README's status line. Run every test on your machine, those CI leaves out included (the Java
+   editor and the timeout-reliant ones; see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
 
    ```bash
-   ./mvnw verify -PuiHeavyJava
-   xvfb-run -a ./mvnw verify -PtimeoutReliant -Dnvim.path=/path/to/nvim
+   xvfb-run -a ./mvnw verify -Pall -Dnvim.path=/path/to/nvim
    ```
 
    Commit and push, then run the *Build* workflow on the branch by hand and wait for it to pass:
