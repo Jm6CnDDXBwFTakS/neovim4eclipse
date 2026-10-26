@@ -12,6 +12,8 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Event;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+
 /**
  * The mouse in a real editor ({@link NeovimMouse}): clicks go to Neovim's own mouse, and its cursor
  * and visual selection come back to the editor. The file is "alpha\nbeta\ngamma\n".
@@ -52,15 +54,25 @@ class MouseEndToEndTest extends EndToEndTestBase {
         expectText("alpha\nbea\ngamma\n");
     }
 
+    /**
+     * Neovim counts the three presses as one triple click only if each comes within
+     * {@code 'mousetime'} of the one before. The default, 500 ms, is too short on a loaded machine,
+     * so the test allows 10 s, and sets the default back for the tests after it.
+     */
     @Test
     void aTripleClickSelectsTheLineAndDDeletesIt() {
-        click(7, 3); // beta
-        // Wait for linewise visual mode itself: the second click already selects the word "beta"
-        // (charwise, mode v), so waiting only for the selection could end before Neovim had the third.
-        waitUntil("the line selected", TIMEOUT_MS, () -> "V".equals(session.getMode()) && selected().startsWith("beta"),
-                () -> "; selected [" + selected() + "], mode " + session.getMode());
-        type(widget, "d");
-        expectText("alpha\ngamma\n");
+        SessionProbe.lua(session, "vim.o.mousetime = 10000");
+        try {
+            click(7, 3); // beta
+            // Wait for linewise visual mode itself: the second click already selects the word "beta"
+            // (charwise, mode v), so waiting only for the selection could end before Neovim had the third.
+            waitUntil("the line selected", TIMEOUT_MS, () -> "V".equals(session.getMode()) && selected().startsWith("beta"),
+                    () -> "; selected [" + selected() + "], mode " + session.getMode());
+            type(widget, "d");
+            expectText("alpha\ngamma\n");
+        } finally {
+            SessionProbe.lua(session, "vim.o.mousetime = 500");
+        }
     }
 
     @Test
