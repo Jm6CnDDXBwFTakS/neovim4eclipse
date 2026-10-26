@@ -712,6 +712,42 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("lcd " + folder, Level.WARNING, () -> await(api.execLua(LuaScripts.SET_WINDOW_FOLDER, List.of(folder))));
     }
 
+    /**
+     * Moves Neovim out of {@code folder} ({@link LuaScripts#LEAVE_FOLDER}) and waits until it has,
+     * for at most {@code timeout}: called before Eclipse deletes or closes the project in that
+     * folder, which Windows refuses while Neovim's process works in it.
+     *
+     * <p>The one wait for Neovim the UI thread may do (Eclipse deletes a project from the UI thread
+     * too). It is bounded, so that a Neovim that holds requests (waiting for the character after
+     * {@code f}) or waits for the UI thread itself costs at most {@code timeout}, after which the
+     * delete goes on as it would have without this call. Sent straight to Neovim, not queued on the
+     * input thread: work there can wait for the UI thread (a key whose changes the UI thread
+     * applies), which here is waiting for this answer, so a queued request missed the bound in
+     * about one project delete out of five in the UI tests. Writes to Neovim are serialized by the
+     * RPC channel, so this cannot cut into a request of the input thread.
+     *
+     * @return how many working folders Neovim moved, or {@code -1} when it did not answer in time,
+     *         failed, or is closed
+     */
+    public int leaveFolder(String folder, Duration timeout) {
+        if (!isAlive()) {
+            return -1;
+        }
+        try {
+            Object moved = api.execLua(LuaScripts.LEAVE_FOLDER, List.of(folder)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return moved instanceof Number n ? n.intValue() : 0;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return -1;
+        } catch (java.util.concurrent.TimeoutException e) {
+            LOG.warning(() -> "Neovim did not leave " + folder + " within " + timeout.toMillis() + " ms");
+            return -1;
+        } catch (Exception e) { // Neovim's error, or a closed connection
+            LOG.log(Level.WARNING, "Neovim could not leave " + folder, e);
+            return -1;
+        }
+    }
+
     /** Runs normal-mode {@code keys} without mappings, then refreshes Eclipse. See {@link CommandRunner#normal}. */
     public void normalAsync(String keys) {
         submit("normal! " + keys, Level.WARNING, () -> commands.normal(keys));

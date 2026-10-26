@@ -48,6 +48,7 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 ## Rules the code depends on
 
 - No blocking Neovim RPC on the SWT UI thread; queue work through the session's `*Async` methods.
+  The one bounded exception: `editor/ProjectFolderExit` waits at most 1 s before a project delete.
 - Neovim columns are UTF-8 bytes, Eclipse columns UTF-16 chars; convert with `Utf8Columns` /
   `DocumentPositions`.
 - `StyledText` offsets are not document offsets when code is folded; convert with `WidgetOffsets`.

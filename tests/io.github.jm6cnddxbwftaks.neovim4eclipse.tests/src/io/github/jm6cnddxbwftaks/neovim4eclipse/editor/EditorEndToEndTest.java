@@ -788,6 +788,30 @@ class EditorEndToEndTest extends EndToEndTestBase {
         waitUntil("clean after one Ctrl+Z", TIMEOUT_MS, () -> !editor.isDirty());
     }
 
+    /**
+     * Neovim works in the editor's project ({@code :lcd}) and leaves it before Eclipse closes (or
+     * deletes) the project: Windows refuses to delete a folder Neovim's process works in
+     * ({@code ProjectFolderExit}). The teardown's delete checks the delete on Windows.
+     */
+    @Test
+    void neovimLeavesTheProjectFolderBeforeEclipseClosesTheProject() throws Exception {
+        java.nio.file.Path folder = project.getLocation().toPath().toRealPath();
+        waitUntil("Neovim works in the project", TIMEOUT_MS, () -> folder.toString().equals(workingFolder()));
+        project.close(null);
+        assertEquals(folder.getParent().toString(), workingFolder());
+    }
+
+    /** Neovim's process folder, real path (macOS: /var is /private/var). */
+    private String workingFolder() {
+        try {
+            return java.nio.file.Path.of(String.valueOf(
+                    io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.uv.cwd()")))
+                    .toRealPath().toString();
+        } catch (java.io.IOException e) {
+            return e.toString();
+        }
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {

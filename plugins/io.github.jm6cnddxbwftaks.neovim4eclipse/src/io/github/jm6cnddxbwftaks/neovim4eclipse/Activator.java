@@ -17,6 +17,7 @@ import org.osgi.framework.BundleContext;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ContributionVisibility;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
@@ -48,6 +49,8 @@ public class Activator extends AbstractUIPlugin {
     private ErrorLogHandler errorLogHandler;
     /** Prints the plug-in's log at the level of {@code -Dneovim4eclipse.logLevel}, when it is set. */
     private final LogLevelSwitch logLevelSwitch = new LogLevelSwitch();
+    /** Moves Neovim out of a project folder before Eclipse deletes or closes the project. */
+    private ProjectFolderExit projectFolderExit;
 
     @Override
     public void start(BundleContext context) throws Exception {
@@ -57,6 +60,7 @@ public class Activator extends AbstractUIPlugin {
         errorLogHandler.install(PLUGIN_ID);
         applyLogLevel();
         EditorAttachManager.getInstance().installWorkbenchListeners();
+        projectFolderExit = ProjectFolderExit.install(this::currentSession);
 
         preferenceListener = event -> {
             String property = event.getProperty();
@@ -79,6 +83,8 @@ public class Activator extends AbstractUIPlugin {
             getPreferenceStore().removePropertyChangeListener(preferenceListener);
             preferenceListener = null;
         }
+        ProjectFolderExit.uninstall(projectFolderExit);
+        projectFolderExit = null;
         EditorAttachManager.getInstance().detachQuietly();
         shutdownSession();
         plugin = null;
@@ -147,6 +153,11 @@ public class Activator extends AbstractUIPlugin {
             current.setStatusItems(getStatusItems());
         }
         EditorAttachManager.getInstance().refreshStatusLine();
+    }
+
+    /** The running session, or {@code null}: unlike {@link #getOrCreateSession()}, never starts {@code nvim}. */
+    public synchronized NeovimSession currentSession() {
+        return session != null && session.isAlive() ? session : null;
     }
 
     /** Returns the live session, starting {@code nvim} on first use or after it died. */
