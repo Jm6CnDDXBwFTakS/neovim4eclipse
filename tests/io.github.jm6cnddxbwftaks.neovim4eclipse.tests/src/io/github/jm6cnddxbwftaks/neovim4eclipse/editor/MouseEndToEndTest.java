@@ -72,4 +72,20 @@ class MouseEndToEndTest extends EndToEndTestBase {
         type(widget, "d");
         expectText("aa\ngamma\n");
     }
+
+    /** With the {@code :} box open, a click in the editor abandons the line and then lands. */
+    @Test
+    void aClickWithTheBoxOpenClosesItAndMovesTheCursor() {
+        type(widget, ':');
+        waitUntil("the : box", TIMEOUT_MS, () -> textChildOf(widget) != null);
+        UiTestSupport.requireKeyboardFocus(textChildOf(widget), TIMEOUT_MS);
+
+        click(12, 1); // the m of gamma
+
+        waitUntil("the box closed", TIMEOUT_MS, () -> textChildOf(widget) == null);
+        waitUntil("Neovim's cursor on line 3", TIMEOUT_MS, () -> cursorLine() == 3,
+                () -> "; mode " + session.getMode());
+        type(widget, "x");
+        expectText("alpha\nbeta\ngmma\n");
+    }
 }

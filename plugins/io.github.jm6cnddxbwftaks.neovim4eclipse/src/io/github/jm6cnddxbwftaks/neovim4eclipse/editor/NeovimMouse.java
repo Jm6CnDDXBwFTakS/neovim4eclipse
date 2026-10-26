@@ -34,7 +34,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.MouseInput;
  *
  * <p>Swallowing is needed because the editor would otherwise act too: its own drag selection and
  * caret moves would fight Neovim's selection. Because the widget no longer sees the press, this
- * class gives it the focus.
+ * class gives it the focus; with the {@code :} box open that abandons the line (the box closes on
+ * another control taking the focus), and the click then lands in normal mode.
  *
  * <h2>What stays Eclipse's</h2>
  * <ul>
@@ -108,7 +109,10 @@ final class NeovimMouse {
                 }
                 swallow(event);
                 if (!widget.isFocusControl()) {
-                    widget.setFocus(); // the widget did not see the press, so it would not take the focus
+                    // The widget did not see the press, so it would not take the focus itself.
+                    // forceFocus, not setFocus: setFocus on a widget with children (the : box is one)
+                    // gives the focus to a child, and the box would stay open.
+                    widget.forceFocus();
                 }
                 pressed = true;
                 onPress.run();
