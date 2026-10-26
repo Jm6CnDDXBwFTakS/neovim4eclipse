@@ -17,6 +17,7 @@ import org.eclipse.swt.widgets.Display;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ClipboardPort.Selection;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * The real system clipboard through SWT: what is copied can be pasted, a paste from the RPC thread
@@ -24,7 +25,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ClipboardPort.Selection;
  */
 class ClipboardBridgeTest {
 
-    private static final long TIMEOUT_MS = 5000;
+    private static final long TIMEOUT_MS = TestWait.millis();
 
     private final ClipboardBridge bridge = new ClipboardBridge(ClipboardBridge.PASTE_TIMEOUT_MS);
 
@@ -51,7 +52,7 @@ class ClipboardBridgeTest {
         CompletableFuture<Optional<String>> pasted = CompletableFuture.supplyAsync(() -> impatient.paste(Selection.CLIPBOARD));
 
         // The UI thread does not run its event loop, as if it were waiting for Neovim itself.
-        Optional<String> result = pasted.get(2, TimeUnit.SECONDS);
+        Optional<String> result = pasted.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
         assertEquals(Optional.empty(), result, "nothing, instead of a Neovim that waits forever");
         spin(100); // let the queued read run, so it does not leak into the next test

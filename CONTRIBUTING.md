@@ -31,6 +31,7 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake t
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
 ./mvnw test -f tests/swt/pom.xml                # SWT widget tests: a display, but no workbench
 ./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
+./mvnw verify -Pui -Dtest.wait.seconds=60       # any of these with more time per wait (default 15)
 ```
 
 The UI tests in `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` run only with `-Pui`. They
@@ -101,7 +102,11 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed
   into the box; it fails with "lost keyboard focus" if the box closed before Enter), `statusLineTexts` (the window's status line, where Eclipse-side errors appear).
   `SessionProbe` runs Lua in Neovim, for what the editor cannot show (the buffer list).
-- `ExpectedLog` (`tests/shared`, used by `tests/unit` and `tests/text`): for a test that makes the
+- `TestWait` (`tests/shared`, used by every test module): how long a test waits for something it
+  expects, 15 s unless `-Dtest.wait.seconds=N` says otherwise. Every wait uses it (`TestWait.millis()`,
+  or `EndToEndTestBase.TIMEOUT_MS` in the UI tests), never a number of its own; see
+  [Tests on a loaded machine](#tests-on-a-loaded-machine).
+- `ExpectedLog` (`tests/shared`, used by every test module): for a test that makes the
   code fail on purpose. `try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) { ... }` keeps
   that class's log records off the console while the block runs, and
   `log.assertLogged(Level.SEVERE, "Could not switch")` checks the failure was reported. Without it
@@ -109,6 +114,42 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   then goes unnoticed. Everything else still logs to the console.
 - Fakes of the session's ports (`KeyRouter.Neovim`, `BufferPort`, `CursorPort`, `CommandRunner.Neovim`, `StateSync.Neovim`, `KeyInput.Neovim`) and `UiExecutor`
   (`IMMEDIATE`, or one that holds work back) are defined next to the tests that use them.
+
+### Tests on a loaded machine
+
+A test that waits for Neovim, a thread or the event loop must pass on a busy machine too: a CI
+runner has two cores and shares them, and there an answer that usually takes 50 ms can take seconds.
+Most tests that failed only under load failed in one of these ways, all fixed in the test, not by
+waiting longer:
+
+- **Checking before Neovim finished.** `nvim_input` only queues keys, so a check right after it can
+  run before Neovim read them. Wait for the result (`waitUntil`, `expectText`), or for a value that
+  only the last queued command sets (the `:redir` test waits for `g:mine`, set by `:redir END`).
+- **Waiting for a state the test passes through.** The triple-click test waited for "beta selected",
+  which the second click already does (charwise); it now waits for linewise visual mode, which only
+  the third click gives.
+- **Reading output that arrives in pieces.** Shell output reaches the popup a part at a time; the
+  test waits for the whole of it (several lines), not for the first part.
+- **Neovim settings that count real time.** `'mousetime'` (500 ms) decides whether two clicks are a
+  double click; on a loaded machine two clicks sent at once can arrive further apart. The mouse
+  tests set it to 10 s for themselves.
+
+Every wait has the same limit, `TestWait` (15 s). A passing test returns as soon as its condition
+holds, so the limit only matters when something is broken. To give a slow machine more time, or a
+fast one less so that a hang fails sooner, pass `-Dtest.wait.seconds=N` to any test command above.
+
+To reproduce CI's conditions, run the tests on fewer cores rather than next to a CPU hog: the run
+then behaves the same way each time, and the JVM, the test Eclipse and Neovim all see the small
+machine (the JVM sizes its thread pools and garbage collector by the cores it may use). Child
+processes inherit the restriction:
+
+```bash
+taskset -c 0 xvfb-run -a ./mvnw verify -Pui                              # Linux, one core
+taskset -c 0,1 ./mvnw test -f tests/unit/pom.xml -Pintegration          # Linux, two cores
+```
+
+On Windows, from `cmd`: `start "" /affinity 3 /wait /b mvnw.cmd verify -Pui` (`3` is a bit mask:
+cores 0 and 1; `1` is core 0 alone). macOS has no way to pin a process to cores.
 
 ### Code coverage
 

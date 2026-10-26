@@ -32,6 +32,7 @@ import org.msgpack.core.MessagePacker;
 import org.msgpack.core.MessageUnpacker;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * {@link RpcChannel} without Neovim: the test plays Neovim on the other end of two pipes. It reads
@@ -115,11 +116,11 @@ class RpcChannelTest {
     }
 
     private static Object result(CompletableFuture<Object> future) throws Exception {
-        return future.get(5, TimeUnit.SECONDS);
+        return future.get(TestWait.millis(), TimeUnit.MILLISECONDS);
     }
 
     private static Throwable failure(CompletableFuture<Object> future) {
-        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
+        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get(TestWait.millis(), TimeUnit.MILLISECONDS));
         return e.getCause();
     }
 
@@ -454,10 +455,10 @@ class RpcChannelTest {
     }
 
     private static void waitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TestWait.millis());
         while (!condition.getAsBoolean()) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("condition not met within 5 s");
+                throw new AssertionError("condition not met within " + TestWait.millis() + " ms");
             }
             Thread.sleep(5);
         }

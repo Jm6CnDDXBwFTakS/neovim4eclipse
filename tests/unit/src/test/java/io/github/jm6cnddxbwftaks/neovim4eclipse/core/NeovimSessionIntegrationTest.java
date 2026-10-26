@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,6 +19,7 @@ import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
@@ -47,9 +47,10 @@ class NeovimSessionIntegrationTest {
 
     /**
      * How long a test waits for Neovim to get somewhere. Generous, because a loaded machine (a busy
-     * CI runner) can take seconds; a passing test never waits that long.
+     * CI runner) can take seconds; a passing test never waits that long. 15 s unless
+     * {@code -Dtest.wait.seconds} says otherwise (see {@link TestWait}).
      */
-    private static final long WAIT_MS = 15_000;
+    private static final long WAIT_MS = TestWait.millis();
 
     private static NeovimSession start() throws Exception {
         return start(List.of("--clean"));
@@ -357,7 +358,7 @@ class NeovimSessionIntegrationTest {
     private static String eval(NeovimSession s, String expression) throws Exception {
         java.util.concurrent.CompletableFuture<String> value = new java.util.concurrent.CompletableFuture<>();
         s.evalAsync(expression, value::complete);
-        return value.get(10, TimeUnit.SECONDS);
+        return value.get(WAIT_MS, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -887,9 +888,9 @@ class NeovimSessionIntegrationTest {
                         .toList();
                 assertEquals(1, nvims.size(), "this test's Neovim: " + nvims);
                 nvims.get(0).destroyForcibly();
-                nvims.get(0).onExit().get(5, TimeUnit.SECONDS);
+                nvims.get(0).onExit().get(WAIT_MS, TimeUnit.MILLISECONDS);
                 waitFor(() -> !s.isAlive(), "the session to notice");
-                long deadline = System.nanoTime() + 2_000_000_000L; // the reader thread logs on its own
+                long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(WAIT_MS); // the reader thread logs on its own
                 while (true) {
                     try {
                         log.assertLogged(Level.WARNING, "Neovim exited unexpectedly");
@@ -923,7 +924,7 @@ class NeovimSessionIntegrationTest {
             if (PlatformUtil.isWindows()) {
                 return;
             }
-            long deadline = System.nanoTime() + 2_000_000_000L; // the stderr thread logs on its own
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(WAIT_MS); // the stderr thread logs on its own
             while (true) {
                 try {
                     log.assertLogged(Level.WARNING, "Neovim stderr: stray text");
@@ -1321,7 +1322,7 @@ class NeovimSessionIntegrationTest {
                     + luaString(project) + ")");
             s.lua("vim.cmd.tabnew(); vim.cmd.tcd(" + luaString(project) + "); vim.cmd.tabprevious()");
 
-            assertEquals(3, s.leaveFolder(root.resolve("app").toString(), Duration.ofSeconds(5)), "global, tab page 2, window 2");
+            assertEquals(3, s.leaveFolder(root.resolve("app").toString(), TestWait.duration()), "global, tab page 2, window 2");
 
             String parent = root.toString();
             assertEquals(parent, s.lua("return vim.fn.getcwd(-1, -1)"), "the global folder");
@@ -1330,7 +1331,7 @@ class NeovimSessionIntegrationTest {
             assertEquals(other.toString(), s.lua("return vim.fn.getcwd(1, 1)"), "a window elsewhere keeps its folder");
             assertEquals(1L, ((Number) s.lua("return vim.fn.haslocaldir(1, 1)")).longValue(), "still its own (:lcd)");
             assertEquals(parent, s.lua("return vim.uv.cwd()"), "the process's folder, the one Windows checks");
-            assertEquals(0, s.leaveFolder(root.resolve("app").toString(), Duration.ofSeconds(5)), "nothing left inside");
+            assertEquals(0, s.leaveFolder(root.resolve("app").toString(), TestWait.duration()), "nothing left inside");
         }
     }
 
@@ -1348,7 +1349,7 @@ class NeovimSessionIntegrationTest {
                     + luaString(project) + ")");
             Files.delete(gone);
 
-            assertEquals(1, s.leaveFolder(project.toString(), Duration.ofSeconds(5)), "the global folder");
+            assertEquals(1, s.leaveFolder(project.toString(), TestWait.duration()), "the global folder");
             assertEquals(root.toString(), s.lua("return vim.uv.cwd()"));
         }
     }

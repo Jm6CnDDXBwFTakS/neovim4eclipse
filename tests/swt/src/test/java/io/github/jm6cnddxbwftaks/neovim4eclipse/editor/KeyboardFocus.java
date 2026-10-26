@@ -37,7 +37,7 @@ final class KeyboardFocus {
      * {@code Shell.forceActive()} is asynchronous and may be refused once, so it is asked again every
      * {@value #RETRY_MS} ms.
      *
-     * <p>Example: {@code KeyboardFocus.require(box, 5000);} right after the box opened.
+     * <p>Example: {@code KeyboardFocus.require(box, TestWait.millis());} right after the box opened.
      */
     static void require(Control control, long timeoutMs) {
         Display display = control.getDisplay();
