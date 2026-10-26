@@ -421,6 +421,12 @@ whenever Neovim stopped at a prompt.) The `:` box still runs commands through `c
 which waits until Neovim is idle before refreshing Eclipse: a long `:!make` holds every request until
 it ends.
 
+When the plug-in must wait for Neovim where it cannot queue, the wait is bounded. Example: Eclipse
+announces a project delete (`IResourceChangeEvent.PRE_DELETE`) and deletes the files as soon as the
+listeners return, so `editor/ProjectFolderExit` cannot just queue "leave this folder" for later; it
+waits for Neovim's answer, at most 1 s. If Neovim is waiting for the character after `f`, the request
+is held, the wait ends after 1 s, and Eclipse goes on with the delete.
+
 ### 2.7 Buffers and line events
 
 - `nvim_create_buf(listed, scratch)` makes a buffer; `nvim_set_current_buf` shows it in the window.

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -1257,6 +1258,59 @@ class NeovimSessionIntegrationTest {
                     "the window's folder");
             assertEquals(1L, ((Number) s.lua("return vim.fn.haslocaldir(0)")).longValue(), "window-local (:lcd)");
         }
+    }
+
+    /**
+     * Before Eclipse deletes a project, Neovim leaves its folder: every working folder inside it (the
+     * global one, a tab page's, a window's) moves to the folder's parent, and a window working
+     * elsewhere keeps its folder. Windows refuses to delete a folder Neovim's process works in.
+     */
+    @Test
+    void leavingAFolderMovesEveryWorkingFolderInsideItToItsParent(@TempDir Path dir) throws Exception {
+        Path root = dir.toRealPath(); // macOS: /var is a link to /private/var; getcwd() resolves it
+        Path project = Files.createDirectories(root.resolve("app/src"));
+        Path other = Files.createDirectories(root.resolve("other"));
+        try (NeovimSession s = start()) {
+            s.lua("vim.cmd.cd(" + luaString(project) + ")");
+            s.lua("vim.cmd.vsplit(); vim.cmd.lcd(" + luaString(other) + "); vim.cmd.wincmd('w'); vim.cmd.lcd("
+                    + luaString(project) + ")");
+            s.lua("vim.cmd.tabnew(); vim.cmd.tcd(" + luaString(project) + "); vim.cmd.tabprevious()");
+
+            assertEquals(3, s.leaveFolder(root.resolve("app").toString(), Duration.ofSeconds(5)), "global, tab page 2, window 2");
+
+            String parent = root.toString();
+            assertEquals(parent, s.lua("return vim.fn.getcwd(-1, -1)"), "the global folder");
+            assertEquals(parent, s.lua("return vim.fn.getcwd(-1, 2)"), "tab page 2's folder");
+            assertEquals(parent, s.lua("return vim.fn.getcwd()"), "the current window's folder");
+            assertEquals(other.toString(), s.lua("return vim.fn.getcwd(1, 1)"), "a window elsewhere keeps its folder");
+            assertEquals(1L, ((Number) s.lua("return vim.fn.haslocaldir(1, 1)")).longValue(), "still its own (:lcd)");
+            assertEquals(parent, s.lua("return vim.uv.cwd()"), "the process's folder, the one Windows checks");
+            assertEquals(0, s.leaveFolder(root.resolve("app").toString(), Duration.ofSeconds(5)), "nothing left inside");
+        }
+    }
+
+    /**
+     * A window whose folder is outside, and gone already (a project deleted before), does not stop
+     * the others from moving: setting that folder again would fail with E344.
+     */
+    @Test
+    void aWindowInAFolderThatIsGoneDoesNotStopLeaving(@TempDir Path dir) throws Exception {
+        Path root = dir.toRealPath();
+        Path project = Files.createDirectories(root.resolve("app"));
+        Path gone = Files.createDirectories(root.resolve("gone"));
+        try (NeovimSession s = start()) {
+            s.lua("vim.cmd.vsplit(); vim.cmd.lcd(" + luaString(gone) + "); vim.cmd.wincmd('w'); vim.cmd.cd("
+                    + luaString(project) + ")");
+            Files.delete(gone);
+
+            assertEquals(1, s.leaveFolder(project.toString(), Duration.ofSeconds(5)), "the global folder");
+            assertEquals(root.toString(), s.lua("return vim.uv.cwd()"));
+        }
+    }
+
+    /** {@code path} as a Lua string literal ({@code C:\\x} on Windows keeps its backslashes). */
+    private static String luaString(Path path) {
+        return "'" + path.toString().replace("\\", "\\\\").replace("'", "\\'") + "'";
     }
 
     @Test

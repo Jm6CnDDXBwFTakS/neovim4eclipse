@@ -326,6 +326,15 @@ view to the controller, which shows it in the box. The box edits nothing:
 - **Working folder:** the controller sets the window's folder (`:lcd`, silently) to the editor's project
   root, or the file's folder outside a project, so that `:e` completion and `:!` start there (decision D5).
   Where `:e` looks for a name is still the plug-in's rule, the file's folder first (`util/EditPath`).
+  Neovim's process then works in that folder, and Windows refuses to delete a folder a process works
+  in. So before Eclipse deletes or closes a project, `editor/ProjectFolderExit` (a workspace listener
+  for `PRE_DELETE` and `PRE_CLOSE`) has Neovim move every working folder inside it, global, tab page's
+  and window's, to the folder's parent (`LuaScripts.LEAVE_FOLDER`), and waits for the answer at most
+  1 s, on whatever thread deletes the project, the UI thread included: the delete must not start
+  before Neovim has moved, and the bound keeps a busy Neovim (one waiting for the character after `f`,
+  say) from hanging Eclipse. Past it, the delete goes on and may fail on Windows, as before. The
+  request goes straight to Neovim, not through the input thread, whose work can itself wait for the
+  UI thread.
 - **Host commands are parsed by Neovim** (`LuaScripts.HOST_COMMANDS`): Enter on a `:` line goes to Neovim
   like any key. Just before the line runs, a `CmdlineLeavePre` autocommand parses it with
   `nvim_parse_cmd()`; a command Eclipse carries out (`:q`, `:wq`, `:e`, `:tabn` ..., the table in

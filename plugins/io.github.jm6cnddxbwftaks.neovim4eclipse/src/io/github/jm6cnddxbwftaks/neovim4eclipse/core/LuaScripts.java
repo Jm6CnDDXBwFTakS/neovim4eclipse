@@ -611,6 +611,79 @@ final class LuaScripts {
      */
     static final String SET_WINDOW_FOLDER = "vim.cmd.lcd({ args = { select(1, ...) }, mods = { silent = true } })";
 
+    /**
+     * Moves Neovim out of folder argument 1 and everything under it, before Eclipse deletes or
+     * closes the project there, and returns how many working folders it moved (0 when none was in
+     * it). Each working folder inside it, the global one ({@code :cd}), a tab page's ({@code :tcd})
+     * and a window's ({@code :lcd}), becomes the folder's parent; the others stay as they are.
+     *
+     * <p>Why: Neovim's process works in the current window's folder, the attached editor's project
+     * ({@link #SET_WINDOW_FOLDER}), and Windows does not delete a folder a process works in: deleting
+     * that project failed with "The process cannot access the file because it is being used by
+     * another process".
+     *
+     * <p>How: each scope's folder is read first and set again afterward where it changed, because
+     * setting the global or a tab page's folder also drops the current window's own one
+     * ({@code chdir(dir, 'global')} acts as {@code :cd}). A folder outside is left alone when it
+     * did not change: it may be gone already (a project deleted earlier), and {@code :lcd} to it
+     * would fail with E344. {@code nvim_win_call} sets another window's folder without entering it.
+     * Paths are compared after {@code vim.fs.normalize} (forward slashes), and ignoring case on
+     * Windows, where {@code C:\Work\app} and {@code c:/work/app} are one folder. Example:
+     * the window works in {@code /ws/app/src}; leaving {@code /ws/app} moves it to {@code /ws}.
+     */
+    static final String LEAVE_FOLDER = """
+            local folder = ...
+            local win32 = vim.fn.has('win32') == 1
+            local function key(path)
+              path = vim.fs.normalize(path)
+              return win32 and path:lower() or path
+            end
+            local inner = key(folder)
+            local function inside(dir)
+              dir = key(dir)
+              return dir == inner or vim.startswith(dir, inner .. '/')
+            end
+            local refuge = vim.fs.dirname(vim.fs.normalize(folder))
+            local function kept(dir) return inside(dir) and refuge or dir end
+            local silent = { silent = true }
+            local moved = 0
+            local tabs, wins = {}, {}
+            for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+              local tabnr = vim.api.nvim_tabpage_get_number(tab)
+              if vim.fn.haslocaldir(-1, tabnr) == 1 then
+                tabs[#tabs + 1] = { tab, vim.fn.getcwd(-1, tabnr) }
+              end
+              for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+                local winnr = vim.fn.win_id2tabwin(win)[2]
+                if vim.fn.haslocaldir(winnr, tabnr) == 1 then
+                  wins[#wins + 1] = { win, vim.fn.getcwd(winnr, tabnr) }
+                end
+              end
+            end
+            if inside(vim.fn.getcwd(-1, -1)) then
+              vim.fn.chdir(refuge, 'global')
+              moved = moved + 1
+            end
+            -- Sets one scope's folder, unless it already is that (a folder outside, which may be gone
+            -- by now: setting it again would fail with E344).
+            local function set(win, command, scope_cwd, dir)
+              local target = kept(dir)
+              if inside(dir) then moved = moved + 1 end
+              vim.api.nvim_win_call(win, function()
+                if scope_cwd() ~= dir or target ~= dir then
+                  pcall(vim.cmd[command], { args = { target }, mods = silent })
+                end
+              end)
+            end
+            for _, t in ipairs(tabs) do
+              set(vim.api.nvim_tabpage_get_win(t[1]), 'tcd', function() return vim.fn.getcwd(-1, 0) end, t[2])
+            end
+            for _, w in ipairs(wins) do
+              set(w[1], 'lcd', function() return vim.fn.haslocaldir() == 1 and vim.fn.getcwd() or '' end, w[2])
+            end
+            return moved
+            """;
+
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
 
     /** Evaluates the Vim expression in argument 1 ({@code bufnr('a.txt')}) and returns its value. */

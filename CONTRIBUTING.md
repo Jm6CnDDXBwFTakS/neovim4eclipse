@@ -204,7 +204,9 @@ These are explained in [docs/LEARNING.md](docs/LEARNING.md); breaking them cause
 text that tests do not always catch.
 
 1. **Never wait for Neovim on the SWT UI thread.** Use the session's `...Async` methods; blocking calls
-   belong on the session's input thread.
+   belong on the session's input thread. The one exception is bounded: before Eclipse deletes or
+   closes a project, `ProjectFolderExit` waits at most 1 s for Neovim to leave its folder, since the
+   delete cannot wait for a callback (see ARCHITECTURE.md, "Working folder").
 2. **Touch widgets and documents only on the UI thread.** From other threads, use
    `Display.asyncExec`.
 3. **Keep `util` and `core` free of `org.eclipse.*` imports.** `tests/unit` compiles them without
