@@ -83,8 +83,6 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     /** A push is queued on the input thread and has not read the document yet. */
     private final AtomicBoolean pushPending = new AtomicBoolean(false);
     private volatile boolean closed;
-    /** As {@code BufferSynchronizer.finalNewline}: remembered at each push. UI thread. */
-    private boolean finalNewline;
 
     /** @param ui the UI thread, where the document is read and changed ({@code SwtUiExecutor} in the editor) */
     public UnattachedDocumentSync(IDocument document, DocumentBuffer buffer, DocumentBufferPort session,
@@ -93,7 +91,6 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         this.buffer = buffer;
         this.session = session;
         this.ui = ui;
-        this.finalNewline = LineTextUtil.endsWithLineBreak(document.get()); // as the buffer was created from it
     }
 
     /** Starts listening to both sides. UI thread. */
@@ -128,7 +125,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         if (closed) {
             return;
         }
-        if (change.lastLine() > neovimLineCount(document, finalNewline)) {
+        if (change.lastLine() > neovimLineCount(document, FinalNewlines.of(document))) {
             // LineRangeEdit would clamp the range to the end of the document and apply it there.
             LOG.warning("Neovim's change of " + describe() + " does not fit the document (did Eclipse change it "
                     + "at the same time?); Neovim gets Eclipse's text instead: " + change);
@@ -137,6 +134,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         }
         applyingNeovim = true;
         try {
+            boolean finalNewline = FinalNewlines.of(document);
             Edit edit = change.lastLine() < 0 ? BufferSynchronizer.fullBufferEdit(document, change.newLines(), finalNewline)
                     : BufferSynchronizer.rangeEdit(document, change, finalNewline);
             if (edit != null) {
@@ -199,7 +197,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     /** The document's lines, read on the UI thread (see {@link BufferSynchronizer#pushDocumentToNeovim}). */
     private List<String> documentLinesOnUi() {
         if (ui.isUiThread()) {
-            return readDocumentLines();
+            return FinalNewlines.linesToPush(document);
         }
         if (!ui.isAvailable()) {
             return null;
@@ -207,17 +205,10 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         List<List<String>> snapshot = new ArrayList<>(1);
         ui.syncExec(() -> {
             if (!closed) {
-                snapshot.add(readDocumentLines());
+                snapshot.add(FinalNewlines.linesToPush(document));
             }
         });
         return snapshot.isEmpty() ? null : snapshot.get(0);
-    }
-
-    /** The document's lines for Neovim, remembering its final newline with them. UI thread. */
-    private List<String> readDocumentLines() {
-        String text = document.get();
-        finalNewline = LineTextUtil.endsWithLineBreak(text);
-        return LineTextUtil.splitDocumentLines(text);
     }
 
     private String describe() {

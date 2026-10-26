@@ -169,6 +169,29 @@ class UnattachedDocumentSyncTest {
         assertEquals(List.of(List.of("only")), neovim.pushed, "Neovim gets Eclipse's text, so they agree again");
     }
 
+    /**
+     * The editor's synchronizer and this one agree on a document's final newline: after {@code o}
+     * in the editor on a file without one, its editor is switched away from, and {@code :bufdo}'s
+     * {@code o} on the empty last line adds a second empty line, not a replacement of it.
+     */
+    @Test
+    void theFinalNewlineDecidedInTheEditorIsKeptHere() {
+        IDocument noFinalNewline = new Document("alpha");
+        BufferSynchronizerTest.FakeBufferPort editorPort = new BufferSynchronizerTest.FakeBufferPort();
+        try (BufferSynchronizer editor = new BufferSynchronizer(noFinalNewline, editorPort, UiExecutor.IMMEDIATE);
+                UnattachedDocumentSync background =
+                        new UnattachedDocumentSync(noFinalNewline, buffer, neovim, UiExecutor.IMMEDIATE)) {
+            editor.pushDocumentToNeovim();
+            editor.startRemoteListening();
+            editorPort.neovimChanged(new BufferChange(1, 1, List.of(""))); // o in the editor
+            editor.close();
+            background.start();
+
+            neovim.neovimChanged(buffer, new BufferChange(2, 2, List.of(""))); // o on line 2, the empty one
+            assertEquals("alpha\n\n", noFinalNewline.get());
+        }
+    }
+
     @Test
     void neovimCountsNoLineAfterAFinalLineBreak() {
         assertEquals(1, UnattachedDocumentSync.neovimLineCount(new Document(""), true), "an empty buffer has one line");

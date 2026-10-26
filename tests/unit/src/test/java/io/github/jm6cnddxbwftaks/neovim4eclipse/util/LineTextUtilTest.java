@@ -148,6 +148,24 @@ class LineTextUtilTest {
         assertEquals(text, back, "round trip of [" + text.replace("\n", "\\n").replace("\r", "\\r") + "]");
     }
 
+    /** The first push decides the final newline from the text; later pushes keep it (see the class comment). */
+    @Test
+    void toNeovimKeepsTheFinalNewlineDecidedBefore() {
+        NeovimLinesCheck.check("a\n", null, List.of("a"), true, "first push of text ending in a line break");
+        NeovimLinesCheck.check("a", null, List.of("a"), false, "first push of text without one");
+        NeovimLinesCheck.check("a\n", false, List.of("a", ""), false, "the break starts an empty last line");
+        NeovimLinesCheck.check("a\n\n", false, List.of("a", "", ""), false, "two empty last lines");
+        NeovimLinesCheck.check("a\n", true, List.of("a"), true, "a final newline stays one");
+        NeovimLinesCheck.check("a", true, List.of("a"), false, "the last line break deleted in Eclipse");
+        NeovimLinesCheck.check("", null, List.of(""), false, "an empty document");
+    }
+
+    private static final class NeovimLinesCheck {
+        static void check(String text, Boolean known, List<String> lines, boolean finalNewline, String what) {
+            assertEquals(new LineTextUtil.NeovimLines(lines, finalNewline), LineTextUtil.toNeovim(text, known), what);
+        }
+    }
+
     @Test
     void platformLineDelimiterIsTheSystemOne() {
         assertEquals(System.lineSeparator(), LineTextUtil.platformLineDelimiter());

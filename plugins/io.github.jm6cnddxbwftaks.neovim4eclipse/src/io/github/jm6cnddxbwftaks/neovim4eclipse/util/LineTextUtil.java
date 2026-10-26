@@ -21,19 +21,22 @@ import java.util.List;
  *   <li>{@link #splitDocumentLines} drops the empty "line" after a final line break, so
  *       {@code "a\n"} is {@code ["a"]} (not {@code ["a", ""]}). Real blank lines at the end are kept:
  *       {@code "a\n\n"} is {@code ["a", ""]}.</li>
- *   <li>Whether the document has a final newline is read from the document when it is pushed to
- *       Neovim and remembered by the synchronizer ({@code sync/BufferSynchronizer}), which passes it
- *       to every edit ({@link LineRangeEdit}, the full re-sync). Edits therefore preserve whatever
- *       the file had: a file that ended with a newline still does, and one that did not still does
- *       not.</li>
+ *   <li>Whether the document has a final newline is decided at the first push to Neovim and
+ *       remembered by the synchronizer ({@code sync/BufferSynchronizer}), which passes it to every
+ *       edit ({@link LineRangeEdit}, the full re-sync) and to every later push
+ *       ({@link #toNeovim}). Edits therefore preserve whatever the file had, as Vim's
+ *       {@code 'eol'} does: a file that ended with a newline still does, and one that did not still
+ *       does not.</li>
  * </ul>
  *
  * <p><b>Why remembered, not read each time:</b> the text alone is ambiguous. {@code ["a", ""]}
  * without a final newline is the same text as {@code ["a"]} with one: {@code "a\n"}. That buffer is
  * what {@code o} on the last line of {@code "a"} makes. Read from the text after that edit, the
  * newline looked like a final newline, and the full sync that follows (insert mode syncs once)
- * appended a second empty line. Remembered from the push, it stays "no final newline" until Eclipse
- * pushes the document again; that push sends {@code ["a"]} with a final newline, the same file.
+ * appended a second empty line. Remembered, it stays "no final newline", and a later push sends
+ * {@code ["a", ""]} again, so the empty last line stays a line that motions reach ({@code Go},
+ * Esc, {@code Go} adds a second one, as in Vim). The one change: text that no longer ends with a
+ * line break (the last line break deleted in Eclipse) has no final newline from then on.
  *
  * <p>Round trip: {@code linesToDocumentText(splitDocumentLines(t), d, endsWithLineBreak(t))} equals
  * {@code t} whenever {@code t} uses the single delimiter {@code d}.
@@ -41,6 +44,38 @@ import java.util.List;
 public final class LineTextUtil {
 
     private LineTextUtil() {
+    }
+
+    /**
+     * What to send to Neovim for a document's text: its lines, and whether it has a final newline
+     * from now on.
+     *
+     * @param lines        Neovim's lines; with {@code finalNewline} false and text ending in a line
+     *                     break, the last one is the empty line that break starts
+     * @param finalNewline whether the text's last line break is a final newline
+     */
+    public record NeovimLines(List<String> lines, boolean finalNewline) {
+    }
+
+    /**
+     * The lines to push to Neovim for {@code text}, given what was decided about its final newline
+     * before (see the class comment).
+     *
+     * <p>Examples: {@code "a\n"} first pushed is {@code ["a"]} with a final newline. Pushed again
+     * after {@code "a"} was known to have none, it is {@code ["a", ""]} still without one. Text
+     * without a final line break never has a final newline.
+     *
+     * @param text  the document's text
+     * @param known the final newline decided at earlier pushes, or {@code null} at the first
+     */
+    public static NeovimLines toNeovim(String text, Boolean known) {
+        List<String> lines = splitDocumentLines(text);
+        boolean endsWithBreak = endsWithLineBreak(text);
+        boolean finalNewline = endsWithBreak && (known == null || known);
+        if (endsWithBreak && !finalNewline) {
+            lines.add(""); // the last line break starts an empty last line
+        }
+        return new NeovimLines(lines, finalNewline);
     }
 
     /** Returns a mutable copy of {@code lines}, or a single empty line if there are none. */

@@ -578,10 +578,10 @@ These are real and deliberate to know about before extending the code:
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`
    creates it.
-4. **An empty last line becomes a final newline.** In a file without a final newline, `o` on the last
-   line adds an empty last line; on the next push to Neovim (leaving insert mode, for example) the
-   same text, ending in a line break, counts as a file with a final newline and no empty last line.
-   The file's bytes are the same either way.
+4. **The line after a final newline.** Eclipse shows an empty line after a file's final newline,
+   where Neovim has none, so motions cannot reach it (`G` stops on the line above). A file without
+   a final newline keeps none, as with Vim's `'noeol'`: `o` on its last line adds an empty line that
+   motions do reach.
 5. **Other Vim plug-ins (Vrapper).** Installed together with [Vrapper](https://github.com/vrapper/vrapper),
    Neovim for Eclipse gets the keys while it is attached: each key is handled once, by Neovim
    (tried with Vrapper 0.74.0 on Eclipse 4.34). Vrapper's own mode display stays in the status bar,
