@@ -34,8 +34,8 @@
        ./mvnw verify -PuiHeavyJava, which adds the tools (a larger download, a slower start) and
        runs only those tests. Not run in CI.
 
-       Tests tagged "loadSensitive" depend on how fast the machine is; -Pui leaves them out and
-       ./mvnw verify -PloadSensitive runs only them (here and in tests/unit). Not run in CI.
+       Tests tagged "timeoutReliant" depend on how fast the machine is; -Pui leaves them out and
+       ./mvnw verify -PtimeoutReliant runs only them (here and in tests/unit). Not run in CI.
 
        ScreenshotCaptureTest (tagged "screenshots") is not a test: it takes the Marketplace and README
        screenshots. Only ./mvnw verify -Pscreenshots runs it, with the Java tools for a highlighted
@@ -186,7 +186,7 @@
     <ui.skip>true</ui.skip>
     <!-- The JUnit tags run and left out; see the uiHeavyJava profile. Empty: no filter. -->
     <ui.groups></ui.groups>
-    <ui.excludedGroups>heavyJava,screenshots,loadSensitive</ui.excludedGroups>
+    <ui.excludedGroups>heavyJava,screenshots,timeoutReliant</ui.excludedGroups>
   </properties>
 
   <profiles>
@@ -229,15 +229,15 @@
         </plugins>
       </build>
     </profile>
-    <!-- ./mvnw verify -PloadSensitive: runs only the UI tests tagged "loadSensitive", which depend on
+    <!-- ./mvnw verify -PtimeoutReliant: runs only the UI tests tagged "timeoutReliant", which depend on
          how fast the machine is, so -Pui and CI leave them out (as tests/unit does for its
          integration tests with that tag). None is tagged yet; failIfNoTests keeps the profile usable
          until one is. See CONTRIBUTING.md, "Tests on a loaded machine". -->
     <profile>
-      <id>loadSensitive</id>
+      <id>timeoutReliant</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
-        <ui.groups>loadSensitive</ui.groups>
+        <ui.groups>timeoutReliant</ui.groups>
         <ui.excludedGroups></ui.excludedGroups>
         <failIfNoTests>false</failIfNoTests>
       </properties>

@@ -188,14 +188,14 @@ class NeovimSessionIntegrationTest {
      * rather than with a fixed limit: on a loaded machine seven plain keys alone can take seconds.
      * One stall would add 5 s; the 4 s margin allows for the load changing between the two.
      *
-     * <p>Tagged {@code loadSensitive}: it measures time, so a busy machine can fail it with nothing
-     * wrong, and only {@code -PloadSensitive} runs it (CONTRIBUTING.md, "Tests on a loaded machine").
+     * <p>Tagged {@code timeoutReliant}: it measures time, so a busy machine can fail it with nothing
+     * wrong, and only {@code -PtimeoutReliant} runs it (CONTRIBUTING.md, "Tests on a loaded machine").
      * The decision it guards is checked without a clock in {@code KeyInputTest}
      * ({@code whileNeovimWaitsForTheRestOfACommandNothingIsAsked}), and that Neovim reports the wait
      * in {@code NeovimApiIntegrationTest} and {@link #waitingForACharacterShowsTheKeyInTheCommandArea}.
      */
     @Test
-    @Tag("loadSensitive")
+    @Tag("timeoutReliant")
     void pendingCommandsDoNotStallTheInputThread() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("hello world", "second line", "third line"));

@@ -32,7 +32,7 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake t
 ./mvnw test -f tests/swt/pom.xml                # SWT widget tests: a display, but no workbench
 ./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
 ./mvnw verify -Pui -Dtest.wait.seconds=60       # any of these with more time per wait (default 15)
-xvfb-run -a ./mvnw verify -PloadSensitive       # only the tests that depend on the machine's speed
+xvfb-run -a ./mvnw verify -PtimeoutReliant       # only the tests that depend on the machine's speed
 ```
 
 The UI tests in `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` run only with `-Pui`. They
@@ -141,9 +141,11 @@ The integration tests use `NeovimBarrier.pass(session)` instead: one request tha
 only after the keys before it, with every notification they caused sent and handled before the
 answer (see that class for why the order holds). After it, what has not arrived will not.
 
-**Tests that cannot help depending on the machine** are tagged `loadSensitive`: a test that measures
+**Tests that cannot help depending on the machine** are tagged `timeoutReliant`: a test that measures
 time (`pendingCommandsDoNotStallTheInputThread` compares how long keys take) fails on a busy machine
-with nothing wrong. `-Pui` and `-Pintegration`, and so CI, leave them out; `-PloadSensitive` runs
+with nothing wrong. The name says why: such a test relies on a time limit of its own (here, at
+most 4 s more than plain keys), which the machine's speed decides, not only on the `TestWait` limit
+every test has for an outcome that never comes. `-Pui` and `-Pintegration`, and so CI, leave them out; `-PtimeoutReliant` runs
 only them, in `tests/unit` (with a real Neovim, so pass `-Dnvim.path` as for `-Pintegration`) and in
 the UI tests (none tagged yet). Tag a test only when no rewrite helps: first look for the cause in
 the list above, move the decision into a class with a unit test, or check a state instead of a
@@ -151,7 +153,7 @@ duration. Each tagged test says in its comment what checks the same thing withou
 before a release (see [Releasing](#releasing)), on a quiet machine.
 
 If they should ever run in CI, the plan is a checkbox on the *Build* workflow's manual run (an
-`inputs:` entry under `workflow_dispatch` that adds `-PloadSensitive` steps), not every push, so a
+`inputs:` entry under `workflow_dispatch` that adds `-PtimeoutReliant` steps), not every push, so a
 busy runner cannot block a merge. It is not set up.
 
 Every wait has the same limit, `TestWait` (15 s). A passing test returns as soon as its condition
@@ -363,11 +365,11 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    `## [Unreleased]` above it. That section becomes the release notes;
    `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
    the README's status line. Run the tests CI leaves out on your machine, after the Java editor and
-   the load-sensitive ones (see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
+   the timeout-reliant ones (see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
 
    ```bash
    ./mvnw verify -PuiHeavyJava
-   xvfb-run -a ./mvnw verify -PloadSensitive -Dnvim.path=/path/to/nvim
+   xvfb-run -a ./mvnw verify -PtimeoutReliant -Dnvim.path=/path/to/nvim
    ```
 
    Commit and push, then run the *Build* workflow on the branch by hand and wait for it to pass:

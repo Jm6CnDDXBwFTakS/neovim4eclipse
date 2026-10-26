@@ -148,23 +148,23 @@
             <artifactId>maven-surefire-plugin</artifactId>
             <configuration>
               <groups>integration</groups>
-              <!-- Not the tests that measure time (see the loadSensitive profile below). -->
-              <excludedGroups combine.self="override">loadSensitive</excludedGroups>
+              <!-- Not the tests that measure time (see the timeoutReliant profile below). -->
+              <excludedGroups combine.self="override">timeoutReliant</excludedGroups>
             </configuration>
           </plugin>
         </plugins>
       </build>
     </profile>
-    <!-- ./mvnw test -f tests/unit/pom.xml -PloadSensitive -Dnvim.path=...: only the tests tagged
-         "loadSensitive", with a real Neovim. They depend on how fast the machine is (one measures
+    <!-- ./mvnw test -f tests/unit/pom.xml -PtimeoutReliant -Dnvim.path=...: only the tests tagged
+         "timeoutReliant", with a real Neovim. They depend on how fast the machine is (one measures
          time), so a busy machine can fail them with nothing wrong: -Pintegration and CI leave them
          out. Run them on a quiet machine after changing what they guard (see each test's comment,
          and CONTRIBUTING.md, "Tests on a loaded machine"). -->
     <profile>
-      <id>loadSensitive</id>
+      <id>timeoutReliant</id>
       <properties>
-        <jacoco.dataFile>${project.build.directory}/jacoco-loadSensitive.exec</jacoco.dataFile>
-        <jacoco.reportDir>${project.build.directory}/site/jacoco-loadSensitive</jacoco.reportDir>
+        <jacoco.dataFile>${project.build.directory}/jacoco-timeoutReliant.exec</jacoco.dataFile>
+        <jacoco.reportDir>${project.build.directory}/site/jacoco-timeoutReliant</jacoco.reportDir>
       </properties>
       <build>
         <plugins>
@@ -172,7 +172,7 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <configuration>
-              <groups>loadSensitive</groups>
+              <groups>timeoutReliant</groups>
               <excludedGroups combine.self="override"/>
             </configuration>
           </plugin>
