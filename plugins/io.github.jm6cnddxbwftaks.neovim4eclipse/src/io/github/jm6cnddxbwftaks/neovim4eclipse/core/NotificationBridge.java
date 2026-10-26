@@ -90,12 +90,13 @@ final class NotificationBridge implements Incoming {
         Object onClipboardPaste(String register);
 
         /**
-         * Neovim writes buffer {@code bufnr} ({@code :w}, {@code :update}, {@code :wall}; see
+         * Neovim writes buffer {@code bufnr} ({@code :w}, {@code :update}, {@code :bufdo update}; see
          * {@link LuaScripts#DOCUMENT_BUFFER}) and waits until Eclipse has saved it.
          *
-         * @return {@code null} if the document was saved, else the error message Neovim shows
+         * @param cmdarg the write's {@code ++opt} arguments ({@code v:cmdarg}), e.g. {@code " ++p"}
+         * @return the error that fails the write, or the message Neovim shows
          */
-        String onWrite(int bufnr);
+        DocumentWrite.Result onWrite(int bufnr, String cmdarg);
 
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
@@ -233,21 +234,22 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Payload: {@code [bufnr]}. Answers {@code ""} when the document was saved, else the error
-     * message. Never throws, for the same reason as {@link #onClipboardPaste}: the message is what
+     * Payload: {@code [bufnr, cmdarg]}. Answers {@code [error, message]} ({@link DocumentWrite.Result}):
+     * {@code ["", "\"a.txt\" 3L, 12B written"]} when the document was saved, {@code ["E212: ...", ""]}
+     * when not. Never throws, for the same reason as {@link #onClipboardPaste}: the message is what
      * Neovim shows the user, an RPC error would only show a stack trace.
      */
     private Object onWrite(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf == null) {
-            return "Eclipse got a write request without a buffer number";
+            return DocumentWrite.Result.failed("Eclipse got a write request without a buffer number").toRpc();
         }
+        String cmdarg = args.size() > 1 && args.get(1) != null ? String.valueOf(args.get(1)) : "";
         try {
-            String error = sink.onWrite(buf);
-            return error == null ? "" : error;
+            return sink.onWrite(buf, cmdarg).toRpc();
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Saving buffer " + buf + " for Neovim failed", e);
-            return "Eclipse could not save the file: " + e.getMessage();
+            return DocumentWrite.Result.failed("Eclipse could not save the file: " + e.getMessage()).toRpc();
         }
     }
 

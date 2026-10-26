@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,6 +18,7 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -23,10 +26,12 @@ import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.editors.text.IEncodingSupport;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
 /**
  * Vim's file commands carried out by Eclipse: save, close, open and revert. Which command means
@@ -77,6 +82,38 @@ public final class EclipseFileCommands {
         IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
         NewFiles.Missing missing = NewFiles.missingFileOf(editor);
         return missing == null ? savePart(part) : NewFiles.save(editor, part, missing, createFolders, evenIfUnchanged);
+    }
+
+    /**
+     * Vim's message after a write of {@code editor}'s file, as Neovim would show it:
+     * {@code "Clazz.java" 12L, 140B written}, the bytes counted in the file's encoding
+     * ({@link WrittenMessage}). UI thread.
+     */
+    static String writtenMessage(ITextEditor editor) {
+        IEditorInput input = editor.getEditorInput();
+        IDocument document = editor.getDocumentProvider() == null ? null
+                : editor.getDocumentProvider().getDocument(input);
+        return WrittenMessage.of(input.getName(), false, document == null ? "" : document.get(), charsetOf(editor));
+    }
+
+    /** The encoding the editor saves in: the workspace file's, the editor's, or UTF-8. */
+    private static Charset charsetOf(ITextEditor editor) {
+        try {
+            IFile file = editor.getEditorInput().getAdapter(IFile.class);
+            if (file != null && file.exists()) {
+                return Charset.forName(file.getCharset());
+            }
+            IEncodingSupport encoding = editor.getAdapter(IEncodingSupport.class);
+            if (encoding != null) {
+                String name = encoding.getEncoding() != null ? encoding.getEncoding() : encoding.getDefaultEncoding();
+                if (name != null) {
+                    return Charset.forName(name);
+                }
+            }
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Unknown encoding for " + editor.getTitle(), e);
+        }
+        return StandardCharsets.UTF_8;
     }
 
     /**

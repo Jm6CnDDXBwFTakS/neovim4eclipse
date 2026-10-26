@@ -266,9 +266,9 @@ class NeovimBufferIntegrationTest {
     void neovimsWritesAskEclipseToSave() throws Exception {
         try (NeovimSession s = start()) {
             List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
-            s.setWriteHandler(document -> {
+            s.setWriteHandler((document, createFolders) -> {
                 saved.add(document);
-                return null;
+                return DocumentWrite.Result.saved("");
             });
             Path dir = Files.createTempDirectory("neovim4eclipse-write");
             DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
@@ -296,7 +296,7 @@ class NeovimBufferIntegrationTest {
     @Test
     void aFailedSaveFailsTheWriteAndTheBufferStaysModified() throws Exception {
         try (NeovimSession s = start()) {
-            s.setWriteHandler(document -> "Eclipse could not save A.txt: read-only");
+            s.setWriteHandler((document, createFolders) -> DocumentWrite.Result.failed("Eclipse could not save A.txt: read-only"));
             DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/A.txt");
             s.showBuffer(a);
             s.setBufferLines(List.of("a"));
@@ -388,9 +388,10 @@ class NeovimBufferIntegrationTest {
             DocumentBuffer a = new DocumentBuffer(dir + "A.txt");
             DocumentBuffer b = new DocumentBuffer(dir + "B.txt");
             List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
-            s.setWriteHandler(document -> {
+            s.setWriteHandler((document, createFolders) -> {
                 saved.add(document);
-                return document.equals(a) ? "Eclipse could not save A.txt: read-only" : null;
+                return document.equals(a) ? DocumentWrite.Result.failed("Eclipse could not save A.txt: read-only")
+                        : DocumentWrite.Result.saved("");
             });
             // Shown first, so A has the lower buffer number and :bufdo reaches it first.
             s.showBuffer(a);
@@ -408,14 +409,44 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * A typed {@code :w} is Neovim's write (B2b): its write hook asks Eclipse to save, passing
+     * {@code ++p}, and shows the message Eclipse answers, as Vim shows {@code "A.txt" 1L, 2B written}.
+     * {@code :w !cmd} pipes the text instead and asks Eclipse nothing.
+     */
+    @Test
+    void aTypedWriteAsksEclipseAndShowsTheWrittenMessage() throws Exception {
+        try (NeovimSession s = start()) {
+            List<String> asked = new CopyOnWriteArrayList<>();
+            s.setWriteHandler((document, createFolders) -> {
+                asked.add(document.name() + (createFolders ? " ++p" : ""));
+                return DocumentWrite.Result.saved("\"A.txt\" 1L, 2B written");
+            });
+            List<String> messages = new CopyOnWriteArrayList<>();
+            s.addStatusListener(info -> messages.add(info.message()));
+            Path dir = Files.createTempDirectory("neovim4eclipse-write");
+            DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a"));
+
+            s.input(":w ++p<CR>");
+            waitFor(() -> messages.contains("\"A.txt\" 1L, 2B written"), "the written message: " + messages);
+            assertEquals(List.of(a.name() + " ++p"), asked);
+
+            s.input(":w !cat >/dev/null<CR>");
+            s.lua("return 0"); // the keys before it are done
+            assertEquals(1, asked.size(), ":w !cmd is no write of the file: " + asked);
+        }
+    }
+
     /** Eclipse saves a document only as its own file; {@code :w other.txt} is refused, nothing is written. */
     @Test
     void aWriteUnderAnotherNameIsRefused() throws Exception {
         try (NeovimSession s = start()) {
             List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
-            s.setWriteHandler(document -> {
+            s.setWriteHandler((document, createFolders) -> {
                 saved.add(document);
-                return null;
+                return DocumentWrite.Result.saved("");
             });
             Path dir = Files.createTempDirectory("neovim4eclipse-write");
             DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());

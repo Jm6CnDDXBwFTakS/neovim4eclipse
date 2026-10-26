@@ -54,12 +54,12 @@ class NotificationBridgeTest {
                 }
                 return List.of(List.of("pasted"), "v");
             }
-            @Override public String onWrite(int bufnr) {
-                events.add("write@" + bufnr);
+            @Override public DocumentWrite.Result onWrite(int bufnr, String cmdarg) {
+                events.add("write@" + bufnr + cmdarg);
                 if (bufnr == 13) {
                     throw new IllegalStateException("workspace closed");
                 }
-                return bufnr == 7 ? "read-only" : null;
+                return bufnr == 7 ? DocumentWrite.Result.failed("read-only") : DocumentWrite.Result.saved("written");
             }
             @Override public void onIdeAction(IdeAction action) {
                 events.add("action:" + action.name() + ":" + action.count());
@@ -199,14 +199,14 @@ class NotificationBridgeTest {
         assertThrows(UnsupportedOperationException.class, () -> request("eclipse_unknown"));
     }
 
-    /** The answer is what Neovim shows: "" for a save that worked, else the message. */
+    /** The answer is {@code [error, message]}: the message for a save that worked, else the error. */
     @Test
-    void writeRequestsAnswerWithTheErrorOrNothing() {
-        assertEquals("", request("eclipse_write", 3));
-        assertEquals("read-only", request("eclipse_write", 7L));
-        assertEquals("Eclipse could not save the file: workspace closed", request("eclipse_write", 13));
-        assertEquals("Eclipse got a write request without a buffer number", request("eclipse_write"));
-        assertEquals(List.of("write@3", "write@7", "write@13"), events);
+    void writeRequestsAnswerWithTheErrorOrTheMessage() {
+        assertEquals(List.of("", "written"), request("eclipse_write", 3, " ++p"));
+        assertEquals(List.of("read-only", ""), request("eclipse_write", 7L, ""));
+        assertEquals(List.of("Eclipse could not save the file: workspace closed", ""), request("eclipse_write", 13));
+        assertEquals(List.of("Eclipse got a write request without a buffer number", ""), request("eclipse_write"));
+        assertEquals(List.of("write@3 ++p", "write@7", "write@13"), events);
     }
 
     @Test

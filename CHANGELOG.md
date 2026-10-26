@@ -20,6 +20,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- `:w` and `:update` are Neovim's own writes, which ask Eclipse to save: they show Vim's message
+  (`"A.java" 12L, 340B written`), `:update` skips files without unsaved changes, `:w !cmd` pipes the text
+  to a command as in Neovim (before, it saved the file), and `:w other.txt` is refused instead of
+  saving the current file under its own name.
 - `:w`, `:q`, `:e`, `:tabn` and the other commands Eclipse carries out are now read by Neovim, so they
   work from a mapping (`<leader>q` → `:q<CR>` closes the editor instead of quitting Neovim's window),
   a macro, `:normal` and `@:`, and are written exactly as in Neovim. A range of buffers works

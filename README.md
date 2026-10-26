@@ -275,7 +275,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 
 | Command | Eclipse does |
 |---------|--------------|
-| `:w`, `:up[date]` | save the editor (`:w file` ignores the name) |
+| `:w`, `:up[date]` | save the editor, with Vim's message (`"A.java" 12L, 340B written`); these are Neovim's own writes, see below |
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
 | `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes) |
@@ -300,10 +300,11 @@ after `|` (`:echo 1 | q`), and a range a command does not take (`:5,10w`).
 A buffer that Neovim deletes by itself (a Lua plug-in, `<Cmd>bd<CR>`, `:bufdo bd`) closes its
 editor too, and so does a `:quit` Neovim runs itself; Eclipse asks about changes as for `:q`.
 
-Neovim can also write a buffer by itself: `:update` inside `:bufdo` or `:argdo`, or `vim.cmd.write()`
-in Lua. Those writes save the file through Eclipse too (so save actions run as usual), and Neovim
-never writes a file itself. A write under another name (`:w other.txt` from Lua) is refused; use
-*File → Save As*.
+Writes are Neovim's own: `:w`, `:update`, `:bufdo update`, `vim.cmd.write()` in Lua. Neovim never writes
+a file itself; it asks Eclipse to save it (so save actions run as usual) and shows Vim's message. Neovim's
+"modified" flag follows Eclipse's unsaved-changes marker, so `:update` saves exactly what Eclipse would,
+and `:ls` shows `+` for those files. `:w !cmd` pipes the text to a command, as in Neovim. A write under
+another name (`:w other.txt`) or of some lines only (`:5,10w`) is refused; use *File → Save As*.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
 macro being recorded contains it. Listings (`:ls`, `:jumps`, `:marks`, `:registers`, `:set opt?`,
@@ -352,9 +353,8 @@ the plugin makes sure everything you do is seen by Neovim as keys:
   macro contains exactly what you typed, including arrow keys and Backspace. Eclipse's content assist and
   IME composition are therefore unavailable *while recording*.
 - **`:` commands and `/` searches** from the command line are typed into Neovim (`:<cmd><CR>`), so they are
-  recorded and `@:` works. `:w`, `:wa`, `:q`, `:wq`, `:x` are still handled by Eclipse and are **not** recorded; a
-  `:w` inside a macro is run by Neovim, which asks Eclipse to save (see below). The editor gets the macro's
-  changes only when it ends, so such a save writes the text from before the macro.
+  recorded and `@:` works, `:w`, `:q` and the other commands Eclipse carries out too. The editor gets the
+  macro's changes only when it ends, so a `:w` inside a macro saves the text from before the macro.
 - **Playback** is applied to the editor as one change when the macro finishes, which is much faster than
   replaying each step and avoids half-finished states. Very long macros are given up to 60 seconds.
 - `f/`, `t:`, `r/`, `@:`, `qa` ...: the character after `f F t T r @ m ' \` " q` is an *argument* and always goes
@@ -583,8 +583,7 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w <otherfile>` saves the current editor and ignores
-   the name; `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after `|`
+3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w <otherfile>` is refused (use *File → Save As*); `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after `|`
    or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`
