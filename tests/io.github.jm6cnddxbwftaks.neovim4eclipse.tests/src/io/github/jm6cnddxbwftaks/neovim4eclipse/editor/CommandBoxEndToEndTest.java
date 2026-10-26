@@ -233,8 +233,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
             assertNull(opened.getEditorInput().getAdapter(IFile.class), "not a workspace file");
             page().closeEditor(opened, false);
         } finally {
-            Files.deleteIfExists(outside);
-            Files.deleteIfExists(dir);
+            leaveAndDelete(dir, outside);
         }
     }
 

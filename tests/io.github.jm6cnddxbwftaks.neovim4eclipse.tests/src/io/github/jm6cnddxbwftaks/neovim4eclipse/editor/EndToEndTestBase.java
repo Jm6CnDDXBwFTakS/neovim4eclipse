@@ -140,6 +140,21 @@ abstract class EndToEndTestBase {
         }
     }
 
+    /**
+     * Deletes a folder outside the workspace that an editor of the test opened a file in: first
+     * {@code contents}, in order, then {@code dir}. Neovim's window may still work there ({@code :lcd}
+     * to the file's folder, until another editor attaches), and Windows does not delete a folder a
+     * process works in; so Neovim leaves it first, as {@code ProjectFolderExit} has it leave a project
+     * before Eclipse deletes one.
+     */
+    void leaveAndDelete(java.nio.file.Path dir, java.nio.file.Path... contents) throws java.io.IOException {
+        session.leaveFolder(dir.toString(), java.time.Duration.ofSeconds(5));
+        for (java.nio.file.Path path : contents) {
+            java.nio.file.Files.deleteIfExists(path);
+        }
+        java.nio.file.Files.deleteIfExists(dir);
+    }
+
     /** The active workbench page. */
     static IWorkbenchPage page() {
         return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();

@@ -265,8 +265,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertFalse(opened.isDirty());
             closeAll();
         } finally {
-            Files.deleteIfExists(outside);
-            Files.deleteIfExists(dir);
+            leaveAndDelete(dir, outside);
         }
     }
 
@@ -297,9 +296,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertFalse(opened.isDirty());
             closeAll();
         } finally {
-            Files.deleteIfExists(outside);
-            Files.deleteIfExists(sub);
-            Files.deleteIfExists(dir);
+            leaveAndDelete(dir, outside, sub);
         }
     }
 
