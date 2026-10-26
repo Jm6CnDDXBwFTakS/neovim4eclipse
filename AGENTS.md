@@ -27,7 +27,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ./mvnw test -f tests/swt/pom.xml                  # SWT widget tests (a display, no workbench)
 ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/usr/bin/nvim   # real Neovim
 xvfb-run -a ./mvnw verify -Pui                    # on a machine without a display
-taskset -c 0,1 ./mvnw verify -Pui                # as a two-core CI runner (CONTRIBUTING.md, "Tests on a loaded machine")
+taskset -c 0,1 ./mvnw verify -Pui                # as a two-core CI runner; Windows (start /affinity) and macOS: CONTRIBUTING.md, "Tests on a loaded machine"
 ```
 
 The UI tests need `-Pui` (off by default because they open a window); run them after changing

@@ -34,6 +34,7 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake t
 ./mvnw verify -Pui -Dtest.wait.seconds=60       # any of these with more time per wait (default 15)
 xvfb-run -a ./mvnw verify -PtimeoutReliant       # only the tests that depend on the machine's speed
 xvfb-run -a ./mvnw verify -Pall                  # every test of every group in one run (see below)
+taskset -c 0,1 ./mvnw verify -Pui               # any of these on two cores, as a CI runner (Linux; Windows and macOS below)
 ```
 
 **Running every test.** `-Pall` runs every test in one build: the unit, text, SWT and UI tests as
@@ -186,13 +187,47 @@ then behaves the same way each time, and the JVM, the test Eclipse and Neovim al
 machine (the JVM sizes its thread pools and garbage collector by the cores it may use). Child
 processes inherit the restriction:
 
+**Linux.** `taskset -c` takes the list of cores the command may use (`0` is core 0 alone, `0,1`
+the first two). Put it in front of any build command; with `xvfb-run`, in front of that:
+
 ```bash
-taskset -c 0 xvfb-run -a ./mvnw verify -Pui                              # Linux, one core
-taskset -c 0,1 ./mvnw test -f tests/unit/pom.xml -Pintegration          # Linux, two cores
+taskset -c 0 xvfb-run -a ./mvnw verify -Pui -Dnvim.path=/path/to/nvim                       # one core
+taskset -c 0,1 ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/path/to/nvim   # two cores
+taskset -c 0,1 xvfb-run -a ./mvnw verify -Pall -Dnvim.path=/path/to/nvim                   # everything, two cores
+taskset -c 0,1 ./mvnw verify -PtimeoutReliant -Dnvim.path=/path/to/nvim                    # the clock tests
 ```
 
-On Windows, from `cmd`: `start "" /affinity 3 /wait /b mvnw.cmd verify -Pui` (`3` is a bit mask:
-cores 0 and 1; `1` is core 0 alone). macOS has no way to pin a process to cores.
+**Windows.** `start /affinity` takes a hexadecimal bit mask of cores: `1` is core 0 alone, `3`
+cores 0 and 1 (binary 11). `/wait` waits for the build to end, `/b` keeps it in the same console,
+and the empty `""` is the window title `start` expects first. From `cmd`:
+
+```bat
+start "" /affinity 3 /wait /b mvnw.cmd verify -Pui -Dnvim.path=C:\path\to\nvim
+start "" /affinity 1 /wait /b mvnw.cmd test -f tests\unit\pom.xml -Pintegration -Dnvim.path=C:\path\to\nvim
+```
+
+`start` belongs to `cmd`, so from PowerShell run it through `cmd /c`. `--%` (PowerShell's
+stop-parsing token) hands the rest of the line to `cmd` as written, so PowerShell neither drops the
+empty `""` nor splits `-Dnvim.path=...` at the dot:
+
+```powershell
+cmd /c --% start "" /affinity 3 /wait /b mvnw.cmd verify -Pall -Dnvim.path=C:\path\to\nvim
+```
+
+To check that the mask took effect, open Task Manager, *Details*, right-click a `java.exe` or
+`nvim.exe` process and choose *Set affinity*: only the chosen cores are ticked.
+
+**macOS** cannot pin a process to cores. The nearest substitute makes every JVM size itself as if the
+machine had two cores (thread pools, garbage collector), though they still run on all of them, and
+so do Neovim and the test Eclipse's native code. It shows sizing problems, not slowness:
+
+```bash
+JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=2 ./mvnw verify -Pui -Dnvim.path=/path/to/nvim
+```
+
+`JAVA_TOOL_OPTIONS` reaches the forked test JVMs too, where `MAVEN_OPTS` would not; each JVM prints
+"Picked up JAVA_TOOL_OPTIONS" as it starts. For a slow machine, use a Linux or Windows one, or a
+virtual machine with two cores.
 
 ### Code coverage
 
