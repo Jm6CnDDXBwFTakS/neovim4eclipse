@@ -59,6 +59,17 @@ does not depend on JDT and still starts without it.
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 
 1. `tests/unit` when the code is in `util` or `core` (no Eclipse at all).
+   - **Lua that runs inside Neovim** (`core/LuaScripts`: which `:` commands Eclipse carries out,
+     the write hook, the yank hook, leaving a folder) is tested in Lua, in
+     `tests/unit/src/test/lua/*_spec.lua`, inside a headless Neovim without the Java session:
+     what a script sends to Eclipse is recorded instead of sent, and keys typed with
+     `nvim_feedkeys(keys, 'xt')` are done when the call returns, so nothing waits.
+     `LuaScriptsInNeovimTest` runs each Lua test in a Neovim of its own, under `-Pintegration`
+     (it needs a real Neovim). `src/test/lua/harness.lua` explains the helpers and the one limit:
+     a test cannot show that something stays open. Example:
+     `t.type(':wa<CR>'); t.eq({ { 'wall', false, {} } }, t.sent('eclipse_command'))`.
+     Test the Java side of the same case (what the plug-in does with the notification) without
+     Neovim, and keep one test through the real session only for the connection between the two.
 2. `tests/text` when the code uses `IDocument`, `Document` or `DocumentEvent` but no SWT widget and
    no workbench. Example: `BufferSynchronizer` applies Neovim's line changes to a real `Document`;
    its test needs the text model, not an editor. The class must also be listed in the compiler
