@@ -575,8 +575,9 @@ public final class EditorAttachManager {
         // Even if unchanged: Neovim asks only for :w, or for :update of a modified buffer, and
         // 'modified' follows Eclipse's dirty flag; so this is a write Vim would make.
         if (!EclipseFileCommands.save(text, createFolders, true)) {
-            return DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle()
-                    + (created ? "" : " (see the Error Log)"));
+            // No "see the Error Log": usually Eclipse has already said why in a dialog (a read-only
+            // file whose "make writable?" was answered No), and the log has nothing more.
+            return DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle());
         }
         return DocumentWrite.Result.saved(created ? "" : EclipseFileCommands.writtenMessage(text));
     }
