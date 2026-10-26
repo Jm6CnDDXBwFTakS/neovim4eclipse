@@ -17,6 +17,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - On a slow or busy machine, a `:` command that opens another editor (`:e new.txt`) no longer ends
   with "Type :qa and press <Enter> to exit Nvim" in place of its own message: the new editor taking
   the focus is no longer taken for a click away from the `:` box.
+- A typed `:w | q` no longer quits the embedded Neovim (and with it every editor's Neovim) after a
+  successful save, nor closes the editor without asking after a failed one: each command of a `|`
+  chain goes to Eclipse like the first, so the editor closes as for `:q`, asking about unsaved
+  changes. The same holds for `:w | bd`, `:echo 1 | q` and the other Eclipse commands.
 
 ## [0.1.7] - 2026-10-26
 
