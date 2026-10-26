@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentExtension;
 import org.eclipse.jface.text.IDocumentListener;
 import org.junit.jupiter.api.AfterEach;
@@ -209,6 +210,35 @@ class BufferSynchronizerTest {
             assertEquals("alpha\n", doc.get());
             neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha", "")));
             assertEquals("alpha\n", doc.get(), "no second empty line");
+        }
+    }
+
+    /**
+     * Undoing a Neovim change brings the document back to the stamp it had before, every time, so
+     * an editor saved at that stamp is clean again (see {@link UndoSteps}). Without a new undo step
+     * per change, the second round restored a stale stamp and the file stayed marked as changed.
+     */
+    @Test
+    void undoingANeovimChangeRestoresTheStampBeforeIt() throws Exception {
+        IDocument doc = new Document("alpha\nbeta\ngamma\n");
+        org.eclipse.text.undo.DocumentUndoManagerRegistry.connect(doc);
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            org.eclipse.text.undo.IDocumentUndoManager undo =
+                    org.eclipse.text.undo.DocumentUndoManagerRegistry.getDocumentUndoManager(doc);
+            undo.connect(this); // as the editor's text viewer does
+            s.pushDocumentToNeovim();
+            s.startRemoteListening();
+            for (int round = 0; round < 3; round++) {
+                long saved = ((IDocumentExtension4) doc).getModificationStamp(); // as if saved here
+                neovim.neovimChanged(new BufferChange(2, 2, List.of("beta"))); // yyp on line 2
+                assertEquals("alpha\nbeta\nbeta\ngamma\n", doc.get());
+                undo.undo(); // Ctrl+Z
+                assertEquals("alpha\nbeta\ngamma\n", doc.get());
+                assertEquals(saved, ((IDocumentExtension4) doc).getModificationStamp(), "round " + round);
+            }
+        } finally {
+            org.eclipse.text.undo.DocumentUndoManagerRegistry.getDocumentUndoManager(doc).disconnect(this);
+            org.eclipse.text.undo.DocumentUndoManagerRegistry.disconnect(doc);
         }
     }
 

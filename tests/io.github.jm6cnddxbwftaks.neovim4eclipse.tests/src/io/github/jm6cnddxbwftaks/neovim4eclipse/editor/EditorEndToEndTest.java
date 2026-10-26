@@ -738,6 +738,38 @@ class EditorEndToEndTest extends EndToEndTestBase {
                 () -> Boolean.FALSE.equals(io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.bo.modified")));
     }
 
+    /** Ctrl+Z as real key events (Display.post), so that Eclipse's key binding runs Undo. */
+    private void postCtrlZ() {
+        org.eclipse.swt.widgets.Display d = widget.getDisplay();
+        org.eclipse.swt.widgets.Event e = new org.eclipse.swt.widgets.Event();
+        e.type = SWT.KeyDown; e.keyCode = SWT.CTRL; d.post(e);
+        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyDown; e.character = 'z'; e.keyCode = 'z'; d.post(e);
+        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.character = 'z'; e.keyCode = 'z'; d.post(e);
+        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.keyCode = SWT.CTRL; d.post(e);
+        UiTestSupport.spin(500);
+    }
+
+    /**
+     * Ctrl+Z after a Neovim edit makes the editor clean again every time, not only the first time:
+     * each Neovim change starts its own step in Eclipse's undo history ({@code sync/UndoSteps}).
+     * Real key events, so that Ctrl+Z goes through Eclipse's key bindings as when typed.
+     */
+    @Test
+    void ctrlZBackToTheSavedTextMakesTheEditorCleanEveryTime() throws Exception {
+        for (int round = 0; round < 3; round++) {
+            editor.doSave(null);
+            settle();
+            typeSlowly("2Gyyp");
+            settle();
+            assertTrue(editor.isDirty(), "round " + round + ": yyp changed the file");
+            postCtrlZ();
+            settle();
+            expectText("alpha\nbeta\ngamma\n");
+            int r = round;
+            waitUntil("round " + r + ": clean after Ctrl+Z", TIMEOUT_MS, () -> !editor.isDirty());
+        }
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {

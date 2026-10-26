@@ -268,6 +268,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                     : fullBuffer ? fullBufferEdit(document, change.newLines(), newline)
                     : rangeEdit(document, change, newline);
             if (edit != null) {
+                UndoSteps.beforeChange(document); // its own undo step, as a keystroke would make
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
         } catch (Exception e) {

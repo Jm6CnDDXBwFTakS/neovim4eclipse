@@ -79,6 +79,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `o` on the last line of a file without a final newline showed two new empty lines in Eclipse
   (and saved them), though Neovim had one and its motions could not reach the second. The empty
   line it adds now also stays a line after Esc, as in Vim: `Go` goes to it.
+- Ctrl+Z back to the saved text after a Neovim edit (`yyp`, `dd`) left the file marked as changed,
+  from the second time on.
 - After `:w` (or another `:` command Eclipse runs), the status bar could stay on `-- COMMAND --`
   in normal mode until the next key.
 
