@@ -134,6 +134,12 @@ waiting longer:
   double click; on a loaded machine two clicks sent at once can arrive further apart. The mouse
   tests set it to 10 s for themselves.
 
+**Checking that something did not happen** needs care too: "sleep 200 ms, then check nothing
+arrived" passes on a loaded machine even when the bug is there, because the stray event comes later.
+The integration tests use `NeovimBarrier.pass(session)` instead: one request that Neovim answers
+only after the keys before it, with every notification they caused sent and handled before the
+answer (see that class for why the order holds). After it, what has not arrived will not.
+
 Every wait has the same limit, `TestWait` (15 s). A passing test returns as soon as its condition
 holds, so the limit only matters when something is broken. To give a slow machine more time, or a
 fast one less so that a hang fails sooner, pass `-Dtest.wait.seconds=N` to any test command above.

@@ -58,7 +58,8 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   model (`org.eclipse.jface.text` types from the `org.eclipse.text` jar), no SWT or workbench. The
   `editor/` classes listed in `tests/swt/pom.xml` may use SWT and JFace, not the workbench.
 - A test waits with `TestWait` (`-Dtest.wait.seconds`, default 15) for an outcome, never with a
-  fixed sleep or a limit of its own; see CONTRIBUTING.md, "Tests on a loaded machine".
+  fixed sleep or a limit of its own; to check that nothing more arrived, an integration test uses
+  `NeovimBarrier.pass`, not a sleep. See CONTRIBUTING.md, "Tests on a loaded machine".
 - Put each test in the cheapest module that can run it: `tests/unit`, then `tests/text`, then
   `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in").
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse

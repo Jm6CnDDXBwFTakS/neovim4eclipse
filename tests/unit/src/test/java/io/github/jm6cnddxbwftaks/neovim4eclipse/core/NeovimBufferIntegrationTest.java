@@ -122,7 +122,7 @@ class NeovimBufferIntegrationTest {
             s.input("d");
             s.input("d");
             waitFor(() -> !changes.isEmpty(), "the attached buffer's change");
-            Thread.sleep(200); // give a wrongly forwarded event time to arrive
+            NeovimBarrier.pass(s); // a wrongly forwarded event would have arrived by now
             assertTrue(changes.stream().noneMatch(c -> c.newLines().contains("changed elsewhere")), changes.toString());
         }
     }
@@ -189,7 +189,7 @@ class NeovimBufferIntegrationTest {
             DocumentBuffer b = new DocumentBuffer("");
             s.showBuffer(a);
             s.showBuffer(b);
-            Thread.sleep(200);
+            NeovimBarrier.pass(s); // their BufEnter notifications have been handled
             assertTrue(entered.isEmpty(), "Eclipse's own switches: " + entered);
 
             s.command("buffer " + a.bufnr());

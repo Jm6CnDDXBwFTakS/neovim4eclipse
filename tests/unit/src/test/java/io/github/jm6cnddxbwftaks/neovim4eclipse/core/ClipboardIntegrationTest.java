@@ -111,7 +111,7 @@ class ClipboardIntegrationTest {
             s.setBufferLines(List.of("one", "two"));
             keys(s, "\"", "+", "y", "y");
             waitFor(() -> !system.copies.isEmpty(), "the copy");
-            Thread.sleep(200); // a second (racing) write from the yank hook would arrive by now
+            NeovimBarrier.pass(s); // a second (racing) write from the yank hook would have arrived
             assertEquals(List.of("CLIPBOARD:one" + NL), system.copies);
 
             keys(s, "j", "\"", "+", "p");
@@ -153,7 +153,7 @@ class ClipboardIntegrationTest {
 
             keys(s, "y", "y"); // one write, by the provider (the yank hook stands down)
             waitFor(() -> !system.copies.isEmpty(), "the copy");
-            Thread.sleep(200);
+            NeovimBarrier.pass(s);
             assertEquals(List.of("CLIPBOARD:aZbc" + NL), system.copies);
         }
     }
@@ -176,7 +176,7 @@ class ClipboardIntegrationTest {
             system.texts.put(Selection.CLIPBOARD, "Z");
             keys(s, "\"", "+", "y", "y");
             keys(s, "\"", "+", "p");
-            Thread.sleep(200);
+            NeovimBarrier.pass(s);
             assertEquals(List.of(), system.copies, "Eclipse is not the provider");
             assertTrue(!s.getBufferLines().contains("aZbc"));
         }
