@@ -18,6 +18,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # everything: plug-in, all tests incl. UI (not -PuiHeavyJava), feature, ZIP
 ./mvnw verify                                     # the same without the UI tests (no Eclipse window)
 ./mvnw verify -PuiHeavyJava                       # only the UI tests that need Java tooling (slow; not in CI)
+./mvnw verify -PloadSensitive -Dnvim.path=/usr/bin/nvim   # only the tests tagged loadSensitive (measure time; not in CI)
 ./mvnw verify -Pscreenshots                       # retake the Marketplace screenshots (see docs/design/MARKETPLACE.md)
 ./mvnw verify -DskipTests                         # build only
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
@@ -59,7 +60,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   `editor/` classes listed in `tests/swt/pom.xml` may use SWT and JFace, not the workbench.
 - A test waits with `TestWait` (`-Dtest.wait.seconds`, default 15) for an outcome, never with a
   fixed sleep or a limit of its own; to check that nothing more arrived, an integration test uses
-  `NeovimBarrier.pass`, not a sleep. See CONTRIBUTING.md, "Tests on a loaded machine".
+  `NeovimBarrier.pass`, not a sleep. A test that must depend on the machine's speed is tagged
+  `loadSensitive` (left out of -Pui, -Pintegration and CI), only when no rewrite helps. See
+  CONTRIBUTING.md, "Tests on a loaded machine".
 - Put each test in the cheapest module that can run it: `tests/unit`, then `tests/text`, then
   `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in").
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse
