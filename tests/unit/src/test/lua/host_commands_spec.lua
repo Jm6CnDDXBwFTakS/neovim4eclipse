@@ -48,6 +48,64 @@ t.test('arguments are passed as typed, a count becomes the argument, and | goes 
   t.eq(1, vim.g.after, 'the command after | ran')
 end)
 
+--- Eclipse's side of the write hook (DOCUMENT_BUFFER's eclipse_write request): saves, or fails
+--- with `err`. Returns the list of buffers asked for.
+local function eclipse_saves(err)
+  local asked = {}
+  t.answer('eclipse_write', function(buf)
+    asked[#asked + 1] = buf
+    return err and { err, '' } or { '', 'written' }
+  end)
+  return asked
+end
+
+t.test('every command of a | chain is looked at: :w | q writes in Neovim, then Eclipse closes', function()
+  start()
+  vim.cmd('vsplit') -- if q were Neovim's, it would close a window (on the last one, end Neovim)
+  local asked = eclipse_saves()
+  local buf = t.document('A.txt', { 'a' })
+  t.type(':w | q<CR>')
+  t.eq({ buf }, asked, 'Neovim wrote, through Eclipse')
+  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({}, t.sent('eclipse_buffer_closed'), 'no :quit reached Neovim')
+  t.eq(2, #vim.api.nvim_list_wins(), 'nothing was closed')
+  t.eq('w | q', vim.fn.histget(':', -1), 'the history keeps the line as typed')
+end)
+
+t.test('after a failed save, :w | q still hands the quit to Eclipse, which asks about the changes', function()
+  start()
+  vim.cmd('vsplit')
+  local asked = eclipse_saves('Eclipse could not save A.txt: read-only')
+  local buf = t.document('A.txt', { 'a' })
+  t.type(':w | q<CR>')
+  t.eq({ buf }, asked)
+  t.eq(true, vim.bo[buf].modified, 'not saved')
+  -- Eclipse closes a dirty editor only after asking, as for a plain :q (HostCommandRunner).
+  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({}, t.sent('eclipse_buffer_closed'), 'the safety net did not close the editor behind the prompt')
+  t.eq(2, #vim.api.nvim_list_wins())
+end)
+
+t.test('a host command anywhere in a chain goes to Eclipse; the others and refused ones stay Neovim\'s', function()
+  start()
+  t.type(':let g:a = 1 | echo 2<CR>') -- no host command: the line runs as typed
+  t.type(':echo 1 | bd | let g:after = 1<CR>')
+  t.type(':echo 1 |  tabn 3 | wa<CR>') -- spaces after | are Neovim's to skip
+  t.eq({
+    { 'bdelete', false, {} },
+    { 'tabnext', false, { '3' } },
+    { 'wall', false, {} },
+  }, t.sent('eclipse_command'))
+  t.eq(1, vim.g.a)
+  t.eq(1, vim.g.after, 'the command after the host command ran')
+  vim.cmd('vsplit')
+  t.forget()
+  t.type(':echo 1 | q foo<CR>') -- :q takes no argument: E488, from Neovim
+  t.ok(vim.v.errmsg:find('E488', 1, true), vim.v.errmsg)
+  t.eq({}, t.sent('eclipse_command'))
+  t.eq(2, #vim.api.nvim_list_wins())
+end)
+
 t.test('a line Eclipse would refuse stays Neovim\'s', function()
   start()
   vim.cmd('vsplit') -- if :q foo were run, it would close a window, not end the test's Neovim

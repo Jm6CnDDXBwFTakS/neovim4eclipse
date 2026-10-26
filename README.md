@@ -293,9 +293,11 @@ Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
 `:q<CR>`), from a macro, with `:normal`, and repeated with `@:`. Neovim hands each one to Eclipse as
 `:Eclipse quit`, `:Eclipse! edit file` ..., a command you can also use in your own mappings; the
-history keeps what you typed. A command after `|` runs after it (`:w | echo "saved"`). Not handed over,
-so Neovim's: a line run by `<Cmd>` or Lua (`vim.cmd.quit()`), the commands `:bufdo` runs, a command
-after `|` (`:echo 1 | q`), and a range a command does not take (`:5,10w`).
+history keeps what you typed. Each command of a `|` chain is handed over the same way: `:w | q`
+writes, then closes the editor (asking first if the save failed), and `:w | echo "saved"` runs the
+`echo` after the write. Not handed over, so Neovim's: a line run by `<Cmd>` or Lua
+(`vim.cmd.quit()`), the commands `:bufdo` runs, the rest of a line whose command takes `|` as part of
+its argument (`:normal`, `:g`, `:let x = 1 | q`), and a range a command does not take (`:5,10w`).
 
 A buffer that Neovim deletes by itself (a Lua plug-in, `<Cmd>bd<CR>`, `:bufdo bd`) closes its
 editor too, and so does a `:quit` Neovim runs itself; Eclipse asks about changes as for `:q`.
@@ -583,8 +585,8 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w <otherfile>` is refused (use *File → Save As*); `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after `|`
-   or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
+3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w <otherfile>` is refused (use *File → Save As*); `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
+   `:let ... |` or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`
    creates it.

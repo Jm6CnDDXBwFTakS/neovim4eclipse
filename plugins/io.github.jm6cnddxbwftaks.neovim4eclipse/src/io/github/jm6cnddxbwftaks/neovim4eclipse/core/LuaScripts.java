@@ -174,8 +174,14 @@ final class LuaScripts {
      *   <li>Just before a {@code :} line runs, {@code CmdlineLeavePre} parses it with
      *       {@code nvim_parse_cmd()}. If it is one of the commands, {@code setcmdline()} replaces it
      *       with the {@code :Eclipse} form, which Neovim then runs instead: {@code :tabn 3} becomes
-     *       {@code :Eclipse tabnext 3}, {@code :q!} {@code :Eclipse! quit}. A {@code |} and what
-     *       follows are kept ({@code :Eclipse} is defined with {@code bar}).</li>
+     *       {@code :Eclipse tabnext 3}, {@code :q!} {@code :Eclipse! quit}. Each command after a
+     *       {@code |} gets the same treatment ({@code :Eclipse} is defined with {@code bar}):
+     *       {@code :w | q} becomes {@code :w | Eclipse quit}, so Neovim writes through the write
+     *       hook ({@link #DOCUMENT_BUFFER}) and Eclipse then closes the editor, asking first if the
+     *       save failed. Left to Neovim, that {@code q} would end the embedded Neovim on its last
+     *       window. A command that reads {@code |} as part of its argument ({@code :normal},
+     *       {@code :g}, {@code :let}; {@code nvim_parse_cmd()} gives it no next command) keeps the
+     *       rest of its line.</li>
      *   <li>{@code :Eclipse} puts the line as typed back into the history, in place of its own, so
      *       Up in the {@code :} box recalls {@code tabn 3}.</li>
      * </ol>
@@ -193,7 +199,8 @@ final class LuaScripts {
      * <p>{@code CmdlineLeavePre} fires on Esc too; {@code v:char} tells which key ended the line, and
      * only Enter runs it. It fires for {@code :} typed by a mapping, a macro, {@code :normal} and
      * {@code feedkeys()} as well, each line on its own, but not for {@code <Cmd>}, for the commands
-     * {@code :bufdo} runs, or after {@code |}: those reach Neovim. For the ones that close something
+     * {@code :bufdo} runs, or after a {@code |} that {@code nvim_parse_cmd()} does not split
+     * ({@code :let x = 1 | q}): those reach Neovim. For the ones that close something
      * there are safety nets, which tell Eclipse but cannot stop Neovim: {@code QuitPre} here (a
      * {@code :quit} Neovim runs; on its last window Neovim ends, as experiment X7 found), and
      * {@code BufDelete} / {@code BufWipeout} on each document buffer ({@link #DOCUMENT_BUFFER}).
@@ -219,12 +226,9 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, vim.list_slice(o.fargs, 2))
             end, { nargs = '+', bang = true, bar = true, desc = 'Eclipse carries out an ex command (:Eclipse quit)' })
 
-            -- The line to run instead of `line`, or nil to leave it alone.
-            local function replacement(line)
-              local ok, p = pcall(vim.api.nvim_parse_cmd, line, {})
-              if not ok then
-                return nil -- Neovim reports it when it runs the line
-              end
+            -- The :Eclipse form of one parsed command (p, from nvim_parse_cmd; what follows a | is
+            -- not part of it), or nil to leave the command to Neovim.
+            local function eclipse_form(p)
               local rule = rules[p.cmd]
               if not rule then
                 return nil
@@ -259,13 +263,38 @@ final class LuaScripts {
               if #args > 0 then
                 cmd = cmd .. ' ' .. table.concat(args, ' ') -- as typed: a name keeps its backslashes
               end
-              if p.nextcmd ~= '' then
-                cmd = cmd .. ' | ' .. p.nextcmd
-              end
               return cmd
             end
 
-            -- Safety net: a :quit that Neovim runs itself (<Cmd>q, vim.cmd.quit(), after |) closes the
+            -- The line to run instead of `line`, or nil to leave it alone. Each command of a | chain
+            -- is looked at, not just the first: in `:w | q` Neovim writes (through Eclipse, the write
+            -- hook), then Eclipse closes the editor, asking first if the save failed. Without this
+            -- the q would be Neovim's, and on its last window Neovim would end.
+            -- Example: `w | q` becomes `w | Eclipse quit`, `q | echo 1` becomes `Eclipse quit | echo 1`.
+            -- nvim_parse_cmd gives what follows the | as nextcmd, the end of the line as typed
+            -- (`w  |  q` has nextcmd `q`); a command that takes | as an argument (:normal, :g,
+            -- :let) has none, so the rest of its line stays as typed.
+            local function replacement(line)
+              local ok, p = pcall(vim.api.nvim_parse_cmd, line, {})
+              if not ok then
+                return nil -- Neovim reports it when it runs the line
+              end
+              local own = eclipse_form(p)
+              local rest -- the rest of the chain rewritten, or nil if none of it changed
+              local after = p.nextcmd
+              if after ~= '' and line:sub(-#after) == after then
+                rest = replacement(after)
+              end
+              if own then
+                return after == '' and own or (own .. ' | ' .. (rest or after))
+              end
+              if rest then
+                return line:sub(1, #line - #after) .. rest -- this command as typed, its | included
+              end
+              return nil
+            end
+
+            -- Safety net: a :quit that Neovim runs itself (<Cmd>q, vim.cmd.quit(), :let x = 1 | q) closes the
             -- editor too. It cannot stop the quit (on the last window Neovim ends anyway). Not for the
             -- command-line window, which SETUP closes with :quit, nor while Eclipse ends Neovim (:qa!),
             -- which the session ignores.
