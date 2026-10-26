@@ -26,6 +26,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   (`:3,5bd`), a count before a tab command (`:2tabn`), and a command after `|` still runs
   (`:w | echo "saved"`). New: `:Eclipse quit`, `:Eclipse! edit file` ... run them by Neovim's full name,
   for your own mappings.
+- A buffer Neovim deletes by itself (a Lua plug-in, `<Cmd>bd<CR>`, `:bufdo bd`) now closes its editor,
+  as `:bd` does, instead of leaving the editor on a buffer Neovim no longer has.
 - A save that Eclipse cannot do, asked for by Neovim (`:wall`, `:bufdo update`, a mapping's `:w`),
   now fails the command, as a failed write does in Neovim: `:bufdo update` stops at that file instead of
   going on, and `:w | q` in a mapping no longer goes on to close the editor. The error is shown as

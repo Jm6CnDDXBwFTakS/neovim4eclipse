@@ -193,8 +193,11 @@ final class LuaScripts {
      * <p>{@code CmdlineLeavePre} fires on Esc too; {@code v:char} tells which key ended the line, and
      * only Enter runs it. It fires for {@code :} typed by a mapping, a macro, {@code :normal} and
      * {@code feedkeys()} as well, each line on its own, but not for {@code <Cmd>}, for the commands
-     * {@code :bufdo} runs, or after {@code |}: those reach Neovim, whose buffer autocommands tell
-     * Eclipse ({@code DOCUMENT_BUFFER}).
+     * {@code :bufdo} runs, or after {@code |}: those reach Neovim. For the ones that close something
+     * there are safety nets, which tell Eclipse but cannot stop Neovim: {@code QuitPre} here (a
+     * {@code :quit} Neovim runs; on its last window Neovim ends, as experiment X7 found), and
+     * {@code BufDelete} / {@code BufWipeout} on each document buffer ({@link #DOCUMENT_BUFFER}).
+     * Both send {@code eclipse_buffer_closed}, and Eclipse closes the editor showing that buffer.
      */
     static final String HOST_COMMANDS = """
             local rules = {} -- { quit = 'none', edit = 'any', ... }
@@ -261,6 +264,19 @@ final class LuaScripts {
               end
               return cmd
             end
+
+            -- Safety net: a :quit that Neovim runs itself (<Cmd>q, vim.cmd.quit(), after |) closes the
+            -- editor too. It cannot stop the quit (on the last window Neovim ends anyway). Not for the
+            -- command-line window, which SETUP closes with :quit, nor while Eclipse ends Neovim (:qa!),
+            -- which the session ignores.
+            vim.api.nvim_create_autocmd('QuitPre', {
+              desc = 'Eclipse closes the editor',
+              callback = function()
+                if vim.fn.getcmdwintype() == '' then
+                  vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', vim.api.nvim_get_current_buf())
+                end
+              end,
+            })
 
             vim.api.nvim_create_autocmd('CmdlineLeavePre', {
               desc = 'Eclipse carries out :w, :q, :e, :tabn ...',
@@ -417,6 +433,15 @@ final class LuaScripts {
      * autocommand. Being two lines, it opens the output popup ({@code util/MessageRoute}), where Vim
      * would show it above a "Press ENTER" prompt. The buffer stays modified, so {@code :update} tries
      * again next time.
+     *
+     * <h2>Deleted by Neovim: a safety net</h2>
+     * A {@code :bd} on Neovim's command line reaches Eclipse as {@code :Eclipse bdelete}
+     * ({@link #HOST_COMMANDS}), which closes the editor. One Neovim runs itself ({@code <Cmd>bd<CR>},
+     * {@code vim.cmd.bdelete()}, {@code :bufdo bd}) deletes the buffer first; its {@code BufDelete}
+     * or {@code BufWipeout} then sends {@code eclipse_buffer_closed}, and Eclipse closes the editor
+     * showing it, asking about changes as usual (decision D10 of the cleanup plan). When Eclipse
+     * wipes a buffer itself (its last editor closed), no editor shows it any more and the notice is
+     * ignored.
      */
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
@@ -444,6 +469,15 @@ final class LuaScripts {
                   return fail(err)
                 end
                 vim.bo[ev.buf].modified = false
+              end,
+            })
+            -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its
+            -- editor too. Eclipse ignores it for a buffer no editor shows (one it wiped itself).
+            vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {
+              buf = buf,
+              desc = 'Eclipse closes the editor',
+              callback = function(ev)
+                vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', ev.buf)
               end,
             })
             """;

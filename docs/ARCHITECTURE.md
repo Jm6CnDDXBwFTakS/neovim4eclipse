@@ -328,6 +328,11 @@ view to the controller, which shows it in the box. The box edits nothing:
   `:Eclipse tabnext 3`. Since this happens on Neovim's command line, a mapping's `:q<CR>`, a macro,
   `:normal` and `@:` go the same way. Replacing the line rather than cancelling it (`v:event.abort`) keeps
   `@:` working: a cancelled line is no "last command line" (E30). Experiment X7 of the cleanup plan.
+- **Safety nets** for what Neovim runs itself (`<Cmd>bd`, `vim.cmd.quit()`, `:bufdo bd`, a command after
+  `|`): `BufDelete` / `BufWipeout` on a document buffer and `QuitPre` send `eclipse_buffer_closed`, and
+  `EditorAttachManager` closes the editor showing that buffer (asking about changes). They cannot stop
+  Neovim: on its last window a quit still ends it (X7). Ignored while the session closes (its `:qa!`
+  fires `QuitPre` too) and for a buffer no editor shows (one Eclipse wiped itself).
 - The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the attached editor
   (`NeovimSession.addHostCommandListener`), is turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.

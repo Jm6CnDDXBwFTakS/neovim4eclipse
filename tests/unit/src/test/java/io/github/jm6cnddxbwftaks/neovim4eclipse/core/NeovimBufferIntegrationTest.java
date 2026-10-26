@@ -319,6 +319,34 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * The safety nets: a document buffer that Neovim deletes by itself ({@code <Cmd>bd},
+     * {@code vim.cmd.bdelete()}), or a {@code :quit} it runs itself, tells Eclipse which buffer, so
+     * that its editor closes. A {@code :bd} typed on the command line is handed over instead and
+     * deletes nothing in Neovim.
+     */
+    @Test
+    void aBufferNeovimDeletesOrQuitsByItselfIsReported() throws Exception {
+        try (NeovimSession s = start()) {
+            List<Integer> closed = new CopyOnWriteArrayList<>();
+            s.setBufferClosedHandler(closed::add);
+            String dir = System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/";
+            DocumentBuffer a = new DocumentBuffer(dir + "A.txt");
+            DocumentBuffer b = new DocumentBuffer(dir + "B.txt");
+            s.showBuffer(a);
+            s.showBuffer(b);
+
+            s.lua("vim.cmd.bdelete(" + a.bufnr() + ")");
+            waitFor(() -> closed.contains(a.bufnr()), "A's deletion: " + closed);
+
+            s.command("split"); // two windows, so the quit closes one instead of ending Neovim
+            closed.clear();
+            s.lua("vim.cmd.quit()");
+            waitFor(() -> closed.contains(b.bufnr()), "the quit of B's window: " + closed);
+            assertTrue(s.isAlive());
+        }
+    }
+
     /** {@code :bufdo update} stops at a buffer whose save failed, as it stops at a real write error. */
     @Test
     void bufdoUpdateStopsAtAFailedSave() throws Exception {
