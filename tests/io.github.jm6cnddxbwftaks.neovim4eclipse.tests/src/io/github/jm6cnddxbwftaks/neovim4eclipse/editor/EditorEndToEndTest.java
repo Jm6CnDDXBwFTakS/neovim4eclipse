@@ -676,6 +676,20 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("helloalpha\nhellobeta\ngamma\n");
     }
 
+    /**
+     * A macro recorded at a person's speed records its insert too: the session sees that Neovim is
+     * recording (reg_recording() in its state) before the {@code i}, and makes the insert
+     * Neovim-driven, so Neovim types {@code hello} and records it.
+     */
+    @Test
+    void aSlowRecordingRecordsTheInsert() {
+        typeSlowly("ggqaihello");
+        escape(widget);
+        settle();
+        typeSlowly("qj0@a");
+        expectText("helloalpha\nhellobeta\ngamma\n");
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {
@@ -703,18 +717,11 @@ class EditorEndToEndTest extends EndToEndTestBase {
      * The {@code q} that stops a recording takes no register, so the {@code :} right after it opens
      * the box, and the recorded macro then plays back.
      *
-     * <p>The keys are typed faster than Neovim reports its state: "normal mode" is already true before
-     * {@code ggqaA;<Esc>} is processed, so {@code jq} arrives while the session still says "not
-     * recording". {@code KeyRouter} therefore tracks the recording from the keys it routed; before it
-     * did, this test failed whenever it ran with the rest of the class.
-     *
-     * <p>Known rare failure (2026-10-20): after that fix it failed once in 32 runs, the first full
-     * {@code -Pui} build, with the same symptom (the {@code :} reached Neovim, mode {@code c}). A trace
-     * of every routing decision did not catch it again in 31 runs, so the cause is unknown; one
-     * guess is that the build used classes compiled before the fix. If it fails again, the failure
-     * message gives Neovim's mode; trace {@code KeyRouter.route} (key, pending state, recording by keys
-     * and as reported, waiting for an argument), kept in memory and printed only in the failure
-     * message, since printing every key may change the timing.
+     * <p>The keys are typed faster than Neovim reports its state: {@code jq} may arrive while the
+     * session still says "not recording". That no longer matters: every key outside insert mode goes
+     * to Neovim, which knows the {@code q} stops the recording and that the {@code :} after it opens
+     * a command line (the box opens on {@code cmdline_show}). Before 0.1.7 {@code KeyRouter} guessed
+     * both from the keys it routed, and this test caught the guess going wrong.
      */
     @Test
     void afterRecordingAMacroColonOpensTheBoxAndTheMacroPlaysBack() {
