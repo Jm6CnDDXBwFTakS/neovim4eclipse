@@ -11,7 +11,7 @@ Neovim owns editing; Eclipse owns files and rendering.
      behavior it shows changes. -->
 ![Neovim editing a Java file in Eclipse: ciw, a recorded macro, :%s, gd to a declaration, content assist in insert mode and :e! to revert](docs/images/demo.gif)
 
-**Status: 0.1.5, an early release.** It works day to day on Linux, macOS and Windows; expect rough
+**Status: 0.1.6, an early release.** It works day to day on Linux, macOS and Windows; expect rough
 edges, see [Known limitations](#known-limitations).
 
 **Documentation**

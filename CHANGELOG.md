@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-26
+
 ### Changed
 
 - **Neovim 0.12.6 or newer is required** (was 0.9). The plug-in now lets newer Neovim features do
@@ -26,14 +28,15 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `bin/nvim`), or a folder with release archives extracted into it, up to four levels down (so also
   as Windows Explorer's *Extract All* leaves them), with a *Browse...* button, and shows which Neovim
   it finds and its version. Left blank (the new default), it looks in the plug-in's own Neovim
-  folder first, `~/.local/share/neovim4eclipse-plugin/neovim` (`$XDG_DATA_HOME/...` when set; on
-  Windows `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`), then on `PATH`, then in the usual
+  folder first, `~/.local/share/neovim4eclipse-plugin/neovim` (`$XDG_DATA_HOME/...` when set; `~`
+  is `HOME`, on Windows `%USERPROFILE%` when `HOME` is not set), then on `PATH`, then in the usual
   install folders, now also Neovim's own `/opt` folders and per-user Windows installs. Several
   Neovims side by side in one folder: the newest that runs is used. An absolute path to `nvim` set
   before keeps working. Under the field's note, a line says what the field takes and links to
-  [Finding Neovim](README.md#finding-neovim) in the README; when nothing is found, the note says
-  whether the default folders or the value entered came up empty, and how to go on. A note about a
-  Neovim that would not start is shown in the theme's error color, with an error mark on the field.
+  [Finding Neovim](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#finding-neovim) in the README;
+  when nothing is found, the note says whether the default folders or the value entered came up
+  empty, and how to go on. A note about a Neovim that would not start is shown in the theme's error
+  color, with an error mark on the field.
 - A Neovim older than the minimum is refused at start, with a message naming its version and the
   one needed, instead of failing later in unclear ways.
 
