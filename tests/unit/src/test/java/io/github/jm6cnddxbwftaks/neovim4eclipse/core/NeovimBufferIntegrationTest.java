@@ -347,6 +347,39 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * Neovim's {@code 'modified'} follows Eclipse's dirty flag: set or cleared on request, and kept
+     * through a push of Eclipse's text (writing lines would mark the buffer modified, though a
+     * revert is not dirty). So {@code :update} writes exactly what Eclipse would save.
+     */
+    @Test
+    void modifiedFollowsEclipsesDirtyFlag() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/A.txt");
+            s.showBuffer(a);
+            s.setModifiedAsync(a, true); // an editor with unsaved changes, attached
+            waitFor(() -> a.eclipseDirty, "the flag recorded");
+            s.setBufferLines(List.of("a"));
+            assertEquals(Boolean.TRUE, s.lua("return vim.bo.modified"), "the first load keeps it modified");
+
+            s.setModifiedAsync(a, false); // Ctrl+S in Eclipse; queued on the input thread
+            waitFor(() -> Boolean.FALSE.equals(lua(s, "return vim.bo.modified")), "'modified' cleared");
+
+            s.setBufferLines(List.of("b")); // :e! in Eclipse: the saved text comes back, not dirty
+            assertEquals(Boolean.FALSE, s.lua("return vim.bo.modified"), "the push keeps Eclipse's flag");
+            s.setModifiedAsync(a, true);
+            waitFor(() -> Boolean.TRUE.equals(lua(s, "return vim.bo.modified")), "'modified' set");
+        }
+    }
+
+    private static Object lua(NeovimSession s, String code) {
+        try {
+            return s.lua(code);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** {@code :bufdo update} stops at a buffer whose save failed, as it stops at a real write error. */
     @Test
     void bufdoUpdateStopsAtAFailedSave() throws Exception {

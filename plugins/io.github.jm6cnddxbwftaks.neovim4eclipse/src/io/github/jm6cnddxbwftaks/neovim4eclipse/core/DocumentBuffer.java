@@ -18,6 +18,12 @@ public final class DocumentBuffer {
      * history, so that {@code u} in a freshly opened file does not empty it.
      */
     volatile boolean loaded;
+    /**
+     * Whether Eclipse has unsaved changes in the document (its editor is dirty). Neovim's
+     * {@code 'modified'} follows it ({@link NeovimSession#setModifiedAsync}), so that {@code :update}
+     * and {@code :wall} write exactly what Eclipse would save, and {@code :ls} shows {@code +}.
+     */
+    volatile boolean eclipseDirty;
 
     /** @param name buffer name shown by {@code :ls} and {@code %f}, normally the file path; may be empty */
     public DocumentBuffer(String name) {

@@ -121,8 +121,11 @@ Neovim never writes them itself; a write (`:update` in `:bufdo`, `:wall`, a mapp
 `EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at most 30 s) and
 answers with nothing or an error message. An error fails the write as a real failed write does
 (`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before
-quitting, and `:bufdo update` stops at that buffer, which stays `'modified'`. A freshly loaded buffer is not
-`'modified'`, so `:update` skips files nobody changed. Only the attached buffer's cursor reports reach Eclipse.
+quitting, and `:bufdo update` stops at that buffer, which stays `'modified'`. `'modified'` follows Eclipse's
+dirty flag: `EditorAttachManager` listens to each editor's `PROP_DIRTY` and calls
+`NeovimSession.setModifiedAsync` (`LuaScripts.SET_MODIFIED`), and every push of Eclipse's text sets it
+again (writing lines marks a buffer modified, though a revert is not dirty). So `:update` writes exactly
+the files Eclipse would save, skips the others, and `:ls` shows `+` for unsaved ones. Only the attached buffer's cursor reports reach Eclipse.
 
 Neovim can change any of those buffers (`:bufdo %s/old/new/g`), and Eclipse can change a document
 whose editor is in the background (a rename refactoring). Every document with a buffer therefore has a

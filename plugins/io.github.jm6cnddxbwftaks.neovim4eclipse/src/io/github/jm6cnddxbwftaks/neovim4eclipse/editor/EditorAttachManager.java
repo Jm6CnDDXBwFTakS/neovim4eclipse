@@ -23,6 +23,7 @@ import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IPropertyListener;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IPathEditorInput;
@@ -93,6 +94,15 @@ public final class EditorAttachManager {
     /** Guarded by {@code this}. The buffer of the attached document, or {@code null}. */
     private DocumentBuffer attachedBuffer;
     private volatile boolean autoAttach = true;
+    /**
+     * An editor's dirty flag changed (it was saved, reverted, or edited): Neovim's {@code 'modified'}
+     * for its document follows, so {@code :update} writes what Eclipse would save. UI thread.
+     */
+    private final IPropertyListener dirtyListener = (source, propId) -> {
+        if (propId == IEditorPart.PROP_DIRTY && source instanceof IEditorPart part) {
+            onDirtyChanged(part);
+        }
+    };
     /** Guarded by {@code this}. */
     private boolean listenersRegistered;
     private final IPartListener2 partListener = new IPartListener2() {
@@ -357,6 +367,9 @@ public final class EditorAttachManager {
             throw new IllegalStateException("Editor has no document: " + editor.getTitle());
         }
         DocumentBuffer buffer = documents.add(document, editor, () -> bufferName(textEditor.getEditorInput()));
+        // Neovim's 'modified' follows the editor's dirty flag, from the first load on.
+        editor.addPropertyListener(dirtyListener); // once per editor: a listener list holds it once
+        session.setModifiedAsync(buffer, editor.isDirty());
         UnattachedDocumentSync sync = unattachedSyncs.computeIfAbsent(buffer, b -> {
             UnattachedDocumentSync created = new UnattachedDocumentSync(document, b, session, SwtUiExecutor.INSTANCE);
             created.start();
@@ -606,8 +619,24 @@ public final class EditorAttachManager {
         return true;
     }
 
+    /** Tells Neovim whether {@code part}'s document has unsaved changes. UI thread. */
+    private void onDirtyChanged(IEditorPart part) {
+        ITextEditor text = textEditorOf(part); // a multi-page editor's text page too
+        IDocument document = text == null ? null : documentOf(text);
+        Optional<DocumentBuffer> buffer;
+        NeovimSession session;
+        synchronized (this) {
+            session = followedSession;
+            buffer = document == null ? Optional.empty() : documents.bufferOf(document);
+        }
+        if (session != null && buffer.isPresent() && buffer.get().isOpenIn(session)) {
+            session.setModifiedAsync(buffer.get(), part.isDirty());
+        }
+    }
+
     /** Forgets {@code part}; the buffer of a document whose last editor closed is wiped in Neovim. */
     private void releaseDocumentsOf(IEditorPart part) {
+        part.removePropertyListener(dirtyListener);
         List<DocumentBuffer> unused;
         NeovimSession session;
         synchronized (this) {

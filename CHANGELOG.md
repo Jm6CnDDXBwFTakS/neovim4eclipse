@@ -26,6 +26,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   (`:3,5bd`), a count before a tab command (`:2tabn`), and a command after `|` still runs
   (`:w | echo "saved"`). New: `:Eclipse quit`, `:Eclipse! edit file` ... run them by Neovim's full name,
   for your own mappings.
+- Neovim's `'modified'` now follows Eclipse's unsaved-changes marker: `:ls` shows `+` for exactly the
+  files Eclipse would save, and `:bufdo update` writes those (before, a file saved with Ctrl+S still
+  counted as changed, and one opened with unsaved changes did not).
 - A buffer Neovim deletes by itself (a Lua plug-in, `<Cmd>bd<CR>`, `:bufdo bd`) now closes its editor,
   as `:bd` does, instead of leaving the editor on a buffer Neovim no longer has.
 - A save that Eclipse cannot do, asked for by Neovim (`:wall`, `:bufdo update`, a mapping's `:w`),

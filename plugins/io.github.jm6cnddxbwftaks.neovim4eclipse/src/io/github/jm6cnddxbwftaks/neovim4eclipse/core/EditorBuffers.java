@@ -76,6 +76,12 @@ public final class EditorBuffers<D, E> {
         return entry.buffer;
     }
 
+    /** The buffer of {@code document}, or empty when no editor showing it was attached yet. */
+    public Optional<DocumentBuffer> bufferOf(D document) {
+        Entry<E> entry = documents.get(document);
+        return entry == null ? Optional.empty() : Optional.of(entry.buffer);
+    }
+
     /**
      * The editor to activate when Neovim switched to buffer {@code bufnr} by itself, or empty when no
      * open editor shows that buffer (then Neovim is sent back to the attached buffer).

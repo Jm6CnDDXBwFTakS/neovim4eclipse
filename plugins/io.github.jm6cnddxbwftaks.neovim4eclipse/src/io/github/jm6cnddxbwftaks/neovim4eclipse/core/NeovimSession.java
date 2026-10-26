@@ -462,6 +462,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         } finally {
             writingBufnr = NotificationBridge.UNKNOWN_BUFFER;
         }
+        applyModified(buffer);
         return true;
     }
 
@@ -517,12 +518,34 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (document != null && !document.loaded) {
             await(api.execLua(LuaScripts.LOAD_WITHOUT_UNDO, target));
             document.loaded = true;
+            applyModified(document);
             return;
         }
         LineDiff.Change change = LineDiff.between(getBufferLines(), target);
         if (change != null) {
             await(api.bufSetLines(buffers.attached(), change.start(), change.end(), false, change.replacement()));
+            if (document != null) {
+                applyModified(document); // the change set 'modified'; Eclipse decides (a revert is not dirty)
+            }
         }
+    }
+
+    /**
+     * Eclipse's dirty flag for {@code buffer}'s document changed (UI thread, from the editor's dirty
+     * property): Neovim's {@code 'modified'} follows it ({@link LuaScripts#SET_MODIFIED}). Every push of
+     * Eclipse's text sets it again, since writing lines marks a buffer modified. Any thread.
+     */
+    public void setModifiedAsync(DocumentBuffer buffer, boolean dirty) {
+        buffer.eclipseDirty = dirty;
+        submit("modified " + dirty + " for " + buffer.name(), Level.FINE, () -> applyModified(buffer));
+    }
+
+    /** Sets the buffer's {@code 'modified'} to its document's dirty flag, if the buffer exists. */
+    private void applyModified(DocumentBuffer buffer) throws Exception {
+        if (buffers.handleOf(buffer) == null || !buffer.loaded) {
+            return;
+        }
+        await(api.execLua(LuaScripts.SET_MODIFIED, List.of(String.valueOf(buffer.bufnr), buffer.eclipseDirty ? "1" : "0")));
     }
 
     public List<String> getBufferLines() throws Exception {
