@@ -26,6 +26,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -128,6 +129,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final InputThread inputThread = new InputThread();
     /** Keys queued by {@link #inputAsync} that Neovim has not processed yet; see {@link #hasKeysInFlight}. */
     private final AtomicInteger keysInFlight = new AtomicInteger();
+    /** The newest mouse drag not sent yet (see {@link #mouseAsync}). */
+    private final LatestValue<MouseInput> pendingDrag = new LatestValue<>();
     /** Runs submitted {@code :} commands, listings, searches and {@code :normal!}. */
     private final CommandRunner commands = new CommandRunner(new CommandRunnerNeovim());
     /** Tells Neovim's command lines the user opened from the ones the plug-in types. */
@@ -597,6 +600,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return keysInFlight.get() > 0;
     }
 
+    /**
+     * Hands a mouse event in the editor to Neovim's own mouse ({@link KeyInput#mouse}), on the input
+     * thread, in order with the keys. Drags that arrive faster than Neovim answers replace each other
+     * ({@link LatestValue}): only the newest position is sent, and a release still comes after it.
+     */
+    public void mouseAsync(MouseInput event) {
+        if (event.action() == MouseInput.Action.DRAG) {
+            if (pendingDrag.offer(event)) {
+                submit("mouse drag", Level.FINE, () -> {
+                    MouseInput latest = pendingDrag.take();
+                    if (latest != null) {
+                        keyInput.mouse(latest);
+                    }
+                });
+            }
+            return;
+        }
+        submit("mouse " + event.action().luaName(), Level.FINE, () -> keyInput.mouse(event));
+    }
+
     /** Moves the Neovim cursor (e.g. after a mouse click in Eclipse). */
     public void setCursorAsync(int line1Based, int col0Based) {
         submit("setCursor", Level.FINE, () -> {
@@ -680,6 +703,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Sends one key to Neovim and refreshes Eclipse. Blocking: call on the input thread. See {@link KeyInput#input}. */
     public void input(String keys) throws Exception {
         keyInput.input(keys);
+    }
+
+    /** One mouse event, handled by Neovim's mouse. Blocking: call on the input thread. See {@link KeyInput#mouse}. */
+    public void mouse(MouseInput event) throws Exception {
+        keyInput.mouse(event);
     }
 
     // ---- synchronization from Neovim to listeners ----
@@ -932,6 +960,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void setCursor(int line1, int col0) throws Exception {
             NeovimSession.this.setCursor(line1, col0);
+        }
+
+        @Override
+        public void mouse(MouseInput event) throws Exception {
+            await(api.execLua(LuaScripts.MOUSE, List.of("left", event.action().luaName(), event.modifiers(),
+                    String.valueOf(event.line1()), String.valueOf(event.col0()))));
         }
 
         private static String text(Object raw) {

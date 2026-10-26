@@ -96,6 +96,12 @@ class KeyInputTest {
         }
 
         @Override
+        public void mouse(MouseInput event) {
+            calls.add("mouse " + event.action().luaName() + " " + event.line1() + ":" + event.col0());
+            mode = after.getOrDefault("mouse " + event.action().luaName(), mode);
+        }
+
+        @Override
         public Mode getMode() {
             return mode;
         }
@@ -305,6 +311,30 @@ class KeyInputTest {
         type("<CR>");
 
         assertTrue(nvim.calls.contains("type <CR>"), nvim.calls.toString());
+    }
+
+    // ---- the mouse ----
+
+    @Test
+    void aMouseEventGoesToNeovimThenTheStateIsRead() throws Exception {
+        nvim.after.put("mouse drag", new Mode("v", false));
+
+        keys.mouse(new MouseInput(MouseInput.Action.PRESS, "", 2, 3));
+        keys.mouse(new MouseInput(MouseInput.Action.DRAG, "", 3, 1));
+
+        assertEquals(List.of("mouse press 2:3", "keysConsumed", "snapshot", "mouse drag 3:1", "keysConsumed",
+                "snapshot"), nvim.calls);
+        assertEquals(List.of("mode n", "mode v"), heard, "the drag started visual mode");
+    }
+
+    /** {@code d} then a click: Neovim would not run the script until {@code d} is complete. */
+    @Test
+    void aMouseEventWhileNeovimWaitsForTheRestOfACommandIsDropped() throws Exception {
+        nvim.mode = new Mode("no", true);
+
+        keys.mouse(new MouseInput(MouseInput.Action.PRESS, "", 2, 3));
+
+        assertEquals(List.of(), nvim.calls);
     }
 
     // ---- macro playback ----

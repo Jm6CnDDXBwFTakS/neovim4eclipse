@@ -42,6 +42,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   (`Ctrl-U`, `Ctrl-N`, `Ctrl-P`, `Ctrl-R`), instead of running Eclipse shortcuts on the editor behind it.
 - Switching to another application or input method (Super+Space for Japanese input) while the `:`
   box is open keeps the line; only a click elsewhere in Eclipse cancels it.
+- The mouse in normal and visual mode is Neovim's: a double click selects a word, a triple click the
+  line (`V`), dragging selects in visual mode, and Shift+click extends the selection, so `d`, `y` and
+  `>` act on what you selected. Before, the editor made a selection of its own that Neovim did not
+  know about, and `x` after dragging deleted one character. Ctrl/Cmd+click, the right and middle
+  buttons, and the mouse in insert mode stay Eclipse's.
 - `:e` file names complete from the editor's project folder: Neovim's window now works there (`:lcd`).
   `:e` still looks next to the current file first.
 - `q:` (Neovim's command-line window, which Eclipse cannot show) now closes at once with a message

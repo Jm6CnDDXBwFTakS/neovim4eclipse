@@ -83,6 +83,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final CommandLineBox commandLine;
     /** Eclipse's Copy, Paste, Cut and Select All, pointed at {@link #commandLine} while it is open. */
     private final CommandLineEditHandlers commandLineEdits;
+    /** The left mouse button, handed to Neovim in normal and visual mode. */
+    private final NeovimMouse mouse;
     /** Neovim's messages and errors, and the plug-in's own, along the bottom of the editor. */
     private final MessageLine messageLine;
     /** The message last handed to {@link #messageLine}, so that other status changes do not show it again. */
@@ -149,6 +151,8 @@ public final class NeovimEditorController implements AutoCloseable {
                 this::onCommandLineStateChanged);
         this.commandLineEdits = new CommandLineEditHandlers(
                 editor.getSite().getService(IHandlerService.class), commandLine);
+        this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
+                this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         session.setHostExHandler(cmd -> HostCommands.tryHandleEx(cmd, editor));
@@ -351,6 +355,14 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
+    /**
+     * Whether a left click goes to Neovim's mouse ({@link NeovimMouse}): in Neovim mode, except in
+     * insert and replace mode, where Eclipse types and so places the caret itself.
+     */
+    private boolean neovimHandlesMouse() {
+        return !closed && neovimModeActive && !VimModes.isTyping(session.getMode());
+    }
+
     /** Whether the {@code :} box has the keyboard focus (the Vim Ctrl keys then go to its line). */
     private boolean commandLineHasFocus() {
         return commandLine != null && commandLine.hasFocus();
@@ -530,6 +542,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         try {
             caretSync.dispose();
+            mouse.dispose();
             commandLineEdits.dispose();
             commandLine.dispose();
             messageLine.dispose();

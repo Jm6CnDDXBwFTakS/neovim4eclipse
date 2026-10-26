@@ -123,10 +123,12 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <!-- The classes under test, one by one (editor/ also holds workbench code), and the util/
-               and core/ classes they use (core/ClipboardPort: the interface ClipboardBridge implements). -->
+               and core/ classes they use (core/ClipboardPort: the interface ClipboardBridge implements;
+               core/MouseInput: what NeovimMouse sends). -->
           <includes>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/ClipboardPort.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/MouseInput.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/EditorCaret.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StyledTextCaret.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/WidgetOffsets.java</include>
@@ -137,6 +139,8 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/MessageLine.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CommandLineBox.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ClipboardBridge.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimMouse.java</include>
           </includes>
         </configuration>
       </plugin>

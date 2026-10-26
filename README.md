@@ -36,7 +36,7 @@ edges, see [Known limitations](#known-limitations).
 | Eclipse is responsible for | Neovim is responsible for |
 |----------------------------|---------------------------|
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
-| Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode |
+| Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode, the mouse included (see [Mouse](#mouse)) |
 | File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:bd`, `:e file`, `:e!`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
 | `gd` (Open Declaration) and `K` (hover information), through the editor's own commands | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
@@ -303,6 +303,20 @@ read-only box in the same place, with the command as its first line; output that
 scroll it; any other key or a click closes it. One-line output (`:echo "hi"`, a `:s` report) goes to
 the message line instead, and so do errors. Your own `:redir` collects as in Vim.
 
+## Mouse
+
+In normal and visual mode the left mouse button is Neovim's, as in Neovim with `'mouse'` on (its
+default): a click moves the cursor, a double click selects a word (on a bracket, up to its match), a
+triple click selects the line (`V`), a fourth click a block (`Ctrl-V`), dragging selects, and
+Shift+click extends the selection. The selection is Neovim's visual selection, so `d`, `y`, `>`, `:`
+act on what you see. Your `'mouse'`, `'mousetime'` and mappings such as `<2-LeftMouse>` apply; with
+`'mouse'` empty a click only moves the cursor.
+
+Eclipse keeps the mouse in insert mode and in Eclipse mode, and always keeps Ctrl+click (Cmd+click on
+macOS: Open Declaration and other hyperlinks), the right button (context menu) and the middle button
+(pasting the primary selection on Linux). Dragging selected text to move it is not available in
+normal mode; drag in insert mode or Eclipse mode for that.
+
 ## Indentation (`o`, `O`, `>>`)
 
 Neovim indents the lines it creates. When a document is attached, the plug-in sets that buffer's
@@ -336,7 +350,8 @@ the plugin makes sure everything you do is seen by Neovim as keys:
 - `f/`, `t:`, `r/`, `@:`, `qa` ...: the character after `f F t T r @ m ' \` " q` is an *argument* and always goes
   to Neovim (previously `f/` opened the search box).
 
-Not recorded: mouse clicks and other actions that happen only in Eclipse. Not supported: the command-line
+Clicks in normal and visual mode are recorded, as Neovim records them (`<LeftMouse>`, without a
+position: playback clicks where the mouse was last). Not recorded: actions that happen only in Eclipse. Not supported: the command-line
 window (`q:`, `q/`, `q?`). Macros live in Neovim's registers and last until Neovim restarts (for example
 after changing the executable preference).
 

@@ -712,16 +712,19 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("alpha\nbea\ngamma\n");
     }
 
-    /** After dragging over words, {@code x} deletes the first selected character (Neovim's cursor goes to the start). */
+    /**
+     * Dragging is Neovim's own mouse ({@link NeovimMouse}): it selects in visual mode, from the
+     * character pressed to the character released, and {@code x} deletes the selection.
+     */
     @Test
-    void xAfterDraggingOverWordsDeletesTheFirstSelectedCharacter() throws Exception {
+    void xAfterDraggingOverWordsDeletesTheSelection() throws Exception {
         document.set("one two three\n");
         settle();
-        drag(4, 9); // "two t"
-        assertEquals(new Point(4, 9), widget.getSelection(), "the dragged selection");
-        settle();
+        drag(4, 8); // from the t of "two" to the t of "three": "two t"
+        waitUntil("Neovim's visual selection", TIMEOUT_MS, () -> new Point(4, 9).equals(widget.getSelection()),
+                () -> "; selection " + widget.getSelection() + ", mode " + session.getMode());
         type(widget, 'x');
-        expectText("one wo three\n");
+        expectText("one hree\n");
     }
 
     /** A left click on the character at {@code offset}, as the mouse sends it. */

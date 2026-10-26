@@ -33,6 +33,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  *       pulled once ({@link #syncBufferAfterMacro}).</li>
  *   <li><b>{@code :w} typed in Neovim's own command line</b>: offered to Eclipse on Enter
  *       ({@link #tryHostCommandLine}).</li>
+ *   <li><b>The mouse</b> in normal and visual mode goes the same way as a key ({@link #mouse}).</li>
  * </ul>
  *
  * <p>Everything here blocks on RPC and runs on the session's single input thread, which keeps keys
@@ -86,6 +87,9 @@ final class KeyInput {
 
         /** Moves Neovim's cursor; {@code col0} is a 0-based UTF-8 byte column. */
         void setCursor(int line1, int col0) throws Exception;
+
+        /** Hands one mouse event to Neovim's own mouse ({@link LuaScripts#MOUSE}). */
+        void mouse(MouseInput event) throws Exception;
     }
 
     private final Neovim nvim;
@@ -171,6 +175,31 @@ final class KeyInput {
                 LOG.warning("input('" + keys + "') took " + ms + " ms (mode=" + state.mode() + ")");
             }
         }
+    }
+
+    /**
+     * One mouse event (a click, a drag, a release in the editor), handled by Neovim's own mouse as a
+     * key is: Neovim moves the cursor or selects, then the new mode, cursor and selection are
+     * published. The editor's selection then shows Neovim's visual selection.
+     *
+     * <p>While Neovim waits for the rest of a command ({@code d}, {@code f}) the event is dropped:
+     * Neovim would not answer the script until that command is complete, and the script needs it to
+     * find the clicked character on Neovim's screen ({@link LuaScripts#MOUSE}).
+     */
+    void mouse(MouseInput event) throws Exception {
+        Mode before = state.readMode();
+        if (before == null || before.blocking()) {
+            LOG.fine(() -> "mouse " + event + " dropped: Neovim waits for the rest of a command");
+            return;
+        }
+        status.clearMessage(); // as a key does: a message stays until the next key or click
+        nvim.mouse(event);
+        nvim.awaitKeysConsumed(); // the script queued the event as input
+        Mode mode = state.readMode();
+        if (mode != null && mode.blocking()) {
+            return;
+        }
+        state.publishState();
     }
 
     private void inputKey(String keys) throws Exception {

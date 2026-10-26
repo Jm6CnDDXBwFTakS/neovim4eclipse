@@ -340,6 +340,76 @@ final class LuaScripts {
             end
             """;
 
+    /**
+     * One mouse event for Neovim's own mouse handling ({@code nvim_input_mouse}): arguments button
+     * ({@code "left"}), action ({@code "press"}, {@code "drag"}, {@code "release"}), modifiers
+     * ({@code "S"}, {@code "A"}, {@code ""}), line (1-based) and byte column (0-based, both as text) of the
+     * character clicked in the document. Returns whether the event was handed to Neovim's mouse.
+     *
+     * <p><b>Why a script.</b> {@code nvim_input_mouse} takes a <em>screen</em> cell, not a buffer
+     * position, and the plug-in draws nothing of Neovim's screen: Neovim's window (40 rows, see
+     * {@code NeovimConnection}) does not scroll with the editor. So the script asks Neovim where the
+     * character is on its screen ({@code screenpos()}), which also accounts for tabs, wide
+     * characters and wrapped lines. A character that is not on Neovim's screen is brought there:
+     * <ul>
+     *   <li>a press scrolls Neovim's window to it (the cursor goes there anyway);</li>
+     *   <li>a drag in visual mode moves the cursor there, which extends the selection as the drag
+     *       would (scrolling first would move the cursor and lose the drag's start);</li>
+     *   <li>the first drag, before visual mode started, goes to the nearest edge of Neovim's screen,
+     *       so the selection starts where the press was; the next drag event extends it.</li>
+     * </ul>
+     *
+     * <p>Clicking past the end of a line points at the cell after its last character, as a click
+     * there does in Neovim. Without the mouse ({@code 'mouse'} lacks {@code n} or {@code v}, or
+     * {@code a}) a press only moves the cursor, as the plug-in did before it forwarded the mouse.
+     *
+     * <p>Example: {@code ("left", "press", "", 250, 5)} with Neovim showing lines 1 to 38 scrolls
+     * its window to line 250 and presses there; three presses within {@code 'mousetime'} select the
+     * line ({@code V}), as in Neovim. Visual-mode letters are built with {@code string.char}: a Java
+     * text block would read a backslash escape as octal.
+     */
+    static final String MOUSE = """
+            local button, action, mods, lnum, col = ...
+            lnum, col = tonumber(lnum), tonumber(col) -- the plug-in passes every argument as text
+            local m = vim.o.mouse
+            local visual = vim.fn.mode():match('^[vVsS' .. string.char(22, 19) .. ']') ~= nil
+            if not (m:find('a') or m:find(visual and 'v' or 'n')) then
+              if action == 'press' and button == 'left' then
+                vim.api.nvim_win_set_cursor(0, { lnum, col })
+              end
+              return false
+            end
+            local function cell(l, c)
+              local len = #vim.fn.getline(l)
+              local past = len > 0 and c >= len
+              local pos = vim.fn.screenpos(0, l, len == 0 and 1 or math.min(c, len - 1) + 1)
+              if pos.row == 0 then
+                return nil
+              end
+              return pos.row - 1, pos.col - 1 + (past and 1 or 0)
+            end
+            local row, scol = cell(lnum, col)
+            if not row then
+              if action == 'press' then
+                vim.fn.winrestview({ topline = lnum, lnum = lnum, col = col })
+              elseif visual then
+                vim.api.nvim_win_set_cursor(0, { lnum, col })
+                if action == 'drag' then
+                  return true
+                end
+              else
+                local edge = lnum > vim.fn.line('w$') and vim.fn.line('w$') or vim.fn.line('w0')
+                lnum, col = edge, 0
+              end
+              row, scol = cell(lnum, col)
+              if not row then
+                return false
+              end
+            end
+            vim.api.nvim_input_mouse(button, action, mods, 0, row, scol)
+            return true
+            """;
+
     /** Pastes argument 1 at the cursor, in any mode, as a paste rather than typed keys. */
     static final String PASTE = "vim.api.nvim_paste(select(1, ...), false, -1)";
 
