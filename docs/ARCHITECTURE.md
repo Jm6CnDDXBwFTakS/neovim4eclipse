@@ -479,6 +479,10 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   covered by randomized tests against a line-list model.
 - `util/TextDiff` makes full re-syncs a minimal local edit rather than `IDocument.set()`, so
   annotations, folding and the caret survive.
+- **Undo steps:** each change from Neovim starts a new step in Eclipse's undo history
+  (`sync/UndoSteps`, `IDocumentUndoManager.commit()`), as a keystroke in the widget would; Neovim's keys
+  never reach the widget. Without it, a step left open after Ctrl+Z kept a stale modification stamp, and
+  the next Ctrl+Z back to the saved text left the editor marked as changed.
 - **Final newline:** `text = join(lines) + (final newline ? delimiter : "")`. The flag is decided at the
   document's first push to Neovim and remembered per document (`sync/FinalNewlines`), like Vim's `'eol'`,
   so a file keeps (or lacks) its final newline exactly as it had it. It cannot be read from the text at
