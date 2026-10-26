@@ -39,9 +39,10 @@ Lua module and starts, per test:
 With "--list" instead of a test name it prints the spec's test names, one per line after "TEST\t".
 A test passes when the process ends with status 0; a failed check prints "FAIL: ..." and a
 traceback, and ends with status 1. By hand, from tests/unit, after one JUnit run has written the
-module (its path is in the JUnit output of a failure):
+module to target/lua-tests/scripts.lua:
 
-  nvim --clean --headless -l src/test/lua/harness.lua /tmp/.../scripts.lua src/test/lua/host_commands_spec.lua --list
+  nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l src/test/lua/harness.lua \
+    target/lua-tests/scripts.lua src/test/lua/host_commands_spec.lua --list
 
 A spec file gets the harness as its argument:
 
