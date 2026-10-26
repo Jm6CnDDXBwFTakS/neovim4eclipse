@@ -357,10 +357,12 @@ class NeovimSessionIntegrationTest {
     @Test
     void hostCommandsReachEclipseFromTypedLinesMappingsMacrosAndAtColon() throws Exception {
         assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "nnoremap <Space>q :q<CR>",
-                "--cmd", "let @a = \":tabn 3\\r\""))) {
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "nnoremap <Space>q :q<CR>"))) {
             List<HostCommand> commands = new CopyOnWriteArrayList<>();
             s.addHostCommandListener(commands::add);
+            // Set here, not with --cmd "let @a = ...": Windows drops the double quotes of a process
+            // argument, and register a then held no command (the macro step timed out there only).
+            s.lua("vim.fn.setreg('a', ':tabn 3' .. string.char(13))");
 
             keys(s, ":", "wa", "<CR>");
             waitFor(() -> commands.size() == 1, ":wa");
