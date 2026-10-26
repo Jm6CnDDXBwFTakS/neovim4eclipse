@@ -459,9 +459,11 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
   covered by randomized tests against a line-list model.
 - `util/TextDiff` makes full re-syncs a minimal local edit rather than `IDocument.set()`, so
   annotations, folding and the caret survive.
-- **Final newline:** `text = join(lines) + (document ends with a line break ? delimiter : "")`. The flag is
-  read from the current document on every edit, never stored, so a file keeps (or lacks) its final newline
-  exactly as it had it. See the class comment on `util/LineTextUtil` for the one inherent ambiguity.
+- **Final newline:** `text = join(lines) + (final newline ? delimiter : "")`. The flag is read from the
+  document at each push to Neovim and remembered by the synchronizer until the next push, so a file keeps
+  (or lacks) its final newline exactly as it had it. It cannot be read from the text at each edit: after
+  `o` on the last line of `"a"`, the text `"a\n"` is `["a", ""]` without a final newline, not `["a"]`
+  with one (class comment on `util/LineTextUtil`).
 - **Paste, counts and `.`** are ordinary keys sent to Neovim; there is no Java-side emulation. Linewise
   paste arrives as a pure line insertion, which `LineRangeEdit` handles.
 - **Columns:** Neovim cursor/visual columns are UTF-8 byte offsets. `editor/DocumentPositions` converts

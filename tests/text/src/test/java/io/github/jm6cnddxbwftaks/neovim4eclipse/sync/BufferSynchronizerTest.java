@@ -148,6 +148,50 @@ class BufferSynchronizerTest {
         assertEquals(List.of(), neovim.queued); // Neovim's own change is not pushed back
     }
 
+    /**
+     * {@code o} on the last line of a file without a final newline adds one empty line, and the full
+     * sync that follows (Neovim sends one when insert mode starts) adds none: the synchronizer
+     * remembers from the push that the file had no final newline, although the document now ends
+     * with a line break. It used to read that line break as a final newline and show two empty lines.
+     */
+    @Test
+    void oOnTheLastLineOfAFileWithoutAFinalNewlineAddsOneLine() {
+        IDocument noFinalNewline = new Document("alpha\nbeta");
+        try (BufferSynchronizer noeol = new BufferSynchronizer(noFinalNewline, neovim, UiExecutor.IMMEDIATE)) {
+            noeol.pushDocumentToNeovim();
+            noeol.startRemoteListening();
+
+            neovim.neovimChanged(new BufferChange(2, 2, List.of(""))); // o
+            assertEquals("alpha\nbeta\n", noFinalNewline.get());
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha", "beta", "")));
+            assertEquals("alpha\nbeta\n", noFinalNewline.get(), "the full sync adds no second empty line");
+            neovim.neovimChanged(new BufferChange(3, 3, List.of(""))); // o again, on the empty line
+            assertEquals("alpha\nbeta\n\n", noFinalNewline.get());
+        }
+    }
+
+    /**
+     * Pushing a document that ends with a line break sends no empty last line: Neovim gets the same
+     * file as lines with a final newline, and Neovim's changes are applied that way from then on.
+     */
+    @Test
+    void aPushRemembersTheFinalNewlineAgain() {
+        IDocument noFinalNewline = new Document("alpha");
+        try (BufferSynchronizer noeol = new BufferSynchronizer(noFinalNewline, neovim, UiExecutor.IMMEDIATE)) {
+            noeol.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(1, 1, List.of(""))); // o: "alpha\n", no final newline
+            noeol.stopRemoteListening();
+            noeol.pushDocumentToNeovim();
+            noeol.startRemoteListening();
+
+            assertEquals(List.of(List.of("alpha")), neovim.pushed, "the same file, with a final newline");
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha")));
+            assertEquals("alpha\n", noFinalNewline.get());
+            neovim.neovimChanged(new BufferChange(1, 1, List.of("beta")));
+            assertEquals("alpha\nbeta\n", noFinalNewline.get());
+        }
+    }
+
     @Test
     void closeUnregistersFromTheSession() {
         sync.startRemoteListening();

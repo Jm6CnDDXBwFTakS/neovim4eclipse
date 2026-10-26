@@ -20,8 +20,14 @@ import org.junit.jupiter.api.Test;
  */
 class LineRangeEditTest {
 
+    /** Applies the change to a document whose line break at the end, if any, is a final newline. */
     private static String apply(String doc, int first, int last, List<String> newLines, String delim) {
-        Edit edit = LineRangeEdit.compute(new StringLineSource(doc), first, last, newLines, delim);
+        return apply(doc, true, first, last, newLines, delim);
+    }
+
+    private static String apply(String doc, boolean finalNewline, int first, int last, List<String> newLines,
+            String delim) {
+        Edit edit = LineRangeEdit.compute(new StringLineSource(doc), first, last, newLines, delim, finalNewline);
         if (edit == null) {
             return doc;
         }
@@ -42,8 +48,8 @@ class LineRangeEditTest {
 
     @Test
     void identicalContentIsANoOp() {
-        assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 1, List.of("a"), "\n"));
-        assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 2, List.of("a", "b"), "\n"));
+        assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 1, List.of("a"), "\n", true));
+        assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 2, List.of("a", "b"), "\n", true));
     }
 
     @Test
@@ -90,6 +96,19 @@ class LineRangeEditTest {
     void appendAfterLastLineWithoutFinalNewlineStartsANewLineAndAddsNoFinalNewline() {
         assertEquals("a\nb", apply("a", 1, 1, List.of("b"), "\n"));
         assertEquals("a\nb\nc", apply("a", 1, 1, List.of("b", "c"), "\n"));
+    }
+
+    /**
+     * Without a final newline, a line break at the end starts an empty last line: {@code "a\nb\n"}
+     * is {@code ["a", "b", ""]}, what {@code o} on the last line of {@code "a\nb"} makes.
+     */
+    @Test
+    void anEmptyLastLineWithoutAFinalNewlineIsALine() {
+        assertEquals("a\nb\n", apply("a\nb", false, 2, 2, List.of(""), "\n"), "o on the last line");
+        assertEquals("a\nb\n\n", apply("a\nb\n", false, 3, 3, List.of(""), "\n"), "o on the empty last line");
+        assertEquals("a\nb\nX", apply("a\nb\n", false, 2, 3, List.of("X"), "\n"), "typing on it");
+        assertEquals("a\nb", apply("a\nb\n", false, 2, 3, List.of(), "\n"), "dd on it");
+        assertEquals("a\nb\n", apply("a\nb\n", false, 0, -1, List.of("a", "b", ""), "\n"), "a full sync");
     }
 
     @Test
@@ -157,11 +176,8 @@ class LineRangeEditTest {
         for (int round = 0; round < 5000; round++) {
             String delim = delimiters[random.nextInt(delimiters.length)];
             boolean finalNewline = random.nextBoolean();
+            // Any lines, an empty last line without a final newline too: the flag tells them apart.
             List<String> model = randomLines(random, 1 + random.nextInt(6), true);
-            if (!finalNewline && model.size() > 1 && model.get(model.size() - 1).isEmpty()) {
-                // Not representable: "a" + delimiter + "" is the text of ["a"] WITH a final newline.
-                model.set(model.size() - 1, "z");
-            }
             String doc = LineTextUtil.linesToDocumentText(model, delim, finalNewline);
 
             int first = random.nextInt(model.size() + 1);
@@ -177,7 +193,7 @@ class LineRangeEditTest {
             expectedLines.addAll(model.subList(last, model.size()));
             String expected = LineTextUtil.linesToDocumentText(expectedLines, delim, finalNewline);
 
-            String result = apply(doc, first, last, replacement, delim);
+            String result = apply(doc, finalNewline, first, last, replacement, delim);
 
             assertEquals(expected, result, "round " + round + " doc=" + escape(doc) + " first=" + first
                     + " last=" + last + " new=" + replacement + " finalNewline=" + finalNewline);
@@ -200,14 +216,14 @@ class LineRangeEditTest {
     @Test
     void aChangedWordIsReplacedAloneNotItsWholeLine() {
         String doc = "a\n  int count = 1;\nb\n";
-        Edit edit = LineRangeEdit.compute(new StringLineSource(doc), 1, 2, List.of("  int  = 1;"), "\n");
+        Edit edit = LineRangeEdit.compute(new StringLineSource(doc), 1, 2, List.of("  int  = 1;"), "\n", true);
         assertEquals(new Edit(8, 5, ""), edit);
     }
 
     /** Deleting a line still removes the line and its line break, and nothing else. */
     @Test
     void aDeletedLineIsStillOneEdit() {
-        Edit edit = LineRangeEdit.compute(new StringLineSource("a\nb\nc\n"), 1, 2, List.of(), "\n");
+        Edit edit = LineRangeEdit.compute(new StringLineSource("a\nb\nc\n"), 1, 2, List.of(), "\n", true);
         assertEquals(new Edit(2, 2, ""), edit);
     }
 }

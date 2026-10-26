@@ -690,6 +690,21 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("helloalpha\nhellobeta\ngamma\n");
     }
 
+    /**
+     * {@code o} on the last line of a file without a final newline shows one new line, not two, and
+     * the file then ends with exactly one line break (see {@code LineTextUtil}).
+     */
+    @Test
+    void oAtTheEndOfAFileWithoutAFinalNewlineAddsOneLine() {
+        document.set("alpha\nbeta");
+        settle();
+        typeSlowly("Go");
+        expectText("alpha\nbeta\n");
+        escape(widget);
+        settle();
+        expectText("alpha\nbeta\n");
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {
