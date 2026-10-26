@@ -33,4 +33,12 @@ public interface BufferPort {
     void addBufferChangeListener(Consumer<BufferChange> listener);
 
     void removeBufferChangeListener(Consumer<BufferChange> listener);
+
+    /**
+     * Notified (on a session thread) after each key or other queued work, once Neovim has handled it
+     * and every buffer change it caused was delivered ({@link NeovimSession#addInputHandledListener}).
+     */
+    void addInputHandledListener(Runnable listener);
+
+    void removeInputHandledListener(Runnable listener);
 }

@@ -62,6 +62,23 @@ class BufferSynchronizerTest {
             listeners.remove(listener);
         }
 
+        final List<Runnable> inputHandled = new ArrayList<>();
+
+        @Override
+        public void addInputHandledListener(Runnable listener) {
+            inputHandled.add(listener);
+        }
+
+        @Override
+        public void removeInputHandledListener(Runnable listener) {
+            inputHandled.remove(listener);
+        }
+
+        /** Says that Neovim has handled the key, as the session does after each queued key. */
+        void keyHandled() {
+            List.copyOf(inputHandled).forEach(Runnable::run);
+        }
+
         /** Runs the queued work in order, as the input thread would. */
         void runQueued() {
             List<Runnable> work = new ArrayList<>(queued);
@@ -231,6 +248,7 @@ class BufferSynchronizerTest {
             for (int round = 0; round < 3; round++) {
                 long saved = ((IDocumentExtension4) doc).getModificationStamp(); // as if saved here
                 neovim.neovimChanged(new BufferChange(2, 2, List.of("beta"))); // yyp on line 2
+                neovim.keyHandled();
                 assertEquals("alpha\nbeta\nbeta\ngamma\n", doc.get());
                 undo.undo(); // Ctrl+Z
                 assertEquals("alpha\nbeta\ngamma\n", doc.get());
@@ -238,6 +256,37 @@ class BufferSynchronizerTest {
             }
         } finally {
             org.eclipse.text.undo.DocumentUndoManagerRegistry.getDocumentUndoManager(doc).disconnect(this);
+            org.eclipse.text.undo.DocumentUndoManagerRegistry.disconnect(doc);
+        }
+    }
+
+    /**
+     * The changes of one Neovim command are one undo step: {@code J} changes line 1 and deletes line
+     * 2, and one Ctrl+Z undoes both. The next command is a step of its own.
+     */
+    @Test
+    void theChangesOfOneNeovimCommandAreOneUndoStep() throws Exception {
+        IDocument doc = new Document("alpha\nbeta\ngamma\n");
+        org.eclipse.text.undo.DocumentUndoManagerRegistry.connect(doc);
+        org.eclipse.text.undo.IDocumentUndoManager undo =
+                org.eclipse.text.undo.DocumentUndoManagerRegistry.getDocumentUndoManager(doc);
+        undo.connect(this);
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushDocumentToNeovim();
+            s.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("alpha beta"))); // J: two changes
+            neovim.neovimChanged(new BufferChange(1, 2, List.of()));
+            neovim.keyHandled();
+            neovim.neovimChanged(new BufferChange(1, 2, List.of())); // dd on gamma: the next command
+            neovim.keyHandled();
+            assertEquals("alpha beta\n", doc.get());
+
+            undo.undo();
+            assertEquals("alpha beta\ngamma\n", doc.get(), "one Ctrl+Z undoes dd");
+            undo.undo();
+            assertEquals("alpha\nbeta\ngamma\n", doc.get(), "one more undoes all of J");
+        } finally {
+            undo.disconnect(this);
             org.eclipse.text.undo.DocumentUndoManagerRegistry.disconnect(doc);
         }
     }

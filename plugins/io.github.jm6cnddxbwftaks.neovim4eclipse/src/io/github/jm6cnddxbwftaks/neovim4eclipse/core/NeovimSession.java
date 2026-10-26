@@ -353,6 +353,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         events.removeBufferChangeListener(listener);
     }
 
+    /**
+     * Notified (on the input thread) after each key, command or other piece of queued work, once
+     * Neovim has handled it. Every buffer change it caused has been delivered by then: Neovim sends
+     * its change notifications before the answer to the work's last request, which the work waits
+     * for (the state snapshot after a key). The editor's synchronizer uses it to make one undo step
+     * of all the changes of one command ({@code J} changes one line and deletes the next).
+     */
+    @Override
+    public void addInputHandledListener(Runnable listener) {
+        events.addInputHandledListener(listener);
+    }
+
+    @Override
+    public void removeInputHandledListener(Runnable listener) {
+        events.removeInputHandledListener(listener);
+    }
+
     public void addCursorListener(Consumer<CursorPos> listener) {
         events.addCursorListener(listener);
     }
@@ -716,8 +733,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /** See {@link InputThread#submit}; {@code false} if {@code work} will never run. */
+    /**
+     * Queues {@code work} on the input thread. Afterward, even if it failed, the input-handled
+     * listeners hear that Neovim has done what it asked (see {@link #addInputHandledListener}).
+     */
     private boolean submit(String what, Level failureLevel, InputThread.Task work) {
-        return inputThread.submit(what, failureLevel, work);
+        return inputThread.submit(what, failureLevel, () -> {
+            try {
+                work.run();
+            } finally {
+                events.inputHandled();
+            }
+        });
     }
 
     // ---- key input (see KeyInput) ----

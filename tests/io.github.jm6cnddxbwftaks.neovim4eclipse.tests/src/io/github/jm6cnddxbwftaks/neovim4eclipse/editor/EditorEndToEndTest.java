@@ -770,6 +770,19 @@ class EditorEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /** {@code J} reaches Eclipse as two changes; one Ctrl+Z undoes both, back to the saved, clean text. */
+    @Test
+    void oneCtrlZUndoesAWholeJ() throws Exception {
+        editor.doSave(null);
+        settle();
+        typeSlowly("ggJ");
+        expectText("alpha beta\ngamma\n");
+        postCtrlZ();
+        settle();
+        expectText("alpha\nbeta\ngamma\n");
+        waitUntil("clean after one Ctrl+Z", TIMEOUT_MS, () -> !editor.isDirty());
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {
