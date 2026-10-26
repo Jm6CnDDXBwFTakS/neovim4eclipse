@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -139,6 +140,27 @@ class OutputPopupTest {
         popup.show(":ls", "first");
         popup.show(":marks", "second");
         assertTrue(view().getText().startsWith(":marks\nsecond"), view().getText()); // view() checks there is one
+    }
+
+    /** Output that no typed command printed (a timer's) has no title line. */
+    @Test
+    void withoutATitleTheOutputIsTheFirstLine() {
+        popup.show("", "a\nb");
+        assertEquals("a\nb\nPress any key to continue", view().getText());
+    }
+
+    /** {@code :!make}'s output arrives again, whole, as it grows: the open popup is updated in place. */
+    @Test
+    void growingOutputUpdatesTheOpenPopupAndKeepsWhereItWasScrolled() {
+        popup.show(":!make", lines(100));
+        StyledText first = view();
+        first.setTopIndex(10);
+
+        popup.show(":!make", lines(150));
+
+        assertSame(first, view(), "the same popup, not a new one");
+        assertTrue(view().getText().contains("line 150"), view().getText());
+        assertEquals(10, view().getTopIndex());
     }
 
     // Where it sits

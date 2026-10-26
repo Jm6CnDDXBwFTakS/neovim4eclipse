@@ -64,7 +64,7 @@ class NvimKeysTest {
 
     @Test
     void exCommandIsTypedAsSilentCommandLine() {
-        assertEquals(":silent %s/a/b/g<CR>", NvimKeys.exCommand("%s/a/b/g"));
-        assertEquals(":silent echo <lt>x><CR>", NvimKeys.exCommand("  echo <x>  "));
+        assertEquals(":%s/a/b/g<CR>", NvimKeys.exCommand("%s/a/b/g"));
+        assertEquals(":echo <lt>x><CR>", NvimKeys.exCommand("  echo <x>  "));
     }
 }

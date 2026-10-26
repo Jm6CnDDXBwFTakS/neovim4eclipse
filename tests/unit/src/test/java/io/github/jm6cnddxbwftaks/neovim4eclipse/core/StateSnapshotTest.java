@@ -132,52 +132,31 @@ class StateSnapshotTest {
         assertEquals("", StateSnapshot.recording("junk"));
     }
 
-    // ---- status bar parts ----
+    // ---- statusline ----
 
-    private static List<Object> snapshot(String statusline, String showcmd, String statusmsg, String errmsg) {
-        return List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "", statusline, showcmd, statusmsg, errmsg);
+    @Test
+    void theStatuslineIsTheEleventhElement() {
+        assertEquals("[No Name] 1,1", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "", "[No Name] 1,1", 1)));
     }
 
     @Test
-    void snapshotCarriesStatuslineCmdAndMessage() {
-        StatusInfo info = StateSnapshot.status(snapshot("[No Name] 1,1", "2d", "3 lines yanked", ""));
-        assertEquals("[No Name] 1,1", info.statusline());
-        assertEquals("2d", info.cmd());
-        assertEquals("3 lines yanked", info.message());
-        assertFalse(info.error(), "a status message is not an error");
-    }
-
-    @Test
-    void anErrorWinsOverAStatusMessage() {
-        StatusInfo info = StateSnapshot.status(snapshot("", "", "3 lines yanked", "E486: Pattern not found: x"));
-        assertEquals("E486: Pattern not found: x", info.message());
-        assertTrue(info.error());
-    }
-
-    @Test
-    void statusPartsAreEmptyWhenNotRequestedOrNotUnderstood() {
-        assertEquals(StatusInfo.EMPTY, StateSnapshot.status(snapshot("", "", "", "")));
-        assertEquals(StatusInfo.EMPTY, StateSnapshot.status(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "")));
-        assertEquals(StatusInfo.EMPTY, StateSnapshot.status(null));
-        assertEquals(StatusInfo.EMPTY, StateSnapshot.status("junk"));
-    }
-
-    @Test
-    void nullElementsBecomeEmptyText() {
-        java.util.List<Object> withNulls = new java.util.ArrayList<>(snapshot("", "", "", ""));
-        withNulls.set(10, null);
-        withNulls.set(13, null);
-        assertEquals(StatusInfo.EMPTY, StateSnapshot.status(withNulls));
+    void theStatuslineIsEmptyWhenMissingOrNotUnderstood() {
+        assertEquals("", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "")));
+        assertEquals("", StateSnapshot.statusline(null));
+        assertEquals("", StateSnapshot.statusline("junk"));
+        java.util.List<Object> withNull = new java.util.ArrayList<>(List.of(1, 0, 1, 1, 1, 1, "n", 0, 8, "", "", 1));
+        withNull.set(10, null);
+        assertEquals("", StateSnapshot.statusline(withNull));
     }
 
     // ---- buffer ----
 
     @Test
-    void snapshotBufferIsTheFifteenthElement() {
-        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(14, (Object) ""));
+    void snapshotBufferIsTheTwelfthElement() {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(11, (Object) ""));
         raw.add(6);
         assertEquals(6, StateSnapshot.buffer(raw));
-        assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer(raw.subList(0, 14)));
+        assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer(raw.subList(0, 11)));
         assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer("garbage"));
     }
 }

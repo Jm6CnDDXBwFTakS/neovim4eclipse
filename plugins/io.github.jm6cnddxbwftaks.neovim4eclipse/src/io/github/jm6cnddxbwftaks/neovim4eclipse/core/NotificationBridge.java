@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 
 /**
  * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
@@ -96,6 +97,12 @@ final class NotificationBridge implements Incoming {
          * see {@link CmdlineEvent}).
          */
         void onCmdline(CmdlineEvent event);
+
+        /**
+         * Neovim showed a message, the pending command changed, or a redraw ended (the UI is
+         * attached with {@code ext_messages}; see {@link MessageEvent}).
+         */
+        void onMessageEvent(MessageEvent event);
     }
 
     private final Sink sink;
@@ -107,7 +114,9 @@ final class NotificationBridge implements Incoming {
     /**
      * Dispatches a notification by name. Unknown names are ignored (see {@link Incoming}). Of the
      * {@code redraw} notifications, which Neovim sends several times per key, only the command-line
-     * events are read; the rest is Neovim's screen, which the plug-in does not draw.
+     * and message events are read; the rest is Neovim's screen, which the plug-in does not draw.
+     * The command-line events go first: a command's output is titled with its command line
+     * ({@code :ls}), which the same notification may carry.
      */
     @Override
     public void notification(String method, List<?> args) {
@@ -119,7 +128,10 @@ final class NotificationBridge implements Incoming {
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
-            case "redraw" -> CmdlineEvent.fromRedraw(args).forEach(sink::onCmdline);
+            case "redraw" -> {
+                CmdlineEvent.fromRedraw(args).forEach(sink::onCmdline);
+                MessageEvent.fromRedraw(args).forEach(sink::onMessageEvent);
+            }
             default -> LOG.finest(() -> "Ignored notification " + method);
         }
     }

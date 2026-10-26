@@ -34,7 +34,7 @@ class CmdlineWatcherTest {
     @Test
     void thePluginsOwnLineIsIgnored() {
         watcher.expectOwn(":", now);
-        assertEquals(Decision.IGNORE, show(":", "silent ls"));
+        assertEquals(Decision.IGNORE, show(":", "ls"));
         hide();
         assertEquals(Decision.USER_LINE, show(":", ""), "the expectation was used up");
     }
@@ -45,7 +45,7 @@ class CmdlineWatcherTest {
         watcher.expectOwn(":", now);
         assertEquals(Decision.IGNORE, show("/", "foo"));
         hide();
-        assertEquals(Decision.IGNORE, show(":", "silent echo 1"));
+        assertEquals(Decision.IGNORE, show(":", "echo 1"));
         hide();
     }
 

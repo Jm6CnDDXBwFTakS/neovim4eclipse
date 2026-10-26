@@ -101,7 +101,7 @@ class KeyInputTest {
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean showcmd) {
+        public Object stateSnapshot(boolean statusline) {
             calls.add("snapshot");
             Object[] raw = new Object[StateSnapshot.BUFNR + 1];
             Arrays.fill(raw, "");
@@ -182,17 +182,14 @@ class KeyInputTest {
         assertEquals(List.of("type x", "bufferLines", "snapshot"), nvim.calls);
     }
 
+    /** Neovim shows the pending command itself ({@code msg_showcmd}, see StatusTrackerTest). */
     @Test
-    void whileNeovimWaitsForTheRestOfACommandNothingIsAskedAndTheKeyIsShownAsPending() throws Exception {
-        status.setItems(Set.of(StatusItem.CMD));
-        List<String> showcmd = new ArrayList<>();
-        status.addStatusListener(info -> showcmd.add(info.cmd()));
+    void whileNeovimWaitsForTheRestOfACommandNothingIsAsked() throws Exception {
         nvim.after.put("f", new Mode("n", true)); // waiting for the character
 
         type("f");
 
         assertEquals(List.of("type f"), nvim.calls);
-        assertEquals(List.of("f"), showcmd);
     }
 
     // ---- insert mode ----

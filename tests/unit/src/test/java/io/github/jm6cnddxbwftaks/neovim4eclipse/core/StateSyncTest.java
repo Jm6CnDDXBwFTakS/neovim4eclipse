@@ -46,8 +46,8 @@ class StateSyncTest {
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean showcmd) {
-            snapshotFlags = List.of(statusline, showcmd);
+        public Object stateSnapshot(boolean statusline) {
+            snapshotFlags = List.of(statusline);
             if (snapshot == null) {
                 throw new IllegalStateException("timed out");
             }
@@ -181,13 +181,16 @@ class StateSyncTest {
         assertEquals(List.of(), listeners.heard);
     }
 
+    /** The statusline is evaluated only when the status bar shows it. */
     @Test
-    void onlyTheStatusBarPartsShownAreRequested() {
+    void theStatuslineIsRequestedOnlyWhenShown() {
         status.setItems(Set.of(StatusItem.CMD));
-
         state.publishState();
+        assertEquals(List.of(false), nvim.snapshotFlags);
 
-        assertEquals(List.of(false, true), nvim.snapshotFlags);
+        status.setItems(Set.of(StatusItem.STATUSLINE));
+        state.publishState();
+        assertEquals(List.of(true), nvim.snapshotFlags);
     }
 
     @Test

@@ -45,10 +45,9 @@ final class StateSync {
 
         /**
          * Runs {@link LuaScripts#STATE_SNAPSHOT} (with a short timeout) and returns its raw answer,
-         * read by {@link StateSnapshot}. The flags say which optional status bar parts to include;
-         * messages are always included.
+         * read by {@link StateSnapshot}. The flag says whether to evaluate the statusline.
          */
-        Object stateSnapshot(boolean statusline, boolean showcmd) throws Exception;
+        Object stateSnapshot(boolean statusline) throws Exception;
 
         /** The attached buffer's lines. */
         List<String> bufferLines() throws Exception;
@@ -180,7 +179,7 @@ final class StateSync {
     }
 
     /**
-     * Publishes mode, cursor, visual selection and the status bar parts from one request
+     * Publishes mode, cursor, visual selection and the statusline from one request
      * ({@link LuaScripts#STATE_SNAPSHOT}). Must only be called when Neovim is not blocked.
      *
      * <p>Cursor and selection are only published when Neovim's current buffer is the attached one:
@@ -191,7 +190,7 @@ final class StateSync {
         String current = mode;
         try {
             Set<StatusItem> items = status.items();
-            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE), items.contains(StatusItem.CMD));
+            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE));
             dispatchMode(current);
             if (isAttached.test(StateSnapshot.buffer(raw))) {
                 CursorPos cursor = StateSnapshot.cursor(raw);
@@ -203,7 +202,7 @@ final class StateSync {
                         : VisualSelection.none());
             }
             status.updateRecording(StateSnapshot.recording(raw));
-            status.publish(StateSnapshot.status(raw));
+            status.publishStatusline(StateSnapshot.statusline(raw));
         } catch (Exception e) {
             LOG.log(Level.FINE, "state snapshot failed", e);
         }

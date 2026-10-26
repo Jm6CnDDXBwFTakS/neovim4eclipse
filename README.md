@@ -232,13 +232,12 @@ its messages and where the `:` box opens:
 As in Vim, the message stays until the next key; a click also hides it. A message too long for the
 line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones.
 
-The line shows two kinds of text:
-
-- what Neovim gives through its status-message and error variables (`v:statusmsg`, `v:errmsg`);
-- the plug-in's own errors from the file and tab commands.
-
-Messages from `:echo` and the normal messages of `:` commands (typed as `:silent`) are not included,
-but errors are.
+The line shows every message of one line that Neovim gives, whatever printed it: a key, a `:` command
+(`:echo "hi"`, `:pwd`), a mapping, a timer or an autocommand; and the plug-in's own errors from the file
+and tab commands. Messages of more than one line open the output box described under
+[Command line](#command-line---), as Vim would show them above a "Press ENTER" prompt: two
+errors at once, a failed save with Neovim's `Error in BufWriteCmd Autocommands` line above it, a Lua
+error with its traceback.
 
 *Window → Preferences → Neovim → Flash the editor on errors* (off by default) also tints the editor for
 a moment on each error, like Vim's `'visualbell'`, for when your eyes are on the cursor.
@@ -288,13 +287,13 @@ The commands above are the ones typed in the `:` box. Neovim can also write a bu
 and Neovim never writes a file itself. A write under another name (`:w other.txt`) is refused; use
 *File → Save As*.
 
-Commands that only display something (`:ls`, `:buffers`, `:jumps`, `:marks`, `:registers`, `:changes`,
-`:messages`, `:pwd`, `:echo`, `:set opt?` ...) show their output in a read-only box in the same place.
-`j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys scroll it; any other key or a click closes it.
-These commands are not recorded into a macro (they change nothing). Any other command is typed into
-Neovim, and whatever it prints (`:!ls`, `:echo` inside a longer command, a `:s` report) is collected with
-`:redir` and shown in the same box. Errors appear in the message line only. Messages printed later, by a
-timer or an autocmd, are not shown, and nothing is collected while your own `:redir` is running.
+Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
+macro being recorded contains it. Listings (`:ls`, `:jumps`, `:marks`, `:registers`, `:set opt?`,
+`:messages` ...), shell output (`:!ls`, `:!make`) and anything else of more than one line show in a
+read-only box in the same place, with the command as its first line; output that keeps coming
+(`:!make`) is added while the box is open. `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys
+scroll it; any other key or a click closes it. One-line output (`:echo "hi"`, a `:s` report) goes to
+the message line instead, and so do errors. Your own `:redir` collects as in Vim.
 
 ## Indentation (`o`, `O`, `>>`)
 
@@ -320,7 +319,7 @@ the plugin makes sure everything you do is seen by Neovim as keys:
 - **Insert mode while recording** is driven by Neovim (every key is forwarded, as for block `I`/`A`), so the
   macro contains exactly what you typed, including arrow keys and Backspace. Eclipse's content assist and
   IME composition are therefore unavailable *while recording*.
-- **`:` commands and `/` searches** from the command line are typed into Neovim (`:silent <cmd>`), so they are
+- **`:` commands and `/` searches** from the command line are typed into Neovim (`:<cmd><CR>`), so they are
   recorded and `@:` works. `:w`, `:wa`, `:q`, `:wq`, `:x` are still handled by Eclipse and are **not** recorded; a
   `:w` inside a macro is run by Neovim, which asks Eclipse to save (see below). The editor gets the macro's
   changes only when it ends, so such a save writes the text from before the macro.

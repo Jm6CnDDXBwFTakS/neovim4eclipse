@@ -41,7 +41,7 @@ class CommandLineBoxTest {
 
     private static final long TIMEOUT_MS = 5000;
 
-    /** Records each call as text, e.g. {@code "capture ls"}; {@code :w} and {@code :q} count as IDE commands. */
+    /** Records each call as text, e.g. {@code "run ls"}; {@code :w} and {@code :q} count as IDE commands. */
     private static final class FakeCommands implements CommandLineBox.Commands {
         final List<String> calls = new ArrayList<>();
 
@@ -60,12 +60,7 @@ class CommandLineBoxTest {
         }
 
         @Override
-        public void capture(String exCommand, Consumer<String> onOutput) {
-            calls.add("capture " + exCommand);
-        }
-
-        @Override
-        public void run(String exCommand, Consumer<String> onOutput) {
+        public void run(String exCommand) {
             calls.add("run " + exCommand);
         }
 
@@ -247,18 +242,14 @@ class CommandLineBoxTest {
         assertEquals(List.of("ide w"), commands.calls);
     }
 
+    /** Its output comes back from Neovim as messages, which the controller passes to {@code showOutput}. */
     @Test
-    void aListingIsCapturedForThePopup() {
+    void anyOtherCommandIsRunInNeovimListingsToo() {
+        open(Kind.EX, false);
+        typeAndPressEnter("set ts=4");
         open(Kind.EX, false);
         typeAndPressEnter("ls");
-        assertEquals(List.of("capture ls"), commands.calls);
-    }
-
-    @Test
-    void anyOtherCommandIsRunInNeovim() {
-        open(Kind.EX, false);
-        typeAndPressEnter("set ts=4"); // sets an option; :echo and :set ts? are listings
-        assertEquals(List.of("run set ts=4"), commands.calls);
+        assertEquals(List.of("run set ts=4", "run ls"), commands.calls);
     }
 
     // A command line the user opened in Neovim (a mapping such as <Space>s -> :%s/)

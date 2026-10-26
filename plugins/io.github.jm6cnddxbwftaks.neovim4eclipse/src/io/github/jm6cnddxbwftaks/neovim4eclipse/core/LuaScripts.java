@@ -56,8 +56,6 @@ final class LuaScripts {
             -- "." can repeat it), e.g. a `jk` -> <Esc> mapping would end the insert in the middle.
             vim.cmd('imapclear')
             vim.cmd('iabclear')
-            -- Lets nvim_eval_statusline('%S') report the pending command (showcmd) for the status bar.
-            vim.opt.showcmdloc = 'statusline'
             vim.api.nvim_create_autocmd('ModeChanged', {
               callback = function()
                 vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode)
@@ -141,45 +139,34 @@ final class LuaScripts {
     /**
      * Everything the UI needs after a key, in ONE round trip:
      * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, curswant,
-     * tabstop, recording, statusline, showcmd, statusmsg, errmsg, bufnr}}. {@code bufnr} tells whether
-     * the cursor is still in the buffer Eclipse shows (Neovim may just have jumped to another file).
+     * tabstop, recording, statusline, bufnr}}. {@code bufnr} tells whether the cursor is still in the
+     * buffer Eclipse shows (Neovim may just have jumped to another file).
      *
      * <p>The cursor is {@code nvim_win_get_cursor} (1-based line, 0-based byte column); the visual
      * bounds are {@code getpos} (1-based lines and byte columns) and only meaningful in visual mode.
      * {@code curswant} is 2147483647 after {@code $} (a block then extends to each line's end).
      * {@code recording} is the register being recorded into ({@code reg_recording()}), or "".
      *
-     * <p>Two of them depend on two arguments, each {@code "1"} or {@code "0"}, so that nothing is
-     * evaluated that the status bar does not show: (1) the evaluated {@code 'statusline'} (a Vim-like
-     * default if the user has none), (2) {@code showcmd} via the {@code %S} statusline item. The latest
-     * message {@code v:statusmsg} and error {@code v:errmsg} are always read, for the editor's message
-     * line, and <em>cleared</em> after reading so that each message is seen once.
+     * <p>The argument, {@code "1"} or {@code "0"}, says whether to evaluate the {@code 'statusline'}
+     * (a Vim-like default if the user has none), so that nothing is evaluated that the status bar
+     * does not show. Messages and the pending command ({@code showcmd}) are not read here: Neovim
+     * sends them as UI events ({@code ext_messages}; see {@code StatusTracker}).
      */
     static final String STATE_SNAPSHOT = """
             local want_statusline = select(1, ...) == '1'
-            local want_cmd = select(2, ...) == '1'
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
             local view = vim.fn.winsaveview()
-            local statusline, showcmd = '', ''
+            local statusline = ''
             if want_statusline then
               local fmt = vim.o.statusline
               if fmt == nil or fmt == '' then fmt = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P' end
               local ok, res = pcall(vim.api.nvim_eval_statusline, fmt, { maxwidth = 300 })
               if ok and type(res) == 'table' then statusline = res.str or '' end
             end
-            if want_cmd then
-              local ok, res = pcall(vim.api.nvim_eval_statusline, '%S', { maxwidth = 40 })
-              if ok and type(res) == 'table' then showcmd = res.str or '' end
-            end
-            local statusmsg = vim.v.statusmsg or ''
-            local errmsg = vim.v.errmsg or ''
-            pcall(function() vim.v.statusmsg = '' end)
-            pcall(function() vim.v.errmsg = '' end)
             return { c[1], c[2], s[2], s[3], e[2], e[3], vim.fn.mode(), view.curswant, vim.bo.tabstop,
-                     vim.fn.reg_recording(), statusline, showcmd, statusmsg, errmsg,
-                     vim.api.nvim_get_current_buf() }
+                     vim.fn.reg_recording(), statusline, vim.api.nvim_get_current_buf() }
             """;
 
     /**
@@ -195,54 +182,6 @@ final class LuaScripts {
                 pcall(vim.api.nvim_buf_delete, b, { force = true })
               end
             end
-            """;
-
-    /**
-     * Runs an ex command (argument 1) and returns what it printed ({@code nvim_exec2} with
-     * {@code output = true}).
-     */
-    static final String CAPTURE_OUTPUT = """
-            local cmd = select(1, ...)
-            return vim.api.nvim_exec2(cmd, { output = true }).output
-            """;
-
-    /**
-     * Starts collecting everything Neovim prints into {@code g:neovim4eclipse_output}, with
-     * {@code :redir}. It keeps collecting while the next typed command runs, also under
-     * {@code :silent} (the classic idiom {@code redir => x | silent ls | redir END}), until
-     * {@link #STOP_OUTPUT_CAPTURE}.
-     */
-    static final String START_OUTPUT_CAPTURE = """
-            vim.g.neovim4eclipse_output = ''
-            vim.cmd('redir => g:neovim4eclipse_output')
-            """;
-
-    /**
-     * Ends the capture started by {@link #START_OUTPUT_CAPTURE} and returns what was printed, or ""
-     * when nothing was, or when it was only the message that the editor's message line already
-     * shows: the error ({@code v:errmsg}, {@code E486: Pattern not found}) or the status message
-     * ({@code v:statusmsg}, {@code 7 substitutions on 4 lines} after {@code :%s}); otherwise the
-     * popup repeated it. Real output ({@code :echo}, {@code :set ts?}) sets neither. Cleaned up for
-     * the popup:
-     * <ul>
-     *   <li>the empty lines it starts with (where the command line was drawn) and trailing blanks are
-     *       removed; the indentation of the first line is kept ({@code "  tabstop=8"});</li>
-     *   <li>carriage returns are removed (shell output arrives with {@code \r\n});</li>
-     *   <li>for {@code :!cmd}, the echo of the shell command ({@code :!ls}) that Neovim prints first
-     *       is removed: the popup's title already shows it.</li>
-     * </ul>
-     */
-    static final String STOP_OUTPUT_CAPTURE = """
-            pcall(vim.cmd, 'redir END')
-            local out = (vim.g.neovim4eclipse_output or ''):gsub('\\r', '')
-            vim.g.neovim4eclipse_output = nil
-            out = out:gsub('^\\n+', '')
-            out = out:gsub('^:![^\\n]*\\n*', '')
-            out = out:gsub('%s+$', '')
-            if out:match('^%s*$') or out == vim.v.errmsg or out == vim.v.statusmsg then
-              return ''
-            end
-            return out
             """;
 
     /**
@@ -312,9 +251,11 @@ final class LuaScripts {
      * {@code :echoerr}, so inside the autocommand it aborts the {@code :write} that triggered it. The
      * error reaches whoever ran the command, {@code :w | q} does not go on to quit, and
      * {@code :bufdo update} stops at that buffer. {@code v:errmsg} holds the text alone
-     * ({@code Eclipse could not save A.txt: read-only}); Neovim's own message puts its usual line in
-     * front, {@code Error in BufWriteCmd Autocommands for "<buffer=3>":}, as for any error in an
-     * autocommand. The buffer stays modified, so {@code :update} tries again next time.
+     * ({@code Eclipse could not save A.txt: read-only}); the message Neovim shows puts its usual line
+     * in front, {@code Error in BufWriteCmd Autocommands for "<buffer=3>":}, as for any error in an
+     * autocommand. Being two lines, it opens the output popup ({@code util/MessageRoute}), where Vim
+     * would show it above a "Press ENTER" prompt. The buffer stays modified, so {@code :update} tries
+     * again next time.
      */
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
@@ -392,8 +333,8 @@ final class LuaScripts {
      *       going back is {@code <C-p>} (and from the start, Tab then two {@code <C-p>}).</li>
      *   <li>The line is fed separately, with {@code escape_ks}, so that {@code <} in it is just a
      *       character and not the start of a key name.</li>
-     *   <li>{@code 'wildmode'} is the user's, without its {@code list} parts: listing would print
-     *       into the message area nobody sees, and could leave Neovim at a "Press ENTER" prompt.</li>
+     *   <li>{@code 'wildmode'} is the user's, without its {@code list} parts: listing would send the
+     *       candidates as a message, which would open the output popup over the box's own list.</li>
      *   <li>{@code 'eventignore'} keeps {@code CmdlineEnter}, {@code CmdlineChanged},
      *       {@code CmdlineLeave} and {@code ModeChanged} from firing: user plug-ins should not react,
      *       and Eclipse should not hear of a trip to command-line mode.</li>
@@ -485,6 +426,9 @@ final class LuaScripts {
 
     /** The user's {@code 'clipboard'} option (e.g. {@code unnamedplus}), evaluated after their init file ran. */
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
+
+    /** Evaluates the Vim expression in argument 1 ({@code bufnr('a.txt')}) and returns its value. */
+    static final String EVAL = "return vim.fn.eval(select(1, ...))";
 
     static final String GET_CMDLINE = "return vim.fn.getcmdline()";
 

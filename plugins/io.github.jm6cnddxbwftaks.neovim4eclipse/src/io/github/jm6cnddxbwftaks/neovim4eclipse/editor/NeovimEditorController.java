@@ -23,6 +23,7 @@ import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPos;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
@@ -106,6 +107,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<VisualSelection> selectionListener = this::onVisualSelection;
     private final Consumer<String> recordingListener = this::onRecordingChanged;
     private final Consumer<StatusInfo> statusListener = this::onStatusChanged;
+    private final Consumer<CommandOutput> outputListener = this::onOutput;
     private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
     private final Consumer<CmdlineEvent> userCmdlineListener = this::onUserCmdline;
 
@@ -161,6 +163,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addSelectionListener(selectionListener);
         session.addRecordingListener(recordingListener);
         session.addStatusListener(statusListener);
+        session.addOutputListener(outputListener);
         session.addIdeActionListener(ideActionListener);
         session.addUserCmdlineListener(userCmdlineListener);
 
@@ -371,6 +374,20 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
+     * Output for the popup (a listing, shell output, messages of more than one line): shown over
+     * this editor if Neovim drives it. The message line is cleared, as the popup replaces it. Called
+     * on the session's thread.
+     */
+    private void onOutput(CommandOutput output) {
+        HostCommands.runOnUi(() -> {
+            if (closed || styledText.isDisposed() || !isNeovimModeActive()) {
+                return;
+            }
+            commandLine.showOutput(output.title(), output.text());
+        });
+    }
+
+    /**
      * Shows a message of the plug-in's own in the message line, e.g. {@code E37: No write since last
      * change} from {@code :e}. It goes away with the next key, like Neovim's messages. UI thread.
      */
@@ -490,6 +507,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeSelectionListener(selectionListener);
             session.removeRecordingListener(recordingListener);
             session.removeStatusListener(statusListener);
+            session.removeOutputListener(outputListener);
             session.removeIdeActionListener(ideActionListener);
             session.removeUserCmdlineListener(userCmdlineListener);
         } catch (Exception e) {
@@ -535,13 +553,8 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         @Override
-        public void capture(String exCommand, Consumer<String> onOutput) {
-            session.captureOutputAsync(exCommand, onOutput);
-        }
-
-        @Override
-        public void run(String exCommand, Consumer<String> onOutput) {
-            session.commandAsync(exCommand, onOutput);
+        public void run(String exCommand) {
+            session.commandAsync(exCommand);
         }
 
         @Override

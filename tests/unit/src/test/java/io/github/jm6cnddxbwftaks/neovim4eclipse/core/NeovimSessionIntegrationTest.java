@@ -52,9 +52,9 @@ class NeovimSessionIntegrationTest {
     // ---- errors in the user's configuration ----
 
     /**
-     * A typo in init.lua made Neovim wait at a "Press ENTER" prompt Eclipse does not show, and the
-     * start timed out. Now the prompt is dismissed, Neovim starts (without that init.lua: a syntax
-     * error stops all of it), and the error is reported.
+     * A typo in init.lua once made Neovim wait at a "Press ENTER" prompt Eclipse does not show, and
+     * the start timed out. With ext_messages there is no prompt: Neovim starts (without that
+     * init.lua: a syntax error stops all of it), and the error is reported.
      */
     @Test
     void aSyntaxErrorInTheConfigurationIsReportedAndNeovimStartsAnyway(@TempDir Path dir) throws Exception {
@@ -224,7 +224,7 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    /** The status bar parts are only read when shown; messages always are, for the message line. */
+    /** The status bar parts are only shown when chosen; messages always reach the message line. */
     @Test
     void nothingOptionalIsEvaluatedWhenOnlyTheModeIsShown() throws Exception {
         try (NeovimSession s = start()) {
@@ -291,7 +291,6 @@ class NeovimSessionIntegrationTest {
             List<StatusInfo> seen = new CopyOnWriteArrayList<>();
             s.addStatusListener(seen::add);
             s.normalAsync("gd");
-            // v:errmsg is what the message line reads (and clears) after each request.
             waitFor(() -> seen.stream().anyMatch(i -> i.error() && i.message().equals("E349: No identifier under cursor")),
                     "E349 as an error in the message line, without the \"Vim:\" prefix pcall adds");
             String history = (String) s.lua("return vim.api.nvim_exec2('messages', { output = true }).output");
@@ -313,48 +312,97 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    @Test
-    void typedCommandsReportWhatTheyPrint() throws Exception {
-        try (NeovimSession s = start()) {
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.commandAsync("echo 'hello from' 'neovim'", outputs::add);
-            s.commandAsync("set tabstop?", outputs::add);
-            s.commandAsync("nosuchcommand", outputs::add); // an error: shown in the status bar only
-            s.commandAsync("let g:x = 1", outputs::add); // prints nothing
-            s.commandAsync("echo 'done'", outputs::add);
-            waitFor(() -> outputs.contains("done"), "the last command's output");
-            assertEquals(List.of("hello from neovim", "  tabstop=8", "done"), outputs);
-            assertEquals("1", String.valueOf(s.lua("return vim.g.x")));
-            assertEquals("silent echo 'done'", String.valueOf(s.lua("return vim.fn.histget(':', -1)")),
-                    "the command is typed, so it is in the history");
+    // ---- messages (ext_messages): the message line and the output popup ----
+
+    /** What a session shows: the message line's messages and the popup's output, in order. */
+    private static final class Shown {
+        final List<StatusInfo> lines = new CopyOnWriteArrayList<>();
+        final List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
+
+        Shown(NeovimSession s) {
+            s.addStatusListener(info -> {
+                if (!info.message().isEmpty()) {
+                    lines.add(info);
+                }
+            });
+            s.addOutputListener(outputs::add);
+        }
+
+        boolean line(String message, boolean error) {
+            return lines.stream().anyMatch(i -> i.message().equals(message) && i.error() == error);
         }
     }
 
     /**
-     * {@code :%s} prints "N substitutions on M lines", which the message line shows ({@code v:statusmsg}):
-     * no popup repeats it. The {@code :echo} after it is real output and is passed on, so the
-     * substitution's turn has passed when the test looks.
+     * A typed command's one-line output and its errors go to the message line, a listing to the
+     * popup with its command line as title; a command that prints nothing shows nothing. The
+     * command is typed as written, so the history has it without {@code :silent}.
      */
     @Test
-    void aSubstitutionsMessageIsNotOutput() throws Exception {
+    void typedCommandsShowWhatTheyPrint() throws Exception {
+        try (NeovimSession s = start()) {
+            Shown shown = new Shown(s);
+            s.commandAsync("echo 'hello from' 'neovim'");
+            s.commandAsync("set tabstop?");
+            s.commandAsync("nosuchcommand");
+            s.commandAsync("let g:x = 1");
+            s.commandAsync("echo 'done'");
+            waitFor(() -> shown.line("done", false), "the last command's message");
+            assertTrue(shown.line("hello from neovim", false), "one-line echo: " + shown.lines);
+            assertTrue(shown.line("E492: Not an editor command: nosuchcommand", true), "the error: " + shown.lines);
+            assertEquals(List.of(new CommandOutput(":set tabstop?", "  tabstop=8")), shown.outputs);
+            assertEquals("1", String.valueOf(s.lua("return vim.g.x")));
+            assertEquals("echo 'done'", String.valueOf(s.lua("return vim.fn.histget(':', -1)")),
+                    "the command is typed, so it is in the history as written");
+        }
+    }
+
+    /**
+     * Listings are typed like every other command, so {@code @:} repeats them. ({@code :ls!}: the
+     * session's scratch buffer is unlisted, so a plain {@code :ls} would print nothing.)
+     */
+    @Test
+    void aListingOpensThePopupAndIsInTheHistory() throws Exception {
+        try (NeovimSession s = start()) {
+            Shown shown = new Shown(s);
+            s.commandAsync("ls!");
+            waitFor(() -> !shown.outputs.isEmpty(), "the listing");
+            assertEquals(":ls!", shown.outputs.get(0).title());
+            assertTrue(shown.outputs.get(0).text().contains("line 1"), "a buffer list: " + shown.outputs);
+            assertEquals("ls!", String.valueOf(s.lua("return vim.fn.histget(':', -1)")));
+        }
+    }
+
+    @Test
+    void aSubstitutionsCountIsShownOnTheMessageLine() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("alpha", "data"));
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.commandAsync("%s/a/b/g", outputs::add);
-            s.commandAsync("echo 'after'", outputs::add);
-            waitFor(() -> !outputs.isEmpty(), "the :echo output");
-            assertEquals(List.of("after"), outputs);
+            Shown shown = new Shown(s);
+            s.commandAsync("%s/a/b/g");
+            waitFor(() -> shown.line("4 substitutions on 2 lines", false), "the count");
             assertEquals(List.of("blphb", "dbtb"), s.getBufferLines());
+            assertTrue(shown.outputs.isEmpty(), "no popup: " + shown.outputs);
+        }
+    }
+
+    /** A message of two lines is shown as Vim shows it before a "Press ENTER": in the popup. */
+    @Test
+    void aMessageOfSeveralLinesOpensThePopup() throws Exception {
+        try (NeovimSession s = start()) {
+            Shown shown = new Shown(s);
+            s.commandAsync("echo \"one\\ntwo\"");
+            waitFor(() -> !shown.outputs.isEmpty(), "the popup");
+            assertEquals(new CommandOutput(":echo \"one\\ntwo\"", "one\ntwo"), shown.outputs.get(0));
         }
     }
 
     @Test
     void shellCommandOutputIsShownWithoutTheEchoedCommand() throws Exception {
         try (NeovimSession s = start()) {
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.commandAsync("!echo shellout", outputs::add);
-            waitFor(() -> !outputs.isEmpty(), "the shell command's output");
-            assertEquals(List.of("shellout"), outputs);
+            Shown shown = new Shown(s);
+            s.commandAsync("!echo shellout");
+            waitFor(() -> !shown.outputs.isEmpty(), "the shell command's output");
+            assertEquals(new CommandOutput(":!echo shellout", "shellout"), shown.outputs.get(shown.outputs.size() - 1));
         }
     }
 
@@ -366,43 +414,68 @@ class NeovimSessionIntegrationTest {
     @Test
     void multiLineShellCommandOutputHasNoCarriageReturns() throws Exception {
         try (NeovimSession s = start()) {
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.commandAsync(PlatformUtil.isWindows() ? "!dir" : "!ls -a", outputs::add);
-            waitFor(() -> !outputs.isEmpty(), "the shell command's output");
-            String output = outputs.get(0);
+            Shown shown = new Shown(s);
+            s.commandAsync(PlatformUtil.isWindows() ? "!dir" : "!ls -a");
+            waitFor(() -> !shown.outputs.isEmpty(), "the shell command's output");
+            String output = shown.outputs.get(shown.outputs.size() - 1).text();
             assertTrue(output.contains("\n"), "several lines: " + output);
             assertFalse(output.contains("\r"), "no carriage return: " + output.replace("\r", "\\r"));
         }
     }
 
+    /**
+     * Long output leaves Neovim ready for the next key: with {@code ext_messages} there is no
+     * "Press ENTER" or "-- More --" prompt to wait at (experiment X2), so nothing dismisses one.
+     */
     @Test
-    void aTypedRedirKeepsRedirecting() throws Exception {
+    void longOutputLeavesNoPrompt() throws Exception {
         try (NeovimSession s = start()) {
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.commandAsync("redir => g:mine", outputs::add);
-            s.commandAsync("echo 'kept'", outputs::add); // not captured: it would take the redirection over
-            s.commandAsync("redir END", outputs::add);
-            s.commandAsync("echo 'after'", outputs::add); // captured again
-            waitFor(() -> outputs.contains("after"), "the output after redir END");
-            assertEquals(List.of("after"), outputs);
+            Shown shown = new Shown(s);
+            s.commandAsync("echo join(range(300), \"\\n\")");
+            waitFor(() -> !shown.outputs.isEmpty(), "the output");
+            assertEquals(300, shown.outputs.get(0).text().split("\n").length);
+            String mode = String.valueOf(s.lua("return vim.api.nvim_get_mode().mode"));
+            assertEquals("n", mode, "no hit-enter (r) or more (rm) prompt");
+        }
+    }
+
+    /** The plug-in no longer redirects anything itself, so the user's {@code :redir} simply works. */
+    @Test
+    void aTypedRedirCollectsWhatIsPrinted() throws Exception {
+        try (NeovimSession s = start()) {
+            Shown shown = new Shown(s);
+            s.commandAsync("redir => g:mine");
+            s.commandAsync("echo 'kept'");
+            s.commandAsync("redir END");
+            waitFor(() -> shown.line("kept", false), "the echo, shown as well, as in Vim");
             assertTrue(String.valueOf(s.lua("return vim.g.mine")).contains("kept"),
                     "the user's :redir must have collected the echo");
         }
     }
 
-    /** As above, for the display-only commands the command line runs without typing ({@code :echo}, {@code :ls}). */
+    /** {@code :messages} arrives as its own event (msg_history_show) and opens the popup. */
     @Test
-    void aTypedRedirAlsoCollectsDisplayOnlyCommands() throws Exception {
+    void theMessageHistoryOpensThePopup() throws Exception {
         try (NeovimSession s = start()) {
-            List<String> outputs = new CopyOnWriteArrayList<>();
-            s.commandAsync("redir => g:mine", outputs::add);
-            s.captureOutputAsync("echo 'kept'", outputs::add); // no popup: the user's :redir gets it
-            s.commandAsync("redir END", outputs::add);
-            s.captureOutputAsync("echo 'after'", outputs::add); // shown again
-            waitFor(() -> outputs.contains("after"), "the output after redir END");
-            assertEquals(List.of("after"), outputs);
-            assertTrue(String.valueOf(s.lua("return vim.g.mine")).contains("kept"),
-                    "the user's :redir must have collected the echo");
+            Shown shown = new Shown(s);
+            s.commandAsync("echomsg 'remember me'");
+            s.commandAsync("messages");
+            waitFor(() -> !shown.outputs.isEmpty(), "the history");
+            assertEquals(":messages", shown.outputs.get(0).title());
+            assertTrue(shown.outputs.get(0).text().contains("remember me"), "the history: " + shown.outputs);
+        }
+    }
+
+    /**
+     * A message no command waits for, from a timer, still reaches the message line: the case of the
+     * diagnostics plan's jump message, which Neovim echoes later, with vim.schedule.
+     */
+    @Test
+    void aLaterMessageFromATimerIsShown() throws Exception {
+        try (NeovimSession s = start()) {
+            Shown shown = new Shown(s);
+            s.lua("vim.defer_fn(function() vim.api.nvim_echo({ { 'from a timer' } }, false, {}) end, 50)");
+            waitFor(() -> shown.line("from a timer", false), "the timer's message");
         }
     }
 
@@ -550,7 +623,8 @@ class NeovimSessionIntegrationTest {
             assertEquals(40L, ui.get("height"));
             for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                     "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-                assertEquals("ext_cmdline".equals(option), ui.get(option), option); // see TERMINAL_UI
+                boolean on = List.of("ext_cmdline", "ext_messages", "ext_linegrid").contains(option);
+                assertEquals(on, ui.get(option), option); // see TERMINAL_UI
             }
         }
     }

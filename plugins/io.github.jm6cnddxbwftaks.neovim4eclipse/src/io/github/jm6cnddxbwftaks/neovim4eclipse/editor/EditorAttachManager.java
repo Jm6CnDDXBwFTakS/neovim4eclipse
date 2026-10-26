@@ -443,9 +443,9 @@ public final class EditorAttachManager {
                 closeBufferEditor(session, Integer.parseInt(ref), ref, force, from);
             } else {
                 // The answer comes on a session thread; the closing belongs on the UI thread.
-                session.captureOutputAsync("echo " + BufferRefs.bufnrExpression(ref), printed -> {
+                session.evalAsync(BufferRefs.bufnrExpression(ref), value -> {
                     if (!display.isDisposed()) {
-                        display.asyncExec(() -> closeBufferEditor(session, BufferRefs.parseBufnr(printed), ref,
+                        display.asyncExec(() -> closeBufferEditor(session, BufferRefs.parseBufnr(value), ref,
                                 force, from));
                     }
                 });
