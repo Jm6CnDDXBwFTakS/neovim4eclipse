@@ -136,6 +136,15 @@ final class LuaScripts {
               ide('next_tab', 'gt', 'next editor tab')
               ide('previous_tab', 'gT', 'previous editor tab')
             end
+            -- ZZ and ZQ save and close the Eclipse editor. Always mapped, whatever
+            -- neovim4eclipse_ide_keys says: Neovim's own ZZ (:x) would quit the embedded Neovim,
+            -- which serves every editor. Being mappings, Neovim decides when they apply: fZ, rZ
+            -- and "Z in a macro" are Neovim's to read, as for any key (no guessing in Java).
+            for key, action in pairs({ ZZ = 'save_and_close', ZQ = 'close' }) do
+              vim.keymap.set('n', key, function()
+                vim.rpcnotify(0, 'eclipse_action', action, 0)
+              end, { desc = 'Eclipse: ' .. (key == 'ZZ' and 'save and close the editor' or 'close the editor') })
+            end
             -- The command-line window (q:, q/, Ctrl-F on the command line) is a window of its own,
             -- which Eclipse cannot show: close it at once and say why. The : box's Up and Down
             -- browse the same history. Scheduled: the window cannot close inside its own CmdwinEnter.

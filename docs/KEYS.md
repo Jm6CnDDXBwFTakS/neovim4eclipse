@@ -66,11 +66,11 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,
   arrows, `Home`, `End`, unbound function keys as `<F5>` and so on.
 
-## Keys Neovim hands to Eclipse: `gd`, `K`, `gt`, `gT`
+## Keys Neovim hands to Eclipse: `gd`, `K`, `gt`, `gT`, `ZZ`, `ZQ`
 
 Some normal-mode keys mean something only the IDE can do. The plug-in maps them in Neovim to a small
 Lua function that sends an `eclipse_action` notification back to Eclipse (`core/IdeAction`), so Neovim
-still handles counts and the `g` prefix:
+still handles counts, the `g` prefix and arguments (`fZ` finds a `Z`; it is not the start of `ZZ`):
 
 | Key | Eclipse runs |
 |-----|--------------|
@@ -78,6 +78,8 @@ still handles counts and the `g` prefix:
 | `K` | Show Tooltip Description (`F2`): the hover information |
 | `gt`, `{N}gt` | next editor tab, or tab N |
 | `gT`, `{N}gT` | previous editor tab, or N tabs back |
+| `ZZ` | save the editor if it has changes, then close it (Vim's `:x`); a failed save keeps it open |
+| `ZQ` | close the editor without saving (Vim's `:q!`) |
 
 These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys.
 To keep Neovim's meaning instead, put this in `init.lua`:
@@ -85,6 +87,9 @@ To keep Neovim's meaning instead, put this in `init.lua`:
 ```lua
 vim.g.neovim4eclipse_ide_keys = 0   -- or false
 ```
+
+`ZZ` and `ZQ` stay mapped either way: Neovim's own would quit the embedded Neovim, which every
+editor shares.
 
 ## Where this lives in the code
 

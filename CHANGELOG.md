@@ -47,6 +47,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `>` act on what you selected. Before, the editor made a selection of its own that Neovim did not
   know about, and `x` after dragging deleted one character. Ctrl/Cmd+click, the right and middle
   buttons, and the mouse in insert mode stay Eclipse's.
+- `ZZ` and `ZQ` are now mappings in Neovim, so Neovim reads them as it reads any key: `fZ` typed
+  quickly finds a `Z` instead of waiting for a second one, and `ZZ` in a macro saves and
+  closes the editor. Every key outside insert mode now goes straight to Neovim; the plug-in no
+  longer guesses Vim's grammar to decide.
 - `:e` file names complete from the editor's project folder: Neovim's window now works there (`:lcd`).
   `:e` still looks next to the current file first.
 - `q:` (Neovim's command-line window, which Eclipse cannot show) now closes at once with a message

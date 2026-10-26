@@ -601,11 +601,14 @@ writes it *before* opening the dialog (so a crash does not repeat it), and opens
 `Display.asyncExec`, never inside the code that triggered it. Turn it off for the UI tests in
 `test-customization.ini`, or the first test that triggers it waits for a click until it times out.
 
-**Teach the router a key sequence it misroutes.** If a `:`, `/` or `?` opens the box where Vim
-would not (or the other way round), find what Neovim expects after the keys before it: add the
-sequence to `KeyGrammarNeovimTest.corpus()` and run the integration tests. If the test reports a
-difference, change `util/KeyGrammar` and add a row to `KeyGrammarTest`. Example: `zfzf` showed that
-`z` inside an operator is a prefix, so `KeyGrammar.operatorKey` got `"z"` next to `[` and `]`.
+**Hand a normal-mode key to Eclipse.** Do not catch it in Java: map it in Neovim, so Neovim keeps
+reading counts, prefixes and arguments (`fZ` is not `ZZ`). Add a constant to `core/IdeAction`, a
+`vim.keymap.set` in `LuaScripts.SETUP` that calls `vim.rpcnotify(0, 'eclipse_action', '<name>', vim.v.count)`
+(inside the `neovim4eclipse_ide_keys` check if the user may want Neovim's meaning back), and a `case`
+in `editor/IdeActions.run`. Test it in `NeovimSessionIntegrationTest` (the notification arrives) and,
+if it changes the workbench, in a UI test. Example: `ZZ` and `ZQ` (`save_and_close`, `close`). Why
+not Java: until 0.1.7 `KeyRouter` followed Vim's grammar itself (`KeyGrammar`, 392 lines) to know
+whether a `Z` or `:` started a command, and every new case (`gqq`, `zfzf`, `g??`) was a bug first.
 
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
 `vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `case "eclipse_<name>"` to

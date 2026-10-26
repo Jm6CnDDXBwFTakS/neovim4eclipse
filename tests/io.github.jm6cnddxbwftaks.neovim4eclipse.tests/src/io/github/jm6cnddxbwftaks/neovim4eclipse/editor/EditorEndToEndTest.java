@@ -509,9 +509,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * {@code ZQ} closes the editor only after the key event is over. Eclipse's own key listeners
-     * run after the plug-in's and use the editor; closed during the event, the Java editor fails
-     * with a NullPointerException ("getViewer() is null").
+     * {@code ZQ} is mapped in Neovim to Eclipse's close, which arrives after the key event is over.
+     * Eclipse's own key listeners run after the plug-in's and use the editor; closed during the
+     * event, the Java editor fails with a NullPointerException ("getViewer() is null").
      */
     @Test
     void zqClosesTheEditorAfterTheKeyEvent() {
@@ -650,6 +650,43 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     // ---- Keys ----
+
+    /**
+     * {@code Z} as the argument of {@code f} is Neovim's to read, even typed fast: {@code fZ} finds
+     * the {@code Z} (Java no longer holds a {@code Z} back as the start of {@code ZZ}), and
+     * {@code x} deletes it.
+     */
+    @Test
+    void zAfterFIsItsArgumentNotAFileCommand() throws Exception {
+        document.set("aZb\n");
+        settle();
+        type(widget, "0fZx");
+        expectText("ab\n");
+    }
+
+    /**
+     * A macro recorded at full speed records its insert: the {@code i} starts insert mode before
+     * Eclipse could take over the typing, so Neovim types {@code hello} and records it (KeyRouter).
+     */
+    @Test
+    void aFastRecordingRecordsTheInsert() {
+        type(widget, "ggqaihello");
+        escape(widget);
+        type(widget, "qj0@a");
+        expectText("helloalpha\nhellobeta\ngamma\n");
+    }
+
+    /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
+    @Test
+    void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {
+        document.set("key: a/b/c\n");
+        settle();
+        type(widget, "0f:r/t/");
+        assertNull(textChildOf(widget), "no : box");
+        type(widget, 'x');
+        expectText("key/ /b/c\n");
+    }
+
 
     /** {@code f:} finds the colon (it does not open the : box), {@code r/} replaces it, {@code t/} stops before the next slash. */
     @Test

@@ -153,7 +153,6 @@ public final class NeovimEditorController implements AutoCloseable {
                 editor.getSite().getService(IHandlerService.class), commandLine);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
-        keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         session.setHostExHandler(cmd -> HostCommands.tryHandleEx(cmd, editor));
         session.setLeaveInsertPush(() -> {
@@ -460,7 +459,6 @@ public final class NeovimEditorController implements AutoCloseable {
             return;
         }
         if (!closed && neovimModeActive) {
-            keyInterceptor.sentElsewhere(nvimKey);
             session.inputAsync(nvimKey);
         }
     }

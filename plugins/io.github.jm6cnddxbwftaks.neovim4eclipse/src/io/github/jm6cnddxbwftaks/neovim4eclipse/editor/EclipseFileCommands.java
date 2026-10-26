@@ -16,7 +16,6 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -48,32 +47,22 @@ public final class EclipseFileCommands {
 
     /**
      * {@code ZZ}: write if needed, then quit; a failed write keeps the editor open, as in Vim (a new
-     * file in a missing folder, a read-only file). Call from the key event; see {@link #afterKeyEvent}.
+     * file in a missing folder, a read-only file).
+     *
+     * <p>{@code ZZ} and {@code ZQ} are mappings in Neovim ({@code IdeAction}), so they arrive as a
+     * notification after their key event is over. That matters: closed during the event, the Java
+     * editor's own key listeners, which run after the plug-in's, would find a disposed editor
+     * ("getViewer() is null").
      */
-    public static void zz(ITextEditor editor) {
-        afterKeyEvent(() -> {
-            if (save(editor, false, false)) {
-                close(editor, true);
-            }
-        });
-    }
-
-    /** {@code ZQ}: quit without writing. Call from the key event; see {@link #afterKeyEvent}. */
-    public static void zq(ITextEditor editor) {
-        afterKeyEvent(() -> close(editor, true));
-    }
-
-    /**
-     * Runs {@code r} on the UI thread once the current event is over, even when called on it.
-     * {@code ZZ} and {@code ZQ} arrive in the widget's key event, and the editor's own key listeners
-     * run after the plug-in's: closing the editor right away would leave them a disposed editor (the
-     * Java editor then fails with "getViewer() is null").
-     */
-    private static void afterKeyEvent(Runnable r) {
-        Display display = Display.getDefault();
-        if (display != null && !display.isDisposed()) {
-            display.asyncExec(r);
+    static void zz(ITextEditor editor) {
+        if (save(editor, false, false)) {
+            close(editor, true);
         }
+    }
+
+    /** {@code ZQ}: quit without writing; see {@link #zz}. */
+    static void zq(ITextEditor editor) {
+        close(editor, true);
     }
 
     /**

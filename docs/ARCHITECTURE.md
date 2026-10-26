@@ -363,15 +363,17 @@ keys* and to keep the editor in step with playback.
 - **Playback (`@x`):** `@` is a pending-character command (see "Pending commands"). The next key starts the
   playback: buffer events are suppressed (`suppressBufferEvents`), and when Neovim is idle the whole buffer is
   fetched once (timeout 60 s) and applied as one minimal edit (`syncBufferAfterMacro`).
-- **Arguments vs prompts:** a `:` `/` `?` now always goes to Neovim, which opens a command line or takes
-  it as an argument (`f:`); the box opens only on Neovim's report. `KeyRouter`'s reading of the grammar
-  still decides where `q` records; it goes in step B1 of the cleanup plan. It knows that the key after
-  `f F t T r @ m ' \` "`, a prefix (`g z [ ] Z <C-w>`), `i`/`a` in an operator, or a half-typed mapping is
-  an argument, and that `g??` is the `g?` operator doubled. `KeyRouter` takes Neovim's answer (`nvim_get_mode`: `blocking`, operator-pending)
-  when Neovim has processed every key sent, and `util/KeyGrammar`'s reading of the keys while some are
-  still in flight. A `q` starts a recording only where it is a command (not in `gqq` or `<C-w>q`), and
-  stops one while recording. `KeyGrammarNeovimTest` (integration) compares the grammar with a real
-  Neovim over a list of sequences; see [design/KEY_ROUTING.md](design/KEY_ROUTING.md).
+- **Arguments vs prompts:** outside insert mode every key goes to Neovim, which alone decides what it
+  means: `:` `/` `?` open a command line or are the argument of the command before them (`f:`, `r/`,
+  `d/foo`); `q` starts or stops a recording or is part of `gqq`; `Z` starts `ZZ` or is the argument of
+  `fZ`. The box opens only when Neovim reports its command line (`cmdline_show`), and the recording
+  state comes from Neovim (`reg_recording()` in the snapshot). `ZZ` and `ZQ` are Neovim mappings to
+  Eclipse's save and close (`IdeAction`, below), never Neovim's own, which would quit the embedded
+  Neovim. Until 0.1.7, `KeyRouter` guessed all of this on the UI thread from the keys typed so far
+  (`util/KeyGrammar`, removed in step B1 of the cleanup plan), because the box was its own and had to
+  open before Neovim saw the key; see [design/KEY_ROUTING.md](design/KEY_ROUTING.md). Example: `qaihello<Esc>q`
+  typed at full speed records the insert, because the `i` reaches Neovim before Eclipse can take
+  over the typing, so Neovim types the insert and records it (next section).
 
 ## Handing typing over to Eclipse
 

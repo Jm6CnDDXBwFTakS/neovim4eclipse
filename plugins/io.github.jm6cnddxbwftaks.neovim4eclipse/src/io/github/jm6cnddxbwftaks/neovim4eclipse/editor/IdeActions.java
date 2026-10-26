@@ -18,7 +18,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 
 /**
  * Carries out the keys Neovim hands back to the IDE ({@link IdeAction}): {@code gd}, {@code K},
- * {@code gt}, {@code gT}.
+ * {@code gt}, {@code gT}, {@code ZZ}, {@code ZQ}.
  *
  * <p><b>Commands, not code.</b> "Open Declaration" is different in every kind of editor (Java, C,
  * an LSP editor), so the plug-in does not implement it: it runs the Eclipse <em>command</em> the
@@ -71,6 +71,8 @@ final class IdeActions {
             }
             case IdeAction.NEXT_TAB -> EditorTabs.go(editor, TabNavigation.Action.NEXT, action.count());
             case IdeAction.PREVIOUS_TAB -> EditorTabs.go(editor, TabNavigation.Action.PREVIOUS, action.count());
+            case IdeAction.SAVE_AND_CLOSE -> EclipseFileCommands.zz(editor);
+            case IdeAction.CLOSE -> EclipseFileCommands.zq(editor);
             default -> LOG.fine(() -> "Unknown IDE action ignored: " + action);
         }
     }

@@ -4,7 +4,10 @@ Status: **phases 1 and 2 built**; on `fix/key-routing` from `release/0.1.5` at `
 (after the `g??` fix). **Phase 3 built in 0.1.7** as step A2 of the Neovim 0.12 cleanup plan: every
 `:`, `/`, `?` goes to Neovim, the box is a view of Neovim's command line (`util/CmdlineState`), and
 the box's own history, completion and search answering are gone (docs/ARCHITECTURE.md, "Command
-line"). Phase 2's take-over of lines a mapping opened is no longer needed: every line is shown. The decisions are at the end. When a phase is done, change its heading
+line"). Phase 2's take-over of lines a mapping opened is no longer needed: every line is shown.
+**`util/KeyGrammar` removed in 0.1.7** (step B1): nothing on the UI thread needs to guess any more;
+every key outside insert mode goes to Neovim, and `ZZ`/`ZQ` are Neovim mappings (`core/IdeAction`).
+The text below describes the grammar as it was. The decisions are at the end. When a phase is done, change its heading
 and add an *As built* section, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 
 ## Summary
