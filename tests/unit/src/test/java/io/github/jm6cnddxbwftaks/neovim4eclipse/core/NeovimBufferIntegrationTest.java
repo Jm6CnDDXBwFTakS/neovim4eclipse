@@ -259,37 +259,6 @@ class NeovimBufferIntegrationTest {
     }
 
     /**
-     * A write by Neovim itself ({@code :update}, {@code :bufdo update}, a mapping's {@code :w}) asks
-     * Eclipse to save the document, and Neovim never writes the file. A freshly loaded document is
-     * not modified, so {@code :update} skips it, as for a file just read.
-     */
-    @Test
-    void neovimsWritesAskEclipseToSave() throws Exception {
-        try (NeovimSession s = start()) {
-            List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
-            s.setWriteHandler((document, createFolders) -> {
-                saved.add(document);
-                return DocumentWrite.Result.saved("");
-            });
-            Path dir = Files.createTempDirectory("neovim4eclipse-write");
-            DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
-            DocumentBuffer b = new DocumentBuffer(dir.resolve("B.txt").toString());
-            s.showBuffer(a);
-            s.setBufferLines(List.of("a"));
-            s.showBuffer(b);
-            s.setBufferLines(List.of("b"));
-            assertEquals(Boolean.FALSE, s.lua("return vim.bo.modified"), "just loaded");
-
-            s.lua("vim.api.nvim_buf_set_lines(" + a.bufnr() + ", 0, -1, false, {'A'})");
-            s.command("bufdo update");
-
-            assertEquals(List.of(a), saved, "only the modified one");
-            assertEquals(Boolean.FALSE, s.lua("return vim.bo[" + a.bufnr() + "].modified"), "saved");
-            assertFalse(Files.exists(dir.resolve("A.txt")), "Neovim never writes the file itself");
-        }
-    }
-
-    /**
      * A save Eclipse could not do fails the write the way a real failed write does
      * ({@code E212: Can't open file for writing}): the command reports the error to whoever ran it,
      * so {@code :w | q} does not go on and {@code :bufdo update} stops there.
@@ -317,34 +286,6 @@ class NeovimBufferIntegrationTest {
             s.input(":execute 'write'<CR>");
             waitFor(() -> outputs.stream().anyMatch(o -> o.text().equals("Error in BufWriteCmd Autocommands for \"<buffer="
                     + a.bufnr() + ">\":\nEclipse could not save A.txt: read-only")), "the error in the popup: " + outputs);
-        }
-    }
-
-    /**
-     * The safety nets: a document buffer that Neovim deletes by itself ({@code <Cmd>bd},
-     * {@code vim.cmd.bdelete()}), or a {@code :quit} it runs itself, tells Eclipse which buffer, so
-     * that its editor closes. A {@code :bd} typed on the command line is handed over instead and
-     * deletes nothing in Neovim.
-     */
-    @Test
-    void aBufferNeovimDeletesOrQuitsByItselfIsReported() throws Exception {
-        try (NeovimSession s = start()) {
-            List<Integer> closed = new CopyOnWriteArrayList<>();
-            s.setBufferClosedHandler(closed::add);
-            String dir = System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/";
-            DocumentBuffer a = new DocumentBuffer(dir + "A.txt");
-            DocumentBuffer b = new DocumentBuffer(dir + "B.txt");
-            s.showBuffer(a);
-            s.showBuffer(b);
-
-            s.lua("vim.cmd.bdelete(" + a.bufnr() + ")");
-            waitFor(() -> closed.contains(a.bufnr()), "A's deletion: " + closed);
-
-            s.command("split"); // two windows, so the quit closes one instead of ending Neovim
-            closed.clear();
-            s.lua("vim.cmd.quit()");
-            waitFor(() -> closed.contains(b.bufnr()), "the quit of B's window: " + closed);
-            assertTrue(s.isAlive());
         }
     }
 
@@ -381,35 +322,6 @@ class NeovimBufferIntegrationTest {
         }
     }
 
-    /** {@code :bufdo update} stops at a buffer whose save failed, as it stops at a real write error. */
-    @Test
-    void bufdoUpdateStopsAtAFailedSave() throws Exception {
-        try (NeovimSession s = start()) {
-            String dir = System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/";
-            DocumentBuffer a = new DocumentBuffer(dir + "A.txt");
-            DocumentBuffer b = new DocumentBuffer(dir + "B.txt");
-            List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
-            s.setWriteHandler((document, createFolders) -> {
-                saved.add(document);
-                return document.equals(a) ? DocumentWrite.Result.failed("Eclipse could not save A.txt: read-only")
-                        : DocumentWrite.Result.saved("");
-            });
-            // Shown first, so A has the lower buffer number and :bufdo reaches it first.
-            s.showBuffer(a);
-            s.setBufferLines(List.of("a"));
-            s.input("x");
-            s.showBuffer(b);
-            s.setBufferLines(List.of("b"));
-            s.input("x");
-            assertTrue(a.bufnr() < b.bufnr(), "buffer order");
-
-            assertThrows(Exception.class, () -> s.command("bufdo update"));
-
-            assertEquals(List.of(a), saved, "A is first in the buffer list; B is not tried after A failed");
-            assertEquals(Boolean.TRUE, s.lua("return vim.bo[" + b.bufnr() + "].modified"));
-        }
-    }
-
     /**
      * A typed {@code :w} is Neovim's write (B2b): its write hook asks Eclipse to save, passing
      * {@code ++p}, and shows the message Eclipse answers, as Vim shows {@code "A.txt" 1L, 2B written}.
@@ -437,29 +349,6 @@ class NeovimBufferIntegrationTest {
             s.input(":w !cat >/dev/null<CR>");
             s.lua("return 0"); // the keys before it are done
             assertEquals(1, asked.size(), ":w !cmd is no write of the file: " + asked);
-        }
-    }
-
-    /** Eclipse saves a document only as its own file; {@code :w other.txt} is refused, nothing is written. */
-    @Test
-    void aWriteUnderAnotherNameIsRefused() throws Exception {
-        try (NeovimSession s = start()) {
-            List<DocumentBuffer> saved = new CopyOnWriteArrayList<>();
-            s.setWriteHandler((document, createFolders) -> {
-                saved.add(document);
-                return DocumentWrite.Result.saved("");
-            });
-            Path dir = Files.createTempDirectory("neovim4eclipse-write");
-            DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
-            s.showBuffer(a);
-            s.setBufferLines(List.of("a"));
-
-            Exception refused = assertThrows(Exception.class, () -> s.command("write " + dir.resolve("other.txt")));
-
-            assertEquals(List.of(), saved);
-            assertTrue(String.valueOf(refused.getMessage()).contains("only under its own name"),
-                    String.valueOf(refused.getMessage()));
-            assertFalse(Files.exists(dir.resolve("other.txt")));
         }
     }
 

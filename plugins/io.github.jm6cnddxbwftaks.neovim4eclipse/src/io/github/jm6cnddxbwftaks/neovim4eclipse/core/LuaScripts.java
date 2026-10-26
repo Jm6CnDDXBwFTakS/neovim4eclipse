@@ -446,8 +446,11 @@ final class LuaScripts {
      * <p>A failed save fails the write, as a real failed write ({@code E212: Can't open file for
      * writing}) does: {@code nvim_echo}'s {@code err = true} (Neovim 0.11) works like
      * {@code :echoerr}, so inside the autocommand it aborts the {@code :write} that triggered it. The
-     * error reaches whoever ran the command, {@code :w | q} does not go on to quit, and
-     * {@code :bufdo update} stops at that buffer. {@code v:errmsg} holds the text alone
+     * error reaches whoever ran the command: through the API ({@code nvim_command}, {@code vim.cmd})
+     * the command fails and {@code :bufdo update} stops at that buffer. A typed line, though, goes on
+     * after {@code |}: in {@code :w | let g:x = 1} the {@code let} still runs (checked in
+     * {@code tests/unit/src/test/lua/document_buffer_spec.lua}, and the same in Neovim's own TUI).
+     * {@code v:errmsg} holds the text alone
      * ({@code Eclipse could not save A.txt: read-only}); the message Neovim shows puts its usual line
      * in front, {@code Error in BufWriteCmd Autocommands for "<buffer=3>":}, as for any error in an
      * autocommand. Being two lines, it opens the output popup ({@code util/MessageRoute}), where Vim
