@@ -31,6 +31,8 @@ final class StateSnapshot {
     static final int BUFNR = 9;
     /** A block's lines, flat: line, first byte, last byte per line (see {@code util/BlockSelection}). */
     static final int BLOCK = 10;
+    /** {@code nvim_get_mode().mode} when the snapshot was taken; see {@link #mode}. */
+    static final int MODE = 11;
 
     private StateSnapshot() {
     }
@@ -45,6 +47,19 @@ final class StateSnapshot {
             return text(list.get(STATUSLINE));
         }
         return "";
+    }
+
+    /**
+     * Neovim's mode when the snapshot was taken, or {@code null} if missing or malformed. Fresher
+     * than any mode read before the request: Neovim answers the request only after the keys sent
+     * before it ({@code StateSync.publishState}).
+     */
+    static String mode(Object raw) {
+        if (raw instanceof List<?> list && list.size() > MODE && list.get(MODE) instanceof String mode
+                && !mode.isEmpty()) {
+            return mode;
+        }
+        return null;
     }
 
     /** The register being recorded into; "" if not recording or not understood. */

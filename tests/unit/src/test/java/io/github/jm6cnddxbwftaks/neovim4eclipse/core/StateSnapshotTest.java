@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -114,6 +115,19 @@ class StateSnapshotTest {
         VisualSelection s = StateSnapshot.selection(List.of(1, 1), "v");
         assertEquals("v", s.mode());
         assertEquals(1, s.startLine1Based());
+    }
+
+    // ---- mode ----
+
+    @Test
+    void theModeIsNvimGetModesOrNullWhenMissing() {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(StateSnapshot.MODE + 1, (Object) ""));
+        raw.set(StateSnapshot.MODE, "no");
+        assertEquals("no", StateSnapshot.mode(raw));
+        raw.set(StateSnapshot.MODE, "");
+        assertNull(StateSnapshot.mode(raw), "empty");
+        assertNull(StateSnapshot.mode(raw.subList(0, StateSnapshot.MODE)), "an older, shorter answer");
+        assertNull(StateSnapshot.mode("not a list"));
     }
 
     // ---- recording register ----

@@ -187,10 +187,15 @@ final class StateSync {
      * failed request publishes nothing; the next key tries again.
      */
     void publishState() {
-        String current = mode;
         try {
             Set<StatusItem> items = status.items();
             Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE));
+            // The mode in the answer, not one read before the request. Example: Eclipse runs :w, the
+            // plug-in closes Neovim's command line with Esc and publishes. The mode read before was
+            // "c"; Neovim's ModeChanged notice "n" can arrive while the request is out, and publishing
+            // the old "c" after it left the status bar on -- COMMAND -- in normal mode.
+            String snapshotMode = StateSnapshot.mode(raw);
+            String current = snapshotMode != null ? snapshotMode : mode;
             dispatchMode(current);
             if (isAttached.test(StateSnapshot.buffer(raw))) {
                 CursorPos cursor = StateSnapshot.cursor(raw);
