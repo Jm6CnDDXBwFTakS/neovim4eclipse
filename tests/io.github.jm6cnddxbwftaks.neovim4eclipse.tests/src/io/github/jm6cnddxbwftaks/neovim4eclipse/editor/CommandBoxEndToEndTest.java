@@ -23,6 +23,9 @@ import org.eclipse.core.resources.IFolder;
 import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
+import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
@@ -36,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * The {@code :} box ({@link CommandLineBox}) the whole way: {@code :} typed in the editor opens it,
@@ -315,5 +319,57 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
 
         type(widget, "Gdd");
         expectText("alpha\nbeta\n");
+    }
+
+    // ---- Eclipse's shortcuts in the box ----
+
+    /**
+     * Eclipse's Paste (Ctrl+V, Cmd+V, Shift+Insert) with the box open pastes into Neovim's line, not
+     * into the file behind it.
+     */
+    @Test
+    void pasteWithTheBoxOpenPastesIntoTheLine() throws Exception {
+        type(widget, ':');
+        boxReading(":");
+        Clipboard clipboard = new Clipboard(widget.getDisplay());
+        try {
+            // Not a :s, whose 'inccommand' preview would change the buffer before Enter.
+            clipboard.setContents(new Object[] { "2delete" }, new Transfer[] { TextTransfer.getInstance() });
+        } finally {
+            clipboard.dispose();
+        }
+
+        runCommand("org.eclipse.ui.edit.paste");
+
+        Text box = boxReading(":2delete");
+        expectText("alpha\nbeta\ngamma\n"); // the file is untouched
+        pressEnter(box);
+        expectText("alpha\ngamma\n");
+    }
+
+    /** While the box has the focus, the Vim Ctrl keys are bound to Neovim: Ctrl+U clears Neovim's line. */
+    @Test
+    void aVimCtrlKeyInTheBoxReachesNeovimsLine() throws Exception {
+        type(widget, ':');
+        Text box = boxReading(":");
+        box.insert("echo 1");
+        boxReading(":echo 1");
+        waitUntil("Ctrl+U bound to Neovim", TIMEOUT_MS,
+                () -> VimCtrlKeys.commandId('u').equals(commandFor("CTRL+U")),
+                () -> "; Ctrl+U runs " + commandFor("CTRL+U"));
+
+        runCommand(VimCtrlKeys.commandId('u'));
+
+        Text cleared = boxReading(":");
+        pressEnter(cleared); // an empty line closes without running anything
+        waitUntil("the box to close", TIMEOUT_MS, () -> textChildOf(widget) == null);
+    }
+
+    private static String commandFor(String keys) {
+        try {
+            return KeyBindings.commandIdFor(keys);
+        } catch (Exception e) {
+            return e.toString();
+        }
     }
 }

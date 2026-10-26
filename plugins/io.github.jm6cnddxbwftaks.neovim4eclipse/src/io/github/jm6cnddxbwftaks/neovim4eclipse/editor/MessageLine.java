@@ -35,6 +35,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLineFormat;
  * editor on errors</em>, an error also tints the editor's background for a moment, like Vim's
  * {@code 'visualbell'}.
  *
+ * <p>While the {@code :} box is open the line sits just above it ({@link #makeRoomBelow}), so a
+ * message that arrives while the user types a command (a timer's {@code :echo}) does not cover the
+ * box; when the box closes the line moves back to the bottom edge.
+ *
  * <p>UI thread only.
  */
 final class MessageLine {
@@ -54,6 +58,8 @@ final class MessageLine {
     private Color backgroundBeforeFlash;
     /** How many flashes have started; for tests (see {@link #flashCount}). */
     private int flashes;
+    /** Space kept free below the line for the {@code :} box; 0 while the box is closed. */
+    private int bottomInset;
 
     /** The next key or click hides the line; Shift, Ctrl and the like on their own are not keys yet. */
     private final Listener hideOnInput = event -> {
@@ -121,6 +127,15 @@ final class MessageLine {
         }
     }
 
+    /**
+     * Keeps {@code pixels} free below the line, now and for later messages, for the {@code :} box and
+     * its candidate list; 0 puts the line back at the bottom edge. Called by {@link CommandLineBox}.
+     */
+    void makeRoomBelow(int pixels) {
+        bottomInset = Math.max(0, pixels);
+        reposition();
+    }
+
     /** Hides the line; the next {@link #show} brings it back. */
     void hide() {
         text = "";
@@ -165,7 +180,10 @@ final class MessageLine {
         }
     }
 
-    /** One line high, the editor's width, just above its bottom edge, as the command line sits. */
+    /**
+     * One line high, the editor's width, just above its bottom edge, as the command line sits; above
+     * the box while it is open ({@link #bottomInset}).
+     */
     private void reposition() {
         if (!isShowing() || host.isDisposed()) {
             return;
@@ -175,7 +193,7 @@ final class MessageLine {
         int height = OverlayFrame.outerHeight(
                 Math.max(host.getLineHeight(), frame.content().computeSize(SWT.DEFAULT, SWT.DEFAULT).y));
         int x = area.x + OverlayFrame.SIDE_PADDING;
-        int y = area.y + area.height - height - OverlayFrame.bottomGap(host);
+        int y = area.y + area.height - height - OverlayFrame.bottomGap(host) - bottomInset;
         Rectangle current = frame.control().getBounds();
         if (current.x != x || current.y != y || current.width != width || current.height != height) {
             frame.control().setBounds(x, y, width, height);

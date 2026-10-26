@@ -8,6 +8,7 @@ import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
+import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.KeyListener;
@@ -16,12 +17,16 @@ import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.events.VerifyEvent;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Text;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CandidateLine;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * The editor's view of Neovim's command line ({@code :}, {@code /}, {@code ?}, and prompts such as
@@ -54,8 +59,30 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
  * Only what Neovim cannot do: drawing, and text that does not come from a key. Pasting
  * (Ctrl+V, Cmd+V, Shift+Insert, a middle click) and an input method's composed text (IME) reach the
  * box as an edit, which is refused and sent to Neovim as a paste ({@link Commands#paste}); Ctrl+C with
- * text selected in the box copies it. Clicking elsewhere (anything that takes the focus away)
- * abandons the line in Neovim ({@code <C-c>}), as before.
+ * text selected in the box copies it. Clicking elsewhere in Eclipse (another control takes the
+ * focus) abandons the line in Neovim ({@code <C-c>}), as before.
+ *
+ * <h2>Eclipse's shortcuts</h2>
+ * Eclipse runs its key bindings before any widget sees the key, and the box is part of the editor,
+ * so without help {@code Ctrl+V} would run the editor's Paste and {@code Ctrl+W} would close the
+ * editor. Two things keep the keys for the box ({@code NeovimEditorController} does both, through
+ * the state listener it passes to the constructor, because they need the workbench):
+ * <ul>
+ *   <li>The Vim Ctrl-key contexts stay active while the box has the focus ({@code EditorKeyContext}),
+ *       so the letters the preferences give to Neovim reach Neovim's line ({@code <C-r>a},
+ *       {@code <C-u>}, {@code <C-n>}). They arrive in {@link #ctrlKey}, which keeps Ctrl+V for
+ *       pasting and Ctrl+C for copying a selection where those are the platform's own shortcuts.</li>
+ *   <li>While the box is open, Copy, Paste, Cut and Select All run on the box
+ *       ({@code CommandLineEditHandlers}): Cmd+V on macOS, Shift+Insert, and Ctrl+V when the
+ *       preferences give {@code v} to Eclipse.</li>
+ * </ul>
+ *
+ * <h2>Focus that leaves Eclipse</h2>
+ * Only a control of Eclipse's own that takes the focus abandons the line. When the focus leaves
+ * Eclipse altogether (another application, or the window an input method opens to switch, such as
+ * Super+Space for Japanese input on Linux), the line stays open, and the box has the focus again
+ * when Eclipse's window does. So {@code :} typed in Latin input, then a switch to Japanese input,
+ * keeps the line.
  *
  * <p>Example: {@code :} in the editor goes to Neovim; Neovim reports the line {@code ":"} and the
  * box opens with it. {@code s}, {@code e}, {@code t}, Space, Tab go to Neovim one by one; after Tab
@@ -89,9 +116,18 @@ final class CommandLineBox {
     /** Gap between the box and the candidate list or output popup above it. */
     private static final int PADDING = 3;
 
+    /** Whether Ctrl (not Cmd, as on macOS) is the platform's copy and paste modifier. */
+    private static final boolean CTRL_IS_MOD1 = SWT.MOD1 == SWT.CTRL;
+
     private final StyledText host;
+    /** The host's display, kept for removing the focus filter after the host is disposed. */
+    private final Display display;
     private final Commands commands;
     private final OutputPopup output;
+    /** Neovim's messages; moved above the box while it is open (a timer's {@code :echo}). */
+    private final MessageLine messageLine;
+    /** Told when the box opens, closes, gains or loses the focus. */
+    private final Runnable stateListener;
 
     private OverlayFrame<Text> frame;
     /** The text field inside {@link #frame}; {@code null} while closed. */
@@ -106,6 +142,25 @@ final class CommandLineBox {
     /** The candidate list above the box; {@code null} while hidden. */
     private OverlayFrame<StyledText> listFrame;
 
+    /**
+     * Display filter while the box is open: a control of Eclipse's own outside the box took the
+     * focus (a click in the editor, another view), so the line is abandoned. A filter, not the box's
+     * focus-lost event: the focus may also leave Eclipse for a while (an input method's switcher),
+     * and that must keep the line.
+     */
+    private final Listener abandonOnFocusElsewhere = this::onFocusAnywhere;
+    private final FocusListener focusChange = new FocusListener() {
+        @Override
+        public void focusGained(FocusEvent e) {
+            stateListener.run();
+        }
+
+        @Override
+        public void focusLost(FocusEvent e) {
+            stateListener.run();
+        }
+    };
+
     private final PaintListener repositionOnPaint = event -> reposition();
     private final ControlListener repositionOnResize = new ControlListener() {
         @Override
@@ -119,15 +174,71 @@ final class CommandLineBox {
         }
     };
 
-    CommandLineBox(StyledText host, Commands commands) {
+    /**
+     * @param host          the editor's text widget
+     * @param commands      the way to Neovim
+     * @param messageLine   the editor's message line, kept above the box while it is open
+     * @param stateListener told when the box opens, closes, gains or loses the focus (see
+     *                      {@link #isOpen}, {@link #hasFocus}); the controller switches the key
+     *                      contexts and edit handlers there. UI thread.
+     */
+    CommandLineBox(StyledText host, Commands commands, MessageLine messageLine, Runnable stateListener) {
         this.host = host;
+        this.display = host.getDisplay();
         this.commands = commands;
+        this.messageLine = messageLine;
+        this.stateListener = stateListener;
         // ':' typed in the popup starts the next command, as in Vim: it goes to Neovim like any ':'.
         this.output = new OutputPopup(host, () -> commands.type(":"));
     }
 
     boolean isOpen() {
         return box != null && !box.isDisposed();
+    }
+
+    /** Whether the box is open and has the keyboard focus. */
+    boolean hasFocus() {
+        return isOpen() && box.isFocusControl();
+    }
+
+    /**
+     * A Vim Ctrl key that the workbench delivered while the box is open ({@code SendKeyHandler}).
+     * Ctrl+V pastes and Ctrl+C with text selected copies, where Ctrl is the platform's own
+     * modifier for them (not on macOS, where Cmd+V pastes and Ctrl+V is Vim's literal-insert);
+     * every other key goes to Neovim's line, as typed in the box. UI thread.
+     *
+     * @param nvimKey the key in Neovim's notation, such as {@code <C-r>}
+     */
+    void ctrlKey(String nvimKey) {
+        char letter = VimCtrlKeys.letterOf(nvimKey);
+        if (CTRL_IS_MOD1 && letter == 'v') {
+            paste();
+        } else if (CTRL_IS_MOD1 && letter == 'c' && isOpen() && box.getSelectionCount() > 0) {
+            copy();
+        } else {
+            commands.type(nvimKey);
+        }
+    }
+
+    /** Pastes the clipboard into Neovim's line (through {@link #onEdit}). UI thread. */
+    void paste() {
+        if (isOpen()) {
+            box.paste();
+        }
+    }
+
+    /** Copies the text selected in the box, if any. UI thread. */
+    void copy() {
+        if (isOpen()) {
+            box.copy();
+        }
+    }
+
+    /** Selects the box's text (for copying; Neovim's line does not change). UI thread. */
+    void selectAll() {
+        if (isOpen()) {
+            box.selectAll();
+        }
     }
 
     /**
@@ -166,13 +277,16 @@ final class CommandLineBox {
         box.addVerifyListener(this::onEdit);
         box.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         box.addTraverseListener(this::onTraverse);
-        box.addFocusListener(FocusListener.focusLostAdapter(e -> abandon()));
+        box.addFocusListener(focusChange);
         host.addPaintListener(repositionOnPaint);
         host.addControlListener(repositionOnResize);
         reposition();
         // ':' typed over a command's output: keep the output visible above the box until the line closes.
         output.makeRoomBelow(roomBelowOutput());
+        messageLine.makeRoomBelow(roomBelowOutput());
         box.setFocus();
+        display.addFilter(SWT.FocusIn, abandonOnFocusElsewhere);
+        stateListener.run();
     }
 
     /**
@@ -228,7 +342,24 @@ final class CommandLineBox {
         }
     }
 
-    /** The focus left the box (a click elsewhere): Neovim's line is abandoned, as Vim's Ctrl-C does. */
+    /** See {@link #abandonOnFocusElsewhere}. */
+    private void onFocusAnywhere(Event event) {
+        if (isOpen() && event.widget instanceof Control control && !isInBox(control)) {
+            abandon();
+        }
+    }
+
+    /** Whether {@code control} is the box, its frame or something inside them. */
+    private boolean isInBox(Control control) {
+        for (Control c = control; c != null; c = c.getParent()) {
+            if (c == frame.control()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Another control took the focus (a click elsewhere): Neovim's line is abandoned, as Vim's Ctrl-C does. */
     private void abandon() {
         if (!isOpen()) {
             return;
@@ -252,13 +383,13 @@ final class CommandLineBox {
         CandidateLine.ListLine line = CandidateLine.fit(view.candidates(), view.selected(), columnsOf(list));
         list.setText(line.text());
         if (line.highlightStart() >= 0) {
-            Display display = host.getDisplay();
             list.setStyleRange(new StyleRange(line.highlightStart(), line.highlightLength(),
                     display.getSystemColor(SWT.COLOR_LIST_SELECTION_TEXT),
                     display.getSystemColor(SWT.COLOR_LIST_SELECTION)));
         }
         reposition();
         output.makeRoomBelow(roomBelowOutput()); // ':' over a command's output: keep the output above the list
+        messageLine.makeRoomBelow(roomBelowOutput());
     }
 
     /** How many average characters fit into the list (exact for the monospaced fonts editors use). */
@@ -280,6 +411,7 @@ final class CommandLineBox {
         listFrame = null;
         if (isOpen()) {
             output.makeRoomBelow(roomBelowOutput());
+            messageLine.makeRoomBelow(roomBelowOutput());
         }
     }
 
@@ -323,7 +455,7 @@ final class CommandLineBox {
         }
     }
 
-    /** Space the output popup leaves free below it: the box, and the candidate list if shown. */
+    /** Space the output popup and message line leave free below them: the box, and the candidate list if shown. */
     private int roomBelowOutput() {
         int room = frame.control().getBounds().height + PADDING;
         if (listFrame != null) {
@@ -341,7 +473,9 @@ final class CommandLineBox {
         if (box == null) {
             return;
         }
+        display.removeFilter(SWT.FocusIn, abandonOnFocusElsewhere);
         output.close(false); // output kept for this command line goes with it
+        messageLine.makeRoomBelow(0); // a message shown meanwhile moves down to the bottom edge
         if (listFrame != null) {
             listFrame.dispose();
             listFrame = null;
@@ -357,6 +491,7 @@ final class CommandLineBox {
         if (refocusEditor && !host.isDisposed()) {
             host.setFocus();
         }
+        stateListener.run();
     }
 
     /** Called when the editor goes away. */

@@ -249,9 +249,12 @@ the editor, as wide as the editor minus a small padding and in the editor's font
 in it goes to Neovim, so it behaves exactly like Neovim's command line: Enter runs it, Esc or
 Backspace on the empty line cancels, Up/Down browse Neovim's history (the same as in a terminal,
 kept between sessions), `Ctrl-R` inserts a register, and your command-line mappings and
-abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. Clicking elsewhere cancels the
-line. While the box has focus the Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it; text from
-an input method (IME) goes in the same way.
+abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. Clicking elsewhere in Eclipse
+cancels the line; switching to another application or input method keeps it. In the box the `Ctrl`
+letters ticked in the preferences (see "Ctrl keys") go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-N`),
+except `Ctrl-V`, which pastes, and `Ctrl-C` with text selected, which copies (on macOS, Cmd-V and Cmd-C
+do that, and `Ctrl-V` is Neovim's). Shift+Insert pastes too, and text from an input method (IME) goes
+in the same way. A message that arrives while you type (a timer's `:echo`) shows above the box.
 
 The box opens for every command line Neovim opens: a mapping in your `init.lua`
 (`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript
