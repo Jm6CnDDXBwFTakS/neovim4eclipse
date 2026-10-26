@@ -138,7 +138,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
             Edit edit = change.lastLine() < 0 ? BufferSynchronizer.fullBufferEdit(document, change.newLines(), finalNewline)
                     : BufferSynchronizer.rangeEdit(document, change, finalNewline);
             if (edit != null) {
-                UndoSteps.beforeChange(document); // see UndoSteps: Ctrl+Z back to the save clears the marker
+                UndoSteps.beforeChangeOnItsOwn(document); // see UndoSteps: Ctrl+Z back to the save clears the marker
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
         } catch (Exception e) {

@@ -64,6 +64,10 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      */
     private volatile boolean neovimBehind;
     private final Consumer<BufferChange> bufferChangeListener = this::onNeovimBufferChange;
+    /** Groups the changes of one Neovim command into one Eclipse undo step. UI thread. */
+    private final UndoSteps undoSteps;
+    /** Neovim has handled a key: the undo step of its changes ends (on the UI thread, after them). */
+    private final Runnable inputHandledListener = this::closeUndoStepSoon;
 
     private volatile boolean listening;
     private volatile boolean closed;
@@ -95,6 +99,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         this.document = document;
         this.session = session;
         this.ui = ui;
+        this.undoSteps = new UndoSteps(document);
     }
 
     public void setCaretRestorer(Runnable caretRestorer) {
@@ -172,6 +177,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
         listening = true;
         session.addBufferChangeListener(bufferChangeListener);
+        session.addInputHandledListener(inputHandledListener);
         LOG.fine("BufferSynchronizer: remote listening enabled");
     }
 
@@ -186,6 +192,8 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
     public void stopRemoteListening() {
         listening = false;
         session.removeBufferChangeListener(bufferChangeListener);
+        session.removeInputHandledListener(inputHandledListener);
+        closeUndoStepSoon(); // no more changes from Neovim for now: their step ends
     }
 
     /**
@@ -268,7 +276,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                     : fullBuffer ? fullBufferEdit(document, change.newLines(), newline)
                     : rangeEdit(document, change, newline);
             if (edit != null) {
-                UndoSteps.beforeChange(document); // its own undo step, as a keystroke would make
+                undoSteps.beforeRemoteChange(); // one undo step per Neovim command (see UndoSteps)
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
         } catch (Exception e) {
@@ -346,6 +354,19 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * document must reflect a change before the next key is processed, otherwise a following
      * range event would be applied against stale line numbers.
      */
+    /**
+     * Ends the undo step of Neovim's latest changes, on the UI thread, without waiting for it: a key
+     * must not wait for the UI. Changes applied before (with {@code syncExec}) are in the step; the
+     * UI thread runs this after them.
+     */
+    private void closeUndoStepSoon() {
+        if (ui.isUiThread()) {
+            undoSteps.close();
+        } else if (ui.isAvailable()) {
+            ui.asyncExec(undoSteps::close);
+        }
+    }
+
     private void runOnUi(Runnable r) {
         if (!ui.isAvailable()) {
             return;
@@ -366,6 +387,8 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         closed = true;
         listening = false;
         session.removeBufferChangeListener(bufferChangeListener);
+        session.removeInputHandledListener(inputHandledListener);
         document.removeDocumentListener(localChangeListener);
+        closeUndoStepSoon();
     }
 }

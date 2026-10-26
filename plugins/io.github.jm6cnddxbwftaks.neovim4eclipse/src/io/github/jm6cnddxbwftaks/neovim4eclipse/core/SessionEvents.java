@@ -29,6 +29,9 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
     private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
     private final ListenerList<HostCommand> hostCommandListeners = new ListenerList<>("host command", Level.WARNING);
+    /** {@link ListenerList} holds consumers; these take no value, so each is wrapped once, here. */
+    private final ListenerList<Void> inputHandledListeners = new ListenerList<>("input handled", Level.WARNING);
+    private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
 
     // ---- firing ----
@@ -56,6 +59,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** A key mapped in Neovim asks the IDE to act (see {@link IdeAction}). */
     void ideAction(IdeAction action) {
         ideActionListeners.fire(action);
+    }
+
+    /** Neovim has handled a key or other queued work (see {@code NeovimSession#addInputHandledListener}). */
+    void inputHandled() {
+        inputHandledListeners.fire(null);
     }
 
     /** Neovim handed a command to Eclipse ({@code :Eclipse quit}; see {@link HostCommand}). */
@@ -108,6 +116,17 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeIdeActionListener(Consumer<IdeAction> listener) {
         ideActionListeners.remove(listener);
+    }
+
+    void addInputHandledListener(Runnable listener) {
+        inputHandledListeners.add(inputHandledWrappers.computeIfAbsent(listener, l -> ignored -> l.run()));
+    }
+
+    void removeInputHandledListener(Runnable listener) {
+        Consumer<Void> wrapper = inputHandledWrappers.remove(listener);
+        if (wrapper != null) {
+            inputHandledListeners.remove(wrapper);
+        }
     }
 
     void addHostCommandListener(Consumer<HostCommand> listener) {

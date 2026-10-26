@@ -11,8 +11,9 @@ import org.eclipse.text.undo.DocumentUndoManagerRegistry;
 import org.eclipse.text.undo.IDocumentUndoManager;
 
 /**
- * Starts a new step in Eclipse's undo history before a change from Neovim is applied, as a
- * keystroke in the editor would.
+ * Makes the changes of one Neovim command one step in Eclipse's undo history, as the keystroke of
+ * an Eclipse command would: Ctrl+Z undoes {@code J} at once (Neovim changes one line and deletes
+ * the next, two changes), and brings the document back to exactly the state before.
  *
  * <h2>Why</h2>
  * Eclipse's undo history ({@link IDocumentUndoManager}) groups document changes into steps. It
@@ -25,25 +26,66 @@ import org.eclipse.text.undo.IDocumentUndoManager;
  * save, {@code yyp} (10), Ctrl+Z restores 9, not 8, so the file stays marked as changed although
  * its text is the saved one.
  *
- * <p>{@link IDocumentUndoManager#commit()} closes the open step, or, when it is empty, starts it
- * afresh, so the next change records the stamp the document has. One Neovim change is then one
- * undo step for Ctrl+Z, as one command is in Neovim. Text-model only (no SWT), so it is tested in
- * {@code tests/text}.
+ * <h2>How</h2>
+ * The first change from Neovim opens a compound step ({@link IDocumentUndoManager#beginCompoundChange},
+ * which also closes whatever was open, so the step records the document's current stamp). It is
+ * closed ({@link #close}) when the session says Neovim has handled the key that made the changes;
+ * every change of that key has been applied by then ({@code BufferPort#addInputHandledListener}).
+ * A change Neovim makes by itself, between keys (a timer in a plug-in), joins the step of the next
+ * key's changes.
+ *
+ * <p>Text-model only (no SWT), so it is tested in {@code tests/text}. UI thread only, like every
+ * change of the document.
  */
 final class UndoSteps {
 
     private static final Logger LOG = Logger.getLogger(UndoSteps.class.getName());
 
-    private UndoSteps() {
+    private final IDocument document;
+    /** The undo manager a compound step was opened in, or {@code null} when none is open. */
+    private IDocumentUndoManager open;
+
+    UndoSteps(IDocument document) {
+        this.document = document;
+    }
+
+    /** Before a change from Neovim is applied: opens the step for this key's changes, if none is open. */
+    void beforeRemoteChange() {
+        if (open != null) {
+            return;
+        }
+        IDocumentUndoManager undo = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
+        if (undo == null) {
+            return; // no editor keeps an undo history for this document
+        }
+        try {
+            undo.beginCompoundChange();
+            open = undo;
+        } catch (RuntimeException e) {
+            LOG.log(Level.FINE, "Could not start an undo step", e); // the change is applied anyway
+        }
+    }
+
+    /** Neovim has handled the key: its changes are one step. Does nothing when none is open. */
+    void close() {
+        IDocumentUndoManager undo = open;
+        open = null;
+        if (undo == null) {
+            return;
+        }
+        try {
+            undo.endCompoundChange();
+        } catch (RuntimeException e) {
+            LOG.log(Level.FINE, "Could not end an undo step", e);
+        }
     }
 
     /**
-     * Closes the open undo step of {@code document}, if Eclipse keeps an undo history for it (an
-     * open editor does). Never fails: a history that is registered but not in use (no editor has
-     * connected to it, so it has no open step) throws, and the change must be applied anyway.
-     * UI thread, like every change of the document.
+     * Closes the open undo step of {@code document}, or starts it afresh when empty, for a change
+     * applied on its own (a document without an editor in front; see {@link UnattachedDocumentSync}).
+     * Never fails: a history that is registered but not in use throws, and the change must be applied.
      */
-    static void beforeChange(IDocument document) {
+    static void beforeChangeOnItsOwn(IDocument document) {
         IDocumentUndoManager undo = DocumentUndoManagerRegistry.getDocumentUndoManager(document);
         if (undo == null) {
             return;
