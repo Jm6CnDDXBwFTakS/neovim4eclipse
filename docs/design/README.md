@@ -10,10 +10,10 @@ note the place to learn *why* the code is the way it is, which the code itself c
 | Note | What it covers | Status |
 |------|----------------|--------|
 | [MARKETPLACE.md](MARKETPLACE.md) | A permanent p2 update site on GitHub Pages, and the Eclipse Marketplace listing | phase 1 built; signing (phase 4) built, first signed release 0.1.4 |
-| [KEY_ROUTING.md](KEY_ROUTING.md) | When `:`, `/`, `?` open the box and when `q` records: fixing the router's guesses, and letting Neovim say (`ext_cmdline`) | phases 1 and 2 built |
+| [KEY_ROUTING.md](KEY_ROUTING.md) | When `:`, `/`, `?` open the box and when `q` records: fixing the router's guesses, and letting Neovim say (`ext_cmdline`) | phases 1 and 2 built; phase 3 built as step A2 of the Neovim 0.12 cleanup (0.1.7) |
 | [FOLDING.md](FOLDING.md) | Folding with `zo`, `zc` and the other `z` commands, mirroring Eclipse's folds into Neovim | planned |
 | [NEW_FILE.md](NEW_FILE.md) | `:e newfile` opens an empty editor that `:w` creates | implemented |
-| [TAB_COMPLETION.md](TAB_COMPLETION.md) | Tab completion in the `:` command line | implemented |
+| [TAB_COMPLETION.md](TAB_COMPLETION.md) | Tab completion in the `:` command line | superseded in 0.1.7: Tab is Neovim's own, in Neovim's command line |
 | [LOG_LEVEL.md](LOG_LEVEL.md) | One switch for the plug-in's log level, and why it is the only one | implemented |
 | [RPC_CLIENT.md](RPC_CLIENT.md) | Our own msgpack-rpc client in place of neovim-java, step by step | done |
 

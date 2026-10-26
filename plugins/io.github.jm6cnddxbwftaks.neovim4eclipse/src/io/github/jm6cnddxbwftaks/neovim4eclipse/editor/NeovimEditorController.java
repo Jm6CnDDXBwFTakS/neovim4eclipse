@@ -33,11 +33,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostExCommand;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
@@ -109,7 +105,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<StatusInfo> statusListener = this::onStatusChanged;
     private final Consumer<CommandOutput> outputListener = this::onOutput;
     private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
-    private final Consumer<CmdlineEvent> userCmdlineListener = this::onUserCmdline;
+    private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
             DocumentBuffer buffer, boolean takeNeovimCursor) {
@@ -144,9 +140,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive);
-        this.commandLine = new CommandLineBox(styledText, new SessionCommands(session, editor));
+        this.commandLine = new CommandLineBox(styledText, new SessionCommands(session));
         this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
-        keyInterceptor.setSpecialKeyHandler(this::handleExOrSearchKey);
         keyInterceptor.setEditor(editor);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         session.setHostExHandler(cmd -> HostCommands.tryHandleEx(cmd, editor));
@@ -165,13 +160,14 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addStatusListener(statusListener);
         session.addOutputListener(outputListener);
         session.addIdeActionListener(ideActionListener);
-        session.addUserCmdlineListener(userCmdlineListener);
+        session.addCmdlineListener(cmdlineListener);
 
         modeStatus.addTo(editor.getEditorSite());
 
         int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offsets.caretModelOffset());
 
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
+        setWindowFolder();
 
         onModeChanged(session.getMode());
         LOG.fine("Attached Neovim to editor: " + editor.getTitle());
@@ -200,15 +196,17 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Opens the inline command line for {@code :} / {@code /} / {@code ?}. Returns true if handled.
+     * Neovim's window works in this editor's project ({@code :lcd}): {@code :e} completion,
+     * {@code :!} and {@code :find} start at the project's root, or at the file's folder for a file
+     * outside any project (decision D5 of the cleanup plan). Where {@code :e} then looks for a name is
+     * still the plug-in's rule, the file's folder first ({@code EclipseFileCommands.editFolders}).
      */
-    private boolean handleExOrSearchKey(String nvimKey) {
-        CommandLine.Kind kind = CommandLine.Kind.forKey(nvimKey);
-        if (kind == null) {
-            return false;
+    private void setWindowFolder() {
+        List<Path> folders = EclipseFileCommands.editFolders(editor);
+        Path folder = folders.get(1) != null ? folders.get(1) : folders.get(0);
+        if (folder != null) {
+            session.setWindowFolderAsync(folder.toString());
         }
-        commandLine.open(kind, VimModes.isVisual(session.getMode()));
-        return true;
     }
 
     /** The editor's current document (looked up each time; may be {@code null}). */
@@ -331,30 +329,18 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * The user opened a command line in Neovim that the box did not (a mapping such as
-     * {@code nnoremap ; :}, a count before {@code :}, {@code !} with a motion): the box takes it
-     * over, with Neovim's text so far. A {@code :} line is closed in Neovim at once ({@code <C-c>}),
-     * so the box runs its command the usual way (Tab completion, IDE commands, output capture need
-     * Neovim in normal mode). A search line stays open, because it may belong to an operator
-     * ({@code d/}), and the box answers it on Enter. RPC thread. Docs/design/KEY_ROUTING.md, phase 2.
-     *
-     * <p>Not while the box is open: then the line is the box's own doing. Tab completion types into
-     * Neovim's command line for a moment ({@code LuaScripts.COMPLETE_CMDLINE}), which Neovim may
-     * report like any other line; taking it over would replace the box the user is typing in.
+     * Neovim's command line changed: the box shows it (opens, redraws, closes) if Neovim drives
+     * this editor. Every command line is Neovim's, whoever opened it: {@code :} typed here, a
+     * mapping, a count, {@code input()}. RPC thread.
      */
-    private void onUserCmdline(CmdlineEvent event) {
-        CommandLine.Kind kind = CommandLine.Kind.forKey(event.firstc());
-        if (closed || !neovimModeActive || kind == null) {
+    private void onCmdline(CmdlineState.View view) {
+        if (closed || !neovimModeActive) {
             return;
         }
         HostCommands.runOnUi(() -> {
-            if (closed || styledText.isDisposed() || commandLine.isOpen()) {
-                return;
+            if (!closed && !styledText.isDisposed()) {
+                commandLine.show(view);
             }
-            if (kind == CommandLine.Kind.EX) {
-                session.inputAsync("<C-c>");
-            }
-            commandLine.openFromNeovim(kind, event.content(), kind != CommandLine.Kind.EX);
         });
     }
 
@@ -509,7 +495,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeStatusListener(statusListener);
             session.removeOutputListener(outputListener);
             session.removeIdeActionListener(ideActionListener);
-            session.removeUserCmdlineListener(userCmdlineListener);
+            session.removeCmdlineListener(cmdlineListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }
@@ -540,52 +526,20 @@ public final class NeovimEditorController implements AutoCloseable {
         LOG.fine("Detached Neovim from editor: " + editor.getTitle());
     }
 
-    /** {@link CommandLineBox.Commands} on the session, with file and tab commands run by this editor. */
-    private record SessionCommands(NeovimSession session, ITextEditor editor) implements CommandLineBox.Commands {
+    /**
+     * {@link CommandLineBox.Commands} on the session: keys and pastes go to Neovim's command line, in
+     * order with the editor's own keys (one input thread). File and tab commands still reach this
+     * editor, through the session's host handler on Enter.
+     */
+    private record SessionCommands(NeovimSession session) implements CommandLineBox.Commands {
         @Override
-        public void leaveVisualMode() {
-            session.inputAsync("<Esc>");
+        public void type(String keys) {
+            session.inputAsync(keys);
         }
 
         @Override
-        public boolean runInIde(String exCommand) {
-            return HostCommands.tryHandleEx(exCommand, editor);
-        }
-
-        @Override
-        public void run(String exCommand) {
-            session.commandAsync(exCommand);
-        }
-
-        @Override
-        public void search(String pattern, boolean backward) {
-            session.search(pattern, backward);
-        }
-
-        @Override
-        public void answerSearch(String pattern, boolean backward) {
-            session.answerSearchAsync(pattern, backward);
-        }
-
-        @Override
-        public void cancelNeovimLine() {
-            session.inputAsync("<C-c>");
-        }
-
-        /** {@code :e} names complete in the folders {@code :e} looks in; other lines need none. */
-        @Override
-        public void complete(String line, String steps, Consumer<Completion> onResult) {
-            List<String> folders = new ArrayList<>();
-            HostExCommand command = HostExCommand.parse(line);
-            if (command.kind() == HostExCommand.Kind.EDIT) {
-                for (Path folder : EclipseFileCommands.editFolders(editor)) {
-                    folders.add(folder == null ? "" : folder.toString());
-                }
-                if (EditPath.isFromCurrentFolder(command.argument()) && folders.size() > 1) {
-                    folders = folders.subList(0, 1); // :e ./ looks beside the edited file only
-                }
-            }
-            session.completeAsync(line, steps, folders, onResult);
+        public void paste(String text) {
+            session.pasteAsync(text);
         }
     }
 

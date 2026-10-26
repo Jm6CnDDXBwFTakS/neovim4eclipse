@@ -66,25 +66,29 @@ final class NeovimConnection implements AutoCloseable {
     private static final int UI_HEIGHT = 40;
     /**
      * The UI the plug-in attaches as: no 24-bit color ({@code rgb} defaults to {@code true}, so it is
-     * sent explicitly), and three parts of Neovim's screen sent as events instead of drawn into the
+     * sent explicitly), and parts of Neovim's screen sent as events instead of drawn into the
      * grid, which nobody sees:
      * <ul>
-     *   <li>{@code ext_cmdline}: every command line Neovim opens ({@code cmdline_show}, read by
-     *       {@link NotificationBridge}), which lets the editor's box take over one the user opened
-     *       through a mapping (docs/design/KEY_ROUTING.md).</li>
+     *   <li>{@code ext_cmdline}: every command line Neovim opens, as {@code cmdline_show},
+     *       {@code cmdline_pos} ... ({@code util/CmdlineEvent}), which the editor's {@code :} box
+     *       draws: the command line is Neovim's own.</li>
      *   <li>{@code ext_messages}: every message, with its kind ({@code msg_show}), the pending
      *       command ({@code msg_showcmd}) and {@code :messages} ({@code msg_history_show}); see
      *       {@code util/MessageEvent}. Neovim then never waits at a "Press ENTER" prompt: there is
      *       no message area to fill (experiment X2 of the cleanup plan).</li>
+     *   <li>{@code ext_popupmenu}: completion candidates as {@code popupmenu_show}; on grid -1 they
+     *       belong to the command line, and the box lists them. A menu of an insert Neovim drives
+     *       ({@code <C-n>} in a block {@code I}) comes on grid 1 and is ignored, as it was drawn into
+     *       a grid nobody saw before (experiment X3).</li>
      *   <li>{@code ext_linegrid}, which {@code ext_messages} needs (Neovim turns it on anyway). The grid
      *       events it brings are ignored; they are fewer per key than the old cell-by-cell ones.</li>
      * </ul>
-     * The other {@code ext_*} options stay off: the popup menu, tabline, windows ... are not used.
+     * The other {@code ext_*} options stay off: the tabline, windows ... are not used.
      */
     static final Map<String, Object> TERMINAL_UI = terminalUi();
 
     private static Map<String, Object> terminalUi() {
-        List<String> on = List.of("ext_cmdline", "ext_messages", "ext_linegrid");
+        List<String> on = List.of("ext_cmdline", "ext_messages", "ext_linegrid", "ext_popupmenu");
         Map<String, Object> options = new LinkedHashMap<>();
         for (String name : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                 "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {

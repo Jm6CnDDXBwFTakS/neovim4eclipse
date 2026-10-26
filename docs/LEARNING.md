@@ -339,10 +339,14 @@ A Neovim instance with no UI attached does not process typed input reliably. `Ne
 therefore calls `nvim_ui_attach(120, 40, ...)` even though Eclipse draws nothing of Neovim's screen.
 Neovim then sends `redraw` notifications describing that screen. The options passed to
 `nvim_ui_attach` choose parts that come as *events* instead of drawn cells (`:help ui-ext-options`);
-the plug-in asks for two (`NeovimConnection.TERMINAL_UI`) and ignores the rest of the screen:
+the plug-in asks for three (`NeovimConnection.TERMINAL_UI`) and ignores the rest of the screen:
 
-- `ext_cmdline`: each command line Neovim opens, as `cmdline_show` (its text, its type `:` `/` `?`)
-  and `cmdline_hide`. That is how the editor notices a `:` the user's mapping opened.
+- `ext_cmdline` and `ext_popupmenu`: Neovim's command line, as events. Typing `:set tabs` sends
+  `cmdline_show` with the text `set tabs`, the cursor as a byte offset (8) and the type `:`; Left
+  sends `cmdline_pos 7`; Tab on `:e ` sends `popupmenu_show` with the file names on grid -1 (the
+  command line); Esc sends `cmdline_hide`. The editor's `:` box draws exactly that
+  (`util/CmdlineState`) and sends every key back with `nvim_input`: the command line, its history and
+  its completion are Neovim's own, the box only shows them.
 - `ext_messages`: each message, as `msg_show` with a *kind* that says what it is. Example, `/nope`
   then Enter sends two:
 
@@ -356,6 +360,11 @@ the plug-in asks for two (`NeovimConnection.TERMINAL_UI`) and ignores the rest o
   the echo of the search nowhere, the error to the message line in red; `:ls` (kind `list_cmd`) to
   the output popup. Without `ext_messages`, a UI that draws no grid sees no message at all, and Neovim
   stops at a "Press ENTER" prompt whenever its message area overflows (2.6).
+
+A UI that takes over parts of the screen draws them itself, with Neovim's data. Example, the
+search preview: while `/foo` is typed with `'incsearch'`, Neovim moves its view to the match but no
+`CursorMoved` fires; the only report is `win_viewport` (part of `ext_linegrid`), whose cursor the
+session hands to the editor's caret.
 
 `nvim_set_client_info` tells Neovim who is connected (`neovim4eclipse` and the bundle version).
 `:checkhealth` and `nvim_list_chans()` show it.

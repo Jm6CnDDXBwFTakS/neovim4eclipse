@@ -78,10 +78,9 @@ selections are mapped onto `StyledText.setSelection`; a blockwise selection is p
 
 - **Mode status**: `ModeStatusContribution` on the editor status line.
 - **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`).
-- **Ex / search**: `:`, `/`, `?` open `CommandLineBox`, an inline `Text` child of the editor widget
-  (see "Command line" below). A submitted line goes through its small `CommandLineBox.Commands`
-  interface (the IDE for file and tab commands, else the session's `commandAsync` or `search`,
-  carried out by `core/CommandRunner`), so the box itself needs only SWT and is tested in `tests/swt`.
+- **Ex / search**: `CommandLineBox`, an inline `Text` child of the editor widget, shows Neovim's command
+  line (see "Command line" below). Its keys and pastes go to the session through its small
+  `CommandLineBox.Commands` interface, so the box itself needs only SWT and is tested in `tests/swt`.
   What a command prints comes back from Neovim as message events (see "Messages and output").
 
 ### 5. Auto-attach
@@ -257,15 +256,40 @@ plug-in because native borders differ per platform (Windows 11 draws none). It i
 *and on every paint* of the host, so scrolling cannot leave it behind. It is non-modal: opening it moves focus
 to the box, which (via the focus listener in the controller) also deactivates the Vim key context.
 
-- The prefix (`:`/`/`/`?`) is the first character of the text and is protected by a `VerifyListener`.
-- **Click-away cancel:** a focus listener on the box closes it when it loses focus (a click in the editor, another view,
-  switching windows). Pressing `:` again while it is still open only refocuses it, keeping its text.
-- It is opened with `asyncExec`: on some platforms the key's character event follows the key-down after
-  focus moved and would land in the box, so a one-character echo of the opening key is ignored for 150 ms.
-- `:` in visual mode sends `<Esc>` and pre-fills `:'<,'>` (also required because typing `:` in visual mode
-  makes Neovim insert its own range in front of the box's).
-- Pure logic is in `util/CommandLine` (kinds, prefill, parsing) and `util/CommandHistory`, both unit tested;
-  host commands are classified by `util/HostExCommand`, turned into IDE calls by `util/HostCommandRunner`
+**The line is Neovim's** (step A2 of the cleanup plan; until 0.1.7 the box edited its own text and ran it
+on Enter). The UI is attached with `ext_cmdline` and `ext_popupmenu`, so Neovim reports its command line as
+events instead of drawing it: `cmdline_show` (text, byte cursor, type or prompt, level), `cmdline_pos`,
+`cmdline_special_char` (`"` after `<C-r>`), `cmdline_hide`, and the completion menu `popupmenu_show` /
+`popupmenu_select` / `popupmenu_hide` (grid -1 for the command line). `util/CmdlineEvent` reads them,
+`util/CmdlineState` keeps the line (`View`: text, caret, candidates), and the session passes each changed
+view to the controller, which shows it in the box. The box edits nothing:
+
+- **Keys** go to Neovim in its notation (`util/KeyMapping`; Tab and Shift+Tab from the traversal event),
+  through the session's input thread, in order with the editor's own keys. Up/Down are Neovim's history,
+  Tab its completion (`'wildmode'`), `<C-r>` its registers; command-line mappings and abbreviations apply.
+- **Text that is no key** (Ctrl+V or Cmd+V paste, Shift+Insert, an input method's committed text, a drop)
+  reaches the box as an edit, which the `VerifyListener` refuses and sends as `nvim_paste`. Ctrl+C with a
+  selection copies; without one it is Neovim's `<C-c>`.
+- **Opening and closing** follow Neovim: the box opens on `cmdline_show`, whoever opened the line (`:` or
+  `/` typed in the editor, which now simply goes to Neovim; a mapping; a count; `:` in visual mode, where
+  Neovim inserts `'<,'>` itself; an operator's `d/`; `input()`, `confirm()`), and closes on `cmdline_hide`.
+- **Click-away:** when the box loses focus it sends `<C-c>` and closes; views of that line still on their
+  way are ignored until Neovim reports it closed.
+- **Candidates** are fitted into one line above the box around the selected one (`util/CandidateLine`).
+- **Search preview:** while a `/` or `?` line is open, `win_viewport` carries Neovim's `'incsearch'`
+  match (no `CursorMoved` fires then); the session dispatches it as the cursor, so the caret and view
+  follow the match, and Esc or Enter then set the real cursor through the state read after that key.
+- **The plug-in's own lines** (`commandAsync` types `:cmd<CR>`) are not shown: `util/CmdlineWatcher`
+  is told before each one and drops its events.
+- **`q:`** (the command-line window) is closed as soon as it opens, by a `CmdwinEnter` autocommand in
+  `LuaScripts.SETUP`, with a message: Eclipse cannot show a second window.
+- **Working folder:** the controller sets the window's folder (`:lcd`, silently) to the editor's project
+  root, or the file's folder outside a project, so that `:e` completion and `:!` start there (decision D5).
+  Where `:e` looks for a name is still the plug-in's rule, the file's folder first (`util/EditPath`).
+- **Host commands:** on Enter, `KeyInput.tryHostCommandLine` reads Neovim's line (`getcmdline()`) and
+  offers it to the editor; a command Eclipse runs (`:w`, `:q`, `:e`, `:tabn` ...) is closed in Neovim with
+  Esc, which keeps it in the history.
+- Host commands are classified by `util/HostExCommand`, turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
   `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by
   the file's name, and a write creates the file through the document provider instead of Eclipse's
@@ -283,26 +307,12 @@ to the box, which (via the focus listener in the controller) also deactivates th
   `NeovimConnection.waitForStartup` therefore waits for an idle answer and keeps the errors
   (`:messages`) for a one-time warning
   (`editor/StartupErrorNotice`, `util/StartupErrorReport`).
-- **Command lines Neovim opens:** the UI is attached with `ext_cmdline` (and nothing else of the
-  UI protocol), so Neovim reports each command line it opens as a `cmdline_show` redraw event
-  (`util/CmdlineEvent`, read in `NotificationBridge`). `util/CmdlineWatcher` drops the plug-in's own
-  (each typed `:cmd<CR>` and `/pattern<CR>` is announced first) and reports the user's: a
-  mapping (`nnoremap ; :`), a count before `:`, `!` with a motion. The controller then opens the box
-  with Neovim's text. A `:` line is closed in Neovim at once (`<C-c>`) and the box runs its command as
-  usual; a search line stays open, since it may belong to an operator (`d/`), and Enter answers it
-  (`<C-u>pattern<CR>`, `CommandRunner.answerSearch`), Esc closes it. See
-  [design/KEY_ROUTING.md](design/KEY_ROUTING.md), phase 2.
-- **Output:** every command is typed (`:cmd<CR>`, as written, so the history, macros and `@:` see
-  it; listings such as `:ls` too), and `core/CommandRunner` waits until Neovim is idle (at most 60 s,
-  for `:!make`) before refreshing Eclipse. What it prints arrives as message events and goes to the
-  message line or the `OutputPopup` (see "Messages and output"). The plug-in redirects nothing itself,
-  so a user's own `:redir` works as in Vim.
-- **Tab completion** (`:` box only): each Tab sends the line as it was before the first Tab plus the keys
-  pressed so far (`util/CommandCompletion`) to `NeovimSession.completeAsync`, whose one Lua call
-  (`LuaScripts.COMPLETE_CMDLINE`) types them into Neovim's command line, reads the result and cancels.
-  So Neovim never stays in command-line mode, and the completion is exactly Neovim's. The answer
-  (`util/Completion`) is applied only if nothing was typed meanwhile; the candidates are shown in a
-  one-line `StyledText` above the box. Details and the experiments behind them: `docs/design/TAB_COMPLETION.md`.
+- **Output:** a command runs in Neovim as typed, so the history, macros and `@:` see it, listings
+  such as `:ls` too. What it prints arrives as message events and goes to the message line or the
+  `OutputPopup` (see "Messages and output"); output that arrives while a line is open does not take the
+  box's focus. The plug-in redirects nothing itself, so a user's own `:redir` works as in Vim.
+  (`core/CommandRunner` still types whole lines for `commandAsync`, waiting until Neovim is idle, at most
+  60 s, before refreshing Eclipse.)
 
 ## Macros
 
@@ -319,10 +329,11 @@ keys* and to keep the editor in step with playback.
 - **Playback (`@x`):** `@` is a pending-character command (see "Pending commands"). The next key starts the
   playback: buffer events are suppressed (`suppressBufferEvents`), and when Neovim is idle the whole buffer is
   fetched once (timeout 60 s) and applied as one minimal edit (`syncBufferAfterMacro`).
-- **Arguments vs prompts:** a `:` `/` `?` opens the editor's prompt only where Vim would start a command
-  line: not after `f F t T r @ m ' \` "`, a prefix (`g z [ ] Z <C-w>`), `i`/`a` in an operator, or a
-  half-typed mapping, where it is that command's argument and goes to Neovim; and `g??` is the `g?`
-  operator doubled. `KeyRouter` takes Neovim's answer (`nvim_get_mode`: `blocking`, operator-pending)
+- **Arguments vs prompts:** a `:` `/` `?` now always goes to Neovim, which opens a command line or takes
+  it as an argument (`f:`); the box opens only on Neovim's report. `KeyRouter`'s reading of the grammar
+  still decides where `q` records; it goes in step B1 of the cleanup plan. It knows that the key after
+  `f F t T r @ m ' \` "`, a prefix (`g z [ ] Z <C-w>`), `i`/`a` in an operator, or a half-typed mapping is
+  an argument, and that `g??` is the `g?` operator doubled. `KeyRouter` takes Neovim's answer (`nvim_get_mode`: `blocking`, operator-pending)
   when Neovim has processed every key sent, and `util/KeyGrammar`'s reading of the keys while some are
   still in flight. A `q` starts a recording only where it is a command (not in `gqq` or `<C-w>q`), and
   stops one while recording. `KeyGrammarNeovimTest` (integration) compares the grammar with a real
@@ -436,7 +447,7 @@ mode/cursor/visual selection. Keys slower than 250 ms are logged as warnings wit
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
-| Tab completion in the `:` box | `util/CommandCompletion` (cycle, stale answers, list line), `util/Completion` (the answer), `core/LuaScripts.COMPLETE_CMDLINE`, `editor/CommandLineBox` | `CommandCompletionTest`, `CompletionTest`, `CommandCompletionIntegrationTest` (real Neovim), `tests/swt` `CommandLineBoxTest`, UI `EditorEndToEndTest` |
+| The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown), UI `CommandBoxEndToEndTest` |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
 | A document that is not attached and its buffer in step (`:bufdo`, refactorings) | `sync/UnattachedDocumentSync` (session seen through `core/DocumentBufferPort`) | `tests/text` `UnattachedDocumentSyncTest` (fake port: both directions, coalescing, attach and detach, a change that no longer fits), `NeovimBufferIntegrationTest` (routing, echo), UI `EditorEndToEndTest` (`:bufdo` over three files) |

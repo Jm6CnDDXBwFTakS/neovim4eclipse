@@ -19,6 +19,7 @@ import java.util.logging.Level;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -624,7 +625,7 @@ class NeovimSessionIntegrationTest {
             assertEquals(40L, ui.get("height"));
             for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                     "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-                boolean on = List.of("ext_cmdline", "ext_messages", "ext_linegrid").contains(option);
+                boolean on = List.of("ext_cmdline", "ext_messages", "ext_linegrid", "ext_popupmenu").contains(option);
                 assertEquals(on, ui.get(option), option); // see TERMINAL_UI
             }
         }
@@ -909,16 +910,157 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    // ---- Neovim's own command line, as the : box shows it (A2) ----
+
+    /** {@link NeovimSession#lua}, or {@code null} if it failed: for {@link #waitFor} conditions. */
+    private static Object luaOrNull(NeovimSession s, String code) {
+        try {
+            return s.lua(code);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** The views the command-line listener heard, in order. */
+    private static List<CmdlineState.View> cmdlineViews(NeovimSession s) {
+        List<CmdlineState.View> views = new CopyOnWriteArrayList<>();
+        s.addCmdlineListener(views::add);
+        return views;
+    }
+
+    private static CmdlineState.View last(List<CmdlineState.View> views) {
+        return views.isEmpty() ? CmdlineState.View.CLOSED : views.get(views.size() - 1);
+    }
+
     @Test
-    void searchMovesTheCursor() throws Exception {
+    void typingOnTheCommandLineIsReportedWithItsCursor() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CmdlineState.View> views = cmdlineViews(s);
+            keys(s, ":", "e", "c", "h", "o", "<Left>");
+            waitFor(() -> last(views).caret() == 4, "the caret after <Left>: " + views);
+            assertEquals(":echo", last(views).text());
+            keys(s, "<Esc>");
+            waitFor(() -> !last(views).open(), "the line closed: " + views);
+        }
+    }
+
+    /** Neovim's own history: Up recalls the last command, typed through the box or anywhere. */
+    @Test
+    void upRecallsNeovimsHistory() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CmdlineState.View> views = cmdlineViews(s);
+            keys(s, ":", "l", "e", "t", " ", "g", ":", "x", "=", "1", "<CR>");
+            keys(s, ":", "<Up>");
+            waitFor(() -> last(views).text().equals(":let g:x=1"), "the history entry: " + views);
+        }
+    }
+
+    /** Tab is Neovim's completion; the candidates come as the menu of the command line. */
+    @Test
+    void tabCompletesAndListsTheCandidates() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CmdlineState.View> views = cmdlineViews(s);
+            keys(s, ":", "c", "o", "l", "o", " ", "<Tab>");
+            waitFor(() -> last(views).candidates().size() > 1, "colorscheme candidates: " + views);
+            assertTrue(last(views).candidates().contains("default"), last(views).candidates().toString());
+            assertTrue(last(views).text().startsWith(":colo "), last(views).text());
+        }
+    }
+
+    /** A line a mapping opens is shown like any other: it is Neovim's line. */
+    @Test
+    void aLineOpenedByAMappingIsShown() throws Exception {
+        try (NeovimSession s = start()) {
+            s.command("nnoremap ; :%s/");
+            List<CmdlineState.View> views = cmdlineViews(s);
+            keys(s, ";");
+            waitFor(() -> last(views).text().equals(":%s/"), "the mapping's line: " + views);
+        }
+    }
+
+    /** {@code :} in visual mode: Neovim puts the range in itself. */
+    @Test
+    void colonInVisualModeGetsNeovimsRange() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("a", "b"));
+            List<CmdlineState.View> views = cmdlineViews(s);
+            keys(s, "V", "j", ":");
+            waitFor(() -> last(views).text().equals(":'<,'>"), "the visual range: " + views);
+        }
+    }
+
+    @Test
+    void aPromptIsShownWithItsText() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CmdlineState.View> views = cmdlineViews(s);
+            s.inputAsync(":call input('Name: ', 'def')<CR>");
+            waitFor(() -> last(views).text().equals("Name: def"), "the prompt: " + views);
+            assertEquals("", last(views).firstc());
+            keys(s, "<Esc>");
+        }
+    }
+
+    /** A paste goes into the line as text: {@code <} stays a character. */
+    @Test
+    void aPasteGoesIntoTheLine() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CmdlineState.View> views = cmdlineViews(s);
+            keys(s, ":");
+            s.pasteAsync("echo \"<x>\"");
+            waitFor(() -> last(views).text().equals(":echo \"<x>\""), "the pasted text: " + views);
+        }
+    }
+
+    /** While a search is typed, the cursor follows Neovim's preview of the match; Esc puts it back. */
+    @Test
+    void theCursorFollowsTheMatchWhileASearchIsTyped() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("one", "two", "three"));
-            s.search("three", false);
-            long deadline = System.currentTimeMillis() + 2000;
-            while (s.getLastCursor().line1Based() != 3 && System.currentTimeMillis() < deadline) {
-                Thread.sleep(25);
-            }
-            assertEquals(3, s.getLastCursor().line1Based());
+            keys(s, "/", "t", "h");
+            waitFor(() -> s.getLastCursor().line1Based() == 3, "the cursor on the match, before Enter");
+            keys(s, "<Esc>");
+            waitFor(() -> s.getLastCursor().line1Based() == 1, "back where it was");
+            keys(s, "/", "t", "w", "<CR>");
+            waitFor(() -> s.getLastCursor().line1Based() == 2, "on the match after Enter");
+        }
+    }
+
+    /** The plug-in's own typed lines ({@code commandAsync}) do not open the box. */
+    @Test
+    void thePluginsOwnLinesAreNotReported() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CmdlineState.View> views = cmdlineViews(s);
+            s.commandAsync("let g:own = 1");
+            waitFor(() -> Long.valueOf(1).equals(luaOrNull(s, "return vim.g.own")), "the command ran");
+            keys(s, ":");
+            waitFor(() -> last(views).open(), "the user's line");
+            assertEquals(":", views.get(0).text(), "the first view is the user's line, not :let: " + views);
+        }
+    }
+
+    /** {@code q:} would open a window Eclipse cannot show: it closes at once, with a message. */
+    @Test
+    void theCommandLineWindowClosesWithAMessage() throws Exception {
+        try (NeovimSession s = start()) {
+            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
+            s.addStatusListener(seen::add);
+            keys(s, "q", ":");
+            waitFor(() -> seen.stream().anyMatch(i -> i.message().startsWith("The command-line window is not available")),
+                    "the message: " + seen);
+            assertEquals("", String.valueOf(s.lua("return vim.fn.getcmdwintype()")));
+            assertEquals(1L, ((Number) s.lua("return #vim.api.nvim_list_wins()")).longValue());
+        }
+    }
+
+    /** {@code :e} completion and {@code :!} start in the editor's project (decision D5). */
+    @Test
+    void theWindowFolderIsSet(@TempDir Path dir) throws Exception {
+        try (NeovimSession s = start()) {
+            s.setWindowFolderAsync(dir.toString());
+            Path real = dir.toRealPath(); // macOS: /var is a link to /private/var, and getcwd() resolves it
+            waitFor(() -> List.of(dir.toString(), real.toString()).contains(String.valueOf(luaOrNull(s, "return vim.fn.getcwd(0)"))),
+                    "the window's folder");
+            assertEquals(1L, ((Number) s.lua("return vim.fn.haslocaldir(0)")).longValue(), "window-local (:lcd)");
         }
     }
 

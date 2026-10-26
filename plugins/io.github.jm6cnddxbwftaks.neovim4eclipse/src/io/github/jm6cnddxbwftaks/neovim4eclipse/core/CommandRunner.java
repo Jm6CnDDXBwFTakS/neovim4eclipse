@@ -8,13 +8,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimKeys;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchCommand;
 
 /**
- * Runs what the user submits from the command line box ({@code :} commands and searches) and
- * {@code :normal!} keys, then refreshes Eclipse from Neovim.
+ * Runs {@code :} commands for the plug-in and its tests ({@link NeovimSession#commandAsync}) and
+ * {@code :normal!} keys, then refreshes Eclipse from Neovim. (What the user types in the {@code :} box
+ * goes to Neovim's own command line key by key; see {@code CmdlineState}.)
  *
- * <p>Commands and searches are <em>typed</em> ({@code :ls<CR>}, {@code /foo<CR>}), not run with
+ * <p>Commands are <em>typed</em> ({@code :ls<CR>}), not run with
  * {@code nvim_command}: Neovim then records them in a macro being recorded, keeps them in its
  * history and knows the last one for {@code @:}, as when typed in Vim. What they print does not pass
  * through here: Neovim sends every message as a UI event ({@code ext_messages}), and
@@ -88,21 +88,6 @@ final class CommandRunner {
         nvim.normalWithoutMappings(keys);
         nvim.syncBuffer();
         nvim.syncModeAndCursor();
-    }
-
-    /**
-     * Answers a search line the user opened in Neovim ({@code d/} through a mapping, say), which
-     * Neovim keeps open while the editor's box edits the pattern: replaces what Neovim's line holds
-     * with {@code pattern} and runs it ({@code <C-u>pattern<CR>}), then refreshes Eclipse. Answering
-     * the open line, rather than typing a new search, keeps a pending operator.
-     */
-    void answerSearch(String pattern, boolean backward) throws Exception {
-        typeAndRefresh("<C-u>" + SearchCommand.body(pattern, backward) + "<CR>");
-    }
-
-    /** Types a search ({@code /pattern<CR>} or {@code ?pattern<CR>}), then refreshes Eclipse. */
-    void search(String pattern, boolean backward) throws Exception {
-        typeAndRefresh(SearchCommand.build(pattern, backward));
     }
 
     /**

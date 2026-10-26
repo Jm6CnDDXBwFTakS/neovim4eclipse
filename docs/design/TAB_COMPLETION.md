@@ -1,5 +1,11 @@
 # Design note: Tab completion in the `:` command line
 
+> **Superseded in 0.1.7.** The `:` box is now a view of Neovim's own command line (step A2 of the
+> Neovim 0.12 cleanup plan; docs/ARCHITECTURE.md, "Command line"): Tab goes to Neovim, which
+> completes, and the candidates come as `popupmenu_show` events. `COMPLETE_CMDLINE`,
+> `util/CommandCompletion` and `util/Completion` are gone. This note stays as the record of why the
+> old way worked as it did.
+
 Status: **implemented** (2026-10-20). Planned against `develop` at `b56571c`, with Neovim 0.12.4 on
 Windows 11 for the experiments. Decisions made with the maintainer are marked *(decided)*. Where the
 code differs from the plan below, the section *As built* says how and why.

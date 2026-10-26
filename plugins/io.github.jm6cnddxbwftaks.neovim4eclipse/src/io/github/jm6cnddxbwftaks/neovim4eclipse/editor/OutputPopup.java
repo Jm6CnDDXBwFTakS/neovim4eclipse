@@ -73,6 +73,16 @@ final class OutputPopup {
      * @param output what the command printed; nothing is shown when it is blank
      */
     void show(String title, String output) {
+        show(title, output, true);
+    }
+
+    /**
+     * As {@link #show(String, String)}; with {@code takeFocus} false the popup opens without taking
+     * the focus and stays while the command line box keeps it, as {@link #makeRoomBelow} does. Used
+     * for output that arrives while the user types a command line (a timer's message): taking the
+     * focus would close that line.
+     */
+    void show(String title, String output, boolean takeFocus) {
         if (host.isDisposed() || output == null || output.isBlank()) {
             return;
         }
@@ -98,8 +108,13 @@ final class OutputPopup {
         }));
         host.addPaintListener(repositionOnPaint);
         host.addControlListener(repositionOnResize);
-        reposition();
-        view.setFocus();
+        if (takeFocus) {
+            reposition();
+            view.setFocus();
+        } else {
+            heldForCommandLine = true;
+            reposition();
+        }
     }
 
     private void onKey(KeyEvent e) {

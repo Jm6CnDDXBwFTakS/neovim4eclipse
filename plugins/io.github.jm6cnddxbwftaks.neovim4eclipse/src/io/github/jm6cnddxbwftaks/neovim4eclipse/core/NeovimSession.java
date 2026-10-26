@@ -22,8 +22,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
@@ -72,8 +72,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * request, a keystroke should cost a fraction of a second, not {@value #RPC_TIMEOUT_SEC}s.
      */
     private static final long STATE_TIMEOUT_MS = 750;
-    /** At most this many completion candidates are sent back for the list; {@code :h } has thousands. */
-    static final int COMPLETION_CAP = 200;
 
     // ---- connection ----
 
@@ -134,6 +132,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final CommandRunner commands = new CommandRunner(new CommandRunnerNeovim());
     /** Tells Neovim's command lines the user opened from the ones the plug-in types. */
     private final CmdlineWatcher cmdlineWatcher = new CmdlineWatcher();
+    /** Neovim's command line, from its UI events; read and written on the RPC reader thread only. */
+    private final CmdlineState cmdline = new CmdlineState();
+    /** The view last passed to the command-line listeners. */
+    private CmdlineState.View lastCmdline = CmdlineState.View.CLOSED;
 
     private NeovimSession(NeovimConnection connection, Handle homeBuffer, ClipboardPort clipboard) {
         this.connection = connection;
@@ -382,17 +384,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Notified (on an RPC thread) when the user opens a command line in Neovim that the editor's box
-     * did not open: a mapping ({@code nnoremap ; :}), a count ({@code 2:}), {@code !} with a motion.
-     * The listener takes it over (see docs/design/KEY_ROUTING.md, phase 2). The plug-in's own typed
-     * command lines are not reported ({@link CmdlineWatcher}).
+     * Notified (on an RPC thread) whenever Neovim's command line changes: opened (by {@code :},
+     * {@code /}, a mapping, a count, {@code input()}), typed in, completed, or closed. The editor's
+     * box draws the {@link CmdlineState.View}. The plug-in's own typed lines are not reported
+     * ({@link CmdlineWatcher}).
      */
-    public void addUserCmdlineListener(Consumer<CmdlineEvent> listener) {
-        events.addUserCmdlineListener(listener);
+    public void addCmdlineListener(Consumer<CmdlineState.View> listener) {
+        events.addCmdlineListener(listener);
     }
 
-    public void removeUserCmdlineListener(Consumer<CmdlineEvent> listener) {
-        events.removeUserCmdlineListener(listener);
+    public void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
+        events.removeCmdlineListener(listener);
     }
 
     // ---- per-document buffers (see DocumentBuffers) ----
@@ -632,52 +634,25 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Completes a {@code :} command line as Neovim's own Tab does ({@link LuaScripts#COMPLETE_CMDLINE})
-     * and passes the answer to {@code onResult}, on a session thread. Nothing is passed when Neovim
-     * is busy with a command or not in normal mode: Tab then does nothing.
-     *
-     * @param line    the command line, without the {@code :}
-     * @param steps   one letter per key: {@code T} next match, {@code P} previous match
-     * @param folders where to complete {@code :e} file names, best first (at most two are used);
-     *                empty for any other command
+     * Pastes {@code text} where Neovim's cursor is, as a paste ({@code nvim_paste}): in the command
+     * line, the box's Ctrl+V or an input method's committed text. On the input thread, in order with
+     * the keys.
      */
-    public void completeAsync(String line, String steps, List<String> folders, Consumer<Completion> onResult) {
-        submit("complete " + line, Level.FINE, () -> {
-            if (isBlocked()) {
-                return;
-            }
-            Completion completion = Completion.parse(await(api.execLua(LuaScripts.COMPLETE_CMDLINE, List.of(
-                    line, steps, folderArgument(folders, 0), folderArgument(folders, 1),
-                    String.valueOf(COMPLETION_CAP)))));
-            if (completion != null) {
-                onResult.accept(completion);
-            }
-        });
+    public void pasteAsync(String text) {
+        submit("paste", Level.WARNING, () -> await(api.execLua(LuaScripts.PASTE, List.of(text))));
     }
 
-    private static String folderArgument(List<String> folders, int index) {
-        return index < folders.size() && folders.get(index) != null ? folders.get(index) : "";
+    /**
+     * Sets the window's working folder ({@code :lcd}) for the editor being attached: its project's
+     * root, so that {@code :e} completion and {@code :!} start there (decision D5 of the cleanup plan).
+     */
+    public void setWindowFolderAsync(String folder) {
+        submit("lcd " + folder, Level.WARNING, () -> await(api.execLua(LuaScripts.SET_WINDOW_FOLDER, List.of(folder))));
     }
 
     /** Runs normal-mode {@code keys} without mappings, then refreshes Eclipse. See {@link CommandRunner#normal}. */
     public void normalAsync(String keys) {
         submit("normal! " + keys, Level.WARNING, () -> commands.normal(keys));
-    }
-
-    /**
-     * Answers a search line the user opened in Neovim (see {@link #addUserCmdlineListener}): runs
-     * {@code pattern} in it, keeping a pending operator ({@code d/}).
-     */
-    public void answerSearchAsync(String pattern, boolean backward) {
-        submit("answer search " + pattern, Level.WARNING, () -> commands.answerSearch(pattern, backward));
-    }
-
-    /** Runs a search ({@code /} or {@code ?}) and moves the cursor to the match. */
-    public void search(String pattern, boolean backward) {
-        if (pattern == null || pattern.isEmpty()) {
-            return;
-        }
-        submit("search " + pattern, Level.WARNING, () -> commands.search(pattern, backward));
     }
 
     /** Leaves insert mode without replaying typed text (see {@link #leaveInsertModeAsync(InsertReplay.Plan)}). */
@@ -832,14 +807,35 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             status.onMessageEvent(event);
         }
 
+        /**
+         * Feeds the command-line state and passes a changed view on once per notification. While a
+         * search is typed, Neovim's view follows the match ({@code 'incsearch'}); its cursor goes
+         * to the editor's caret as any cursor from Neovim does, and Esc or Enter then sets it for
+         * good through the state read after that key.
+         */
         @Override
-        public void onCmdline(CmdlineEvent event) {
-            if (event.shown() && event.level() == 1) {
-                status.commandLine(event.firstc() + event.content()); // the title of its output
+        public void onCmdline(List<CmdlineEvent> cmdlineEvents) {
+            long now = System.currentTimeMillis();
+            boolean changed = false;
+            for (CmdlineEvent event : cmdlineEvents) {
+                if (event instanceof CmdlineEvent.Show show && show.level() == 1) {
+                    status.commandLine(show.firstc() + show.content()); // the title of its output
+                }
+                if (cmdlineWatcher.isOwn(event, now)) {
+                    continue;
+                }
+                if (event instanceof CmdlineEvent.Viewport viewport) {
+                    if (cmdline.view().isSearch()) {
+                        state.dispatchCursor(viewport.curline() + 1, viewport.curcol());
+                    }
+                    continue;
+                }
+                changed |= cmdline.apply(event);
             }
-            if (cmdlineWatcher.onEvent(event, System.currentTimeMillis()) == CmdlineWatcher.Decision.USER_LINE) {
-                LOG.fine(() -> "user command line " + event.firstc() + event.content());
-                events.userCmdline(event);
+            CmdlineState.View view = cmdline.view();
+            if (changed && !view.equals(lastCmdline)) {
+                lastCmdline = view;
+                events.cmdline(view);
             }
         }
     }

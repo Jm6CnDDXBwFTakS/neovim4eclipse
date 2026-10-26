@@ -62,8 +62,11 @@ class NotificationBridgeTest {
             @Override public void onIdeAction(IdeAction action) {
                 events.add("action:" + action.name() + ":" + action.count());
             }
-            @Override public void onCmdline(CmdlineEvent event) {
-                events.add(event.shown() ? "cmdline" + event.firstc() + event.content() : "cmdline-hide");
+            @Override public void onCmdline(List<CmdlineEvent> cmdline) {
+                for (CmdlineEvent event : cmdline) {
+                    events.add(event instanceof CmdlineEvent.Show show ? "cmdline" + show.firstc() + show.content()
+                            : "cmdline:" + event);
+                }
             }
             @Override public void onMessageEvent(MessageEvent event) {
                 events.add("message:" + event);

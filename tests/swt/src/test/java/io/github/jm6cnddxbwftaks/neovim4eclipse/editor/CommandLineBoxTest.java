@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyleRange;
@@ -28,64 +27,30 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandLine.Kind;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Completion;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState.View;
 
 /**
- * The {@code :}, {@code /} and {@code ?} box on a real SWT text field: it keeps its prefix whatever
- * the platform does with the selection, and Enter sends each kind of line to the right place. Neovim
- * and the IDE are a fake {@link CommandLineBox.Commands} that records the calls, so no workbench or
- * Neovim is needed.
+ * The {@code :} box on a real SWT text field, as a view of Neovim's command line: it shows the
+ * views it is given and sends every key, paste and click-away to Neovim, editing nothing itself.
+ * Neovim is a fake {@link CommandLineBox.Commands} that records what was sent; a test plays Neovim's
+ * part by passing the next view. No workbench or Neovim is needed.
  */
 class CommandLineBoxTest {
 
     private static final long TIMEOUT_MS = 5000;
 
-    /** Records each call as text, e.g. {@code "run ls"}; {@code :w} and {@code :q} count as IDE commands. */
+    /** Records what the box sends, e.g. {@code "type a"}, {@code "paste text"}. */
     private static final class FakeCommands implements CommandLineBox.Commands {
         final List<String> calls = new ArrayList<>();
 
         @Override
-        public void leaveVisualMode() {
-            calls.add("leave visual mode");
+        public void type(String keys) {
+            calls.add("type " + keys);
         }
 
         @Override
-        public boolean runInIde(String exCommand) {
-            boolean ide = exCommand.equals("w") || exCommand.equals("q");
-            if (ide) {
-                calls.add("ide " + exCommand);
-            }
-            return ide;
-        }
-
-        @Override
-        public void run(String exCommand) {
-            calls.add("run " + exCommand);
-        }
-
-        @Override
-        public void search(String pattern, boolean backward) {
-            calls.add((backward ? "search back " : "search ") + pattern);
-        }
-
-        /** The callbacks of the completions asked for, oldest first; a test answers them. */
-        final List<Consumer<Completion>> pendingCompletions = new ArrayList<>();
-
-        @Override
-        public void complete(String line, String steps, Consumer<Completion> onResult) {
-            calls.add("complete " + line + " " + steps);
-            pendingCompletions.add(onResult);
-        }
-
-        @Override
-        public void answerSearch(String pattern, boolean backward) {
-            calls.add((backward ? "answer search back " : "answer search ") + pattern);
-        }
-
-        @Override
-        public void cancelNeovimLine() {
-            calls.add("cancel Neovim's line");
+        public void paste(String text) {
+            calls.add("paste " + text);
         }
     }
 
@@ -93,8 +58,6 @@ class CommandLineBoxTest {
     private StyledText host;
     private final FakeCommands commands = new FakeCommands();
     private CommandLineBox commandLine;
-    /** The open box's text field; use {@link #box()}, which notices when it closed on focus loss. */
-    private Text openBox;
 
     @BeforeEach
     void createHost() {
@@ -103,7 +66,7 @@ class CommandLineBoxTest {
         host = new StyledText(shell, SWT.MULTI);
         host.setBounds(0, 0, 400, 300);
         shell.open();
-        KeyboardFocus.require(host, TIMEOUT_MS); // the box closes on focus loss: start in the active window
+        KeyboardFocus.require(host, TIMEOUT_MS); // the box abandons its line on focus loss: start in the active window
         commandLine = new CommandLineBox(host, commands);
     }
 
@@ -113,54 +76,30 @@ class CommandLineBoxTest {
         shell.dispose();
     }
 
-    /**
-     * Opens the box and waits until it has keyboard focus; then lets the guard against an echo of the
-     * opening key pass. The box takes the focus when it opens and closes when it loses it, so a box
-     * without focus would close at the next focus event.
-     */
-    private void open(Kind kind, boolean fromVisualMode) {
-        commandLine.open(kind, fromVisualMode);
-        awaitOpen();
+    private static View line(String text, int caret) {
+        return new View(true, text.substring(0, 1), text, caret, List.of(), -1);
     }
 
-    /** As {@link #open}, for a command line the user opened in Neovim (see {@link CommandLineBox#openFromNeovim}). */
-    private void openFromNeovim(Kind kind, String content, boolean answering) {
-        commandLine.openFromNeovim(kind, content, answering);
-        awaitOpen();
+    /** Shows {@code view}, as the controller does for Neovim's report, and waits for the focus. */
+    private Text show(View view) {
+        commandLine.show(view);
+        Text box = findText(host);
+        assertNotNull(box, "the box is open");
+        KeyboardFocus.require(box, TIMEOUT_MS);
+        return box;
     }
 
-    private void awaitOpen() {
-        waitUntil("the box to open", () -> findText(host) != null);
-        openBox = findText(host);
-        KeyboardFocus.require(openBox, TIMEOUT_MS);
-        spin(200);
-    }
-
-    /**
-     * The open box's text field. Fails with "lost keyboard focus" if it closed although the test did
-     * not close it: {@link CommandLineBox} closes the box whenever it loses focus (a click elsewhere,
-     * another window activated), which is what happens when someone works in another window while
-     * the tests run. Without this check the next call fails with a bare "Widget is disposed".
-     */
-    private Text box() {
-        if (openBox == null || openBox.isDisposed()) {
-            fail("The : box closed before the test was done: it lost keyboard focus; "
-                    + KeyboardFocus.report(shell.getDisplay(), shell));
-        }
-        return openBox;
-    }
-
-    private void typeAndPressEnter(String text) {
-        box().insert(text);
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box().notifyListeners(SWT.KeyDown, enter);
+    private static void key(Text box, int keyCode, char character, int stateMask) {
+        Event event = new Event();
+        event.keyCode = keyCode;
+        event.character = character;
+        event.stateMask = stateMask;
+        event.doit = true;
+        box.notifyListeners(SWT.KeyDown, event);
     }
 
     private static Text findText(Control control) {
-        if (control instanceof Text t) {
+        if (control instanceof Text t && !t.isDisposed()) {
             return t;
         }
         if (control instanceof Composite c) {
@@ -174,7 +113,23 @@ class CommandLineBoxTest {
         return null;
     }
 
-    /** Runs the event loop until {@code condition} holds (the box opens and edits asynchronously). */
+    /** The one-line candidate list above the box, or {@code null}. */
+    private static StyledText findList(Control control) {
+        if (control instanceof StyledText t && (t.getStyle() & SWT.SINGLE) != 0) {
+            return t;
+        }
+        if (control instanceof Composite c) {
+            for (Control child : c.getChildren()) {
+                StyledText found = findList(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Runs the event loop until {@code condition} holds. */
     private static void waitUntil(String what, BooleanSupplier condition) {
         Display display = Display.getDefault();
         long deadline = System.currentTimeMillis() + TIMEOUT_MS;
@@ -193,252 +148,149 @@ class CommandLineBoxTest {
         }
     }
 
-    /** Runs the event loop for a while (lets queued work finish). */
-    private static void spin(long millis) {
-        long end = System.currentTimeMillis() + millis;
-        waitUntil("time to pass", () -> System.currentTimeMillis() >= end);
-    }
-
-    // The prefix
+    // What it shows
 
     @Test
-    void startsWithThePrefix() {
-        open(Kind.EX, false);
-        assertEquals(":", box().getText());
+    void neovimsLineOpensTheBoxWithItsTextAndCaret() {
+        Text box = show(line(":echo", 3));
+        assertEquals(":echo", box.getText());
+        assertEquals(3, box.getCaretPosition());
+        assertTrue(commandLine.isOpen());
     }
 
     @Test
-    void typingAfterThePrefixWorks() {
-        open(Kind.EX, false);
-        box().insert("w");
-        assertEquals(":w", box().getText());
+    void theNextViewRedrawsTheSameBox() {
+        Text box = show(line(":e", 2));
+        assertEquals(box, show(line(":ec", 3)));
+        assertEquals(":ec", box.getText());
     }
 
     @Test
-    void typingOverASelectionThatIncludesThePrefixKeepsThePrefix() {
-        open(Kind.EX, false);
-        box().selectAll(); // what macOS does when the field gains focus
-        box().insert("w");
-        spin(100); // the redirected edit is applied just after the verify listener
-        assertEquals(":w", box().getText());
-    }
-
-    @Test
-    void deletingEverythingLeavesThePrefix() {
-        open(Kind.EX, false);
-        box().insert("wq");
-        box().selectAll();
-        box().insert("");
-        spin(100);
-        assertEquals(":", box().getText());
-    }
-
-    // Where Enter sends the line
-
-    @Test
-    void aFileCommandIsRunByTheIdeAndNotByNeovim() {
-        open(Kind.EX, false);
-        typeAndPressEnter("w");
-        assertEquals(List.of("ide w"), commands.calls);
-    }
-
-    /** Its output comes back from Neovim as messages, which the controller passes to {@code showOutput}. */
-    @Test
-    void anyOtherCommandIsRunInNeovimListingsToo() {
-        open(Kind.EX, false);
-        typeAndPressEnter("set ts=4");
-        open(Kind.EX, false);
-        typeAndPressEnter("ls");
-        assertEquals(List.of("run set ts=4", "run ls"), commands.calls);
-    }
-
-    // A command line the user opened in Neovim (a mapping such as <Space>s -> :%s/)
-
-    @Test
-    void neovimsTextIsPrefilledAndEditable() {
-        openFromNeovim(Kind.EX, "%s/", false);
-        assertEquals(":%s/", box().getText());
-        typeAndPressEnter("a/b/");
-        assertEquals(List.of("run %s/a/b/"), commands.calls, "a : line Neovim closed runs as usual");
-    }
-
-    @Test
-    void neovimsSearchLineIsAnsweredNotSearchedAgain() {
-        openFromNeovim(Kind.SEARCH_FORWARD, "", true);
-        typeAndPressEnter("foo");
-        assertEquals(List.of("answer search foo"), commands.calls);
-    }
-
-    @Test
-    void escCancelsNeovimsSearchLine() {
-        openFromNeovim(Kind.SEARCH_BACKWARD, "fo", true);
-        assertEquals("?fo", box().getText());
-        Event esc = new Event();
-        esc.keyCode = SWT.ESC;
-        esc.character = SWT.ESC;
-        esc.doit = true;
-        box().notifyListeners(SWT.KeyDown, esc);
-        waitUntil("the box to close", () -> !commandLine.isOpen());
-        assertEquals(List.of("cancel Neovim's line"), commands.calls);
-    }
-
-    @Test
-    void anEmptyAnswerCancelsNeovimsSearchLine() {
-        openFromNeovim(Kind.SEARCH_FORWARD, "", true);
-        typeAndPressEnter("");
-        assertEquals(List.of("cancel Neovim's line"), commands.calls);
-    }
-
-    @Test
-    void aBoxOpenedHereCancelsNothingInNeovim() {
-        open(Kind.SEARCH_FORWARD, false);
-        commandLine.close(true);
-        assertEquals(List.of(), commands.calls);
-    }
-
-    @Test
-    void slashAndQuestionMarkSearchForwardAndBackward() {
-        open(Kind.SEARCH_FORWARD, false);
-        typeAndPressEnter("foo");
-        waitUntil("the box to close", () -> !commandLine.isOpen());
-        open(Kind.SEARCH_BACKWARD, false);
-        typeAndPressEnter("bar");
-        assertEquals(List.of("search foo", "search back bar"), commands.calls);
-    }
-
-    @Test
-    void colonInVisualModeLeavesItAndPrefillsTheRange() {
-        open(Kind.EX, true);
-        assertEquals(":'<,'>", box().getText());
-        typeAndPressEnter("s/a/b/");
-        assertEquals(List.of("leave visual mode", "run '<,'>s/a/b/"), commands.calls);
-    }
-
-    @Test
-    void enterOnTheBarePrefixRunsNothingAndCloses() {
-        open(Kind.EX, false);
-        typeAndPressEnter("");
-        assertEquals(List.of(), commands.calls);
+    void aClosedLineClosesTheBoxAndTheEditorGetsTheFocus() {
+        show(line(":x", 2));
+        commandLine.show(View.CLOSED);
         assertFalse(commandLine.isOpen());
-    }
-
-    // Tab completion
-
-    /** Presses Tab (or Shift+Tab), which SWT reports as a traversal first. */
-    private void pressTab(boolean backward) {
-        Event traverse = new Event();
-        traverse.detail = backward ? SWT.TRAVERSE_TAB_PREVIOUS : SWT.TRAVERSE_TAB_NEXT;
-        traverse.keyCode = SWT.TAB;
-        traverse.character = SWT.TAB;
-        traverse.doit = true;
-        box().notifyListeners(SWT.Traverse, traverse);
-        assertFalse(traverse.doit, "Tab must not move the focus out of the box");
-    }
-
-    /** Answers the oldest completion asked for, as Neovim would on a session thread. */
-    private void answer(String line, String... candidates) {
-        Consumer<Completion> onResult = commands.pendingCompletions.remove(0);
-        Thread session = new Thread(() -> onResult.accept(new Completion(line, List.of(candidates), candidates.length)));
-        session.start();
-        try {
-            session.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        spin(100);
-    }
-
-    /** The candidate list above the box, or {@code null} while it is hidden. */
-    private StyledText findList() {
-        for (Control child : host.getChildren()) {
-            if (child instanceof Composite c && c.getChildren().length == 1
-                    && c.getChildren()[0] instanceof StyledText list && !list.isDisposed()) {
-                return list;
-            }
-        }
-        return null;
+        waitUntil("the editor's focus", host::isFocusControl);
+        assertEquals(List.of(), commands.calls, "closing because Neovim closed sends nothing");
     }
 
     @Test
-    void tabCompletesTheLineInNeovimAndShowsTheCandidates() {
-        open(Kind.EX, false);
-        box().insert("tabn");
-        pressTab(false);
-        assertEquals(List.of("complete tabn T"), commands.calls);
-        answer("tabnew", "tabNext", "tabnew", "tabnext");
-        assertEquals(":tabnew", box().getText());
-        assertEquals(box().getText().length(), box().getCaretPosition());
-
-        StyledText list = findList();
+    void theCandidatesAreListedAboveWithTheSelectedOneHighlighted() {
+        show(new View(true, ":", ":colo blue", 10, List.of("blue", "darkblue", "default"), 0));
+        StyledText list = findList(host);
         assertNotNull(list, "the candidate list");
-        assertEquals("tabNext  tabnew  tabnext", list.getText());
-        StyleRange[] highlighted = list.getStyleRanges();
-        assertEquals(1, highlighted.length);
-        assertEquals("tabnew", list.getText(highlighted[0].start, highlighted[0].start + highlighted[0].length - 1));
+        assertEquals("blue  darkblue  default", list.getText());
+        StyleRange[] ranges = list.getStyleRanges();
+        assertEquals(1, ranges.length);
+        assertEquals(0, ranges[0].start);
+        assertEquals(4, ranges[0].length);
+        show(line(":colo blue", 10));
+        assertNull(findList(host), "no candidates: no list");
+    }
+
+    // What it sends
+
+    /** Typed characters go to Neovim; the box does not insert them itself. */
+    @Test
+    void typedCharactersGoToNeovimAndAreNotInserted() {
+        Text box = show(line(":", 1));
+        key(box, 'a', 'a', 0);
+        key(box, '<', '<', SWT.SHIFT);
+        assertEquals(List.of("type a", "type <lt>"), commands.calls);
+        assertEquals(":", box.getText(), "Neovim's next view shows them");
     }
 
     @Test
-    void eachTabContinuesTheCycleAndShiftTabGoesBack() {
-        open(Kind.EX, false);
-        box().insert("tabn");
-        pressTab(false);
-        answer("tabNext", "tabNext", "tabnew");
-        pressTab(false);
-        answer("tabnew", "tabNext", "tabnew");
-        pressTab(true);
-        assertEquals(List.of("complete tabn T", "complete tabn TT", "complete tabn TTP"), commands.calls);
-        assertTrue(commandLine.isOpen());
+    void editingKeysGoToNeovim() {
+        Text box = show(line(":abc", 4));
+        key(box, SWT.BS, SWT.BS, 0);
+        key(box, SWT.ARROW_LEFT, (char) 0, 0);
+        key(box, SWT.ARROW_UP, (char) 0, 0);
+        key(box, 'r', (char) 0x12, SWT.CTRL);
+        key(box, SWT.CR, SWT.CR, 0);
+        key(box, SWT.ESC, SWT.ESC, 0);
+        assertEquals(List.of("type <BS>", "type <Left>", "type <Up>", "type <C-r>", "type <CR>", "type <Esc>"),
+                commands.calls);
     }
 
+    /** Tab completes in Neovim and must not move the focus away (which would close the box). */
     @Test
-    void typingEndsTheCycleHidesTheListAndDropsALateAnswer() {
-        open(Kind.EX, false);
-        box().insert("tabn");
-        pressTab(false);
-        answer("tabnew", "tabnew", "tabnext");
-        assertNotNull(findList());
-
-        box().insert(" 2"); // an edit: the list goes, the next Tab starts over
-        spin(50);
-        assertNull(findList());
-        pressTab(false);
-        box().insert("x"); // typed before the answer came
-        answer("tabnew 2 something");
-        assertEquals(":tabnew 2x", box().getText());
-        assertEquals("complete tabnew 2 T", commands.calls.get(1));
+    void tabAndShiftTabGoToNeovimAndKeepTheFocus() {
+        Text box = show(line(":e ", 3));
+        box.traverse(SWT.TRAVERSE_TAB_NEXT);
+        box.traverse(SWT.TRAVERSE_TAB_PREVIOUS);
+        assertEquals(List.of("type <Tab>", "type <S-Tab>"), commands.calls);
+        assertTrue(box.isFocusControl());
     }
 
+    /** A paste (or an input method's text) reaches the box as an edit: refused, sent as a paste. */
     @Test
-    void anAnswerWithNoCandidatesShowsNoList() {
-        open(Kind.EX, false);
-        box().insert("zzz");
-        pressTab(false);
-        answer("zzz");
-        assertEquals(":zzz", box().getText());
-        assertNull(findList());
+    void anEditOfThePlatformIsSentAsAPaste() {
+        Text box = show(line(":", 1));
+        box.insert("echo \"<x>\"");
+        assertEquals(List.of("paste echo \"<x>\""), commands.calls);
+        assertEquals(":", box.getText());
     }
 
+    /** Ctrl+V and Ctrl+C with a selection are the platform's paste and copy, not Neovim's keys. */
     @Test
-    void tabInASearchBoxDoesNothingAndKeepsTheBoxOpen() {
-        open(Kind.SEARCH_FORWARD, false);
-        box().insert("foo");
-        pressTab(false);
-        spin(50);
-        assertTrue(commandLine.isOpen());
-        assertEquals("/foo", box().getText());
+    void pasteAndCopyAreLeftToThePlatform() {
+        Text box = show(line(":echo", 5));
+        key(box, 'v', (char) 0x16, SWT.MOD1);
+        box.setSelection(1, 5);
+        key(box, 'c', (char) 0x03, SWT.MOD1);
         assertEquals(List.of(), commands.calls);
     }
 
+    /** Without a selection, Ctrl+C is Neovim's: it abandons the line. */
     @Test
-    void closingTheBoxRemovesTheListAndIgnoresALateAnswer() {
-        open(Kind.EX, false);
-        box().insert("tabn");
-        pressTab(false);
-        answer("tabnew", "tabnew", "tabnext");
-        pressTab(false);
-        commandLine.close(false);
-        assertNull(findList());
-        answer("tabnext", "tabnew", "tabnext"); // must not fail or reopen anything
+    void ctrlCWithoutASelectionGoesToNeovim() {
+        Text box = show(line(":echo", 5));
+        key(box, 'c', (char) 0x03, SWT.CTRL);
+        assertEquals(List.of("type <C-c>"), commands.calls);
+    }
+
+    /** A click elsewhere abandons the line in Neovim; its views still on their way do not reopen it. */
+    @Test
+    void losingTheFocusAbandonsTheLine() {
+        Text box = show(line(":abc", 4));
+        // What a click elsewhere delivers (moving the real focus is unreliable under a virtual display).
+        box.notifyListeners(SWT.FocusOut, new Event());
+        waitUntil("the box to close", () -> !commandLine.isOpen());
+        assertEquals(List.of("type <C-c>"), commands.calls);
+
+        commandLine.show(line(":abc", 4)); // a view sent before Neovim got the <C-c>
         assertFalse(commandLine.isOpen());
+        commandLine.show(View.CLOSED);
+        show(line(":", 1)); // the next line opens again
+        assertTrue(commandLine.isOpen());
+    }
+
+    // With the output popup
+
+    /** Output that arrives while a line is typed (a timer's message) must not take the focus. */
+    @Test
+    void outputWhileTheBoxIsOpenLeavesItTheFocus() {
+        Text box = show(line(":ec", 3));
+        commandLine.showOutput("", "one\ntwo");
+        waitUntil("the popup", () -> host.getChildren().length >= 2);
+        assertTrue(box.isFocusControl(), "the box keeps the focus");
+        assertTrue(commandLine.isOpen());
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /** {@code :} in the popup starts the next command in Neovim, as {@code :} anywhere does. */
+    @Test
+    void colonInThePopupGoesToNeovim() {
+        commandLine.showOutput(":ls", "  1 a.txt");
+        waitUntil("the popup's focus", () -> shell.getDisplay().getFocusControl() instanceof StyledText focused
+                && focused != host);
+        StyledText popup = (StyledText) shell.getDisplay().getFocusControl();
+        Event colon = new Event();
+        colon.character = ':';
+        colon.keyCode = ':';
+        colon.doit = true;
+        popup.notifyListeners(SWT.KeyDown, colon);
+        assertEquals(List.of("type :"), commands.calls);
     }
 }

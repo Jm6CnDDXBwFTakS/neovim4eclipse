@@ -32,6 +32,8 @@ final class LuaScripts {
      *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
      *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
+     *   <li>The command-line window ({@code q:}) is closed as soon as it opens, with a message:
+     *       Eclipse cannot show a second window.</li>
      * </ul>
      */
     static final String SETUP = """
@@ -134,6 +136,20 @@ final class LuaScripts {
               ide('next_tab', 'gt', 'next editor tab')
               ide('previous_tab', 'gT', 'previous editor tab')
             end
+            -- The command-line window (q:, q/, Ctrl-F on the command line) is a window of its own,
+            -- which Eclipse cannot show: close it at once and say why. The : box's Up and Down
+            -- browse the same history. Scheduled: the window cannot close inside its own CmdwinEnter.
+            vim.api.nvim_create_autocmd('CmdwinEnter', {
+              callback = function()
+                vim.schedule(function()
+                  if vim.fn.getcmdwintype() ~= '' then
+                    vim.cmd.quit()
+                  end
+                  vim.api.nvim_echo({ { 'The command-line window is not available in Eclipse; '
+                    .. 'Up and Down in the : box browse the history' } }, true, {})
+                end)
+              end
+            })
             """;
 
     /**
@@ -324,122 +340,17 @@ final class LuaScripts {
             end
             """;
 
-    /**
-     * Completes a {@code :} command line the way Neovim's own command line does, for Tab in the
-     * {@code :} box (see {@code docs/design/TAB_COMPLETION.md}). Returns {@code {line, total, candidates}}:
-     * the completed line, how many candidates there are, and the first {@code cap} of them; or
-     * {@code nil} when Neovim is not in normal mode (it would not be safe to type {@code :} then).
-     *
-     * <p>Arguments: the line (without {@code :}); the steps, one letter per key, {@code T} for the
-     * next match and {@code P} for the previous one; two folders to complete {@code :e} file names
-     * in ({@code ""} when the line is not an {@code :e}); the cap.
-     *
-     * <h2>How</h2>
-     * It types {@code :}, the line and the steps into Neovim, then {@code <C-\>e} with an expression
-     * that reads {@code getcmdline()} and returns {@code ""}, then {@code <C-c>}: the command line is
-     * read and cancelled, and Neovim is back in normal mode when the call returns. Every press of
-     * Tab in the box re-types the whole sequence, so Neovim is never left in command-line mode.
-     * Some details, all found by experiment (Neovim 0.12):
-     * <ul>
-     *   <li>The keys are not "typed" ({@code nvim_feedkeys} without {@code t}): typed keys would be
-     *       recorded into a macro being recorded, and the expression would land in the {@code =}
-     *       history. Keys that are not typed do not trigger {@code 'wildchar'}, so
-     *       {@code 'wildcharm'} is set to Tab for the call; {@code <S-Tab>} does not work either, so
-     *       going back is {@code <C-p>} (and from the start, Tab then two {@code <C-p>}).</li>
-     *   <li>The line is fed separately, with {@code escape_ks}, so that {@code <} in it is just a
-     *       character and not the start of a key name.</li>
-     *   <li>{@code 'wildmode'} is the user's, without its {@code list} parts: listing would send the
-     *       candidates as a message, which would open the output popup over the box's own list.</li>
-     *   <li>{@code 'eventignore'} keeps {@code CmdlineEnter}, {@code CmdlineChanged},
-     *       {@code CmdlineLeave} and {@code ModeChanged} from firing: user plug-ins should not react,
-     *       and Eclipse should not hear of a trip to command-line mode.</li>
-     *   <li>{@code :e} names: Neovim completes file names in its working directory, while the
-     *       plug-in's {@code :e} looks in the edited file's folder, then the project root
-     *       ({@code util/EditPath}). So the window's directory is set to the first of those folders
-     *       that completes something, with {@code noautocmd lcd}, and put back afterwards: with
-     *       {@code lcd}, {@code tcd} or {@code cd}, depending on which directory was in effect.</li>
-     * </ul>
-     * Options, directory and the helper function are restored even when a step fails.
-     */
-    static final String COMPLETE_CMDLINE = """
-            local line, steps, dir1, dir2, cap = ...
-            cap = tonumber(cap) or 200
-            local mode = vim.api.nvim_get_mode()
-            if mode.mode ~= 'n' or mode.blocking then
-              return nil
-            end
-            local saved = { wildmode = vim.o.wildmode, wildcharm = vim.o.wildcharm, eventignore = vim.o.eventignore }
-            local cwd = vim.fn.getcwd()
-            local win_local = vim.fn.haslocaldir() == 1
-            local tab_local = vim.fn.haslocaldir(-1, 0) == 1
-            local moved = false
-            local result = {}
-            local function complete()
-              for _, dir in ipairs({ dir1, dir2 }) do
-                if dir ~= '' and vim.fn.isdirectory(dir) == 1 then
-                  vim.cmd('noautocmd lcd ' .. vim.fn.fnameescape(dir))
-                  moved = true
-                  if #vim.fn.getcompletion(line, 'cmdline') > 0 then
-                    break
-                  end
-                end
-              end
-              local parts = {}
-              for item in saved.wildmode:gmatch('[^,]+') do
-                local keep = {}
-                for word in item:gmatch('[^:]+') do
-                  if word ~= 'list' then
-                    keep[#keep + 1] = word
-                  end
-                end
-                if #keep > 0 then
-                  parts[#parts + 1] = table.concat(keep, ':')
-                end
-              end
-              vim.o.wildmode = #parts > 0 and table.concat(parts, ',') or 'full'
-              vim.o.wildcharm = 9
-              local ignore = 'CmdlineEnter,CmdlineChanged,CmdlineLeave,ModeChanged'
-              vim.o.eventignore = saved.eventignore == '' and ignore or (saved.eventignore .. ',' .. ignore)
-              _G.__eclipse_capture = function()
-                result.line = vim.fn.getcmdline()
-                return ''
-              end
-              local keys = (steps:gsub('T', '<Tab>'):gsub('P', '<C-p>'))
-                  .. [[<C-\\>ev:lua.__eclipse_capture()<CR><C-c>]]
-              vim.api.nvim_feedkeys(':' .. line, 'n', true)
-              vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, true, true), 'xn', false)
-              local all = vim.fn.getcompletion(line, 'cmdline')
-              result.total = #all
-              result.list = {}
-              for i = 1, math.min(cap, #all) do
-                result.list[i] = all[i]
-              end
-            end
-            local ok, err = pcall(complete)
-            vim.o.wildmode = saved.wildmode
-            vim.o.wildcharm = saved.wildcharm
-            vim.o.eventignore = saved.eventignore
-            _G.__eclipse_capture = nil
-            if moved then
-              local back = vim.fn.fnameescape(cwd)
-              if win_local then
-                vim.cmd('noautocmd lcd ' .. back)
-              elseif tab_local then
-                vim.cmd('noautocmd tcd ' .. back)
-              else
-                vim.cmd('noautocmd cd ' .. back)
-              end
-            end
-            if not ok then
-              error(err, 0)
-            end
-            if result.line == nil then
-              return nil
-            end
-            return { result.line, result.total, result.list }
-            """;
+    /** Pastes argument 1 at the cursor, in any mode, as a paste rather than typed keys. */
+    static final String PASTE = "vim.api.nvim_paste(select(1, ...), false, -1)";
 
-    /** The user's {@code 'clipboard'} option (e.g. {@code unnamedplus}), evaluated after their init file ran. */
+    /**
+     * Sets the current window's working folder to argument 1 ({@code :lcd}): {@code :e} completion,
+     * {@code :!} and {@code :find} then start in the attached editor's project. Silent: Neovim echoes
+     * the new folder, a message that would replace the one the user is reading (the write message
+     * of the {@code :w} that just switched editors, say).
+     */
+    static final String SET_WINDOW_FOLDER = "vim.cmd.lcd({ args = { select(1, ...) }, mods = { silent = true } })";
+
     static final String GET_CLIPBOARD_OPTION = "return vim.o.clipboard";
 
     /** Evaluates the Vim expression in argument 1 ({@code bufnr('a.txt')}) and returns its value. */
