@@ -6,7 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,8 +30,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  *       {@code .} can repeat it ({@link #leaveInsertMode}).</li>
  *   <li><b>Macro playback</b> ({@code @a}): buffer events are held back and the final text is
  *       pulled once ({@link #syncBufferAfterMacro}).</li>
- *   <li><b>{@code :w} typed in Neovim's own command line</b>: offered to Eclipse on Enter
- *       ({@link #tryHostCommandLine}).</li>
  *   <li><b>The mouse</b> in normal and visual mode goes the same way as a key ({@link #mouse}).</li>
  * </ul>
  *
@@ -46,8 +43,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  *       with the rest of the session);</li>
  *   <li>{@link StatusTracker}: the status bar message, the pending key, and macro recording;</li>
  *   <li>the small {@link Neovim} interface: the few raw calls it makes itself;</li>
- *   <li>two suppliers for what the editor installs later: the host {@code :} command handler and
- *       the document push before leaving insert mode.</li>
+ *   <li>a supplier for what the editor installs later: the document push before leaving insert
+ *       mode.</li>
  * </ul>
  * So {@code KeyInputTest} runs it with a fake Neovim and a real {@code StateSync} on a fake (see
  * {@code docs/LEARNING.md}, "Ports and fakes").
@@ -73,12 +70,6 @@ final class KeyInput {
          */
         void awaitKeysConsumed() throws Exception;
 
-        /** The command line's type ({@code ":"}, {@code "/"}, ...; {@link LuaScripts#GET_CMDTYPE}). */
-        String commandLineType() throws Exception;
-
-        /** The text typed on the command line so far ({@link LuaScripts#GET_CMDLINE}). */
-        String commandLineText() throws Exception;
-
         /**
          * The attached buffer's lines. Answered only once Neovim is idle, so after {@code @a} it
          * waits for the macro to finish, up to {@code timeout}.
@@ -95,8 +86,6 @@ final class KeyInput {
     private final Neovim nvim;
     private final StateSync state;
     private final StatusTracker status;
-    /** The editor's host {@code :} command handler ({@code :w} saves in Eclipse), or {@code null}. */
-    private final Supplier<Predicate<String>> hostExHandler;
     /** Pushes the Eclipse document to Neovim before insert mode ends, or {@code null}. */
     private final Supplier<Runnable> leaveInsertPush;
     private final Duration macroTimeout;
@@ -112,18 +101,16 @@ final class KeyInput {
     /** Set by a lone {@code @}: the next key names the macro register and starts the playback. */
     private boolean macroRegisterPending;
 
-    KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Predicate<String>> hostExHandler,
-            Supplier<Runnable> leaveInsertPush) {
-        this(nvim, state, status, hostExHandler, leaveInsertPush, MACRO_TIMEOUT);
+    KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Runnable> leaveInsertPush) {
+        this(nvim, state, status, leaveInsertPush, MACRO_TIMEOUT);
     }
 
     /** @param macroTimeout how long to wait for a macro to finish (tests use milliseconds) */
-    KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Predicate<String>> hostExHandler,
-            Supplier<Runnable> leaveInsertPush, Duration macroTimeout) {
+    KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Runnable> leaveInsertPush,
+            Duration macroTimeout) {
         this.nvim = nvim;
         this.state = state;
         this.status = status;
-        this.hostExHandler = hostExHandler;
         this.leaveInsertPush = leaveInsertPush;
         this.macroTimeout = macroTimeout;
     }
@@ -149,9 +136,9 @@ final class KeyInput {
      * Sends one key to Neovim and refreshes Eclipse.
      *
      * <p>Every key, including digits (counts), {@code p}, {@code P} and {@code .}, is a plain
-     * {@code nvim_input}: Neovim does all the editing. The only exception is Enter on a {@code :}
-     * command line, which is offered to the host handler first (so {@code :w} saves the Eclipse
-     * file).
+     * {@code nvim_input}: Neovim does all the editing, Enter on a {@code :} line too. A command
+     * Eclipse carries out ({@code :w}, {@code :q}) reaches it from Neovim, as {@code :Eclipse}
+     * ({@link LuaScripts#HOST_COMMANDS}).
      *
      * <p><b>Pending commands.</b> After {@code f}, {@code F}, {@code t}, {@code r}, the first
      * {@code g} of {@code gg}, {@code z}, ... Neovim is <em>blocked</em> waiting for the next
@@ -205,10 +192,6 @@ final class KeyInput {
     private void inputKey(String keys) throws Exception {
         LOG.fine(() -> "input(" + keys + ") mode=" + state.mode());
         status.clearMessage(); // a message stays visible until the next key
-
-        if (NvimKeys.isEnter(keys) && tryHostCommandLine()) {
-            return;
-        }
 
         boolean wasTyping = state.isTypingMode();
         String modeBefore = state.mode();
@@ -272,37 +255,6 @@ final class KeyInput {
         } finally {
             state.setSuppressBufferEvents(false);
         }
-    }
-
-    /**
-     * On Enter, asks Neovim (not the cached mode, which can lag) whether a {@code :} command is
-     * being executed and, if the host handles it, cancels it in Neovim.
-     *
-     * @return {@code true} if the host handled the command and the key must not be forwarded
-     */
-    private boolean tryHostCommandLine() {
-        try {
-            Mode mode = state.readMode();
-            // Not on a command line (or Neovim is blocked and would not answer): nothing to intercept.
-            if (mode == null || mode.blocking() || !VimModes.isCmdline(mode.mode())) {
-                return false;
-            }
-            String type = nvim.commandLineType();
-            String text = nvim.commandLineText();
-            Predicate<String> handler = hostExHandler.get();
-            if (handler != null && type.startsWith(":") && !text.isBlank() && handler.test(text.strip())) {
-                // Esc only closes Neovim's line (and keeps it in the history). No buffer sync: the
-                // IDE does the command later, on its UI thread, and a sync queued now would put
-                // Neovim's old text back over a revert (:e!) that Eclipse then sends to Neovim.
-                nvim.type("<Esc>");
-                state.publishState();
-                LOG.fine("Host handled cmdline: " + text);
-                return true;
-            }
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "cmdline host intercept failed", e);
-        }
-        return false;
     }
 
     /**

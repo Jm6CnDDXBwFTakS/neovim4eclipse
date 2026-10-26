@@ -310,9 +310,10 @@ class NeovimBufferIntegrationTest {
 
             // Typed (or from a mapping) rather than through the API: the error is a message, two
             // lines with Neovim's header for an error in an autocommand, so it opens the popup.
+            // Through :execute, since a typed :write is handed to Eclipse (LuaScripts.HOST_COMMANDS).
             List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
             s.addOutputListener(outputs::add);
-            s.input(":write<CR>");
+            s.input(":execute 'write'<CR>");
             waitFor(() -> outputs.stream().anyMatch(o -> o.text().equals("Error in BufWriteCmd Autocommands for \"<buffer="
                     + a.bufnr() + ">\":\nEclipse could not save A.txt: read-only")), "the error in the popup: " + outputs);
         }

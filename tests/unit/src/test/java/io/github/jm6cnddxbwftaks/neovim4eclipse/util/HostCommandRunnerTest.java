@@ -4,8 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * What each host {@code :} command asks of the IDE, without Eclipse: a fake {@link HostCommandRunner.Ide}
- * records the calls, so each test reads as "typing {@code :wq} saves, then closes".
+ * records the calls, so each test reads as "{@code :wq} saves, then closes". Commands are written as
+ * Neovim hands them over, by full name ({@code :Eclipse! quit} is {@code "quit!"}).
  * That Eclipse's save, close and tab switching work is tested in the UI tests ({@code HostCommandsTest}).
  */
 class HostCommandRunnerTest {
@@ -65,8 +66,19 @@ class HostCommandRunnerTest {
     private final FakeIde ide = new FakeIde();
     private final HostCommandRunner runner = new HostCommandRunner(ide, Runnable::run);
 
-    private List<String> run(String command) {
-        assertTrue(runner.run(command), command + " is a host command");
+    /** {@code "bwipeout! 3"}: the command, as {@code :Eclipse} sends it, by full name. */
+    static HostCommand command(String nameAndArgs) {
+        List<String> words = List.of(nameAndArgs.split(" "));
+        String name = words.get(0);
+        boolean bang = name.endsWith("!");
+        HostCommand cmd = HostCommand.of(bang ? name.substring(0, name.length() - 1) : name, bang,
+                words.subList(1, words.size()));
+        assertNotNull(cmd, nameAndArgs + " is a host command");
+        return cmd;
+    }
+
+    private List<String> run(String nameAndArgs) {
+        runner.run(command(nameAndArgs));
         return ide.calls;
     }
 
@@ -74,36 +86,37 @@ class HostCommandRunnerTest {
 
     @Test
     void writeSavesTheCurrentEditor() {
-        assertEquals(List.of("save"), run("w"));
+        assertEquals(List.of("save"), run("write"));
     }
 
     @Test
     void writeAllSavesEveryEditor() {
-        assertEquals(List.of("saveAll"), run(":wa"));
+        assertEquals(List.of("saveAll"), run("wall"));
     }
 
     @Test
     void quitClosesAndAsksAboutChanges() {
-        assertEquals(List.of("close"), run("q"));
+        assertEquals(List.of("close"), run("quit"));
     }
 
     @Test
     void quitBangDiscardsTheChanges() {
-        assertEquals(List.of("close!"), run("q!"));
+        assertEquals(List.of("close!"), run("quit!"));
     }
 
     @Test
     void bufferDeleteWithBuffersClosesThoseEditors() {
-        run("bd 3 other.txt");
-        run("bw! 3");
-        run("bd");
+        // :%bd and :3,5bd arrive as the buffers they cover (Neovim's side turns the range into them).
+        run("bdelete 3 other.txt");
+        run("bwipeout! 3");
+        run("bdelete");
         // run() returns every call so far
-        assertEquals(List.of("closeBuffers [3, other.txt]", "closeBuffers! [3]", "close", "closeAll"), run("%bd"));
+        assertEquals(List.of("closeBuffers [3, other.txt]", "closeBuffers! [3]", "close", "closeBuffers [1, 2]"), run("bdelete 1 2"));
     }
 
     @Test
     void quitAllBangClosesEveryEditorWithoutAsking() {
-        assertEquals(List.of("closeAll!"), run("qa!"));
+        assertEquals(List.of("closeAll!"), run("qall!"));
     }
 
     @Test
@@ -126,24 +139,24 @@ class HostCommandRunnerTest {
 
     @Test
     void writeQuitAllSavesEverythingThenClosesEverything() {
-        assertEquals(List.of("saveAll", "closeAll!"), run("xa"));
+        assertEquals(List.of("saveAll", "closeAll!"), run("xall"));
     }
 
     @Test
     void writeQuitAllKeepsTheEditorsOpenWhenASaveFails() {
         ide.saveWorks = false;
-        assertEquals(List.of("saveAll"), run("wqa"));
+        assertEquals(List.of("saveAll"), run("wqall"));
     }
 
     @Test
     void writeQuitAllBangClosesEverythingEvenWhenASaveFails() {
         ide.saveWorks = false;
-        assertEquals(List.of("saveAll", "closeAll!"), run("wqa!"));
+        assertEquals(List.of("saveAll", "closeAll!"), run("wqall!"));
     }
 
     @Test
     void writePlusPlusPMayCreateFolders() {
-        assertEquals(List.of("save ++p"), run("w ++p"));
+        assertEquals(List.of("save ++p"), run("write ++p"));
     }
 
     @Test
@@ -151,16 +164,16 @@ class HostCommandRunnerTest {
         assertEquals(List.of("save ++p", "close!"), run("wq ++p"));
         ide.calls.clear();
         ide.saveWorks = false; // the folder could not be created
-        assertEquals(List.of("update ++p"), run("x ++p"));
+        assertEquals(List.of("update ++p"), run("xit ++p"));
     }
 
     /** For a new file's editor: :w and :wq create it even untouched, :up and :x only with changes. */
     @Test
     void writeAndWqWriteUnchangedFilesWhileUpdateAndXDoNot() {
-        run("w");
+        run("write");
         run("wq");
-        run("up");
-        run("x");
+        run("update");
+        run("xit");
         run("exit");
         assertEquals(List.of("save", "save", "close!", "update", "update", "close!", "update", "close!"),
                 ide.calls);
@@ -170,20 +183,20 @@ class HostCommandRunnerTest {
 
     @Test
     void editOpensTheNamedFile() {
-        assertEquals(List.of("edit [three.txt]"), run("e three.txt"));
+        assertEquals(List.of("edit [three.txt]"), run("edit three.txt"));
     }
 
     @Test
     void editBangWithoutAFileReloadsTheCurrentOne() {
-        assertEquals(List.of("edit! []"), run("e!"));
+        assertEquals(List.of("edit! []"), run("edit!"));
     }
 
     // ---- tabs ----
 
     @Test
     void tabCommandsPassTheirDirectionAndCount() {
-        run("tabn 3");
-        run("tabp");
+        run("tabnext 3");
+        run("tabprevious");
         run("tabfirst");
         run("tablast");
         assertEquals(List.of("tab NEXT 3", "tab PREVIOUS 0", "tab FIRST 0", "tab LAST 0"), ide.calls);
@@ -192,10 +205,11 @@ class HostCommandRunnerTest {
     // ---- what is not a host command, and threads ----
 
     @Test
-    void otherCommandsAreLeftToNeovim() {
-        assertFalse(runner.run("s/a/b/"));
-        assertFalse(runner.run("set ts=4"));
-        assertEquals(List.of(), ide.calls);
+    void otherCommandsAndArgumentsAreNotEclipses() {
+        assertNull(HostCommand.of("substitute", false, List.of()));
+        assertNull(HostCommand.of("quit", false, List.of("foo")), ":q foo is Neovim's to report");
+        assertNull(HostCommand.of("tabnext", false, List.of("x")));
+        assertNull(HostCommand.of(null, false, List.of()));
     }
 
     @Test
@@ -204,9 +218,9 @@ class HostCommandRunnerTest {
         HostCommandRunner later = new HostCommandRunner(ide, queued::add); // a UI thread that is busy
 
         // Every kind of command: none may touch the IDE from the calling thread.
-        for (String command : List.of("w", "wa", "q", "qa", "wq", "xa", "e x.txt", "tabn", "tabp", "tabfirst",
-                "tablast")) {
-            assertTrue(later.run(command), command);
+        for (String command : List.of("write", "wall", "quit", "qall", "wq", "xall", "edit x.txt", "tabnext",
+                "tabprevious", "tabfirst", "tablast")) {
+            later.run(command(command));
         }
         assertEquals(List.of(), ide.calls, "nothing happens until the UI thread runs the work");
 

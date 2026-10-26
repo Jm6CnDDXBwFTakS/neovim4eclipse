@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
@@ -46,8 +45,6 @@ class KeyInputTest {
         final Map<String, Mode> after = new HashMap<>();
         Mode mode = new Mode("n", false);
         List<String> lines = List.of("text");
-        String commandLineType = ":";
-        String commandLineText = "";
         /** Typing this key throws (a lost connection). */
         String failingKey;
         /** Typing this key makes Neovim send a buffer line event (as editing in Neovim does). */
@@ -69,16 +66,6 @@ class KeyInputTest {
         @Override
         public void awaitKeysConsumed() {
             calls.add("keysConsumed");
-        }
-
-        @Override
-        public String commandLineType() {
-            return commandLineType;
-        }
-
-        @Override
-        public String commandLineText() {
-            return commandLineText;
         }
 
         @Override
@@ -155,11 +142,9 @@ class KeyInputTest {
     private final StatusTracker status = new StatusTracker();
     /** The register being recorded into, as the state snapshot reports it ("" = not recording). */
     private String recording = "";
-    private Predicate<String> hostHandler;
     private Runnable push = () -> nvim.calls.add("push document");
     private final StateSync state = new StateSync(nvim, editor, status, bufnr -> bufnr == 1, this::modeChanged);
-    private final KeyInput keys = new KeyInput(nvim, state, status, () -> hostHandler, () -> push,
-            Duration.ofMillis(50));
+    private final KeyInput keys = new KeyInput(nvim, state, status, () -> push, Duration.ofMillis(50));
 
     /** Wired like the session: every mode change reaches KeyInput first. */
     private void modeChanged(String mode) {
@@ -273,44 +258,19 @@ class KeyInputTest {
 
     // ---- Enter on Neovim's own : command line ----
 
+    /**
+     * Enter on a {@code :} line is typed like any key, {@code :w} too: Neovim hands a command Eclipse
+     * carries out back as {@code :Eclipse write} (LuaScripts.HOST_COMMANDS). No buffer sync follows:
+     * Eclipse runs such a command later (a revert, {@code :e!}, must not be overwritten).
+     */
     @Test
-    void enterOnAColonCommandLineIsOfferedToEclipseFirst() throws Exception {
+    void enterOnAColonLineIsTypedAndSyncsNoBuffer() throws Exception {
         nvim.mode = new Mode("c", false);
-        nvim.commandLineText = " w ";
-        List<String> offered = new ArrayList<>();
-        hostHandler = text -> offered.add(text);
+        nvim.after.put("<CR>", new Mode("n", false));
 
         type("<CR>");
 
-        assertEquals(List.of("w"), offered);
-        // No buffer sync: Eclipse runs the command later (a revert, :e!, must not be overwritten).
-        assertEquals(List.of("type <Esc>", "snapshot"), nvim.calls,
-                "Neovim's command line is cancelled, Enter is not typed");
-    }
-
-    @Test
-    void aCommandEclipseDoesNotHandleIsTypedAsUsual() throws Exception {
-        nvim.mode = new Mode("c", false);
-        nvim.commandLineText = "s/a/b/";
-        hostHandler = text -> false;
-
-        type("<CR>");
-
-        assertTrue(nvim.calls.contains("type <CR>"), nvim.calls.toString());
-    }
-
-    @Test
-    void enterOnASearchLineIsNotOffered() throws Exception {
-        nvim.mode = new Mode("c", false);
-        nvim.commandLineType = "/";
-        nvim.commandLineText = "w";
-        hostHandler = text -> {
-            throw new AssertionError("offered " + text);
-        };
-
-        type("<CR>");
-
-        assertTrue(nvim.calls.contains("type <CR>"), nvim.calls.toString());
+        assertEquals(List.of("type <CR>", "snapshot"), nvim.calls);
     }
 
     // ---- the mouse ----

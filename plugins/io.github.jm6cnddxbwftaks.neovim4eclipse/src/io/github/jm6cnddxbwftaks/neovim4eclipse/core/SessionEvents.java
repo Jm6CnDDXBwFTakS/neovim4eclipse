@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * The session's listeners, one {@link ListenerList} per kind of event: mode, buffer change, cursor,
@@ -27,6 +28,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
     private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
+    private final ListenerList<HostCommand> hostCommandListeners = new ListenerList<>("host command", Level.WARNING);
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
 
     // ---- firing ----
@@ -54,6 +56,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** A key mapped in Neovim asks the IDE to act (see {@link IdeAction}). */
     void ideAction(IdeAction action) {
         ideActionListeners.fire(action);
+    }
+
+    /** Neovim handed a command to Eclipse ({@code :Eclipse quit}; see {@link HostCommand}). */
+    void hostCommand(HostCommand command) {
+        hostCommandListeners.fire(command);
     }
 
     /** Neovim's command line changed: opened, edited, completed or closed (see {@code CmdlineState}). */
@@ -101,6 +108,14 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeIdeActionListener(Consumer<IdeAction> listener) {
         ideActionListeners.remove(listener);
+    }
+
+    void addHostCommandListener(Consumer<HostCommand> listener) {
+        hostCommandListeners.add(listener);
+    }
+
+    void removeHostCommandListener(Consumer<HostCommand> listener) {
+        hostCommandListeners.remove(listener);
     }
 
     void addCmdlineListener(Consumer<CmdlineState.View> listener) {

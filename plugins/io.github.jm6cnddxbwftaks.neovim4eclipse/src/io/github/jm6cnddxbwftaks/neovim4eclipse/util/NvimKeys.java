@@ -8,8 +8,6 @@ import java.util.Set;
 /** Classification of keys in Neovim notation (the strings produced by {@link KeyMapping}). */
 public final class NvimKeys {
 
-    private static final Set<String> ENTER_KEYS = Set.of("<CR>", "CR", "\r", "\n", "<C-CR>");
-
     /** Single keys that change buffer text in a way the line-event stream may not fully describe. */
     private static final String BUFFER_MUTATING_CHARS = "pPxXs~.u";
 
@@ -32,11 +30,6 @@ public final class NvimKeys {
      */
     public static String exCommand(String command) {
         return ":" + escapeLiteral(command.strip()) + "<CR>";
-    }
-
-    /** Whether the key is Enter (which may execute a pending {@code :} command). */
-    public static boolean isEnter(String keys) {
-        return keys != null && ENTER_KEYS.contains(keys);
     }
 
     /**

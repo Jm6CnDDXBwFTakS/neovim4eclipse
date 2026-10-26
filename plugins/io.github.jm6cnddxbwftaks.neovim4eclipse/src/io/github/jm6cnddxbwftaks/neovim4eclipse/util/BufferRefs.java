@@ -12,7 +12,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *
  * <p>Example: {@code :bd other} sends {@code echo bufnr('other')} to Neovim, which prints
  * {@code 4} (or {@code -1} when no buffer, or more than one, matches); the editor of buffer 4 is
- * then closed. {@code HostExCommand} has the command, {@code EditorAttachManager.closeBuffers}
+ * then closed. {@code HostCommand} has the command, {@code EditorAttachManager.closeBuffers}
  * does the closing.
  */
 public final class BufferRefs {

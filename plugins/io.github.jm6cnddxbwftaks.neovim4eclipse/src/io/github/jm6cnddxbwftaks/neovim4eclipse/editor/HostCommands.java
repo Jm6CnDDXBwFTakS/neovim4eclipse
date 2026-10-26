@@ -12,20 +12,21 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommandRunner;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostExCommand;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 
 /**
- * Carries out the {@code :} commands that belong to the IDE (see {@link HostExCommand} for the
+ * Carries out the {@code :} commands that belong to the IDE (see {@link HostCommand} for the
  * list): files through {@link EclipseFileCommands}, tabs through {@link EditorTabs}.
  *
  * <p>What each command does (save before close, a failed save keeps the file open, ...) is decided
  * by {@link HostCommandRunner}, which has no Eclipse code and is unit-tested; this class only
  * connects it to the editor ({@link EditorIde}) and the UI thread.
  *
- * <p>The session calls {@link #tryHandleEx} when Enter is pressed on Neovim's command line, which is
- * also the line the {@code :} box shows ({@link CommandLineBox}). A command handled here is not run
- * by Neovim: its line is closed with Esc, so it stays in Neovim's history.
+ * <p>The commands come from Neovim, already parsed: Neovim's command line hands them over as
+ * {@code :Eclipse quit} ({@code LuaScripts.HOST_COMMANDS}), whether they were typed in the
+ * {@code :} box, run by a mapping or a macro, or repeated with {@code @:}; the editor's controller
+ * passes them to {@link #run}.
  */
 public final class HostCommands {
 
@@ -35,19 +36,17 @@ public final class HostCommands {
     }
 
     /**
-     * Runs {@code raw} in Eclipse if it is a host command. Any thread: the work is done on the UI
-     * thread.
+     * Carries out {@code command} in Eclipse. Any thread: the work is done on the UI thread.
      *
-     * @param raw    the command line, with or without {@code :}
-     * @param editor the editor the command was typed in
-     * @return {@code true} if the command was handled here and must not reach Neovim
+     * @param command what Neovim handed over
+     * @param editor  the editor whose Neovim ran it
      */
-    public static boolean tryHandleEx(String raw, ITextEditor editor) {
+    public static void run(HostCommand command, ITextEditor editor) {
         if (editor == null) {
-            return false;
+            return;
         }
-        LOG.fine(() -> "tryHandleEx [" + raw + "] -> " + HostExCommand.parse(raw));
-        return new HostCommandRunner(new EditorIde(editor), HostCommands::runOnUi).run(raw);
+        LOG.fine(() -> "host command " + command);
+        new HostCommandRunner(new EditorIde(editor), HostCommands::runOnUi).run(command);
     }
 
     /** {@link HostCommandRunner.Ide} for one editor: Eclipse's save, close, open and tab switching. */

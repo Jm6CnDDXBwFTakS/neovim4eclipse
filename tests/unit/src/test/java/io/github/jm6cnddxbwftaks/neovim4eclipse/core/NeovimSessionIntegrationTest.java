@@ -25,6 +25,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
@@ -335,6 +336,83 @@ class NeovimSessionIntegrationTest {
             waitFor(() -> actions.size() == 2, "two IDE actions");
             assertEquals(List.of(new IdeAction(IdeAction.SAVE_AND_CLOSE, 0), new IdeAction(IdeAction.CLOSE, 0)), actions);
             assertTrue(s.isAlive(), "Neovim did not quit");
+        }
+    }
+
+    // ---- commands Eclipse carries out (LuaScripts.HOST_COMMANDS) ----
+
+    /** {@code expression}'s value, asked through the session's queue (so after the keys before it). */
+    private static String eval(NeovimSession s, String expression) throws Exception {
+        java.util.concurrent.CompletableFuture<String> value = new java.util.concurrent.CompletableFuture<>();
+        s.evalAsync(expression, value::complete);
+        return value.get(10, TimeUnit.SECONDS);
+    }
+
+    /**
+     * A command Eclipse carries out reaches it parsed by Neovim, whoever ran the line: typed, a
+     * mapping, a macro, {@code @:}. Neovim expands abbreviations ({@code :wa} is {@code wall}), and
+     * the history keeps the line as typed.
+     */
+    @Test
+    void hostCommandsReachEclipseFromTypedLinesMappingsMacrosAndAtColon() throws Exception {
+        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "--cmd", "nnoremap <Space>q :q<CR>",
+                "--cmd", "let @a = \":tabn 3\\r\""))) {
+            List<HostCommand> commands = new CopyOnWriteArrayList<>();
+            s.addHostCommandListener(commands::add);
+
+            keys(s, ":", "wa", "<CR>");
+            waitFor(() -> commands.size() == 1, ":wa");
+            assertEquals(HostCommand.Kind.WRITE_ALL, commands.get(0).kind());
+            assertEquals("wa", eval(s, "histget(':', -1)"), "the history has the line as typed");
+
+            keys(s, "<Space>", "q");
+            waitFor(() -> commands.size() == 2, "the mapping's :q");
+            assertEquals(HostCommand.Kind.QUIT, commands.get(1).kind());
+
+            keys(s, "@", "a");
+            waitFor(() -> commands.size() == 3, "the macro's :tabn 3");
+            assertEquals(new HostCommand(HostCommand.Kind.TAB_NEXT, false, List.of("3"), false), commands.get(2));
+
+            // @: repeats the last line with a typed character in it (:help quote_:), here :wa.
+            keys(s, "@", ":");
+            waitFor(() -> commands.size() == 4, "@: repeating :wa");
+            assertEquals(commands.get(0), commands.get(3));
+
+            keys(s, ":", "q!", "<CR>");
+            waitFor(() -> commands.size() == 5, ":q!");
+            assertTrue(commands.get(4).force());
+            assertTrue(s.isAlive(), "Neovim did not quit");
+        }
+    }
+
+    /**
+     * Arguments as Neovim splits them ({@code :e my\ file.txt}), a count in front of a tab command,
+     * what follows {@code |} still runs, and a command with a range or arguments it does not take
+     * stays Neovim's.
+     */
+    @Test
+    void hostCommandsKeepTheirArgumentsAndLeaveTheRestToNeovim() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("1", "2", "3"));
+            List<HostCommand> commands = new CopyOnWriteArrayList<>();
+            s.addHostCommandListener(commands::add);
+
+            keys(s, ":", "e my\\ file.txt", "<CR>");
+            keys(s, ":", "2tabn", "<CR>");
+            keys(s, ":", "Eclipse! quit | let g:after = 1", "<CR>");
+            waitFor(() -> commands.size() == 3, "three commands");
+            assertEquals(List.of("my file.txt"), commands.get(0).args());
+            assertEquals(List.of("2"), commands.get(1).args(), ":2tabn is :tabn 2");
+            assertTrue(commands.get(2).force());
+            assertEquals("1", eval(s, "get(g:, 'after', 0)"), "the command after | ran");
+
+            keys(s, ":", "q foo", "<CR>");
+            keys(s, ":", "1,2tabn", "<CR>");
+            keys(s, ":", "Eclipse nope", "<CR>");
+            assertEquals("ok", eval(s, "'ok'")); // the keys before it are done
+            assertEquals(3, commands.size(), "Neovim's, not Eclipse's: " + commands);
+            assertTrue(s.isAlive());
         }
     }
 

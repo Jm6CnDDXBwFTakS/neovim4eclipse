@@ -67,6 +67,9 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         try {
             test.run();
         } finally {
+            // Settled first: SessionProbe waits on the UI thread, and Neovim's line events for the
+            // test's last command also need the UI thread; asked in between, each waits for the other.
+            settle();
             SessionProbe.lua(session, "pcall(vim.keymap.del, 'n', '" + lhs + "')");
         }
     }
@@ -288,6 +291,22 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
         assertEquals("2second\n", fileText("second.txt"));
         page().closeEditor(second, false);
+    }
+
+    /**
+     * A mapping's {@code :w<CR>} saves through Eclipse, as the typed one does: Neovim hands the line
+     * over ({@code :Eclipse write}), whoever typed it. Before 0.1.7 only lines typed in the box were
+     * Eclipse's, and a mapping's {@code :w} reached Neovim's write hook instead.
+     */
+    @Test
+    void aMappingsColonWSavesTheEditor() throws Exception {
+        document.replace(0, 0, "1");
+        settle();
+        withMapping("<Space>w", ":w<CR>", () -> {
+            type(widget, " w");
+            waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty());
+            assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
+        });
     }
 
     /**

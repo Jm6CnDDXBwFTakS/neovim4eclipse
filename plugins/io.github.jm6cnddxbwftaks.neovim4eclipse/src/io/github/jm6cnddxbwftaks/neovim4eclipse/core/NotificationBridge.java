@@ -12,6 +12,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
@@ -93,6 +94,12 @@ final class NotificationBridge implements Incoming {
         void onIdeAction(IdeAction action);
 
         /**
+         * Neovim ran {@code :Eclipse[!] name args}, usually a {@code :q} or {@code :e file} that its
+         * command line handed over ({@link LuaScripts#HOST_COMMANDS}); Eclipse carries it out.
+         */
+        void onHostCommand(HostCommand command);
+
+        /**
          * The command-line, completion-menu and view events of one {@code redraw} notification, in
          * order (the UI is attached with {@code ext_cmdline} and {@code ext_popupmenu}; see
          * {@link CmdlineEvent}). Passed together so that the box is redrawn once for them.
@@ -128,6 +135,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_yank" -> onYank(args);
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
+            case "eclipse_command" -> onCommand(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -234,6 +242,26 @@ final class NotificationBridge implements Incoming {
             Integer count = args.size() >= 2 ? toInt(args.get(1)) : null;
             sink.onIdeAction(new IdeAction(String.valueOf(args.get(0)), count == null ? 0 : Math.max(0, count)));
         }
+    }
+
+    /**
+     * Payload: {@code [name, bang, args]}, as {@code :Eclipse} sends it ({@code ["edit", false,
+     * ["a.txt"]]}). A name or arguments Eclipse does not take are logged and dropped: the Lua side
+     * checks them first, so this happens only for a hand-written {@code :Eclipse} it let through.
+     */
+    private void onCommand(List<?> args) {
+        if (args.size() < 3 || args.get(0) == null) {
+            return;
+        }
+        String name = String.valueOf(args.get(0));
+        boolean bang = Boolean.TRUE.equals(args.get(1));
+        List<String> commandArgs = toStringList(args.get(2));
+        HostCommand command = HostCommand.of(name, bang, commandArgs);
+        if (command == null) {
+            LOG.warning(() -> "Eclipse cannot carry out :" + name + (bang ? "!" : "") + " " + commandArgs);
+            return;
+        }
+        sink.onHostCommand(command);
     }
 
     /** Payload: {@code [bufnr, changedtick, firstline, lastline, linedata, more]}. */
