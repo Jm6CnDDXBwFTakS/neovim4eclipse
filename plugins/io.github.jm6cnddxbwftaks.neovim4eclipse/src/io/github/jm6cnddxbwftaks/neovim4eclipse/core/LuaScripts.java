@@ -362,6 +362,21 @@ final class LuaScripts {
             """;
 
     /**
+     * Sets {@code 'modified'} of a buffer (arguments: its number, {@code "1"} or {@code "0"}) to
+     * Eclipse's dirty flag: Eclipse decides whether a document has unsaved changes, and Neovim's flag
+     * follows, so that {@code :update} and {@code :bufdo update} write what Eclipse would save and
+     * {@code :ls} shows {@code +} for it. Example: Ctrl+S in Eclipse clears it; typing in Eclipse,
+     * or a change made by Neovim, sets it.
+     */
+    static final String SET_MODIFIED = """
+            local bufnr, modified = ...
+            local buf = tonumber(bufnr) -- not tonumber(select(1, ...)): the second argument would be a base
+            if vim.api.nvim_buf_is_valid(buf) then
+              vim.bo[buf].modified = modified == '1'
+            end
+            """;
+
+    /**
      * Sets the current buffer's indentation options (arguments: tabstop, "1" to indent with tabs,
      * indent width, "1" to follow braces, cinoptions). See {@code util/Indentation} for why.
      * {@code 'shiftwidth'} is one indent level, used by {@code >>}, {@code o} and {@code cindent};
@@ -398,7 +413,8 @@ final class LuaScripts {
             if not ok then
               error(err)
             end
-            -- Like a file just read: not modified, so :update (and :bufdo update) skips it.
+            -- Like a file just read: not modified. NeovimSession then sets 'modified' to Eclipse's dirty
+            -- flag (an editor with unsaved changes stays modified, so :update writes it).
             vim.bo.modified = false
             """;
 

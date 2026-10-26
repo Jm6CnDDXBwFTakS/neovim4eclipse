@@ -723,6 +723,21 @@ class EditorEndToEndTest extends EndToEndTestBase {
         assertEquals(List.of("alpha", "beta", "", ""), session.getBufferLines());
     }
 
+    /**
+     * Neovim's {@code 'modified'} follows the editor's dirty flag: a change in Eclipse sets it, a
+     * save in Eclipse clears it, so {@code :update} writes what Eclipse would save.
+     */
+    @Test
+    void neovimsModifiedFollowsTheEditorsDirtyFlag() throws Exception {
+        document.replace(0, 0, "1");
+        settle();
+        waitUntil("'modified' set", TIMEOUT_MS,
+                () -> Boolean.TRUE.equals(io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.bo.modified")));
+        editor.doSave(null);
+        waitUntil("'modified' cleared", TIMEOUT_MS,
+                () -> Boolean.FALSE.equals(io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.bo.modified")));
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {

@@ -45,6 +45,13 @@ class EditorBuffersTest {
     }
 
     @Test
+    void theBufferOfADocumentIsFoundByTheDocument() {
+        DocumentBuffer a = buffers.add("A.java", "editor 1", () -> "/src/A.java");
+        assertSame(a, buffers.bufferOf("A.java").orElseThrow());
+        assertTrue(buffers.bufferOf("B.java").isEmpty(), "no editor on B.java was attached");
+    }
+
+    @Test
     void eachDocumentHasItsOwnBufferAndTheNameIsAskedForOnlyOnce() {
         AtomicInteger asked = new AtomicInteger();
         DocumentBuffer a = buffers.add("A.java", "editor 1", () -> "A" + asked.incrementAndGet());
