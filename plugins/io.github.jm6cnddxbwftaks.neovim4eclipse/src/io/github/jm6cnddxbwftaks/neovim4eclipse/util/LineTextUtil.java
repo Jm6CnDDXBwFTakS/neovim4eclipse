@@ -21,16 +21,19 @@ import java.util.List;
  *   <li>{@link #splitDocumentLines} drops the empty "line" after a final line break, so
  *       {@code "a\n"} is {@code ["a"]} (not {@code ["a", ""]}). Real blank lines at the end are kept:
  *       {@code "a\n\n"} is {@code ["a", ""]}.</li>
- *   <li>Whether the document ends with a line break is <em>not stored anywhere</em>; it is read from
- *       the current document text each time ({@link #endsWithLineBreak}). Edits therefore preserve
- *       whatever the file had: a file that ended with a newline still does, and one that did not
- *       still does not. {@link LineRangeEdit} and the full re-sync both follow this rule.</li>
+ *   <li>Whether the document has a final newline is read from the document when it is pushed to
+ *       Neovim and remembered by the synchronizer ({@code sync/BufferSynchronizer}), which passes it
+ *       to every edit ({@link LineRangeEdit}, the full re-sync). Edits therefore preserve whatever
+ *       the file had: a file that ended with a newline still does, and one that did not still does
+ *       not.</li>
  * </ul>
  *
- * <p><b>Inherent ambiguity:</b> a file with no final line break cannot have an empty last line,
- * because {@code ["a", ""]} without a final break is the same text as {@code ["a"]} with one. This only
- * matters transiently (for example right after {@code o} on the last line of such a file, before
- * anything is typed); the next full sync from Eclipse resolves it.
+ * <p><b>Why remembered, not read each time:</b> the text alone is ambiguous. {@code ["a", ""]}
+ * without a final newline is the same text as {@code ["a"]} with one: {@code "a\n"}. That buffer is
+ * what {@code o} on the last line of {@code "a"} makes. Read from the text after that edit, the
+ * newline looked like a final newline, and the full sync that follows (insert mode syncs once)
+ * appended a second empty line. Remembered from the push, it stays "no final newline" until Eclipse
+ * pushes the document again; that push sends {@code ["a"]} with a final newline, the same file.
  *
  * <p>Round trip: {@code linesToDocumentText(splitDocumentLines(t), d, endsWithLineBreak(t))} equals
  * {@code t} whenever {@code t} uses the single delimiter {@code d}.

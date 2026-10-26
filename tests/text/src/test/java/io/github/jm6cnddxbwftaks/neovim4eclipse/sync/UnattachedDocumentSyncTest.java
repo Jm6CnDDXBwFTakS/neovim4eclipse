@@ -171,9 +171,11 @@ class UnattachedDocumentSyncTest {
 
     @Test
     void neovimCountsNoLineAfterAFinalLineBreak() {
-        assertEquals(1, UnattachedDocumentSync.neovimLineCount(new Document("")), "an empty buffer has one line");
-        assertEquals(1, UnattachedDocumentSync.neovimLineCount(new Document("a\n")));
-        assertEquals(2, UnattachedDocumentSync.neovimLineCount(new Document("a\r\nb")));
+        assertEquals(1, UnattachedDocumentSync.neovimLineCount(new Document(""), true), "an empty buffer has one line");
+        assertEquals(1, UnattachedDocumentSync.neovimLineCount(new Document("a\n"), true));
+        assertEquals(2, UnattachedDocumentSync.neovimLineCount(new Document("a\r\nb"), false));
+        assertEquals(2, UnattachedDocumentSync.neovimLineCount(new Document("a\n"), false),
+                "without a final newline the line break starts an empty last line");
     }
 
     @Test

@@ -59,6 +59,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Neovim's block commands act on, also for characters whose screen width the plug-in had to guess
   (emoji, rarer wide characters, your `'ambiwidth'`).
 
+### Fixed
+
+- `o` on the last line of a file without a final newline showed two new empty lines in Eclipse
+  (and saved them), though Neovim had one and its motions could not reach the second.
+
 ## [0.1.6] - 2026-10-26
 
 ### Changed

@@ -19,10 +19,19 @@ import java.util.List;
  *       with {@code newLines}. Pure insertion has {@code first == last}; pure deletion has
  *       empty {@code newLines}.</li>
  *   <li>Eclipse counts an extra empty "phantom" line when a document ends with a line break.
- *       Neovim's line count is therefore {@code lineCount()} minus one in that case.</li>
+ *       Whether that line is one of Neovim's lines depends on the caller's {@code finalLineBreak}:
+ *       {@code true} means the document's last line break is the file's final newline, after
+ *       Neovim's last line, so Neovim has {@code lineCount() - 1} lines; {@code false} means every
+ *       Eclipse line is a Neovim line, the last one possibly empty.</li>
  *   <li>The result follows the exact rule in {@link LineTextUtil}: the document keeps ending (or
- *       not ending) with a line break exactly as it did before the edit.</li>
+ *       not ending) with a final newline exactly as it did before the edit.</li>
  * </ul>
+ *
+ * <p>Why the caller says it, instead of this class reading it from the text: the text is
+ * ambiguous. {@code "a\nb\n"} is either {@code ["a", "b"]} with a final newline or
+ * {@code ["a", "b", ""]} without one, which is what {@code o} on the last line of {@code "a\nb"}
+ * makes. Guessing "with" there counted one line too few, and the next full sync added a second
+ * empty line.
  */
 public final class LineRangeEdit {
 
@@ -59,10 +68,14 @@ public final class LineRangeEdit {
      * @param last     line after the last changed one; {@code < 0} or past the end means "through the last line"
      * @param newLines replacement lines; {@code null} is treated as empty
      * @param delim    line delimiter to insert
+     * @param finalNewline whether the document's last line break is a final newline after Neovim's
+     *                 last line (see the class comment); ignored when the document does not end
+     *                 with a line break
      */
-    public static Edit compute(LineSource doc, int first, int last, List<String> newLines, String delim) {
+    public static Edit compute(LineSource doc, int first, int last, List<String> newLines, String delim,
+            boolean finalNewline) {
         List<String> lines = newLines == null ? List.of() : newLines;
-        boolean finalLineBreak = endsWithLineBreak(doc);
+        boolean finalLineBreak = finalNewline && endsWithLineBreak(doc);
         // Neovim's line count: Eclipse's phantom empty last line is not a Neovim line.
         int count = finalLineBreak ? doc.lineCount() - 1 : doc.lineCount();
         int firstLine = Math.max(0, Math.min(first, count));

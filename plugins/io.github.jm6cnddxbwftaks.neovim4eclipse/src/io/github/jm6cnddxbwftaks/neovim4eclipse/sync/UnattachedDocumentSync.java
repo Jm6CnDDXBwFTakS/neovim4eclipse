@@ -83,6 +83,8 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     /** A push is queued on the input thread and has not read the document yet. */
     private final AtomicBoolean pushPending = new AtomicBoolean(false);
     private volatile boolean closed;
+    /** As {@code BufferSynchronizer.finalNewline}: remembered at each push. UI thread. */
+    private boolean finalNewline;
 
     /** @param ui the UI thread, where the document is read and changed ({@code SwtUiExecutor} in the editor) */
     public UnattachedDocumentSync(IDocument document, DocumentBuffer buffer, DocumentBufferPort session,
@@ -91,6 +93,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         this.buffer = buffer;
         this.session = session;
         this.ui = ui;
+        this.finalNewline = LineTextUtil.endsWithLineBreak(document.get()); // as the buffer was created from it
     }
 
     /** Starts listening to both sides. UI thread. */
@@ -125,7 +128,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         if (closed) {
             return;
         }
-        if (change.lastLine() > neovimLineCount(document)) {
+        if (change.lastLine() > neovimLineCount(document, finalNewline)) {
             // LineRangeEdit would clamp the range to the end of the document and apply it there.
             LOG.warning("Neovim's change of " + describe() + " does not fit the document (did Eclipse change it "
                     + "at the same time?); Neovim gets Eclipse's text instead: " + change);
@@ -134,8 +137,8 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         }
         applyingNeovim = true;
         try {
-            Edit edit = change.lastLine() < 0 ? BufferSynchronizer.fullBufferEdit(document, change.newLines())
-                    : BufferSynchronizer.rangeEdit(document, change);
+            Edit edit = change.lastLine() < 0 ? BufferSynchronizer.fullBufferEdit(document, change.newLines(), finalNewline)
+                    : BufferSynchronizer.rangeEdit(document, change, finalNewline);
             if (edit != null) {
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
@@ -150,11 +153,12 @@ public final class UnattachedDocumentSync implements AutoCloseable {
 
     /**
      * How many lines Neovim's buffer would have for this text: Neovim has no empty line after a final
-     * line break, JFace counts one. Example: {@code "a\nb\n"} is 3 JFace lines, 2 Neovim lines.
+     * line break, JFace counts one. Example: {@code "a\nb\n"} is 3 JFace lines, 2 Neovim lines; but
+     * 3 Neovim lines when {@code finalNewline} is false (the last one empty, see {@code LineTextUtil}).
      */
-    static int neovimLineCount(IDocument document) {
+    static int neovimLineCount(IDocument document, boolean finalNewline) {
         int lines = document.getNumberOfLines();
-        return document.getLength() > 0 && LineTextUtil.endsWithLineBreak(document.get()) ? lines - 1 : lines;
+        return finalNewline && LineTextUtil.endsWithLineBreak(document.get()) ? lines - 1 : lines;
     }
 
     // ---- Eclipse to Neovim ----
@@ -195,7 +199,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     /** The document's lines, read on the UI thread (see {@link BufferSynchronizer#pushDocumentToNeovim}). */
     private List<String> documentLinesOnUi() {
         if (ui.isUiThread()) {
-            return BufferSynchronizer.documentToLines(document);
+            return readDocumentLines();
         }
         if (!ui.isAvailable()) {
             return null;
@@ -203,10 +207,17 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         List<List<String>> snapshot = new ArrayList<>(1);
         ui.syncExec(() -> {
             if (!closed) {
-                snapshot.add(BufferSynchronizer.documentToLines(document));
+                snapshot.add(readDocumentLines());
             }
         });
         return snapshot.isEmpty() ? null : snapshot.get(0);
+    }
+
+    /** The document's lines for Neovim, remembering its final newline with them. UI thread. */
+    private List<String> readDocumentLines() {
+        String text = document.get();
+        finalNewline = LineTextUtil.endsWithLineBreak(text);
+        return LineTextUtil.splitDocumentLines(text);
     }
 
     private String describe() {
