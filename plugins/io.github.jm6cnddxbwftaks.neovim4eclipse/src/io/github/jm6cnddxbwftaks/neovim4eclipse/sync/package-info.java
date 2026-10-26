@@ -13,6 +13,8 @@
  *
  * <p>That is for the attached document. Every other document with a buffer is kept in step by an
  * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync}, both ways, so that
- * {@code :bufdo} reaches every open file and a refactoring reaches every buffer.
+ * {@code :bufdo} reaches every open file and a refactoring reaches every buffer. Both ask
+ * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.sync.FinalNewlines} whether a document's last line
+ * break is a final newline, which its text alone cannot tell.
  */
 package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;

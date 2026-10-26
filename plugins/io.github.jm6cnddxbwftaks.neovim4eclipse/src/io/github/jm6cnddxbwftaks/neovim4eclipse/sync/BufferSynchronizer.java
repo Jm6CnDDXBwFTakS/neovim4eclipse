@@ -64,16 +64,6 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      */
     private volatile boolean neovimBehind;
     private final Consumer<BufferChange> bufferChangeListener = this::onNeovimBufferChange;
-    /**
-     * Whether the document's last line break is the file's final newline, after Neovim's last line.
-     * Read from the document when it is sent to Neovim, and used for every Neovim change applied
-     * after that; see {@link LineTextUtil} for why it cannot be read from the text each time.
-     * Example: {@code "a\nb"} pushed, then {@code o} on the last line: Neovim has
-     * {@code ["a", "b", ""]}, the document reads {@code "a\nb\n"}, and this stays {@code false}.
-     * {@code null} until the first push (the attach pushes first, see "Ordering"); until then the
-     * document's text is all there is to go by. UI thread.
-     */
-    private Boolean finalNewline;
 
     private volatile boolean listening;
     private volatile boolean closed;
@@ -233,7 +223,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      */
     private List<String> documentLinesOnUi() {
         if (ui.isUiThread()) {
-            return readDocumentLines();
+            return FinalNewlines.linesToPush(document);
         }
         if (!ui.isAvailable()) {
             return null;
@@ -241,23 +231,16 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         List<List<String>> snapshot = new ArrayList<>(1);
         ui.syncExec(() -> {
             if (!closed) {
-                snapshot.add(readDocumentLines());
+                snapshot.add(FinalNewlines.linesToPush(document));
             }
         });
         return snapshot.isEmpty() ? null : snapshot.get(0);
     }
 
-    /** The document's lines for Neovim, remembering its final newline with them. UI thread. */
-    private List<String> readDocumentLines() {
-        String text = document.get();
-        finalNewline = LineTextUtil.endsWithLineBreak(text);
-        return LineTextUtil.splitDocumentLines(text);
-    }
-
     /**
      * Eclipse document to Neovim lines. The empty "line" after a final line break is not a
-     * Neovim line; the final line break itself is remembered at each push and kept by later edits
-     * ({@link #finalNewline}, {@link LineTextUtil}).
+     * Neovim line, and a final newline is assumed. For reading a document's lines (its indentation);
+     * a push uses {@link FinalNewlines#linesToPush}, which knows the document's final newline.
      */
     public static List<String> documentToLines(IDocument document) {
         return LineTextUtil.splitDocumentLines(document.get());
@@ -280,7 +263,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         changesWhileApplying = 0;
         try {
             boolean fullBuffer = change.lastLine() < 0;
-            boolean newline = finalNewline != null ? finalNewline : LineTextUtil.endsWithLineBreak(document.get());
+            boolean newline = FinalNewlines.of(document);
             Edit edit = fullBuffer && neovimBehind ? null
                     : fullBuffer ? fullBufferEdit(document, change.newLines(), newline)
                     : rangeEdit(document, change, newline);
@@ -312,7 +295,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * {@code null} when it already does. Also used by {@link UnattachedDocumentSync}.
      *
      * @param finalNewline whether the text ends with a final newline after the last line, as
-     *                     remembered from the last push (see {@link #finalNewline})
+     *                     remembered for the document ({@link FinalNewlines})
      */
     static Edit fullBufferEdit(IDocument document, List<String> newLines, boolean finalNewline) {
         String current = document.get();

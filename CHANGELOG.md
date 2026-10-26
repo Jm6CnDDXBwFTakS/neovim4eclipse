@@ -62,7 +62,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Fixed
 
 - `o` on the last line of a file without a final newline showed two new empty lines in Eclipse
-  (and saved them), though Neovim had one and its motions could not reach the second.
+  (and saved them), though Neovim had one and its motions could not reach the second. The empty
+  line it adds now also stays a line after Esc, as in Vim: `Go` goes to it.
 
 ## [0.1.6] - 2026-10-26
 

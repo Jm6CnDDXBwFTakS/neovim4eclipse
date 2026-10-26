@@ -171,24 +171,44 @@ class BufferSynchronizerTest {
     }
 
     /**
-     * Pushing a document that ends with a line break sends no empty last line: Neovim gets the same
-     * file as lines with a final newline, and Neovim's changes are applied that way from then on.
+     * A push keeps a file without a final newline that way: the empty last line that {@code o} made
+     * is sent as a line, so {@code Go} after Esc goes to it and adds a second one, as in Vim.
      */
     @Test
-    void aPushRemembersTheFinalNewlineAgain() {
+    void aPushKeepsAnEmptyLastLineOfAFileWithoutAFinalNewline() {
         IDocument noFinalNewline = new Document("alpha");
         try (BufferSynchronizer noeol = new BufferSynchronizer(noFinalNewline, neovim, UiExecutor.IMMEDIATE)) {
+            noeol.pushDocumentToNeovim();
             noeol.startRemoteListening();
             neovim.neovimChanged(new BufferChange(1, 1, List.of(""))); // o: "alpha\n", no final newline
             noeol.stopRemoteListening();
-            noeol.pushDocumentToNeovim();
+            noeol.pushDocumentToNeovim(); // Esc
             noeol.startRemoteListening();
 
-            assertEquals(List.of(List.of("alpha")), neovim.pushed, "the same file, with a final newline");
-            neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha")));
-            assertEquals("alpha\n", noFinalNewline.get());
-            neovim.neovimChanged(new BufferChange(1, 1, List.of("beta")));
-            assertEquals("alpha\nbeta\n", noFinalNewline.get());
+            assertEquals(List.of(List.of("alpha"), List.of("alpha", "")), neovim.pushed);
+            neovim.neovimChanged(new BufferChange(2, 2, List.of(""))); // Go
+            assertEquals("alpha\n\n", noFinalNewline.get());
+        }
+    }
+
+    /**
+     * A file loses its final newline when Eclipse deletes its last line break (Backspace at the end
+     * in insert mode): Neovim's changes are then applied to a file without one.
+     */
+    @Test
+    void deletingTheLastLineBreakInEclipseDropsTheFinalNewline() throws Exception {
+        IDocument doc = new Document("alpha\n");
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushDocumentToNeovim();
+            doc.replace(5, 1, "");
+            s.pushDocumentToNeovim();
+            s.startRemoteListening();
+
+            assertEquals(List.of(List.of("alpha"), List.of("alpha")), neovim.pushed);
+            neovim.neovimChanged(new BufferChange(1, 1, List.of(""))); // o
+            assertEquals("alpha\n", doc.get());
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha", "")));
+            assertEquals("alpha\n", doc.get(), "no second empty line");
         }
     }
 

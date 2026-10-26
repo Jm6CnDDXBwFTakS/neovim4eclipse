@@ -705,6 +705,24 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("alpha\nbeta\n");
     }
 
+    /**
+     * The empty last line that {@code o} made in a file without a final newline stays a line after
+     * Esc: {@code Go} goes to it and adds a second one, as in Vim, and Neovim has both.
+     */
+    @Test
+    void anEmptyLastLineWithoutAFinalNewlineStaysALine() throws Exception {
+        document.set("alpha\nbeta");
+        settle();
+        typeSlowly("Go");
+        escape(widget);
+        settle();
+        typeSlowly("Go");
+        escape(widget);
+        settle();
+        expectText("alpha\nbeta\n\n");
+        assertEquals(List.of("alpha", "beta", "", ""), session.getBufferLines());
+    }
+
     /** As {@link #fRAndTTakeColonAndSlashAsTheirArgument}, typed at full speed: Neovim reads every key. */
     @Test
     void fRAndTTypedFastTakeColonAndSlashAsTheirArgument() throws Exception {
