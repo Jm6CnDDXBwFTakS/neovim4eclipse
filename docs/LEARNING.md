@@ -629,8 +629,11 @@ UI-thread hop with a bounded wait (`EditorAttachManager.saveForNeovim`).
 existing indexes stay valid), add a reader for the new element to `StateSnapshot` (and a case to
 `StateSnapshotTest`), and use it in `StateSync.publishState`.
 
-**Handle an Ex command in Eclipse instead of Neovim.** Classify it in `util/HostExCommand` (unit-test
-it); say what it does in `util/HostCommandRunner`, adding a method to its `Ide` interface if the IDE
+**Handle an Ex command in Eclipse instead of Neovim.** Add Neovim's full name for it (what
+`nvim_parse_cmd()` returns as `cmd`: `:wa` is `wall`) to the table in `util/HostCommand`, with what
+arguments it takes (unit-test it in `HostCommandTest`); Neovim's side gets the table at start-up, so
+`:that-command` typed, mapped or recorded now runs as `:Eclipse that-command`. Say what it does in
+`util/HostCommandRunner`, adding a method to its `Ide` interface if the IDE
 must do something new (unit-test that in `HostCommandRunnerTest` with the fake `Ide`); then implement
 the method in `editor/HostCommands` with Eclipse's API (`editor/EclipseFileCommands`, `EditorTabs`).
 

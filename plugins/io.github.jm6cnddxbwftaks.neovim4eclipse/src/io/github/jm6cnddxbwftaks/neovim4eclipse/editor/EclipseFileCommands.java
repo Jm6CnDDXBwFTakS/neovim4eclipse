@@ -30,7 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
 
 /**
  * Vim's file commands carried out by Eclipse: save, close, open and revert. Which command means
- * what is decided by {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostExCommand}; the
+ * what is decided by {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand}; the
  * dispatching is done by {@link HostCommands}.
  *
  * <p>Why Eclipse: Neovim's buffers are copies the plug-in keeps in step with Eclipse's documents;

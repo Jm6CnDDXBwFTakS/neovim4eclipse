@@ -8,8 +8,8 @@ import java.util.function.Consumer;
 
 /**
  * Decides what a host {@code :} command does in the IDE: which files to save or close, in which order,
- * and whether a failed save stops the close. {@link HostExCommand} says <em>which</em> command was
- * typed; this class turns it into calls on the small {@link Ide} interface. The editor's
+ * and whether a failed save stops the close. {@link HostCommand} says <em>which</em> command Neovim
+ * parsed; this class turns it into calls on the small {@link Ide} interface. The editor's
  * {@code HostCommands} implements {@link Ide} with Eclipse's save, close, open and tab switching,
  * so the decisions here are tested without a workbench ({@code HostCommandRunnerTest}).
  *
@@ -74,21 +74,17 @@ public final class HostCommandRunner {
     }
 
     /**
-     * Runs {@code raw} in the IDE if it is a host command. Any thread: the work goes through
-     * {@code onUi}; the answer does not wait for it.
-     *
-     * @param raw the command line, with or without {@code :}
-     * @return {@code true} if the command is the IDE's and must not reach Neovim
+     * Runs {@code cmd} in the IDE. Any thread: the work goes through {@code onUi}, and this does not
+     * wait for it.
      */
-    public boolean run(String raw) {
-        HostExCommand cmd = HostExCommand.parse(raw);
+    public void run(HostCommand cmd) {
         boolean force = cmd.force();
         switch (cmd.kind()) {
             case WRITE -> onUi.accept(() -> ide.save(cmd.createFolders(), cmd.writesUnchanged()));
             case WRITE_ALL -> onUi.accept(ide::saveAll);
             case QUIT -> onUi.accept(() -> ide.close(force));
             case QUIT_ALL -> onUi.accept(() -> ide.closeAll(force));
-            case BUFFER_DELETE -> onUi.accept(() -> ide.closeBuffers(cmd.buffers(), force));
+            case BUFFER_DELETE -> onUi.accept(() -> ide.closeBuffers(cmd.args(), force));
             // Closed with force = true once saved: the save already dealt with the changes.
             case WRITE_QUIT -> onUi.accept(() -> {
                 if (ide.save(cmd.createFolders(), cmd.writesUnchanged()) || force) {
@@ -100,15 +96,11 @@ public final class HostCommandRunner {
                     ide.closeAll(true);
                 }
             });
-            case EDIT -> onUi.accept(() -> ide.edit(cmd.argument(), force));
+            case EDIT -> onUi.accept(() -> ide.edit(cmd.file(), force));
             case TAB_NEXT -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.NEXT, cmd.count()));
             case TAB_PREVIOUS -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.PREVIOUS, cmd.count()));
             case TAB_FIRST -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.FIRST, 0));
             case TAB_LAST -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.LAST, 0));
-            case NONE -> {
-                return false;
-            }
         }
-        return true;
     }
 }

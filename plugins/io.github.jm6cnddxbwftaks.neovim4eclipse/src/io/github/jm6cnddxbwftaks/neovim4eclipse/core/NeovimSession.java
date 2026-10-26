@@ -12,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -30,6 +29,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * Façade over one embedded {@code nvim --embed} process, through the plug-in's own msgpack-rpc
@@ -114,8 +114,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * characters at the cursor. (The Lua hook stands down too; this is the second guard.)
      */
     private volatile boolean nvimManagesClipboard;
-    /** Asked before a {@code :} command line is executed on Enter (used for host-side {@code :w}/{@code :q}). */
-    private volatile Predicate<String> hostExHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
     private volatile Runnable leaveInsertPush;
     /** Saves a document when Neovim writes its buffer; see {@link #setWriteHandler}. */
@@ -145,8 +143,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // built first and given this::modeChanged, which reaches keyInput only when a mode arrives.
         this.state = new StateSync(new StateSyncNeovim(), events, status, buffers::isAttached,
                 this::modeChanged);
-        this.keyInput = new KeyInput(new KeyInputNeovim(), state, status, () -> hostExHandler,
-                () -> leaveInsertPush);
+        this.keyInput = new KeyInput(new KeyInputNeovim(), state, status, () -> leaveInsertPush);
         this.clipboard = new ClipboardRegisters(clipboard, System.lineSeparator());
     }
 
@@ -195,6 +192,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
         int channel = await(api.getChannelId());
         await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
+        await(api.execLua(LuaScripts.HOST_COMMANDS, List.of(HostCommand.rulesForNeovim())));
         Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -274,10 +272,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void driveInsertFromNeovim() {
         keyInput.driveFromNeovim();
-    }
-
-    public void setHostExHandler(Predicate<String> handler) {
-        this.hostExHandler = handler;
     }
 
     public void setLeaveInsertPush(Runnable leaveInsertPush) {
@@ -372,6 +366,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     public void removeSelectionListener(Consumer<VisualSelection> listener) {
         events.removeSelectionListener(listener);
+    }
+
+    /**
+     * Notified (on an RPC thread) when Neovim hands a command to Eclipse: {@code :q} typed, from a
+     * mapping or a macro, run as {@code :Eclipse quit} (see {@link HostCommand}).
+     */
+    public void addHostCommandListener(Consumer<HostCommand> listener) {
+        events.addHostCommandListener(listener);
+    }
+
+    public void removeHostCommandListener(Consumer<HostCommand> listener) {
+        events.removeHostCommandListener(listener);
     }
 
     /** Notified (on an RPC thread) when a key mapped in Neovim asks the IDE to act; see {@link IdeAction}. */
@@ -813,6 +819,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
+        public void onHostCommand(HostCommand command) {
+            LOG.fine(() -> "host command " + command);
+            events.hostCommand(command);
+        }
+
+        @Override
         public void onMessageEvent(MessageEvent event) {
             status.onMessageEvent(event);
         }
@@ -922,16 +934,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void awaitKeysConsumed() throws Exception {
             await(api.execLua("return 0", List.of()));
-        }
-
-        @Override
-        public String commandLineType() throws Exception {
-            return text(await(api.execLua(LuaScripts.GET_CMDTYPE, List.of())));
-        }
-
-        @Override
-        public String commandLineText() throws Exception {
-            return text(await(api.execLua(LuaScripts.GET_CMDLINE, List.of())));
         }
 
         @Override

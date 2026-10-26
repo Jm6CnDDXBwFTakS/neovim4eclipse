@@ -320,10 +320,16 @@ view to the controller, which shows it in the box. The box edits nothing:
 - **Working folder:** the controller sets the window's folder (`:lcd`, silently) to the editor's project
   root, or the file's folder outside a project, so that `:e` completion and `:!` start there (decision D5).
   Where `:e` looks for a name is still the plug-in's rule, the file's folder first (`util/EditPath`).
-- **Host commands:** on Enter, `KeyInput.tryHostCommandLine` reads Neovim's line (`getcmdline()`) and
-  offers it to the editor; a command Eclipse runs (`:w`, `:q`, `:e`, `:tabn` ...) is closed in Neovim with
-  Esc, which keeps it in the history.
-- Host commands are classified by `util/HostExCommand`, turned into IDE calls by `util/HostCommandRunner`
+- **Host commands are parsed by Neovim** (`LuaScripts.HOST_COMMANDS`): Enter on a `:` line goes to Neovim
+  like any key. Just before the line runs, a `CmdlineLeavePre` autocommand parses it with
+  `nvim_parse_cmd()`; a command Eclipse carries out (`:w`, `:q`, `:e`, `:tabn` ..., the table in
+  `util/HostCommand`) is replaced with `setcmdline()` by `:Eclipse[!] {full name} {args}`, a user command
+  that sends `eclipse_command` and puts the typed line back in the history. Example: `:tabn 3` runs as
+  `:Eclipse tabnext 3`. Since this happens on Neovim's command line, a mapping's `:q<CR>`, a macro,
+  `:normal` and `@:` go the same way. Replacing the line rather than cancelling it (`v:event.abort`) keeps
+  `@:` working: a cancelled line is no "last command line" (E30). Experiment X7 of the cleanup plan.
+- The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the attached editor
+  (`NeovimSession.addHostCommandListener`), is turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
   `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by
   the file's name, and a write creates the file through the document provider instead of Eclipse's
@@ -486,7 +492,7 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
 | Which key goes to Neovim or Eclipse | `core/KeyRouter` (SWT glue: `editor/KeyInterceptor`) | `KeyRouterTest` |
 | The mouse in normal and visual mode | `editor/NeovimMouse` (which events, the character under the pointer), `core/MouseInput`, `util/LatestValue` (drags merged), `KeyInput.mouse`, `LuaScripts.MOUSE` (Neovim's screen cell) | `tests/swt` `NeovimMouseTest`, `MouseInputTest`, `LatestValueTest`, `KeyInputTest`, `NeovimSessionIntegrationTest` (real Neovim: click off its screen, word, line, drag, Shift+click, `'mouse'` off), UI `MouseEndToEndTest`, `EditorEndToEndTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
-| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `util/HostExCommand` (which command), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostExCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
+| Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `LuaScripts.HOST_COMMANDS` (Neovim parses and hands over), `util/HostCommand` (which commands, by full name), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `NeovimSessionIntegrationTest` (typed, mapping, macro, `@:`, arguments), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |

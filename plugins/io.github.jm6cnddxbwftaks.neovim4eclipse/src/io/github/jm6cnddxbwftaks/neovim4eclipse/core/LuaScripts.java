@@ -162,6 +162,125 @@ final class LuaScripts {
             """;
 
     /**
+     * Hands the ex commands Eclipse carries out ({@code :w}, {@code :q}, {@code :e file},
+     * {@code :tabn} ...; see {@code util/HostCommand}) from Neovim's command line to Eclipse. The
+     * argument names those commands by Neovim's full name, with what each may have after it
+     * ({@code HostCommand.rulesForNeovim()}), as words: {@code "edit=any quit=none tabnext=count ..."}.
+     *
+     * <h2>How</h2>
+     * <ol>
+     *   <li>{@code :Eclipse[!] {command} {args}} is a user command that sends {@code eclipse_command}
+     *       to Eclipse ({@code :Eclipse tabnext 3}). Anyone can use it, in a mapping too.</li>
+     *   <li>Just before a {@code :} line runs, {@code CmdlineLeavePre} parses it with
+     *       {@code nvim_parse_cmd()}. If it is one of the commands, {@code setcmdline()} replaces it
+     *       with the {@code :Eclipse} form, which Neovim then runs instead: {@code :tabn 3} becomes
+     *       {@code :Eclipse tabnext 3}, {@code :q!} {@code :Eclipse! quit}. A {@code |} and what
+     *       follows are kept ({@code :Eclipse} is defined with {@code bar}).</li>
+     *   <li>{@code :Eclipse} puts the line as typed back into the history, in place of its own, so
+     *       Up in the {@code :} box recalls {@code tabn 3}.</li>
+     * </ol>
+     *
+     * <p>Why replace the line rather than cancel it ({@code v:event.abort} in {@code CmdlineLeave}):
+     * a cancelled line is not "the last command line", so {@code @:} would fail with E30, while the
+     * replaced one is, and {@code @:} repeats it. Only {@code :reg :} shows the replacement.
+     * (Experiment X7 of the cleanup plan, 2026-10-26.)
+     *
+     * <p>Not replaced, so left to Neovim: a range the command does not take ({@code :5,10w}),
+     * arguments it does not take ({@code :q foo}: Neovim reports E488), a line Neovim cannot parse.
+     * A range of buffers ({@code :3,5bd}, {@code :%bd}) becomes the listed buffers it covers, and a
+     * count in front of a tab command ({@code :3tabn}) its argument.
+     *
+     * <p>{@code CmdlineLeavePre} fires on Esc too; {@code v:char} tells which key ended the line, and
+     * only Enter runs it. It fires for {@code :} typed by a mapping, a macro, {@code :normal} and
+     * {@code feedkeys()} as well, each line on its own, but not for {@code <Cmd>}, for the commands
+     * {@code :bufdo} runs, or after {@code |}: those reach Neovim, whose buffer autocommands tell
+     * Eclipse ({@code DOCUMENT_BUFFER}).
+     */
+    static final String HOST_COMMANDS = """
+            local rules = {} -- { quit = 'none', edit = 'any', ... }
+            for name, rule in select(1, ...):gmatch('(%a+)=(%a+)') do
+              rules[name] = rule
+            end
+            local typed -- the line as typed while its :Eclipse replacement runs (for the history)
+            vim.api.nvim_create_user_command('Eclipse', function(o)
+              if typed then
+                vim.fn.histdel(':', -1) -- the replacement
+                vim.fn.histadd(':', typed)
+                typed = nil
+              end
+              local name = o.fargs[1]
+              if not rules[name] then
+                vim.api.nvim_echo({ { 'E492: Not an Eclipse command: ' .. name } }, true, { err = true })
+                return
+              end
+              vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, vim.list_slice(o.fargs, 2))
+            end, { nargs = '+', bang = true, bar = true, desc = 'Eclipse carries out an ex command (:Eclipse quit)' })
+
+            -- The line to run instead of `line`, or nil to leave it alone.
+            local function replacement(line)
+              local ok, p = pcall(vim.api.nvim_parse_cmd, line, {})
+              if not ok then
+                return nil -- Neovim reports it when it runs the line
+              end
+              local rule = rules[p.cmd]
+              if not rule then
+                return nil
+              end
+              local args = vim.deepcopy(p.args)
+              local range = p.range or {}
+              if #range > 0 then
+                if rule == 'buffers' and #args == 0 then
+                  -- :3,5bd, :%bd, :bd 3 (a number after :bd is a range too): the listed buffers it covers
+                  local last = range[2] or range[1]
+                  for _, b in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
+                    if b.bufnr >= range[1] and b.bufnr <= last then
+                      args[#args + 1] = tostring(b.bufnr)
+                    end
+                  end
+                  if #args == 0 then
+                    return nil -- no such buffer: Neovim says so
+                  end
+                elseif rule == 'count' and #args == 0 and #range == 1 then
+                  args = { tostring(range[1]) } -- :3tabn is :tabn 3
+                else
+                  return nil
+                end
+              end
+              if rule == 'none' and #args > 0 then
+                return nil
+              end
+              if rule == 'count' and (#args > 1 or (#args == 1 and not args[1]:match('^%d+$'))) then
+                return nil
+              end
+              local cmd = 'Eclipse' .. (p.bang and '!' or '') .. ' ' .. p.cmd
+              if #args > 0 then
+                cmd = cmd .. ' ' .. table.concat(args, ' ') -- as typed: a name keeps its backslashes
+              end
+              if p.nextcmd ~= '' then
+                cmd = cmd .. ' | ' .. p.nextcmd
+              end
+              return cmd
+            end
+
+            vim.api.nvim_create_autocmd('CmdlineLeavePre', {
+              desc = 'Eclipse carries out :w, :q, :e, :tabn ...',
+              callback = function()
+                -- Only a : line, and only when Enter runs it (v:char is the key that ends the line:
+                -- CR or NL, spelled as string.char because a backslash escape is Java's too).
+                if vim.fn.getcmdtype() ~= ':' or (vim.v.char ~= string.char(13) and vim.v.char ~= string.char(10)) then
+                  return
+                end
+                local line = vim.fn.getcmdline()
+                local cmd = replacement(line)
+                if cmd then
+                  typed = line
+                  vim.fn.setcmdline(cmd)
+                end
+              end,
+            })
+            """;
+
+    /**
      * Everything the UI needs after a key, in ONE round trip:
      * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, recording,
      * statusline, bufnr, block, full_mode}}. {@code bufnr} tells whether the cursor is still in the
@@ -278,8 +397,8 @@ final class LuaScripts {
      * The one here asks Eclipse to save the document (the {@code eclipse_write} request, answered by
      * {@link NotificationBridge}) and, if that worked, clears {@code 'modified'}, as a real write does.
      * So {@code :bufdo %s/a/b/g | update}, {@code :wall} and a {@code <leader>w} mapping in
-     * {@code init.lua} all save through Eclipse. ({@code :w} typed in the {@code :} box never gets here:
-     * Eclipse handles it before Neovim sees it, see {@code util/HostExCommand}.)
+     * {@code init.lua} all save through Eclipse. ({@code :w} on Neovim's command line never gets here:
+     * it is handed to Eclipse as {@code :Eclipse write}, see {@link #HOST_COMMANDS}.)
      *
      * <p>A write under another name ({@code :w other.txt}) is refused: Eclipse saves a document only
      * as its own file. The names are compared after {@code resolve()} and {@code vim.fs.normalize}:
@@ -436,8 +555,4 @@ final class LuaScripts {
 
     /** Evaluates the Vim expression in argument 1 ({@code bufnr('a.txt')}) and returns its value. */
     static final String EVAL = "return vim.fn.eval(select(1, ...))";
-
-    static final String GET_CMDLINE = "return vim.fn.getcmdline()";
-
-    static final String GET_CMDTYPE = "return vim.fn.getcmdtype()";
 }

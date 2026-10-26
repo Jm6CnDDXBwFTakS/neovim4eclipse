@@ -420,7 +420,7 @@ public final class EditorAttachManager {
 
     /**
      * {@code :bd 3 other.txt}: closes the editors of the named buffers, as {@code :bd} alone closes
-     * the current one ({@code HostExCommand.Kind.BUFFER_DELETE}). A number is a buffer number; a
+     * the current one ({@code HostCommand.Kind.BUFFER_DELETE}). A number is a buffer number; a
      * name is looked up in Neovim with {@code bufnr()} ({@link BufferRefs}), asynchronously, so its
      * editor closes a moment later. A buffer no editor shows gets Vim's error in {@code from}'s
      * message line. With two editors on one file (Window > New Editor), the first is closed. UI

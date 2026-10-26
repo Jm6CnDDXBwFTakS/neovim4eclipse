@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * {@link NotificationBridge} as the RPC layer calls it: {@code notification(name, args)} and
@@ -62,6 +63,9 @@ class NotificationBridgeTest {
             @Override public void onIdeAction(IdeAction action) {
                 events.add("action:" + action.name() + ":" + action.count());
             }
+            @Override public void onHostCommand(HostCommand command) {
+                events.add("command:" + command.kind() + (command.force() ? "!" : "") + ":" + command.args());
+            }
             @Override public void onCmdline(List<CmdlineEvent> cmdline) {
                 for (CmdlineEvent event : cmdline) {
                     events.add(event instanceof CmdlineEvent.Show show ? "cmdline" + show.firstc() + show.content()
@@ -94,6 +98,16 @@ class NotificationBridgeTest {
         notify("eclipse_action", "definition");
         notify("eclipse_action");
         assertEquals(List.of("action:next_tab:3", "action:definition:0"), events);
+    }
+
+    /** {@code :Eclipse[!] name args}: Neovim's full name, the bang, the arguments as a list. */
+    @Test
+    void hostCommandCarriesNameBangAndArguments() {
+        notify("eclipse_command", "edit", false, List.of("my file.txt"));
+        notify("eclipse_command", "quit", true, List.of());
+        notify("eclipse_command", "substitute", false, List.of()); // not Eclipse's: dropped
+        notify("eclipse_command", "quit");                          // malformed: dropped
+        assertEquals(List.of("command:EDIT:[my file.txt]", "command:QUIT!:[]"), events);
     }
 
     @Test

@@ -12,16 +12,6 @@ import org.junit.jupiter.api.Test;
 class NvimKeysTest {
 
     @Test
-    void enterKeys() {
-        for (String k : new String[] { "<CR>", "CR", "\r", "\n", "<C-CR>" }) {
-            assertTrue(NvimKeys.isEnter(k), k);
-        }
-        assertFalse(NvimKeys.isEnter("j"));
-        assertFalse(NvimKeys.isEnter("<Esc>"));
-        assertFalse(NvimKeys.isEnter(null));
-    }
-
-    @Test
     void bufferMutatingSingleKeys() {
         for (char c : "pPxXs~.".toCharArray()) {
             assertTrue(NvimKeys.isBufferMutating(String.valueOf(c)), String.valueOf(c));

@@ -14,7 +14,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
  * {@code :bd} with a buffer number or name closes that buffer's editor, not the one it was typed in
- * ({@code HostExCommand.Kind.BUFFER_DELETE}). Which calls a command makes is tested without Eclipse
+ * ({@code HostCommand.Kind.BUFFER_DELETE}). Which calls a command makes is tested without Eclipse
  * in {@code HostCommandRunnerTest}; this checks the real lookup, through Neovim's {@code bufnr()}.
  */
 class BufferDeleteEndToEndTest extends EndToEndTestBase {
@@ -54,7 +54,7 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
         ITextEditor other = openOtherAndReturn();
         runInBox(widget, "bd 999");
         waitUntil("the E516 message", TIMEOUT_MS,
-                () -> messageText(editor).equals("E516: No buffers were deleted: bd 999"),
+                () -> messageText(editor).equals("E516: No buffers were deleted"), // Neovim's own: 999 is no listed buffer
                 () -> "; the message line shows " + messageText(editor));
         runInBox(widget, "bd nosuchfile");
         waitUntil("the E94 message", TIMEOUT_MS,

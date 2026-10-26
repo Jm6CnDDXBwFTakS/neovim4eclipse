@@ -38,6 +38,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * Binds one {@link ITextEditor} to a {@link NeovimSession}.
@@ -110,6 +111,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<StatusInfo> statusListener = this::onStatusChanged;
     private final Consumer<CommandOutput> outputListener = this::onOutput;
     private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
+    private final Consumer<HostCommand> hostCommandListener = this::onHostCommand;
     private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
@@ -154,7 +156,6 @@ public final class NeovimEditorController implements AutoCloseable {
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
-        session.setHostExHandler(cmd -> HostCommands.tryHandleEx(cmd, editor));
         session.setLeaveInsertPush(() -> {
             try {
                 synchronizer.pushDocumentToNeovim();
@@ -170,6 +171,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addStatusListener(statusListener);
         session.addOutputListener(outputListener);
         session.addIdeActionListener(ideActionListener);
+        session.addHostCommandListener(hostCommandListener);
         session.addCmdlineListener(cmdlineListener);
 
         modeStatus.addTo(editor.getEditorSite());
@@ -336,6 +338,18 @@ public final class NeovimEditorController implements AutoCloseable {
                         () -> session.normalAsync("gd"));
             }
         });
+    }
+
+    /**
+     * Neovim handed a command to Eclipse ({@code :q} as {@code :Eclipse quit}). It is this editor's
+     * when Neovim drives it: one Neovim serves every editor, and only the attached one listens.
+     * Session thread; the work goes to the UI thread.
+     */
+    private void onHostCommand(HostCommand command) {
+        if (closed || !neovimModeActive) {
+            return;
+        }
+        HostCommands.run(command, editor);
     }
 
     /**
@@ -534,6 +548,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeStatusListener(statusListener);
             session.removeOutputListener(outputListener);
             session.removeIdeActionListener(ideActionListener);
+            session.removeHostCommandListener(hostCommandListener);
             session.removeCmdlineListener(cmdlineListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);

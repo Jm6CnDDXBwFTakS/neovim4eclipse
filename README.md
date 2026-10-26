@@ -279,7 +279,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
 | `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes) |
-| `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). `:%bd` closes all editors |
+| `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). A range closes the editors of the buffers it covers (`:3,5bd`); `:%bd` closes all editors |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
 | `:wqa[ll]`, `:xa[ll]` | save all, then close all |
@@ -289,10 +289,17 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 
-The commands above are the ones typed in the `:` box. Neovim can also write a buffer by itself:
-`:update` inside `:bufdo` or `:argdo`, `:wall`, or a mapping in your `init.lua` such as
-`<leader>w` → `:w<CR>`. Those writes save the file through Eclipse too (so save actions run as usual),
-and Neovim never writes a file itself. A write under another name (`:w other.txt`) is refused; use
+Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
+work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
+`:q<CR>`), from a macro, with `:normal`, and repeated with `@:`. Neovim hands each one to Eclipse as
+`:Eclipse quit`, `:Eclipse! edit file` ..., a command you can also use in your own mappings; the
+history keeps what you typed. A command after `|` runs after it (`:w | echo "saved"`). Not handed over,
+so Neovim's: a line run by `<Cmd>` or Lua (`vim.cmd.quit()`), the commands `:bufdo` runs, a command
+after `|` (`:echo 1 | q`), and a range a command does not take (`:5,10w`).
+
+Neovim can also write a buffer by itself: `:update` inside `:bufdo` or `:argdo`, or `vim.cmd.write()`
+in Lua. Those writes save the file through Eclipse too (so save actions run as usual), and Neovim
+never writes a file itself. A write under another name (`:w other.txt` from Lua) is refused; use
 *File → Save As*.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
@@ -573,8 +580,9 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Host commands are a fixed set** (table under *Command line*). `:w <otherfile>` saves the current editor and ignores
-   the name; `:e` does not expand `%` or wildcards; tab commands only move within the current editor
+3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w <otherfile>` saves the current editor and ignores
+   the name; `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after `|`
+   or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`
    creates it.

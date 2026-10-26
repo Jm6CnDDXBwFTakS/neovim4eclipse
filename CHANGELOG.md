@@ -20,6 +20,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- `:w`, `:q`, `:e`, `:tabn` and the other commands Eclipse carries out are now read by Neovim, so they
+  work from a mapping (`<leader>q` → `:q<CR>` closes the editor instead of quitting Neovim's window),
+  a macro, `:normal` and `@:`, and are written exactly as in Neovim. A range of buffers works
+  (`:3,5bd`), a count before a tab command (`:2tabn`), and a command after `|` still runs
+  (`:w | echo "saved"`). New: `:Eclipse quit`, `:Eclipse! edit file` ... run them by Neovim's full name,
+  for your own mappings.
 - A save that Eclipse cannot do, asked for by Neovim (`:wall`, `:bufdo update`, a mapping's `:w`),
   now fails the command, as a failed write does in Neovim: `:bufdo update` stops at that file instead of
   going on, and `:w | q` in a mapping no longer goes on to close the editor. The error is shown as
