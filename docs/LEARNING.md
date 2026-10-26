@@ -468,6 +468,26 @@ Every column crossing the boundary goes through `util/Utf8Columns`.
   statusline in one round trip, instead of many separate requests per key. (Messages and the pending
   command are not in it: they arrive as UI events, see 2.4.)
 
+**Testing a chunk.** A script is tested in Lua, inside a headless Neovim, not through the session
+(`tests/unit/src/test/lua/*_spec.lua`, run by `LuaScriptsInNeovimTest` under `-Pintegration`). The
+harness replaces `vim.rpcnotify` with a recorder and `vim.rpcrequest` with answers the test gives,
+then types keys with `nvim_feedkeys(keys, 'xt')`: `x` runs them to the end before the call returns,
+`t` makes them count as typed (mappings, the command line and its autocommands apply). So there is
+nothing to wait for:
+
+```lua
+t.test(':wa goes to Eclipse', function()
+  t.setup()                                   -- LuaScripts.SETUP, as the session runs it first
+  t.run('HOST_COMMANDS', t.host_rules)
+  t.type(':wa<CR>')
+  t.eq({ { 'wall', false, {} } }, t.sent('eclipse_command'))
+end)
+```
+
+When the keys run out, `x` ends a pending mode as Esc would; `t.during(keys, check)` runs a check
+from a mapping while visual mode or the command line is still on. `src/test/lua/harness.lua` has
+the details.
+
 `nvim_exec2(cmd, { output = true })` runs an Ex command and returns what it printed, instead of
 showing it. The plug-in uses it once, at start-up, to read `:messages` when the user's configuration
 reported errors (`NeovimConnection.waitForStartup`).
@@ -611,15 +631,17 @@ writes it *before* opening the dialog (so a crash does not repeat it), and opens
 reading counts, prefixes and arguments (`fZ` is not `ZZ`). Add a constant to `core/IdeAction`, a
 `vim.keymap.set` in `LuaScripts.SETUP` that calls `vim.rpcnotify(0, 'eclipse_action', '<name>', vim.v.count)`
 (inside the `neovim4eclipse_ide_keys` check if the user may want Neovim's meaning back), and a `case`
-in `editor/IdeActions.run`. Test it in `NeovimSessionIntegrationTest` (the notification arrives) and,
-if it changes the workbench, in a UI test. Example: `ZZ` and `ZQ` (`save_and_close`, `close`). Why
+in `editor/IdeActions.run`. Test the mapping in Lua (`src/test/lua/setup_spec.lua`: the key sends
+the notification, with its count), the reading of it in `NotificationBridgeTest`, and, if it changes
+the workbench, the whole way in a UI test. Example: `ZZ` and `ZQ` (`save_and_close`, `close`). Why
 not Java: until 0.1.7 `KeyRouter` followed Vim's grammar itself (`KeyGrammar`, 392 lines) to know
 whether a `Z` or `:` started a command, and every new case (`gqq`, `zfzf`, `g??`) was a bug first.
 
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
 `vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `case "eclipse_<name>"` to
 `NotificationBridge.notification` (with a private method that reads the arguments) and a method to
-its `Sink`; implement it in `NeovimSession.EventSink`. If the
+its `Sink`; implement it in `NeovimSession.EventSink`. Test the autocommand in a Lua spec
+(`t.sent('eclipse_<name>')`) and the reading in `NotificationBridgeTest`. If the
 event changes state the session keeps (like mode or cursor), record it in `StateSync` and give it a
 listener list in `SessionEvents`.
 

@@ -64,7 +64,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   `timeoutReliant` (left out of -Pui, -Pintegration and CI), only when no rewrite helps. See
   CONTRIBUTING.md, "Tests on a loaded machine".
 - Put each test in the cheapest module that can run it: `tests/unit`, then `tests/text`, then
-  `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in").
+  `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in"). Lua in
+  `core/LuaScripts` is tested in Lua (`tests/unit/src/test/lua/*_spec.lua`, a headless Neovim, no
+  Java session), not through `NeovimSession`.
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse
   classes as thin glue. Large classes are split by concern (see `core/package-info.java`).
 
