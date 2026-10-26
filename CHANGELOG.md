@@ -32,6 +32,16 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   command, so they are in the history, `@:` repeats them and a macro being recorded contains them.
 - Commands from the `:` box are kept in Neovim's history as you typed them, without a `silent` in
   front.
+- The `:`, `/` and `?` box is now Neovim's own command line, shown in the editor: every key goes to
+  Neovim. Up and Down browse Neovim's history (the same as in a terminal, kept between sessions), Tab
+  completes as your `'wildmode'` says, `Ctrl-R` inserts a register, and your command-line mappings and
+  abbreviations work. The box also shows prompts (`input()`, `confirm()`), and opens for every command
+  line Neovim opens, `:'<,'>` from visual mode included.
+- While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back.
+- `:e` file names complete from the editor's project folder: Neovim's window now works there (`:lcd`).
+  `:e` still looks next to the current file first.
+- `q:` (Neovim's command-line window, which Eclipse cannot show) now closes at once with a message
+  instead of leaving Neovim in a window you cannot see.
 - The `Ctrl-V` block's highlight is now measured by Neovim itself, so it always covers exactly what
   Neovim's block commands act on, also for characters whose screen width the plug-in had to guess
   (emoji, rarer wide characters, your `'ambiwidth'`).

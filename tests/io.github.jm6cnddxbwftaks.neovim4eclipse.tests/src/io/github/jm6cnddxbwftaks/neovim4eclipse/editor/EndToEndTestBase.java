@@ -284,13 +284,12 @@ abstract class EndToEndTestBase {
     }
 
     /**
-     * Types {@code :} into {@code target}, waits for the box, and types {@code command} after it.
+     * Types {@code :} into {@code target}, waits for the box, and puts {@code command} into it.
      *
-     * <p>Waits until the box shows the command, because the insert may land a moment later. On
-     * macOS a text field selects its whole content (the {@code :}) when it gains focus, so the
-     * insert would replace the prefix. The box's prefix guard refuses that edit and applies it after
-     * the prefix in a later {@code asyncExec} (see {@code CommandLineBox.protectPrefix}). An Enter
-     * sent before then would submit an empty command line.
+     * <p>The {@code :} goes to Neovim, which opens its command line; the box opens when Neovim
+     * reports it. The command is inserted into the box as a paste would be: the box refuses the edit
+     * and sends the text to Neovim ({@code CommandLineBox.onEdit}), so this waits until Neovim's
+     * report shows it. An Enter sent before then would run a shorter line.
      */
     Text openBox(StyledText target, String command) {
         type(target, ':');

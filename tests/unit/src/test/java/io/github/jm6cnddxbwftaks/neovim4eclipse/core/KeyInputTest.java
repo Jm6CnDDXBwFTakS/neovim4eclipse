@@ -277,7 +277,8 @@ class KeyInputTest {
         type("<CR>");
 
         assertEquals(List.of("w"), offered);
-        assertEquals(List.of("type <Esc>", "bufferLines", "snapshot"), nvim.calls,
+        // No buffer sync: Eclipse runs the command later (a revert, :e!, must not be overwritten).
+        assertEquals(List.of("type <Esc>", "snapshot"), nvim.calls,
                 "Neovim's command line is cancelled, Enter is not typed");
     }
 

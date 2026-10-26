@@ -262,8 +262,10 @@ final class KeyInput {
             String text = nvim.commandLineText();
             Predicate<String> handler = hostExHandler.get();
             if (handler != null && type.startsWith(":") && !text.isBlank() && handler.test(text.strip())) {
+                // Esc only closes Neovim's line (and keeps it in the history). No buffer sync: the
+                // IDE does the command later, on its UI thread, and a sync queued now would put
+                // Neovim's old text back over a revert (:e!) that Eclipse then sends to Neovim.
                 nvim.type("<Esc>");
-                state.syncBuffer();
                 state.publishState();
                 LOG.fine("Host handled cmdline: " + text);
                 return true;

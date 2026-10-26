@@ -151,8 +151,9 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Tab in the {@code :} box, the whole way: Neovim completes {@code :e} names in the edited
-     * file's folder (not its own working directory), and Enter opens the completed file.
+     * Tab in the {@code :} box, the whole way: Neovim completes {@code :e} names in the window's
+     * folder, which is the project's root ({@code :lcd}, set when the editor is attached), and Enter
+     * opens the completed file.
      */
     @Test
     void tabCompletesAFileNameForEditAndEnterOpensIt() throws Exception {

@@ -244,24 +244,29 @@ a moment on each error, like Vim's `'visualbell'`, for when your eyes are on the
 
 ## Command line (`:`, `/`, `?`)
 
-`:`, `/` and `?` open a single text box near the bottom edge of the editor, as wide as the editor
-minus a small padding and in the editor's font. Enter runs it; Esc or Backspace on the
-empty box cancels; clicking elsewhere also cancels it; Up/Down browse a history (kept separately for commands and
-searches). `:` from visual mode leaves visual mode and pre-fills `:'<,'>`. While the box has focus the
-Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it.
+`:`, `/` and `?` open Neovim's own command line, shown in a single text box near the bottom edge of
+the editor, as wide as the editor minus a small padding and in the editor's font. Every key you type
+in it goes to Neovim, so it behaves exactly like Neovim's command line: Enter runs it, Esc or
+Backspace on the empty line cancels, Up/Down browse Neovim's history (the same as in a terminal,
+kept between sessions), `Ctrl-R` inserts a register, and your command-line mappings and
+abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. Clicking elsewhere cancels the
+line. While the box has focus the Vim `Ctrl` bindings are off, so `Ctrl-V` pastes into it; text from
+an input method (IME) goes in the same way.
 
-The box also opens when a mapping in your `init.lua` opens a command line
+The box opens for every command line Neovim opens: a mapping in your `init.lua`
 (`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript
-`nnoremap ; :`), when a count comes before `:` (`2:` gives `:.,.+1`), and for `!` with a
-motion (`!!` gives `:.!`), with what Neovim has typed so far. A search line opened this way inside an
-operator (`vim.keymap.set('n', '<Space>d', 'd/')`) keeps the operator: Enter in the box completes it.
+`nnoremap ; :`), a count before `:` (`2:` gives `:.,.+1`), `!` with a motion (`!!` gives `:.!`), a
+search inside an operator (`d/`), and prompts such as `input()` and `confirm()`.
 
-In the `:` box, Tab completes the line as Neovim's own command line does (commands, options and their
-values, buffers, help tags, variables, functions, file names), following your `'wildmode'`; Shift+Tab goes
-back. A line above the box lists the candidates, with the current one highlighted. `:e` completes file
-names in the folders `:e` looks in: next to the current file, then in its project (`./` and `../` only next
-to the current file). Completion works on the whole line, whatever the caret position; typing anything
-starts over. In `/` and `?`, Tab does nothing.
+Tab completes the line as Neovim does (commands, options and their values, buffers, help tags,
+variables, functions, file names), following your `'wildmode'`; Shift+Tab goes back. A line above the
+box lists the candidates, with the selected one highlighted. File names complete from the editor's
+project folder (Neovim's window works there, `:lcd`); `:e` itself still looks next to the current
+file first, then in the project.
+
+While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back to where
+you were. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
+Up and Down in the box browse the same history.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.
 

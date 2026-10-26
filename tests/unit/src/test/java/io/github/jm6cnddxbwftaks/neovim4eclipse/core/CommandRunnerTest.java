@@ -118,21 +118,4 @@ class CommandRunnerTest {
 
         assertEquals(List.of("normal gd", "syncBuffer", "syncModeAndCursor"), nvim.calls);
     }
-
-    @Test
-    void searchTypesTheEscapedPatternThenRefreshes() throws Exception {
-        runner.search("a/b", false);
-
-        assertEquals(List.of("clearMessages", "type /a\\/b<CR>", "awaitIdle 5000", "syncBuffer",
-                "syncModeAndCursor"), nvim.calls);
-    }
-
-    /** A search line the user opened in Neovim is answered in place, keeping a pending operator. */
-    @Test
-    void answeringASearchLineReplacesItsTextAndRuns() throws Exception {
-        runner.answerSearch("a/b", false);
-
-        assertEquals(List.of("clearMessages", "type <C-u>a\\/b<CR>", "awaitIdle 5000", "syncBuffer",
-                "syncModeAndCursor"), nvim.calls);
-    }
 }

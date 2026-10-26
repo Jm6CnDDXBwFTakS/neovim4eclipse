@@ -6,7 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 
 /**
  * The session's listeners, one {@link ListenerList} per kind of event: mode, buffer change, cursor,
@@ -27,7 +27,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
     private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
-    private final ListenerList<CmdlineEvent> userCmdlineListeners = new ListenerList<>("user command line", Level.WARNING);
+    private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
 
     // ---- firing ----
 
@@ -56,9 +56,9 @@ final class SessionEvents implements StateSync.Listeners {
         ideActionListeners.fire(action);
     }
 
-    /** The user opened a command line in Neovim that the editor's box did not (see {@code CmdlineWatcher}). */
-    void userCmdline(CmdlineEvent event) {
-        userCmdlineListeners.fire(event);
+    /** Neovim's command line changed: opened, edited, completed or closed (see {@code CmdlineState}). */
+    void cmdline(CmdlineState.View view) {
+        cmdlineListeners.fire(view);
     }
 
     // ---- registration ----
@@ -103,11 +103,11 @@ final class SessionEvents implements StateSync.Listeners {
         ideActionListeners.remove(listener);
     }
 
-    void addUserCmdlineListener(Consumer<CmdlineEvent> listener) {
-        userCmdlineListeners.add(listener);
+    void addCmdlineListener(Consumer<CmdlineState.View> listener) {
+        cmdlineListeners.add(listener);
     }
 
-    void removeUserCmdlineListener(Consumer<CmdlineEvent> listener) {
-        userCmdlineListeners.remove(listener);
+    void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
+        cmdlineListeners.remove(listener);
     }
 }

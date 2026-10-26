@@ -93,10 +93,11 @@ final class NotificationBridge implements Incoming {
         void onIdeAction(IdeAction action);
 
         /**
-         * Neovim showed, changed or hid a command line (the UI is attached with {@code ext_cmdline};
-         * see {@link CmdlineEvent}).
+         * The command-line, completion-menu and view events of one {@code redraw} notification, in
+         * order (the UI is attached with {@code ext_cmdline} and {@code ext_popupmenu}; see
+         * {@link CmdlineEvent}). Passed together so that the box is redrawn once for them.
          */
-        void onCmdline(CmdlineEvent event);
+        void onCmdline(List<CmdlineEvent> events);
 
         /**
          * Neovim showed a message, the pending command changed, or a redraw ended (the UI is
@@ -129,7 +130,10 @@ final class NotificationBridge implements Incoming {
             case "eclipse_action" -> onAction(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
-                CmdlineEvent.fromRedraw(args).forEach(sink::onCmdline);
+                List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
+                if (!cmdline.isEmpty()) {
+                    sink.onCmdline(cmdline);
+                }
                 MessageEvent.fromRedraw(args).forEach(sink::onMessageEvent);
             }
             default -> LOG.finest(() -> "Ignored notification " + method);

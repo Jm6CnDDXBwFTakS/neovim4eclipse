@@ -23,9 +23,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
  * by {@link HostCommandRunner}, which has no Eclipse code and is unit-tested; this class only
  * connects it to the editor ({@link EditorIde}) and the UI thread.
  *
- * <p>Two places call {@link #tryHandleEx}: the inline command box ({@link CommandLineBox}) and the
- * session, when Enter is pressed on Neovim's own command line (for example while a macro is being
- * recorded). A command handled here never reaches Neovim.
+ * <p>The session calls {@link #tryHandleEx} when Enter is pressed on Neovim's command line, which is
+ * also the line the {@code :} box shows ({@link CommandLineBox}). A command handled here is not run
+ * by Neovim: its line is closed with Esc, so it stays in Neovim's history.
  */
 public final class HostCommands {
 
