@@ -13,6 +13,7 @@ import org.eclipse.jface.text.IDocument;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection.LineRange;
 
 /**
@@ -28,6 +29,13 @@ class VisualSelectionViewTest {
     private static final String TEXT = "alpha\nbeta\ngamma";
     /** {@code Ctrl-V}, the mode Neovim reports for a blockwise selection. */
     private static final String BLOCKWISE = "\u0016";
+    /**
+     * Ctrl-V from "l" of alpha (line 1, byte 1) to "m" of gamma (line 3, byte 2), as Neovim reports
+     * it: bytes 2-3 of each line ({@code getregionpos()}).
+     */
+    private static final VisualSelection BLOCK = new VisualSelection(true, BLOCKWISE, 1, 1, 3, 2,
+            List.of(new BlockSelection.ByteRange(1, 2, 3), new BlockSelection.ByteRange(2, 2, 3),
+                    new BlockSelection.ByteRange(3, 2, 3)));
 
     /** Records what would be painted. */
     private static final class FakeHighlight implements BlockHighlight {
@@ -106,23 +114,24 @@ class VisualSelectionViewTest {
     @Test
     void blockwiseSelectionMovesOnlyTheCaretAndMarksItAsNeovims() {
         caret.place(5, 0, 5);
-        view.show(doc, new VisualSelection(true, BLOCKWISE, 1, 1, 3, 2));
+        view.show(doc, BLOCK);
         assertEquals(0, caret.selectionLength());
         caret.assertCaretPosition(3, 2);
         assertEquals(List.of("from Neovim"), caretChanges);
-        assertEquals(3, highlight.ranges.size()); // one range per line
+        assertEquals(List.of(new LineRange(0, 1, 3), new LineRange(1, 1, 3), new LineRange(2, 1, 3)),
+                highlight.ranges); // "lp", "et", "am": Neovim's bytes as document characters
     }
 
     @Test
     void leavingBlockwiseRemovesTheHighlight() {
-        view.show(doc, new VisualSelection(true, BLOCKWISE, 1, 1, 3, 2));
+        view.show(doc, BLOCK);
         view.show(doc, VisualSelection.none());
         assertEquals(List.of(), highlight.ranges);
     }
 
     @Test
     void clearBlockAndDisposeReachTheHighlight() {
-        view.show(doc, new VisualSelection(true, BLOCKWISE, 1, 1, 3, 2));
+        view.show(doc, BLOCK);
         view.clearBlock(); // switching to Eclipse mode
         assertEquals(List.of(), highlight.ranges);
         view.dispose();

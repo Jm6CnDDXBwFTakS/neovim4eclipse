@@ -3,7 +3,10 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 
 /**
  * Reads the answer of {@link LuaScripts#STATE_SNAPSHOT}, the one request made after each key.
@@ -23,11 +26,11 @@ final class StateSnapshot {
     static final int CURSOR_COL = 1;
     /** Visual start line, start column, end line, end column, mode: five consecutive elements. */
     static final int VISUAL_BOUNDS = 2;
-    static final int CURSWANT = 7;
-    static final int TABSTOP = 8;
-    static final int RECORDING = 9;
-    static final int STATUSLINE = 10;
-    static final int BUFNR = 11;
+    static final int RECORDING = 7;
+    static final int STATUSLINE = 8;
+    static final int BUFNR = 9;
+    /** A block's lines, flat: line, first byte, last byte per line (see {@code util/BlockSelection}). */
+    static final int BLOCK = 10;
 
     private StateSnapshot() {
     }
@@ -68,18 +71,35 @@ final class StateSnapshot {
         return null;
     }
 
-    /** The visual selection, including the blockwise extras ({@code $} and the tab width). */
+    /** The visual selection, with the lines of a block ({@link #blockLines}). */
     static VisualSelection selection(Object raw, String fallbackMode) {
         if (!(raw instanceof List<?> list) || list.size() < VISUAL_BOUNDS + 4) {
             return visualBounds(null, fallbackMode);
         }
         VisualSelection base = visualBounds(
                 list.subList(VISUAL_BOUNDS, Math.min(list.size(), VISUAL_BOUNDS + 5)), fallbackMode);
-        // curswant is 2147483647 (Integer.MAX_VALUE) after "$": the block extends to each line's end.
-        boolean toEol = list.size() > CURSWANT && toInt(list.get(CURSWANT), 0) >= Integer.MAX_VALUE;
-        int tabstop = list.size() > TABSTOP ? Math.max(1, toInt(list.get(TABSTOP), 8)) : 8;
         return new VisualSelection(base.active(), base.mode(), base.startLine1Based(), base.startCol0Based(),
-                base.endLine1Based(), base.endCol0Based(), toEol, tabstop);
+                base.endLine1Based(), base.endCol0Based(), list.size() > BLOCK ? blockLines(list.get(BLOCK)) : List.of());
+    }
+
+    /**
+     * The block's lines from the flat {@code {line, first byte, last byte, ...}} list; an incomplete
+     * or malformed triple ends the list (the lines read so far are kept).
+     */
+    static List<BlockSelection.ByteRange> blockLines(Object raw) {
+        List<BlockSelection.ByteRange> lines = new ArrayList<>();
+        if (raw instanceof List<?> flat) {
+            for (int i = 0; i + 2 < flat.size(); i += 3) {
+                int line = toInt(flat.get(i), -1);
+                int first = toInt(flat.get(i + 1), -1);
+                int last = toInt(flat.get(i + 2), -1);
+                if (line < 1 || first < 1 || last < 1) {
+                    break;
+                }
+                lines.add(new BlockSelection.ByteRange(line, first, last));
+            }
+        }
+        return lines;
     }
 
     /**

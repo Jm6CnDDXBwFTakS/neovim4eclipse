@@ -111,8 +111,11 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("getpos('v')"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("getpos('.')"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.fn.mode()"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("curswant"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.bo.tabstop"));
+        // A block's lines come from Neovim; no curswant or tabstop for Java to compute them from.
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.fn.getregionpos(s, e, { type = mode, eol = true })"));
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if mode == string.char(22) then"), "blocks only");
+        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("curswant"));
+        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("tabstop"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("reg_recording()"));
     }
 

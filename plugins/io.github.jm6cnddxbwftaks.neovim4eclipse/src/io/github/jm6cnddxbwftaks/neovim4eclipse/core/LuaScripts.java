@@ -138,14 +138,21 @@ final class LuaScripts {
 
     /**
      * Everything the UI needs after a key, in ONE round trip:
-     * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, curswant,
-     * tabstop, recording, statusline, bufnr}}. {@code bufnr} tells whether the cursor is still in the
-     * buffer Eclipse shows (Neovim may just have jumped to another file).
+     * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, recording,
+     * statusline, bufnr, block}}. {@code bufnr} tells whether the cursor is still in the buffer
+     * Eclipse shows (Neovim may just have jumped to another file).
      *
      * <p>The cursor is {@code nvim_win_get_cursor} (1-based line, 0-based byte column); the visual
      * bounds are {@code getpos} (1-based lines and byte columns) and only meaningful in visual mode.
-     * {@code curswant} is 2147483647 after {@code $} (a block then extends to each line's end).
      * {@code recording} is the register being recorded into ({@code reg_recording()}), or "".
+     *
+     * <p>{@code block}, in blockwise visual mode only ({@code mode()} is Ctrl-V,
+     * {@code string.char(22)}), is what each line of the block covers, from {@code getregionpos()}
+     * (Neovim 0.10), flat: {@code line, first byte, last byte} per line, 1-based (see
+     * {@code util/BlockSelection}). Neovim
+     * does the screen-cell arithmetic: tabs, wide characters, {@code $}. Example: {@code Ctrl-V},
+     * {@code j}, {@code l} from the start of {@code "abc"} and {@code "def"} gives
+     * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (experiment X5).
      *
      * <p>The argument, {@code "1"} or {@code "0"}, says whether to evaluate the {@code 'statusline'}
      * (a Vim-like default if the user has none), so that nothing is evaluated that the status bar
@@ -157,7 +164,6 @@ final class LuaScripts {
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
-            local view = vim.fn.winsaveview()
             local statusline = ''
             if want_statusline then
               local fmt = vim.o.statusline
@@ -165,8 +171,17 @@ final class LuaScripts {
               local ok, res = pcall(vim.api.nvim_eval_statusline, fmt, { maxwidth = 300 })
               if ok and type(res) == 'table' then statusline = res.str or '' end
             end
-            return { c[1], c[2], s[2], s[3], e[2], e[3], vim.fn.mode(), view.curswant, vim.bo.tabstop,
-                     vim.fn.reg_recording(), statusline, vim.api.nvim_get_current_buf() }
+            local mode = vim.fn.mode()
+            local block = {}
+            if mode == string.char(22) then -- Ctrl-V, spelled so because a backslash escape is Java's too
+              for _, line in ipairs(vim.fn.getregionpos(s, e, { type = mode, eol = true })) do
+                block[#block + 1] = line[1][2] -- the line
+                block[#block + 1] = line[1][3] -- its first byte
+                block[#block + 1] = line[2][3] -- its last byte
+              end
+            end
+            return { c[1], c[2], s[2], s[3], e[2], e[3], mode, vim.fn.reg_recording(), statusline,
+                     vim.api.nvim_get_current_buf(), block }
             """;
 
     /**

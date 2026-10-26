@@ -18,6 +18,7 @@ import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -809,7 +810,8 @@ class NeovimSessionIntegrationTest {
             assertEquals(0, last.startCol0Based());
             assertEquals(2, last.endLine1Based());
             assertEquals(1, last.endCol0Based());
-            assertTrue(!last.toEndOfLine());
+            assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 2), new BlockSelection.ByteRange(2, 1, 2)),
+                    last.block(), "Neovim's getregionpos: bytes 1-2 of each line");
         }
     }
 
@@ -819,8 +821,23 @@ class NeovimSessionIntegrationTest {
             s.setBufferLines(List.of("abcd", "ef", "ijklmn"));
             List<VisualSelection> seen = new CopyOnWriteArrayList<>();
             s.addSelectionListener(seen::add);
-            keys(s, "g", "g", "<C-v>", "j", "$");
-            assertTrue(seen.get(seen.size() - 1).toEndOfLine());
+            keys(s, "g", "g", "<C-v>", "j", "j", "$");
+            assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 4), new BlockSelection.ByteRange(2, 1, 2),
+                    new BlockSelection.ByteRange(3, 1, 6)), seen.get(seen.size() - 1).block(), "each line to its end");
+        }
+    }
+
+    /** Tabs and wide characters: the cell arithmetic is Neovim's (experiment X5). */
+    @Test
+    void aBlockOverTabsAndWideCharactersComesFromNeovim() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("a\tbcdef", "abcdefghij", "aあいうb"));
+            List<VisualSelection> seen = new CopyOnWriteArrayList<>();
+            s.addSelectionListener(seen::add);
+            keys(s, "g", "g", "<C-v>", "j", "j", "l"); // l onto あ (cells 1-2): the block is cells 0-2
+            // Line 1: a and the tab (cells 1-7, only partly inside); line 2: abc; line 3: a and あ.
+            assertEquals(List.of(new BlockSelection.ByteRange(1, 1, 2), new BlockSelection.ByteRange(2, 1, 3),
+                    new BlockSelection.ByteRange(3, 1, 4)), seen.get(seen.size() - 1).block());
         }
     }
 
