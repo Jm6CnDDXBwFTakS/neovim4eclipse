@@ -126,6 +126,8 @@
           <excludedGroups>integration</excludedGroups>
           <systemPropertyVariables>
             <nvim.path>${nvim.path}</nvim.path>
+            <!-- How long a test waits; see testing/TestWait (tests/shared). -->
+            <test.wait.seconds>${test.wait.seconds}</test.wait.seconds>
           </systemPropertyVariables>
         </configuration>
       </plugin>

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * The "Show Neovim menu in the menu bar" preference: the page offers it, and changing it adds or
@@ -31,7 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
  */
 class MenuVisibilityTest {
 
-    private static final long TIMEOUT_MS = 5_000;
+    private static final long TIMEOUT_MS = TestWait.millis();
 
     private final IPreferenceStore store = Activator.getDefault().getPreferenceStore();
 

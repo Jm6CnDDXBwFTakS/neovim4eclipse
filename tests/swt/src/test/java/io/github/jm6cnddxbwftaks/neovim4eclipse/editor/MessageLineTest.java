@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.function.BooleanSupplier;
+
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.custom.StyledText;
@@ -20,6 +22,8 @@ import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * The line along the bottom of the editor that shows Neovim's latest message or error, on a real
@@ -65,11 +69,16 @@ class MessageLineTest {
         host.notifyListeners(SWT.KeyDown, event);
     }
 
-    /** Runs the event loop for {@code ms}, so that timers fire. */
-    private static void runFor(int ms) throws InterruptedException {
+    /**
+     * Runs the event loop, so that timers fire, until {@code condition} holds. Waits for the outcome
+     * instead of a fixed time: a timer due in 150 ms can fire much later on a loaded machine, so
+     * "run the loop for 450 ms, then check" failed there although nothing was wrong.
+     */
+    private static void runUntil(String what, BooleanSupplier condition) throws InterruptedException {
         Display display = Display.getDefault();
-        long end = System.currentTimeMillis() + ms;
-        while (System.currentTimeMillis() < end) {
+        long deadline = System.currentTimeMillis() + TestWait.millis();
+        while (!condition.getAsBoolean()) {
+            assertTrue(System.currentTimeMillis() < deadline, "timed out waiting for " + what);
             if (!display.readAndDispatch()) {
                 Thread.sleep(5);
             }
@@ -165,8 +174,7 @@ class MessageLineTest {
         assertNotEquals(before.getRGB(), host.getBackground().getRGB(), "tinted");
         assertEquals(1, line.flashCount());
 
-        runFor(MessageLine.FLASH_MS + 300);
-        assertFalse(line.isFlashing());
+        runUntil("the flash to end", () -> !line.isFlashing());
         assertEquals(before.getRGB(), host.getBackground().getRGB(), "back to the editor's own background");
     }
 

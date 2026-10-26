@@ -31,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState.View;
 
 /**
@@ -41,7 +42,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState.View;
  */
 class CommandLineBoxTest {
 
-    private static final long TIMEOUT_MS = 5000;
+    private static final long TIMEOUT_MS = TestWait.millis();
 
     /** Records what the box sends, e.g. {@code "type a"}, {@code "paste text"}. */
     private static final class FakeCommands implements CommandLineBox.Commands {

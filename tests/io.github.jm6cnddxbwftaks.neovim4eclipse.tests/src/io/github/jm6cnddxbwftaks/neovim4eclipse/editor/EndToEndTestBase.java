@@ -41,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 
 /**
@@ -64,7 +65,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
  */
 abstract class EndToEndTestBase {
 
-    static final long TIMEOUT_MS = 15_000;
+    /**
+     * How long a helper waits for Neovim or the workbench before the test fails: 15 s unless
+     * {@code -Dtest.wait.seconds} says otherwise (see {@link TestWait}, shared with the other test
+     * modules through build.properties).
+     */
+    static final long TIMEOUT_MS = TestWait.millis();
 
     /** The text editor's ID, as in Open With › Text Editor. */
     static final String TEXT_EDITOR = "org.eclipse.ui.DefaultTextEditor";
@@ -148,7 +154,7 @@ abstract class EndToEndTestBase {
      * before Eclipse deletes one.
      */
     void leaveAndDelete(java.nio.file.Path dir, java.nio.file.Path... contents) throws java.io.IOException {
-        session.leaveFolder(dir.toString(), java.time.Duration.ofSeconds(5));
+        session.leaveFolder(dir.toString(), TestWait.duration());
         for (java.nio.file.Path path : contents) {
             java.nio.file.Files.deleteIfExists(path);
         }

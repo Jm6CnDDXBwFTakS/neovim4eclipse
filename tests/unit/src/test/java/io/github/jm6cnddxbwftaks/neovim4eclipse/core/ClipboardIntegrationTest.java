@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ClipboardPort.Selection;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
@@ -66,7 +67,7 @@ class ClipboardIntegrationTest {
     }
 
     private static void waitFor(BooleanSupplier condition, String what) throws Exception {
-        long deadline = System.currentTimeMillis() + 2000;
+        long deadline = System.currentTimeMillis() + TestWait.millis();
         while (!condition.getAsBoolean()) {
             assertTrue(System.currentTimeMillis() < deadline, "timed out waiting for " + what);
             Thread.sleep(25);

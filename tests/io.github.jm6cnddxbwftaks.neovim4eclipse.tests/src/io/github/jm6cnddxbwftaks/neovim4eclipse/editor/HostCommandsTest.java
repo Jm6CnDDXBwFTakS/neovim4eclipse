@@ -24,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
@@ -40,7 +41,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  */
 class HostCommandsTest {
 
-    private static final long TIMEOUT_MS = 10_000;
+    private static final long TIMEOUT_MS = TestWait.millis();
 
     private IProject project;
     private ITextEditor first;

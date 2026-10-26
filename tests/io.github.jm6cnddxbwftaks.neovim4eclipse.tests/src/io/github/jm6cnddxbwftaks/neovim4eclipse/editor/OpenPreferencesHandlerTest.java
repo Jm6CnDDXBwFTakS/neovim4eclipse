@@ -72,7 +72,7 @@ class OpenPreferencesHandlerTest {
         assertNotNull(label, "no 'Neovim folder or program' label");
         assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
         // The note under the field names what the field finds (NvimProbe), after a short delay.
-        UiTestSupport.waitUntil("the note saying which Neovim was found", 10_000, () -> find(page, Label.class)
+        UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> find(page, Label.class)
                 .stream().anyMatch(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found")));
         Text field = find(page, Text.class).stream().findFirst().orElse(null);
         assertNotNull(field, "no text field");
@@ -90,7 +90,7 @@ class OpenPreferencesHandlerTest {
                 .filter(l -> l.getText().equals(NeovimPreferencePage.NEOVIM_FIELD_HELP)).findFirst().orElse(null);
         assertNotNull(help, "no help with a link to how Neovim is found");
         assertTrue(help.isVisible(), "help hidden");
-        UiTestSupport.waitUntil("the note saying which Neovim was found", 10_000, () -> note(page) != null);
+        UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
         Label note = note(page);
         assertTrue(note.getParent() == help.getParent() && note.getBounds().y < help.getBounds().y,
                 "the note (what the field finds) comes before the help (what it takes): note " + note.getBounds()

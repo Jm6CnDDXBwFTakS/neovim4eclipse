@@ -18,6 +18,7 @@ import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
@@ -33,7 +34,7 @@ class NeovimBufferIntegrationTest {
     }
 
     private static void waitFor(BooleanSupplier condition, String what) throws Exception {
-        long deadline = System.currentTimeMillis() + 3000;
+        long deadline = System.currentTimeMillis() + TestWait.millis();
         while (!condition.getAsBoolean()) {
             if (System.currentTimeMillis() > deadline) {
                 throw new AssertionError("timed out waiting for " + what);

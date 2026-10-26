@@ -27,6 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.MsgpackNeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
@@ -137,7 +138,7 @@ class NeovimApiIntegrationTest {
     @Test
     void getModeIsBlockingWhileACommandWaitsForItsArgument() throws Exception {
         await(api.input("f"));
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TestWait.millis());
         Mode mode = await(api.getMode());
         while (!mode.blocking() && System.nanoTime() < deadline) {
             Thread.sleep(10);

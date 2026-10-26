@@ -104,6 +104,19 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
         <executions>
+          <!-- Test helpers shared by the test modules (ExpectedLog, TestWait), kept once in tests/shared. -->
+          <execution>
+            <id>add-shared-test-sources</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../shared/src</source>
+              </sources>
+            </configuration>
+          </execution>
           <execution>
             <id>add-plugin-sources</id>
             <phase>generate-sources</phase>
@@ -200,6 +213,10 @@
         <configuration>
           <!-- @{argLine} keeps the JaCoCo agent that prepare-agent put there. -->
           <argLine>@{argLine} ${swt.jvmArgs}</argLine>
+          <systemPropertyVariables>
+            <!-- How long a test waits; see testing/TestWait (tests/shared). -->
+            <test.wait.seconds>${test.wait.seconds}</test.wait.seconds>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
     </plugins>
