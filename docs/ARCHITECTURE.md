@@ -188,6 +188,20 @@ methods of `core/rpc/Incoming`) through `NeovimConnection.setIncoming`, which pi
 name. `core/rpc/RpcChannel` delivers them on its reader thread, in arrival order, and answers
 each request exactly once.
 
+### 8. Eclipse's problems are Neovim diagnostics
+
+Eclipse finds the problems (compiler, builders, language servers); Neovim moves between them. Each
+document with a buffer has a `sync/DiagnosticsSync` that reads its editor's annotation model, keeps
+the annotations that are problems (`editor/ProblemAnnotations`: subtypes of the platform's error,
+warning and info types), converts their offsets to lines and UTF-8 byte columns
+(`util/DiagnosticPositions`), and sends the list with `setDiagnosticsAsync`;
+`LuaScripts.SET_DIAGNOSTICS` puts it in the namespace `neovim4eclipse` with `vim.diagnostic.set`.
+Neovim's own `]d` / `[d` then work, and the plug-in maps no key. Changes are debounced (300 ms) and
+an unchanged list is not sent again: Neovim's diagnostics move with edits by themselves (extmarks).
+`SETUP` makes the namespace draw nothing (Eclipse draws the problems) and, unless the user's config
+has one, sets `vim.diagnostic`'s `on_jump` hook to echo the message after a jump, which reaches the
+message line like any message. Design and decisions: [design/DIAGNOSTICS.md](design/DIAGNOSTICS.md).
+
 ## Ideas for future work
 
 | Topic | Hint |
@@ -538,6 +552,7 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
+| Eclipse's problems as Neovim diagnostics (`]d`, `[d`) | `util/DiagnosticPositions` (offsets to lines and byte columns), `util/Diagnostic` (severity, Lua arguments), `sync/DiagnosticsSync` (annotation model to session, through `core/DiagnosticsPort`), `editor/ProblemAnnotations` (which annotations are problems), `LuaScripts.SET_DIAGNOSTICS` and `SETUP` (namespace, `on_jump` echo) | `DiagnosticPositionsTest`, `DiagnosticTest`, `tests/text` `DiagnosticsSyncTest` (real `AnnotationModel`: debounce, unchanged lists, preference, close), `diagnostics_spec.lua` (real Neovim: `]d` with a count, Ctrl-O, the echo), UI `DiagnosticsEndToEndTest` (a problem marker, `]d`, its message) |
 | Attach push: buffer switch, indent options, push, listening, cursor; failures | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path) |
 | A document that is not attached and its buffer in step (`:bufdo`, refactorings) | `sync/UnattachedDocumentSync` (session seen through `core/DocumentBufferPort`) | `tests/text` `UnattachedDocumentSyncTest` (fake port: both directions, coalescing, attach and detach, a change that no longer fits), `NeovimBufferIntegrationTest` (routing, echo), UI `EditorEndToEndTest` (`:bufdo` over three files) |
 | Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | `tests/text` `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |

@@ -138,6 +138,18 @@ How do you get from the editor to the viewer? Through *adapters*. `editor.getAda
 asks the editor for an object of that type, and the editor returns one if it can. Adapters are how
 Eclipse lets objects offer other interfaces without hard dependencies (`NeovimEditorController.viewerExtensionOf`).
 
+**The annotation model** is a fifth object next to the document: the marks drawn over the text and
+in the rulers (problems, tasks, bookmarks, search results, occurrences), each an `Annotation` with a
+*type* and a `Position` (offset and length) that moves as the document is edited. The document
+provider gives it: `provider.getAnnotationModel(input)`. Problems come in two kinds: *markers* a
+build saved on the file (`IMarker.PROBLEM`, shown as `MarkerAnnotation`s) and, in a Java editor,
+the problems JDT finds while you type, which are annotations only. Reading the model gets both.
+Annotation types form a hierarchy (`plugin.xml`, `org.eclipse.ui.editors.annotationTypes`): JDT's
+`org.eclipse.jdt.ui.error` is a subtype of the platform's `org.eclipse.ui.workbench.texteditor.error`,
+so `IAnnotationAccessExtension.isSubtype` asks "an error of any kind?" without knowing every plug-in
+(`editor/ProblemAnnotations`). Models change on other threads too (JDT's reconciler), so a listener
+only schedules work for the UI thread (`sync/DiagnosticsSync`).
+
 Multi-page editors (the POM editor, PDE's `MANIFEST.MF` editor) are not `ITextEditor`s. Their source
 tab is a nested text editor, which `EditorAttachManager` digs out.
 
@@ -592,11 +604,12 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `KeyRouter.Neovim` | `core/KeyRouter` | `NeovimSession` |
 | `BufferPort` | `sync/BufferSynchronizer` | `NeovimSession` |
 | `DocumentBufferPort` | `sync/UnattachedDocumentSync` | `NeovimSession` |
+| `DiagnosticsPort` | `sync/DiagnosticsSync` | `NeovimSession` (a fake that records each list, in `DiagnosticsSyncTest`) |
 | `CursorPort` | `editor/CaretSync` | `NeovimSession` |
 | `CommandRunner.Neovim` | `core/CommandRunner` | adapter inside `NeovimSession` |
 | `KeyInput.Neovim` | `core/KeyInput` | adapter inside `NeovimSession` (`KeyInputTest` scripts it: "after `i` the mode is `i`") |
 | `StateSync.Neovim`, `StateSync.Listeners` | `core/StateSync` | adapter inside `NeovimSession`; `SessionEvents` |
-| `UiExecutor` | `BufferSynchronizer`, `CaretSync` | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests) |
+| `UiExecutor` | `BufferSynchronizer`, `CaretSync`, `DiagnosticsSync` (`timerExec` for its debounce) | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests, or a fake that holds timed work until the test runs it) |
 | `EditorCaret` | `CaretSync`, `VisualSelectionView` | `editor/StyledTextCaret` (`FakeCaret` in tests) |
 | `HostCommandRunner.Ide` | `util/HostCommandRunner` | a record inside `editor/HostCommands` |
 | `DocumentPush.Neovim`, `DocumentPush.Mirror` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer` |
@@ -632,6 +645,16 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `PreferenceInitializer`; add a field to a preference page; read it with
 `Activator.getDefault().getPreferenceStore()`; if it must apply at once, handle it in the
 `Activator`'s property-change listener.
+
+**Send something Eclipse knows about each open file to Neovim.** Follow `sync/DiagnosticsSync`
+(Eclipse's problems, for `]d`): one object per document with a buffer, created and closed in
+`EditorAttachManager` next to its `UnattachedDocumentSync`, started after the controller's attach so
+that its first send is queued behind the buffer's first load. It listens to the Eclipse model on
+any thread, schedules one send on the UI thread for many changes (`UiExecutor.timerExec`), reads the
+model there, converts in a pure `util/` class (`DiagnosticPositions`), skips a list equal to the last
+one, and sends with an `*Async` method of a small port (`core/DiagnosticsPort`), whose Lua script
+(`LuaScripts.SET_DIAGNOSTICS`) is tested in a `*_spec.lua`. Test the timing in `tests/text` with a fake
+port and held timers.
 
 **Show a dialog once (or once per version).** Put the decision in a pure class in `util/` that takes
 what was recorded and the running version, and returns what to show (`WelcomeNote.decide`); unit-test

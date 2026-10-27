@@ -21,6 +21,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
@@ -60,7 +61,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  * other buffers are dropped.
  */
 public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort,
-        DocumentBufferPort {
+        DocumentBufferPort, DiagnosticsPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
@@ -571,6 +572,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             return;
         }
         await(api.execLua(LuaScripts.SET_MODIFIED, List.of(String.valueOf(buffer.bufnr), buffer.eclipseDirty ? "1" : "0")));
+    }
+
+    @Override
+    public void setDiagnosticsAsync(DocumentBuffer buffer, List<Diagnostic> diagnostics) {
+        List<Diagnostic> copy = List.copyOf(diagnostics);
+        submit(copy.size() + " problems for " + buffer.name(), Level.FINE, () -> {
+            // Not created yet, wiped, or from a Neovim that was restarted: the number could be another
+            // buffer's. Not loaded: the problems would land in an empty buffer, before its text.
+            if (buffers.handleOf(buffer) == null || !buffer.loaded) {
+                return;
+            }
+            await(api.execLua(LuaScripts.SET_DIAGNOSTICS, Diagnostic.toLuaArgs(buffer.bufnr, copy)));
+        });
     }
 
     public List<String> getBufferLines() throws Exception {

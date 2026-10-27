@@ -41,6 +41,7 @@ edges, see [Known limitations](#known-limitations).
 | `gd` (Open Declaration) and `K` (hover information), through the editor's own commands | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
+| Finding errors and warnings (compiler, builders, language servers), sent to Neovim as diagnostics (see [Problems](#problems-d-d)) | `]d` / `[d` / `]D` / `[D` between them, with counts, in macros and the jumplist |
 
 Details of what happens on each key are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -241,6 +242,39 @@ error with its traceback.
 
 *Window → Preferences → Neovim → Flash the editor on errors* (off by default) also tints the editor for
 a moment on each error, like Vim's `'visualbell'`, for when your eyes are on the cursor.
+
+## Problems (`]d`, `[d`)
+
+The errors, warnings and infos Eclipse shows in an open file (the ones it underlines: the Java
+compiler's, a builder's, a language server's) are also Neovim *diagnostics* of that file's buffer, so
+Neovim's own keys move between them:
+
+| Key | Goes to |
+|-----|---------|
+| `]d` / `[d` | the next / previous problem in the file; with a count, `3]d` skips two |
+| `]D` / `[D` | the last / first problem |
+
+They are Neovim's default mappings: the plug-in maps nothing, so your own mapping of these keys in
+`init.lua` wins. Each jump is in the jumplist (`Ctrl-O` comes back) and works in a macro. The
+message line then shows the problem's message (its first line), as Eclipse's status bar does after
+*Next Annotation* (`Ctrl+.`); `K` right after opens Eclipse's hover for it, with its quick fixes in
+a Java editor. Example: on line 1 of a file with an unused import on line 3, `]d` goes to line 3
+and shows `The import java.util.List is never used`.
+
+- **Nothing more is drawn**: Eclipse already underlines the problems and marks them in the rulers.
+- **Tasks** (`TODO` comments) are not problems, so `]d` does not stop on them; nor on spelling
+  mistakes, bookmarks or search results.
+- **The list follows Eclipse**: a problem fixed (or found) shows in Neovim a moment after Eclipse
+  shows it (about 300 ms after the editor's annotations change).
+- **Your own diagnostics** (nvim-lint, a language server started in `init.lua`) stay as they are;
+  `]d` stops on theirs and Eclipse's alike, as Neovim does with several sources. The message after
+  a jump is shown for any of them. A `vim.diagnostic.config({ jump = { on_jump = ... } })` of your
+  own replaces the plug-in's message.
+- **To turn it off**: *Window → Preferences → Neovim → Send Eclipse's problems to Neovim* (on by
+  default). Off, Neovim has none of Eclipse's problems; useful when your own diagnostics cover the
+  same files.
+
+How it works: [docs/design/DIAGNOSTICS.md](docs/design/DIAGNOSTICS.md).
 
 ## Command line (`:`, `/`, `?`)
 
@@ -533,6 +567,12 @@ one, in a `:terminal` too, inherits it.
 Where the plug-in has to work around one of your settings for a technical reason, it does so as
 narrowly as it can, and it is listed here.
 
+- **`vim.diagnostic`'s `jump.on_jump`, only if your config sets none.** After `]d` it shows the
+  first line of the problem's message in the message line ([Problems](#problems-d-d)). Set your own
+  `on_jump` (or the older `jump.float`) and the plug-in leaves it alone. The namespace
+  `neovim4eclipse`, which holds Eclipse's problems, is set to draw nothing; your other namespaces
+  keep their display settings.
+
 - **`'shortmess'` `F`, while Eclipse switches editors.** When another editor becomes active, the
   plug-in makes Neovim enter that file's buffer with `F` added to `'shortmess'`, and puts your value
   back right after. Without `F` (common in configs carried over from Vim), Neovim would show its
@@ -550,6 +590,8 @@ the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`)
 through *Window → Preferences*.
 Changing the executable restarts Neovim and re-attaches the active editor. *Flash the editor on errors*
 adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
+*Send Eclipse's problems to Neovim* gives `]d` and `[d` Eclipse's errors and warnings to move
+between ([Problems](#problems-d-d)).
 *Show a welcome after installing...* turns off the welcome and the update notes (step 5 of
 [Install](#install)); an administrator can turn it off for everyone with the line
 `io.github.jm6cnddxbwftaks.neovim4eclipse/showWelcome=false` in the product's

@@ -71,6 +71,12 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
                 "Flash the editor on errors",
                 getFieldEditorParent()));
 
+        // Eclipse's errors and warnings as Neovim diagnostics: ]d and [d move between them.
+        addField(new BooleanFieldEditor(
+                PreferenceConstants.SEND_PROBLEMS,
+                "Send Eclipse's problems to Neovim (]d and [d jump to the next and previous one)",
+                getFieldEditorParent()));
+
         // The welcome after installing, and the short note after an update to a new minor version.
         addField(new BooleanFieldEditor(
                 PreferenceConstants.SHOW_WELCOME,
