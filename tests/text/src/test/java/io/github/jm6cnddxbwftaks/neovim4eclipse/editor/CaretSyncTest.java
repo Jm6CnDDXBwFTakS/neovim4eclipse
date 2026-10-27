@@ -82,6 +82,26 @@ class CaretSyncTest {
     }
 
     @Test
+    void whileEclipseTypesNeovimsCursorReportsAreDropped() {
+        boolean[] typing = { true };
+        sync.dropNeovimCursorWhile(() -> typing[0]);
+        caret.userMovesTo(3, 2); // Eclipse typed: the caret is past the end of Neovim's old line
+        sync.onNeovimCursor(new CursorPos(3, 1)); // Neovim clamped it and reported it back
+        caret.assertCaretPosition(3, 2);
+
+        typing[0] = false; // Esc: Neovim's lines are right again
+        sync.onNeovimCursor(new CursorPos(1, 0));
+        caret.assertCaretPosition(1, 0);
+    }
+
+    @Test
+    void theCaretRestoreAfterARemoteChangeStillApplies() {
+        sync.dropNeovimCursorWhile(() -> true);
+        sync.showNeovimCursor(new CursorPos(2, 1)); // the synchronizer's restore, not a report
+        caret.assertCaretPosition(2, 1);
+    }
+
+    @Test
     void theUsersCaretMoveReachesNeovimInBytes() {
         caret.userMovesTo(3, 2);
         assertEquals(List.of("async 3:3"), neovim.moves);

@@ -615,6 +615,72 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         });
     }
 
+    private static final String CLASS_F = """
+            package p;
+
+            public class F {
+                void m() {
+                    System.out.println("");
+                }
+
+            }
+            """;
+
+    /** The caret as a 1-based line and a 0-based column, e.g. "6:5". */
+    private String caretLineCol() {
+        int offset = ((ITextSelection) javaEditor.getSelectionProvider().getSelection()).getOffset();
+        org.eclipse.jface.text.IDocument d = documentOf(javaEditor);
+        try {
+            int line = d.getLineOfOffset(offset);
+            return (line + 1) + ":" + (offset - d.getLineOffset(line));
+        } catch (org.eclipse.jface.text.BadLocationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    /**
+     * As reported: {@code O} on the class's closing brace, then a method typed in insert mode and
+     * Enter, which JDT answers with the closing brace and an indented line between. The caret
+     * belongs after that line's indentation. It went to column 1: the caret move reached Neovim,
+     * whose lines lack what Eclipse typed until Esc, Neovim clamped it to its old line ({@code }})
+     * and reported that back.
+     */
+    @Test
+    void enterAfterABraceTypedAboveTheClosingBraceKeepsTheCaretOnTheIndentedLine() throws Exception {
+        openJava("F.java", CLASS_F);
+        settle();
+        type(javaWidget, "8G");
+        settle();
+        type(javaWidget, "O");
+        settle();
+        type(javaWidget, "private void aMethod() {");
+        type(javaWidget, '\r');
+        settle();
+        // JDT: "    private void aMethod() {", then "    \t" (the caret after it), then "    }".
+        waitUntil("the caret after the new line's indentation", TIMEOUT_MS, () -> caretLineCol().equals("9:5"),
+                () -> "; it is at " + caretLineCol() + " in\n" + javaText());
+        type(javaWidget, 'x');
+        escape(javaWidget);
+        settle();
+        assertTrue(javaText().contains("    private void aMethod() {\n    \tx\n    }\n"), javaText());
+    }
+
+    /** The same with {@code o} below the method's closing brace. */
+    @Test
+    void enterAfterABraceTypedBelowAMethodKeepsTheCaretOnTheIndentedLine() throws Exception {
+        openJava("F.java", CLASS_F);
+        settle();
+        type(javaWidget, "6G");
+        settle();
+        type(javaWidget, "o");
+        settle();
+        type(javaWidget, "void b() {");
+        type(javaWidget, '\r');
+        settle();
+        waitUntil("the caret after the new line's indentation", TIMEOUT_MS, () -> caretLineCol().equals("8:5"),
+                () -> "; it is at " + caretLineCol() + " in\n" + javaText());
+    }
+
     /** How many fold annotations the Java editor has. */
     private int foldCount() {
         org.eclipse.jface.text.source.projection.ProjectionViewer viewer =
