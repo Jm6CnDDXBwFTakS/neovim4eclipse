@@ -180,6 +180,20 @@ class NeovimFoldsIntegrationTest {
         }
     }
 
+    /** While the z mapping waits for the next key, the status bar shows the pending z; then not. */
+    @Test
+    void aPendingZIsShownInTheStatusBar() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            List<String> cmds = new CopyOnWriteArrayList<>();
+            s.addStatusListener(info -> cmds.add(info.cmd()));
+            keys(s, "3", "z");
+            waitFor(() -> cmds.contains("3z"), "the pending 3z");
+            keys(s, "j");
+            waitFor(() -> !cmds.isEmpty() && cmds.get(cmds.size() - 1).isEmpty(), "the pending z cleared");
+        }
+    }
+
     @Test
     void theOptOutTurnsFoldingOffAndTheUsersOwnFoldsStay() throws Exception {
         // As an init.lua would: set before the session reads it, and a global foldmethod of the user's.

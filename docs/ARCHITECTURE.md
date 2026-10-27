@@ -557,6 +557,25 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   sets `'nofoldenable'`. `vim.g.neovim4eclipse_folds = 0`, read once at start
   (`FoldsPort.foldsEnabled`), turns all of it off.
 
+**Folding: the workarounds, and why.** Each of these looks odd on its own; each fixed a bug found by
+hand or by an experiment ([design/FOLDING.md](design/FOLDING.md), *As built*). Keep them unless the
+reason is gone.
+
+| Workaround | Where | Why (and the test that holds it) |
+|------------|-------|----------------------------------|
+| Folds are created open, outer first, then the collapsed ones closed inner first, each on a *handle line* | `LuaScripts.FOLDS` (`set`, `handle_line`) | `:fold` makes a closed fold, and a range over a closed fold grows to cover it; `:foldclose` closes the innermost open fold on each line of its range (X3, X11, X13). `folds_spec.lua` |
+| Regions that cross another's border are dropped | `util/FoldRegions.forNeovim` | Neovim widens such a fold to contain the other (X14), hiding lines Eclipse shows. `FoldRegionsTest` |
+| Old folds are deleted with `:noautocmd normal! zE` | `LuaScripts.FOLDS` (`delete_all_folds`) | A plain `:normal` in insert mode passes through normal mode and fires `ModeChanged`; the plug-in took insert mode as ended and typed text went missing. `foldmethod=expr` and back does not work in insert mode (expression folds are not recomputed there). `folds_spec.lua` |
+| `z` alone is mapped in mirrored buffers, reading the next key with `getcharstr()` | `LuaScripts.FOLDS` (`z_key`) | Mappings of `zE`, `zf` ... time out after `'timeoutlen'` (400 ms); a slowly typed `zE` was Neovim's and deleted every fold. A user mapping of `z` + one key is looked up and run (`maparg`); longer ones are lost (README, Known limitations). `NeovimFoldsIntegrationTest.aSlowZEIsRefusedToo` |
+| That mapping reports its pending `z` itself (`eclipse_showcmd`) | `LuaScripts.FOLDS`, `NotificationBridge.onShowcmd` | Neovim sends no `msg_showcmd` while a mapping reads the next key, so the status bar showed nothing. `NeovimFoldsIntegrationTest.aPendingZIsShownInTheStatusBar` |
+| `:fold` is refused through a hook in `HOST_COMMANDS` | `LuaScripts.HOST_COMMANDS` (`refuse`) | A built-in command cannot be mapped. A refusal is an error, so it ends the rest of a `\|` line, as in Vim. `folds_spec.lua` |
+| A resend during `zn` keeps Neovim's own states | `LuaScripts.FOLDS` (`states_kept`) | Eclipse shows every fold open during `zn`, so its states would make `zi` restore nothing. `folds_spec.lua` |
+| Fold sends wait while Eclipse types in insert mode | `editor/FoldMirror` (`hold`, `resume`) | Neovim lacks the typed lines until `Esc`; folds sent then landed on the wrong lines. `JavaEditorEndToEndTest.aMethodTypedInInsertModeStaysAndBecomesAFold` |
+| Neovim's cursor reports are dropped while Eclipse types | `editor/CaretSync.onNeovimCursor` | The caret sent to Neovim came back clamped to Neovim's old line (`CursorMovedI`). `CaretSyncTest`, `JavaEditorEndToEndTest.enterAfterABrace...` |
+| Neovim's fold changes are applied as from Neovim | `NeovimEditorController.onFolds` (`CaretSync.runAsFromNeovim`) | Collapsing makes the widget move its caret below the fold; that move reached Neovim as the user's. `JavaEditorEndToEndTest.zcInTheBodyOfAMethodWithJavadocAndZoReopensIt` |
+| The session reports folds before the cursor | `core/StateSync.publishState` | Both go through one UI queue: the folds must be applied before the caret lands. `StateSyncTest` |
+| Not worked around: the caret is sometimes not drawn after a fold change | (Eclipse) | SWT's own behavior, also without the plug-in; noted in the README. |
+
 ## Where logic lives (and how it is tested)
 
 | Concern | Class | Tests |

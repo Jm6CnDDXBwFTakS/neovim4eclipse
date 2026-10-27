@@ -60,6 +60,9 @@ All three commits of section 7 are built. Where they differ from the plan below,
   user's for `z` and that key if there is one, and otherwise feeds `z` and the key (with the count)
   to Neovim. Known limitations in the README list what that does not cover. Test:
   `NeovimFoldsIntegrationTest.aSlowZEIsRefusedToo`, which failed with the two-key mappings.
+  Neovim then shows no pending `z` (no `msg_showcmd` while a mapping reads a key), so the mapping
+  sends `eclipse_showcmd` itself, and the status bar shows `z` (or `3z`) until the next key.
+- **All the workarounds in one place:** docs/ARCHITECTURE.md, "Folding: the workarounds, and why".
 - **The refusal is a hook, not a rule in the Java table.** `HostCommand`'s table lists what Eclipse
   carries out, and `:fold` is not that; it is refused only in mirrored buffers, which only Lua
   knows. So `HOST_COMMANDS` offers `require('neovim4eclipse.host_commands').refuse(name, why)`, and

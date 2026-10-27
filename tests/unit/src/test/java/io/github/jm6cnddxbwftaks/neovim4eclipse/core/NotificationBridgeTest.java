@@ -239,6 +239,16 @@ class NotificationBridgeTest {
         assertEquals(List.of("lines@1:0:-1:[a]"), events);
     }
 
+    /** The fold module's z mapping reports its pending z itself; it goes where Neovim's showcmd goes. */
+    @Test
+    void thePluginsOwnShowcmdIsAShowcmdAndAFlush() {
+        notify("eclipse_showcmd", "3z");
+        notify("eclipse_showcmd", "");
+        notify("eclipse_showcmd"); // malformed: dropped
+        assertEquals(List.of("message:" + new MessageEvent.Showcmd("3z"), "message:" + new MessageEvent.Flush(),
+                "message:" + new MessageEvent.Showcmd(""), "message:" + new MessageEvent.Flush()), events);
+    }
+
     @Test
     void unknownNotificationsAreIgnored() {
         // Neovim sends these too: grid redraws to every UI, changedtick events to nvim_buf_attach.
