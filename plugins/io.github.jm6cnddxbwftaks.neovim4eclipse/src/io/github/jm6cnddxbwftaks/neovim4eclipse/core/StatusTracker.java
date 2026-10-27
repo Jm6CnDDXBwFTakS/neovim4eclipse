@@ -157,6 +157,11 @@ final class StatusTracker {
         }
     }
 
+    /** The status last passed to the listeners: what Neovim shows now. Any thread. */
+    StatusInfo current() {
+        return lastStatus;
+    }
+
     // ---- listeners ----
 
     void addStatusListener(Consumer<StatusInfo> listener) {

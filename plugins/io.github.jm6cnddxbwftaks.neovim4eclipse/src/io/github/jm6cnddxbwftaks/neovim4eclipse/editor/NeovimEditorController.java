@@ -410,6 +410,15 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
+     * Shows what Neovim shows now ({@link NeovimSession#currentStatus()}): used when Neovim moved into
+     * this editor by itself, so that a {@code :b}'s message reaches the editor it moved to, as on
+     * Neovim's single screen. UI thread.
+     */
+    void showNeovimsCurrentStatus() {
+        onStatusChanged(session.currentStatus());
+    }
+
+    /**
      * Output for the popup (a listing, shell output, messages of more than one line): shown over
      * this editor if Neovim drives it. The message line is cleared, as the popup replaces it. Called
      * on the session's thread.
