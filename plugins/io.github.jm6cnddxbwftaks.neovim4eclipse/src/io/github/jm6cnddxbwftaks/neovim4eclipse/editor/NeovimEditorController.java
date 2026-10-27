@@ -148,6 +148,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
+        // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are echoes.
+        this.caretSync.dropNeovimCursorWhile(() -> session.isEclipseTypingReady() && !session.isNeovimDrivenInsert());
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
@@ -587,7 +589,7 @@ public final class NeovimEditorController implements AutoCloseable {
         if (VimModes.isVisual(session.getMode())) {
             return;
         }
-        caretSync.showNeovimCursor(pos);
+        caretSync.onNeovimCursor(pos);
     }
 
     private void onVisualSelection(VisualSelection sel) {

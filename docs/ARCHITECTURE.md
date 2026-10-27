@@ -56,6 +56,13 @@ After the push Neovim's cursor is moved to Eclipse's caret, or to the start of E
 Eclipse's undo selects the line it brings back, and inserting that line above Neovim's cursor would
 otherwise leave the cursor one line too low.
 
+**While Eclipse types in insert mode, Neovim's cursor reports are dropped** (`CaretSync.onNeovimCursor`).
+Neovim's lines lack the typed text until `Esc`, so a caret move sent to Neovim comes back clamped to
+its old line (`CursorMovedI`). After `O` above a class's `}`, a method signature and Enter, the caret
+jumped from column 5 of JDT's new indented line to column 1, the length of Neovim's `}` there. No key
+reaches Neovim while Eclipse types, so such a report is only that echo; in a Neovim-driven insert
+(macro, block insert) the reports apply as usual.
+
 Eclipse can also change the document **in reaction to a change applied from Neovim**: in a linked
 rename, `x` on the name is copied to every other occurrence, inside the same `IDocument.replace`.
 `BufferSynchronizer` counts the document changes while it applies one; more than one means Neovim

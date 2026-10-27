@@ -51,6 +51,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `:saveas other.txt` (and `:file other.txt` followed by `:w`) no longer saves the changes over the
   original file while Neovim calls the buffer by the new name. `:file other.txt` is now undone, since
   the editor's file stays the same.
+- In insert mode, Enter after a `{` (which Eclipse answers with the closing brace and an indented
+  line) could leave the caret at the start of the new line instead of after its indentation, when
+  the line was opened with `O` or `o`.
 
 ## [0.1.8] - 2026-10-27
 

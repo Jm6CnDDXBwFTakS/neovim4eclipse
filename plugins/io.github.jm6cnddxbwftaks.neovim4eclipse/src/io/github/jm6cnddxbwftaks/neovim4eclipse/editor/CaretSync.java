@@ -33,6 +33,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
  * for document rewrites applied from Neovim ({@code IDocument.set} resets the caret to 0): those are
  * recognized by {@code applyingRemoteChange}.
  *
+ * <p><b>While Eclipse types, Neovim's cursor reports are dropped</b> ({@link #onNeovimCursor}).
+ * In insert mode Eclipse types and Neovim gets the text only at {@code Esc}, so Neovim's lines are
+ * out of date. The caret moves still reach Neovim, which clamps them to its old lines and reports
+ * the clamped place back. Example: after {@code O} above a class's {@code }} and a method typed
+ * with Enter (JDT then adds two lines), the caret went to column 5 of the new line, Neovim's line
+ * there was still {@code }}, so it reported column 1, and the caret jumped there. No key reaches
+ * Neovim while Eclipse types, so such a report is only that echo. At {@code Esc} the text is pushed
+ * and Neovim's cursor is right again.
+ *
  * <p>Neovim columns are UTF-8 bytes, Eclipse columns UTF-16 chars; {@link DocumentPositions}
  * converts between them. The caret is seen through {@link EditorCaret}, in document offsets (the
  * widget's own offsets leave out folded code), so this class is tested without a widget. Created
@@ -51,6 +60,8 @@ final class CaretSync {
     private final BooleanSupplier followEclipseCaret;
     /** True while the synchronizer applies a change from Neovim to the document. */
     private final BooleanSupplier applyingRemoteChange;
+    /** True while Eclipse types in insert mode: Neovim's cursor reports are then dropped. */
+    private BooleanSupplier eclipseTyping = () -> false;
 
     private volatile boolean disposed;
     /** Set while a caret change from Neovim is applied, so the listener does not echo it back. */
@@ -67,6 +78,22 @@ final class CaretSync {
         this.followEclipseCaret = followEclipseCaret;
         this.applyingRemoteChange = applyingRemoteChange;
         caret.addMoveListener(moveListener);
+    }
+
+    /** See the class comment, <em>While Eclipse types</em>. Called once, at setup. */
+    void dropNeovimCursorWhile(BooleanSupplier eclipseTyping) {
+        this.eclipseTyping = eclipseTyping;
+    }
+
+    /**
+     * A cursor Neovim reported (after a key, or a {@code CursorMoved}/{@code CursorMovedI} event):
+     * moves the caret there, unless Eclipse is typing (see the class comment). Any thread.
+     */
+    void onNeovimCursor(CursorPos pos) {
+        if (eclipseTyping.getAsBoolean()) {
+            return;
+        }
+        showNeovimCursor(pos);
     }
 
     /**
