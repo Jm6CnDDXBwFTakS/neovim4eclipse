@@ -438,8 +438,24 @@ final class CommandLineBox {
             output.show(title, text, false);
             output.makeRoomBelow(roomBelowOutput());
         } else {
-            output.showOverEditor(title, text, host.isFocusControl());
+            output.showOverEditor(title, text, focusIsInEditor());
         }
+    }
+
+    /**
+     * Whether the keyboard focus is in this editor (its text or a control on it), or nowhere for a
+     * moment, as between the box closing after Enter and the editor getting the focus back: then
+     * output is the editor's own, from a command typed in it. Elsewhere means another part of
+     * Eclipse (a view, a dialog, another editor).
+     */
+    private boolean focusIsInEditor() {
+        Control focus = host.getDisplay().getFocusControl();
+        for (Control c = focus; c != null; c = c.getParent()) {
+            if (c == host) {
+                return true;
+            }
+        }
+        return focus == null;
     }
 
     /** Places the box near the bottom edge of the editor ({@link OverlayFrame#bottomGap}). */

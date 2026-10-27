@@ -414,6 +414,34 @@ class CommandLineBoxTest {
                 () -> popupText() != null && popupText().isFocusControl());
     }
 
+    /**
+     * The popup waits for the editor's focus, and a {@code :} typed as soon as the editor has it
+     * opens the box before the popup takes the focus: the box keeps it, and its line. Found with
+     * {@code NewFileEndToEndTest} on Windows: an error after {@code :w}, then {@code :w ++p}. The box
+     * opens right after the editor's focus event; where that event comes at once (Windows, macOS)
+     * the popup's posted focus change runs after the box opened.
+     */
+    @Test
+    void aCommandLineOpenedRightAfterTheEditorGotTheFocusKeepsIt() {
+        Text elsewhere = new Text(shell, SWT.SINGLE);
+        elsewhere.setBounds(0, 0, 100, 20);
+        elsewhere.moveAbove(host);
+        KeyboardFocus.require(elsewhere, TIMEOUT_MS);
+        commandLine.showOutput(":w", "E1: first\nE2: second");
+        waitUntil("the popup", () -> popupText() != null);
+        host.setFocus();
+        commandLine.show(line(":", 1));
+        Text box = findText(host);
+        assertNotNull(box, "the box is open");
+        Display display = shell.getDisplay();
+        while (display.readAndDispatch()) {
+            // run what the focus change posted
+        }
+        assertTrue(commandLine.isOpen(), "the box is still open");
+        assertTrue(box.isFocusControl(), "the box keeps the focus");
+        assertEquals(List.of(), commands.calls, "the line was not abandoned");
+    }
+
     /** The output popup's text: a {@link StyledText} inside the host, or {@code null}. */
     private StyledText popupText() {
         return popupTextIn(host);

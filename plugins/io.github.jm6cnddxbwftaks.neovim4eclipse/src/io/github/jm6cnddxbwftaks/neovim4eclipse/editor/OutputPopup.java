@@ -46,12 +46,17 @@ final class OutputPopup {
      * it opened while the user typed elsewhere in Eclipse.
      */
     private boolean waitingForEditorFocus;
-    /** Takes the focus once the editor gets it, as Vim's prompt takes the next key. */
+    /**
+     * Takes the focus once the editor gets it, as Vim's prompt takes the next key. Posted, as a focus
+     * change inside a focus event is unreliable; by the time it runs the editor may have handed the
+     * focus on (a {@code :} typed at once opened the command line box), and then the popup leaves it
+     * there: taking it would close the box.
+     */
     private final Listener takeFocusWithEditor = event -> {
         stopWaitingForEditorFocus();
         if (isOpen()) {
             view.getDisplay().asyncExec(() -> {
-                if (isOpen()) {
+                if (isOpen() && editorHasFocus()) {
                     view.setFocus();
                 }
             });
@@ -112,6 +117,11 @@ final class OutputPopup {
             waitingForEditorFocus = true;
             host.addListener(SWT.FocusIn, takeFocusWithEditor);
         }
+    }
+
+    /** Whether the editor itself (the host) has the keyboard focus. */
+    private boolean editorHasFocus() {
+        return !host.isDisposed() && host.isFocusControl();
     }
 
     private void stopWaitingForEditorFocus() {
