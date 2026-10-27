@@ -438,7 +438,7 @@ final class CommandLineBox {
             output.show(title, text, false);
             output.makeRoomBelow(roomBelowOutput());
         } else {
-            output.show(title, text);
+            output.showOverEditor(title, text, host.isFocusControl());
         }
     }
 

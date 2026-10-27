@@ -313,7 +313,9 @@ macro being recorded contains it. Listings of more than one line (`:ls`, `:jumps
 `:registers` ...), shell output (`:!ls`, `:!make`), `:messages` and anything else of more than one
 line show in a read-only box in the same place, with the command as its first line; output that keeps coming
 (`:!make`) is added while the box is open. `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys
-scroll it; any other key or a click closes it. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
+scroll it; any other key or a click closes it. Output that comes while you type elsewhere in Eclipse
+(a timer's or an autocommand's) opens the box without taking the keyboard from there; it takes it
+when you go back to the editor. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
 the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
 
 ## Mouse

@@ -17,6 +17,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A listing that fits on one line (`:set ts?`, `:ls` with one buffer, the file info of a typed `:b`)
   shows on the message line, as on Neovim's own screen, instead of opening the output box. Longer
   listings still open it.
+- Output that comes while you type elsewhere in Eclipse (a view, a dialog, another editor), such as
+  a timer's or an autocommand's, opens the output box without taking the keyboard from there. The
+  box takes it when you go back to the editor. Output for the editor you type in takes it at once,
+  as before.
 
 ### Fixed
 

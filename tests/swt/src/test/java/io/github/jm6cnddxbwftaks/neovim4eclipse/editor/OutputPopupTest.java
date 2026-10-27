@@ -37,6 +37,12 @@ import org.junit.jupiter.api.Test;
  * a real keyboard. Whether a key was handled by the popup shows in {@code event.doit}: the popup
  * sets it to {@code false} for the keys it acts on, and leaves it {@code true} for the ones
  * {@code StyledText} handles itself (arrows, Page Up/Down, Ctrl+C).
+ *
+ * <p>Focus changes are simulated the same way ({@code notifyListeners(SWT.FocusOut, ...)}): real
+ * keyboard focus exists only in the active window, which a test's shell is not while the developer
+ * types elsewhere ({@link KeyboardFocus}), so these tests run either way. What depends on real focus
+ * (the popup taking it, or leaving it where the user types) is tested with real focus in
+ * {@code CommandLineBoxTest}.
  */
 class OutputPopupTest {
 
