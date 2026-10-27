@@ -127,8 +127,11 @@ name, which `:saveas` and `:file` change): another name is a copy (`:w other.txt
 the workspace inside a project, never over unsaved changes in another editor, and without touching
 the editor or `'modified'`. Some lines (`:5,10w part.txt`, `FileWriteCmd`) and appends (`:w >> log.txt`,
 `FileAppendCmd`) send the lines between the marks `'[` and `']` (kinds `"lines"`, `"append"`; the text
-cut by `util/TextLines`); both are refused for the editor's own file, saved only whole. A renamed
-buffer written under its new name is refused (it used to save the old file).
+cut by `util/TextLines`); both are refused for the editor's own file, saved only whole. `:saveas new.txt`
+renames the buffer, then writes it under the new name: kind `"saveas"`, which `OtherFileWrites.saveAs`
+carries out as Eclipse's Save As without the dialog (the document provider saves to the new input,
+then `replaceInputKeepingBuffer` moves the editor, keeping the Neovim buffer). A `BufFilePost` check
+puts the old name back after `:file new.txt` or a refused `:saveas`.
 `:wq`, `:x` and `:wa` stay Eclipse's commands (`util/HostCommand`): they close editors or save editors
 that have no buffer. An error fails the write as a real failed write does
 (`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before

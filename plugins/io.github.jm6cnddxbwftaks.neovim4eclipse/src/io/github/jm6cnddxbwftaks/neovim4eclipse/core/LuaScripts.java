@@ -546,11 +546,18 @@ final class LuaScripts {
      *       {@code "copy"}, with the full name). Eclipse writes the document's text there; the editor
      *       stays on its own file and keeps its unsaved changes, so {@code 'modified'} does not change.
      *       Neovim itself refuses an existing file without {@code !} (E13), before the hook.</li>
-     *   <li>A buffer renamed by {@code :saveas} or {@code :file}, written under its new name: refused,
-     *       since the editor's file is still the old one. (Before this check Eclipse saved the old
-     *       file, the editor's, under Neovim's new name: experiment X1 of the plan "writes under
-     *       another name".)</li>
+     *   <li>The buffer's new name after {@code :saveas new.txt}, which renames the buffer and then
+     *       writes it: Eclipse saves the document as that file and moves the editor there (kind
+     *       {@code "saveas"}); then {@code b:neovim4eclipse_file} is the new file. (Before, Eclipse
+     *       saved the editor's old file while Neovim called the buffer by the new name: experiment X1
+     *       of the plan "writes under another name".)</li>
      * </ul>
+     * The buffer must keep its editor's name, so {@code BufFilePost} checks it once the command is
+     * over ({@code vim.schedule}) and puts the old name back after {@code :file new.txt} (with a
+     * message saying why) or a {@code :saveas} Eclipse refused (whose error is already shown). The
+     * rename back is {@code :keepalt noautocmd file}, which leaves the buffer {@code [Not edited]}
+     * until its next write, as any {@code :file} does; the plug-in's own buffers avoid that mark by
+     * being named with {@code bufadd()} ({@link #CREATE_DOCUMENT_BUFFER}), which cannot rename.
      * Some lines ({@code :5,10w part.txt}) run {@code FileWriteCmd} instead, and an append
      * ({@code :w >> log.txt}, {@code :5,10w >> log.txt}) {@code FileAppendCmd}; Neovim marks the lines
      * with {@code '[} and {@code ']}, which the hooks send (request kinds {@code "lines"} and
@@ -628,6 +635,9 @@ final class LuaScripts {
               return true
             end
 
+            -- Buffers whose :saveas asked Eclipse, so their rename is no :file (see BufFilePost below).
+            local saveas_tried = {}
+
             vim.api.nvim_create_autocmd('BufWriteCmd', {
               buf = buf, -- named "buffer" before Neovim 0.12.2
               desc = 'Eclipse saves the document',
@@ -639,8 +649,13 @@ final class LuaScripts {
                     vim.bo[ev.buf].modified = false
                   end
                 elseif own(ev.buf, target) then
-                  -- Renamed by :saveas or :file: the editor's file is still the old one.
-                  fail('Eclipse saves this buffer only as ' .. vim.fn.fnamemodify(file, ':t') .. '; use File > Save As')
+                  -- :saveas new.txt: Neovim renamed the buffer, then writes it under the new name.
+                  -- Eclipse saves the document as that file and moves the editor there.
+                  saveas_tried[ev.buf] = true -- the BufFilePost check below then stays quiet
+                  if ask(ev.buf, 'saveas', target, 0, 0) then
+                    vim.b[ev.buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(ev.buf)
+                    vim.bo[ev.buf].modified = false
+                  end
                 else
                   -- :w other.txt: the text to another file, as in Vim. The editor's changes stay unsaved.
                   ask(ev.buf, 'copy', target, 0, 0)
@@ -663,6 +678,33 @@ final class LuaScripts {
                 end,
               })
             end
+            -- The buffer keeps the editor's name. :file new.txt renames it without a file (the editor
+            -- would still show the old one), and so does a :saveas that Eclipse could not carry out:
+            -- once the command is over (scheduled), the old name is put back; only :file says why.
+            vim.api.nvim_create_autocmd('BufFilePost', {
+              buf = buf,
+              desc = 'Eclipse keeps the buffer named after its file',
+              callback = function(ev)
+                local b = ev.buf
+                vim.schedule(function()
+                  if not vim.api.nvim_buf_is_valid(b) then
+                    return
+                  end
+                  local quiet = saveas_tried[b]
+                  saveas_tried[b] = nil
+                  local file = vim.b[b].neovim4eclipse_file
+                  if canonical(vim.api.nvim_buf_get_name(b)) == canonical(file) then
+                    return -- :saveas done: the editor shows the new file
+                  end
+                  vim.api.nvim_buf_call(b, function()
+                    vim.cmd('keepalt noautocmd file ' .. vim.fn.fnameescape(file))
+                  end)
+                  if not quiet then
+                    fail('file: Eclipse names this buffer after its file; use :saveas or File > Save As')
+                  end
+                end)
+              end,
+            })
             -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its
             -- editor too. Eclipse ignores it for a buffer no editor shows (one it wiped itself).
             vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {

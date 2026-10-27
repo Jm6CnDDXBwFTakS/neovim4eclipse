@@ -26,7 +26,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Writes to a file other than the editor's (the plan "writes under another name"): {@code :w name}
- * writes a copy, {@code :2,3w name} some lines, {@code :w >> name} adds them to a file, as in Vim. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
+ * writes a copy, {@code :2,3w name} some lines, {@code :w >> name} adds them to a file, as in Vim,
+ * and {@code :saveas name} is Eclipse's Save As without the dialog. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
  * each test makes it {@code "lpha\n..."} first ({@code 0x}), so the copy is told from the file.
  *
  * <p>Error checks come last in a test: Neovim shows an error of the write hook in two lines, which
@@ -229,5 +230,52 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         runInBox(widget, "w >> missing.txt");
         waitUntil("E212", TIMEOUT_MS, () -> errmsg().startsWith("E212"), () -> ": " + errmsg());
         assertFalse(project.getFile("missing.txt").exists());
+    }
+
+    @Test
+    void saveasMovesTheEditorToTheNewFileAndKeepsNeovimsUndo() {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        int bufnr = session.getAttachedBufnr();
+        change();
+        runInBox(widget, "saveas sa.txt");
+
+        waitUntil("the editor on sa.txt", TIMEOUT_MS, () -> "sa.txt".equals(editor.getTitle()),
+                () -> "; it is " + editor.getTitle());
+        assertEquals(project.getFile("sa.txt"), editor.getEditorInput().getAdapter(IFile.class), "a workspace-file editor");
+        assertEquals(CHANGED, fileText("sa.txt"));
+        assertEquals("alpha\nbeta\ngamma\n", fileText("test.txt"), "the old file stays as it was");
+        assertFalse(editor.isDirty());
+        waitForAttach(editor, "sa.txt");
+        assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
+        expectMessage("\"sa.txt\" [New] 3L, 16B written");
+
+        type(widget, "u");
+        expectText("alpha\nbeta\ngamma\n"); // Neovim's undo history came along
+        runInBox(widget, "w");
+        assertEquals("alpha\nbeta\ngamma\n", fileText("sa.txt"), "a later :w saves the new file");
+        assertEquals(List.of(), dialogs);
+    }
+
+    @Test
+    void saveasOutsideTheWorkspace() throws Exception {
+        Path out = Files.createTempDirectory("neovim4eclipse-saveas").resolve("out.txt");
+        change();
+        runInBox(widget, "saveas " + out);
+
+        waitUntil("the editor on out.txt", TIMEOUT_MS, () -> "out.txt".equals(editor.getTitle()));
+        assertEquals(CHANGED, Files.readString(out));
+        assertFalse(editor.isDirty());
+    }
+
+    @Test
+    void saveasToAFileOpenInAnotherEditorIsRefused() throws Exception {
+        openInTheBackground(createFile("taken.txt", "taken\n"));
+        change();
+        runInBox(widget, "saveas! taken.txt");
+
+        waitUntil("the refusal", TIMEOUT_MS, () -> errmsg().startsWith("E139"), () -> ": " + errmsg());
+        assertEquals("taken\n", fileText("taken.txt"));
+        assertEquals("test.txt", editor.getTitle());
+        assertTrue(editor.isDirty());
     }
 }

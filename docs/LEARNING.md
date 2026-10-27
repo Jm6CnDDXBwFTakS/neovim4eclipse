@@ -299,6 +299,8 @@ as Vim does, because the buffer's own file is still unsaved. A write of some lin
 event, `FileWriteCmd` (`:5,10w part.txt`), and `>>` runs `FileAppendCmd`; Neovim sets the marks `'[`
 and `']` to the lines, which the hook reads with `line("'[")`. A buffer with `buftype=acwrite` and no
 such hook refuses them (E140 without `!`, E676 with it), which is how the plug-in refused them before.
+`:saveas new.txt` renames the buffer first (`BufFilePre`, `BufFilePost`), then writes it, so its
+`BufWriteCmd` sees the buffer's new name as `ev.match`: that is how the hook tells it from a copy.
 
 In Neovim, `:help api` lists every function and `:help rpc` describes the protocol. `nvim --api-info`
 dumps the API as MessagePack.

@@ -316,8 +316,14 @@ for an editor's own save. A copy over a file that an Eclipse editor has open wit
 refused, even with `!`; an open editor without changes shows the new text. Some lines go to another
 file the same way (`:5,10w part.txt`), and `>>` adds them to the end of one (`:w >> log.txt`,
 `:5,10w >> log.txt`; a missing file needs `!`, as in Vim). The editor's own file is saved only whole,
-so `:5,10w!` and `:w >> %` are refused there. Not yet supported: renaming the buffer with `:saveas` or
-`:file name` (refused); use *File → Save As*.
+so `:5,10w!` and `:w >> %` are refused there.
+
+`:saveas new.txt` is Eclipse's *File → Save As* without the dialog: the document is saved as `new.txt`
+and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was, and
+`:e #` opens it again. Eclipse's save actions do not run in that save (a `:w` afterwards runs them).
+It is refused when another Eclipse editor has `new.txt` open (E139). `:file new.txt`, which renames a
+buffer without a file, is undone at once (the editor's file stays the same); `:file` alone shows the
+file info as usual, which says `[Not edited]` until the next write after such an attempt.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
 macro being recorded contains it. Listings of more than one line (`:ls`, `:jumps`, `:marks`,
@@ -611,7 +617,7 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w other.txt` and `:5,10w part.txt` write to another file, but `:saveas` and `:file name` are refused (use *File → Save As*); `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
+3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w other.txt`, `:5,10w part.txt` and `:saveas new.txt` work as in Vim, but `:file name` is undone; `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
    `:let ... |` or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`

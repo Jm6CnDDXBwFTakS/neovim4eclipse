@@ -19,7 +19,12 @@ import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.ui.IEditorInput;
+import org.eclipse.ui.IReusableEditor;
+import org.eclipse.ui.ide.FileStoreEditorInput;
+import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.ITextEditor;
 
@@ -32,7 +37,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  * name"). {@code :w other.txt} is a copy, as in Vim: the document's text goes to {@code other.txt},
  * and the editor stays on its own file with its unsaved changes, so {@code :w} afterwards still
  * saves the editor. {@code :5,10w part.txt} writes those lines only ({@link #lines}), and
- * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}). Neovim decides which
+ * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}). {@code :saveas new.txt}
+ * is Eclipse's Save As without its dialog: the editor moves to the new file ({@link #saveAs}). Neovim decides which
  * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already
  * refused an existing file without {@code !} (E13).
  *
@@ -108,6 +114,66 @@ final class OtherFileWrites {
         }
         return write(target, TextLines.of(document.get(), first, last), EclipseFileCommands.charsetOf(editor), true,
                 force, createFolders);
+    }
+
+    /**
+     * Saves {@code editor}'s document as {@code target} and moves the editor there, as
+     * {@code :saveas target} does in Vim and File › Save As in Eclipse. Neovim has already renamed its
+     * buffer to {@code target} (and made the old name the alternate file, {@code :e #}); the editor
+     * keeps that buffer, with its undo history and marks. The old file stays as it was on disk.
+     *
+     * <p>How: as Eclipse's own Save As ({@code AbstractDecoratedTextEditor.performSaveAs}) without the
+     * dialog. The document provider saves the document to the new input, then the editor takes that
+     * input ({@link EditorAttachManager#replaceInputKeepingBuffer}). Experiment X4 checked it for a
+     * workspace file, a file outside the workspace and a Java file. Eclipse's save actions do not run
+     * in such a save (X4: format on save left the text as it was); a {@code :w} afterwards runs them.
+     *
+     * <p>Refused when another Eclipse editor has {@code target} open (Vim's E139 is for a file another
+     * buffer has; Neovim gives it itself when that editor has a Neovim buffer), and for an editor
+     * that cannot take another file (a part of a multi-page editor, say).
+     *
+     * @param createFolders {@code ++p}: missing folders may be created
+     */
+    static DocumentWrite.Result saveAs(ITextEditor editor, Path target, boolean createFolders) {
+        String name = target.getFileName() == null ? target.toString() : target.getFileName().toString();
+        IDocumentProvider provider = editor.getDocumentProvider();
+        IDocument document = documentOf(editor);
+        if (provider == null || document == null || !(editor instanceof IReusableEditor)) {
+            return DocumentWrite.Result.failed("Eclipse cannot save " + editor.getTitle() + " as another file here; use File > Save As");
+        }
+        IFile workspaceFile = NewFiles.workspaceFileAt(target);
+        if (openBufferOf(target, workspaceFile) != null) {
+            return DocumentWrite.Result.failed("E139: File is loaded in another buffer (an Eclipse editor has \"" + name + "\" open)");
+        }
+        try {
+            if (!folderExists(target, workspaceFile)) {
+                if (!createFolders) {
+                    return DocumentWrite.Result.failed(NewFiles.NO_FOLDER);
+                }
+                createFolder(target, workspaceFile);
+            }
+            boolean created = !Files.exists(target);
+            IEditorInput input = workspaceFile != null ? new FileEditorInput(workspaceFile)
+                    : new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(target.toUri()));
+            provider.aboutToChange(input);
+            try {
+                provider.saveDocument(new NullProgressMonitor(), input, document, true);
+            } finally {
+                provider.changed(input);
+            }
+            if (workspaceFile != null) {
+                workspaceFile.refreshLocal(IResource.DEPTH_ZERO, null);
+            }
+            if (!EditorAttachManager.getInstance().replaceInputKeepingBuffer(editor, input)) {
+                // Another editor shows the same document: that one would be left on the old file.
+                return DocumentWrite.Result.failed("Saved " + name + ", but another editor shows this document, so this "
+                        + "one stays on " + editor.getTitle());
+            }
+            return DocumentWrite.Result.saved(WrittenMessage.of(name, created, document.get(), EclipseFileCommands.charsetOf(editor)));
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Saving " + editor.getTitle() + " as " + target + " failed", e);
+            return DocumentWrite.Result.failed("E212: Can't open file for writing: " + e.getMessage());
+        }
     }
 
     /**
