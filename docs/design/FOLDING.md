@@ -54,7 +54,7 @@ All three commits of section 7 are built. Where they differ from the plan below,
 - **There is no `:folddelete`.** Neovim (and Vim) delete folds with `zd`, `zD` and `zE` only;
   `:foldd` is `:folddoopen`, which opens folds and stays Neovim's. Only `:fold` is refused.
 - **`z` alone is mapped, not `zf`, `zd`, `zE`** (found while trying it, 2026-10-27). Neovim waits
-  only `'timeoutlen'` (400 ms) for a mapping's second key; typed more slowly, `zE` was Neovim's own
+  only `'timeoutlen'` (then 400 ms, now Neovim's 1000 ms) for a mapping's second key; typed more slowly, `zE` was Neovim's own
   and deleted every fold, after which `zc` said `E490: No fold found`. The mapping of `z` reads the
   next key with `getcharstr()`, which has no time limit, refuses `f F d D E`, runs a mapping of the
   user's for `z` and that key if there is one, and otherwise feeds `z` and the key (with the count)

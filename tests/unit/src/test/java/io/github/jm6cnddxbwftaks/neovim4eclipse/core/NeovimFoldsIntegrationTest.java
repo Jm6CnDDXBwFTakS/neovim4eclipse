@@ -160,7 +160,7 @@ class NeovimFoldsIntegrationTest {
 
     /**
      * A person pausing between {@code z} and {@code E} longer than {@code 'timeoutlen'} (the
-     * plug-in sets 400 ms): with mappings of the two keys, Neovim gave up waiting, ran its own
+     * Neovim's default, 1000 ms): with mappings of the two keys, Neovim gave up waiting, ran its own
      * {@code zE} and deleted every fold. The mapping of {@code z} alone waits for the next key
      * without a time limit. The pause is the point of this test, so it sleeps: it is not a wait for
      * an outcome (AGENTS.md, "Rules the code depends on").

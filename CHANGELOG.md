@@ -54,6 +54,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - In insert mode, Enter after a `{` (which Eclipse answers with the closing brace and an indented
   line) could leave the caret at the start of the new line instead of after its indentation, when
   the line was opened with `O` or `o`.
+- The plug-in no longer sets `'timeoutlen'` to 400 ms, over the value in your `init.lua`. With so
+  short a wait, a pause between `[` and `d` ran Vim's older `[d` (E388: Couldn't find definition)
+  instead of going to a problem. Neovim's default (1000 ms) or your own setting now applies.
 
 ## [0.1.8] - 2026-10-27
 
