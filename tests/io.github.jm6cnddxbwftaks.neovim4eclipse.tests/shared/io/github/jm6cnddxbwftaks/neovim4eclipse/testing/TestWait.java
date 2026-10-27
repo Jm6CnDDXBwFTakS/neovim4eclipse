@@ -23,8 +23,9 @@ import java.time.Duration;
  * </pre>
  *
  * The test POMs pass {@value #PROPERTY} on to the test JVM, as they do {@code nvim.path}. Every test
- * module compiles this file: tests/unit, tests/text and tests/swt add tests/shared/src as a test
- * source in their POMs, the UI test fragment lists it in its build.properties ({@code source..}).
+ * module compiles this file: it lives in the UI test fragment's {@code shared/} folder, which the
+ * fragment lists in its build.properties ({@code source..}) and tests/unit, tests/text and tests/swt
+ * add as a test source in their POMs.
  *
  * <p>Not for the opposite check, "nothing else happened": waiting the full limit there would make
  * every passing run slow. Those tests ask Neovim a question instead and check once the answer is

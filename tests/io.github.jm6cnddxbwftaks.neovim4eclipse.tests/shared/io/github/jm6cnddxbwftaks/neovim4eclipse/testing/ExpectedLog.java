@@ -34,7 +34,8 @@ import java.util.logging.Logger;
  *
  * <p>Only that one logger is captured, only while the block runs: anything else that logs still
  * prints, so an unexpected warning stays visible. Uses {@code java.util.logging}, which the plug-in
- * logs through. Shared by the test modules (each adds {@code tests/shared/src} as a test source).
+ * logs through. Shared by the test modules: it lives in the UI test fragment's {@code shared/}
+ * folder, which the other test modules add as a test source.
  */
 public final class ExpectedLog implements AutoCloseable {
 

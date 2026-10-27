@@ -149,11 +149,11 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed
   into the box; it fails with "lost keyboard focus" if the box closed before Enter), `statusLineTexts` (the window's status line, where Eclipse-side errors appear).
   `SessionProbe` runs Lua in Neovim, for what the editor cannot show (the buffer list).
-- `TestWait` (`tests/shared`, used by every test module): how long a test waits for something it
+- `TestWait` (`tests/io...tests/shared`, used by every test module): how long a test waits for something it
   expects, 15 s unless `-Dtest.wait.seconds=N` says otherwise. Every wait uses it (`TestWait.millis()`,
   or `EndToEndTestBase.TIMEOUT_MS` in the UI tests), never a number of its own; see
   [Tests on a loaded machine](#tests-on-a-loaded-machine).
-- `ExpectedLog` (`tests/shared`, used by every test module): for a test that makes the
+- `ExpectedLog` (`tests/io...tests/shared`, used by every test module): for a test that makes the
   code fail on purpose. `try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) { ... }` keeps
   that class's log records off the console while the block runs, and
   `log.assertLogged(Level.SEVERE, "Could not switch")` checks the failure was reported. Without it
@@ -328,8 +328,8 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `tests/unit` | JUnit tests of `util` and `core`, without Eclipse |
 | `tests/text` | JUnit tests of code that uses Eclipse's text model but no widgets (`sync`, parts of `editor`), without a workbench |
 | `tests/swt` | JUnit tests of `editor` classes that use SWT widgets but not the workbench; need a display |
-| `tests/shared` | test helpers shared by those modules (`ExpectedLog`); not a module of its own |
 | `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` | workbench tests (a fragment of the plug-in) |
+| `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/shared` | test helpers every test module uses (`TestWait`, `ExpectedLog`): the fragment's second source folder, a test source of the other modules. Inside the fragment because PDE takes no source folder outside a project |
 | `features/...feature` | the installable feature |
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
