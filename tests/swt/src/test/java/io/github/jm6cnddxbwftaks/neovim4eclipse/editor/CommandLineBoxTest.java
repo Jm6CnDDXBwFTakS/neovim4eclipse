@@ -415,17 +415,21 @@ class CommandLineBoxTest {
         commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
         waitUntil("the popup", () -> popupText() != null);
         assertTrue(elsewhere.isFocusControl(), "the focus stays where the user types");
+        KeyboardFocus.require(elsewhere, TIMEOUT_MS); // the window active again, if a window manager took it
         // As Eclipse does when the editor is activated. Composite.setFocus offers the focus to the
         // children first, the popup's text among them, which must refuse it (NO_FOCUS).
         host.setFocus();
         waitUntil("the focus to come back to the editor or the popup",
                 () -> host.isFocusControl() || popupText() != null && popupText().isFocusControl());
+        assertTrue(host.isFocusControl(), "the editor has the focus, not the popup");
         Display display = shell.getDisplay();
         while (display.readAndDispatch()) {
             // run what the focus change posted
         }
-        assertTrue(host.isFocusControl(), "the editor has the focus, not the popup");
+        // Not "the editor still has it": on Linux the window manager may deactivate the test's window
+        // now and then (KeyboardFocus), and then nothing has the focus. The popup must never take it.
         assertNotNull(popupText(), "the popup is still shown");
+        assertFalse(popupText().isFocusControl(), "the popup did not take the focus later");
     }
 
     /** A click into such a popup gives it the focus, to scroll it; then it closes as any popup does. */
