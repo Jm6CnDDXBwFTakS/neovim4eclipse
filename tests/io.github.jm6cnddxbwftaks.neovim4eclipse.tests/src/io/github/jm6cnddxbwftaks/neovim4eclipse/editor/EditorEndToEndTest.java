@@ -744,18 +744,15 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Eclipse's Undo key as real key events (Display.post), so that Eclipse's key binding runs Undo:
-     * Ctrl+Z, or Cmd+Z on macOS. Undo is bound to M1+Z, and M1 is Command on a Mac (there, Ctrl+Z
-     * runs nothing in Eclipse).
+     * Eclipse's Undo key, so that Eclipse's key binding runs Undo: Ctrl+Z, or Cmd+Z on macOS. Undo is
+     * bound to M1+Z, and M1 is Command on a Mac (there, Ctrl+Z runs nothing in Eclipse).
+     *
+     * <p>{@code UiTestSupport.m1Key} sends it to the widget, not as real key events through the
+     * operating system ({@code Display.post}): on macOS those need the Accessibility permission, and
+     * without it they are dropped.
      */
     private void postCtrlZ() {
-        int m1 = org.eclipse.jface.util.Util.isMac() ? SWT.COMMAND : SWT.CTRL;
-        org.eclipse.swt.widgets.Display d = widget.getDisplay();
-        org.eclipse.swt.widgets.Event e = new org.eclipse.swt.widgets.Event();
-        e.type = SWT.KeyDown; e.keyCode = m1; d.post(e);
-        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyDown; e.character = 'z'; e.keyCode = 'z'; d.post(e);
-        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.character = 'z'; e.keyCode = 'z'; d.post(e);
-        e = new org.eclipse.swt.widgets.Event(); e.type = SWT.KeyUp; e.keyCode = m1; d.post(e);
+        UiTestSupport.m1Key(widget, 'z');
         UiTestSupport.spin(500);
     }
 

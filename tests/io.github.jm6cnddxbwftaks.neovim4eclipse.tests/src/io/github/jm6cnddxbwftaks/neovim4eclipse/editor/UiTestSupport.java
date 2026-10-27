@@ -181,8 +181,8 @@ final class UiTestSupport {
 
     /**
      * Sends one key press to the widget as if typed. {@code notifyListeners(SWT.KeyDown)} goes through
-     * the widget's own key handling, verify-key listeners (the plug-in's KeyInterceptor) included;
-     * it bypasses the workbench's key-binding dispatcher, so it is not for Ctrl keys.
+     * the widget's own key handling, verify-key listeners (the plug-in's KeyInterceptor) included.
+     * Without a modifier, the workbench's key bindings take no part; for M1 keys see {@link #m1Key}.
      */
     static void type(StyledText widget, char character) {
         Event event = new Event();
@@ -198,6 +198,23 @@ final class UiTestSupport {
         for (char c : keys.toCharArray()) {
             type(widget, c);
         }
+    }
+
+    /**
+     * Sends M1 plus a letter key, such as M1+Z (Undo): Ctrl, or Command on macOS. Like
+     * {@link #type(StyledText, char)}, without the operating system, so no permission is needed; the
+     * workbench's key bindings still see it, because {@code notifyListeners} runs the display's
+     * filters first, and Eclipse's key-binding dispatcher is one. The character is what the system
+     * reports for the chord: the letter with Command, its control character with Ctrl (Ctrl+Z is 26).
+     */
+    static void m1Key(StyledText widget, char letter) {
+        boolean mac = org.eclipse.jface.util.Util.isMac();
+        Event event = new Event();
+        event.keyCode = letter;
+        event.character = mac ? letter : (char) (letter - 'a' + 1);
+        event.stateMask = mac ? SWT.COMMAND : SWT.CTRL;
+        event.doit = true;
+        widget.notifyListeners(SWT.KeyDown, event);
     }
 
     /** Sends Escape. */
