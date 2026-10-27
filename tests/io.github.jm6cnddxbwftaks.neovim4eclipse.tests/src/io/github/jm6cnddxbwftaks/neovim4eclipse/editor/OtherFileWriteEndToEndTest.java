@@ -318,4 +318,20 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals("taken\n", fileText("taken.txt"));
         assertTrue(page().findEditor(editor.getEditorInput()) != null, "still open");
     }
+
+    /**
+     * Neovim keeps an empty buffer named after a file written under another name (Vim's alternate
+     * file); left there, it kept an editor opened on that file later from naming its own buffer.
+     */
+    @Test
+    void anEditorOpenedOnACopyGetsABufferOfThatName() throws Exception {
+        runInBox(widget, "w copy.txt");
+        expectMessage("\"copy.txt\" [New] 3L, 17B written");
+        ITextEditor copy = openExisting(project.getFile("copy.txt"));
+        AtomicReference<String> name = new AtomicReference<>();
+        session.evalAsync("bufname('%')", name::set);
+        waitUntil("bufname()", TIMEOUT_MS, () -> name.get() != null);
+        assertEquals(project.getFile("copy.txt").getLocation().toOSString(), name.get());
+        assertEquals("alpha\nbeta\ngamma\n", documentOf(copy).get());
+    }
 }
