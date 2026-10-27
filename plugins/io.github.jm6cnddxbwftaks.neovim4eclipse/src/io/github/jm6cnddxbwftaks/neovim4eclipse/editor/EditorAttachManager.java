@@ -583,6 +583,9 @@ public final class EditorAttachManager {
                 case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders());
                 case APPEND -> OtherFileWrites.append(text, target, request.first(), request.last(), request.force(),
                         request.createFolders());
+                case SAVE_AS -> part == text ? OtherFileWrites.saveAs(text, target, request.createFolders())
+                        : DocumentWrite.Result.failed("Eclipse cannot save a page of " + part.getTitle()
+                                + " as another file; use File > Save As");
                 default -> OtherFileWrites.copy(text, target, request.createFolders());
             };
         }

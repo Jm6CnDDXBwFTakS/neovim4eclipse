@@ -11,8 +11,9 @@ import java.util.List;
  * Eclipse's answer.
  *
  * <p>The request ({@link Request}) says what to write where: the document to its own file (a save),
- * or a copy of it to another file ({@code :w other.txt}, which leaves the editor on its own file, as
- * in Vim). It carries {@code v:cmdarg}, the {@code ++opt} arguments of the write ({@code " ++p"} for
+ * a copy of it or some of its lines to another file ({@code :w other.txt}, which leaves the editor on
+ * its own file, as in Vim), or the document as another file that the editor then shows
+ * ({@code :saveas new.txt}). It carries {@code v:cmdarg}, the {@code ++opt} arguments of the write ({@code " ++p"} for
  * {@code :w ++p}). The answer is either an error, which fails the write as a real failed write does,
  * or the message Neovim shows, as Vim's own after a write: {@code "a.txt" 12L, 140B written}. An
  * empty message shows nothing (a new file's editor shows its own {@code [New]} message).
@@ -31,7 +32,9 @@ public final class DocumentWrite {
         /** Some lines to another file ({@code :5,10w part.txt}), which they replace. */
         LINES,
         /** Lines added at the end of another file ({@code :w >> log.txt}, {@code :5,10w >> log.txt}). */
-        APPEND;
+        APPEND,
+        /** The document saved as another file, which the editor then shows ({@code :saveas new.txt}). */
+        SAVE_AS;
 
         /** The kind named {@code name} in the request ({@code "copy"}); anything else is {@link #OWN}. */
         static Kind named(String name) {
@@ -39,6 +42,7 @@ public final class DocumentWrite {
                 case "copy" -> COPY;
                 case "lines" -> LINES;
                 case "append" -> APPEND;
+                case "saveas" -> SAVE_AS;
                 default -> OWN;
             };
         }

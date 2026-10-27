@@ -33,6 +33,7 @@ class DocumentWriteTest {
         assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.LINES, "/ws/p/part.txt", 5, 10, false, false),
                 DocumentWrite.Request.of("", "lines", "/ws/p/part.txt", 5, 10, false));
         assertEquals(DocumentWrite.Kind.APPEND, DocumentWrite.Kind.named("append"));
+        assertEquals(DocumentWrite.Kind.SAVE_AS, DocumentWrite.Kind.named("saveas"));
         assertEquals(DocumentWrite.Kind.OWN, DocumentWrite.Kind.named("unknown"), "an unknown kind is a save, never a copy");
     }
 

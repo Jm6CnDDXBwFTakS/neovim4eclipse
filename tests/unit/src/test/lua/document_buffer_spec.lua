@@ -10,14 +10,15 @@
 local t = ...
 
 --- Eclipse's answers, by buffer number: '' saves, any other text is the error. Records each request:
---- { buf, cmdarg } for a save of the editor's file, { buf, cmdarg, kind, file } for a copy, and
+--- { buf, cmdarg } for a save of the editor's file, { buf, cmdarg, kind, file } for a copy or a
+--- :saveas, and
 --- { buf, cmdarg, kind, file, first, last, bang } for lines.
 local function eclipse(failures)
   local asked = {}
   t.answer('eclipse_write', function(buf, cmdarg, kind, file, first, last, bang)
     if kind == '' then
       asked[#asked + 1] = { buf, cmdarg }
-    elseif kind == 'copy' then
+    elseif kind == 'copy' or kind == 'saveas' then
       asked[#asked + 1] = { buf, cmdarg, kind, file }
     else
       asked[#asked + 1] = { buf, cmdarg, kind, file, first, last, bang }
@@ -108,18 +109,45 @@ t.test('a copy over an existing file needs !, as in Vim (E13, before Eclipse is 
   t.eq({ { buf, '', 'copy', other } }, asked)
 end)
 
-t.test('a buffer renamed by :file is not written under its new name', function()
+t.test(':saveas asks Eclipse to save as the new file, which becomes the buffer\'s', function()
   t.setup()
   local asked = eclipse()
   local buf, name = t.document('A.txt', { 'a' })
-  local other = vim.fs.dirname(name) .. '/renamed.txt'
-  vim.cmd.file(vim.fn.fnameescape(other))
-  local ok, err = pcall(vim.cmd.write)
+  vim.bo[buf].modified = true
+  local new = vim.fs.dirname(name) .. '/B.txt'
+  vim.cmd.saveas(vim.fn.fnameescape(new))
+  t.eq({ { buf, '', 'saveas', new } }, asked)
+  t.eq(new, vim.api.nvim_buf_get_name(buf))
+  t.eq(new, vim.b[buf].neovim4eclipse_file, 'later writes compare with the new file')
+  t.eq(false, vim.bo[buf].modified)
+  t.eq(name, vim.fn.expand('#:p'), 'the old file is the alternate one, as in Vim')
+  vim.wait(50) -- the scheduled check after the rename leaves it alone
+  t.eq(new, vim.api.nvim_buf_get_name(buf))
+  vim.cmd.write()
+  t.eq({ buf, '' }, asked[2], 'a :w then saves the new file')
+end)
+
+t.test('a :saveas Eclipse refused puts the old name back, with Eclipse\'s error only', function()
+  t.setup()
+  local buf, name = t.document('A.txt', { 'a' })
+  eclipse({ [buf] = 'E139: File is loaded in another buffer' })
+  local ok, err = pcall(vim.cmd.saveas, vim.fn.fnameescape(vim.fs.dirname(name) .. '/B.txt'))
   t.eq(false, ok)
-  t.ok(tostring(err):find('Eclipse saves this buffer only as A.txt', 1, true), tostring(err))
-  t.eq({}, asked, 'X1: Eclipse would have saved A.txt, the editor\'s file')
-  vim.cmd.write(vim.fn.fnameescape(name)) -- its own file is still a save
-  t.eq({ { buf, '' } }, asked)
+  t.ok(tostring(err):find('E139', 1, true), tostring(err))
+  t.wait_for('the old name', function() return vim.api.nvim_buf_get_name(buf) == name end)
+  t.ok(not vim.fn.execute('messages'):find('file: Eclipse', 1, true), 'no :file message on top')
+end)
+
+t.test(':file new.txt is undone: the buffer keeps the editor\'s name', function()
+  t.setup()
+  local asked = eclipse()
+  local buf, name = t.document('A.txt', { 'a' })
+  vim.cmd.file(vim.fn.fnameescape(vim.fs.dirname(name) .. '/renamed.txt'))
+  t.wait_for('the old name', function() return vim.api.nvim_buf_get_name(buf) == name end)
+  t.eq('file: Eclipse names this buffer after its file; use :saveas or File > Save As', vim.v.errmsg)
+  vim.cmd.write()
+  t.eq({ { buf, '' } }, asked, 'X1: a :w saves the editor\'s file, under its own name')
+  t.ok(vim.fn.execute('file'):find('A.txt', 1, true), ':file alone still shows the file info')
 end)
 
 t.test('the same file named through a link or with other slashes is its own name', function()
