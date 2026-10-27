@@ -395,51 +395,61 @@ class CommandLineBoxTest {
         assertEquals(List.of(), commands.calls);
     }
 
-    /**
-     * Output that comes while the user types elsewhere in Eclipse (here a field standing for a view or
-     * a dialog) leaves the focus there, unlike Vim's prompt: Eclipse has more places to type. The
-     * popup takes the focus once the editor gets it back, so the next key there closes it, as in Vim.
-     */
-    @Test
-    void outputWhileTheUserTypesElsewhereWaitsForTheEditor() {
+    /** A field standing for another part of Eclipse (a view, a dialog), with the keyboard focus. */
+    private Text focusElsewhere() {
         Text elsewhere = new Text(shell, SWT.SINGLE);
         elsewhere.setBounds(0, 0, 100, 20);
         elsewhere.moveAbove(host);
         KeyboardFocus.require(elsewhere, TIMEOUT_MS);
-        commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
-        waitUntil("the popup", () -> popupText() != null);
-        assertTrue(elsewhere.isFocusControl(), "the focus stays where the user types");
-        host.setFocus();
-        waitUntil("the popup to take the focus with the editor",
-                () -> popupText() != null && popupText().isFocusControl());
+        return elsewhere;
     }
 
     /**
-     * The popup waits for the editor's focus, and a {@code :} typed as soon as the editor has it
-     * opens the box before the popup takes the focus: the box keeps it, and its line. Found with
-     * {@code NewFileEndToEndTest} on Windows: an error after {@code :w}, then {@code :w ++p}. The box
-     * opens right after the editor's focus event; where that event comes at once (Windows, macOS)
-     * the popup's posted focus change runs after the box opened.
+     * Output that comes while the user types elsewhere in Eclipse leaves the focus there, unlike Vim's
+     * prompt: Eclipse has more places to type. Coming back to the editor does not move the focus to
+     * the popup either: the popup behaves like the message line (see the next tests).
      */
     @Test
-    void aCommandLineOpenedRightAfterTheEditorGotTheFocusKeepsIt() {
-        Text elsewhere = new Text(shell, SWT.SINGLE);
-        elsewhere.setBounds(0, 0, 100, 20);
-        elsewhere.moveAbove(host);
-        KeyboardFocus.require(elsewhere, TIMEOUT_MS);
-        commandLine.showOutput(":w", "E1: first\nE2: second");
+    void outputWhileTheUserTypesElsewhereLeavesTheFocusThere() {
+        Text elsewhere = focusElsewhere();
+        commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
         waitUntil("the popup", () -> popupText() != null);
-        host.setFocus();
-        commandLine.show(line(":", 1));
-        Text box = findText(host);
-        assertNotNull(box, "the box is open");
+        assertTrue(elsewhere.isFocusControl(), "the focus stays where the user types");
+        KeyboardFocus.require(host, TIMEOUT_MS);
         Display display = shell.getDisplay();
         while (display.readAndDispatch()) {
-            // run what the focus change posted
+            // run anything the focus change posted
         }
-        assertTrue(commandLine.isOpen(), "the box is still open");
-        assertTrue(box.isFocusControl(), "the box keeps the focus");
-        assertEquals(List.of(), commands.calls, "the line was not abandoned");
+        assertTrue(host.isFocusControl(), "the editor keeps the focus");
+        assertNotNull(popupText(), "the popup is still shown");
+    }
+
+    /** Such a popup closes with the next key in the editor, which goes on to Neovim as usual. */
+    @Test
+    void aKeyInTheEditorClosesAPopupThatOpenedWithoutTheFocus() {
+        focusElsewhere();
+        commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
+        waitUntil("the popup", () -> popupText() != null);
+        KeyboardFocus.require(host, TIMEOUT_MS);
+        Event key = new Event();
+        key.character = 'j';
+        key.keyCode = 'j';
+        key.doit = true;
+        host.notifyListeners(SWT.KeyDown, key);
+        waitUntil("the popup to close", () -> popupText() == null);
+        assertTrue(host.isFocusControl(), "the editor keeps the focus");
+    }
+
+    /** ... and with a click in the editor, as the message line does. */
+    @Test
+    void aClickInTheEditorClosesAPopupThatOpenedWithoutTheFocus() {
+        focusElsewhere();
+        commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
+        waitUntil("the popup", () -> popupText() != null);
+        Event click = new Event();
+        click.button = 1;
+        host.notifyListeners(SWT.MouseDown, click);
+        waitUntil("the popup to close", () -> popupText() == null);
     }
 
     /** The output popup's text: a {@link StyledText} inside the host, or {@code null}. */

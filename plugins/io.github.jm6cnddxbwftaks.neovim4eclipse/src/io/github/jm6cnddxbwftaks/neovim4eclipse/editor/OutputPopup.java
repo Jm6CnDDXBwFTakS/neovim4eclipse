@@ -42,26 +42,12 @@ final class OutputPopup {
     /** True while the command line box has the focus: losing it then does not close the popup. */
     private boolean heldForCommandLine;
     /**
-     * True while the popup waits for the editor to get the focus, to take it then ({@link #showOverEditor}):
-     * it opened while the user typed elsewhere in Eclipse.
+     * True while the popup is shown without the focus ({@link #showOverEditor}): it opened while the
+     * user typed elsewhere in Eclipse, and the next key or click in the editor closes it.
      */
-    private boolean waitingForEditorFocus;
-    /**
-     * Takes the focus once the editor gets it, as Vim's prompt takes the next key. Posted, as a focus
-     * change inside a focus event is unreliable; by the time it runs the editor may have handed the
-     * focus on (a {@code :} typed at once opened the command line box), and then the popup leaves it
-     * there: taking it would close the box.
-     */
-    private final Listener takeFocusWithEditor = event -> {
-        stopWaitingForEditorFocus();
-        if (isOpen()) {
-            view.getDisplay().asyncExec(() -> {
-                if (isOpen() && editorHasFocus()) {
-                    view.setFocus();
-                }
-            });
-        }
-    };
+    private boolean closesWithEditorInput;
+    /** Closes the popup on a key or click in the editor; the key itself goes on to Neovim as usual. */
+    private final Listener closeOnEditorInput = event -> close(false);
 
     private final PaintListener repositionOnPaint = event -> reposition();
     private final ControlListener repositionOnResize = new ControlListener() {
@@ -103,9 +89,13 @@ final class OutputPopup {
      * editor focused it takes the focus at once, as Vim's "Press ENTER" prompt takes the next key.
      * Output that comes while the user types elsewhere in Eclipse (a view, a dialog, another editor)
      * does not take the focus from there: Vim has one place to type, Eclipse many. The popup then
-     * opens without the focus and takes it once the editor gets it back.
+     * opens without the focus and behaves like the message line: the next key or click in the
+     * editor closes it, and the key goes on to Neovim. A click into the popup gives it the focus,
+     * for scrolling. Nothing here moves the focus later, which would race with the command line box
+     * a {@code :} opens (focus events come in a different order on each system). Neovim's
+     * {@code :messages} keeps its history either way.
      *
-     * @param editorHasFocus whether the editor (the host) has the keyboard focus now
+     * @param editorHasFocus whether the focus is in the editor now
      */
     void showOverEditor(String title, String output, boolean editorHasFocus) {
         if (editorHasFocus || isOpen()) {
@@ -114,21 +104,18 @@ final class OutputPopup {
         }
         show(title, output, false, false);
         if (isOpen() && !host.isDisposed()) {
-            waitingForEditorFocus = true;
-            host.addListener(SWT.FocusIn, takeFocusWithEditor);
+            closesWithEditorInput = true;
+            host.addListener(SWT.KeyDown, closeOnEditorInput);
+            host.addListener(SWT.MouseDown, closeOnEditorInput);
         }
     }
 
-    /** Whether the editor itself (the host) has the keyboard focus. */
-    private boolean editorHasFocus() {
-        return !host.isDisposed() && host.isFocusControl();
-    }
-
-    private void stopWaitingForEditorFocus() {
-        if (waitingForEditorFocus) {
-            waitingForEditorFocus = false;
+    private void stopClosingWithEditorInput() {
+        if (closesWithEditorInput) {
+            closesWithEditorInput = false;
             if (!host.isDisposed()) {
-                host.removeListener(SWT.FocusIn, takeFocusWithEditor);
+                host.removeListener(SWT.KeyDown, closeOnEditorInput);
+                host.removeListener(SWT.MouseDown, closeOnEditorInput);
             }
         }
     }
@@ -253,7 +240,7 @@ final class OutputPopup {
         view = null;
         bottomInset = 0;
         heldForCommandLine = false;
-        stopWaitingForEditorFocus();
+        stopClosingWithEditorInput();
         if (!host.isDisposed()) {
             host.removePaintListener(repositionOnPaint);
             host.removeControlListener(repositionOnResize);

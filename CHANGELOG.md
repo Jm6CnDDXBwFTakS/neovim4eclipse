@@ -18,9 +18,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   shows on the message line, as on Neovim's own screen, instead of opening the output box. Longer
   listings still open it.
 - Output that comes while you type elsewhere in Eclipse (a view, a dialog, another editor), such as
-  a timer's or an autocommand's, opens the output box without taking the keyboard from there. The
-  box takes it when you go back to the editor. Output for the editor you type in takes it at once,
-  as before.
+  a timer's or an autocommand's, opens the output box without taking the keyboard from there. Like
+  a message, it then closes with your next key or click in the editor. Output for the editor you
+  type in takes the keyboard at once, as before.
 
 ### Fixed
 
