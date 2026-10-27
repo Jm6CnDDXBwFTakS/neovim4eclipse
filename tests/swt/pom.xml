@@ -104,7 +104,8 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
         <executions>
-          <!-- Test helpers shared by the test modules (ExpectedLog, TestWait), kept once in tests/shared. -->
+          <!-- Test helpers shared by the test modules (ExpectedLog, TestWait), kept once in the UI test
+               fragment's shared/ folder (see its build.properties). -->
           <execution>
             <id>add-shared-test-sources</id>
             <phase>generate-test-sources</phase>
@@ -113,7 +114,7 @@
             </goals>
             <configuration>
               <sources>
-                <source>${project.basedir}/../shared/src</source>
+                <source>${project.basedir}/../io.github.jm6cnddxbwftaks.neovim4eclipse.tests/shared</source>
               </sources>
             </configuration>
           </execution>
@@ -214,7 +215,7 @@
           <!-- @{argLine} keeps the JaCoCo agent that prepare-agent put there. -->
           <argLine>@{argLine} ${swt.jvmArgs}</argLine>
           <systemPropertyVariables>
-            <!-- How long a test waits; see testing/TestWait (tests/shared). -->
+            <!-- How long a test waits; see testing/TestWait (the UI test fragment's shared/). -->
             <test.wait.seconds>${test.wait.seconds}</test.wait.seconds>
           </systemPropertyVariables>
         </configuration>
