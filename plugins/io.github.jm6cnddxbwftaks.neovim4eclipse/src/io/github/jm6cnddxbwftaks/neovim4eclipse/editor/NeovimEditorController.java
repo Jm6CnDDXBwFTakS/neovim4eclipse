@@ -14,6 +14,7 @@ import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextViewerExtension;
+import org.eclipse.jface.text.source.projection.ProjectionViewer;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
@@ -27,6 +28,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPos;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FoldState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
@@ -54,6 +56,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  *   <li>{@link VisualSelectionView}, {@link CursorStyleController}, {@link ModeStatusContribution},
  *       {@link CommandLineBox}, {@link MessageLine}: what is drawn;</li>
  *   <li>{@link InsertTracker}: what was typed in insert mode, for {@code .}.</li>
+ *   <li>{@link FoldMirror}: the editor's folds and Neovim's, kept the same (when the editor folds
+ *       and the user has not turned it off with {@code vim.g.neovim4eclipse_folds = 0}).</li>
  * </ul>
  *
  * <h2>Columns</h2>
@@ -100,6 +104,13 @@ public final class NeovimEditorController implements AutoCloseable {
     private final CaretSync caretSync;
     /** Widget offsets to document offsets and back (folded code is not in the widget). */
     private final WidgetOffsets offsets;
+    /** The Neovim buffer of this editor's document. */
+    private final DocumentBuffer buffer;
+    /**
+     * The editor's folds mirrored into Neovim; {@code null} when folding is off in Neovim (the
+     * opt-out) or the editor cannot fold (no {@link ProjectionViewer}). See {@link #sendFolds()}.
+     */
+    private final FoldMirror foldMirror;
     private volatile boolean closed;
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
@@ -113,6 +124,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
     private final Consumer<HostCommand> hostCommandListener = this::onHostCommand;
     private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
+    private final Consumer<FoldState> foldListener = this::onFolds;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
             DocumentBuffer buffer, boolean takeNeovimCursor) {
@@ -124,7 +136,14 @@ public final class NeovimEditorController implements AutoCloseable {
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session, SwtUiExecutor.INSTANCE);
         this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
-        EditorCaret caret = new StyledTextCaret(styledText, offsets);
+        this.buffer = buffer;
+        this.foldMirror = session.foldsEnabled() && viewerOf(editor) instanceof ProjectionViewer projection
+                ? new FoldMirror(projection, SwtUiExecutor.INSTANCE, folds -> session.setFoldsAsync(buffer, folds))
+                : null;
+        StyledTextCaret caret = new StyledTextCaret(styledText, offsets);
+        if (foldMirror != null) {
+            caret.setFoldCaption(foldMirror::captionOffset); // a closed fold's caption, without unfolding
+        }
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
@@ -173,6 +192,9 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addIdeActionListener(ideActionListener);
         session.addHostCommandListener(hostCommandListener);
         session.addCmdlineListener(cmdlineListener);
+        if (foldMirror != null) {
+            session.addFoldStateListener(foldListener);
+        }
 
         modeStatus.addTo(editor.getEditorSite());
 
@@ -193,6 +215,38 @@ public final class NeovimEditorController implements AutoCloseable {
     private void pushDocumentAndCursorAsync(int line1, int col0, boolean takeNeovimCursor) {
         int tabWidth = styledText.isDisposed() ? 0 : styledText.getTabs();
         documentPush.start(tabWidth, indentationOf(tabWidth), line1, col0, takeNeovimCursor);
+        sendFolds();
+    }
+
+    /**
+     * Sends the editor's folds to Neovim, queued after the push (one input thread), so that the lines
+     * are there: Eclipse's regions when the editor folds, an empty list when it cannot, which turns
+     * folding off in Neovim's window so that a {@code 'foldmethod'} of the user's cannot hide lines
+     * Eclipse shows. Nothing when the user turned folding off ({@code vim.g.neovim4eclipse_folds = 0}):
+     * then Neovim's folding is left as the user has it. UI thread.
+     */
+    private void sendFolds() {
+        if (foldMirror != null) {
+            foldMirror.send();
+        } else if (session.foldsEnabled()) {
+            session.setFoldsAsync(buffer, List.of());
+        }
+    }
+
+    /**
+     * Neovim's closed folds after a key: collapse and expand Eclipse's to match, on the UI thread,
+     * before the caret moves (the session reports folds before the cursor, and both go through the
+     * same UI queue). Only for this editor's buffer and in Neovim mode. Session thread.
+     */
+    private void onFolds(FoldState folds) {
+        if (closed || !neovimModeActive || folds.bufnr() != buffer.bufnr()) {
+            return;
+        }
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed && !styledText.isDisposed()) {
+                foldMirror.applyNeovimState(folds.closed());
+            }
+        });
     }
 
     /**
@@ -559,10 +613,14 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeIdeActionListener(ideActionListener);
             session.removeHostCommandListener(hostCommandListener);
             session.removeCmdlineListener(cmdlineListener);
+            session.removeFoldStateListener(foldListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }
         try {
+            if (foldMirror != null) {
+                foldMirror.close();
+            }
             caretSync.dispose();
             mouse.dispose();
             commandLineEdits.dispose();

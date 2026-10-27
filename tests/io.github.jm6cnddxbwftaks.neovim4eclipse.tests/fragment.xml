@@ -50,4 +50,16 @@
       </editor>
    </extension>
 
+   <!-- An editor that folds, like the Java editor, without Java tooling: brace blocks are its folds.
+        For the folding tests; only test files have the extension fold. -->
+   <extension point="org.eclipse.ui.editors">
+      <editor
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.tests.foldingEditor"
+            name="Neovim for Eclipse tests: folding editor"
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.TestFoldingEditor"
+            extensions="fold"
+            default="true">
+      </editor>
+   </extension>
+
 </fragment>

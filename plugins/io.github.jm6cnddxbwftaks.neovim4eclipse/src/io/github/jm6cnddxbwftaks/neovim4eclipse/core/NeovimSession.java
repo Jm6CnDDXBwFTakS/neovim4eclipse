@@ -608,14 +608,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (!foldsEnabled) {
             return;
         }
-        List<String> args = FoldRegions.toLuaArgs(buffer.bufnr, folds);
-        submit(folds.size() + " folds for " + buffer.name(), Level.FINE, () -> {
+        List<FoldRegions.Fold> copy = List.copyOf(folds);
+        submit(copy.size() + " folds for " + buffer.name(), Level.FINE, () -> {
             // As for the diagnostics: the number could be another buffer's, or the text not there yet.
-            // SET_FOLDS itself skips a buffer that is not the current one.
+            // SET_FOLDS itself skips a buffer that is not the current one. The number is read here, on
+            // the input thread: at attach the buffer is created by the push queued just before.
             if (buffers.handleOf(buffer) == null || !buffer.loaded) {
                 return;
             }
-            await(api.execLua(LuaScripts.SET_FOLDS, args));
+            await(api.execLua(LuaScripts.SET_FOLDS, FoldRegions.toLuaArgs(buffer.bufnr, copy)));
         });
     }
 

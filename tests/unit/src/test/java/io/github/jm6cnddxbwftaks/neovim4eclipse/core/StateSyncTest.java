@@ -231,14 +231,14 @@ class StateSyncTest {
     }
 
     @Test
-    void withFoldingOnTheClosedFoldsArePublishedAfterTheCursor() {
+    void withFoldingOnTheClosedFoldsArePublishedBeforeTheCursor() {
         state.setFoldsEnabled(true);
         nvim.snapshot = foldSnapshot(List.of(0L, 2L));
 
         state.publishState();
 
         assertEquals(List.of(false, true), nvim.snapshotFlags);
-        assertEquals(List.of("onModeChanged n", "mode n", "cursor 3:0", "no selection", "folds 1 [0, 2]"),
+        assertEquals(List.of("onModeChanged n", "mode n", "folds 1 [0, 2]", "cursor 3:0", "no selection"),
                 listeners.heard);
     }
 

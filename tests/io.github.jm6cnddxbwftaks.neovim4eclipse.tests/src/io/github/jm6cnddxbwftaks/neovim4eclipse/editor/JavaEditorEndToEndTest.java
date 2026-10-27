@@ -39,6 +39,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+
 /**
  * The end-to-end checks that need Java tooling: Eclipse's own Java edits (Format, Rename, Organize
  * Imports, a save action, a template) reach Neovim, {@code gd} and {@code K} run Open Declaration
@@ -414,28 +416,116 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
 
     // ---- Folded code; ZQ in a Java editor ----
 
-    /** With the imports folded, {@code 4G} (inside them) unfolds them; {@code x} edits that line. */
+    private static final String IMPORTS = """
+            package p;
+
+            import java.util.List;
+            import java.util.Map;
+
+            class A {
+            	List<String> l;
+            	Map<String, String> m;
+            }
+            """;
+
+    /** Waits until the editor's folds have reached Neovim (FoldMirror's first send). */
+    private void waitForFoldsInNeovim() {
+        waitUntil("the folds in Neovim", TIMEOUT_MS,
+                () -> Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.b.neovim4eclipse_folds == true")));
+    }
+
+    /** Whether the widget hides lines (some fold is collapsed). */
+    private boolean someLinesHidden() {
+        return javaWidget.getLineCount() < documentOf(javaEditor).getNumberOfLines();
+    }
+
+    /**
+     * The imports are folded when the editor opens, and the fold is mirrored closed in Neovim. With
+     * Vim's default {@code 'foldopen'} ({@code G} is a "jump", which is not in it) {@code 4G} into
+     * them leaves them folded: the caret stands on the fold's caption line, the first import.
+     */
     @Test
-    void movingIntoFoldedImportsUnfoldsThem() throws Exception {
-        String source = """
-                package p;
-
-                import java.util.List;
-                import java.util.Map;
-
-                class A {
-                	List<String> l;
-                	Map<String, String> m;
-                }
-                """;
-        openJava("A.java", source);
+    void movingIntoFoldedImportsLeavesThemFoldedWithTheCaretOnTheirCaption() throws Exception {
+        openJava("A.java", IMPORTS);
+        waitForFoldsInNeovim();
+        assertTrue(someLinesHidden(), "JDT folds the imports at first");
 
         type(javaWidget, "4G");
         settle();
-        waitUntil("the caret on line 4", TIMEOUT_MS, () -> selectionLine() == 3,
+        waitUntil("the caret on the imports' caption line", TIMEOUT_MS, () -> selectionLine() == 2,
                 () -> "; the selection is on line " + selectionLine());
-        type(javaWidget, 'x');
-        expectJava(source.replace("import java.util.Map;", "mport java.util.Map;"));
+        assertTrue(someLinesHidden(), "still folded");
+    }
+
+    /** With {@code foldopen=all} Neovim opens the fold, Eclipse unfolds it, and {@code x} edits that line. */
+    @Test
+    void withFoldopenAllMovingIntoFoldedImportsUnfoldsThem() throws Exception {
+        String before = (String) SessionProbe.lua(session, "return vim.o.foldopen");
+        SessionProbe.lua(session, "vim.o.foldopen = 'all'");
+        try {
+            openJava("A.java", IMPORTS);
+            waitForFoldsInNeovim();
+
+            type(javaWidget, "4G");
+            settle();
+            waitUntil("the caret on line 4", TIMEOUT_MS, () -> selectionLine() == 3,
+                    () -> "; the selection is on line " + selectionLine());
+            waitUntil("the imports unfolded", TIMEOUT_MS, () -> !someLinesHidden());
+            type(javaWidget, 'x');
+            expectJava(IMPORTS.replace("import java.util.Map;", "mport java.util.Map;"));
+        } finally {
+            SessionProbe.lua(session, "vim.o.foldopen = '" + before + "'");
+        }
+    }
+
+    /**
+     * {@code zc} in a method with Javadoc collapses it in Eclipse, which shows its signature, not
+     * the comment above (the caption of JDT's member position), and the caret goes to that line;
+     * {@code zo} opens it again with the caret back where Neovim's cursor is.
+     */
+    @Test
+    void zcOnAMethodWithJavadocPutsTheCaretOnItsSignature() throws Exception {
+        String source = """
+                package p;
+
+                class B {
+                	/**
+                	 * Docs.
+                	 */
+                	void m() {
+                		int x = 1;
+                	}
+                }
+                """;
+        openJava("B.java", source);
+        waitForFoldsInNeovim();
+
+        type(javaWidget, "8G");
+        settle();
+        type(javaWidget, "zc");
+        settle();
+        waitUntil("the method folded", TIMEOUT_MS, this::someLinesHidden);
+        waitUntil("the caret on the signature", TIMEOUT_MS, () -> selectionLine() == 6,
+                () -> "; the selection is on line " + selectionLine());
+
+        type(javaWidget, "zo");
+        settle();
+        waitUntil("the method unfolded", TIMEOUT_MS, () -> !someLinesHidden());
+        waitUntil("the caret back on line 8", TIMEOUT_MS, () -> selectionLine() == 7,
+                () -> "; the selection is on line " + selectionLine());
+    }
+
+    /** {@code zM} collapses every member; {@code zR} opens them all. */
+    @Test
+    void zMAndZRFoldAndUnfoldEverything() throws Exception {
+        openJava("C.java", CALLER);
+        waitForFoldsInNeovim();
+        type(javaWidget, "zR");
+        settle();
+        waitUntil("everything unfolded", TIMEOUT_MS, () -> !someLinesHidden());
+        type(javaWidget, "zM");
+        settle();
+        waitUntil("everything folded", TIMEOUT_MS, this::someLinesHidden);
     }
 
     /** {@code ZQ} closes a Java editor after its key event: no "Unhandled event loop exception". */

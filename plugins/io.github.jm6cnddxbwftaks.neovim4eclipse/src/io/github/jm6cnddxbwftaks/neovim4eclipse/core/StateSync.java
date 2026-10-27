@@ -213,6 +213,13 @@ final class StateSync {
             String current = snapshotMode != null ? snapshotMode : mode;
             dispatchMode(current);
             if (isAttached.test(StateSnapshot.buffer(raw))) {
+                // The folds before the cursor: the editor applies them in this order (one UI queue),
+                // so the caret lands on text that is shown. Example: after zo, a caret placed while
+                // the fold was still collapsed in Eclipse would go to its caption line and stay there.
+                List<Integer> closed = folds ? StateSnapshot.closedFolds(raw) : null;
+                if (closed != null) {
+                    listeners.folds(new FoldState(StateSnapshot.buffer(raw), closed));
+                }
                 CursorPos cursor = StateSnapshot.cursor(raw);
                 if (cursor != null) {
                     dispatchCursor(cursor.line1Based(), cursor.col0Based());
@@ -220,11 +227,6 @@ final class StateSync {
                 listeners.selection(VimModes.isVisual(current)
                         ? StateSnapshot.selection(raw, current)
                         : VisualSelection.none());
-                // After the cursor, as read; the editor applies the folds first (docs/design/FOLDING.md, 3.2).
-                List<Integer> closed = folds ? StateSnapshot.closedFolds(raw) : null;
-                if (closed != null) {
-                    listeners.folds(new FoldState(StateSnapshot.buffer(raw), closed));
-                }
             }
             status.updateRecording(StateSnapshot.recording(raw));
             status.publishStatusline(StateSnapshot.statusline(raw));

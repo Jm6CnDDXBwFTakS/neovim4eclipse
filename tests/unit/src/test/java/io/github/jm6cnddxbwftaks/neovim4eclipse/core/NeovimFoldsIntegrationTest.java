@@ -87,6 +87,28 @@ class NeovimFoldsIntegrationTest {
         return ((Number) s.lua("return vim.fn.line('.')")).intValue();
     }
 
+    /**
+     * As at an editor's attach: the push that creates the buffer is queued, and the folds right
+     * after it, before the buffer has a number. The folds must still reach that buffer.
+     */
+    @Test
+    void foldsQueuedBehindThePushThatCreatesTheBufferArrive() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            s.runAttachSetup(() -> {
+                try {
+                    s.showBuffer(doc);
+                    s.setBufferLines(List.of("a", "b", "c", "d"));
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            s.setFoldsAsync(doc, FoldRegions.forNeovim(List.of(new Region(2, 3, true))));
+            waitFor(() -> mirrored(s), "the folds to arrive");
+            assertEquals(2, ((Number) s.lua("return vim.fn.foldclosed(3)")).intValue());
+        }
+    }
+
     @Test
     void zcAndZoChangeTheClosedFoldsHeardAfterTheKey() throws Exception {
         try (NeovimSession s = start()) {
