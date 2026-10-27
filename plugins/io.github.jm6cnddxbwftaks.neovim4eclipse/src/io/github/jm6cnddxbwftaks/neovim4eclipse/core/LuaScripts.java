@@ -391,6 +391,40 @@ final class LuaScripts {
             """;
 
     /**
+     * Creates the buffer for a document (argument: the file's full name) and returns its number: listed,
+     * loaded and empty, without a swap file, as {@code nvim_create_buf(true, true)} makes it, but named
+     * the way {@code :e} names a buffer. The text is pushed afterwards, and {@link #DOCUMENT_BUFFER}
+     * turns {@code buftype=nofile} into {@code acwrite}.
+     *
+     * <p>Why not {@code nvim_buf_set_name}: it marks the buffer "not edited", as {@code :file name}
+     * does, and once the buffer is {@code acwrite} Neovim's file info says so:
+     * {@code "/path/a.txt" [Not edited] 3 lines --33%--} where Neovim shows
+     * {@code "/path/a.txt" 3 lines --33%--} for a file it read. {@code bufadd()} names the buffer
+     * without that mark. {@code bufload()} with {@code buftype=nofile} loads it without reading the
+     * file (Eclipse's text, unsaved changes included, comes next); {@code :noautocmd} keeps it from
+     * firing {@code BufReadCmd}, {@code BufEnter} and {@code BufWinEnter}, as it enters the buffer for
+     * a moment, so the events are those of {@code nvim_create_buf}: {@code BufNew} and {@code BufAdd}.
+     * (Neovim keeps an {@code acwrite} buffer's name as given, a full path, even after {@code :lcd}.)
+     *
+     * <p>A name another buffer has already, which {@code bufadd()} would return, gives a new buffer
+     * left unnamed instead (the second result is {@code false}): two documents must not share one.
+     */
+    static final String CREATE_DOCUMENT_BUFFER = """
+            local name = select(1, ...)
+            if vim.fn.bufexists(name) == 1 then
+              return { vim.api.nvim_create_buf(true, true), false }
+            end
+            local buf = vim.fn.bufadd(name)
+            vim.bo[buf].buftype = 'nofile'
+            vim.bo[buf].bufhidden = 'hide'
+            vim.bo[buf].swapfile = false
+            vim.bo[buf].modeline = false
+            vim.cmd('noautocmd call bufload(' .. buf .. ')')
+            vim.bo[buf].buflisted = true
+            return { buf, true }
+            """;
+
+    /**
      * Makes a buffer the current one (argument: its number) without Neovim's file info message, such
      * as {@code "a.txt" 3 lines --33%--}.
      *

@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
@@ -148,20 +147,28 @@ final class DocumentBuffers {
         // Listed, so :ls and :b see it. Scratch: no swap file, and no filetype detection runs. Its
         // buftype=nofile is then changed to acwrite, so that a write asks Eclipse to save
         // (LuaScripts.DOCUMENT_BUFFER): Neovim never writes the file itself.
-        Handle buffer = await(api.createBuf(true, true));
-        if (!name.isEmpty()) {
-            try {
-                await(api.bufSetName(buffer, name));
-            } catch (Exception e) {
-                LOG.log(Level.FINE, "Buffer name already in use, left unnamed: " + name, e);
-            }
-        }
+        Handle buffer = name.isEmpty() ? await(api.createBuf(true, true)) : createNamed(name);
         await(api.execLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
         // nvim_buf_attach: Neovim now sends nvim_buf_lines_event for this buffer. No initial
         // full-buffer event (false): the document is pushed into the buffer instead.
         await(api.bufAttach(buffer, false));
         created.put(bufnr(buffer), buffer);
         return buffer;
+    }
+
+    /**
+     * A new buffer named {@code name}, as {@code :e} names one ({@link LuaScripts#CREATE_DOCUMENT_BUFFER});
+     * left unnamed if another buffer has that name already.
+     */
+    private Handle createNamed(String name) throws Exception {
+        Object result = await(api.execLua(LuaScripts.CREATE_DOCUMENT_BUFFER, List.of(name)));
+        if (!(result instanceof List<?> pair) || pair.size() != 2 || !(pair.get(0) instanceof Number bufnr)) {
+            throw new IllegalStateException("Unexpected answer creating the buffer for " + name + ": " + result);
+        }
+        if (!Boolean.TRUE.equals(pair.get(1))) {
+            LOG.fine(() -> "Buffer name already in use, left unnamed: " + name);
+        }
+        return Handle.buffer(bufnr.longValue());
     }
 
     /** Wipes a document's buffer, with its undo history and marks (its last editor closed). */

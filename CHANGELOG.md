@@ -26,6 +26,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   and back no longer opens the output popup either, which took the keyboard focus, so that `jdd`
   after Eclipse's Undo deleted the wrong line. The plug-in adds `F` only while it switches; README,
   "Neovim settings the plug-in changes".
+- Neovim's file info for an open file (`Ctrl-G`, `:file`, and with a `'shortmess'` without `F` a
+  typed `:b`) no longer says `[Not edited]`: the plug-in names its buffers as `:e` does.
 
 ## [0.1.7] - 2026-10-26
 
