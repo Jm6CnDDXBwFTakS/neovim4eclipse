@@ -415,13 +415,29 @@ class CommandLineBoxTest {
         commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
         waitUntil("the popup", () -> popupText() != null);
         assertTrue(elsewhere.isFocusControl(), "the focus stays where the user types");
-        KeyboardFocus.require(host, TIMEOUT_MS);
+        // As Eclipse does when the editor is activated. Composite.setFocus offers the focus to the
+        // children first, the popup's text among them, which must refuse it (NO_FOCUS).
+        host.setFocus();
+        waitUntil("the focus to come back to the editor or the popup",
+                () -> host.isFocusControl() || popupText() != null && popupText().isFocusControl());
         Display display = shell.getDisplay();
         while (display.readAndDispatch()) {
-            // run anything the focus change posted
+            // run what the focus change posted
         }
-        assertTrue(host.isFocusControl(), "the editor keeps the focus");
+        assertTrue(host.isFocusControl(), "the editor has the focus, not the popup");
         assertNotNull(popupText(), "the popup is still shown");
+    }
+
+    /** A click into such a popup gives it the focus, to scroll it; then it closes as any popup does. */
+    @Test
+    void aClickIntoAPopupThatOpenedWithoutTheFocusGivesItTheFocus() {
+        focusElsewhere();
+        commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
+        waitUntil("the popup", () -> popupText() != null);
+        Event click = new Event();
+        click.button = 1;
+        popupText().notifyListeners(SWT.MouseDown, click);
+        waitUntil("the popup's focus", () -> popupText() != null && popupText().isFocusControl());
     }
 
     /** Such a popup closes with the next key in the editor, which goes on to Neovim as usual. */

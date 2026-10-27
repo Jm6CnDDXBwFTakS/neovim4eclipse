@@ -53,7 +53,10 @@ final class OverlayFrame<T extends Control> {
      * @param factory creates the content control inside the given parent
      */
     OverlayFrame(StyledText host, Function<Composite, T> factory) {
-        frame = new Composite(host, SWT.NONE);
+        // NO_FOCUS: the frame is only a border. Composite.setFocus offers the focus to its children
+        // first, so without it an editor getting the focus could hand it to the frame of an overlay
+        // whose content refuses it (a message, an output popup shown without the focus).
+        frame = new Composite(host, SWT.NO_FOCUS);
         FillLayout layout = new FillLayout();
         layout.marginWidth = BORDER;
         layout.marginHeight = BORDER;
