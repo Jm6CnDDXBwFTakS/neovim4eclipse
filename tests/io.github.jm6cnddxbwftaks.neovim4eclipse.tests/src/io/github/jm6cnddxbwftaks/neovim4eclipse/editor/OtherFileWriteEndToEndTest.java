@@ -27,7 +27,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Writes to a file other than the editor's (the plan "writes under another name"): {@code :w name}
  * writes a copy, {@code :2,3w name} some lines, {@code :w >> name} adds them to a file, as in Vim,
- * and {@code :saveas name} is Eclipse's Save As without the dialog. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
+ * {@code :saveas name} is Eclipse's Save As without the dialog, and {@code :wq name} writes the copy
+ * before closing. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
  * each test makes it {@code "lpha\n..."} first ({@code 0x}), so the copy is told from the file.
  *
  * <p>Error checks come last in a test: Neovim shows an error of the write hook in two lines, which
@@ -277,5 +278,44 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals("taken\n", fileText("taken.txt"));
         assertEquals("test.txt", editor.getTitle());
         assertTrue(editor.isDirty());
+    }
+
+    private void expectClosed(ITextEditor target) {
+        waitUntil("the editor to close", TIMEOUT_MS, () -> page().findEditor(target.getEditorInput()) == null);
+    }
+
+    @Test
+    void wqWithANameWritesTheCopyThenCloses() {
+        ITextEditor target = editor;
+        runInBox(widget, "wq copy.txt");
+        expectClosed(target);
+        assertEquals("alpha\nbeta\ngamma\n", fileText("copy.txt"));
+    }
+
+    @Test
+    void wqBangWithANameDiscardsTheEditorsOwnChanges() {
+        ITextEditor target = editor;
+        change();
+        runInBox(widget, "wq! copy.txt");
+        expectClosed(target);
+        assertEquals(CHANGED, fileText("copy.txt"), "the copy has the changes");
+        assertEquals("alpha\nbeta\ngamma\n", fileText("test.txt"), "the file has not");
+    }
+
+    @Test
+    void xWithANameWritesNothingWithoutChanges() {
+        ITextEditor target = editor;
+        runInBox(widget, "x copy.txt");
+        expectClosed(target);
+        assertFalse(project.getFile("copy.txt").exists());
+    }
+
+    @Test
+    void wqWithAnExistingNameNeedsBangAndStaysOpen() throws Exception {
+        createFile("taken.txt", "taken\n");
+        runInBox(widget, "wq taken.txt");
+        waitUntil("E13", TIMEOUT_MS, () -> messageText(editor).startsWith("E13"), () -> ": " + messageText(editor));
+        assertEquals("taken\n", fileText("taken.txt"));
+        assertTrue(page().findEditor(editor.getEditorInput()) != null, "still open");
     }
 }

@@ -32,6 +32,13 @@ class HostCommandRunnerTest {
         }
 
         @Override
+        public boolean writeCopy(String file, boolean force, boolean onlyIfChanged, boolean createFolders) {
+            calls.add("copy" + (force ? "!" : "") + (onlyIfChanged ? " if changed" : "") + (createFolders ? " ++p" : "")
+                    + " " + file);
+            return saveWorks;
+        }
+
+        @Override
         public boolean saveAll() {
             calls.add("saveAll");
             return saveWorks;
@@ -118,6 +125,23 @@ class HostCommandRunnerTest {
     void writeQuitSavesThenCloses() {
         // Closed with force: the save already took care of the changes.
         assertEquals(List.of("save", "close!"), run("wq"));
+    }
+
+    @Test
+    void writeQuitWithANameWritesACopyThenClosesAskingAboutTheEditorsChanges() {
+        // As Vim's :wq other.txt: the copy, then :q, which asks (Vim: E37) since the editor is not saved.
+        assertEquals(List.of("copy other.txt", "close"), run("wq other.txt"));
+    }
+
+    @Test
+    void xitWithANameCopiesOnlyChangesAndBangDiscardsThem() {
+        assertEquals(List.of("copy! if changed ++p sub/a.txt", "close!"), run("xit! ++p sub/a.txt"));
+    }
+
+    @Test
+    void writeQuitWithANameStaysOpenWhenTheCopyFails() {
+        ide.saveWorks = false; // E13, a missing folder, unsaved changes in the target's editor
+        assertEquals(List.of("copy! other.txt"), run("wq! other.txt"));
     }
 
     @Test

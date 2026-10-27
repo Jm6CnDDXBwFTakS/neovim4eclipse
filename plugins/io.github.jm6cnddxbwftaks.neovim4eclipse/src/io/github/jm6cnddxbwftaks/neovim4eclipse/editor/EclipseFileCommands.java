@@ -30,6 +30,7 @@ import org.eclipse.ui.editors.text.IEncodingSupport;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
@@ -82,6 +83,35 @@ public final class EclipseFileCommands {
         IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
         NewFiles.Missing missing = NewFiles.missingFileOf(editor);
         return missing == null ? savePart(part) : NewFiles.save(editor, part, missing, createFolders, evenIfUnchanged);
+    }
+
+    /**
+     * Writes a copy of {@code editor}'s text to {@code name}, the {@code :w other.txt} part of
+     * {@code :wq other.txt} ({@link OtherFileWrites#copy}), and shows Vim's message or the error.
+     * Neovim's own {@code :w other.txt} checks for an existing file before Eclipse is asked; here the
+     * command is Eclipse's, so this does it: E13 without {@code !}. UI thread.
+     *
+     * @param name          as typed: relative to the edited file's folder, absolute, or {@code ~/...}
+     * @param onlyIfChanged {@code :x}: nothing is written when the editor has no unsaved changes
+     * @return whether the copy was written, or nothing needed writing
+     */
+    static boolean writeCopy(ITextEditor editor, String name, boolean force, boolean onlyIfChanged, boolean createFolders) {
+        IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
+        if (onlyIfChanged && !part.isDirty()) {
+            return true;
+        }
+        Path target = newFilePath(editor, name);
+        if (target == null) {
+            HostCommands.showError(editor, "Eclipse cannot tell where \"" + name + "\" goes: this file has no folder");
+            return false;
+        }
+        if (!force && Files.exists(target)) {
+            HostCommands.showError(editor, "E13: File exists (add ! to override)");
+            return false;
+        }
+        DocumentWrite.Result result = OtherFileWrites.copy(editor, target, createFolders);
+        HostCommands.showMessage(editor, result.ok() ? result.message() : result.error(), !result.ok());
+        return result.ok();
     }
 
     /**

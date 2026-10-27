@@ -361,7 +361,8 @@ view to the controller, which shows it in the box. The box edits nothing:
   fires `QuitPre` too) and for a buffer no editor shows (one Eclipse wiped itself).
 - The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the attached editor
   (`NeovimSession.addHostCommandListener`), is turned into IDE calls by `util/HostCommandRunner`
-  (`:wq` saves, then closes only if the save worked) and carried out by `editor/HostCommands`.
+  (`:wq` saves, then closes only if the save worked; `:wq other.txt` writes a copy instead,
+  `HostCommand.writeTarget`, then closes as `:q` does) and carried out by `editor/HostCommands`.
   `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by
   the file's name, and a write creates the file through the document provider instead of Eclipse's
   save, which would open Save As (see [NEW_FILE.md](design/NEW_FILE.md)). The editor is opened by location
