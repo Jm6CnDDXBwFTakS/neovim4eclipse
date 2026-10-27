@@ -525,10 +525,10 @@ public final class EditorAttachManager {
      * file changed on disk). A save that takes longer still finishes; Neovim is told it did not, and
      * leaves the buffer modified.
      *
-     * @param createFolders {@code :w ++p}: a new file's missing folders may be created
+     * @param request what to write where: the editor's file, or a copy ({@code :w other.txt})
      * @return the written message, or the error that fails the write
      */
-    private DocumentWrite.Result saveForNeovim(DocumentBuffer buffer, boolean createFolders) {
+    private DocumentWrite.Result saveForNeovim(DocumentBuffer buffer, DocumentWrite.Request request) {
         Display display = Display.getDefault();
         if (display == null || display.isDisposed()) {
             return DocumentWrite.Result.failed("Eclipse is shutting down; " + buffer.name() + " was not saved");
@@ -536,7 +536,7 @@ public final class EditorAttachManager {
         CompletableFuture<DocumentWrite.Result> result = new CompletableFuture<>();
         display.asyncExec(() -> {
             try {
-                result.complete(saveOnUi(buffer, createFolders));
+                result.complete(saveOnUi(buffer, request));
             } catch (RuntimeException e) {
                 result.completeExceptionally(e);
             }
@@ -559,9 +559,10 @@ public final class EditorAttachManager {
     /**
      * Saves {@code buffer}'s document through the first editor open on it, as {@code :w} does: a file
      * that does not exist yet is created ({@code NewFiles}, which shows its own {@code [New]}
-     * message), any other is saved by Eclipse, and Vim's written message is the answer. UI thread.
+     * message), any other is saved by Eclipse, and Vim's written message is the answer. A write to
+     * another file goes to {@link OtherFileWrites} instead. UI thread.
      */
-    private DocumentWrite.Result saveOnUi(DocumentBuffer buffer, boolean createFolders) {
+    private DocumentWrite.Result saveOnUi(DocumentBuffer buffer, DocumentWrite.Request request) {
         Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
         synchronized (this) {
             NeovimSession session = followedSession;
@@ -573,6 +574,11 @@ public final class EditorAttachManager {
         }
         IEditorPart part = showing.get().editor();
         ITextEditor text = textEditorOf(part);
+        if (request.kind() == DocumentWrite.Kind.COPY) {
+            return text == null ? DocumentWrite.Result.failed(part.getTitle() + " has no text to copy")
+                    : OtherFileWrites.copy(text, Path.of(request.target()), request.createFolders());
+        }
+        boolean createFolders = request.createFolders();
         if (text == null) {
             return EclipseFileCommands.savePart(part) ? DocumentWrite.Result.saved("")
                     : DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle() + " (see the Error Log)");

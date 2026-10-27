@@ -121,6 +121,12 @@ Neovim never writes them itself; a write (`:w`, `:update`, `:bufdo update`, `vim
 (`++p`) and waits: `EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at
 most 30 s) and answers `[error, message]` (`core/DocumentWrite`); the hook echoes the message, Vim's
 `"a.txt" 12L, 140B written` (`util/WrittenMessage`), which Neovim does not give for an `acwrite` buffer.
+The hook compares the written name with the editor's file (`b:neovim4eclipse_file`, not the buffer's
+name, which `:saveas` and `:file` change): another name is a copy (`:w other.txt`, request kind
+`"copy"` with the full path), which `editor/OtherFileWrites` writes in the editor's encoding, through
+the workspace inside a project, never over unsaved changes in another editor, and without touching
+the editor or `'modified'`. A renamed buffer written under its new name is refused (it used to save
+the old file).
 `:wq`, `:x` and `:wa` stay Eclipse's commands (`util/HostCommand`): they close editors or save editors
 that have no buffer. An error fails the write as a real failed write does
 (`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before

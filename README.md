@@ -305,8 +305,17 @@ editor too, and so does a `:quit` Neovim runs itself; Eclipse asks about changes
 Writes are Neovim's own: `:w`, `:update`, `:bufdo update`, `vim.cmd.write()` in Lua. Neovim never writes
 a file itself; it asks Eclipse to save it (so save actions run as usual) and shows Vim's message. Neovim's
 "modified" flag follows Eclipse's unsaved-changes marker, so `:update` saves exactly what Eclipse would,
-and `:ls` shows `+` for those files. `:w !cmd` pipes the text to a command, as in Neovim. A write under
-another name (`:w other.txt`) or of some lines only (`:5,10w`) is refused; use *File → Save As*.
+and `:ls` shows `+` for those files. `:w !cmd` pipes the text to a command, as in Neovim.
+
+A write under another name, `:w other.txt`, writes a copy, as in Vim: the text goes to `other.txt` (in
+the file's own encoding, `++p` creating missing folders), and the editor stays on its own file with its
+unsaved changes, so a later `:w` still saves it. Inside a project the copy appears in the Project
+Explorer at once. As in Vim, an existing file needs `!` (`:w! other.txt`), and a file another Neovim
+buffer has is refused (E139). A copy is the text as it is: Eclipse's save actions (format on save) are
+for an editor's own save. A copy over a file that an Eclipse editor has open with unsaved changes is
+refused, even with `!`; an open editor without changes shows the new text. Not yet supported: writing
+some lines only (`:5,10w`), and renaming the buffer with `:saveas` or `:file name` (refused); use
+*File → Save As*.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
 macro being recorded contains it. Listings of more than one line (`:ls`, `:jumps`, `:marks`,
@@ -600,7 +609,7 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w <otherfile>` is refused (use *File → Save As*); `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
+3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w other.txt` writes a copy, but `:5,10w`, `:saveas` and `:file name` are refused (use *File → Save As*); `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
    `:let ... |` or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`

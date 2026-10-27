@@ -344,7 +344,7 @@ final class NewFiles {
     }
 
     /** Creates {@code container} and its missing parents, top first. A project is never created. */
-    private static void createWorkspaceFolder(IContainer container) throws CoreException {
+    static void createWorkspaceFolder(IContainer container) throws CoreException {
         if (container.exists() || !(container instanceof IFolder folder)) {
             return;
         }

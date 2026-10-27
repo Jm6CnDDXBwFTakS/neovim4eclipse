@@ -24,6 +24,15 @@ class DocumentWriteTest {
     }
 
     @Test
+    void theRequestNamesTheKindAndTheFile() {
+        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.OWN, "", true), DocumentWrite.Request.of(" ++p", "", ""));
+        assertEquals(DocumentWrite.Request.own(false), DocumentWrite.Request.of("", null, null), "a plain save sends neither");
+        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.COPY, "/ws/p/b.txt", false),
+                DocumentWrite.Request.of("", "copy", "/ws/p/b.txt"));
+        assertEquals(DocumentWrite.Kind.OWN, DocumentWrite.Kind.named("unknown"), "an unknown kind is a save, never a copy");
+    }
+
+    @Test
     void theAnswerIsErrorThenMessage() {
         assertEquals(List.of("", "\"a.txt\" 1L, 2B written"), DocumentWrite.Result.saved("\"a.txt\" 1L, 2B written").toRpc());
         assertEquals(List.of("E212: read-only", ""), DocumentWrite.Result.failed("E212: read-only").toRpc());

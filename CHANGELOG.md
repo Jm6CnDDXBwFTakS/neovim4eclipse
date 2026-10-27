@@ -12,6 +12,18 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- `:w other.txt` writes a copy of the file, as in Vim, instead of being refused. The editor stays on
+  its own file and keeps its unsaved changes; `:w!` overwrites an existing file, and `++p` creates
+  missing folders. A copy over a file that another Eclipse editor has open with unsaved changes is
+  refused.
+
+### Fixed
+
+- `:saveas other.txt` (and `:file other.txt` followed by `:w`) no longer saves the changes over the
+  original file under Neovim's new name. They are refused for now, with a pointer to *File → Save As*.
+
 ## [0.1.8] - 2026-10-27
 
 The plug-in itself is unchanged from 0.1.7; this release is for people who build it from source.

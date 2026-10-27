@@ -289,6 +289,14 @@ text with the `ErrorMsg` highlight instead would only look like an error (kind `
 write would count as done. Through the API (`nvim_command("write")`) the failure comes back as the
 request's error rather than as a message.
 
+**What a write hook is told.** In a `BufWriteCmd` autocommand, `ev.match` (`<amatch>`) is the name
+being written, not the buffer's: `:w other.txt` runs the hook of buffer `A.txt` with `other.txt`. The
+plug-in's hook compares it with the editor's file (kept in `b:neovim4eclipse_file`) to tell a save from
+a copy (`editor/OtherFileWrites`). Neovim does its usual checks before any hook runs, so the hook never
+sees what Vim would refuse: an existing file without `!` (E13), a file another buffer has (E139).
+Example: `:w other.txt` in a buffer with unsaved changes writes the copy and leaves `'modified'` set,
+as Vim does, because the buffer's own file is still unsaved.
+
 In Neovim, `:help api` lists every function and `:help rpc` describes the protocol. `nvim --api-info`
 dumps the API as MessagePack.
 
