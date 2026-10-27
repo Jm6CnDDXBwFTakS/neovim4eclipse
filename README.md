@@ -614,9 +614,9 @@ narrowly as it can, and it is listed here.
 - **`'foldmethod'`, `'foldenable'` and `'foldminlines'`, window-local, in editors' buffers.** In an
   editor that folds, `'foldmethod'` is `manual` and `'foldminlines'` 0, so Neovim's folds are
   exactly Eclipse's ([Folding](#folding-zo-zc-zm)); in one that cannot fold, `'nofoldenable'`.
-  Your global values stay as they are. In those buffers `zf`, `zF`, `zd`, `zD` and `zE` also get
-  buffer-local mappings that show an error, which win over a mapping of yours of these keys. With
-  `vim.g.neovim4eclipse_folds = 0`, none of this is set.
+  Your global values stay as they are. In those buffers `z` also gets a buffer-local mapping, which
+  refuses `zf`, `zF`, `zd`, `zD` and `zE` and passes every other `z` command on (see Known
+  limitations). With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
 
 - **`vim.diagnostic`'s `jump.on_jump`, only if your config sets none.** After `]d` it shows the
   first line of the problem's message in the message line ([Problems](#problems-d-d)). Set your own
@@ -731,6 +731,14 @@ These are real and deliberate to know about before extending the code:
    though, and keeps showing `-- NORMAL --` whatever Neovim's mode is. Turn Vrapper off with its
    toolbar button, or uninstall it, to avoid the second display. Other Vim emulations have not
    been tried.
+6. **`z` is a mapping in editors that fold.** So that `zf`, `zd` and `zE` cannot change Eclipse's
+   folds even when typed slowly, `z` is mapped there and reads the next key itself (two-key
+   mappings would time out after `'timeoutlen'`). Every other `z` command works as before, with
+   counts, and a mapping of yours of `z` and one key (`zR`, `zz`) still runs. Not covered: your
+   mappings of three or more keys starting with `z` (`zxy`) do not run in those buffers; plugins
+   that list what can follow `z` (which-key) show nothing there; and `:normal! zE` or a
+   `nnoremap` to `zE` still reach Neovim's own `zE`. Other buffers are not affected, and
+   `vim.g.neovim4eclipse_folds = 0` leaves `z` alone everywhere.
 
 ## Maintenance rules
 

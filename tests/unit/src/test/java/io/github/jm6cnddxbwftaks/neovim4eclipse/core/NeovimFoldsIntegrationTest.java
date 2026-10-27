@@ -158,6 +158,28 @@ class NeovimFoldsIntegrationTest {
         }
     }
 
+    /**
+     * A person pausing between {@code z} and {@code E} longer than {@code 'timeoutlen'} (the
+     * plug-in sets 400 ms): with mappings of the two keys, Neovim gave up waiting, ran its own
+     * {@code zE} and deleted every fold. The mapping of {@code z} alone waits for the next key
+     * without a time limit. The pause is the point of this test, so it sleeps: it is not a wait for
+     * an outcome (AGENTS.md, "Rules the code depends on").
+     */
+    @Test
+    void aSlowZEIsRefusedToo() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            Object levels = s.lua("local r = {} for l = 1, 16 do r[#r+1] = vim.fn.foldlevel(l) end return table.concat(r)");
+            long pause = ((Number) s.lua("return vim.o.timeoutlen")).longValue() + 200;
+            keys(s, "3", "G", "z");
+            Thread.sleep(pause);
+            keys(s, "E");
+            assertEquals(levels, s.lua("local r = {} for l = 1, 16 do r[#r+1] = vim.fn.foldlevel(l) end return table.concat(r)"),
+                    "every fold is still there");
+            assertEquals("zE: Eclipse defines the folds in this editor", s.lua("return vim.v.errmsg"));
+        }
+    }
+
     @Test
     void theOptOutTurnsFoldingOffAndTheUsersOwnFoldsStay() throws Exception {
         // As an init.lua would: set before the session reads it, and a global foldmethod of the user's.
