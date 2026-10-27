@@ -32,6 +32,9 @@ final class LuaScripts {
      *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
      *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
+     *   <li>The diagnostics namespace {@code neovim4eclipse} ({@link #SET_DIAGNOSTICS}) draws nothing,
+     *       and, unless the user's config has its own, a {@code vim.diagnostic} {@code on_jump} hook
+     *       echoes the first line of the problem {@code ]d} lands on.</li>
      *   <li>The command-line window ({@code q:}) is closed as soon as it opens, with a message:
      *       Eclipse cannot show a second window.</li>
      * </ul>
@@ -144,6 +147,27 @@ final class LuaScripts {
               vim.keymap.set('n', key, function()
                 vim.rpcnotify(0, 'eclipse_action', action, 0)
               end, { desc = 'Eclipse: ' .. (key == 'ZZ' and 'save and close the editor' or 'close the editor') })
+            end
+            -- Eclipse's problems arrive as diagnostics in the namespace 'neovim4eclipse' (SET_DIAGNOSTICS),
+            -- for Neovim's own ]d [d ]D [D. Nothing of them is drawn: Eclipse already underlines them
+            -- and marks the ruler, and Neovim's window is never seen anyway. Other namespaces (a
+            -- user's nvim-lint) keep their own display settings.
+            local diagnostics_ns = vim.api.nvim_create_namespace('neovim4eclipse')
+            vim.diagnostic.config({ virtual_text = false, virtual_lines = false, signs = false,
+              underline = false, update_in_insert = false }, diagnostics_ns)
+            -- After ]d, the message of the problem landed on goes to the message line, as Eclipse's
+            -- status bar shows it after Ctrl+. (Next Annotation). Neovim's on_jump hook (0.12) runs
+            -- after the cursor moved. Only when init.lua set no hook of its own (nor the older
+            -- jump.float): a user's choice wins. The hook is global, so this echoes any namespace's
+            -- diagnostic, ours or nvim-lint's. Only the first line: a message line holds one, and a
+            -- longer echo would open the output box on every jump (K shows the whole hover).
+            local jump = vim.diagnostic.config().jump or {}
+            if jump.on_jump == nil and not jump.float then
+              vim.diagnostic.config({ jump = { on_jump = function(diagnostic)
+                if diagnostic and diagnostic.message then
+                  vim.api.nvim_echo({ { (diagnostic.message:gsub('\\n.*', '')) } }, false, {})
+                end
+              end } })
             end
             -- The command-line window (q:, q/, Ctrl-F on the command line) is a window of its own,
             -- which Eclipse cannot show: close it at once and say why. The : box's Up and Down
@@ -474,6 +498,40 @@ final class LuaScripts {
             if vim.api.nvim_buf_is_valid(buf) then
               vim.bo[buf].modified = modified == '1'
             end
+            """;
+
+    /**
+     * Replaces the Eclipse problems of one buffer with a new list, as Neovim diagnostics in the
+     * namespace {@code neovim4eclipse} ({@code :help vim.diagnostic.set()}). Arguments: the buffer
+     * number, then six per problem: lnum, col, end_lnum, end_col (0-based lines, byte columns),
+     * severity (1 error, 2 warning, 3 info), message ({@code util/Diagnostic.toLuaArgs}). With the
+     * number alone, the buffer's problems are cleared. A buffer that is gone (its editor closed
+     * meanwhile) is left alone.
+     *
+     * <p>Each call replaces the whole list, so nothing is diffed. Neovim then moves the diagnostics
+     * with the text as it is edited (extmarks) until Eclipse sends the next list. Example: arguments
+     * {@code 3, 0, 4, 0, 7, 1, "x cannot be resolved"} put one error on line 1 of buffer 3, and
+     * {@code ]d} from the start of the buffer goes there.
+     */
+    static final String SET_DIAGNOSTICS = """
+            local args = { ... }
+            local buf = tonumber(args[1])
+            if not buf or not vim.api.nvim_buf_is_valid(buf) then
+              return
+            end
+            local list = {}
+            for i = 2, #args - 5, 6 do
+              list[#list + 1] = {
+                lnum = tonumber(args[i]),
+                col = tonumber(args[i + 1]),
+                end_lnum = tonumber(args[i + 2]),
+                end_col = tonumber(args[i + 3]),
+                severity = tonumber(args[i + 4]),
+                message = args[i + 5],
+                source = 'Eclipse',
+              }
+            end
+            vim.diagnostic.set(vim.api.nvim_create_namespace('neovim4eclipse'), buf, list)
             """;
 
     /**
