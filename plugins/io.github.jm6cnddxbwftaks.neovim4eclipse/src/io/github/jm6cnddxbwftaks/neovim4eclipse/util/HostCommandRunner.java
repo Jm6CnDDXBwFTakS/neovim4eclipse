@@ -34,6 +34,19 @@ public final class HostCommandRunner {
          */
         boolean save(boolean createFolders, boolean evenIfUnchanged);
 
+        /**
+         * Writes a copy of the current editor's text to {@code file} ({@code :wq other.txt}), as
+         * Neovim's {@code :w other.txt} does; {@code false} if it was not written (and the reason
+         * shown). The editor itself is not saved.
+         *
+         * @param file          the name as typed, relative to the edited file's folder
+         * @param force         {@code !}: an existing file may be overwritten
+         * @param onlyIfChanged {@code :x}: write only if the editor has unsaved changes
+         *                      ({@code true} without writing when it has none)
+         * @param createFolders {@code ++p}: missing folders may be created
+         */
+        boolean writeCopy(String file, boolean force, boolean onlyIfChanged, boolean createFolders);
+
         /** Saves every modified editor; {@code false} if one could not be saved. */
         boolean saveAll();
 
@@ -86,7 +99,13 @@ public final class HostCommandRunner {
             case BUFFER_DELETE -> onUi.accept(() -> ide.closeBuffers(cmd.args(), force));
             // Closed with force = true once saved: the save already dealt with the changes.
             case WRITE_QUIT -> onUi.accept(() -> {
-                if (ide.save(cmd.createFolders(), cmd.writesUnchanged()) || force) {
+                if (!cmd.writeTarget().isEmpty()) {
+                    // :wq other.txt is :w other.txt then :q, as in Vim: a copy, and the editor's own
+                    // changes stay unsaved, so the close asks about them (where Vim says E37) unless !.
+                    if (ide.writeCopy(cmd.writeTarget(), force, !cmd.writesUnchanged(), cmd.createFolders())) {
+                        ide.close(force);
+                    }
+                } else if (ide.save(cmd.createFolders(), cmd.writesUnchanged()) || force) {
                     ide.close(true);
                 }
             });

@@ -101,6 +101,10 @@ class HostCommandTest {
         assertTrue(HostCommand.of("wq", false, List.of("++p")).createFolders());
         assertTrue(HostCommand.of("xit", false, List.of("++p")).createFolders());
         assertFalse(HostCommand.of("wq", false, List.of("other.txt")).createFolders());
+        assertTrue(HostCommand.of("wq", false, List.of("++enc=latin1", "++p", "sub/a.txt")).createFolders());
+        assertEquals("sub/a.txt", HostCommand.of("wq", false, List.of("++p", "sub/a.txt")).writeTarget());
+        assertEquals("", HostCommand.of("wq", false, List.of("++p")).writeTarget());
+        assertEquals("", HostCommand.of("edit", false, List.of("a.txt")).writeTarget(), "only :wq, :x and :exit");
         assertFalse(HostCommand.of("edit", false, List.of("++p")).createFolders());
     }
 

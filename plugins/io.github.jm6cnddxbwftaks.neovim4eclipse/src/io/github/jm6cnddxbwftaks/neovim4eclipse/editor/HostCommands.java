@@ -57,6 +57,11 @@ public final class HostCommands {
         }
 
         @Override
+        public boolean writeCopy(String file, boolean force, boolean onlyIfChanged, boolean createFolders) {
+            return EclipseFileCommands.writeCopy(editor, file, force, onlyIfChanged, createFolders);
+        }
+
+        @Override
         public boolean saveAll() {
             return EclipseFileCommands.saveAll();
         }

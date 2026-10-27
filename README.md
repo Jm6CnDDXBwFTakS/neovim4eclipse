@@ -316,7 +316,9 @@ for an editor's own save. A copy over a file that an Eclipse editor has open wit
 refused, even with `!`; an open editor without changes shows the new text. Some lines go to another
 file the same way (`:5,10w part.txt`), and `>>` adds them to the end of one (`:w >> log.txt`,
 `:5,10w >> log.txt`; a missing file needs `!`, as in Vim). The editor's own file is saved only whole,
-so `:5,10w!` and `:w >> %` are refused there.
+so `:5,10w!` and `:w >> %` are refused there. `:wq other.txt` writes the copy, then closes the editor,
+as Vim's `:w other.txt | q`: Eclipse asks about the editor's own unsaved changes (where Vim says E37),
+and `:wq!` discards them. `:x other.txt` writes the copy only if the editor has changes.
 
 `:saveas new.txt` is Eclipse's *File → Save As* without the dialog: the document is saved as `new.txt`
 and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was, and

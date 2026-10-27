@@ -21,6 +21,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `:5,10w part.txt` writes those lines to another file, and `:w >> log.txt` (or `:5,10w >> log.txt`)
   adds them to the end of one, as in Vim. Both stay refused for the editor's own file, which Eclipse
   saves only whole.
+- `:wq other.txt` and `:x other.txt` write the copy, then close the editor, as in Vim. Before, they
+  ignored the name and saved the editor's own file.
 - `:saveas new.txt` saves the file as `new.txt` and moves the editor there, like *File → Save As*
   without the dialog. Neovim's undo history comes along; the old file stays as it was.
 

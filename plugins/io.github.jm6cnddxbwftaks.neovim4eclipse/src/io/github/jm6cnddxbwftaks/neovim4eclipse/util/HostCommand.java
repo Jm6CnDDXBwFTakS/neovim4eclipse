@@ -31,7 +31,8 @@ import java.util.TreeMap;
  *   <tr><td>{@code quit}, {@code bdelete}, {@code bwipeout}, {@code bunload}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
  *   <tr><td>{@code bdelete 3}, {@code bdelete other.txt}, {@code %bdelete}</td><td>{@link Kind#BUFFER_DELETE}</td><td>close those buffers' editors</td></tr>
  *   <tr><td>{@code qall}, {@code quitall}</td><td>{@link Kind#QUIT_ALL}</td><td>close all editors</td></tr>
- *   <tr><td>{@code wq}, {@code xit}, {@code exit}</td><td>{@link Kind#WRITE_QUIT}</td><td>save and close</td></tr>
+ *   <tr><td>{@code wq}, {@code xit}, {@code exit}</td><td>{@link Kind#WRITE_QUIT}</td><td>save and close; with a
+ *       name ({@code :wq other.txt}), write a copy there and close</td></tr>
  *   <tr><td>{@code wqall}, {@code xall}</td><td>{@link Kind#WRITE_QUIT_ALL}</td><td>save all, close all</td></tr>
  *   <tr><td>{@code edit file}, {@code edit!}</td><td>{@link Kind#EDIT}</td><td>open a file; revert</td></tr>
  *   <tr><td>{@code tabnext}, {@code tabprevious}, ...</td><td>{@code TAB_*}</td><td>switch editor tabs</td></tr>
@@ -166,7 +167,19 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
      * write, which passes {@code ++p} to Eclipse itself; see {@code core/DocumentWrite}.)
      */
     public boolean createFolders() {
-        return kind == Kind.WRITE_QUIT && !args.isEmpty() && args.get(0).equals("++p");
+        return kind == Kind.WRITE_QUIT && args.contains("++p");
+    }
+
+    /**
+     * The file of {@code :wq other.txt} or {@code :x other.txt}, which write a copy there before
+     * closing, as in Vim; "" when the command names none ({@code :wq}, {@code :wq ++p}). The
+     * {@code ++opt} words are left out. Example: {@code :wq ++p sub/a.txt} gives {@code sub/a.txt}.
+     */
+    public String writeTarget() {
+        if (kind != Kind.WRITE_QUIT) {
+            return "";
+        }
+        return String.join(" ", args.stream().filter(word -> !word.startsWith("++")).toList());
     }
 
     /** The file of {@code :e file}, or "" for {@code :e} alone (reload). */
