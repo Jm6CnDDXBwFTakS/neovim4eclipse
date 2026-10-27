@@ -316,7 +316,8 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     // The system clipboard (Eclipse is Neovim's clipboard provider; see core/ClipboardRegisters).
-    // These assume the init.lua on the test machine does not set g:clipboard (its own provider wins).
+    // No g:clipboard of the developer's can interfere: the UI tests read no personal Neovim config.
+    // Clipboard sharing with a virtual machine's host can (CONTRIBUTING.md, "Tests on a virtual machine").
 
     @Test
     void plusPPastesTextCopiedInAnotherProgram() {
