@@ -59,6 +59,12 @@ All three commits of section 7 are built. Where they differ from the plan below,
   the fold module registers `fold` there (it runs after `HOST_COMMANDS`). A refused line becomes
   `:Eclipse fold`, which shows the error. Being an error, it ends the rest of a `|` chain, as any
   error does in Vim (`:10,12fold | let x = 1` does not set `x`).
+- **An Eclipse caret glitch, left alone** (found while trying it, 2026-10-27): now and then, right
+  after a fold opens or closes, the caret is not drawn until it moves (normal mode, Linux, XFCE on
+  X11). It happens the same with `Ctrl+Numpad` in Eclipse mode and in an Eclipse without the
+  plug-in, so it is SWT's or the platform's (likely the caret's blink state across the viewer's
+  redraw). A workaround (hide and show the caret after each fold change) was decided against: the
+  plug-in would only cover Neovim mode, and the README notes it instead.
 - **Tests:** a test editor that folds, `TestFoldingEditor` (`*.fold`, brace blocks are its folds),
   for `FoldingEndToEndTest` without Java tooling. Not done: a UI test of the opt-out (the UI tests
   share one Neovim, started without it; `NeovimFoldsIntegrationTest` covers it), and "a method added

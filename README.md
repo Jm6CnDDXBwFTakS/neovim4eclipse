@@ -315,6 +315,10 @@ the open and closed state the same both ways: a fold collapsed with the ruler's 
   Neovim (*Window → Preferences → Neovim*, or of Eclipse).
 - **For your config**: the `User` autocommand `Neovim4EclipseFolds` fires when the closed folds
   change, with `data = { buf = 3, closed = { ... } }`.
+- **The caret can vanish after a fold opens or closes** (seen on Linux, XFCE on X11): it stays in
+  the right place but is not drawn until it next moves. This is Eclipse's own behavior: it happens
+  with `Ctrl+Numpad -`/`+` in Eclipse mode, and in an Eclipse without this plug-in. Any motion
+  brings the caret back.
 
 ## Command line (`:`, `/`, `?`)
 
