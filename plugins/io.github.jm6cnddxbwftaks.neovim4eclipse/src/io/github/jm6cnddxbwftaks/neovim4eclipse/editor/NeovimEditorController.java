@@ -138,7 +138,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
         this.buffer = buffer;
         this.foldMirror = session.foldsEnabled() && viewerOf(editor) instanceof ProjectionViewer projection
-                ? new FoldMirror(projection, SwtUiExecutor.INSTANCE, folds -> session.setFoldsAsync(buffer, folds))
+                ? new FoldMirror(projection, SwtUiExecutor.INSTANCE, folds -> session.setFoldsAsync(buffer, folds),
+                        session::isTypingMode) // held while Eclipse types: Neovim lacks those lines until Esc
                 : null;
         StyledTextCaret caret = new StyledTextCaret(styledText, offsets);
         if (foldMirror != null) {
@@ -561,6 +562,14 @@ public final class NeovimEditorController implements AutoCloseable {
         keyContext.updateFromAnyThread(mode);
         if (!VimModes.isTyping(mode)) {
             insertTracker.reset(); // an insert ended (or never started): drop any stale snapshot
+            if (foldMirror != null) {
+                // Folds held while Eclipse typed; queued after the push at Esc, so the lines are there.
+                SwtUiExecutor.INSTANCE.asyncExec(() -> {
+                    if (!closed && !styledText.isDisposed()) {
+                        foldMirror.resume();
+                    }
+                });
+            }
         }
         try {
             modeStatus.setMode(mode);

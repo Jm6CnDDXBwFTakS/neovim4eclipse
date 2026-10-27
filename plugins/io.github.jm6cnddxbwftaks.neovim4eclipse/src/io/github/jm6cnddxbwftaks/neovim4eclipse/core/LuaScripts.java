@@ -626,6 +626,10 @@ final class LuaScripts {
      * from Lua runs. (Neovim has no {@code :folddelete}: deleting is {@code zd} only, and
      * {@code :foldd} is {@code :folddoopen}, which opens folds and stays Neovim's.)
      *
+     * <p>The old folds are deleted with {@code :noautocmd normal! zE}: Eclipse can send folds while
+     * Neovim is in insert mode, and a plain {@code :normal} passes through normal mode, firing
+     * {@code ModeChanged}, which made the plug-in take insert mode as ended.
+     *
      * <p>An empty list means the editor cannot fold: the window gets {@code 'nofoldenable'}
      * (window-local), so a user's {@code 'foldmethod'} cannot hide lines that Eclipse shows, and the
      * marks and {@code b:neovim4eclipse_folds} (the "mirrored" flag) are removed. All options are set
@@ -671,6 +675,17 @@ final class LuaScripts {
               host.refuse('fold', function()
                 return vim.b.neovim4eclipse_folds and REFUSED or nil
               end)
+            end
+
+            -- Deletes every manual fold of the current window (zE), without ModeChanged.
+            -- Why: Eclipse may send folds while Neovim is in insert mode, and :normal passes through
+            -- normal mode on the way, which fires ModeChanged; the plug-in heard "normal" and took
+            -- insert mode as ended (a method typed in Eclipse then went missing). noautocmd keeps
+            -- that event (and the user's own autocommands) out; Neovim stays in insert mode. (Not
+            -- foldmethod=expr with foldexpr=0 and back: in insert mode Neovim does not recompute
+            -- expression folds, so the old folds stayed.)
+            local function delete_all_folds()
+              vim.cmd('silent! noautocmd normal! zE')
             end
 
             -- The marks of buf as { first, last, index } (1-based lines, 0-based index), in index order.
@@ -793,7 +808,7 @@ final class LuaScripts {
               setlocal('foldmethod', 'manual')
               setlocal('foldenable', true)
               setlocal('foldminlines', 0)
-              vim.cmd('silent! normal! zE')
+              delete_all_folds()
               local count = vim.api.nvim_buf_line_count(buf)
               local closed = {}
               for i, f in ipairs(folds) do

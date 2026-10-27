@@ -566,6 +566,67 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
                 () -> "; the selection is on line " + selectionLine());
     }
 
+    /**
+     * As reported: typing a new method in insert mode, {@code {} and Enter (JDT closes the brace).
+     * The reconcile makes a fold for it while Neovim, in insert mode, does not have those lines yet.
+     * Two bugs met here: the folds were sent at once, onto the wrong lines, and deleting the old
+     * folds ran {@code :normal}, whose pass through normal mode made the plug-in take insert mode as
+     * ended, so the typed method went missing. Now the folds wait for {@code Esc}, and the method
+     * is in both and is a fold in Neovim.
+     */
+    @Test
+    void aMethodTypedInInsertModeStaysAndBecomesAFold() throws Exception {
+        String source = """
+                package p;
+
+                public class E {
+                    /**
+                     * A comment.
+                     */
+                    void thisIsAMethodWithAComment() {
+                        System.out.println("");
+                    }
+
+                }
+                """;
+        openJava("E.java", source);
+        waitForFoldsInNeovim();
+        type(javaWidget, "10G");
+        settle();
+        type(javaWidget, "o");
+        settle();
+        int foldsBefore = foldCount();
+        type(javaWidget, "private void aMethod() {");
+        type(javaWidget, '\r');
+        // Long enough for JDT's reconcile and the folds it makes (about 500 ms); insert mode must hold.
+        waitUntil("JDT to fold the new method", TIMEOUT_MS, () -> foldCount() > foldsBefore,
+                () -> "; it has " + foldCount() + " folds, as before");
+        settle(); // the folds' send, had it not been held
+        assertEquals("i", session.getMode(), "still in insert mode");
+
+        escape(javaWidget);
+        settle();
+        waitUntil("the method in Neovim", TIMEOUT_MS,
+                () -> Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.fn.search('aMethod', 'nw') > 0")));
+        assertTrue(javaText().contains("private void aMethod() {"), javaText());
+        waitUntil("the new method a fold in Neovim", TIMEOUT_MS, () -> {
+            Object level = SessionProbe.lua(session, "return vim.fn.foldlevel(vim.fn.search('aMethod', 'nw'))");
+            return level instanceof Number n && n.intValue() > 0;
+        });
+    }
+
+    /** How many fold annotations the Java editor has. */
+    private int foldCount() {
+        org.eclipse.jface.text.source.projection.ProjectionViewer viewer =
+                (org.eclipse.jface.text.source.projection.ProjectionViewer) javaEditor
+                        .getAdapter(org.eclipse.jface.text.ITextOperationTarget.class);
+        int count = 0;
+        for (var it = viewer.getProjectionAnnotationModel().getAnnotationIterator(); it.hasNext(); it.next()) {
+            count++;
+        }
+        return count;
+    }
+
     /** {@code zM} collapses every member; {@code zR} opens them all. */
     @Test
     void zMAndZRFoldAndUnfoldEverything() throws Exception {

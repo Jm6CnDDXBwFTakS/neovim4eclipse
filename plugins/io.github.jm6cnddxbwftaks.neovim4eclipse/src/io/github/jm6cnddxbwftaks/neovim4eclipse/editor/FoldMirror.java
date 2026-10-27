@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -58,6 +59,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions.Region;
  * method's index; this class collapses its annotation; the widget hides the body; the caret goes to
  * the method's caption line ({@link #captionOffset}).
  *
+ * <p><b>Held while Eclipse types.</b> In insert mode Eclipse types and Neovim gets the text only at
+ * {@code Esc}, so Neovim's buffer lacks the lines being typed. Folds sent then (the reconcile after
+ * typing a method makes one) would land on the wrong lines. So {@link #send()} waits while
+ * {@code hold} says so, and {@link #resume()} (at the end of insert mode, after the document push)
+ * sends what was held. The list last sent stays the one Neovim has, so the state Neovim reports
+ * meanwhile still maps to the right annotations.
+ *
  * <p>When projection is off (the user turned folding off in the editor), Neovim gets an empty list,
  * which turns folding off in Neovim's window too; turning it on sends the regions again.
  *
@@ -73,6 +81,10 @@ final class FoldMirror implements AutoCloseable {
     private final UiExecutor ui;
     /** Sends the folds to Neovim ({@code FoldsPort.setFoldsAsync} for this editor's buffer). */
     private final Consumer<List<Fold>> sender;
+    /** True while sends must wait (Eclipse is typing in insert mode); see the class comment. */
+    private final BooleanSupplier hold;
+    /** A send was held; {@link #resume()} makes it. UI thread. */
+    private boolean held;
 
     /** The list last sent; Neovim reports folds by their index in it. */
     private List<Fold> sent = List.of();
@@ -105,9 +117,14 @@ final class FoldMirror implements AutoCloseable {
     };
 
     FoldMirror(ProjectionViewer viewer, UiExecutor ui, Consumer<List<Fold>> sender) {
+        this(viewer, ui, sender, () -> false);
+    }
+
+    FoldMirror(ProjectionViewer viewer, UiExecutor ui, Consumer<List<Fold>> sender, BooleanSupplier hold) {
         this.viewer = viewer;
         this.ui = ui;
         this.sender = sender;
+        this.hold = hold;
         viewer.addProjectionListener(projectionListener);
         listenToModel();
     }
@@ -144,6 +161,11 @@ final class FoldMirror implements AutoCloseable {
             return;
         }
         sendScheduled = false;
+        if (hold.getAsBoolean()) {
+            held = true;
+            return;
+        }
+        held = false;
         IDocument document = viewer.getDocument();
         if (!folding() || document == null) {
             sent = List.of();
@@ -197,6 +219,13 @@ final class FoldMirror implements AutoCloseable {
 
     private static String key(int first, int last) {
         return first + ":" + last;
+    }
+
+    /** Sends what was held while Eclipse typed, if anything ({@link #send()}). UI thread. */
+    void resume() {
+        if (held && !closed) {
+            send();
+        }
     }
 
     /** The model changed: unless the change is Neovim's own, send the folds again (coalesced). */

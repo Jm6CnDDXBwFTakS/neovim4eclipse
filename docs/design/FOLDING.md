@@ -59,6 +59,19 @@ All three commits of section 7 are built. Where they differ from the plan below,
   the fold module registers `fold` there (it runs after `HOST_COMMANDS`). A refused line becomes
   `:Eclipse fold`, which shows the error. Being an error, it ends the rest of a `|` chain, as any
   error does in Vim (`:10,12fold | let x = 1` does not set `x`).
+- **Folds wait while Eclipse types** (found while trying it, 2026-10-27). Typing a new method in
+  insert mode (`{`, Enter) makes JDT's reconcile add a fold, and the mirror sent it at once. Two
+  problems: Neovim does not have the typed lines until `Esc`, so the fold landed on the wrong
+  lines; and `SET_FOLDS` deleted the old folds with `:normal! zE`, whose pass through normal mode
+  fires `ModeChanged`, so the plug-in took insert mode as ended and the typed method went missing.
+  Now `FoldMirror` holds sends while `NeovimSession.isTypingMode()` and sends at the end of insert
+  mode, after the push; and the folds are deleted with `:noautocmd normal! zE`. (Switching to
+  `foldmethod=expr` and back, to avoid `:normal`, does not work in insert mode: Neovim does not
+  recompute expression folds there.) Test: `JavaEditorEndToEndTest.aMethodTypedInInsertModeStaysAndBecomesAFold`,
+  which failed before the fix.
+- **Collapsing moves the caret** (found while trying it). `zc` in a method's body collapsed it in
+  Eclipse, whose widget moved its caret below the fold, and that move reached Neovim. Neovim's fold
+  changes are applied inside `CaretSync.runAsFromNeovim`.
 - **An Eclipse caret glitch, left alone** (found while trying it, 2026-10-27): now and then, right
   after a fold opens or closes, the caret is not drawn until it moves (normal mode, Linux, XFCE on
   X11). It happens the same with `Ctrl+Numpad` in Eclipse mode and in an Eclipse without the

@@ -354,3 +354,26 @@ t.test('the mappings go when the editor stops folding', function()
   set_folds({})
   t.eq({}, vim.fn.maparg('zf', 'n', false, true), 'unmapped in buffer ' .. buf)
 end)
+
+-- ---- folds sent while Neovim is in insert mode ----
+
+t.test('SET_FOLDS in insert mode fires no ModeChanged and replaces the folds', function()
+  enabled()
+  lines(20)
+  set_folds({ { 2, 5, false } })
+  local modes = {}
+  vim.api.nvim_create_autocmd('ModeChanged', {
+    callback = function()
+      modes[#modes + 1] = vim.v.event.old_mode .. ':' .. vim.v.event.new_mode
+    end,
+  })
+  local during = t.during('3Go', function()
+    modes = {}
+    set_folds({ { 8, 12, true } })
+    return { mode = vim.api.nvim_get_mode().mode, changes = vim.deepcopy(modes), closed = shown_closed(), level = vim.fn.foldlevel(3) }
+  end)
+  t.eq('i', during.mode, 'still in insert mode')
+  t.eq({}, during.changes, 'no ModeChanged: the plug-in would take insert mode as ended')
+  t.eq({ '8-12' }, during.closed)
+  t.eq(0, during.level, 'the old fold is gone')
+end)

@@ -95,6 +95,28 @@ class FoldMirrorTest {
     }
 
     @Test
+    void sendsWaitWhileHeldAndResumeSendsThem() {
+        boolean[] typing = { true };
+        FoldMirror held = new FoldMirror(viewer, UiExecutor.IMMEDIATE, sends::add, () -> typing[0]);
+        try {
+            sends.clear();
+            model.collapse(first); // a change while Eclipse types (a reconcile, say)
+            held.send();
+            assertEquals(1, sends.size(), "only the mirror without a hold sent");
+            assertEquals(List.of(), held.sentFolds(), "the held mirror keeps the list Neovim has");
+
+            typing[0] = false;
+            held.resume();
+            assertEquals(2, sends.size());
+            assertTrue(held.sentFolds().get(1).collapsed());
+            held.resume();
+            assertEquals(2, sends.size(), "nothing more was held");
+        } finally {
+            held.close();
+        }
+    }
+
+    @Test
     void neovimsStateIsAppliedAndNotSentBack() {
         mirror.applyNeovimState(List.of(1, 2)); // zc on both methods
         assertTrue(first.isCollapsed());
