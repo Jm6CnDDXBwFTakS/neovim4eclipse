@@ -19,8 +19,11 @@ final class LuaScripts {
      * One-time session setup: options plus autocmds that push state to Eclipse.
      *
      * <ul>
-     *   <li>{@code timeoutlen}: how long Neovim waits for the rest of a multi-key mapping or
-     *       operator. Keys arrive one RPC at a time, so this must be generous (gg, diw, f{char}).</li>
+     *   <li>{@code timeout} and {@code timeoutlen} are left alone: Neovim's default (1000 ms) or the
+     *       user's {@code init.lua} decides how long Neovim waits for a mapping's second key. A
+     *       shorter wait made a slowly typed {@code [d} Vim's older {@code [d} (search for a macro
+     *       definition, E388) instead of the diagnostics mapping, as it does in plain Neovim when
+     *       the pause is longer than the wait.</li>
      *   <li>{@code showmode=false}: Eclipse shows the mode in its own status line.</li>
      *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number),
      *       {@code eclipse_buf_enter} and {@code eclipse_yank} notifications handled by
@@ -45,9 +48,6 @@ final class LuaScripts {
             -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
             local chan = tonumber(select(1, ...))
             vim.g.neovim4eclipse_channel = chan
-            vim.opt.timeout = true
-            vim.opt.timeoutlen = 400
-            vim.opt.ttimeoutlen = 50
             vim.opt.hlsearch = true
             vim.opt.incsearch = true
             vim.opt.ignorecase = true
@@ -657,8 +657,8 @@ final class LuaScripts {
             -- reconcile would replace them. The commands get a refusal in HOST_COMMANDS (built-in
             -- commands cannot be mapped); the keys a buffer-local mapping of z alone, which reads the
             -- key after it with getcharstr(), without a time limit.
-            -- Why not mappings of zf, zd, zE ...: Neovim waits only 'timeoutlen' (400 ms) for a
-            -- mapping's second key. A slower zE then ran Neovim's own zE and deleted every fold.
+            -- Why not mappings of zf, zd, zE ...: Neovim waits only 'timeoutlen' (1000 ms by default)
+            -- for a mapping's second key. A slower zE then ran Neovim's own zE and deleted every fold.
             -- The key after z: refused (f F d D E; f d D in visual mode), else passed on. A mapping
             -- of the user's for z and that key ({ 'zR' }, say) runs as Vim would run it; anything
             -- else is Neovim's z command, with the count: 3zj, zz, z=, z{height}<CR>.
