@@ -208,6 +208,14 @@ final class LuaScripts {
      *       rest of its line.</li>
      *   <li>{@code :Eclipse} puts the line as typed back into the history, in place of its own, so
      *       Up in the {@code :} box recalls {@code tabn 3}.</li>
+     *   <li><b>Refused commands.</b> Other scripts can make a built-in command an error where it
+     *       must not run, through {@code require('neovim4eclipse.host_commands').refuse(name, why)}:
+     *       {@code why()} returns the reason, or {@code nil} to let the command run. Such a line
+     *       becomes {@code :Eclipse name}, which shows {@code name: reason} as an error and tells
+     *       Eclipse nothing. A built-in command cannot be mapped, so this is the only way to stop
+     *       one. Example: {@link #FOLDS} refuses {@code :fold} in buffers
+     *       whose folds are Eclipse's, so {@code :3,5fold} shows
+     *       {@code fold: Eclipse defines the folds in this editor}.</li>
      * </ol>
      *
      * <p>Why replace the line rather than cancel it ({@code v:event.abort} in {@code CmdlineLeave}):
@@ -236,6 +244,15 @@ final class LuaScripts {
               rules[name] = rule
             end
             local typed -- the line as typed while its :Eclipse replacement runs (for the history)
+            local refusals = {} -- built-in command name -> function returning why it may not run, or nil
+            package.loaded['neovim4eclipse.host_commands'] = {
+              refuse = function(name, why)
+                refusals[name] = why
+              end,
+            }
+            local function refused(name)
+              return refusals[name] and refusals[name]() or nil
+            end
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
                 vim.fn.histdel(':', -1) -- the replacement
@@ -243,6 +260,11 @@ final class LuaScripts {
                 typed = nil
               end
               local name = o.fargs[1]
+              local why = refused(name)
+              if why then
+                vim.api.nvim_echo({ { name .. ': ' .. why } }, true, { err = true })
+                return
+              end
               if not rules[name] then
                 vim.api.nvim_echo({ { 'E492: Not an Eclipse command: ' .. name } }, true, { err = true })
                 return
@@ -253,6 +275,9 @@ final class LuaScripts {
             -- The :Eclipse form of one parsed command (p, from nvim_parse_cmd; what follows a | is
             -- not part of it), or nil to leave the command to Neovim.
             local function eclipse_form(p)
+              if refused(p.cmd) then
+                return 'Eclipse ' .. p.cmd -- with any range and arguments: none of it runs
+              end
               local rule = rules[p.cmd]
               if not rule then
                 return nil
@@ -591,6 +616,16 @@ final class LuaScripts {
      * and then uses those states for the folds whose range is unchanged; new folds take Eclipse's.
      * {@code 'nofoldenable'} is set again at the end, and {@code zi} restores the user's folds.
      *
+     * <p><b>Folds by hand are refused</b> in a mirrored buffer: Eclipse decides where folds are,
+     * and its next reconcile would replace them. {@code zf}, {@code zF}, {@code zd}, {@code zD} and
+     * {@code zE} (and {@code zf}, {@code zd}, {@code zD} in visual mode) get buffer-local mappings
+     * that show {@code zf: Eclipse defines the folds in this editor}; {@code :fold}, which cannot be
+     * mapped, is refused through {@link #HOST_COMMANDS}' hook,
+     * so this script must run after it. Elsewhere (an editor that cannot fold) they are Neovim's.
+     * Only typed command lines are caught, as for the other host commands: {@code vim.cmd.fold()}
+     * from Lua runs. (Neovim has no {@code :folddelete}: deleting is {@code zd} only, and
+     * {@code :foldd} is {@code :folddoopen}, which opens folds and stays Neovim's.)
+     *
      * <p>An empty list means the editor cannot fold: the window gets {@code 'nofoldenable'}
      * (window-local), so a user's {@code 'foldmethod'} cannot hide lines that Eclipse shows, and the
      * marks and {@code b:neovim4eclipse_folds} (the "mirrored" flag) are removed. All options are set
@@ -608,6 +643,34 @@ final class LuaScripts {
 
             local function setlocal(name, value)
               vim.api.nvim_set_option_value(name, value, { scope = 'local', win = 0 })
+            end
+
+            -- Making or deleting folds by hand: Eclipse decides where folds are, and its next
+            -- reconcile would replace them. The keys get buffer-local mappings in mirrored buffers,
+            -- the commands a refusal in HOST_COMMANDS (built-in commands cannot be mapped).
+            local REFUSED = 'Eclipse defines the folds in this editor'
+            local REFUSED_KEYS = { n = { 'zf', 'zF', 'zd', 'zD', 'zE' }, x = { 'zf', 'zd', 'zD' } }
+            local function refuse_keys(buf, on)
+              for mode, keys in pairs(REFUSED_KEYS) do
+                for _, key in ipairs(keys) do
+                  if on then
+                    vim.keymap.set(mode, key, function()
+                      vim.api.nvim_echo({ { key .. ': ' .. REFUSED } }, true, { err = true })
+                      if mode == 'x' then
+                        vim.cmd.normal({ string.char(27), bang = true }) -- leave visual mode, as zf does
+                      end
+                    end, { buffer = buf, desc = 'Eclipse defines the folds here (neovim4eclipse)' })
+                  else
+                    pcall(vim.keymap.del, mode, key, { buffer = buf })
+                  end
+                end
+              end
+            end
+            local host = package.loaded['neovim4eclipse.host_commands']
+            if host then
+              host.refuse('fold', function()
+                return vim.b.neovim4eclipse_folds and REFUSED or nil
+              end)
             end
 
             -- The marks of buf as { first, last, index } (1-based lines, 0-based index), in index order.
@@ -721,6 +784,9 @@ final class LuaScripts {
               vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
               if #folds == 0 then
                 setlocal('foldenable', false)
+                if vim.b[buf].neovim4eclipse_folds then
+                  refuse_keys(buf, false)
+                end
                 vim.b[buf].neovim4eclipse_folds = nil
                 return
               end
@@ -748,6 +814,9 @@ final class LuaScripts {
                 if closed[i] then
                   vim.cmd(handle_line(folds, i, closed) .. 'foldclose')
                 end
+              end
+              if not vim.b[buf].neovim4eclipse_folds then
+                refuse_keys(buf, true)
               end
               vim.b[buf].neovim4eclipse_folds = true
               if kept then

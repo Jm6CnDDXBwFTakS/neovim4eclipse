@@ -16,8 +16,7 @@ and only with Eclipse's folds in Neovim is a closed fold one row on both sides.
 
 ## As built (in progress)
 
-Commits 1 and 2 of section 7 (the Neovim side, the Eclipse side) are built; commit 3 (the `zf` and
-`:fold` errors) is not. Where they differ from the plan below, and why:
+All three commits of section 7 are built. Where they differ from the plan below, and why:
 
 - **The handle lines are worked out in Lua**, in the fold module (`LuaScripts.FOLDS`), not in
   `util/FoldRegions`. During `zn` a resend keeps Neovim's own states (3.2), which only Neovim knows,
@@ -52,6 +51,14 @@ Commits 1 and 2 of section 7 (the Neovim side, the Eclipse side) are built; comm
 - **Selections** use the caption rule too: an end of Neovim's visual selection inside a closed fold
   is put at the caption line's start. Checking `VisualSelectionView` and `BlockOverlay` over closed
   folds (3.3) is still to do.
+- **There is no `:folddelete`.** Neovim (and Vim) delete folds with `zd`, `zD` and `zE` only;
+  `:foldd` is `:folddoopen`, which opens folds and stays Neovim's. Only `:fold` is refused.
+- **The refusal is a hook, not a rule in the Java table.** `HostCommand`'s table lists what Eclipse
+  carries out, and `:fold` is not that; it is refused only in mirrored buffers, which only Lua
+  knows. So `HOST_COMMANDS` offers `require('neovim4eclipse.host_commands').refuse(name, why)`, and
+  the fold module registers `fold` there (it runs after `HOST_COMMANDS`). A refused line becomes
+  `:Eclipse fold`, which shows the error. Being an error, it ends the rest of a `|` chain, as any
+  error does in Vim (`:10,12fold | let x = 1` does not set `x`).
 - **Tests:** a test editor that folds, `TestFoldingEditor` (`*.fold`, brace blocks are its folds),
   for `FoldingEndToEndTest` without Java tooling. Not done: a UI test of the opt-out (the UI tests
   share one Neovim, started without it; `NeovimFoldsIntegrationTest` covers it), and "a method added
