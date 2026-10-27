@@ -22,6 +22,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
@@ -61,7 +62,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  * other buffers are dropped.
  */
 public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort,
-        DocumentBufferPort, DiagnosticsPort {
+        DocumentBufferPort, DiagnosticsPort, FoldsPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
@@ -114,6 +115,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * characters at the cursor. (The Lua hook stands down too; this is the second guard.)
      */
     private volatile boolean nvimManagesClipboard;
+    /**
+     * Whether Eclipse's folds are mirrored into Neovim ({@link FoldsPort#foldsEnabled()}): the answer
+     * of {@link LuaScripts#FOLDS}, run once at start after the user's config. Written once, in
+     * {@link #initialize}, before the session is handed out.
+     */
+    private volatile boolean foldsEnabled;
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
     private volatile Consumer<Integer> bufferClosedHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -195,6 +202,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         int channel = await(api.getChannelId());
         await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
         await(api.execLua(LuaScripts.HOST_COMMANDS, List.of(HostCommand.rulesForNeovim())));
+        // Once, here: the opt-out then costs nothing per key (docs/design/FOLDING.md, 3.6).
+        session.foldsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FOLDS, List.of())));
+        session.state.setFoldsEnabled(session.foldsEnabled);
+        LOG.info(() -> "folds " + (session.foldsEnabled ? "mirrored into Neovim" : "off (g:neovim4eclipse_folds)"));
         Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -585,6 +596,37 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             }
             await(api.execLua(LuaScripts.SET_DIAGNOSTICS, Diagnostic.toLuaArgs(buffer.bufnr, copy)));
         });
+    }
+
+    @Override
+    public boolean foldsEnabled() {
+        return foldsEnabled;
+    }
+
+    @Override
+    public void setFoldsAsync(DocumentBuffer buffer, List<FoldRegions.Fold> folds) {
+        if (!foldsEnabled) {
+            return;
+        }
+        List<String> args = FoldRegions.toLuaArgs(buffer.bufnr, folds);
+        submit(folds.size() + " folds for " + buffer.name(), Level.FINE, () -> {
+            // As for the diagnostics: the number could be another buffer's, or the text not there yet.
+            // SET_FOLDS itself skips a buffer that is not the current one.
+            if (buffers.handleOf(buffer) == null || !buffer.loaded) {
+                return;
+            }
+            await(api.execLua(LuaScripts.SET_FOLDS, args));
+        });
+    }
+
+    @Override
+    public void addFoldStateListener(Consumer<FoldState> listener) {
+        events.addFoldListener(listener);
+    }
+
+    @Override
+    public void removeFoldStateListener(Consumer<FoldState> listener) {
+        events.removeFoldListener(listener);
     }
 
     public List<String> getBufferLines() throws Exception {
@@ -1041,9 +1083,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline) throws Exception {
+        public Object stateSnapshot(boolean statusline, boolean folds) throws Exception {
             // Short timeout: see STATE_TIMEOUT_MS.
-            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline)))
+            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(folds)))
                     .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 

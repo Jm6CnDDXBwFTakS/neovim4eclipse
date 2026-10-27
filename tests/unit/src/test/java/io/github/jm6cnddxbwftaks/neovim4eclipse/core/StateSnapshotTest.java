@@ -172,4 +172,32 @@ class StateSnapshotTest {
         assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer(raw.subList(0, 9)));
         assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer("garbage"));
     }
+
+    // ---- folds ----
+
+    private static List<Object> withFolds(Object folds) {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(StateSnapshot.FOLDS, (Object) ""));
+        raw.add(folds);
+        return raw;
+    }
+
+    @Test
+    void theClosedFoldsAreTheThirteenthElement() {
+        assertEquals(12, StateSnapshot.FOLDS);
+        assertEquals(List.of(0, 3), StateSnapshot.closedFolds(withFolds(List.of(0L, 3L))));
+        assertEquals(List.of(), StateSnapshot.closedFolds(withFolds(List.of())));
+    }
+
+    @Test
+    void closedFoldsAreNullWhenMissingOrNotAList() {
+        // null, not empty: an empty list would expand every fold in Eclipse.
+        assertNull(StateSnapshot.closedFolds(withFolds("").subList(0, StateSnapshot.FOLDS)));
+        assertNull(StateSnapshot.closedFolds(withFolds("junk")));
+        assertNull(StateSnapshot.closedFolds(null));
+    }
+
+    @Test
+    void entriesThatAreNotIndexesAreSkipped() {
+        assertEquals(List.of(1, 4), StateSnapshot.closedFolds(withFolds(List.of(1L, "x", -2L, 4L))));
+    }
 }

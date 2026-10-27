@@ -33,6 +33,8 @@ final class StateSnapshot {
     static final int BLOCK = 10;
     /** {@code nvim_get_mode().mode} when the snapshot was taken; see {@link #mode}. */
     static final int MODE = 11;
+    /** The outermost closed folds' indexes, when folding is on; see {@link #closedFolds}. */
+    static final int FOLDS = 12;
 
     private StateSnapshot() {
     }
@@ -60,6 +62,26 @@ final class StateSnapshot {
             return mode;
         }
         return null;
+    }
+
+    /**
+     * The indexes of the outermost closed folds ({@link FoldState#closed()}), or {@code null} when
+     * the element is missing or is not a list. {@code null} and an empty list differ: empty means
+     * "no fold is closed" and expands every fold in Eclipse, so an answer that is not understood must
+     * not look like it. Entries that are not numbers are skipped.
+     */
+    static List<Integer> closedFolds(Object raw) {
+        if (!(raw instanceof List<?> list) || list.size() <= FOLDS || !(list.get(FOLDS) instanceof List<?> folds)) {
+            return null;
+        }
+        List<Integer> closed = new ArrayList<>(folds.size());
+        for (Object id : folds) {
+            int index = toInt(id, -1);
+            if (index >= 0) {
+                closed.add(index);
+            }
+        }
+        return closed;
     }
 
     /** The register being recorded into; "" if not recording or not understood. */

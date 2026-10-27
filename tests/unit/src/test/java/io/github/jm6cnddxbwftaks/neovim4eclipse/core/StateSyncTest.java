@@ -34,7 +34,7 @@ class StateSyncTest {
         Mode mode = new Mode("n", false);
         Object snapshot = snapshot(1, 0, ATTACHED);
         List<String> lines = List.of("alpha");
-        /** The status flags of the last snapshot request. */
+        /** The flags of the last snapshot request: statusline, folds. */
         List<Boolean> snapshotFlags;
 
         @Override
@@ -46,8 +46,8 @@ class StateSyncTest {
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline) {
-            snapshotFlags = List.of(statusline);
+        public Object stateSnapshot(boolean statusline, boolean folds) {
+            snapshotFlags = List.of(statusline, folds);
             if (snapshot == null) {
                 throw new IllegalStateException("timed out");
             }
@@ -85,6 +85,11 @@ class StateSyncTest {
                             + selection.startCol0Based() + "-" + selection.endLine1Based() + ":"
                             + selection.endCol0Based()
                     : "no selection");
+        }
+
+        @Override
+        public void folds(FoldState folds) {
+            heard.add("folds " + folds.bufnr() + " " + folds.closed());
         }
 
         @Override
@@ -206,11 +211,71 @@ class StateSyncTest {
     void theStatuslineIsRequestedOnlyWhenShown() {
         status.setItems(Set.of(StatusItem.CMD));
         state.publishState();
-        assertEquals(List.of(false), nvim.snapshotFlags);
+        assertEquals(List.of(false, false), nvim.snapshotFlags);
 
         status.setItems(Set.of(StatusItem.STATUSLINE));
         state.publishState();
-        assertEquals(List.of(true), nvim.snapshotFlags);
+        assertEquals(List.of(true, false), nvim.snapshotFlags);
+    }
+
+    // ---- folds ----
+
+    /** A snapshot of the attached buffer whose fold element lists {@code closed}. */
+    private static List<Object> foldSnapshot(Object closed) {
+        List<Object> raw = snapshot(3, 0, ATTACHED);
+        while (raw.size() <= StateSnapshot.FOLDS) {
+            raw.add("");
+        }
+        raw.set(StateSnapshot.FOLDS, closed);
+        return raw;
+    }
+
+    @Test
+    void withFoldingOnTheClosedFoldsArePublishedAfterTheCursor() {
+        state.setFoldsEnabled(true);
+        nvim.snapshot = foldSnapshot(List.of(0L, 2L));
+
+        state.publishState();
+
+        assertEquals(List.of(false, true), nvim.snapshotFlags);
+        assertEquals(List.of("onModeChanged n", "mode n", "cursor 3:0", "no selection", "folds 1 [0, 2]"),
+                listeners.heard);
+    }
+
+    @Test
+    void anEmptyListIsPublishedButAMissingElementIsNot() {
+        // Empty means "nothing closed" (zR, zn) and expands every fold; a short answer means nothing.
+        state.setFoldsEnabled(true);
+        nvim.snapshot = foldSnapshot(List.of());
+        state.publishState();
+        assertTrue(listeners.heard.contains("folds 1 []"), listeners.heard.toString());
+
+        listeners.heard.clear();
+        nvim.snapshot = snapshot(3, 0, ATTACHED);
+        state.publishState();
+        assertFalse(listeners.heard.stream().anyMatch(h -> h.startsWith("folds")), listeners.heard.toString());
+    }
+
+    @Test
+    void withFoldingOffNoFoldsAreAskedForOrPublished() {
+        nvim.snapshot = foldSnapshot(List.of(1L));
+
+        state.publishState();
+
+        assertEquals(List.of(false, false), nvim.snapshotFlags);
+        assertFalse(listeners.heard.stream().anyMatch(h -> h.startsWith("folds")), listeners.heard.toString());
+    }
+
+    @Test
+    void theFoldsOfABufferTheEditorDoesNotShowAreNotPublished() {
+        state.setFoldsEnabled(true);
+        List<Object> raw = foldSnapshot(List.of(1L));
+        raw.set(StateSnapshot.BUFNR, ATTACHED + 1);
+        nvim.snapshot = raw;
+
+        state.publishState();
+
+        assertFalse(listeners.heard.stream().anyMatch(h -> h.startsWith("folds")), listeners.heard.toString());
     }
 
     @Test

@@ -45,9 +45,10 @@ final class StateSync {
 
         /**
          * Runs {@link LuaScripts#STATE_SNAPSHOT} (with a short timeout) and returns its raw answer,
-         * read by {@link StateSnapshot}. The flag says whether to evaluate the statusline.
+         * read by {@link StateSnapshot}. The flags say whether to evaluate the statusline and
+         * whether to read the closed folds.
          */
-        Object stateSnapshot(boolean statusline) throws Exception;
+        Object stateSnapshot(boolean statusline, boolean folds) throws Exception;
 
         /** The attached buffer's lines. */
         List<String> bufferLines() throws Exception;
@@ -62,6 +63,9 @@ final class StateSync {
         void selection(VisualSelection selection);
 
         void bufferChange(BufferChange change);
+
+        /** The closed folds of the attached buffer, after each key while folding is on. */
+        void folds(FoldState folds);
     }
 
     private final Neovim nvim;
@@ -88,6 +92,11 @@ final class StateSync {
      * would insert the text twice, and during macro playback (see {@link KeyInput}).
      */
     private volatile boolean suppressBufferEvents;
+    /**
+     * Whether the snapshot reads the closed folds: set once at session start, from the user's
+     * {@code vim.g.neovim4eclipse_folds} ({@code NeovimSession.foldsEnabled()}).
+     */
+    private volatile boolean foldsEnabled;
 
     StateSync(Neovim nvim, Listeners listeners, StatusTracker status, IntPredicate isAttached,
             Consumer<String> onModeChanged) {
@@ -135,6 +144,11 @@ final class StateSync {
         lastCursor = cursor;
     }
 
+    /** See {@link #foldsEnabled}. */
+    void setFoldsEnabled(boolean enabled) {
+        foldsEnabled = enabled;
+    }
+
     /** See {@link #suppressBufferEvents}. */
     void setSuppressBufferEvents(boolean suppress) {
         suppressBufferEvents = suppress;
@@ -179,7 +193,7 @@ final class StateSync {
     }
 
     /**
-     * Publishes mode, cursor, visual selection and the statusline from one request
+     * Publishes mode, cursor, visual selection, the statusline and the closed folds from one request
      * ({@link LuaScripts#STATE_SNAPSHOT}). Must only be called when Neovim is not blocked.
      *
      * <p>Cursor and selection are only published when Neovim's current buffer is the attached one:
@@ -189,7 +203,8 @@ final class StateSync {
     void publishState() {
         try {
             Set<StatusItem> items = status.items();
-            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE));
+            boolean folds = foldsEnabled;
+            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE), folds);
             // The mode in the answer, not one read before the request. Example: Eclipse runs :w, the
             // plug-in closes Neovim's command line with Esc and publishes. The mode read before was
             // "c"; Neovim's ModeChanged notice "n" can arrive while the request is out, and publishing
@@ -205,6 +220,11 @@ final class StateSync {
                 listeners.selection(VimModes.isVisual(current)
                         ? StateSnapshot.selection(raw, current)
                         : VisualSelection.none());
+                // After the cursor, as read; the editor applies the folds first (docs/design/FOLDING.md, 3.2).
+                List<Integer> closed = folds ? StateSnapshot.closedFolds(raw) : null;
+                if (closed != null) {
+                    listeners.folds(new FoldState(StateSnapshot.buffer(raw), closed));
+                }
             }
             status.updateRecording(StateSnapshot.recording(raw));
             status.publishStatusline(StateSnapshot.statusline(raw));
