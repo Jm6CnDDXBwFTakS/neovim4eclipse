@@ -12,6 +12,17 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-27
+
+The plug-in itself is unchanged from 0.1.7; this release is for people who build it from source.
+
+### Fixed
+
+- The source repository imports into Eclipse again (*File → Import → Maven → Existing Maven
+  Projects*). Since 0.1.7 the import stopped with "Resource '/shared' does not exist": the UI tests
+  listed a folder outside their project, which Eclipse's plug-in tooling cannot resolve. A new test
+  checks that every project keeps its folders inside it.
+
 ## [0.1.7] - 2026-10-27
 
 ### Changed

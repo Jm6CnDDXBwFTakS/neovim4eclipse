@@ -197,7 +197,7 @@ bottom; `*` marks a field the form requires.
 | Categories `*` (5 or fewer) | Editor, plus whatever else in the list fits a key-binding/editing tool; not checked yet which names the list has |
 | Markets `*` | Tools |
 | Tags | vim, neovim, vi, modal editing, keybindings |
-| **Solution version:** Version number | 0.1.7 (update with each release, or leave empty: the update site always offers the latest) |
+| **Solution version:** Version number | 0.1.8 (update with each release, or leave empty: the update site always offers the latest) |
 | Update Site URL `*` | https://jm6cnddxbwftaks.github.io/neovim4eclipse/ (the composite site; never changes) |
 | Supported Eclipse Release(s) `*` | 2024-12 (4.34) through 2026-09 (4.41). Not 2026-12 (4.42): it is listed but not yet released; tick it after testing on it |
 | Supported Platform(s) `*` | Windows, Mac, Linux/GTK |
