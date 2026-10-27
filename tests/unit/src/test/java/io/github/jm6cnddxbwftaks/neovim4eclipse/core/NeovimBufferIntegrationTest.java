@@ -389,7 +389,10 @@ class NeovimBufferIntegrationTest {
         }
     }
 
-    /** A listing shows the document buffers; a listing's error is an error on the message line. */
+    /**
+     * A listing shows the document buffers (one line: on the message line, as on Neovim's own screen);
+     * a listing's error is an error on the message line.
+     */
     @Test
     void listingsShowTheDocumentBuffersAndTheirErrors() throws Exception {
         try (NeovimSession s = start()) {
@@ -403,8 +406,9 @@ class NeovimBufferIntegrationTest {
             s.commandAsync("marks q");
             waitFor(() -> lines.stream().anyMatch(i -> i.error() && i.message().startsWith("E283:")),
                     "no marks matching \"q\": " + lines);
-            assertTrue(outputs.get(0).text().contains("A.txt") && outputs.get(0).text().contains(String.valueOf(a.bufnr())),
-                    outputs.toString());
+            assertTrue(lines.stream().anyMatch(i -> !i.error() && i.message().contains("A.txt")
+                    && i.message().startsWith(String.valueOf(a.bufnr()))), "the one-line :ls: " + lines);
+            assertEquals(List.of(), outputs, "no popup for one line");
         }
     }
 }

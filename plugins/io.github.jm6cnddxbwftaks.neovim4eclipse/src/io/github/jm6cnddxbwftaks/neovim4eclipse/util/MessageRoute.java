@@ -20,10 +20,12 @@ import java.util.Set;
  *   <li>More than that, in one message or several, goes to the output popup, as Vim would show
  *       them above a "Press ENTER" prompt: a two-line {@code :echo}, a failed save with its
  *       {@code Error in BufWriteCmd Autocommands ...} header, a Lua error with its traceback.</li>
- *   <li>Listings and shell output always go to the popup, even when one line long:
- *       {@code list_cmd} ({@code :ls}, {@code :set ts?}), the {@code shell_*} kinds, and
- *       {@code :messages}. (Shell output arrives appended to the {@code shell_cmd} message, so that
- *       one counts as output too.)</li>
+ *   <li>A listing ({@code list_cmd}) follows the same two rules, as on Neovim's own screen: one
+ *       line goes to the message line ({@code :set ts?}, {@code :ls} with one buffer, the file info
+ *       of a typed {@code :b}), more to the popup ({@code :ls}, {@code :marks}).</li>
+ *   <li>Shell output always goes to the popup, even when one line long: the {@code shell_*} kinds,
+ *       and {@code :messages}. (Shell output arrives appended to the {@code shell_cmd} message, so
+ *       that one counts as output too.)</li>
  *   <li>Not shown: the echo of a search ({@code search_cmd}: Eclipse's box showed it) and of a
  *       shell command (the first line of {@code shell_cmd}: the popup's title is the command), and
  *       empty messages.</li>
@@ -48,8 +50,8 @@ public final class MessageRoute {
     private static final String HISTORY_KIND = "history";
     /** Kinds that are errors: drawn in the error color on the message line. */
     private static final Set<String> ERROR_KINDS = Set.of("emsg", "echoerr", "lua_error", "rpc_error");
-    /** Kinds that are output to read: always the popup. */
-    private static final Set<String> OUTPUT_KINDS = Set.of("list_cmd", "shell_cmd", "shell_out", "shell_err",
+    /** Kinds that are output to read: always the popup. (A listing, {@code list_cmd}, is not: see the class comment.) */
+    private static final Set<String> OUTPUT_KINDS = Set.of("shell_cmd", "shell_out", "shell_err",
             "shell_ret", HISTORY_KIND);
     /** Kinds that only echo what was typed. */
     private static final Set<String> ECHO_KINDS = Set.of("search_cmd", "empty", "return_prompt");

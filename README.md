@@ -309,12 +309,12 @@ and `:ls` shows `+` for those files. `:w !cmd` pipes the text to a command, as i
 another name (`:w other.txt`) or of some lines only (`:5,10w`) is refused; use *File → Save As*.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
-macro being recorded contains it. Listings (`:ls`, `:jumps`, `:marks`, `:registers`, `:set opt?`,
-`:messages` ...), shell output (`:!ls`, `:!make`) and anything else of more than one line show in a
-read-only box in the same place, with the command as its first line; output that keeps coming
+macro being recorded contains it. Listings of more than one line (`:ls`, `:jumps`, `:marks`,
+`:registers` ...), shell output (`:!ls`, `:!make`), `:messages` and anything else of more than one
+line show in a read-only box in the same place, with the command as its first line; output that keeps coming
 (`:!make`) is added while the box is open. `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys
-scroll it; any other key or a click closes it. One-line output (`:echo "hi"`, a `:s` report) goes to
-the message line instead, and so do errors. Your own `:redir` collects as in Vim.
+scroll it; any other key or a click closes it. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
+the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
 
 ## Mouse
 
