@@ -244,7 +244,12 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         SwtUiExecutor.INSTANCE.asyncExec(() -> {
             if (!closed && !styledText.isDisposed()) {
-                foldMirror.applyNeovimState(folds.closed());
+                // As from Neovim: collapsing a fold that holds the caret makes the widget move the
+                // caret out of the hidden lines (to the line after the fold), and that move must not
+                // reach Neovim as the user's. Example: zc inside a method left Neovim's cursor on the
+                // line after it, where zo found no fold. The cursor that follows puts the caret on
+                // the fold's caption line.
+                caretSync.runAsFromNeovim(() -> foldMirror.applyNeovimState(folds.closed()));
             }
         });
     }
