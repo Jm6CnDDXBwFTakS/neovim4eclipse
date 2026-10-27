@@ -532,9 +532,8 @@ final class LuaScripts {
      * not give for such a buffer. So {@code :w}, {@code :update}, {@code :bufdo %s/a/b/g | update},
      * {@code :w other.txt} and {@code vim.cmd.write()} all write through Eclipse. {@code v:cmdarg} passes {@code ++p} along.
      * {@code 'modified'} itself follows Eclipse's dirty flag ({@link #SET_MODIFIED}), so
-     * {@code :update} asks for exactly the files Eclipse would save. Neovim refuses a partial write
-     * ({@code :5,10w}: E140, with {@code !} E676) and pipes {@code :w !cmd} without this hook
-     * (experiment X9 of the cleanup plan).
+     * {@code :update} asks for exactly the files Eclipse would save. Neovim pipes {@code :w !cmd}
+     * without these hooks (experiment X9 of the cleanup plan).
      *
      * <h2>Which file: the editor's, or a copy</h2>
      * {@code BufWriteCmd} gets the name being written ({@code ev.match}), and the script compares it
@@ -552,6 +551,13 @@ final class LuaScripts {
      *       file, the editor's, under Neovim's new name: experiment X1 of the plan "writes under
      *       another name".)</li>
      * </ul>
+     * Some lines ({@code :5,10w part.txt}) run {@code FileWriteCmd} instead, and an append
+     * ({@code :w >> log.txt}, {@code :5,10w >> log.txt}) {@code FileAppendCmd}; Neovim marks the lines
+     * with {@code '[} and {@code ']}, which the hooks send (request kinds {@code "lines"} and
+     * {@code "append"}, with {@code v:cmdbang}: {@code :w! >> new.txt} may create the file). Both are
+     * refused for the editor's own file, which Eclipse saves only whole: {@code :5,10w!} would leave
+     * only those lines on disk under an editor that has them all. Without such a hook Neovim refused
+     * them itself (E140, with {@code !} E676).
      * The names are compared after {@code resolve()} and {@code vim.fs.normalize}: Neovim resolves
      * symbolic links in a buffer's name but not in the written name (on macOS {@code /var} is a link
      * to {@code /private/var}, so the buffer is {@code /private/var/.../A.txt} while {@code :update}
@@ -587,48 +593,76 @@ final class LuaScripts {
             -- The editor's file, as Neovim names it (links resolved). Writes are compared with it, not
             -- with the buffer's name, which :saveas and :file change.
             vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
+
+            -- An error message, as Neovim shows its own: err = true sets v:errmsg and the ErrorMsg
+            -- highlight, and marks the message as an error (msg_show kind "echoerr").
+            local function fail(msg)
+              vim.api.nvim_echo({ { msg } }, true, { err = true })
+            end
+            -- Resolved: the buffer name has its links resolved, ev.match not (/private/var/x, /var/x on macOS).
+            -- Normalized: on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt, C:\\x\\a.txt).
+            local function canonical(name)
+              return vim.fs.normalize(vim.fn.resolve(name))
+            end
+            -- Whether `name` is the editor's file, or the buffer's name (renamed by :saveas or :file).
+            local function own(b, name)
+              local c = canonical(name)
+              return c == canonical(vim.b[b].neovim4eclipse_file) or c == canonical(vim.api.nvim_buf_get_name(b))
+            end
+            -- Asks Eclipse to write, and shows its answer. kind '' saves the editor; 'copy', 'lines' and
+            -- 'append' write to the file `name` (lines first..last). Neovim waits for the answer:
+            -- Eclipse writes on its UI thread (see EditorAttachManager). v:cmdarg has the write's
+            -- ++opt arguments (" ++p" for :w ++p); v:cmdbang the !, which lets >> create a file.
+            local function ask(b, kind, name, first, last)
+              local answer = vim.rpcrequest(vim.g.neovim4eclipse_channel, 'eclipse_write', b, vim.v.cmdarg,
+                kind, name, first, last, vim.v.cmdbang == 1)
+              local err, written = answer[1], answer[2] -- { error, message }, each '' when none
+              if err ~= '' then
+                fail(err)
+                return false
+              end
+              if written ~= '' then
+                -- Vim's own message after a write, which Neovim does not give for an acwrite buffer.
+                vim.api.nvim_echo({ { written } }, true, {})
+              end
+              return true
+            end
+
             vim.api.nvim_create_autocmd('BufWriteCmd', {
               buf = buf, -- named "buffer" before Neovim 0.12.2
               desc = 'Eclipse saves the document',
               callback = function(ev)
-                -- An error message, as Neovim shows its own: err = true sets v:errmsg and the ErrorMsg
-                -- highlight, and marks the message as an error (msg_show kind "echoerr").
-                local function fail(msg)
-                  vim.api.nvim_echo({ { msg } }, true, { err = true })
-                end
-                -- Resolved: the buffer name has its links resolved, ev.match not (/private/var/x, /var/x on macOS).
-                -- Normalized: on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt, C:\\x\\a.txt).
-                local function canonical(name)
-                  return vim.fs.normalize(vim.fn.resolve(name))
-                end
                 local file = vim.b[ev.buf].neovim4eclipse_file
                 local target = vim.fn.fnamemodify(ev.match, ':p')
-                local kind, name = '', '' -- the editor's own file: Eclipse saves the editor
-                if canonical(target) ~= canonical(file) then
-                  if canonical(vim.api.nvim_buf_get_name(ev.buf)) ~= canonical(file) then
-                    -- Renamed by :saveas or :file: the editor's file is still the old one.
-                    return fail('Eclipse saves this buffer only as ' .. vim.fn.fnamemodify(file, ':t')
-                      .. '; use File > Save As')
+                if canonical(target) == canonical(file) then
+                  if ask(ev.buf, '', '', 0, 0) then
+                    vim.bo[ev.buf].modified = false
                   end
-                  kind, name = 'copy', target -- :w other.txt: the text to another file, as in Vim
-                end
-                -- Neovim waits for the answer: Eclipse saves on its UI thread (see EditorAttachManager).
-                -- v:cmdarg has the write's ++opt arguments (" ++p" for :w ++p).
-                local answer = vim.rpcrequest(vim.g.neovim4eclipse_channel, 'eclipse_write', ev.buf, vim.v.cmdarg,
-                  kind, name)
-                local err, written = answer[1], answer[2] -- { error, message }, each '' when none
-                if err ~= '' then
-                  return fail(err)
-                end
-                if kind == '' then
-                  vim.bo[ev.buf].modified = false -- a copy leaves the editor's changes unsaved, as in Vim
-                end
-                if written ~= '' then
-                  -- Vim's own message after a write, which Neovim does not give for an acwrite buffer.
-                  vim.api.nvim_echo({ { written } }, true, {})
+                elseif own(ev.buf, target) then
+                  -- Renamed by :saveas or :file: the editor's file is still the old one.
+                  fail('Eclipse saves this buffer only as ' .. vim.fn.fnamemodify(file, ':t') .. '; use File > Save As')
+                else
+                  -- :w other.txt: the text to another file, as in Vim. The editor's changes stay unsaved.
+                  ask(ev.buf, 'copy', target, 0, 0)
                 end
               end,
             })
+            -- :5,10w part.txt and :w >> log.txt: some or all lines to another file, between the marks
+            -- '[ and '] that Neovim sets for the write. Not to the editor's own file, which Eclipse
+            -- saves whole: :5,10w! would leave only those lines on disk, and >> would double the file.
+            for event, kind in pairs({ FileWriteCmd = 'lines', FileAppendCmd = 'append' }) do
+              vim.api.nvim_create_autocmd(event, {
+                buf = buf,
+                desc = 'Eclipse writes the lines to another file',
+                callback = function(ev)
+                  local target = vim.fn.fnamemodify(ev.match, ':p')
+                  if own(ev.buf, target) then
+                    return fail('Eclipse saves this file only whole; use :w')
+                  end
+                  ask(ev.buf, kind, target, vim.fn.line("'["), vim.fn.line("']"))
+                end,
+              })
+            end
             -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its
             -- editor too. Eclipse ignores it for a buffer no editor shows (one it wiped itself).
             vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {

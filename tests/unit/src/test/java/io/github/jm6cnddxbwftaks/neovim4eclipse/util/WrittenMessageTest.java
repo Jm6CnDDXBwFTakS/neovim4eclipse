@@ -18,6 +18,13 @@ class WrittenMessageTest {
     }
 
     @Test
+    void linesAddedToAFileAreAppended() {
+        // As Vim says for :w! >> M2.txt (a new file) and :2,3w >> M3.txt.
+        assertEquals("\"M2.txt\" [New] 4L, 8B appended", WrittenMessage.appended("M2.txt", true, "a\nb\nc\nd\n", StandardCharsets.UTF_8));
+        assertEquals("\"M3.txt\" 2L, 4B appended", WrittenMessage.appended("M3.txt", false, "b\nc\n", StandardCharsets.UTF_8));
+    }
+
+    @Test
     void anExistingFileHasNoNewMarker() {
         assertEquals("\"a.txt\" 2L, 4B written", WrittenMessage.of("a.txt", false, "a\nb\n", StandardCharsets.UTF_8));
     }

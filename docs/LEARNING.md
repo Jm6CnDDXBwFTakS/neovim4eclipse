@@ -295,7 +295,10 @@ plug-in's hook compares it with the editor's file (kept in `b:neovim4eclipse_fil
 a copy (`editor/OtherFileWrites`). Neovim does its usual checks before any hook runs, so the hook never
 sees what Vim would refuse: an existing file without `!` (E13), a file another buffer has (E139).
 Example: `:w other.txt` in a buffer with unsaved changes writes the copy and leaves `'modified'` set,
-as Vim does, because the buffer's own file is still unsaved.
+as Vim does, because the buffer's own file is still unsaved. A write of some lines runs a different
+event, `FileWriteCmd` (`:5,10w part.txt`), and `>>` runs `FileAppendCmd`; Neovim sets the marks `'[`
+and `']` to the lines, which the hook reads with `line("'[")`. A buffer with `buftype=acwrite` and no
+such hook refuses them (E140 without `!`, E676 with it), which is how the plug-in refused them before.
 
 In Neovim, `:help api` lists every function and `:help rpc` describes the protocol. `nvim --api-info`
 dumps the API as MessagePack.

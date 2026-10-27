@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Writes to a file other than the editor's (the plan "writes under another name"): {@code :w name}
- * writes a copy, as in Vim. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
+ * writes a copy, {@code :2,3w name} some lines, {@code :w >> name} adds them to a file, as in Vim. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
  * each test makes it {@code "lpha\n..."} first ({@code 0x}), so the copy is told from the file.
  *
  * <p>Error checks come last in a test: Neovim shows an error of the write hook in two lines, which
@@ -205,5 +205,29 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         runInBox(widget, "w other/copy.txt");
         waitUntil("E212", TIMEOUT_MS, () -> errmsg().startsWith("E212"), () -> ": " + errmsg());
         assertFalse(project.getFolder("other").exists());
+    }
+
+    @Test
+    void someLinesGoToAnotherFile() {
+        change();
+        runInBox(widget, "2,3w part.txt");
+        expectMessage("\"part.txt\" [New] 2L, 11B written");
+        assertEquals("beta\ngamma\n", fileText("part.txt"));
+        assertTrue(editor.isDirty());
+    }
+
+    @Test
+    void linesAreAppendedToAFileAndAMissingOneNeedsBang() {
+        change();
+        runInBox(widget, "1w! >> log.txt");
+        expectMessage("\"log.txt\" [New] 1L, 5B appended");
+        runInBox(widget, "3w >> log.txt");
+        expectMessage("\"log.txt\" 1L, 6B appended");
+        assertEquals("lpha\ngamma\n", fileText("log.txt"));
+        assertTrue(project.getFile("log.txt").isSynchronized(IResource.DEPTH_ZERO));
+
+        runInBox(widget, "w >> missing.txt");
+        waitUntil("E212", TIMEOUT_MS, () -> errmsg().startsWith("E212"), () -> ": " + errmsg());
+        assertFalse(project.getFile("missing.txt").exists());
     }
 }

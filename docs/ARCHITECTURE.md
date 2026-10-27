@@ -125,8 +125,10 @@ The hook compares the written name with the editor's file (`b:neovim4eclipse_fil
 name, which `:saveas` and `:file` change): another name is a copy (`:w other.txt`, request kind
 `"copy"` with the full path), which `editor/OtherFileWrites` writes in the editor's encoding, through
 the workspace inside a project, never over unsaved changes in another editor, and without touching
-the editor or `'modified'`. A renamed buffer written under its new name is refused (it used to save
-the old file).
+the editor or `'modified'`. Some lines (`:5,10w part.txt`, `FileWriteCmd`) and appends (`:w >> log.txt`,
+`FileAppendCmd`) send the lines between the marks `'[` and `']` (kinds `"lines"`, `"append"`; the text
+cut by `util/TextLines`); both are refused for the editor's own file, saved only whole. A renamed
+buffer written under its new name is refused (it used to save the old file).
 `:wq`, `:x` and `:wa` stay Eclipse's commands (`util/HostCommand`): they close editors or save editors
 that have no buffer. An error fails the write as a real failed write does
 (`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before

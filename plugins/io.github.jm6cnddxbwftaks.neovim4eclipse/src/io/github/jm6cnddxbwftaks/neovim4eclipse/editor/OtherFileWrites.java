@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -23,15 +24,17 @@ import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TextLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
 /**
  * Writes that Neovim asks for to a file other than the editor's own (the plan "writes under another
  * name"). {@code :w other.txt} is a copy, as in Vim: the document's text goes to {@code other.txt},
  * and the editor stays on its own file with its unsaved changes, so {@code :w} afterwards still
- * saves the editor. Neovim decides which writes are copies (the write hook in
- * {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already refused an existing file without
- * {@code !} (E13).
+ * saves the editor. {@code :5,10w part.txt} writes those lines only ({@link #lines}), and
+ * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}). Neovim decides which
+ * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already
+ * refused an existing file without {@code !} (E13).
  *
  * <p>How a copy is written, and why:
  * <ul>
@@ -49,7 +52,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  *   <li><b>No save actions.</b> Eclipse's save actions (format on save, organize imports) belong to
  *       an editor's save; a copy is the text as it is, as in Vim.</li>
  *   <li>A missing folder fails with E212, unless {@code ++p} creates it, as for a new file
- *       ({@link NewFiles}).</li>
+ *       ({@link NewFiles}). An append to a missing file needs {@code !}, as in Vim
+ *       ({@code :w! >> log.txt}); without it, E212.</li>
  * </ul>
  *
  * <p>UI thread only.
@@ -73,11 +77,47 @@ final class OtherFileWrites {
         if (document == null) {
             return DocumentWrite.Result.failed(editor.getTitle() + " has no text to copy");
         }
-        return write(target, document.get(), EclipseFileCommands.charsetOf(editor), createFolders);
+        return write(target, document.get(), EclipseFileCommands.charsetOf(editor), false, true, createFolders);
     }
 
-    /** Writes {@code text} to {@code target} in {@code charset}; see the class comment. */
-    private static DocumentWrite.Result write(Path target, String text, Charset charset, boolean createFolders) {
+    /**
+     * Writes lines {@code first} to {@code last} (1-based) of {@code editor}'s text to {@code target},
+     * which they replace, as {@code :5,10w target} does in Vim. Example: {@code :2,3w part.txt} of
+     * {@code "a\nb\nc\n"} makes {@code part.txt} {@code "b\nc\n"}.
+     */
+    static DocumentWrite.Result lines(ITextEditor editor, Path target, int first, int last, boolean createFolders) {
+        IDocument document = documentOf(editor);
+        if (document == null) {
+            return DocumentWrite.Result.failed(editor.getTitle() + " has no text to write");
+        }
+        return write(target, TextLines.of(document.get(), first, last), EclipseFileCommands.charsetOf(editor), false,
+                true, createFolders);
+    }
+
+    /**
+     * Adds lines {@code first} to {@code last} (1-based) of {@code editor}'s text to the end of
+     * {@code target}, as {@code :5,10w >> target} does in Vim; {@code :w >> target} sends all lines.
+     *
+     * @param force {@code !}: a missing file is created ({@code :w! >> log.txt}); without it, E212
+     */
+    static DocumentWrite.Result append(ITextEditor editor, Path target, int first, int last, boolean force,
+            boolean createFolders) {
+        IDocument document = documentOf(editor);
+        if (document == null) {
+            return DocumentWrite.Result.failed(editor.getTitle() + " has no text to write");
+        }
+        return write(target, TextLines.of(document.get(), first, last), EclipseFileCommands.charsetOf(editor), true,
+                force, createFolders);
+    }
+
+    /**
+     * Writes {@code text} to {@code target} in {@code charset}, replacing the file or, with
+     * {@code append}, after its text; see the class comment.
+     *
+     * @param mayCreate whether a missing file may be made (an append needs {@code !} for it)
+     */
+    private static DocumentWrite.Result write(Path target, String text, Charset charset, boolean append,
+            boolean mayCreate, boolean createFolders) {
         String name = target.getFileName() == null ? target.toString() : target.getFileName().toString();
         IFile workspaceFile = NewFiles.workspaceFileAt(target);
         ITextFileBuffer open = openBufferOf(target, workspaceFile);
@@ -85,24 +125,31 @@ final class OtherFileWrites {
             return DocumentWrite.Result.failed("\"" + name + "\" has unsaved changes in an Eclipse editor; save or close it first");
         }
         try {
+            boolean created = !Files.exists(target);
+            if (created && !mayCreate) {
+                return DocumentWrite.Result.failed("E212: Can't open file for writing: no such file or directory");
+            }
             if (!folderExists(target, workspaceFile)) {
                 if (!createFolders) {
                     return DocumentWrite.Result.failed(NewFiles.NO_FOLDER);
                 }
                 createFolder(target, workspaceFile);
             }
-            boolean created;
             byte[] bytes = text.getBytes(charset);
             if (workspaceFile != null) {
-                created = writeWorkspaceFile(workspaceFile, bytes, charset);
+                writeWorkspaceFile(workspaceFile, bytes, charset, append);
             } else {
-                created = !Files.exists(target);
-                Files.write(target, bytes);
+                if (append) {
+                    Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                } else {
+                    Files.write(target, bytes);
+                }
                 if (open != null) {
                     open.revert(null); // no workspace to tell the editor; it would ask "File Changed"
                 }
             }
-            return DocumentWrite.Result.saved(WrittenMessage.of(name, created, text, charset));
+            return DocumentWrite.Result.saved(append ? WrittenMessage.appended(name, created, text, charset)
+                    : WrittenMessage.of(name, created, text, charset));
         } catch (Exception e) {
             LOG.log(Level.FINE, "Writing " + target + " for Neovim failed", e);
             return DocumentWrite.Result.failed("E212: Can't open file for writing: " + e.getMessage());
@@ -125,18 +172,20 @@ final class OtherFileWrites {
         }
     }
 
-    /** @return whether the file was created */
-    private static boolean writeWorkspaceFile(IFile file, byte[] bytes, Charset charset) throws Exception {
+    private static void writeWorkspaceFile(IFile file, byte[] bytes, Charset charset, boolean append) throws Exception {
         file.refreshLocal(IResource.DEPTH_ZERO, null); // a file made outside Eclipse is overwritten, not created twice
         if (file.exists()) {
-            file.setContents(new ByteArrayInputStream(bytes), IResource.FORCE | IResource.KEEP_HISTORY, null);
-            return false;
+            if (append) {
+                file.appendContents(new ByteArrayInputStream(bytes), IResource.FORCE | IResource.KEEP_HISTORY, null);
+            } else {
+                file.setContents(new ByteArrayInputStream(bytes), IResource.FORCE | IResource.KEEP_HISTORY, null);
+            }
+            return;
         }
         file.create(new ByteArrayInputStream(bytes), IResource.FORCE, null);
         if (!Charset.forName(file.getParent().getDefaultCharset()).equals(charset)) {
             file.setCharset(charset.name(), null);
         }
-        return true;
     }
 
     /**

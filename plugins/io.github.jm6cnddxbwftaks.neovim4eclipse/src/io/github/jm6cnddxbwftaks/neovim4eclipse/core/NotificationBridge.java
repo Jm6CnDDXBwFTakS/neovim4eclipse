@@ -234,8 +234,8 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Payload: {@code [bufnr, cmdarg, kind, target]}, the last two only for a write to another file
-     * ({@link DocumentWrite.Request#of}). Answers {@code [error, message]} ({@link DocumentWrite.Result}):
+     * Payload: {@code [bufnr, cmdarg, kind, target, first, last, bang]}, all but the first two only for
+     * a write to another file ({@link DocumentWrite.Request#of}). Answers {@code [error, message]} ({@link DocumentWrite.Result}):
      * {@code ["", "\"a.txt\" 3L, 12B written"]} when the document was saved, {@code ["E212: ...", ""]}
      * when not. Never throws, for the same reason as {@link #onClipboardPaste}: the message is what
      * Neovim shows the user, an RPC error would only show a stack trace.
@@ -245,7 +245,8 @@ final class NotificationBridge implements Incoming {
         if (buf == null) {
             return DocumentWrite.Result.failed("Eclipse got a write request without a buffer number").toRpc();
         }
-        DocumentWrite.Request request = DocumentWrite.Request.of(stringAt(args, 1), stringAt(args, 2), stringAt(args, 3));
+        DocumentWrite.Request request = DocumentWrite.Request.of(stringAt(args, 1), stringAt(args, 2), stringAt(args, 3),
+                intAt(args, 4), intAt(args, 5), args.size() > 6 && Boolean.TRUE.equals(args.get(6)));
         try {
             return sink.onWrite(buf, request).toRpc();
         } catch (RuntimeException e) {
@@ -322,6 +323,12 @@ final class NotificationBridge implements Incoming {
     /** The argument at {@code index} as text, or "" when there is none (or it is nil). */
     private static String stringAt(List<?> args, int index) {
         return args.size() > index && args.get(index) != null ? String.valueOf(args.get(index)) : "";
+    }
+
+    /** The argument at {@code index} as a number, or 0 when there is none. */
+    private static int intAt(List<?> args, int index) {
+        Integer value = args.size() > index ? toInt(args.get(index)) : null;
+        return value == null ? 0 : value;
     }
 
     private static Integer toInt(Object o) {

@@ -24,11 +24,15 @@ class DocumentWriteTest {
     }
 
     @Test
-    void theRequestNamesTheKindAndTheFile() {
-        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.OWN, "", true), DocumentWrite.Request.of(" ++p", "", ""));
-        assertEquals(DocumentWrite.Request.own(false), DocumentWrite.Request.of("", null, null), "a plain save sends neither");
-        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.COPY, "/ws/p/b.txt", false),
-                DocumentWrite.Request.of("", "copy", "/ws/p/b.txt"));
+    void theRequestNamesTheKindTheFileAndTheLines() {
+        assertEquals(DocumentWrite.Request.own(true), DocumentWrite.Request.of(" ++p", "", "", 0, 0, false));
+        assertEquals(DocumentWrite.Request.own(false), DocumentWrite.Request.of("", null, null, 0, 0, false),
+                "a plain save sends none of them");
+        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.COPY, "/ws/p/b.txt", 0, 0, true, false),
+                DocumentWrite.Request.of("", "copy", "/ws/p/b.txt", 0, 0, true));
+        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.LINES, "/ws/p/part.txt", 5, 10, false, false),
+                DocumentWrite.Request.of("", "lines", "/ws/p/part.txt", 5, 10, false));
+        assertEquals(DocumentWrite.Kind.APPEND, DocumentWrite.Kind.named("append"));
         assertEquals(DocumentWrite.Kind.OWN, DocumentWrite.Kind.named("unknown"), "an unknown kind is a save, never a copy");
     }
 
