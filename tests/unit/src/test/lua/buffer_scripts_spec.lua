@@ -67,3 +67,43 @@ t.test('showing a buffer that is gone fails, and the user\'s shortmess is still 
   t.eq(false, ok)
   t.eq('ltToOC', vim.o.shortmess)
 end)
+
+-- CREATE_DOCUMENT_BUFFER: a document's buffer named as :e names one, not "not edited" as
+-- nvim_buf_set_name leaves it; loaded and empty without reading the file, and without the events of
+-- entering it.
+local function file_info(buf)
+  return vim.api.nvim_buf_call(buf, function() return vim.fn.execute('file') end)
+end
+
+t.test('a document buffer is named, loaded, empty and not marked "not edited"', function()
+  local name = vim.fn.tempname() .. '-a.txt'
+  vim.fn.writefile({ 'on disk' }, name) -- not read: Eclipse pushes its own text
+  local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq(true, named)
+  t.eq(vim.fn.resolve(vim.fn.fnamemodify(name, ':p')), vim.fn.resolve(vim.api.nvim_buf_get_name(buf)))
+  t.eq(true, vim.api.nvim_buf_is_loaded(buf))
+  t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'the file was not read')
+  t.eq(true, vim.bo[buf].buflisted)
+  t.eq(false, vim.bo[buf].swapfile)
+  t.eq('hide', vim.bo[buf].bufhidden)
+  vim.bo[buf].buftype = 'acwrite' -- as DOCUMENT_BUFFER sets it
+  t.eq(nil, file_info(buf):find('[Not edited]', 1, true), file_info(buf))
+end)
+
+t.test('creating a document buffer neither reads the file nor enters the buffer', function()
+  local fired = {}
+  vim.api.nvim_create_autocmd({ 'BufReadCmd', 'BufReadPre', 'BufReadPost', 'BufEnter', 'BufWinEnter', 'FileType' }, {
+    callback = function(ev) table.insert(fired, ev.event) end,
+  })
+  t.run('CREATE_DOCUMENT_BUFFER', vim.fn.tempname() .. '-b.java')
+  t.eq({}, fired)
+end)
+
+t.test('a name another buffer has already gives a new, unnamed buffer', function()
+  local name = vim.fn.tempname() .. '-c.txt'
+  local existing = vim.fn.bufadd(name)
+  local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq(false, named)
+  t.ok(buf ~= existing, 'a buffer of its own')
+  t.eq('', vim.api.nvim_buf_get_name(buf))
+end)
