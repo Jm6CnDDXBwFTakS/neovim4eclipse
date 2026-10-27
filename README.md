@@ -321,8 +321,8 @@ as Vim's `:w other.txt | q`: Eclipse asks about the editor's own unsaved changes
 and `:wq!` discards them. `:x other.txt` writes the copy only if the editor has changes.
 
 `:saveas new.txt` is Eclipse's *File → Save As* without the dialog: the document is saved as `new.txt`
-and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was, and
-`:e #` opens it again. Eclipse's save actions do not run in that save (a `:w` afterwards runs them).
+and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was.
+Eclipse's save actions do not run in that save (a `:w` afterwards runs them).
 It is refused when another Eclipse editor has `new.txt` open (E139). `:file new.txt`, which renames a
 buffer without a file, is undone at once (the editor's file stays the same); `:file` alone shows the
 file info as usual, which says `[Not edited]` until the next write after such an attempt.

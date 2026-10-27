@@ -131,7 +131,9 @@ cut by `util/TextLines`); both are refused for the editor's own file, saved only
 renames the buffer, then writes it under the new name: kind `"saveas"`, which `OtherFileWrites.saveAs`
 carries out as Eclipse's Save As without the dialog (the document provider saves to the new input,
 then `replaceInputKeepingBuffer` moves the editor, keeping the Neovim buffer). A `BufFilePost` check
-puts the old name back after `:file new.txt` or a refused `:saveas`.
+puts the old name back after `:file new.txt` or a refused `:saveas`. Writes and renames under another
+name also leave an empty, unloaded buffer of that name (Vim's alternate file); the hook wipes it once
+the command is over, or an editor opened on that file later could not give its buffer that name.
 `:wq`, `:x` and `:wa` stay Eclipse's commands (`util/HostCommand`): they close editors or save editors
 that have no buffer. An error fails the write as a real failed write does
 (`nvim_echo` with `err = true`, which works like `:echoerr`): Neovim shows it, `:w | q` stops before

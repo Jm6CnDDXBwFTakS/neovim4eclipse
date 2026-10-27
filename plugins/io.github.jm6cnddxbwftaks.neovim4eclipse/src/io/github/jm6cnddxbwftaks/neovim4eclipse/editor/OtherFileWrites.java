@@ -119,7 +119,7 @@ final class OtherFileWrites {
     /**
      * Saves {@code editor}'s document as {@code target} and moves the editor there, as
      * {@code :saveas target} does in Vim and File › Save As in Eclipse. Neovim has already renamed its
-     * buffer to {@code target} (and made the old name the alternate file, {@code :e #}); the editor
+     * buffer to {@code target}; the editor
      * keeps that buffer, with its undo history and marks. The old file stays as it was on disk.
      *
      * <p>How: as Eclipse's own Save As ({@code AbstractDecoratedTextEditor.performSaveAs}) without the

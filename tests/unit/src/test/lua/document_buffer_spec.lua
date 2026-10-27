@@ -93,6 +93,9 @@ t.test('a write under another name asks Eclipse for a copy and leaves the buffer
   t.eq(true, vim.bo[buf].modified, 'the editor\'s own changes are still unsaved, as in Vim')
   t.eq(name, vim.api.nvim_buf_get_name(buf))
   t.eq(0, vim.fn.filereadable(other), 'Neovim never writes the file itself')
+  -- Neovim keeps an empty buffer of the other name (Vim's alternate file); it would keep an editor
+  -- opened on other.txt later from naming its buffer, so it goes once the command is over.
+  t.wait_for('no buffer left of other.txt', function() return vim.fn.bufexists(other) == 0 end)
 end)
 
 t.test('a copy over an existing file needs !, as in Vim (E13, before Eclipse is asked)', function()
@@ -120,9 +123,9 @@ t.test(':saveas asks Eclipse to save as the new file, which becomes the buffer\'
   t.eq(new, vim.api.nvim_buf_get_name(buf))
   t.eq(new, vim.b[buf].neovim4eclipse_file, 'later writes compare with the new file')
   t.eq(false, vim.bo[buf].modified)
-  t.eq(name, vim.fn.expand('#:p'), 'the old file is the alternate one, as in Vim')
-  vim.wait(50) -- the scheduled check after the rename leaves it alone
-  t.eq(new, vim.api.nvim_buf_get_name(buf))
+  t.ok(vim.fn.bufexists(name) == 1, 'Neovim keeps a buffer of the old name, as Vim does for :e #')
+  t.wait_for('that buffer wiped', function() return vim.fn.bufexists(name) == 0 end)
+  t.eq(new, vim.api.nvim_buf_get_name(buf), 'the scheduled check leaves the new name alone')
   vim.cmd.write()
   t.eq({ buf, '' }, asked[2], 'a :w then saves the new file')
 end)
@@ -145,6 +148,7 @@ t.test(':file new.txt is undone: the buffer keeps the editor\'s name', function(
   vim.cmd.file(vim.fn.fnameescape(vim.fs.dirname(name) .. '/renamed.txt'))
   t.wait_for('the old name', function() return vim.api.nvim_buf_get_name(buf) == name end)
   t.eq('file: Eclipse names this buffer after its file; use :saveas or File > Save As', vim.v.errmsg)
+  t.eq(0, vim.fn.bufexists(vim.fs.dirname(name) .. '/renamed.txt'), 'no buffer left under the other name')
   vim.cmd.write()
   t.eq({ { buf, '' } }, asked, 'X1: a :w saves the editor\'s file, under its own name')
   t.ok(vim.fn.execute('file'):find('A.txt', 1, true), ':file alone still shows the file info')
