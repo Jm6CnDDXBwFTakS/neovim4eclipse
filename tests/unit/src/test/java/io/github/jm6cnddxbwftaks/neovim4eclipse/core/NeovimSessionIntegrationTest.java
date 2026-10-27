@@ -278,9 +278,9 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * A typed command's one-line output and its errors go to the message line, a listing to the
-     * popup with its command line as title; a command that prints nothing shows nothing. The
-     * command is typed as written, so the history has it without {@code :silent}.
+     * A typed command's one-line output and its errors go to the message line, a one-line listing
+     * ({@code :set tabstop?}) too, as on Neovim's own screen; a command that prints nothing shows
+     * nothing. The command is typed as written, so the history has it without {@code :silent}.
      */
     @Test
     void typedCommandsShowWhatTheyPrint() throws Exception {
@@ -294,7 +294,8 @@ class NeovimSessionIntegrationTest {
             waitFor(() -> shown.line("done", false), "the last command's message");
             assertTrue(shown.line("hello from neovim", false), "one-line echo: " + shown.lines);
             assertTrue(shown.line("E492: Not an editor command: nosuchcommand", true), "the error: " + shown.lines);
-            assertEquals(List.of(new CommandOutput(":set tabstop?", "  tabstop=8")), shown.outputs);
+            assertTrue(shown.line("tabstop=8", false), "one-line listing: " + shown.lines);
+            assertEquals(List.of(), shown.outputs, "no popup");
             assertEquals("1", String.valueOf(s.lua("return vim.g.x")));
             assertEquals("echo 'done'", String.valueOf(s.lua("return vim.fn.histget(':', -1)")),
                     "the command is typed, so it is in the history as written");
@@ -302,12 +303,14 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * Listings are typed like every other command, so {@code @:} repeats them. ({@code :ls!}: the
-     * session's scratch buffer is unlisted, so a plain {@code :ls} would print nothing.)
+     * A listing of more than one line opens the popup, titled with its command line. Listings are
+     * typed like every other command, so {@code @:} repeats them. ({@code :ls!}: the session's
+     * scratch buffer is unlisted; two more buffers make the listing longer than one line.)
      */
     @Test
     void aListingOpensThePopupAndIsInTheHistory() throws Exception {
         try (NeovimSession s = start()) {
+            s.lua("vim.api.nvim_create_buf(true, true); vim.api.nvim_create_buf(true, true)");
             Shown shown = new Shown(s);
             s.commandAsync("ls!");
             waitFor(() -> !shown.outputs.isEmpty(), "the listing");

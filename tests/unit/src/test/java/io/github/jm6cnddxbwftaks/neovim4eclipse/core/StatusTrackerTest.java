@@ -120,10 +120,11 @@ class StatusTrackerTest {
     @Test
     void outputGoesToTheOutputListenersWithItsCommandLine() {
         tracker.commandLine(":ls");
-        tracker.onMessageEvent(show("list_cmd", "  1 %a   \"a.txt\"  line 1"));
+        tracker.onMessageEvent(show("list_cmd", "  1 %a   \"a.txt\"  line 1\n  2      \"b.txt\"  line 0"));
         tracker.onMessageEvent(FLUSH);
 
-        assertEquals(List.of(new CommandOutput(":ls", "  1 %a   \"a.txt\"  line 1")), outputs);
+        assertEquals(List.of(new CommandOutput(":ls", "  1 %a   \"a.txt\"  line 1\n  2      \"b.txt\"  line 0")),
+                outputs);
         assertTrue(seen.isEmpty(), "nothing for the message line: " + seen);
     }
 
@@ -147,7 +148,7 @@ class StatusTrackerTest {
     void theSameOutputAfterTheNextKeyIsPassedAgain() {
         for (int i = 0; i < 2; i++) {
             tracker.clearMessage();
-            tracker.onMessageEvent(show("list_cmd", "x"));
+            tracker.onMessageEvent(show("list_cmd", "x\ny"));
             tracker.onMessageEvent(FLUSH);
         }
         assertEquals(2, outputs.size());

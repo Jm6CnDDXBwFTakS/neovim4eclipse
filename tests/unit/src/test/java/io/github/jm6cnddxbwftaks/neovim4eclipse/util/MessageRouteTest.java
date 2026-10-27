@@ -99,11 +99,27 @@ class MessageRouteTest {
 
     // ---- the output popup ----
 
+    /** As on Neovim's own screen: a one-line listing needs no "Press ENTER" prompt. */
     @Test
-    void listingsGoToThePopupTitledWithTheirCommandLineEvenWhenShort() {
+    void aListingOfOneLineGoesToTheMessageLine() {
         route.commandLine(":set ts?");
         add("list_cmd", "  tabstop=8");
-        assertEquals(output(":set ts?", "  tabstop=8"), route.view());
+        assertEquals(new View("tabstop=8", false, "", ""), route.view());
+    }
+
+    /** The file info of a typed {@code :b} (without F in 'shortmess') comes as a listing too. */
+    @Test
+    void theFileInfoOfATypedBufferCommandGoesToTheMessageLine() {
+        route.commandLine(":b other.txt");
+        add("list_cmd", "\"/p/other.txt\" 2 lines --50%--");
+        assertEquals("\"/p/other.txt\" 2 lines --50%--", route.view().line());
+    }
+
+    @Test
+    void aListingOfMoreLinesGoesToThePopupTitledWithItsCommandLine() {
+        route.commandLine(":ls");
+        add("list_cmd", "\n  1 %a   \"a.txt\"  line 1\n  2      \"b.txt\"  line 0");
+        assertEquals(output(":ls", "  1 %a   \"a.txt\"  line 1\n  2      \"b.txt\"  line 0"), route.view());
     }
 
     /** As Vim shows it above a "Press ENTER" prompt; the error color is not kept. */
@@ -168,13 +184,13 @@ class MessageRouteTest {
     void theCommandLineIsKeptAcrossClear() {
         route.commandLine(":ls");
         route.clear();
-        add("list_cmd", "x");
+        add("list_cmd", "x\ny");
         assertEquals(":ls", route.view().title());
     }
 
     @Test
     void leadingBlankLinesAndTrailingSpaceGoButIndentationStays() {
-        add("list_cmd", "\n\n  tabstop=8  \n");
-        assertEquals("  tabstop=8", route.view().output());
+        add("list_cmd", "\n\n  tabstop=8\n  shiftwidth=4  \n");
+        assertEquals("  tabstop=8\n  shiftwidth=4", route.view().output());
     }
 }

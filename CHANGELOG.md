@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- A listing that fits on one line (`:set ts?`, `:ls` with one buffer, the file info of a typed `:b`)
+  shows on the message line, as on Neovim's own screen, instead of opening the output box. Longer
+  listings still open it.
+
 ### Fixed
 
 - On a slow or busy machine, a `:` command that opens another editor (`:e new.txt`) no longer ends

@@ -72,7 +72,7 @@ final class CommandRunner {
     /**
      * Types {@code :cmd<CR>}, waits until it has run, then refreshes buffer, mode and cursor.
      * Example: {@code run("ls")} types {@code :ls<CR>}; Neovim sends the listing as a
-     * {@code list_cmd} message, which opens the output popup.
+     * {@code list_cmd} message, which opens the output popup when it has more than one line.
      */
     void run(String cmd) throws Exception {
         typeAndRefresh(NvimKeys.exCommand(cmd));

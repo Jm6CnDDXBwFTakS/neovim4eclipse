@@ -254,9 +254,9 @@ key or a submitted line until the next) in a `util/MessageRoute` and passes on t
 
 | What arrived | Where it goes | Example |
 | --- | --- | --- |
-| one message of one line | the message line; errors (`emsg`, `echoerr`, `lua_error`, `rpc_error`) in the error color | `3 lines yanked`, `E486: Pattern not found: x`, `:echo "hi"` |
-| a listing or shell output (`list_cmd`, `shell_*`, `:messages`), even one line | the output popup, titled with the command line | `:ls`, `:set ts?`, `:!make` |
-| more than one line, in one message or several | the output popup, as Vim shows it above "Press ENTER" | a failed save with its `Error in BufWriteCmd Autocommands` header, a Lua traceback |
+| one message of one line, a listing (`list_cmd`) too | the message line; errors (`emsg`, `echoerr`, `lua_error`, `rpc_error`) in the error color | `3 lines yanked`, `E486: Pattern not found: x`, `:echo "hi"`, `:set ts?`, a typed `:b`'s file info |
+| shell output (`shell_*`, `:messages`), even one line | the output popup, titled with the command line | `:!make`, `:messages` |
+| more than one line, in one message or several | the output popup, as Vim shows it above "Press ENTER" | `:ls`, a failed save with its `Error in BufWriteCmd Autocommands` header, a Lua traceback |
 | the echo of a search (`search_cmd`) or of a shell command (first line of `shell_cmd`), empty messages | nowhere | |
 
 `replace_last` (a search's `[2/5]` count replacing its echo), `append` (shell output in chunks) and the

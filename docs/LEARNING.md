@@ -370,7 +370,7 @@ the plug-in asks for three (`NeovimConnection.TERMINAL_UI`) and ignores the rest
   The fields are kind, content (chunks of `[attribute, text, highlight]`), replace_last, history,
   append, id and trigger. `util/MessageEvent` reads them, `util/MessageRoute` decides where each goes:
   the echo of the search nowhere, the error to the message line in red; `:ls` (kind `list_cmd`) to
-  the output popup. Without `ext_messages`, a UI that draws no grid sees no message at all, and Neovim
+  the output popup when it lists more than one line, to the message line otherwise. Without `ext_messages`, a UI that draws no grid sees no message at all, and Neovim
   stops at a "Press ENTER" prompt whenever its message area overflows (2.6).
 
 A UI that takes over parts of the screen draws them itself, with Neovim's data. Example, the
