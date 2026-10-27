@@ -54,8 +54,9 @@ class NotificationBridgeTest {
                 }
                 return List.of(List.of("pasted"), "v");
             }
-            @Override public DocumentWrite.Result onWrite(int bufnr, String cmdarg) {
-                events.add("write@" + bufnr + cmdarg);
+            @Override public DocumentWrite.Result onWrite(int bufnr, DocumentWrite.Request request) {
+                events.add("write@" + bufnr + (request.createFolders() ? " ++p" : "") + " " + request.kind()
+                        + (request.target().isEmpty() ? "" : " " + request.target()));
                 if (bufnr == 13) {
                     throw new IllegalStateException("workspace closed");
                 }
@@ -206,7 +207,8 @@ class NotificationBridgeTest {
         assertEquals(List.of("read-only", ""), request("eclipse_write", 7L, ""));
         assertEquals(List.of("Eclipse could not save the file: workspace closed", ""), request("eclipse_write", 13));
         assertEquals(List.of("Eclipse got a write request without a buffer number", ""), request("eclipse_write"));
-        assertEquals(List.of("write@3 ++p", "write@7", "write@13"), events);
+        assertEquals(List.of("", "written"), request("eclipse_write", 3, "", "copy", "/ws/p/other.txt"));
+        assertEquals(List.of("write@3 ++p OWN", "write@7 OWN", "write@13 OWN", "write@3 COPY /ws/p/other.txt"), events);
     }
 
     @Test

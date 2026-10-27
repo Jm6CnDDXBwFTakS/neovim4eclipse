@@ -27,8 +27,9 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'eclipse_write'"));
         // Both names are compared canonical: links resolved (macOS /var), slashes normalized (Windows / against \).
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.fs.normalize(vim.fn.resolve(name))"));
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains(
-                "canonical(ev.match) ~= canonical(vim.api.nvim_buf_get_name(ev.buf))"));
+        // Writes are compared with the editor's file, kept when the buffer is made, not with the
+        // buffer's name, which :saveas and :file change.
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
         assertTrue(LuaScripts.SETUP.contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
     }
 

@@ -97,7 +97,7 @@ public final class EclipseFileCommands {
     }
 
     /** The encoding the editor saves in: the workspace file's, the editor's, or UTF-8. */
-    private static Charset charsetOf(ITextEditor editor) {
+    static Charset charsetOf(ITextEditor editor) {
         try {
             IFile file = editor.getEditorInput().getAdapter(IFile.class);
             if (file != null && file.exists()) {

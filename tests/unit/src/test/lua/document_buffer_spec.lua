@@ -9,11 +9,12 @@
 
 local t = ...
 
---- Eclipse's answers, by buffer number: '' saves, any other text is the error. Records each request.
+--- Eclipse's answers, by buffer number: '' saves, any other text is the error. Records each request:
+--- { buf, cmdarg } for a save of the editor's file, { buf, cmdarg, kind, file } for another file.
 local function eclipse(failures)
   local asked = {}
-  t.answer('eclipse_write', function(buf, cmdarg)
-    asked[#asked + 1] = { buf, cmdarg }
+  t.answer('eclipse_write', function(buf, cmdarg, kind, file)
+    asked[#asked + 1] = kind == '' and { buf, cmdarg } or { buf, cmdarg, kind, file }
     local err = (failures or {})[buf]
     if err then
       return { err, '' }
@@ -72,16 +73,46 @@ t.test('a typed :w | cmd still runs cmd after a failed save', function()
   t.eq('Eclipse could not save A.txt: read-only', vim.v.errmsg, 'v:errmsg has the text alone')
 end)
 
-t.test('a write under another name is refused and nothing is asked or written', function()
+t.test('a write under another name asks Eclipse for a copy and leaves the buffer as it was', function()
   t.setup()
   local asked = eclipse()
-  local _, name = t.document('A.txt', { 'a' })
+  local buf, name = t.document('A.txt', { 'a' })
+  vim.bo[buf].modified = true
   local other = vim.fs.dirname(name) .. '/other.txt'
+  vim.cmd.lcd(vim.fn.fnameescape(vim.fs.dirname(name))) -- as the plug-in sets the window's folder
+  t.type(':w ++p other.txt<CR>')
+  t.eq({ { buf, ' ++p', 'copy', other } }, asked, 'the full name, resolved in the file\'s folder')
+  t.eq(true, vim.bo[buf].modified, 'the editor\'s own changes are still unsaved, as in Vim')
+  t.eq(name, vim.api.nvim_buf_get_name(buf))
+  t.eq(0, vim.fn.filereadable(other), 'Neovim never writes the file itself')
+end)
+
+t.test('a copy over an existing file needs !, as in Vim (E13, before Eclipse is asked)', function()
+  t.setup()
+  local asked = eclipse()
+  local buf, name = t.document('A.txt', { 'a' })
+  local other = vim.fs.dirname(name) .. '/other.txt'
+  vim.fn.writefile({ 'old' }, other)
   local ok, err = pcall(vim.cmd.write, other)
   t.eq(false, ok)
-  t.ok(tostring(err):find('only under its own name', 1, true), tostring(err))
+  t.ok(tostring(err):find('E13', 1, true), tostring(err))
   t.eq({}, asked)
-  t.eq(0, vim.fn.filereadable(other))
+  vim.cmd.write({ other, bang = true })
+  t.eq({ { buf, '', 'copy', other } }, asked)
+end)
+
+t.test('a buffer renamed by :file is not written under its new name', function()
+  t.setup()
+  local asked = eclipse()
+  local buf, name = t.document('A.txt', { 'a' })
+  local other = vim.fs.dirname(name) .. '/renamed.txt'
+  vim.cmd.file(vim.fn.fnameescape(other))
+  local ok, err = pcall(vim.cmd.write)
+  t.eq(false, ok)
+  t.ok(tostring(err):find('Eclipse saves this buffer only as A.txt', 1, true), tostring(err))
+  t.eq({}, asked, 'X1: Eclipse would have saved A.txt, the editor\'s file')
+  vim.cmd.write(vim.fn.fnameescape(name)) -- its own file is still a save
+  t.eq({ { buf, '' } }, asked)
 end)
 
 t.test('the same file named through a link or with other slashes is its own name', function()

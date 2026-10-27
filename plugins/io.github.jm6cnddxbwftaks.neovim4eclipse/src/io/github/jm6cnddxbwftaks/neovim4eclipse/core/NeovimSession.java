@@ -910,13 +910,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public DocumentWrite.Result onWrite(int bufnr, String cmdarg) {
+        public DocumentWrite.Result onWrite(int bufnr, DocumentWrite.Request request) {
             DocumentBuffer document = buffers.documentOf(bufnr);
             DocumentWrite.Handler handler = writeHandler;
             if (document == null || handler == null) {
                 return DocumentWrite.Result.failed("Eclipse has no editor for buffer " + bufnr + "; nothing was saved");
             }
-            return handler.save(document, DocumentWrite.createsFolders(cmdarg));
+            return handler.save(document, request);
         }
 
         @Override

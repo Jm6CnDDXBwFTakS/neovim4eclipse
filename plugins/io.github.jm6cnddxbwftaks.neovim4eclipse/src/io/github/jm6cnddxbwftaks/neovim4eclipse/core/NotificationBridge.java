@@ -96,7 +96,7 @@ final class NotificationBridge implements Incoming {
          * @param cmdarg the write's {@code ++opt} arguments ({@code v:cmdarg}), e.g. {@code " ++p"}
          * @return the error that fails the write, or the message Neovim shows
          */
-        DocumentWrite.Result onWrite(int bufnr, String cmdarg);
+        DocumentWrite.Result onWrite(int bufnr, DocumentWrite.Request request);
 
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
@@ -234,7 +234,8 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Payload: {@code [bufnr, cmdarg]}. Answers {@code [error, message]} ({@link DocumentWrite.Result}):
+     * Payload: {@code [bufnr, cmdarg, kind, target]}, the last two only for a write to another file
+     * ({@link DocumentWrite.Request#of}). Answers {@code [error, message]} ({@link DocumentWrite.Result}):
      * {@code ["", "\"a.txt\" 3L, 12B written"]} when the document was saved, {@code ["E212: ...", ""]}
      * when not. Never throws, for the same reason as {@link #onClipboardPaste}: the message is what
      * Neovim shows the user, an RPC error would only show a stack trace.
@@ -244,9 +245,9 @@ final class NotificationBridge implements Incoming {
         if (buf == null) {
             return DocumentWrite.Result.failed("Eclipse got a write request without a buffer number").toRpc();
         }
-        String cmdarg = args.size() > 1 && args.get(1) != null ? String.valueOf(args.get(1)) : "";
+        DocumentWrite.Request request = DocumentWrite.Request.of(stringAt(args, 1), stringAt(args, 2), stringAt(args, 3));
         try {
-            return sink.onWrite(buf, cmdarg).toRpc();
+            return sink.onWrite(buf, request).toRpc();
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Saving buffer " + buf + " for Neovim failed", e);
             return DocumentWrite.Result.failed("Eclipse could not save the file: " + e.getMessage()).toRpc();
@@ -316,6 +317,11 @@ final class NotificationBridge implements Incoming {
             out.add(String.valueOf(raw));
         }
         return out;
+    }
+
+    /** The argument at {@code index} as text, or "" when there is none (or it is nil). */
+    private static String stringAt(List<?> args, int index) {
+        return args.size() > index && args.get(index) != null ? String.valueOf(args.get(index)) : "";
     }
 
     private static Integer toInt(Object o) {

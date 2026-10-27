@@ -266,7 +266,7 @@ class NeovimBufferIntegrationTest {
     @Test
     void aFailedSaveFailsTheWriteAndTheBufferStaysModified() throws Exception {
         try (NeovimSession s = start()) {
-            s.setWriteHandler((document, createFolders) -> DocumentWrite.Result.failed("Eclipse could not save A.txt: read-only"));
+            s.setWriteHandler((document, request) -> DocumentWrite.Result.failed("Eclipse could not save A.txt: read-only"));
             DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/A.txt");
             s.showBuffer(a);
             s.setBufferLines(List.of("a"));
@@ -331,8 +331,9 @@ class NeovimBufferIntegrationTest {
     void aTypedWriteAsksEclipseAndShowsTheWrittenMessage() throws Exception {
         try (NeovimSession s = start()) {
             List<String> asked = new CopyOnWriteArrayList<>();
-            s.setWriteHandler((document, createFolders) -> {
-                asked.add(document.name() + (createFolders ? " ++p" : ""));
+            s.setWriteHandler((document, request) -> {
+                asked.add(document.name() + " " + request.kind() + (request.createFolders() ? " ++p" : "")
+                        + (request.target().isEmpty() ? "" : " " + request.target()));
                 return DocumentWrite.Result.saved("\"A.txt\" 1L, 2B written");
             });
             List<String> messages = new CopyOnWriteArrayList<>();
@@ -344,11 +345,17 @@ class NeovimBufferIntegrationTest {
 
             s.input(":w ++p<CR>");
             waitFor(() -> messages.contains("\"A.txt\" 1L, 2B written"), "the written message: " + messages);
-            assertEquals(List.of(a.name() + " ++p"), asked);
+            assertEquals(List.of(a.name() + " OWN ++p"), asked);
+
+            // A copy names its file in full: Neovim resolves the name typed in its current folder.
+            Path copy = dir.resolve("copy.txt");
+            s.input(":w " + copy + "<CR>");
+            waitFor(() -> asked.size() == 2, "the copy: " + asked);
+            assertEquals(a.name() + " COPY " + copy, asked.get(1));
 
             s.input(":w !cat >/dev/null<CR>");
             s.lua("return 0"); // the keys before it are done
-            assertEquals(1, asked.size(), ":w !cmd is no write of the file: " + asked);
+            assertEquals(2, asked.size(), ":w !cmd is no write of the file: " + asked);
         }
     }
 
