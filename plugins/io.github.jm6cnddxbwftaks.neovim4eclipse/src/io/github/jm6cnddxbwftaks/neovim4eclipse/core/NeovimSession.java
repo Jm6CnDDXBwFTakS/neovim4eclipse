@@ -182,7 +182,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         // Until a document is shown, Neovim shows an unlisted scratch buffer (also what tests edit).
         Handle homeBuffer = await(api.createBuf(false, true));
-        await(api.setCurrentBuf(homeBuffer));
+        await(api.execLua(LuaScripts.SHOW_BUFFER, List.of(String.valueOf(homeBuffer.id()))));
         await(api.bufAttach(homeBuffer, true)); // line-change notifications
         await(api.execLua(LuaScripts.DELETE_STARTUP_BUFFER, List.of(String.valueOf(homeBuffer.id()))));
 
