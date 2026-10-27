@@ -395,6 +395,45 @@ class CommandLineBoxTest {
         assertEquals(List.of(), commands.calls);
     }
 
+    /**
+     * Output that comes while the user types elsewhere in Eclipse (here a field standing for a view or
+     * a dialog) leaves the focus there, unlike Vim's prompt: Eclipse has more places to type. The
+     * popup takes the focus once the editor gets it back, so the next key there closes it, as in Vim.
+     */
+    @Test
+    void outputWhileTheUserTypesElsewhereWaitsForTheEditor() {
+        Text elsewhere = new Text(shell, SWT.SINGLE);
+        elsewhere.setBounds(0, 0, 100, 20);
+        elsewhere.moveAbove(host);
+        KeyboardFocus.require(elsewhere, TIMEOUT_MS);
+        commandLine.showOutput(":ls", "  1 a.txt\n  2 b.txt");
+        waitUntil("the popup", () -> popupText() != null);
+        assertTrue(elsewhere.isFocusControl(), "the focus stays where the user types");
+        host.setFocus();
+        waitUntil("the popup to take the focus with the editor",
+                () -> popupText() != null && popupText().isFocusControl());
+    }
+
+    /** The output popup's text: a {@link StyledText} inside the host, or {@code null}. */
+    private StyledText popupText() {
+        return popupTextIn(host);
+    }
+
+    private StyledText popupTextIn(Composite parent) {
+        for (Control child : parent.getChildren()) {
+            if (child instanceof StyledText text && text != host) {
+                return text;
+            }
+            if (child instanceof Composite composite) {
+                StyledText found = popupTextIn(composite);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
     /** {@code :} in the popup starts the next command in Neovim, as {@code :} anywhere does. */
     @Test
     void colonInThePopupGoesToNeovim() {
