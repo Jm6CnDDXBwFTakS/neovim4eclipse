@@ -34,6 +34,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   "Neovim settings the plug-in changes".
 - Neovim's file info for an open file (`Ctrl-G`, `:file`, and with a `'shortmess'` without `F` a
   typed `:b`) no longer says `[Not edited]`: the plug-in names its buffers as `:e` does.
+- The message of a command that moves Neovim into another open file, such as the file info of a
+  typed `:b` without `F` in `'shortmess'`, now shows in that file's editor. It went to the editor
+  being left, and was lost with it.
 
 ## [0.1.7] - 2026-10-26
 

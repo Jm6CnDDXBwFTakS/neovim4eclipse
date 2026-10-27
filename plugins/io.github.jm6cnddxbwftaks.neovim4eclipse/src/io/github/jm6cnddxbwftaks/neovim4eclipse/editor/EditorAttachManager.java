@@ -423,7 +423,13 @@ public final class EditorAttachManager {
                 ITextEditor textEditor = textEditorOf(target);
                 // A multi-page editor may open on a form page: no text editor to follow into.
                 if (textEditor != null && documentOf(textEditor) == showing.get().document()) {
-                    attach(target, false, true);
+                    NeovimEditorController followed = attach(target, false, true);
+                    if (followed != null) {
+                        // The message of the command that moved Neovim here (:b's file info) may have
+                        // come while the editor it left was attached: it belongs here, as Neovim
+                        // has one screen. A later message reaches this editor anyway.
+                        followed.showNeovimsCurrentStatus();
+                    }
                     return;
                 }
             }

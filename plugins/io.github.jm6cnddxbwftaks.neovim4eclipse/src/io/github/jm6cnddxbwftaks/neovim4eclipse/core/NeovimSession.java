@@ -305,6 +305,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         status.removeOutputListener(listener);
     }
 
+    /**
+     * What Neovim shows now: the message of the last command (until the next key) and the status
+     * line items. An editor that Neovim moved into by itself ({@code :b}) shows it, as the message
+     * may have arrived while the editor it left was still attached. Any thread.
+     */
+    public StatusInfo currentStatus() {
+        return status.current();
+    }
+
     /** Notified (on a session thread) when the command, message or statusline text changes. */
     public void addStatusListener(Consumer<StatusInfo> listener) {
         status.addStatusListener(listener);

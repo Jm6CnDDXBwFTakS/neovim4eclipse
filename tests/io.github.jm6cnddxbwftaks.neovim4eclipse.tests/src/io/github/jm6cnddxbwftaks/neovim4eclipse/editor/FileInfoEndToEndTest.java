@@ -4,10 +4,12 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.jface.text.ITextOperationTarget;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,6 +96,34 @@ class FileInfoEndToEndTest extends EndToEndTestBase {
         try {
             expectNoMessageAndTheFocus();
             undoThenDeleteTheLineBelow();
+        } finally {
+            page().closeEditor(other, false);
+        }
+    }
+
+    /**
+     * A {@code :b} the user types is Neovim's own: without F, Neovim's file info is shown, in the
+     * editor {@code :b} moved to, as Neovim shows it for the plug-in's buffers. Those are
+     * {@code acwrite} buffers, whose full name Neovim keeps ({@code core/LuaScripts.CREATE_DOCUMENT_BUFFER});
+     * not "[Not edited]". The message comes as a one-line listing ({@code util/MessageRoute}).
+     */
+    @Test
+    void withoutFTheUsersOwnBufferCommandShowsNeovimsFileInfo() throws Exception {
+        ITextEditor other = switchAwayAndBack();
+        try {
+            neovimGivesFileInfo(true);
+            runInBox(widget, "b other.txt");
+            waitUntil("other.txt to become the active editor", TIMEOUT_MS, () -> {
+                IEditorPart active = page().getActiveEditor();
+                return active != null && "other.txt".equals(active.getTitle());
+            });
+            waitForAttach(other, "other.txt");
+            waitUntil("Neovim's file info for other.txt", TIMEOUT_MS, () -> {
+                String shown = messageText(other);
+                return shown.startsWith("\"") && shown.endsWith("other.txt\" 2 lines --50%--")
+                        && !shown.contains("[Not edited]");
+            }, () -> "; the message line shows \"" + messageText(other) + "\"; test.txt's shows \""
+                    + messageText(editor) + "\"");
         } finally {
             page().closeEditor(other, false);
         }
