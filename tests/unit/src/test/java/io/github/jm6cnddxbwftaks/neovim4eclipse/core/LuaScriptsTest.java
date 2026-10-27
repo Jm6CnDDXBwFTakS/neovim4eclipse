@@ -81,10 +81,10 @@ class LuaScriptsTest {
     }
 
     @Test
-    void snapshotOnlyEvaluatesTheStatuslineWhenRequested() {
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("select(1, ...) == '1'"));
+    void snapshotOnlyEvaluatesTheStatuslineAndReadsFoldsWhenRequested() {
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("want_statusline, want_folds = want_statusline == '1', want_folds == '1'"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_statusline then"));
-        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("select(2"), "one argument");
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_folds and package.loaded['neovim4eclipse.folds'] then"));
     }
 
     /**
@@ -113,7 +113,8 @@ class LuaScriptsTest {
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("getpos('v')"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("getpos('.')"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.fn.mode()"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("block, vim.api.nvim_get_mode().mode }"), "the full mode, last");
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("block, vim.api.nvim_get_mode().mode, folds }"),
+                "the full mode, then the folds, last");
         // A block's lines come from Neovim; no curswant or tabstop for Java to compute them from.
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.fn.getregionpos(s, e, { type = mode, eol = true })"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if mode == string.char(22) then"), "blocks only");

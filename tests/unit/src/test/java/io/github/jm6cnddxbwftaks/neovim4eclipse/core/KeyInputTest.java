@@ -94,7 +94,7 @@ class KeyInputTest {
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline) {
+        public Object stateSnapshot(boolean statusline, boolean folds) {
             calls.add("snapshot");
             Object[] raw = new Object[StateSnapshot.BUFNR + 1];
             Arrays.fill(raw, "");
@@ -127,6 +127,10 @@ class KeyInputTest {
 
         @Override
         public void selection(VisualSelection selection) {
+        }
+
+        @Override
+        public void folds(FoldState folds) {
         }
 
         @Override

@@ -14,6 +14,31 @@ and why, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 This feature comes before [VIEWPORT.md](VIEWPORT.md) *(decided)*: the viewport counts screen rows,
 and only with Eclipse's folds in Neovim is a closed fold one row on both sides.
 
+## As built (in progress)
+
+Commit 1 of section 7 (the Neovim side) is built. Where it differs from the plan below, and why:
+
+- **The handle lines are worked out in Lua**, in the fold module (`LuaScripts.FOLDS`), not in
+  `util/FoldRegions`. During `zn` a resend keeps Neovim's own states (3.2), which only Neovim knows,
+  and a handle line depends on which inner folds are open. One place then serves both cases.
+  `FoldRegions` keeps the rest: filtering, merging, sorting and the state diff.
+- **Two more experiments**, run on 0.12.6 while building:
+  - **X13:** `:{l}foldclose` on a line inside a *closed* inner fold closes the fold around it. So a
+    handle line only has to avoid *open* inner folds.
+  - **X14:** two folds that overlap without nesting (2-6, then 4-9) do not stay so: Neovim widens
+    the second to 2-9. `FoldRegions` drops a region that crosses the border of one before it.
+- **The module and the opt-out are one script.** `LuaScripts.FOLDS` returns whether folding is on
+  and, when it is, installs `require('neovim4eclipse.folds')` (`set`, `closed`, `watch`, `poll`).
+  `SET_FOLDS` and the snapshot call it. Fold ids are extmark ids, which start at 1: index + 1.
+- **The `zn` resend** reads Neovim's states by turning folding on for the length of the call and
+  opening the outermost closed folds level by level (nothing is redrawn inside one call). The folds
+  whose range is unchanged keep those states; new ones take Eclipse's.
+- **Names:** the event is `core/FoldState` (buffer and closed indexes); the session's side is the
+  port `core/FoldsPort` (`foldsEnabled`, `setFoldsAsync`, `add/removeFoldStateListener`), as
+  `DiagnosticsPort` is for problems. Its tests are `NeovimFoldsIntegrationTest` and
+  `folds_spec.lua`.
+- **X12 (the redraw trigger)** is not run yet; `poll` after every key is the trigger.
+
 ## Summary
 
 Eclipse folds code in editors built on a `ProjectionViewer`. The Java editor folds imports,
@@ -223,7 +248,7 @@ and sends keys with `nvim_input`, as the plug-in does. Lines are 1-based.
      closed last hides inner ones already closed, as Eclipse shows them. Each with
      `:{l}foldclose` on one *handle line* `l`: a line of the fold that no open fold inside it
      covers, because `:foldclose` closes one level, the innermost open fold, on each line of its
-     range (X11). `util/FoldRegions` computes the handle lines. When open inner folds cover every
+     range (X11). The fold module computes the handle lines (*As built*). When open inner folds cover every
      line of a collapsed one (rare: an outer fold made only of open inner ones), those inner folds
      are closed with it, and Neovim then shows them closed when the outer one opens; the next
      snapshot makes Eclipse agree. *(decided)* The alternative, moving the cursor to each fold and

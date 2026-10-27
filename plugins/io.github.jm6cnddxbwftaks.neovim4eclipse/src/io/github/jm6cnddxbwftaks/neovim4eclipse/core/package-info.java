@@ -39,14 +39,15 @@
  *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call.</li>
  *       </ul></li>
  *   <li>Value types passed to listeners: {@code CursorPos}, {@code VisualSelection},
- *       {@code BufferChange}; and {@code DocumentBuffer}, the handle of one document's buffer.</li>
+ *       {@code BufferChange}, {@code FoldState}; and {@code DocumentBuffer}, the handle of one document's buffer.</li>
  *   <li>{@code KeyRouter}: whether each key goes to Neovim or stays with Eclipse; the SWT listener
  *       ({@code editor/KeyInterceptor}) only feeds it. {@code NeovimSession} implements its small
  *       {@code KeyRouter.Neovim} interface, so tests use a fake session.</li>
  *   <li>Ports, the small parts of the session other packages depend on, so they can be tested with
  *       fakes: {@code BufferPort} (for {@code sync/BufferSynchronizer}), {@code DocumentBufferPort}
  *       (for {@code sync/UnattachedDocumentSync}), {@code DiagnosticsPort} (for
- *       {@code sync/DiagnosticsSync}), {@code CursorPort} (for
+ *       {@code sync/DiagnosticsSync}), {@code FoldsPort} (for the editor's fold mirror),
+ *       {@code CursorPort} (for
  *       {@code editor/CaretSync}), {@code KeyRouter.Neovim}; and the other direction, what core code
  *       and its callers need from Eclipse: {@code ClipboardPort}, {@code UiExecutor} (the UI thread;
  *       {@code editor/SwtUiExecutor} in the editor, {@code UiExecutor.IMMEDIATE} in tests).</li>

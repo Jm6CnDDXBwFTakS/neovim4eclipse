@@ -11,10 +11,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * The session's listeners, one {@link ListenerList} per kind of event: mode, buffer change, cursor,
- * visual selection and IDE action. (Status bar and recording listeners are in {@link StatusTracker},
+ * visual selection, closed folds and IDE action. (Status bar and recording listeners are in {@link StatusTracker},
  * which also decides when those change.)
  *
- * <p>{@link StateSync} fires the first four through {@link StateSync.Listeners}; IDE actions come
+ * <p>{@link StateSync} fires the first five through {@link StateSync.Listeners}; IDE actions come
  * straight from {@link NotificationBridge}. {@link NeovimSession}'s public {@code add...Listener} and
  * {@code remove...Listener} methods pass through to this class.
  *
@@ -27,6 +27,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<BufferChange> bufferChangeListeners = new ListenerList<>("buffer change", Level.WARNING);
     private final ListenerList<CursorPos> cursorListeners = new ListenerList<>("cursor", Level.WARNING);
     private final ListenerList<VisualSelection> selectionListeners = new ListenerList<>("selection", Level.WARNING);
+    private final ListenerList<FoldState> foldListeners = new ListenerList<>("folds", Level.WARNING);
     private final ListenerList<IdeAction> ideActionListeners = new ListenerList<>("IDE action", Level.WARNING);
     private final ListenerList<HostCommand> hostCommandListeners = new ListenerList<>("host command", Level.WARNING);
     /** {@link ListenerList} holds consumers; these take no value, so each is wrapped once, here. */
@@ -54,6 +55,11 @@ final class SessionEvents implements StateSync.Listeners {
     @Override
     public void bufferChange(BufferChange change) {
         bufferChangeListeners.fire(change);
+    }
+
+    @Override
+    public void folds(FoldState folds) {
+        foldListeners.fire(folds);
     }
 
     /** A key mapped in Neovim asks the IDE to act (see {@link IdeAction}). */
@@ -108,6 +114,14 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeSelectionListener(Consumer<VisualSelection> listener) {
         selectionListeners.remove(listener);
+    }
+
+    void addFoldListener(Consumer<FoldState> listener) {
+        foldListeners.add(listener);
+    }
+
+    void removeFoldListener(Consumer<FoldState> listener) {
+        foldListeners.remove(listener);
     }
 
     void addIdeActionListener(Consumer<IdeAction> listener) {

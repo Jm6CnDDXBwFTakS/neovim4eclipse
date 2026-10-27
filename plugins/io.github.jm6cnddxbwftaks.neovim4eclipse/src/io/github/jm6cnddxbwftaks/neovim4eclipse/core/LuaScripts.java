@@ -352,7 +352,7 @@ final class LuaScripts {
     /**
      * Everything the UI needs after a key, in ONE round trip:
      * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, recording,
-     * statusline, bufnr, block, full_mode}}. {@code bufnr} tells whether the cursor is still in the
+     * statusline, bufnr, block, full_mode, folds}}. {@code bufnr} tells whether the cursor is still in the
      * buffer Eclipse shows (Neovim may just have jumped to another file). {@code full_mode} is
      * {@code nvim_get_mode().mode} ({@code "n"}, {@code "no"}, {@code "c"}, ...), the mode the editor
      * publishes; {@code mode} ({@code mode()}, one letter) is the visual mode for the selection.
@@ -369,13 +369,16 @@ final class LuaScripts {
      * {@code j}, {@code l} from the start of {@code "abc"} and {@code "def"} gives
      * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (experiment X5).
      *
-     * <p>The argument, {@code "1"} or {@code "0"}, says whether to evaluate the {@code 'statusline'}
+     * <p>The first argument, {@code "1"} or {@code "0"}, says whether to evaluate the {@code 'statusline'}
      * (a Vim-like default if the user has none), so that nothing is evaluated that the status bar
-     * does not show. Messages and the pending command ({@code showcmd}) are not read here: Neovim
+     * does not show. The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
+     * the indexes of the outermost closed folds, from the fold module's {@code poll} (the per-key
+     * trigger); with {@code "0"} it is an empty list that nothing reads. Messages and the pending command ({@code showcmd}) are not read here: Neovim
      * sends them as UI events ({@code ext_messages}; see {@code StatusTracker}).
      */
     static final String STATE_SNAPSHOT = """
-            local want_statusline = select(1, ...) == '1'
+            local want_statusline, want_folds = ...
+            want_statusline, want_folds = want_statusline == '1', want_folds == '1'
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
@@ -395,8 +398,12 @@ final class LuaScripts {
                 block[#block + 1] = line[2][3] -- its last byte
               end
             end
+            local folds = {}
+            if want_folds and package.loaded['neovim4eclipse.folds'] then
+              folds = package.loaded['neovim4eclipse.folds'].poll(vim.api.nvim_get_current_win())
+            end
             return { c[1], c[2], s[2], s[3], e[2], e[3], mode, vim.fn.reg_recording(), statusline,
-                     vim.api.nvim_get_current_buf(), block, vim.api.nvim_get_mode().mode }
+                     vim.api.nvim_get_current_buf(), block, vim.api.nvim_get_mode().mode, folds }
             """;
 
     /**
@@ -532,6 +539,250 @@ final class LuaScripts {
               }
             end
             vim.diagnostic.set(vim.api.nvim_create_namespace('neovim4eclipse'), buf, list)
+            """;
+
+    /**
+     * Installs the fold module, {@code require('neovim4eclipse.folds')}, unless the user's config
+     * turned folding off with {@code vim.g.neovim4eclipse_folds = 0} (or {@code false}), and returns
+     * whether folding is on. The session runs it once at start, right after {@link #SETUP} (so after
+     * {@code init.lua}), and keeps the answer ({@code NeovimSession.foldsEnabled()}): when it is
+     * off, no other fold script is ever sent, so the opt-out costs nothing (docs/design/FOLDING.md,
+     * 3.6). Changing the variable later needs a Neovim restart.
+     *
+     * <p><b>What the module does.</b> Eclipse's fold regions become Neovim manual folds
+     * ({@code 'foldmethod'=manual}, {@code :{first},{last}fold}) in the window that shows the
+     * buffer, and each fold gets an extmark in the namespace {@code neovim4eclipse_folds} whose id is
+     * the fold's index in Eclipse's list plus one (extmark ids start at 1). The marks move with the
+     * text as the folds do, so a fold can be named to Eclipse after edits. Functions:
+     * <ul>
+     *   <li>{@code set(buf, folds)}, used by {@link #SET_FOLDS}: replaces the current window's folds.
+     *       {@code folds} is a list of {@code {first, last, collapsed}} (1-based lines).</li>
+     *   <li>{@code closed(win)}: the indexes (0-based) of the window's <em>outermost</em> closed
+     *       folds. A fold inside a closed fold is never listed, whatever its state: Neovim cannot see
+     *       it ({@code foldclosed()} gives the outer fold's first line for every line inside), so
+     *       Eclipse keeps its own state for it ({@code util/FoldRegions.stateChange}).</li>
+     *   <li>{@code watch(fn)} and {@code poll(win)}: the one place that decides <em>when</em> fold
+     *       state is read. Neovim has no event for "a fold opened or closed" (no autocommand, and no
+     *       UI event without {@code ext_multigrid}), so for now {@link #STATE_SNAPSHOT} calls
+     *       {@code poll} after every key; {@code poll} returns {@code closed(win)} and calls every
+     *       {@code watch} function when the list differs from the last one for that window and
+     *       buffer. Should Neovim add a fold event, only this trigger changes. The first watcher
+     *       fires {@code User Neovim4EclipseFolds} (with {@code data = { buf = 3, closed = { 0, 2 } }}),
+     *       so a user's config can react to fold changes, for example:
+     *       {@code vim.api.nvim_create_autocmd('User', { pattern = 'Neovim4EclipseFolds', callback = ... })}.</li>
+     * </ul>
+     *
+     * <p><b>How {@code set} closes exactly the collapsed folds.</b> Each fold is created open, outer
+     * first ({@code :fold} makes a closed fold, and a range over a closed fold would grow to cover all
+     * of it: experiment X3). Then the collapsed ones are closed, inner first, each with
+     * {@code :{l}foldclose} on one <em>handle line</em> {@code l}: the first line of the fold that no
+     * open fold inside it covers. {@code :foldclose} closes the innermost open fold on each line of
+     * its range (X11), and on a line covered only by closed inner folds it closes the fold around them
+     * (X13). Example: a collapsed class on lines 1-20 whose lines 1-8 are an open method is closed on
+     * line 9. When open inner folds cover every line, the first line is used and the innermost of
+     * them closes instead; the next snapshot tells Eclipse.
+     *
+     * <p><b>After {@code zn}.</b> {@code 'nofoldenable'} hides every fold's state from
+     * {@code foldclosed()}, and Eclipse, which shows what Neovim asked, has all its regions expanded.
+     * A resend (after a reconcile, say) with Eclipse's states would mark them all open, and {@code zi}
+     * would then bring back nothing. So while the window has {@code 'nofoldenable'}, {@code set} first
+     * reads the states Neovim keeps: it turns folding on for the length of the call (nothing is
+     * redrawn inside one call), opens the outermost closed folds level by level, noting each range,
+     * and then uses those states for the folds whose range is unchanged; new folds take Eclipse's.
+     * {@code 'nofoldenable'} is set again at the end, and {@code zi} restores the user's folds.
+     *
+     * <p>An empty list means the editor cannot fold: the window gets {@code 'nofoldenable'}
+     * (window-local), so a user's {@code 'foldmethod'} cannot hide lines that Eclipse shows, and the
+     * marks and {@code b:neovim4eclipse_folds} (the "mirrored" flag) are removed. All options are set
+     * window-local ({@code :setlocal}), so other windows and the user's global values are untouched.
+     */
+    static final String FOLDS = """
+            local enabled = vim.g.neovim4eclipse_folds
+            if enabled == 0 or enabled == false then
+              return false
+            end
+            local M = {}
+            local ns = vim.api.nvim_create_namespace('neovim4eclipse_folds')
+            M.ns = ns
+            local watchers, last = {}, {}
+
+            local function setlocal(name, value)
+              vim.api.nvim_set_option_value(name, value, { scope = 'local', win = 0 })
+            end
+
+            -- The marks of buf as { first, last, index } (1-based lines, 0-based index), in index order.
+            local function marks(buf)
+              local found = {}
+              for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })) do
+                found[#found + 1] = { m[2] + 1, m[4].end_row + 1, m[1] - 1 }
+              end
+              table.sort(found, function(a, b) return a[3] < b[3] end)
+              return found
+            end
+
+            -- Whether the fold over first..last is closed and not inside another closed fold.
+            local function outermost_closed(first, last)
+              return vim.fn.foldclosed(first) == first and vim.fn.foldclosedend(first) == last
+            end
+
+            function M.closed(win)
+              local buf = vim.api.nvim_win_get_buf(win)
+              if not vim.b[buf].neovim4eclipse_folds then
+                return {}
+              end
+              return vim.api.nvim_win_call(win, function()
+                local ids = {}
+                if not vim.wo.foldenable then
+                  return ids -- zn: Eclipse shows every fold open, as Neovim does
+                end
+                for _, m in ipairs(marks(buf)) do
+                  if outermost_closed(m[1], m[2]) then
+                    ids[#ids + 1] = m[3]
+                  end
+                end
+                return ids
+              end)
+            end
+
+            function M.watch(fn)
+              watchers[#watchers + 1] = fn
+            end
+
+            function M.poll(win)
+              local ids = M.closed(win)
+              local buf = vim.api.nvim_win_get_buf(win)
+              local key = win .. ':' .. buf
+              local joined = table.concat(ids, ',')
+              if (last[key] or '') ~= joined then
+                for _, fn in ipairs(watchers) do
+                  pcall(fn, ids, buf)
+                end
+              end
+              last[key] = joined
+              return ids
+            end
+
+            M.watch(function(ids, buf)
+              vim.api.nvim_exec_autocmds('User', { pattern = 'Neovim4EclipseFolds', modeline = false,
+                data = { buf = buf, closed = ids } })
+            end)
+
+            -- zn in effect: the closed state of every existing fold, by 'first:last' (true closed).
+            local function states_kept(buf)
+              local states = {}
+              setlocal('foldenable', true)
+              local opened = true
+              while opened do
+                opened = false
+                for _, m in ipairs(marks(buf)) do
+                  local key = m[1] .. ':' .. m[2]
+                  if states[key] == nil and outermost_closed(m[1], m[2]) then
+                    states[key] = true
+                    vim.cmd(m[1] .. 'foldopen') -- one level: this fold; the ones inside stay as they are
+                    opened = true
+                  end
+                end
+              end
+              for _, m in ipairs(marks(buf)) do
+                local key = m[1] .. ':' .. m[2]
+                if states[key] == nil then
+                  states[key] = false
+                end
+              end
+              return states
+            end
+
+            -- The first line of folds[i] that no open fold inside it covers (see the comment above).
+            local function handle_line(folds, i, closed)
+              local f = folds[i]
+              local line = f[1]
+              local moved = true
+              while moved and line <= f[2] do
+                moved = false
+                for j = i + 1, #folds do
+                  local g = folds[j]
+                  if g[1] > f[2] then
+                    break -- sorted by first line: no later fold is inside f
+                  end
+                  if not closed[j] and g[2] <= f[2] and g[1] <= line and line <= g[2] then
+                    line, moved = g[2] + 1, true
+                  end
+                end
+              end
+              return line <= f[2] and line or f[1]
+            end
+
+            function M.set(buf, folds)
+              local view = vim.fn.winsaveview()
+              local kept = nil
+              if #folds > 0 and vim.b[buf].neovim4eclipse_folds and not vim.wo.foldenable then
+                kept = states_kept(buf)
+              end
+              vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+              if #folds == 0 then
+                setlocal('foldenable', false)
+                vim.b[buf].neovim4eclipse_folds = nil
+                return
+              end
+              setlocal('foldmethod', 'manual')
+              setlocal('foldenable', true)
+              setlocal('foldminlines', 0)
+              vim.cmd('silent! normal! zE')
+              local count = vim.api.nvim_buf_line_count(buf)
+              local closed = {}
+              for i, f in ipairs(folds) do
+                local first, last = f[1], math.min(f[2], count)
+                closed[i] = f[3]
+                if kept and kept[f[1] .. ':' .. f[2]] ~= nil then
+                  closed[i] = kept[f[1] .. ':' .. f[2]]
+                end
+                if first < last then
+                  vim.cmd(first .. ',' .. last .. 'fold')
+                  vim.cmd(first .. 'foldopen')
+                  vim.api.nvim_buf_set_extmark(buf, ns, first - 1, 0, { id = i, end_row = last - 1, end_col = 0 })
+                else
+                  closed[i] = false -- past the end of the buffer: no fold, so nothing to close
+                end
+              end
+              for i = #folds, 1, -1 do
+                if closed[i] then
+                  vim.cmd(handle_line(folds, i, closed) .. 'foldclose')
+                end
+              end
+              vim.b[buf].neovim4eclipse_folds = true
+              if kept then
+                setlocal('foldenable', false)
+              end
+              vim.fn.winrestview(view)
+            end
+
+            package.loaded['neovim4eclipse.folds'] = M
+            return true
+            """;
+
+    /**
+     * Replaces the folds of the window showing a buffer with Eclipse's (arguments: the buffer
+     * number, then first line, last line, {@code "1"} if collapsed, per fold, from
+     * {@code util/FoldRegions.toLuaArgs}). Done only when that buffer is the current one: folds
+     * belong to a window, and another buffer gets its folds when Eclipse shows it. With the number
+     * alone the editor cannot fold, and folding is turned off in the window. How: {@link #FOLDS}'
+     * {@code set}. Sent only when folding is on, so the module is always there.
+     *
+     * <p>Example: {@code 3, 1, 20, 0, 10, 15, 1} gives buffer 3 an open fold over lines 1-20 with a
+     * closed one over lines 10-15 inside it; {@code zj} from line 1 then goes to line 10.
+     */
+    static final String SET_FOLDS = """
+            local args = { ... }
+            local buf = tonumber(args[1])
+            local folds = package.loaded['neovim4eclipse.folds']
+            if not folds or not buf or vim.api.nvim_get_current_buf() ~= buf then
+              return
+            end
+            local list = {}
+            for i = 2, #args - 2, 3 do
+              list[#list + 1] = { tonumber(args[i]), tonumber(args[i + 1]), args[i + 2] == '1' }
+            end
+            folds.set(buf, list)
             """;
 
     /**
