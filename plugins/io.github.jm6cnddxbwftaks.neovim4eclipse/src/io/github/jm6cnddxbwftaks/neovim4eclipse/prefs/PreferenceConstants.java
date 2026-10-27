@@ -59,6 +59,19 @@ public final class PreferenceConstants {
     /** Off by default: a flash is easy to find distracting. */
     public static final boolean FLASH_ON_ERROR_DEFAULT = false;
 
+    // ---- Eclipse's problems in Neovim (sync/DiagnosticsSync) ----
+
+    /**
+     * Whether the problems Eclipse shows in an open document (errors, warnings, infos) are sent to its
+     * Neovim buffer as diagnostics, for Neovim's {@code ]d} / {@code [d} / {@code ]D} / {@code [D}.
+     * Off, a buffer has no Eclipse problems: useful with diagnostics of one's own in {@code init.lua}
+     * (nvim-lint), so that {@code ]d} does not stop on both.
+     */
+    public static final String SEND_PROBLEMS = "sendProblems";
+
+    /** On by default: {@code ]d} then works as in Neovim with a language server. */
+    public static final boolean SEND_PROBLEMS_DEFAULT = true;
+
     // ---- The welcome note (editor/WelcomeNotice, util/WelcomeNote) ----
 
     /**

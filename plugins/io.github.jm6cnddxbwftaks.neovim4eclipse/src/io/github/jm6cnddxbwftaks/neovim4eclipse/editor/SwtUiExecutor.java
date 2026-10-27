@@ -36,6 +36,17 @@ public final class SwtUiExecutor implements UiExecutor {
         Display.getDefault().asyncExec(work);
     }
 
+    /** {@code Display.timerExec} must be called on the UI thread, so it is reached through {@code asyncExec}. */
+    @Override
+    public void timerExec(int delayMs, Runnable work) {
+        Display display = Display.getDefault();
+        if (display.getThread() == Thread.currentThread()) {
+            display.timerExec(delayMs, work);
+        } else {
+            display.asyncExec(() -> display.timerExec(delayMs, work));
+        }
+    }
+
     @Override
     public void syncExec(Runnable work) {
         Display.getDefault().syncExec(work);

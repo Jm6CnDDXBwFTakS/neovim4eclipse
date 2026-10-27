@@ -26,6 +26,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   relative name is relative to the project folder.
 - `:saveas new.txt` saves the file as `new.txt` and moves the editor there, like *File → Save As*
   without the dialog. Neovim's undo history comes along; the old file stays as it was.
+- Neovim's `]d` and `[d` (and `]D`, `[D`) move between the errors, warnings and infos Eclipse shows
+  in the file, with counts, in macros and in the jumplist; the message line then shows the
+  problem's message. Eclipse's problems are Neovim diagnostics of the file's buffer, so your own
+  diagnostics (nvim-lint) work alongside them. *Window → Preferences → Neovim → Send Eclipse's
+  problems to Neovim* turns it off. See the README, "Problems".
 
 ### Fixed
 

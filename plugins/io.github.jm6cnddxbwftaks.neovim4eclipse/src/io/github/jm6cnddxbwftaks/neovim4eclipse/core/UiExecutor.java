@@ -49,6 +49,17 @@ public interface UiExecutor {
     /** Runs {@code work} on the UI thread later; returns at once. */
     void asyncExec(Runnable work);
 
+    /**
+     * Runs {@code work} on the UI thread after about {@code delayMs} milliseconds; returns at once.
+     * For a debounce: many changes in a row, one piece of work after the last
+     * ({@code sync/DiagnosticsSync}). The default runs it as soon as {@link #asyncExec} would, which
+     * suits {@link #IMMEDIATE} and the tests' fakes; the editor's executor waits (SWT's
+     * {@code Display.timerExec}).
+     */
+    default void timerExec(int delayMs, Runnable work) {
+        asyncExec(work);
+    }
+
     /** Runs {@code work} on the UI thread and waits for it. Never call it while holding a lock the UI thread needs. */
     void syncExec(Runnable work);
 }

@@ -20,6 +20,7 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.source.IAnnotationModel;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -43,6 +44,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorBuffers;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
 
@@ -66,6 +69,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
  * {@link UnattachedDocumentSync} per document with a buffer carries those changes across. When
  * Neovim writes a document's buffer ({@code :bufdo update}), Eclipse saves the document
  * ({@link #saveForNeovim}).
+ *
+ * <p>The problems Eclipse shows in each such document (errors, warnings, infos) go to its buffer as
+ * Neovim diagnostics, for Neovim's own {@code ]d} / {@code [d}: a {@link DiagnosticsSync} per
+ * document with a buffer, kept and dropped with its {@link UnattachedDocumentSync}.
  */
 public final class EditorAttachManager {
 
@@ -92,6 +99,12 @@ public final class EditorAttachManager {
      * with it while it is not attached; created on the document's first attach.
      */
     private final Map<DocumentBuffer, UnattachedDocumentSync> unattachedSyncs = new HashMap<>();
+    /**
+     * Guarded by {@code this}. Sends the problems of each document with a buffer in
+     * {@link #followedSession} to it; created on the document's first attach, when its editor has an
+     * annotation model.
+     */
+    private final Map<DocumentBuffer, DiagnosticsSync> diagnosticsSyncs = new HashMap<>();
     /** Guarded by {@code this}. The buffer of the attached document, or {@code null}. */
     private DocumentBuffer attachedBuffer;
     private volatile boolean autoAttach = true;
@@ -362,6 +375,8 @@ public final class EditorAttachManager {
             // A new Neovim has none of the old buffers; each document gets a new one on its next attach.
             unattachedSyncs.values().forEach(UnattachedDocumentSync::close);
             unattachedSyncs.clear();
+            diagnosticsSyncs.values().forEach(DiagnosticsSync::close);
+            diagnosticsSyncs.clear();
         }
         IDocument document = documentOf(textEditor);
         if (document == null) {
@@ -380,9 +395,63 @@ public final class EditorAttachManager {
         attachedBuffer = buffer;
         activeController = NeovimEditorController.attach(textEditor, session, buffer, takeNeovimCursor);
         attachedPart = editor;
+        // After the controller: its attach queued the buffer's creation and first load, and the
+        // problems sent now are queued behind them, so they land on the document's text.
+        startDiagnostics(textEditor, document, buffer, session);
         ToggleButtonRefresh.request(); // the toolbar button shows this editor's mode
         LOG.fine("Attached Neovim to: " + textEditor.getTitle());
         return activeController;
+    }
+
+    /**
+     * Starts sending {@code document}'s problems to its buffer, unless that already happens or its
+     * editor has no annotation model (some editors have none: nothing to send). Guarded by {@code this}.
+     */
+    private void startDiagnostics(ITextEditor editor, IDocument document, DocumentBuffer buffer, NeovimSession session) {
+        if (diagnosticsSyncs.containsKey(buffer)) {
+            return;
+        }
+        IAnnotationModel model = editor.getDocumentProvider() == null ? null
+                : editor.getDocumentProvider().getAnnotationModel(editor.getEditorInput());
+        if (model == null) {
+            return;
+        }
+        DiagnosticsSync sync = new DiagnosticsSync(document, model, buffer, session, SwtUiExecutor.INSTANCE,
+                ProblemAnnotations::severityOf, EditorAttachManager::sendProblems);
+        sync.start();
+        diagnosticsSyncs.put(buffer, sync);
+    }
+
+    /** The preference "Send Eclipse's problems to Neovim". */
+    private static boolean sendProblems() {
+        Activator activator = Activator.getDefault();
+        return activator == null || activator.getPreferenceStore().getBoolean(PreferenceConstants.SEND_PROBLEMS);
+    }
+
+    /**
+     * Sends every document's problems again, or clears them (the preference "Send Eclipse's problems
+     * to Neovim" changed). Any thread; the work is done on the UI thread.
+     */
+    public void refreshDiagnostics() {
+        Display display = Display.getDefault();
+        if (display == null || display.isDisposed()) {
+            return;
+        }
+        display.asyncExec(() -> {
+            List<DiagnosticsSync> syncs;
+            synchronized (this) {
+                syncs = List.copyOf(diagnosticsSyncs.values());
+            }
+            syncs.forEach(DiagnosticsSync::refresh);
+        });
+    }
+
+    /** Stops sending {@code buffer}'s problems (its document went away). Guarded by {@code this}. */
+    private void stopDiagnostics(DocumentBuffer buffer) {
+        DiagnosticsSync sync = diagnosticsSyncs.remove(buffer);
+        if (sync != null) {
+            sync.close();
+        }
     }
 
     /**
@@ -653,6 +722,9 @@ public final class EditorAttachManager {
                 if (sync != null) {
                     sync.close(); // listens to the old document; the attach below makes one for the new
                 }
+                if (buffer != null) {
+                    stopDiagnostics(buffer); // the same for its annotation model
+                }
             }
         }
         if (wasAttached) {
@@ -689,6 +761,7 @@ public final class EditorAttachManager {
                 if (sync != null) {
                     sync.close();
                 }
+                stopDiagnostics(buffer);
             }
         }
         if (session != null && session.isAlive()) {

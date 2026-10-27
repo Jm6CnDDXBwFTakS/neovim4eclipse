@@ -16,5 +16,9 @@
  * {@code :bufdo} reaches every open file and a refactoring reaches every buffer. Both ask
  * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.sync.FinalNewlines} whether a document's last line
  * break is a final newline, which its text alone cannot tell.
+ *
+ * <p>Not text but about it: {@link io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync}
+ * sends the problems of each document with a buffer (its editor's annotation model) to Neovim as
+ * diagnostics, for Neovim's {@code ]d} and {@code [d}.
  */
 package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;

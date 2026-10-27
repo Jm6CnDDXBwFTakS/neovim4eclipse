@@ -72,6 +72,8 @@ public class Activator extends AbstractUIPlugin {
                 applyStatusItems();
             } else if (PreferenceConstants.isCtrlKeyKey(property)) {
                 EditorAttachManager.getInstance().refreshKeyContext();
+            } else if (PreferenceConstants.SEND_PROBLEMS.equals(property)) {
+                EditorAttachManager.getInstance().refreshDiagnostics();
             }
         };
         getPreferenceStore().addPropertyChangeListener(preferenceListener);
