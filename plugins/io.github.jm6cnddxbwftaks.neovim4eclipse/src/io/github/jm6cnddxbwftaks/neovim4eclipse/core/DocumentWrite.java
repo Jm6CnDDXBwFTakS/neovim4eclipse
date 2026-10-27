@@ -27,11 +27,20 @@ public final class DocumentWrite {
         /** The document to its own file: Eclipse saves the editor ({@code :w}, {@code :update}). */
         OWN,
         /** The whole document to another file; the editor stays as it is ({@code :w other.txt}). */
-        COPY;
+        COPY,
+        /** Some lines to another file ({@code :5,10w part.txt}), which they replace. */
+        LINES,
+        /** Lines added at the end of another file ({@code :w >> log.txt}, {@code :5,10w >> log.txt}). */
+        APPEND;
 
         /** The kind named {@code name} in the request ({@code "copy"}); anything else is {@link #OWN}. */
         static Kind named(String name) {
-            return "copy".equals(name) ? COPY : OWN;
+            return switch (name == null ? "" : name) {
+                case "copy" -> COPY;
+                case "lines" -> LINES;
+                case "append" -> APPEND;
+                default -> OWN;
+            };
         }
     }
 
@@ -40,26 +49,30 @@ public final class DocumentWrite {
      *
      * @param kind          what to write where
      * @param target        the file written, a full path as Neovim names it ({@code /ws/p/other.txt});
-     *                      for {@link Kind#OWN} the buffer's own name
+     *                      "" for {@link Kind#OWN}
+     * @param first         for {@link Kind#LINES} and {@link Kind#APPEND}: the first line written, 1-based
+     * @param last          the last line written, 1-based; 0 with {@code first} for the whole document
+     * @param force         the write had {@code !}: {@code :w! >> log.txt} creates a missing file
      * @param createFolders {@code ++p}: a new file's missing folders may be created
      */
-    public record Request(Kind kind, String target, boolean createFolders) {
+    public record Request(Kind kind, String target, int first, int last, boolean force, boolean createFolders) {
         public Request {
             target = target == null ? "" : target;
         }
 
         /** A save of the document to its own file, as {@code :w} (with {@code ++p} when asked). */
         public static Request own(boolean createFolders) {
-            return new Request(Kind.OWN, "", createFolders);
+            return new Request(Kind.OWN, "", 0, 0, false, createFolders);
         }
 
         /**
          * The request from {@code eclipse_write}'s arguments after the buffer number:
-         * {@code [cmdarg, kind, target]}, the last two left out by a plain save. Example:
-         * {@code [" ++p", "copy", "/ws/p/other.txt"]}.
+         * {@code [cmdarg, kind, target, first, last, bang]}, a plain save sending only the first.
+         * Examples: {@code [" ++p", "copy", "/ws/p/other.txt"]},
+         * {@code ["", "append", "/ws/p/log.txt", 5, 10, true]}.
          */
-        static Request of(String cmdarg, String kind, String target) {
-            return new Request(Kind.named(kind), target, createsFolders(cmdarg));
+        static Request of(String cmdarg, String kind, String target, int first, int last, boolean bang) {
+            return new Request(Kind.named(kind), target, first, last, bang, createsFolders(cmdarg));
         }
     }
 

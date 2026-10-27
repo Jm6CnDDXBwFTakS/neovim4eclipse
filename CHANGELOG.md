@@ -18,6 +18,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   its own file and keeps its unsaved changes; `:w!` overwrites an existing file, and `++p` creates
   missing folders. A copy over a file that another Eclipse editor has open with unsaved changes is
   refused.
+- `:5,10w part.txt` writes those lines to another file, and `:w >> log.txt` (or `:5,10w >> log.txt`)
+  adds them to the end of one, as in Vim. Both stay refused for the editor's own file, which Eclipse
+  saves only whole.
 
 ### Fixed
 

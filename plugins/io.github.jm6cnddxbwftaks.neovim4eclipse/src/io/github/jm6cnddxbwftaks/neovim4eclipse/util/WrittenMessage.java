@@ -14,7 +14,8 @@ import java.nio.charset.Charset;
  * {@code [noeol] 1L, 5B}. An empty file is {@code 0L, 0B}. Bytes are counted in the file's
  * encoding, so {@code é} is 2 bytes in UTF-8 and 1 in ISO-8859-1. Vim's {@code [dos]} and
  * {@code [unix]} markers, which depend on {@code 'fileformat'}, are left out: Eclipse keeps the
- * line breaks the document has.
+ * line breaks the document has. Lines added to the end of a file ({@code :w >> log.txt}) end in
+ * {@code appended} instead of {@code written} ({@link #appended}).
  */
 public final class WrittenMessage {
 
@@ -28,6 +29,15 @@ public final class WrittenMessage {
      * @param charset the encoding it was written in
      */
     public static String of(String name, boolean created, String text, Charset charset) {
+        return message(name, created, text, charset, "written");
+    }
+
+    /** As {@link #of}, for lines added to the end of a file: {@code "log.txt" 2L, 4B appended}. */
+    public static String appended(String name, boolean created, String text, Charset charset) {
+        return message(name, created, text, charset, "appended");
+    }
+
+    private static String message(String name, boolean created, String text, Charset charset, String verb) {
         StringBuilder message = new StringBuilder();
         message.append('"').append(name).append('"');
         if (created) {
@@ -38,7 +48,7 @@ public final class WrittenMessage {
             message.append(" [noeol]");
         }
         message.append(' ').append(lineCount(text)).append("L, ")
-                .append(text.getBytes(charset).length).append("B written");
+                .append(text.getBytes(charset).length).append("B ").append(verb);
         return message.toString();
     }
 

@@ -40,7 +40,8 @@ import java.util.TreeMap;
  * <p>Writes ({@code :w}, {@code :update}) are not in the table: Neovim runs them, and its write
  * hook asks Eclipse to save ({@code core/DocumentWrite}, the {@code BufWriteCmd} of
  * {@code LuaScripts.DOCUMENT_BUFFER}), so they behave as Neovim's own in every respect: {@code :update}
- * skips an unchanged file, {@code :w !cmd} pipes the text to a command, {@code :5,10w} is refused.
+ * skips an unchanged file, {@code :w !cmd} pipes the text to a command, {@code :w other.txt} and {@code :5,10w part.txt} write to
+ * another file.
  *
  * <p>What does not come here, and stays Neovim's: a command with a range it does not take
  * ({@code :5,10w}), arguments it does not take ({@code :q foo}, which Neovim reports), a command

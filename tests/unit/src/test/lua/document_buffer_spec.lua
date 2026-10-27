@@ -10,11 +10,18 @@
 local t = ...
 
 --- Eclipse's answers, by buffer number: '' saves, any other text is the error. Records each request:
---- { buf, cmdarg } for a save of the editor's file, { buf, cmdarg, kind, file } for another file.
+--- { buf, cmdarg } for a save of the editor's file, { buf, cmdarg, kind, file } for a copy, and
+--- { buf, cmdarg, kind, file, first, last, bang } for lines.
 local function eclipse(failures)
   local asked = {}
-  t.answer('eclipse_write', function(buf, cmdarg, kind, file)
-    asked[#asked + 1] = kind == '' and { buf, cmdarg } or { buf, cmdarg, kind, file }
+  t.answer('eclipse_write', function(buf, cmdarg, kind, file, first, last, bang)
+    if kind == '' then
+      asked[#asked + 1] = { buf, cmdarg }
+    elseif kind == 'copy' then
+      asked[#asked + 1] = { buf, cmdarg, kind, file }
+    else
+      asked[#asked + 1] = { buf, cmdarg, kind, file, first, last, bang }
+    end
     local err = (failures or {})[buf]
     if err then
       return { err, '' }
@@ -126,6 +133,37 @@ t.test('the same file named through a link or with other slashes is its own name
   assert(vim.uv.fs_symlink(vim.fs.dirname(name), link))
   vim.cmd.write(link .. '/A.txt') -- macOS: /var/... is /private/var/...
   t.eq({ { buf, '' } }, asked)
+end)
+
+t.test('some lines to another file ask Eclipse for those lines', function()
+  t.setup()
+  local asked = eclipse()
+  local buf, name = t.document('A.txt', { 'a', 'b', 'c', 'd' })
+  local part = vim.fs.dirname(name) .. '/part.txt'
+  vim.cmd('2,3write ' .. vim.fn.fnameescape(part))
+  t.eq({ { buf, '', 'lines', part, 2, 3, false } }, asked)
+end)
+
+t.test('>> asks Eclipse to append, with the ! that lets it create the file', function()
+  t.setup()
+  local asked = eclipse()
+  local buf, name = t.document('A.txt', { 'a', 'b', 'c' })
+  local log = vim.fs.dirname(name) .. '/log.txt'
+  vim.cmd('write >> ' .. vim.fn.fnameescape(log))
+  vim.cmd('2write! >> ' .. vim.fn.fnameescape(log))
+  t.eq({ { buf, '', 'append', log, 1, 3, false }, { buf, '', 'append', log, 2, 2, true } }, asked)
+end)
+
+t.test('some lines or >> to the editor\'s own file are refused: Eclipse saves it whole', function()
+  t.setup()
+  local asked = eclipse()
+  local _, name = t.document('A.txt', { 'a', 'b', 'c' })
+  for _, cmd in ipairs({ '2,3write!', 'write >> ' .. vim.fn.fnameescape(name) }) do
+    local ok, err = pcall(vim.cmd, cmd)
+    t.eq(false, ok, cmd)
+    t.ok(tostring(err):find('Eclipse saves this file only whole; use :w', 1, true), tostring(err))
+  end
+  t.eq({}, asked)
 end)
 
 t.test(':w !cmd pipes the text and asks Eclipse nothing', function()

@@ -24,6 +24,8 @@ class LuaScriptsTest {
     void documentBuffersAreWrittenThroughEclipse() {
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("buftype = 'acwrite'"));
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'BufWriteCmd'"));
+        // Some lines (:5,10w part.txt) and appends (:w >> log.txt) have hooks of their own.
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("FileWriteCmd = 'lines', FileAppendCmd = 'append'"));
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'eclipse_write'"));
         // Both names are compared canonical: links resolved (macOS /var), slashes normalized (Windows / against \).
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.fs.normalize(vim.fn.resolve(name))"));

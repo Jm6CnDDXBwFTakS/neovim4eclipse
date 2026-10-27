@@ -574,9 +574,17 @@ public final class EditorAttachManager {
         }
         IEditorPart part = showing.get().editor();
         ITextEditor text = textEditorOf(part);
-        if (request.kind() == DocumentWrite.Kind.COPY) {
-            return text == null ? DocumentWrite.Result.failed(part.getTitle() + " has no text to copy")
-                    : OtherFileWrites.copy(text, Path.of(request.target()), request.createFolders());
+        if (request.kind() != DocumentWrite.Kind.OWN) {
+            if (text == null) {
+                return DocumentWrite.Result.failed(part.getTitle() + " has no text to write");
+            }
+            Path target = Path.of(request.target());
+            return switch (request.kind()) {
+                case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders());
+                case APPEND -> OtherFileWrites.append(text, target, request.first(), request.last(), request.force(),
+                        request.createFolders());
+                default -> OtherFileWrites.copy(text, target, request.createFolders());
+            };
         }
         boolean createFolders = request.createFolders();
         if (text == null) {
