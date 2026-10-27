@@ -79,6 +79,17 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         void run() throws Exception;
     }
 
+    /** The text on the system clipboard, or "" when it holds none. */
+    private String clipboardText() {
+        Clipboard clipboard = new Clipboard(widget.getDisplay());
+        try {
+            Object text = clipboard.getContents(TextTransfer.getInstance());
+            return text instanceof String string ? string : "";
+        } finally {
+            clipboard.dispose();
+        }
+    }
+
     /** Waits for the box to open (from Neovim's command line) reading {@code text}, and returns it. */
     private Text boxReading(String text) {
         waitUntil("the box to open with " + text, TIMEOUT_MS, () -> {
@@ -382,9 +393,22 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
             clipboard.dispose();
         }
 
+        String beforePaste = clipboardText();
         runCommand("org.eclipse.ui.edit.paste");
 
-        Text box = boxReading(":2delete");
+        // The system clipboard is shared: in a virtual machine with clipboard sharing, the host's
+        // clipboard can replace "2delete" before the paste (CONTRIBUTING.md, "Tests on a virtual
+        // machine"). The message says what the clipboard held, so that case is recognized at once.
+        waitUntil("the box to read :2delete", TIMEOUT_MS, () -> {
+            Text open = textChildOf(widget);
+            return open != null && ":2delete".equals(open.getText());
+        }, () -> {
+            Text open = textChildOf(widget);
+            return "; the box " + (open == null ? "is closed" : "reads " + open.getText())
+                    + "; the clipboard held \"" + beforePaste + "\" before the paste and holds \""
+                    + clipboardText() + "\" now";
+        });
+        Text box = textChildOf(widget);
         expectText("alpha\nbeta\ngamma\n"); // the file is untouched
         pressEnter(box);
         expectText("alpha\ngamma\n");

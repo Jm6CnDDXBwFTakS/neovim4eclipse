@@ -257,6 +257,15 @@ JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=2 ./mvnw verify -Pui -Dnvim.path=/pat
 "Picked up JAVA_TOOL_OPTIONS" as it starts. For a slow machine, use a Linux or Windows one, or a
 virtual machine with two cores.
 
+### Tests on a virtual machine
+
+A few UI tests use the system clipboard: `CommandBoxEndToEndTest.pasteWithTheBoxOpenPastesIntoTheLine`
+and the `+y` and `+p` tests in `EditorEndToEndTest`. With clipboard sharing between a virtual
+machine and its host (as Parallels, VMware, VirtualBox and UTM offer), the host's clipboard can
+replace the test's text before it is pasted, and such a test fails now and then. The paste test's
+message then shows what the clipboard held instead. Turn clipboard sharing off while the tests run,
+or rerun the test.
+
 ### Code coverage
 
 Every test run also measures coverage with [JaCoCo](https://www.jacoco.org/jacoco/): a Java agent
