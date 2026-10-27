@@ -260,3 +260,97 @@ t.test('the User autocommand fires when the closed folds change', function()
   snapshot_folds()
   t.eq({ buf, {} }, seen[2])
 end)
+
+-- ---- folds by hand are refused in mirrored buffers ----
+
+--- HOST_COMMANDS first, as the session runs it before FOLDS (the fold module registers its refusals there).
+local function enabled_with_host_commands()
+  t.run('HOST_COMMANDS', t.host_rules)
+  return enabled()
+end
+
+local REFUSED = 'Eclipse defines the folds in this editor'
+
+t.test('zf, zF, zd, zD and zE show an error and change no fold in a mirrored buffer', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, true } })
+  for _, keys in ipairs({ '1Gzfj', '1GzF', '3Gzd', '3GzD', 'zE' }) do
+    vim.v.errmsg = ''
+    t.type(keys)
+    local key = keys:match('z%a$') or keys:match('z%a')
+    t.eq(key .. ': ' .. REFUSED, vim.v.errmsg, keys)
+    t.eq({ '3-8' }, shown_closed(), keys .. ' left the folds alone')
+  end
+end)
+
+t.test('zf in visual mode shows the error and leaves visual mode', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, false } })
+  vim.v.errmsg = ''
+  t.type('10GVjzf')
+  t.eq('zf: ' .. REFUSED, vim.v.errmsg)
+  t.eq('n', vim.api.nvim_get_mode().mode)
+  t.eq(0, vim.fn.foldlevel(10), 'no fold made')
+end)
+
+t.test(':fold is refused there, with a range and abbreviated', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, true } })
+  for _, line in ipairs({ ':10,12fold<CR>', ':10,12fo<CR>', ':fold<CR>' }) do
+    vim.v.errmsg = ''
+    t.type(line)
+    t.eq('fold: ' .. REFUSED, vim.v.errmsg, line)
+    t.eq({ '3-8' }, shown_closed(), line)
+    t.eq(0, vim.fn.foldlevel(11), line .. ' made no fold')
+  end
+  t.eq({}, t.sent('eclipse_command'), 'nothing reaches Eclipse')
+end)
+
+t.test(':fold after a | is refused too, and an error stops the rest of the line, as in Vim', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, false } })
+  t.type(':nohlsearch | 10,12fold<CR>')
+  t.eq(0, vim.fn.foldlevel(11), 'refused after the |')
+  vim.g.after = nil
+  t.type(':10,12fold | let g:after = 2<CR>')
+  t.eq(0, vim.fn.foldlevel(11), 'refused before it')
+  t.eq(nil, vim.g.after, 'the error ended the line, as any error in a | chain does in Vim')
+  -- Not caught, as for every host command: a | that nvim_parse_cmd does not split (:let takes the
+  -- rest of the line as its argument), so the :fold after it reaches Neovim.
+end)
+
+t.test('the folding commands that open and close folds stay Neovim\'s', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, false } })
+  t.type(':3foldclose<CR>')
+  t.eq({ '3-8' }, shown_closed())
+  t.type(':3foldopen<CR>')
+  t.eq({}, shown_closed())
+  t.type(':3foldclose<CR>:%foldd normal! x<CR>') -- :foldd is :folddoopen (Neovim has no :folddelete)
+  t.eq('ine 1', vim.fn.getline(1), 'ran on the open lines')
+end)
+
+t.test('in a buffer whose editor cannot fold, zf and :fold are Neovim\'s', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({})
+  vim.wo.foldenable = true -- the user turns folding on there
+  t.type('1Gzfj')
+  t.eq(1, vim.fn.foldlevel(1), 'zf made a fold')
+  t.type(':5,7fold<CR>')
+  t.eq(1, vim.fn.foldlevel(6), ':fold made one')
+end)
+
+t.test('the mappings go when the editor stops folding', function()
+  enabled_with_host_commands()
+  local buf = lines(20)
+  set_folds({ { 3, 8, false } })
+  t.ok(vim.fn.maparg('zf', 'n', false, true).buffer == 1, 'mapped while mirrored')
+  set_folds({})
+  t.eq({}, vim.fn.maparg('zf', 'n', false, true), 'unmapped in buffer ' .. buf)
+end)

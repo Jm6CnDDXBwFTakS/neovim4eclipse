@@ -153,6 +153,15 @@ class FoldingEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
+    void zfShowsAnErrorInTheMessageLineAndMakesNoFold() {
+        typeSlowly(foldWidget, "Gzf"); // nothing after it: the next key clears the message line
+        waitUntil("the error in the message line", TIMEOUT_MS,
+                () -> messageText(foldEditor).contains("zf: Eclipse defines the folds in this editor"),
+                () -> "; it reads " + messageText(foldEditor));
+        assertEquals(0, ((Number) SessionProbe.lua(session, "return vim.fn.foldlevel(10)")).intValue());
+    }
+
+    @Test
     void anEditorThatCannotFoldTurnsNeovimsFoldingOff() {
         // The plain Text Editor of test.txt: no folds, so Neovim's window gets 'nofoldenable' there,
         // and a 'foldmethod' of the user's cannot hide lines Eclipse shows.

@@ -300,8 +300,9 @@ the open and closed state the same both ways: a fold collapsed with the ruler's 
 - **What opens a fold is your `'foldopen'`**, as in Vim. By default `j` or `G` into a closed fold leave
   it closed, and a search, `%`, a mark or `u` opens it. Before 0.1.9 any move into folded
   code opened it; `set foldopen=all` in `init.lua` gives that back.
-- **Eclipse decides where the folds are.** `zf`, `zd`, `zE`, `:fold` and `:folddelete` are not
-  supported in these editors: the next reconcile replaces any fold made that way. To add one where
+- **Eclipse decides where the folds are.** `zf`, `zF`, `zd`, `zD`, `zE` and `:fold` show
+  `zf: Eclipse defines the folds in this editor` in these editors, and change no fold: Eclipse's
+  next reconcile would replace any fold made by hand. To add one where
   Eclipse has none, the Java editor folds between `// region` and `// endregion` comments when
   *Window → Preferences → Java → Editor → Folding* says so (custom folding regions).
 - **`dd` on a closed fold, then `u`**, brings the lines back at once and the fold a moment later,
@@ -609,7 +610,9 @@ narrowly as it can, and it is listed here.
 - **`'foldmethod'`, `'foldenable'` and `'foldminlines'`, window-local, in editors' buffers.** In an
   editor that folds, `'foldmethod'` is `manual` and `'foldminlines'` 0, so Neovim's folds are
   exactly Eclipse's ([Folding](#folding-zo-zc-zm)); in one that cannot fold, `'nofoldenable'`.
-  Your global values stay as they are. With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
+  Your global values stay as they are. In those buffers `zf`, `zF`, `zd`, `zD` and `zE` also get
+  buffer-local mappings that show an error, which win over a mapping of yours of these keys. With
+  `vim.g.neovim4eclipse_folds = 0`, none of this is set.
 
 - **`vim.diagnostic`'s `jump.on_jump`, only if your config sets none.** After `]d` it shows the
   first line of the problem's message in the message line ([Problems](#problems-d-d)). Set your own
