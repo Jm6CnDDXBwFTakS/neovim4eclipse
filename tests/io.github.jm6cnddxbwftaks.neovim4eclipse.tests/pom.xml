@@ -166,6 +166,22 @@
             <!-- Where ScreenshotCaptureTest writes its PNG files. -->
             <screenshots.dir>${project.build.directory}/screenshots</screenshots.dir>
           </systemProperties>
+          <!-- The test Eclipse starts Neovim as the plug-in does for real use, with no clean flag, so
+               Neovim would read the config of whoever runs the build (~/.config/nvim/init.lua, its
+               plug-ins, its saved registers and marks), and a personal setting could make a test pass
+               on one machine and fail on another. NVIM_APPNAME makes Neovim look for all of that
+               under another name, where there is nothing; the XDG folders put what Neovim writes
+               (and any config it would look for) under target/. XDG_DATA_HOME stays as it is: the
+               plug-in finds its own Neovim there (util/PluginFolders). The whole test Eclipse sees
+               these variables, not only Neovim: on Linux, GTK and font caches land under target/ too,
+               which costs a little start-up time and nothing else. See CONTRIBUTING.md, "Your Neovim
+               config and the UI tests". -->
+          <environmentVariables>
+            <NVIM_APPNAME>neovim4eclipse-tests</NVIM_APPNAME>
+            <XDG_CONFIG_HOME>${project.build.directory}/neovim-home/config</XDG_CONFIG_HOME>
+            <XDG_STATE_HOME>${project.build.directory}/neovim-home/state</XDG_STATE_HOME>
+            <XDG_CACHE_HOME>${project.build.directory}/neovim-home/cache</XDG_CACHE_HOME>
+          </environmentVariables>
           <!-- Which tests run, by JUnit tag: all but the "heavyJava" ones, unless the uiHeavyJava
                profile swaps the two properties (see the comment at the top). -->
           <groups>${ui.groups}</groups>

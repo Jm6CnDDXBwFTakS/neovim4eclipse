@@ -64,6 +64,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   `NeovimBarrier.pass`, not a sleep. A test that must depend on the machine's speed is tagged
   `timeoutReliant` (left out of -Pui, -Pintegration and CI), only when no rewrite helps. See
   CONTRIBUTING.md, "Tests on a loaded machine".
+- No test reads the developer's own Neovim config (`--clean`; for the UI tests `NVIM_APPNAME` and
+  the `XDG_*` folders in their `pom.xml`). A test about a Neovim setting sets it itself. See
+  CONTRIBUTING.md, "Your Neovim config and the UI tests".
 - Put each test in the cheapest module that can run it: `tests/unit`, then `tests/text`, then
   `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in"). Lua in
   `core/LuaScripts` is tested in Lua (`tests/unit/src/test/lua/*_spec.lua`, a headless Neovim, no

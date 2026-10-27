@@ -99,6 +99,30 @@ does not depend on JDT and still starts without it.
 The compiler keeps 1 to 3 honest: each module has only the jars its tier may use (none, the text
 model, SWT and JFace), so a class that starts using more no longer compiles there.
 
+### Your Neovim config and the UI tests
+
+No test reads your own Neovim config (`init.lua` or `init.vim`, its plug-ins, your saved registers
+and marks), so a personal setting cannot make a test pass on your machine and fail on another. The
+unit and integration tests start Neovim with `--clean`. The UI tests start it as the plug-in does
+for real use, with no flags, so their build sets these variables for the test Eclipse instead (in
+`tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/pom.xml`), and Neovim inherits them:
+
+- `NVIM_APPNAME=neovim4eclipse-tests`: Neovim looks for its config and data under that name instead
+  of `nvim`, where there is nothing.
+- `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`: folders under the module's
+  `target/neovim-home/`, so nothing is written to your home folder either. The whole test Eclipse
+  sees them, not only Neovim: on Linux, GTK and font caches land there too, which only costs a
+  little start-up time.
+
+`XDG_DATA_HOME` is left alone: the plug-in finds its own Neovim there (see `util/PluginFolders`).
+So Neovim makes one empty data folder of its own, next to its usual one: `neovim4eclipse-tests` next
+to `nvim` (on Linux and macOS under `~/.local/share`), or on Windows `neovim4eclipse-tests-data`
+next to `nvim-data`.
+`NeovimHomeEndToEndTest` checks that the isolation holds. A test about how the plug-in behaves with
+a given setting sets it in the test itself (for example `session.commandAsync("set shortmess-=F")`),
+so it runs the same everywhere. To try the plug-in with your own config, run it from Eclipse (see
+"Run it from Eclipse").
+
 ### Test helpers and fakes
 
 No mocking framework is used; tests use real JFace objects and small hand-written fakes:
