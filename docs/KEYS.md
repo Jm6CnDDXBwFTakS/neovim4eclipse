@@ -65,9 +65,11 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
   such as `F3` (Open Declaration) and most `Ctrl+Shift+...` and `Alt+Shift+...` shortcuts.
 - The `z` fold commands (`zo`, `zc`, `zM`, ...) are Neovim's like any normal-mode key. In an editor
   that folds they act on Eclipse's folds, which are mirrored into Neovim. There `zf`, `zF`, `zd`,
-  `zD` and `zE` (buffer-local mappings) and `:fold` (refused when the line runs, like the host
-  commands) show `zf: Eclipse defines the folds in this editor` instead, since Eclipse decides where
-  folds are (README, "Folding"). In an editor that cannot fold they are Neovim's own.
+  `zD` and `zE` and `:fold` show `zf: Eclipse defines the folds in this editor` instead, since
+  Eclipse decides where folds are (README, "Folding"). The keys are caught by a buffer-local
+  mapping of `z` alone that reads the next key without a time limit (two-key mappings timed out,
+  and a slowly typed `zE` was Neovim's); `:fold` is refused when its line runs, like the host
+  commands. In an editor that cannot fold they are Neovim's own.
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,
   arrows, `Home`, `End`, unbound function keys as `<F5>` and so on.
 

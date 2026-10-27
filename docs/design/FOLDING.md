@@ -53,6 +53,13 @@ All three commits of section 7 are built. Where they differ from the plan below,
   folds (3.3) is still to do.
 - **There is no `:folddelete`.** Neovim (and Vim) delete folds with `zd`, `zD` and `zE` only;
   `:foldd` is `:folddoopen`, which opens folds and stays Neovim's. Only `:fold` is refused.
+- **`z` alone is mapped, not `zf`, `zd`, `zE`** (found while trying it, 2026-10-27). Neovim waits
+  only `'timeoutlen'` (400 ms) for a mapping's second key; typed more slowly, `zE` was Neovim's own
+  and deleted every fold, after which `zc` said `E490: No fold found`. The mapping of `z` reads the
+  next key with `getcharstr()`, which has no time limit, refuses `f F d D E`, runs a mapping of the
+  user's for `z` and that key if there is one, and otherwise feeds `z` and the key (with the count)
+  to Neovim. Known limitations in the README list what that does not cover. Test:
+  `NeovimFoldsIntegrationTest.aSlowZEIsRefusedToo`, which failed with the two-key mappings.
 - **The refusal is a hook, not a rule in the Java table.** `HostCommand`'s table lists what Eclipse
   carries out, and `:fold` is not that; it is refused only in mirrored buffers, which only Lua
   knows. So `HOST_COMMANDS` offers `require('neovim4eclipse.host_commands').refuse(name, why)`, and
