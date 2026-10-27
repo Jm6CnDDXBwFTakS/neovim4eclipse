@@ -148,10 +148,20 @@ final class OutputPopup {
             return;
         }
         close(false);
-        frame = new OverlayFrame<>(host,
-                parent -> new StyledText(parent, SWT.MULTI | SWT.READ_ONLY | SWT.V_SCROLL | SWT.H_SCROLL));
+        // Shown without the focus and not for the command line (showOverEditor): NO_FOCUS, so that the
+        // editor getting the focus back does not hand it to the popup (Composite.setFocus offers it to
+        // its children first, the popup's text among them). A click into the popup takes it anyway.
+        boolean refusesFocus = !takeFocus && !holdForCommandLine;
+        frame = new OverlayFrame<>(host, parent -> new StyledText(parent,
+                SWT.MULTI | SWT.READ_ONLY | SWT.V_SCROLL | SWT.H_SCROLL | (refusesFocus ? SWT.NO_FOCUS : SWT.NONE)));
         view = frame.content();
         view.setText(text);
+        if (refusesFocus) {
+            view.addListener(SWT.MouseDown, event -> {
+                stopClosingWithEditorInput(); // focused, it closes as any popup does
+                view.forceFocus(); // forceFocus, unlike setFocus, ignores NO_FOCUS
+            });
+        }
         view.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         view.addFocusListener(FocusListener.focusLostAdapter(e -> {
             if (!heldForCommandLine) {
