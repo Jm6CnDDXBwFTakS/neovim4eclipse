@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-27
+
 ### Changed
 
 - A listing that fits on one line (`:set ts?`, `:ls` with one buffer, the file info of a typed `:b`)
