@@ -31,6 +31,18 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   problem's message. Eclipse's problems are Neovim diagnostics of the file's buffer, so your own
   diagnostics (nvim-lint) work alongside them. *Window → Preferences → Neovim → Send Eclipse's
   problems to Neovim* turns it off. See the README, "Problems".
+- Folding with Vim's `z` commands: in the Java editor (and other editors that fold), `zo`, `zc`,
+  `za`, `zM`, `zR`, `zj`, `zk` and the rest open and close Eclipse's folds, `j` steps over a closed
+  fold, and a fold collapsed in Eclipse is closed in Neovim too. `vim.g.neovim4eclipse_folds = 0` in
+  `init.lua` turns it off. See the README, "Folding".
+
+### Changed
+
+- Moving into folded code no longer opens it unless your `'foldopen'` says so (Vim's default: a
+  search opens a fold, `j` and `G` do not). `set foldopen=all` brings back the old behavior. The
+  caret on a closed Java method stands on its signature.
+- A `'foldmethod'` set in your `init.lua` no longer hides lines in Neovim that Eclipse shows: editors
+  that cannot fold turn Neovim's folding off in their window.
 
 ### Fixed
 

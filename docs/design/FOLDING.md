@@ -16,7 +16,8 @@ and only with Eclipse's folds in Neovim is a closed fold one row on both sides.
 
 ## As built (in progress)
 
-Commit 1 of section 7 (the Neovim side) is built. Where it differs from the plan below, and why:
+Commits 1 and 2 of section 7 (the Neovim side, the Eclipse side) are built; commit 3 (the `zf` and
+`:fold` errors) is not. Where they differ from the plan below, and why:
 
 - **The handle lines are worked out in Lua**, in the fold module (`LuaScripts.FOLDS`), not in
   `util/FoldRegions`. During `zn` a resend keeps Neovim's own states (3.2), which only Neovim knows,
@@ -38,6 +39,24 @@ Commit 1 of section 7 (the Neovim side) is built. Where it differs from the plan
   `DiagnosticsPort` is for problems. Its tests are `NeovimFoldsIntegrationTest` and
   `folds_spec.lua`.
 - **X12 (the redraw trigger)** is not run yet; `poll` after every key is the trigger.
+- **Folds before the cursor.** The session reports the closed folds *before* the cursor
+  (`StateSync.publishState`), and both listeners hop to the UI thread through the same queue, so
+  the editor applies the folds first, as 3.2 asks. Reported after it, a caret placed while a fold
+  that `zo` had just opened was still collapsed in Eclipse would go to its caption line and stay.
+- **No change to `DocumentPush`.** `NeovimEditorController.sendFolds` runs right after
+  `DocumentPush.start`, on the UI thread; `setFoldsAsync` is queued on the same input thread, so the
+  folds still arrive after the push. That covers attach, switching Neovim mode back on, and Neovim
+  entering another editor's buffer (each attach makes a new controller).
+- **`FoldMirror` has no session types**: it gets a `Consumer` that sends the folds, and the
+  controller filters `FoldState` by buffer. So `tests/swt` compiles it with only `core/UiExecutor`.
+- **Selections** use the caption rule too: an end of Neovim's visual selection inside a closed fold
+  is put at the caption line's start. Checking `VisualSelectionView` and `BlockOverlay` over closed
+  folds (3.3) is still to do.
+- **Tests:** a test editor that folds, `TestFoldingEditor` (`*.fold`, brace blocks are its folds),
+  for `FoldingEndToEndTest` without Java tooling. Not done: a UI test of the opt-out (the UI tests
+  share one Neovim, started without it; `NeovimFoldsIntegrationTest` covers it), and "a method added
+  in insert mode becomes a fold after the reconcile".
+
 
 ## Summary
 

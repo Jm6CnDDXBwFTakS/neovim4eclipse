@@ -537,7 +537,18 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   extension) and `NeovimSession.setIndentation` applies them at attach, together with `'tabstop'`.
 - **Folding:** the widget of an editor with folding (the Java editor folds imports) leaves collapsed
   lines out, so a `StyledText` offset is not a document offset. `editor/WidgetOffsets` converts every
-  caret and selection offset (`ITextViewerExtension5`) and unfolds code Neovim's cursor moves into.
+  caret and selection offset (`ITextViewerExtension5`).
+- **Folds are mirrored** ([design/FOLDING.md](design/FOLDING.md)). `editor/FoldMirror` sends the
+  viewer's projection annotations to Neovim as manual folds (`util/FoldRegions` decides which and in
+  what order; `LuaScripts.FOLDS` makes them, with an extmark per fold to name it), after the
+  document push, and again after every annotation change that did not come from Neovim. After each
+  key the state snapshot lists the outermost closed folds, which the mirror collapses and expands in
+  Eclipse (with a no-echo flag), before the caret moves: the session reports folds before the cursor,
+  and both go through one UI queue. A cursor inside a closed fold puts the caret on the fold's
+  caption line without unfolding (`StyledTextCaret` asks `FoldMirror.captionOffset`); an offset
+  hidden by anything else is unfolded as before. Editors that cannot fold get an empty list, which
+  sets `'nofoldenable'`. `vim.g.neovim4eclipse_folds = 0`, read once at start
+  (`FoldsPort.foldsEnabled`), turns all of it off.
 
 ## Where logic lives (and how it is tested)
 
@@ -547,6 +558,8 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
 | Which key goes to Neovim or Eclipse | `core/KeyRouter` (SWT glue: `editor/KeyInterceptor`) | `KeyRouterTest` |
 | The mouse in normal and visual mode | `editor/NeovimMouse` (which events, the character under the pointer), `core/MouseInput`, `util/LatestValue` (drags merged), `KeyInput.mouse`, `LuaScripts.MOUSE` (Neovim's screen cell) | `tests/swt` `NeovimMouseTest`, `MouseInputTest`, `LatestValueTest`, `KeyInputTest`, `NeovimSessionIntegrationTest` (real Neovim: click off its screen, word, line, drag, Shift+click, `'mouse'` off), UI `MouseEndToEndTest`, `EditorEndToEndTest` |
 | Mode strings | `util/VimModes` | `VimModesTest` |
+| Folding: which regions, the state diff | `util/FoldRegions`, `LuaScripts.FOLDS` / `SET_FOLDS`, the snapshot's fold element (`StateSnapshot.closedFolds`), `core/FoldsPort` | `FoldRegionsTest`, `folds_spec.lua`, `StateSnapshotTest`, `StateSyncTest`, `NeovimFoldsIntegrationTest` |
+| Folding: Eclipse's annotations, the caption line | `editor/FoldMirror`, `StyledTextCaret.setFoldCaption`, `NeovimEditorController.sendFolds` | `tests/swt` `FoldMirrorTest`, UI `FoldingEndToEndTest` (test editor `TestFoldingEditor`), `JavaEditorEndToEndTest` (`-PuiHeavyJava`) |
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `LuaScripts.HOST_COMMANDS` (Neovim parses and hands over), `util/HostCommand` (which commands, by full name), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `NeovimSessionIntegrationTest` (typed, mapping, macro, `@:`, arguments), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` path lookup | `util/TabNavigation`, `util/EditPath` | `TabNavigationTest`, `EditPathTest` |

@@ -550,6 +550,31 @@ reported errors (`NeovimConnection.waitForStartup`).
    `NeovimEditorController`, which converts the byte column and moves the caret. The mode reaches `ModeStatusContribution` (status bar) and `CursorStyleController` (block
    caret).
 
+### 3.2a Folding: `zc` on a method
+
+Eclipse folds through *projection*: the viewer is a `ProjectionViewer`, and each fold is a
+`ProjectionAnnotation` in its `ProjectionAnnotationModel`, with a `Position` over the fold's lines.
+Collapsing the annotation makes the widget leave those lines out (hence `WidgetOffsets`), except its
+*caption line*: for a Java member with Javadoc the position is an `IProjectionPosition`, whose
+`computeCaptionOffset` points at the signature. Neovim has the same idea, manual folds
+(`:{first},{last}fold`). The plug-in copies Eclipse's into Neovim:
+
+1. At attach, `NeovimEditorController.sendFolds` asks `FoldMirror.send`, which reads every annotation's
+   lines, lets `util/FoldRegions.forNeovim` sort and filter them, and queues `LuaScripts.SET_FOLDS`
+   after the document push. The fold module (`LuaScripts.FOLDS`) creates the folds and puts an
+   extmark on each, whose id is the fold's index: that is how Neovim names a fold to Eclipse later.
+2. `zc` goes to Neovim like `x` (3.2). Neovim closes the method's fold.
+3. The state snapshot after the key also returns the outermost closed folds' indexes (the module's
+   `poll`). `StateSync` passes them on as a `FoldState`, before the cursor.
+4. `FoldMirror.applyNeovimState` compares them with the annotations (`FoldRegions.stateChange`) and
+   collapses the method's annotation, with a flag set so that its own model listener does not send
+   the change back.
+5. The cursor arrives next. It is inside a fold that is collapsed, so `StyledTextCaret` asks
+   `FoldMirror.captionOffset` and puts the caret on the signature line instead of unfolding.
+
+The other way, a fold collapsed with the ruler changes the annotation model; the mirror's listener
+sends every fold again (one send per UI turn), and Neovim closes it. Design: [FOLDING.md](design/FOLDING.md).
+
 ### 3.3 Insert mode
 
 `i` goes to Neovim like any key; its `ModeChanged` notification switches the plug-in to "typing".

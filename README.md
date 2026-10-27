@@ -42,6 +42,7 @@ edges, see [Known limitations](#known-limitations).
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
 | Finding errors and warnings (compiler, builders, language servers), sent to Neovim as diagnostics (see [Problems](#problems-d-d)) | `]d` / `[d` / `]D` / `[D` between them, with counts, in macros and the jumplist |
+| Where the folds are (methods, imports, comments, language-server regions) and drawing them | Opening and closing them: `zo` `zc` `za` `zM` `zR` and the other `z` commands, `j` over a closed fold (see [Folding](#folding-zo-zc-zm)) |
 
 Details of what happens on each key are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -275,6 +276,44 @@ and shows `The import java.util.List is never used`.
   same files.
 
 How it works: [docs/design/DIAGNOSTICS.md](docs/design/DIAGNOSTICS.md).
+
+## Folding (`zo`, `zc`, `zM`)
+
+In an editor that folds (the Java editor; the Generic Editor with a language server), Eclipse's
+folds are also Neovim's, so Vim's fold commands work on them and the two always show the same folds
+open and closed:
+
+| Key | Does |
+|-----|------|
+| `zo` / `zc` / `za` | open / close / toggle the fold at the cursor; `zO`, `zC`, `zA` all the way down |
+| `zM` / `zR` | close / open every fold; `zm`, `zr` one level |
+| `zv`, `zx`, `zX` | show the cursor's line; reset to `'foldlevel'` |
+| `zj` / `zk`, `[z` / `]z` | to the next / previous fold; to the current fold's start / end |
+| `zn` / `zN` / `zi` | folding off / on / toggled, in Neovim and Eclipse alike |
+
+Neovim runs them all itself; the plug-in only copies Eclipse's fold regions into Neovim and keeps
+the open and closed state the same both ways: a fold collapsed with the ruler's `−` or
+`Ctrl+Numpad -` is closed in Neovim too.
+
+- **A closed fold is one line.** `j` and `k` step over it. The caret stands on the line Eclipse
+  shows for it: for a Java method with Javadoc that is the signature, not the comment above it.
+- **What opens a fold is your `'foldopen'`**, as in Vim. By default `j` or `G` into a closed fold leave
+  it closed, and a search, `%`, a mark or `u` opens it. Before 0.1.9 any move into folded
+  code opened it; `set foldopen=all` in `init.lua` gives that back.
+- **Eclipse decides where the folds are.** `zf`, `zd`, `zE`, `:fold` and `:folddelete` are not
+  supported in these editors: the next reconcile replaces any fold made that way. To add one where
+  Eclipse has none, the Java editor folds between `// region` and `// endregion` comments when
+  *Window → Preferences → Java → Editor → Folding* says so (custom folding regions).
+- **`dd` on a closed fold, then `u`**, brings the lines back at once and the fold a moment later,
+  open (Neovim does not keep manual folds through an undo; Eclipse makes the fold again).
+- **Editors that cannot fold** (the plain Text Editor) turn Neovim's folding off in its window, so
+  a `'foldmethod'` of yours cannot hide lines Eclipse shows.
+- **To leave Neovim's folding alone**: `vim.g.neovim4eclipse_folds = 0` in `init.lua`. Eclipse then
+  folds as it did before 0.1.9: the `z` commands do nothing to its folds, and moving into folded
+  code opens it. The setting is read once when Neovim starts: changing it needs a restart of
+  Neovim (*Window → Preferences → Neovim*, or of Eclipse).
+- **For your config**: the `User` autocommand `Neovim4EclipseFolds` fires when the closed folds
+  change, with `data = { buf = 3, closed = { ... } }`.
 
 ## Command line (`:`, `/`, `?`)
 
@@ -566,6 +605,11 @@ one, in a `:terminal` too, inherits it.
 
 Where the plug-in has to work around one of your settings for a technical reason, it does so as
 narrowly as it can, and it is listed here.
+
+- **`'foldmethod'`, `'foldenable'` and `'foldminlines'`, window-local, in editors' buffers.** In an
+  editor that folds, `'foldmethod'` is `manual` and `'foldminlines'` 0, so Neovim's folds are
+  exactly Eclipse's ([Folding](#folding-zo-zc-zm)); in one that cannot fold, `'nofoldenable'`.
+  Your global values stay as they are. With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
 
 - **`vim.diagnostic`'s `jump.on_jump`, only if your config sets none.** After `]d` it shows the
   first line of the problem's message in the message line ([Problems](#problems-d-d)). Set your own

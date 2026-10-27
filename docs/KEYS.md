@@ -63,6 +63,9 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
   as in Vim, where `Esc` closes the completion menu and leaves insert mode at once.
 - Any other key with an Eclipse key binding is taken by Eclipse first, in every mode: function keys
   such as `F3` (Open Declaration) and most `Ctrl+Shift+...` and `Alt+Shift+...` shortcuts.
+- The `z` fold commands (`zo`, `zc`, `zM`, ...) are Neovim's like any normal-mode key. In an editor
+  that folds they act on Eclipse's folds, which are mirrored into Neovim; `zf`, `zd` and `zE` are
+  not supported there, since Eclipse decides where folds are (README, "Folding").
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,
   arrows, `Home`, `End`, unbound function keys as `<F5>` and so on.
 

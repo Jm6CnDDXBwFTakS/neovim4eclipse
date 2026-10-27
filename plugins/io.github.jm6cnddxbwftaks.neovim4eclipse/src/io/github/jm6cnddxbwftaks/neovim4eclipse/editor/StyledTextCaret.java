@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.function.IntUnaryOperator;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CaretListener;
@@ -31,6 +32,13 @@ import org.eclipse.swt.widgets.Event;
  * After each move this class therefore sends the {@code SWT.Selection} event that the widget sends
  * for a move made by the user. The editor's text viewer turns it into a selection change, which
  * updates all of those. See {@link #announceMove()}.
+ *
+ * <p><b>Folded code.</b> An offset the widget does not show (it is inside a collapsed fold) is
+ * handled in one of two ways. When Neovim has that fold closed too ({@link #setFoldCaption}, from
+ * {@link FoldMirror#captionOffset}), the caret goes to the fold's caption line and nothing unfolds:
+ * Neovim's cursor anywhere in a closed fold stands "on the fold", as Vim shows it. Otherwise the
+ * fold is opened, as Eclipse does when it jumps into folded code ({@link WidgetOffsets#toWidgetRevealing}):
+ * that is the case without mirrored folds (the opt-out, or a region Neovim could not have).
  */
 final class StyledTextCaret implements EditorCaret {
 
@@ -38,10 +46,36 @@ final class StyledTextCaret implements EditorCaret {
     private final WidgetOffsets offsets;
     /** The SWT listeners registered for each move listener, so that they can be removed again. */
     private final Map<Runnable, Object[]> registered = new IdentityHashMap<>();
+    /** Document offset to the caption offset of the closed fold hiding it, or -1 (see the class comment). */
+    private IntUnaryOperator foldCaption = offset -> -1;
 
     StyledTextCaret(StyledText widget, WidgetOffsets offsets) {
         this.widget = widget;
         this.offsets = offsets;
+    }
+
+    /** See the class comment, <em>Folded code</em>. UI thread. */
+    void setFoldCaption(IntUnaryOperator foldCaption) {
+        this.foldCaption = foldCaption != null ? foldCaption : offset -> -1;
+    }
+
+    /**
+     * The widget offset to show {@code modelOffset} at: itself when shown; inside a fold Neovim has
+     * closed, the start of the fold's caption line; else revealed by unfolding. -1 if it stays hidden.
+     */
+    private int widgetOffsetFor(int modelOffset) {
+        int shown = offsets.toWidget(modelOffset);
+        if (shown >= 0) {
+            return shown;
+        }
+        int caption = foldCaption.applyAsInt(modelOffset);
+        if (caption >= 0) {
+            int atCaption = offsets.toWidget(caption);
+            if (atCaption >= 0) {
+                return atCaption;
+            }
+        }
+        return offsets.toWidgetRevealing(modelOffset);
     }
 
     @Override
@@ -70,7 +104,7 @@ final class StyledTextCaret implements EditorCaret {
 
     @Override
     public boolean moveCaret(int offset) {
-        int widgetOffset = offsets.toWidgetRevealing(offset); // unfolds code the cursor moved into
+        int widgetOffset = widgetOffsetFor(offset); // the caption of a closed fold, or unfolds the code
         if (widgetOffset < 0) {
             return false;
         }
@@ -82,8 +116,8 @@ final class StyledTextCaret implements EditorCaret {
 
     @Override
     public boolean select(int anchor, int caret) {
-        int widgetAnchor = offsets.toWidgetRevealing(anchor);
-        int widgetCaret = offsets.toWidgetRevealing(caret);
+        int widgetAnchor = widgetOffsetFor(anchor);
+        int widgetCaret = widgetOffsetFor(caret);
         if (widgetAnchor < 0 || widgetCaret < 0) {
             return false;
         }
