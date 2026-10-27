@@ -391,6 +391,43 @@ final class LuaScripts {
             """;
 
     /**
+     * Makes a buffer the current one (argument: its number) without Neovim's file info message, such
+     * as {@code "a.txt" 3 lines --33%--}.
+     *
+     * <p><b>A deliberate exception: the plug-in changes a user setting here.</b> The plug-in otherwise
+     * leaves {@code 'shortmess'} as the user's config sets it. Neovim gives the file info after
+     * entering a loaded buffer unless {@code 'shortmess'} has {@code F} (it does by default; many
+     * configs carried over from Vim set it without). The plug-in switches buffers whenever another
+     * Eclipse editor becomes active, and there the message does harm, for technical reasons:
+     * <ul>
+     *   <li>Eclipse shows nothing when you switch editors; the message would be Neovim's alone.</li>
+     *   <li>Switching away and back gives two messages before the next key, which the output popup
+     *       shows together ({@code util/MessageRoute}); the popup takes the keyboard focus.</li>
+     *   <li>Without the focus, Eclipse's Undo does not select the text it brings back (JFace selects
+     *       it only in the focused widget), so Neovim's cursor ends up a line off and {@code jdd}
+     *       deletes the wrong line ({@code FileInfoEndToEndTest}).</li>
+     * </ul>
+     * So {@code F} is added for the switch alone, and the user's value is put back right away:
+     * Neovim decides about the message while entering the buffer, so this changes nothing about a
+     * {@code :b} the user types, which Neovim runs by itself. {@code :silent} would also
+     * hide the message, but it would hide every other message of the switch too, such as one from
+     * the user's own {@code BufEnter} autocommand. README.md, "Neovim settings the plug-in changes",
+     * lists this for users.
+     */
+    static final String SHOW_BUFFER = """
+            local buf = tonumber(select(1, ...))
+            local saved = vim.o.shortmess
+            if not saved:find('F', 1, true) then
+              vim.o.shortmess = saved .. 'F'
+            end
+            local ok, err = pcall(vim.api.nvim_set_current_buf, buf)
+            vim.o.shortmess = saved
+            if not ok then
+              error(err, 0)
+            end
+            """;
+
+    /**
      * Sets {@code 'modified'} of a buffer (arguments: its number, {@code "1"} or {@code "0"}) to
      * Eclipse's dirty flag: Eclipse decides whether a document has unsaved changes, and Neovim's flag
      * follows, so that {@code :update} and {@code :bufdo update} write what Eclipse would save and

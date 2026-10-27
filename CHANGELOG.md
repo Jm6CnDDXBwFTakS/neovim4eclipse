@@ -21,6 +21,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   successful save, nor closes the editor without asking after a failed one: each command of a `|`
   chain goes to Eclipse like the first, so the editor closes as for `:q`, asking about unsaved
   changes. The same holds for `:w | bd`, `:echo 1 | q` and the other Eclipse commands.
+- With a `'shortmess'` without `F` in your Neovim config (common in configs carried over from Vim),
+  switching editors no longer shows Neovim's file info (`"a.txt" 3 lines --33%--`). Switching away
+  and back no longer opens the output popup either, which took the keyboard focus, so that `jdd`
+  after Eclipse's Undo deleted the wrong line. The plug-in adds `F` only while it switches; README,
+  "Neovim settings the plug-in changes".
 
 ## [0.1.7] - 2026-10-26
 

@@ -45,3 +45,25 @@ t.test('modified is set and cleared on request, for a buffer that exists', funct
   t.eq(false, vim.bo[buf].modified)
   t.run('SET_MODIFIED', '999', '1') -- gone already (Eclipse closed it): nothing to do, no error
 end)
+
+-- SHOW_BUFFER: the plug-in's own switch to a buffer shows no file info message, also for a user whose
+-- 'shortmess' lacks F (common in configs from Vim). Neovim decides about the message while entering the
+-- buffer, so F must be in 'shortmess' then; the user's value is back afterwards.
+t.test('showing a buffer enters it with F in shortmess and puts the user\'s value back', function()
+  vim.o.shortmess = 'filnxtToOI'
+  local other = vim.api.nvim_create_buf(true, true)
+  local during
+  local id = vim.api.nvim_create_autocmd('BufEnter', { callback = function() during = vim.o.shortmess end })
+  t.run('SHOW_BUFFER', tostring(other))
+  vim.api.nvim_del_autocmd(id)
+  t.eq(other, vim.api.nvim_get_current_buf())
+  t.eq('filnxtToOIF', during, 'F added while entering')
+  t.eq('filnxtToOI', vim.o.shortmess, 'the user\'s value afterwards')
+end)
+
+t.test('showing a buffer that is gone fails, and the user\'s shortmess is still put back', function()
+  vim.o.shortmess = 'ltToOC'
+  local ok = pcall(t.run, 'SHOW_BUFFER', '999')
+  t.eq(false, ok)
+  t.eq('ltToOC', vim.o.shortmess)
+end)

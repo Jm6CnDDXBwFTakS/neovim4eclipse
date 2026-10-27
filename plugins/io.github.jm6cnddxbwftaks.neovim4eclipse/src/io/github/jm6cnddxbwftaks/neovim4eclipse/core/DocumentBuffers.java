@@ -136,7 +136,12 @@ final class DocumentBuffers {
         attached = target;
         attachedBufnr = buffer.bufnr;
         attachedDocument = buffer;
-        await(api.setCurrentBuf(target));
+        showBuffer(target);
+    }
+
+    /** Makes {@code buffer} Neovim's current one, without its file info message ({@link LuaScripts#SHOW_BUFFER}). */
+    private void showBuffer(Handle buffer) throws Exception {
+        await(api.execLua(LuaScripts.SHOW_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
     }
 
     private Handle create(String name) throws Exception {
@@ -177,13 +182,13 @@ final class DocumentBuffers {
         }
         // Leave the buffer first: wiping the window's buffer makes Neovim enter some other one,
         // which Eclipse would follow by activating that editor.
-        await(api.setCurrentBuf(attached));
+        showBuffer(attached);
         await(api.bufDelete(doomed, true, false)); // force: unsaved changes live in Eclipse
     }
 
     /** Switches Neovim back to the attached buffer. */
     void returnToAttached() throws Exception {
-        await(api.setCurrentBuf(attached));
+        showBuffer(attached);
     }
 
     void setEnterHandler(Consumer<Integer> handler) {

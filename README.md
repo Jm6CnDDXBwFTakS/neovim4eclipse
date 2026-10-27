@@ -502,6 +502,18 @@ script that sets it and then runs Eclipse): set for your whole account, it chang
 Neovim too, and `eclipse.ini` cannot set environment variables. Every Neovim started inside that
 one, in a `:terminal` too, inherits it.
 
+### Neovim settings the plug-in changes
+
+Where the plug-in has to work around one of your settings for a technical reason, it does so as
+narrowly as it can, and it is listed here.
+
+- **`'shortmess'` `F`, while Eclipse switches editors.** When another editor becomes active, the
+  plug-in makes Neovim enter that file's buffer with `F` added to `'shortmess'`, and puts your value
+  back right after. Without `F` (common in configs carried over from Vim), Neovim would show its
+  file info (`"a.txt" 3 lines --33%--`) on every switch, which Eclipse does not do. Two such
+  messages in a row also opened the output popup, which took the keyboard focus from the editor,
+  and Eclipse's Undo then left Neovim's cursor a line off. A `:b` you type is not affected.
+
 ## Preferences
 
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
