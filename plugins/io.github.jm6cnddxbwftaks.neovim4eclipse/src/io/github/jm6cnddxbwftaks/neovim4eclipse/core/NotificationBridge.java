@@ -145,6 +145,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
             case "eclipse_command" -> onCommand(args);
+            case "eclipse_showcmd" -> onShowcmd(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -154,6 +155,19 @@ final class NotificationBridge implements Incoming {
                 MessageEvent.fromRedraw(args).forEach(sink::onMessageEvent);
             }
             default -> LOG.finest(() -> "Ignored notification " + method);
+        }
+    }
+
+    /**
+     * The pending command reported by the plug-in's own {@code z} mapping in mirrored buffers
+     * ({@code LuaScripts.FOLDS}), which Neovim does not report while that mapping reads the key
+     * after {@code z}. Passed on as Neovim's own {@code msg_showcmd} and {@code flush} would be, so
+     * the status bar shows it in the same place: {@code "3z"}, then {@code ""} after the key.
+     */
+    private void onShowcmd(List<?> args) {
+        if (!args.isEmpty() && args.get(0) instanceof String text) {
+            sink.onMessageEvent(new MessageEvent.Showcmd(text));
+            sink.onMessageEvent(new MessageEvent.Flush());
         }
     }
 

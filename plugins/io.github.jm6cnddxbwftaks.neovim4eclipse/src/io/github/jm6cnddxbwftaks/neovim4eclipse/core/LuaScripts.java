@@ -667,6 +667,14 @@ final class LuaScripts {
                                       x = { f = true, d = true, D = true } }
             local ESC = string.char(27)
 
+            -- The pending command for Eclipse's status bar. Neovim reports a half-typed command
+            -- (msg_showcmd) by itself, but not a z that this mapping is reading the next key for:
+            -- to Neovim, no command is pending then. So the mapping reports it itself, through the
+            -- same status-bar slot (NotificationBridge, eclipse_showcmd), and clears it after the key.
+            local function showcmd(text)
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_showcmd', text)
+            end
+
             -- Runs the user's mapping m (a maparg() dictionary) for z and the next key.
             local function run_users_mapping(m, count)
               local keys
@@ -692,7 +700,9 @@ final class LuaScripts {
             local function z_key(mode)
               return function()
                 local count = vim.v.count > 0 and tostring(vim.v.count) or ''
+                showcmd(count .. 'z') -- e.g. "3z", as Neovim would show it
                 local ok, key = pcall(vim.fn.getcharstr)
+                showcmd('')
                 if not ok or key == ESC then
                   if mode == 'x' then
                     vim.api.nvim_feedkeys(ESC, 'n', false)
