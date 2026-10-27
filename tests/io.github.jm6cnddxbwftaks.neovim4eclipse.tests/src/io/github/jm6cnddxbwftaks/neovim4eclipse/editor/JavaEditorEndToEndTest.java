@@ -515,6 +515,57 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
                 () -> "; the selection is on line " + selectionLine());
     }
 
+    /**
+     * As reported on a real file: a method with Javadoc followed by a blank line, the cursor in its
+     * body. {@code zc} puts the caret on the signature, Neovim's cursor stays in the fold, and
+     * {@code zo} opens it again. Collapsing the fold makes the widget move its caret out of the
+     * hidden lines, to the blank line after the method; that move once reached Neovim as the
+     * user's, and {@code zo} there found no fold. (The test editor's folds do not show it: there the
+     * widget keeps the caret on the caption line.)
+     */
+    @Test
+    void zcInTheBodyOfAMethodWithJavadocAndZoReopensIt() throws Exception {
+        String source = """
+                package p;
+
+                import java.util.List;
+                import java.util.concurrent.ArrayBlockingQueue;
+
+                /**
+                 * A class comment.
+                 */
+                public class D {
+                    /**
+                     * If you Alt+Enter on this comment, you can turn it into a Markdown comment.
+                     */
+                    void thisIsAMethodWithAComment() {
+                        System.out.println("");
+                    }
+
+                }
+                """;
+        openJava("D.java", source);
+        waitForFoldsInNeovim();
+
+        type(javaWidget, "14G");
+        settle();
+        type(javaWidget, "9|");
+        settle();
+        type(javaWidget, "zc");
+        settle();
+        waitUntil("the method folded", TIMEOUT_MS, () -> javaWidget.getLineCount() < documentOf(javaEditor).getNumberOfLines() - 1);
+        waitUntil("the caret on the signature", TIMEOUT_MS, () -> selectionLine() == 12,
+                () -> "; the selection is on line " + selectionLine() + ", Neovim's cursor on "
+                        + SessionProbe.lua(session, "return vim.fn.line('.')"));
+        assertEquals(14, ((Number) SessionProbe.lua(session, "return vim.fn.line('.')")).intValue(),
+                "Neovim's cursor stays in the fold");
+
+        type(javaWidget, "zo");
+        settle();
+        waitUntil("the caret back on line 14", TIMEOUT_MS, () -> selectionLine() == 13,
+                () -> "; the selection is on line " + selectionLine());
+    }
+
     /** {@code zM} collapses every member; {@code zR} opens them all. */
     @Test
     void zMAndZRFoldAndUnfoldEverything() throws Exception {
