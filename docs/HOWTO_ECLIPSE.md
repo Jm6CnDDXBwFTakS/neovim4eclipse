@@ -23,6 +23,7 @@ For a headless CI build of the plug-in and update site, use Maven/Tycho (`./mvnw
 | Freeze on `ciw` | Ensure `inputAsync` is used (keys not processed on UI thread) |
 | Extra blank line on attach | `BufferSynchronizer.documentToLines` must drop Eclipse's trailing empty line |
 | Caret off by a few columns on non-ASCII lines | Columns must go through `Utf8Columns` (see ARCHITECTURE) |
+| Import fails: "'Updating classpath' has encountered a problem. Resource '/shared' does not exist." | A `build.properties` names a folder outside its project (`../shared/src/`), which PDE cannot resolve; keep every folder inside the project. `ProjectLayoutTest` (`tests/unit`) checks this, and that the folders the test POMs add with build-helper exist. After moving folders, *Maven → Update Project* on the imported projects |
 
 ## Manual commands
 
