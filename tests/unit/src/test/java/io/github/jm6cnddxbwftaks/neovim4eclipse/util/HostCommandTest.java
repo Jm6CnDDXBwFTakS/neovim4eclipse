@@ -32,6 +32,9 @@ class HostCommandTest {
     void eachFullNameHasItsKind() {
         assertEquals(Kind.WRITE_ALL, kind("wall"));
         assertEquals(Kind.QUIT, kind("quit"));
+        // A window alone in its tab per editor (docs/design/WINDOWS.md): closing it closes the editor.
+        assertEquals(Kind.QUIT, kind("close"));
+        assertEquals(Kind.QUIT, kind("tabclose"));
         assertEquals(Kind.QUIT_ALL, kind("qall"));
         assertEquals(Kind.QUIT_ALL, kind("quitall"));
         assertEquals(Kind.WRITE_QUIT, kind("wq"));

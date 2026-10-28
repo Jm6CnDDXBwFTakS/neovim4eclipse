@@ -28,7 +28,7 @@ import java.util.TreeMap;
  *   <caption>Host commands (Neovim's full names)</caption>
  *   <tr><th>Command</th><th>Kind</th><th>Eclipse action</th></tr>
  *   <tr><td>{@code wall}</td><td>{@link Kind#WRITE_ALL}</td><td>File &gt; Save All</td></tr>
- *   <tr><td>{@code quit}, {@code bdelete}, {@code bwipeout}, {@code bunload}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
+ *   <tr><td>{@code quit}, {@code close}, {@code tabclose}, {@code bdelete}, {@code bwipeout}, {@code bunload}</td><td>{@link Kind#QUIT}</td><td>close the editor</td></tr>
  *   <tr><td>{@code bdelete 3}, {@code bdelete other.txt}, {@code %bdelete}</td><td>{@link Kind#BUFFER_DELETE}</td><td>close those buffers' editors</td></tr>
  *   <tr><td>{@code qall}, {@code quitall}</td><td>{@link Kind#QUIT_ALL}</td><td>close all editors</td></tr>
  *   <tr><td>{@code wq}, {@code xit}, {@code exit}</td><td>{@link Kind#WRITE_QUIT}</td><td>save and close; with a
@@ -67,6 +67,13 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
          * In Vim these remove the buffer from view; here each buffer is an Eclipse editor, so they
          * close it. Left to Neovim, they would delete the buffer and put an empty one in its place,
          * whose (empty) text the editor would then show.
+         *
+         * <p>Also {@code :clo[se]} and {@code :tabc[lose]}: each editor is a Neovim window alone in
+         * its tabpage (docs/design/WINDOWS.md), and in Vim closing the window closes the view; here
+         * the editor is the view. Left to Neovim, the editor would lose its window, and a new one
+         * would be opened at once. Vim's {@code :close} keeps a changed buffer hidden; Eclipse
+         * cannot keep unsaved changes without an editor, so it asks, as for {@code :q}, and
+         * {@code :close!} discards them.
          */
         QUIT,
         /**
@@ -204,6 +211,9 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         Map<String, Entry> table = new LinkedHashMap<>();
         table.put("wall", new Entry(Kind.WRITE_ALL, Arguments.NONE, false));
         table.put("quit", new Entry(Kind.QUIT, Arguments.NONE, false));
+        // The editor is the window, and its tab (docs/design/WINDOWS.md): closing it closes the editor.
+        table.put("close", new Entry(Kind.QUIT, Arguments.NONE, false));
+        table.put("tabclose", new Entry(Kind.QUIT, Arguments.NONE, false));
         // Without a buffer they close this editor (QUIT); with buffers, those editors (BUFFER_DELETE).
         table.put("bdelete", new Entry(Kind.QUIT, Arguments.BUFFERS, false));
         table.put("bwipeout", new Entry(Kind.QUIT, Arguments.BUFFERS, false));
