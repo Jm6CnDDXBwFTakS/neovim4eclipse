@@ -29,7 +29,8 @@ import org.eclipse.swt.widgets.Listener;
  * the next paint ({@code StyledText.getWordWrap()} changed) and sent to Neovim; a {@code :set wrap}
  * in Neovim comes back through {@link #onNeovimWrap}, which sets the editor's word wrap. Neither is
  * echoed: the value last agreed on is kept, and only a difference from it is sent. An editor that
- * cannot wrap (block selection on, or no support) keeps its state, and Neovim is told so.
+ * cannot wrap ({@code AbstractTextEditor.isWordWrapSupported()} false) keeps its state, and Neovim
+ * is told so. Block selection is no obstacle: Eclipse turns it off when word wrap goes on.
  *
  * <p><b>Top line.</b> Neovim decides where its window is scrolled ({@code Ctrl-E}, {@code zz},
  * {@code 'scrolloff'}, a jump), and the editor follows ({@link #onNeovimTopLine}), before the caret
@@ -171,7 +172,7 @@ final class ViewportFollower {
         editor.setWordWrap(neovimWrap);
         wrap = text.getWordWrap();
         if (wrap != neovimWrap) {
-            neovim.sendWrap(wrap); // block selection mode, or an editor without word wrap
+            neovim.sendWrap(wrap); // an editor without word wrap
         }
         update(); // the horizontal scroll bar came or went
     }

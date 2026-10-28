@@ -248,6 +248,17 @@ class ViewportEndToEndTest extends EndToEndTestBase {
                 () -> Boolean.FALSE.equals(SessionProbe.lua(session, "return vim.wo.wrap")));
     }
 
+    /** Eclipse ends block selection to wrap (AbstractTextEditor.setWordWrap), so :set wrap still wraps. */
+    @Test
+    void setWrapEndsBlockSelection() {
+        org.eclipse.ui.texteditor.ITextEditorExtension5 block = (org.eclipse.ui.texteditor.ITextEditorExtension5) editor;
+        block.setBlockSelectionMode(true);
+        session.commandAsync("set wrap");
+        waitUntil("the editor's word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
+        assertTrue(!block.isBlockSelectionModeEnabled(), "block selection ended");
+        assertTrue(Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.wo.wrap")), "Neovim keeps 'wrap'");
+    }
+
     /** The key itself, not the command: Eclipse's binding must win over the plug-in's key handling. */
     @Test
     void altShiftYTogglesWordWrap() {
