@@ -364,6 +364,8 @@ send the `wheel count=… detail=…` lines from the Error Log with your system 
   in `init.lua`. The setting is read once when Neovim starts (*Neovim → Restart Neovim...*).
 - Lines made taller by code minings (the Java editor's reference counts) are not measured: there
   `L` can land a line or two below the editor's last line.
+- With `vim.g.neovim4eclipse_folds = 0` Neovim does not know Eclipse's folds, so where code is
+  folded `L`, `Ctrl-F` and `zb` fall short by the folded lines.
 - At the end of a file Neovim can scroll further than Eclipse (`Ctrl-E` until the last line is at
   the top); the editor stops at its own end, and `H` then goes to a line above the editor's top.
 
@@ -478,7 +480,8 @@ act on what you see. Your `'mouse'`, `'mousetime'` and mappings such as `<2-Left
 
 Eclipse keeps the mouse in insert mode and in Eclipse mode, and always keeps Ctrl+click (Cmd+click on
 macOS: Open Declaration and other hyperlinks), the right button (context menu) and the middle button
-(pasting the primary selection on Linux). Dragging selected text to move it is not available in
+(pasting the primary selection on Linux). The wheel scrolls Neovim's window in normal and visual mode
+(see "The editor's size, scrolling and word wrap"). Dragging selected text to move it is not available in
 normal mode; drag in insert mode or Eclipse mode for that.
 
 ## Indentation (`o`, `O`, `>>`)
