@@ -434,8 +434,12 @@ fix/<name>, feature/<name>  ──►  release/<next version>  ──►  main  
   *Build* workflow on one by hand when a change needs CI before the merge.
 - **An urgent fix** while the release branch holds work that is not ready: rename that branch to
   the version after (`release/0.1.2` to `release/0.1.3`, setting its version again), cut a new
-  `release/0.1.2` from `main` for the fix alone, release it, then merge `main` into
-  `release/0.1.3` so it has the fix too.
+  `release/0.1.2` from `main` for the fix alone, release it, then rebase `release/0.1.3` onto
+  `main` so it has the fix too (`git rebase origin/main` on it, then
+  `git push --force-with-lease`). A merge would make a merge commit, which the history does not
+  take (see below); a cherry-pick would leave `main` with a commit `release/0.1.3` lacks, so
+  `main` could not fast-forward to it at the next release. The rebase rewrites the branch, so
+  anyone with a clone of it resets theirs (`git reset --hard origin/release/0.1.3`).
 
 Pull requests are optional: merging directly keeps the same flow.
 
@@ -450,7 +454,9 @@ git switch release/0.1.2 && git merge --ff-only fix/my-change
 
 Rerun the tests after a rebase that had conflicts. Three guards keep it so:
 
-- the repository's branch ruleset requires a linear history;
+- a GitHub ruleset ("Linear history on main and release branches") refuses a push of a merge commit
+  to `main` or `release/**`, from everyone, the maintainer included (it has no bypass; git cannot
+  carry `merge.ff` into a fresh clone, so the server is where the rule holds for every clone);
 - GitHub offers only *Rebase and merge* and *Squash and merge* on a pull request (merge commits are
   turned off);
 - `git config merge.ff only` in your clone makes a plain `git merge` refuse to make a merge commit
