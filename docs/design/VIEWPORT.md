@@ -4,7 +4,7 @@ Status: **planned**, not implemented; for 0.1.10, on `feature/viewport` cut from
 Planned on `feature/diagnostics` at `589485a`. The experiments used Neovim 0.12.6 (the plug-in's
 minimum) on Linux (arm64), through a small msgpack client attached with the plug-in's own UI options
 (`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer on
-2026-10-27, D5 to D8 on 2026-10-28; D9 (the touchpad) waits on a measurement. [FOLDING.md](FOLDING.md)
+2026-10-27, D5 to D9 on 2026-10-28. [FOLDING.md](FOLDING.md)
 was built first (D3) and released in 0.1.9. After the feature is built, add a section *As built*
 after the summary, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 
@@ -33,9 +33,9 @@ editor's").
    (`nvim_ui_try_resize`), and `'wrap'` follows Eclipse's word wrap.
 2. **Neovim to Eclipse:** Neovim reports every change of its window's view (`win_viewport`, an
    event it already sends); the editor scrolls to Neovim's top line.
-3. **Eclipse to Neovim:** the mouse wheel goes to Neovim's own mouse (`nvim_input_mouse`), like the
-   left button already does (D1); other scrolling in Eclipse (scroll bar, Eclipse's own
-   reveal) sets Neovim's top line.
+3. **Eclipse to Neovim:** the mouse wheel scrolls Neovim's window, by the lines SWT reports, and
+   Eclipse follows (D1, D9); other scrolling in Eclipse (scroll bar, Eclipse's own reveal) sets
+   Neovim's top line.
 
 The plug-in implements none of the commands above; it copies sizes and top lines.
 
@@ -49,8 +49,9 @@ SWT measuring with variable line heights (section 3.1) may grow it.
   and `zt` makes the cursor line the editor's first.
 - Resizing the editor, the window, or the font changes `&lines` and `&columns`; `Ctrl-D` then
   scrolls half of the new height.
-- The mouse wheel scrolls as in Neovim *(D1)*: by `'mousescroll'` lines (default `ver:3`), and the
-  cursor is pulled along when it would leave the screen. That is a change from today, where the
+- The mouse wheel and the touchpad scroll Neovim's window *(D1, D9)*: by the lines the operating
+  system reports (its speed, acceleration and momentum, as Eclipse scrolls today; `'mousescroll'`
+  is not used), and the cursor is pulled along when it would leave the screen, as with `Ctrl-E`. That is a change from today, where the
   wheel scrolls Eclipse alone and the caret may stay off screen.
 - In insert mode the wheel is Eclipse's, as today *(D6)*: the view scrolls and the caret stays where
   you type, even off screen; the next key brings the view back to the caret, as Eclipse does. At Esc
@@ -95,6 +96,21 @@ The script is in the session's scratchpad (`vp.py`), not in the repository. Resu
 - **X7, gutter.** `set number` gives `getwininfo()[1].textoff` 4: the window's text is 4 columns
   narrower than `&columns`.
 
+- **X10, wheel and touchpad in SWT (D9), macOS** (2026-10-28, SWT 4967 cocoa, Apple trackpad and a
+  mouse; [probes/WheelProbe.java](probes/WheelProbe.java), a window with a `StyledText` of 13 px
+  lines, which logs each event and how far the text moved). Both arrive as `SWT.MouseVerticalWheel` with `detail` 1 (`SWT.SCROLL_LINE`)
+  and `stateMask` 0; no `SWT.Gesture` event at all. `count` is already whole lines:
+  - Mouse wheel: one event per notch, `count` −1, the text moved 13 px (one line).
+  - Trackpad, slow: one event about every 16 ms while the fingers move, each `count` ±1, 13 px.
+  - Trackpad flick: the momentum after letting go comes as more events of the same kind, `count`
+    rising to −13 and falling back to −1 over about 1 s (55 events, 3370 px, about 260 lines).
+  - Sideways: `SWT.MouseHorizontalWheel`, `detail` 0; a few also come during vertical trackpad
+    scrolling (6 in phases 2 and 3). `StyledText` did not scroll sideways in the probe.
+
+  So nothing in the event tells a trackpad from a mouse wheel, finger from momentum, on macOS; only
+  the timing differs. And SWT's own scrolling is not pixel-smooth there: the text moves `count`
+  lines per event.
+
 Not tried yet: variable line heights in the Java editor (code minings), and a proportional editor
 font. Both are measured on the Eclipse side, so they change only the numbers sent (section 3.1).
 
@@ -134,9 +150,11 @@ font. Both are measured on the Eclipse side, so they change only the numbers sen
 
 ### 3.3 Scrolling, Eclipse to Neovim
 
-- **Wheel** *(D1)*: in normal and visual mode the wheel event is consumed and sent to Neovim's mouse
-  (`NeovimMouse`, extended with `wheel` up and down; sideways wheel stays Eclipse's, D4), and the editor scrolls only when
-  `win_viewport` answers. One source of truth, so no race between the two. Without `'mouse'` the
+- **Wheel** *(D1, D9)*: in normal and visual mode the vertical wheel event is consumed;
+  `util/WheelScroll` turns its `count` into lines (adding up events of 0 lines), and a script
+  (`LuaScripts.SCROLL_LINES`) scrolls Neovim's window by them as `Ctrl-E` / `Ctrl-Y` would, dragging
+  the cursor. The sideways wheel stays Eclipse's (D4). The editor scrolls only when `win_viewport`
+  answers. One source of truth, so no race between the two. Without `'mouse'` the
   wheel stays Eclipse's, and the scroll bar path below applies.
 - **Everything else** (dragging the scroll bar, Page Down on the scroll bar, Eclipse revealing a
   search hit, Open Declaration): the viewport listener sends the new top line, newest only
@@ -171,11 +189,10 @@ column conversion (bytes, cells, pixels) is its own work.
 
 ## 4. Decisions
 
-- **D1, the wheel** *(decided 2026-10-27)*: Neovim's (Vim behavior, `'mousescroll'`, the cursor
-  dragged along, no race). Rejected: Eclipse scrolls, then sends its top line as in 3.3 (the caret
-  is still dragged, by the script, since Neovim's cursor cannot be off screen, and Neovim's late
-  answers need the stale-event rule). To check while building: how SWT reports touchpad scrolling
-  (many small wheel events, or few large ones); whole-line steps replace Eclipse's pixel scrolling.
+- **D1, the wheel** *(decided 2026-10-27; how far it scrolls, D9)*: Neovim scrolls (Vim behavior,
+  the cursor dragged along, no race). Rejected: Eclipse scrolls, then sends its top line as in 3.3
+  (the caret is still dragged, by the script, since Neovim's cursor cannot be off screen, and
+  Neovim's late answers need the stale-event rule). The touchpad question this left open is D9.
 - **D2, `'wrap'`** *(decided 2026-10-27)*: synced both ways. On attach and on Alt+Shift+Y the
   plug-in sets the window's `'wrap'` from the editor's word wrap; an `OptionSet` autocommand turns a
   `:set wrap` / `:set nowrap` in Neovim into Eclipse's word wrap for that editor. Eclipse's state
@@ -209,20 +226,31 @@ column conversion (bytes, cells, pixels) is its own work.
   a long line has a different number of screen rows on each side, and `gj`, `H`, `Ctrl-D` and the
   top lines drift. Rejected: following the user's value (screen commands wrong on long lines).
 - **D8, the size with no editor attached** *(decided 2026-10-28)*: the last editor's.
-- **D9, the touchpad** *(open)*: measure what SWT reports for touchpad scrolling on Linux, macOS
-  and Windows (many small wheel events, few large ones, or a marker that tells them from a mouse
-  wheel), then decide between whole-line steps for every wheel (D1 as is) and keeping Eclipse's
-  pixel scrolling for the touchpad, followed by the top line as in 3.3. Asked again after the
-  measurement.
+- **D9, the touchpad** *(decided 2026-10-28; revisit with real Linux and Windows touchpad data)*:
+  Neovim scrolls by the lines SWT reports (`count`), for a mouse wheel and a touchpad alike,
+  dragging the cursor when it would leave the screen as `Ctrl-E` does (`'scrolloff'` kept). The
+  speed, acceleration and momentum stay the operating system's, as Eclipse scrolls today;
+  `'mousescroll'` is not used (README says so). Why: on macOS nothing in the event tells a
+  trackpad from a wheel (X10), so one rule must serve both. Events of 0 lines (possible from smooth
+  touchpads on Linux or Windows; not measured, all three test machines share one Mac's trackpad,
+  two of them as VMs) are added up until they make a line. Rejected: one Neovim wheel step
+  (`'mousescroll'`, 3 lines) per event (a trackpad scrolls three times as fast as in Eclipse, a
+  flick about 500 lines), and one step per 3 lines reported (3-line jumps on a trackpad). Built so
+  it can change: the conversion is one pure class, `util/WheelScroll` (SWT's `count` and `detail`
+  in, lines out, the adding-up inside), unit-tested; the editor only passes the event in, and the
+  Lua side scrolls by a number of lines without knowing where it came from. A measurement from
+  another machine becomes a `WheelScrollTest` case.
 
 ## 5. Tests
 
 - `tests/unit`: `ViewportSizeTest` (rows and columns from measurements, overhead, minimum 1×1);
   `ViewportEventTest` (parsing, 0-based lines, events of other windows ignored); the echo rule of
-  3.3 as a small pure class (`util/ScrollFollow`) with its test.
+  3.3 as a small pure class (`util/ScrollFollow`) with its test; `WheelScrollTest` (counts to lines,
+  0-line events added up, the X10 sequences from macOS as cases).
 - Lua (`tests/unit/src/test/lua/viewport_spec.lua`): `SET_TOPLINE` drags the cursor as `Ctrl-E`
   does, keeps `'scrolloff'`, clamps at the end of the buffer; `VIEWPORT_SIZE` reports the overhead
-  with `laststatus` 0 and 2 and with `number`.
+  with `laststatus` 0 and 2 and with `number`; `SCROLL_LINES` scrolls and drags the cursor as
+  `Ctrl-E` and `Ctrl-Y` do.
 - Integration (real Neovim): after `nvim_ui_try_resize`, `H`/`L` land on `w0`/`w$`; a `win_viewport`
   arrives for `Ctrl-E`.
 - `tests/swt`: `ViewportMeasureTest` with a fixed font and a known widget size.
@@ -232,12 +260,11 @@ column conversion (bytes, cells, pixels) is its own work.
 
 ## 6. Commits
 
-0. The touchpad measurement (D9), before commit 3; its result is added to section 2.
 1. Size: `ViewportSize`, `ViewportMeasure`, `VIEWPORT_SIZE`, resize on attach and resize, the last
    size kept (D8); `'wrap'` and `'linebreak'` (D2, D7); the opt-out (D5).
 2. Neovim to Eclipse: `ViewportEvent`, top line applied before the caret.
-3. Eclipse to Neovim: the wheel through `NeovimMouse` (D1), `SET_TOPLINE` for the rest, insert mode
-   at Esc.
+3. Eclipse to Neovim: the wheel through `WheelScroll` and `SCROLL_LINES` (D1, D9), `SET_TOPLINE`
+   for the rest, insert mode at Esc.
 4. Docs: README (screen commands now match the editor; D3 shortfall), docs/KEYS.md,
    docs/ARCHITECTURE.md (drop "Neovim's screen is not the editor's", describe the viewport),
    docs/LEARNING.md (a walkthrough of `Ctrl-E`), CHANGELOG under *Unreleased*.
