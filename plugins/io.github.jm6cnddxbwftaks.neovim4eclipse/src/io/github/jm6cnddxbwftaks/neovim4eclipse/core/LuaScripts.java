@@ -567,6 +567,51 @@ final class LuaScripts {
             """;
 
     /**
+     * Returns whether Eclipse's problems are sent to Neovim: {@code true} unless the user's config
+     * says {@code vim.g.neovim4eclipse_problems = 0} (or {@code false}). The session runs it once at
+     * start, after {@link #SETUP} (so after {@code init.lua}), and keeps the answer
+     * ({@code NeovimSession.problemsEnabled()}): when off, no {@link #SET_DIAGNOSTICS} is ever sent.
+     * Changing the variable later needs a Neovim restart.
+     *
+     * <p><b>Off, only the message changes.</b> With no diagnostics, Neovim's {@code ]d} says "No more
+     * valid diagnostics to move to", the same words as in a file without problems, so the user cannot
+     * tell that the plug-in sends none. This script then wraps Neovim's default {@code ]d [d ]D [D}
+     * in a function that, in a buffer with no diagnostics at all, says why instead:
+     * {@code ]d: Eclipse's problems are not sent to Neovim (vim.g.neovim4eclipse_problems = 0)}. In
+     * every other case it calls Neovim's own mapping, unchanged: the jump, the count, the jump list,
+     * the {@code on_jump} hook and diagnostics of the user's own (nvim-lint, a language server in
+     * {@code init.lua}) all stay Neovim's. The wrapper only adds words; it does not redo anything
+     * Neovim does (the project's rule: let Neovim do the work).
+     *
+     * <p>Only Neovim's default mappings are wrapped, recognized by where their function was defined
+     * ({@code vim/_core/defaults}). A key the user mapped or unmapped in {@code init.lua} is left as
+     * it is. Should a later Neovim move its defaults elsewhere, nothing is wrapped and Neovim's own
+     * message appears: harmless.
+     */
+    static final String PROBLEMS = """
+            local enabled = vim.g.neovim4eclipse_problems
+            if enabled ~= 0 and enabled ~= false then
+              return true
+            end
+            for _, lhs in ipairs({ ']d', '[d', ']D', '[D' }) do
+              local default = vim.fn.maparg(lhs, 'n', false, true)
+              local source = type(default.callback) == 'function'
+                and debug.getinfo(default.callback, 'S').source or ''
+              if source:find('vim/_core/defaults', 1, true) then
+                vim.keymap.set('n', lhs, function()
+                  if #vim.diagnostic.get(0) == 0 then
+                    vim.api.nvim_echo({ { lhs .. ": Eclipse's problems are not sent to Neovim"
+                      .. ' (vim.g.neovim4eclipse_problems = 0)', 'WarningMsg' } }, true, {})
+                  else
+                    default.callback() -- Neovim's own: it reads v:count1 of this same key press
+                  end
+                end, { desc = default.desc .. " (Eclipse's problems are off)" })
+              end
+            end
+            return false
+            """;
+
+    /**
      * Installs the fold module, {@code require('neovim4eclipse.folds')}, unless the user's config
      * turned folding off with {@code vim.g.neovim4eclipse_folds = 0} (or {@code false}), and returns
      * whether folding is on. The session runs it once at start, right after {@link #SETUP} (so after

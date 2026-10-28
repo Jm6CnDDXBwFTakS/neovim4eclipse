@@ -121,6 +121,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@link #initialize}, before the session is handed out.
      */
     private volatile boolean foldsEnabled;
+    /**
+     * Whether Eclipse's problems are sent to Neovim ({@link DiagnosticsPort#problemsEnabled()}): the
+     * answer of {@link LuaScripts#PROBLEMS}, run once at start after the user's config. Written once,
+     * in {@link #initialize}, before the session is handed out.
+     */
+    private volatile boolean problemsEnabled;
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
     private volatile Consumer<Integer> bufferClosedHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -206,6 +212,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         session.foldsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FOLDS, List.of())));
         session.state.setFoldsEnabled(session.foldsEnabled);
         LOG.info(() -> "folds " + (session.foldsEnabled ? "mirrored into Neovim" : "off (g:neovim4eclipse_folds)"));
+        // The same for the problems (docs/design/DIAGNOSTICS.md, "Turning it off").
+        session.problemsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.PROBLEMS, List.of())));
+        LOG.info(() -> "Eclipse's problems " + (session.problemsEnabled ? "sent to Neovim" : "off (g:neovim4eclipse_problems)"));
         Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -596,6 +605,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             }
             await(api.execLua(LuaScripts.SET_DIAGNOSTICS, Diagnostic.toLuaArgs(buffer.bufnr, copy)));
         });
+    }
+
+    @Override
+    public boolean problemsEnabled() {
+        return problemsEnabled;
     }
 
     @Override

@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -51,7 +50,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.DiagnosticPositions.Problem
  *       {@value #DEBOUNCE_MS} ms after the first. A list equal to the last one sent is not sent
  *       again: typing moves positions, but Neovim's diagnostics move with the text by themselves
  *       (extmarks), so only a real change of the problems needs a new list.</li>
- *   <li>At {@link #refresh} (the preference changed): at once, even when unchanged.</li>
  * </ul>
  *
  * <h2>Threads</h2>
@@ -78,7 +76,6 @@ public final class DiagnosticsSync implements AutoCloseable {
     private final DiagnosticsPort session;
     private final UiExecutor ui;
     private final Function<Annotation, Severity> severity;
-    private final BooleanSupplier enabled;
     private final IAnnotationModelListener listener = changed -> sendSoon();
     /** A send is scheduled and has not read the model yet. */
     private final AtomicBoolean sendPending = new AtomicBoolean(false);
@@ -93,18 +90,15 @@ public final class DiagnosticsSync implements AutoCloseable {
      * @param session  where the lists go
      * @param ui       the UI thread ({@code SwtUiExecutor} in the editor)
      * @param severity the severity of an annotation that is a problem, {@code null} for any other
-     * @param enabled  asked at each send whether problems go to Neovim (the preference); when not,
-     *                 an empty list is sent, which clears them
      */
     public DiagnosticsSync(IDocument document, IAnnotationModel model, DocumentBuffer buffer,
-            DiagnosticsPort session, UiExecutor ui, Function<Annotation, Severity> severity, BooleanSupplier enabled) {
+            DiagnosticsPort session, UiExecutor ui, Function<Annotation, Severity> severity) {
         this.document = document;
         this.model = model;
         this.buffer = buffer;
         this.session = session;
         this.ui = ui;
         this.severity = severity;
-        this.enabled = enabled;
     }
 
     /**
@@ -114,12 +108,6 @@ public final class DiagnosticsSync implements AutoCloseable {
      */
     public void start() {
         model.addAnnotationModelListener(listener);
-        send();
-    }
-
-    /** Sends the list again, changed or not (the preference changed). UI thread. */
-    public void refresh() {
-        lastSent = null;
         send();
     }
 
@@ -139,7 +127,7 @@ public final class DiagnosticsSync implements AutoCloseable {
         }
         List<Diagnostic> diagnostics;
         try {
-            diagnostics = enabled.getAsBoolean() ? DiagnosticPositions.toDiagnostics(problems(), lines()) : List.of();
+            diagnostics = DiagnosticPositions.toDiagnostics(problems(), lines());
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Could not read the problems of " + describe(), e);
             return;
