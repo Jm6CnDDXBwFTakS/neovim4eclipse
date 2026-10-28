@@ -276,17 +276,21 @@ public final class EclipseFileCommands {
             return;
         }
         // Usually already a full path: Neovim expanded the name as its own :edit would (see EditPath).
-        Path file = EditPath.resolve(argument, Path.of(System.getProperty("user.home")), windowFolder(editor));
+        // Messages name it as Neovim would, relative to the window's folder ("new.txt" [New]).
+        Path home = Path.of(System.getProperty("user.home"));
+        Path folder = windowFolder(editor);
+        Path file = EditPath.resolve(argument, home, folder);
         if (file == null) {
             HostCommands.showError(editor, "Can't find file \"" + argument + "\"");
             return;
         }
+        String shown = EditPath.shown(file, home, folder);
         if (!Files.exists(file)) {
-            NewFiles.open(editor.getEditorSite().getPage(), file, argument);
+            NewFiles.open(editor.getEditorSite().getPage(), file, shown);
             return;
         }
         if (Files.isDirectory(file)) {
-            HostCommands.showError(editor, "\"" + argument + "\" is a directory");
+            HostCommands.showError(editor, "\"" + shown + "\" is a directory");
             return;
         }
         open(editor.getEditorSite().getPage(), file);
