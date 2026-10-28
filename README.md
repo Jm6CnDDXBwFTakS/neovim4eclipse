@@ -391,8 +391,12 @@ search inside an operator (`d/`), and prompts such as `input()` and `confirm()`.
 Tab completes the line as Neovim does (commands, options and their values, buffers, help tags,
 variables, functions, file names), following your `'wildmode'`; Shift+Tab goes back. A line above the
 box lists the candidates, with the selected one highlighted. File names complete from the editor's
-project folder (Neovim's window works there, `:lcd`); `:e` itself still looks next to the current
-file first, then in the project.
+project folder (the editor's Neovim window works there, `:lcd`); `:e` itself still looks next to
+the current file first, then in the project. The folder is set once, when the editor's window
+opens, so a `:lcd` you type stays with that editor. An untitled document (*File → New → Untitled
+Text File*) gets the folder of the editor that was active before it, or your home folder if none
+was. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its file's folder
+instead.
 
 While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back to where
 you were. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
@@ -773,10 +777,18 @@ the Windows Start menu. [docs/PLATFORM.md](docs/PLATFORM.md#neovim-executable) h
 
 These are real and deliberate to know about before extending the code:
 
-1. **One Neovim window.** Each open document has its own Neovim buffer (named after the file, so
-   undo history and marks survive switching editors), but only the active editor is attached.
+1. **A Neovim window per editor, each in a hidden tab of its own.** Each open document has its own
+   Neovim buffer (named after the file, so undo history and marks survive switching editors), and
+   each editor its own Neovim window, which keeps that editor's cursor, column, scroll position,
+   folds, window options (`:setlocal`), jump history, location list and folder (`:lcd`) while
+   other editors are active. Two editors on one file (*Window → New Editor*) share its text, undo
+   history and marks, and each has its own cursor, as two Vim windows on one buffer. Only the
+   active editor is attached. Vim's own window layout (`:split`, `:vsplit`, `:tabnew`,
+   `Ctrl+W s`) is not something Eclipse shows; use Eclipse's split editor or *New Editor*.
    Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor (after `:bufdo` or `:argdo`,
-   only the editor of the file they end in); jumps to anything else
+   only the editor of the file they end in), and the window goes along: the two editors swap
+   windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window. Jumps
+   to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
    reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the

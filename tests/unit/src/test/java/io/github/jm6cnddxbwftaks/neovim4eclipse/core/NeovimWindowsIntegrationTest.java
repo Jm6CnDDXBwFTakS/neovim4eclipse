@@ -214,6 +214,46 @@ class NeovimWindowsIntegrationTest {
         }
     }
 
+    /** The editor jumped into was never attached in this session: it simply takes the window. */
+    @Test
+    void anEditorWithoutAWindowYetTakesTheOneThatJumped() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferEnterHandler(bufnr -> { });
+            DocumentBuffer docA = new DocumentBuffer("");
+            DocumentBuffer docB = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            EditorWindow b = new EditorWindow();
+            s.showWindow(docB, a, ""); // B's buffer exists, as after :badd or a closed editor's
+            s.showWindow(docA, a, "");
+            int aWin = a.winid();
+            s.command("buffer " + docB.bufnr());
+            s.travelWindow(a, b, docA);
+            s.showWindow(docB, b, "");
+            assertEquals(aWin, b.winid());
+            assertFalse(a.isOpenIn(s));
+            s.showWindow(docA, a, "");
+            assertNotEquals(aWin, a.winid(), "a new one for A");
+        }
+    }
+
+    /**
+     * An untitled document has no folder of its own: its window keeps the folder of the editor
+     * attached before (copied by Neovim), or gets the home folder when there was none.
+     */
+    @Test
+    void anUntitledDocumentTakesTheFolderOfTheEditorBeforeOrTheHomeFolder(@TempDir Path dir) throws Exception {
+        try (NeovimSession s = start()) {
+            EditorWindow first = new EditorWindow();
+            s.showWindow(new DocumentBuffer(""), first, null);
+            assertEquals(Path.of(System.getProperty("user.home")).toRealPath(), cwd(s), "no editor before it");
+            EditorWindow project = new EditorWindow();
+            s.showWindow(new DocumentBuffer(""), project, dir.toString());
+            EditorWindow untitled = new EditorWindow();
+            s.showWindow(new DocumentBuffer(""), untitled, null);
+            assertEquals(dir.toRealPath(), cwd(s), "the folder of the editor attached before");
+        }
+    }
+
     @Test
     void closingAnEditorsWindowClosesItsTabAndKeepsTheBuffer() throws Exception {
         try (NeovimSession s = start()) {

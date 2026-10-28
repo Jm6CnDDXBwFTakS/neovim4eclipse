@@ -179,6 +179,34 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code Ctrl-O} across files goes back through one jump history, as in Vim with one window:
+     * test.txt's Neovim window jumps into other.txt and travels to other.txt's editor (the two swap
+     * windows, docs/design/WINDOWS.md, E2), so its history comes along. Here: {@code G} in test.txt
+     * (a jump from line 1), {@code :b other.txt}, then {@code Ctrl-O} twice: back to test.txt line
+     * 3, then to line 1, both in test.txt's editor.
+     */
+    @Test
+    void ctrlOAcrossFilesGoesBackThroughTheWholeJumpHistory() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        type(widget, "G");
+        settle();
+        runInBox(widget, "b other.txt");
+        waitForAttach(other, "other.txt, after :b");
+
+        session.inputAsync("<C-o>");
+        waitForAttach(editor, "test.txt, after Ctrl-O");
+        waitUntil("the caret on test.txt's last line", TIMEOUT_MS,
+                () -> widget.getLineAtOffset(widget.getCaretOffset()) == 2);
+        session.inputAsync("<C-o>");
+        waitUntil("Neovim on test.txt's first line", TIMEOUT_MS, () -> cursorLine() == 1);
+        assertEquals(editor, page.getActiveEditor(), "the second jump is inside test.txt");
+        page.closeEditor(other, false);
+    }
+
+    /**
      * A buffer no editor shows (here a new empty one, {@code :enew}; also help or {@code :e} of a
      * file that is not open) is not followed: Neovim is sent back to the attached document, so
      * the next key still edits it. (The send-back is {@code core/DocumentBuffers.onEntered}; the

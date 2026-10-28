@@ -12,7 +12,20 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Each editor has a Neovim window of its own (in a hidden tabpage), which keeps its cursor, column,
+  scroll position, folds, window-local options, jump history, location list and `:lcd` while you
+  work in other editors. Two editors on one file (*Window → New Editor*) now have a cursor each
+  and share the text and undo history, as two Vim windows on one buffer. `Ctrl-O` into another
+  file takes the window along, so the jump history stays one chain. See the README, "Known
+  limitations".
+
 ### Changed
+
+- The folder Neovim works in (`:lcd`) is set once per editor, when its window opens, instead of on
+  every editor switch, so a `:lcd` you type stays with that editor. An untitled document gets the
+  folder of the editor active before it, or your home folder; `'autochdir'` is honored.
 
 - Neovim's `'showtabline'` is 0, set after your config: each editor is getting a Neovim window
   of its own, in a hidden tabpage, and a tab line would take a row from the editor. See the README,
