@@ -49,6 +49,7 @@ public final class RestartNeovimHandler extends AbstractHandler {
 
             Lost: the undo history, and anything set by hand since Neovim started \
             (:set, :map, :let) that your init.lua does not set.
+            
             Kept: the text of every editor, unsaved changes included. Registers, marks \
             and history come back from Neovim's ShaDa file, as after quitting Neovim \
             in a terminal.
