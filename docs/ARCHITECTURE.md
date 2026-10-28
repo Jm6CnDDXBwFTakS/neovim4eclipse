@@ -232,9 +232,12 @@ causes no reveal of its own. The other way round is `LuaScripts.SET_TOPLINE` (`w
 keeps the cursor visible): on attach, and at Esc after Eclipse scrolled alone while it typed (sent
 after the push and before `<Esc>`, with Neovim's top lines ignored while Esc is handled, since the
 replay of the typed text runs in Neovim's old view). When the editor scrolls by itself in normal or
-visual mode (scroll bar, wheel, a reveal), the follower sees a top line other than the one last
-agreed at the next paint and sends it with `scrollToAsync` (newest only); the same script then drags
-the cursor into the view as `Ctrl-E` does. A top line from Neovim becomes the agreed one once
+visual mode (scroll bar, a reveal), the follower sees a top line other than the one last agreed at
+the next paint and sends it with `scrollToAsync` (newest only); the same script then drags the
+cursor into the view as `Ctrl-E` does. The vertical wheel does not scroll the editor at all in
+those modes: `editor/NeovimWheel`, a display filter, swallows it and sends its lines
+(`util/WheelScroll`, SWT's `count`) with `scrollLinesAsync` (added up) to `LuaScripts.SCROLL_LINES`,
+which steps the top line as `Ctrl-E` does; the editor then follows Neovim's top line. A top line from Neovim becomes the agreed one once
 applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](design/VIEWPORT.md).
 
 ## Ideas for future work

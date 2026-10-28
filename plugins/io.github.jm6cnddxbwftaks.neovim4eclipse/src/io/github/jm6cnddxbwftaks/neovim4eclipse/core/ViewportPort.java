@@ -69,6 +69,15 @@ public interface ViewportPort {
     void scrollToAsync(DocumentBuffer buffer, int line1);
 
     /**
+     * The mouse wheel in the editor, in normal or visual mode (decisions D1, D9): Neovim's window
+     * scrolls {@code lines} down (negative: up) as {@code Ctrl-E} ({@code Ctrl-Y}) would and drags
+     * the cursor along; the editor follows through {@link #addTopLineListener}. Events that arrive
+     * faster than Neovim answers are added up. Nothing happens when {@code buffer} is no longer the
+     * one shown.
+     */
+    void scrollLinesAsync(DocumentBuffer buffer, int lines);
+
+    /**
      * Hears Neovim's window scroll ({@code Ctrl-E}, {@code zz}, {@code 50G}, a resize), on a session
      * thread, before the cursor of the same key is reported (docs/design/VIEWPORT.md, 3.2): the
      * editor scrolls to {@link TopLine#line1()}, then places the caret. Only for attached buffers,

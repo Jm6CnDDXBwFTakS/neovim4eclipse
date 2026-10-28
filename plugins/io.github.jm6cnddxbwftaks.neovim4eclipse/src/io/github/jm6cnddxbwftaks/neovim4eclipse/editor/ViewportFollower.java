@@ -150,6 +150,11 @@ final class ViewportFollower {
         agreedTopLine = eclipseTopLine();
     }
 
+    /** The editor's height in rows, as last sent to Neovim (1 before the first); for a wheel page. */
+    int rows() {
+        return sent == null ? 1 : sent[1];
+    }
+
     /**
      * The editor's top line, 1-based: what Neovim's window is scrolled to on attach, and at Esc,
      * after Eclipse scrolled alone while it typed (decision D6). UI thread.

@@ -1,6 +1,6 @@
 # Design note: Neovim's window follows the editor's view
 
-Status: **in progress** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commits 1 (size, wrap, opt-out) and 2 (scrolling both ways, except the wheel through Neovim) are built, see *As built*.
+Status: **in progress** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commits 1 (size, wrap, opt-out), 2 (scrolling both ways) and 3 (the wheel through Neovim) are built, see *As built*; commit 4 (docs) is left.
 Planned on `feature/diagnostics` at `589485a`. The experiments used Neovim 0.12.6 (the plug-in's
 minimum) on Linux (arm64), through a small msgpack client attached with the plug-in's own UI options
 (`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer on
@@ -104,6 +104,24 @@ Commit 2 (Neovim's scrolling in the editor, and the editor's in Neovim):
 - **Left for commit 3:** the wheel through Neovim (D1, D9: `WheelScroll`, `SCROLL_LINES`). Until
   then the wheel scrolls by Eclipse's amount, and the drag above moves the cursor.
 
+Commit 3 (the wheel through Neovim):
+
+- **`util/WheelScroll` is a static function, nothing added up.** D9 planned to add up events of 0
+  lines; none came, on macOS (X10) or on Linux (X11), since SWT reports whole lines. A page
+  (`SWT.SCROLL_PAGE`, Windows' "one screen at a time") scrolls the editor's rows less two, as
+  `Ctrl-F`.
+- **`editor/NeovimWheel`**, a display filter as `NeovimMouse` is, swallows the vertical wheel in
+  normal and visual mode, unless a modifier is held (Ctrl+wheel zooms, Shift+wheel may scroll
+  sideways), and sends its lines with `scrollLinesAsync`, added up while Neovim is busy. Tested in
+  `tests/swt` (`NeovimWheelTest`).
+- **`LuaScripts.SCROLL_LINES`** steps the top line as `Ctrl-E` and `Ctrl-Y` do, a closed fold
+  counting as one line, and then uses `set_topline(…, drag)`; no `:normal`, which would end visual
+  mode or fire `ModeChanged`.
+- **`'mouse'` is not consulted** (3.3 said the wheel stays Eclipse's without it): since commit 2 the
+  editor's own scroll drags Neovim's cursor the same way, so the result would not differ.
+- **A FINE log line per event** (`wheel count=-3 detail=1: 3 lines`); README asks users to send
+  them for a device that scrolls wrongly.
+
 ## 1. Behavior
 
 - `H`, `M`, `L`, `Ctrl-E` and friends, `zz` `zt` `zb`, and `'scrolloff'` act on what the editor
@@ -172,6 +190,14 @@ The script is in the session's scratchpad (`vp.py`), not in the repository. Resu
   So nothing in the event tells a trackpad from a mouse wheel, finger from momentum, on macOS; only
   the timing differs. And SWT's own scrolling is not pixel-smooth there: the text moves `count`
   lines per event.
+
+- **X11, wheel and touchpad in SWT (D9), Linux in a VM** (2026-10-28, SWT 4967 gtk, aarch64,
+  Debian with XFCE on X11, in a VM on the Mac of X10, its trackpad and a mouse; the same probe).
+  Every event is `SWT.MouseVerticalWheel`, `detail` 1, `count` ±3, wheel and trackpad alike, and
+  Eclipse moved the text 78 or 79 px, three lines of 26 px. Slow trackpad: 14 events over 6 s. A
+  flick: 364 events in about 1 s, 28696 px (about 1100 lines; many events moved 0 px and the next
+  one the rest, as GTK coalesces redraws). The VM passes the trackpad on as wheel clicks, so a
+  touchpad on Linux itself may differ; still the setup of anyone running Eclipse in a VM.
 
 Not tried yet: variable line heights in the Java editor (code minings), and a proportional editor
 font. Both are measured on the Eclipse side, so they change only the numbers sent (section 3.1).

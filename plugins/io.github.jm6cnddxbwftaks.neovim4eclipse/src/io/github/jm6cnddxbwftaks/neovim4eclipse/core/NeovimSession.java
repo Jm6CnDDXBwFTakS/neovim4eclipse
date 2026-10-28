@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -136,6 +137,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile boolean viewportEnabled;
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
+    /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
+    private final AtomicInteger pendingWheelLines = new AtomicInteger();
+    private volatile DocumentBuffer wheelBuffer;
     /** The editor's newest scroll, not sent yet: a scroll-bar drag sends many, Neovim needs the last. */
     private final LatestValue<Scroll> pendingScroll = new LatestValue<>();
     /**
@@ -757,6 +761,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 Scroll latest = pendingScroll.take();
                 if (latest != null) {
                     sendTopLine(latest.buffer(), latest.line1(), true);
+                }
+            });
+        }
+    }
+
+    @Override
+    public void scrollLinesAsync(DocumentBuffer buffer, int lines) {
+        if (!viewportEnabled || lines == 0) {
+            return;
+        }
+        wheelBuffer = buffer;
+        // Added up, not replaced: every wheel event counts. The task takes the sum so far; one
+        // that finds 0 (events that cancelled out) sends nothing.
+        if (pendingWheelLines.getAndAdd(lines) == 0) {
+            submit("wheel", Level.FINE, () -> {
+                int sum = pendingWheelLines.getAndSet(0);
+                DocumentBuffer target = wheelBuffer;
+                if (sum != 0 && target != null && buffers.handleOf(target) != null && target.loaded) {
+                    await(api.execLua(LuaScripts.SCROLL_LINES,
+                            List.of(String.valueOf(target.bufnr), String.valueOf(sum))));
                 }
             });
         }
