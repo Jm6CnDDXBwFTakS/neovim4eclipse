@@ -6,10 +6,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
@@ -133,6 +135,9 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
     private final Consumer<FoldState> foldListener = this::onFolds;
     private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
+    private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
+    /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
+    private volatile String loggedMode;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
             DocumentBuffer buffer, boolean takeNeovimCursor) {
@@ -153,15 +158,14 @@ public final class NeovimEditorController implements AutoCloseable {
             caret.setFoldCaption(foldMirror::captionOffset); // a closed fold's caption, without unfolding
         }
         this.viewport = session.viewportEnabled()
-                ? new ViewportFollower(styledText, session::setEditorSizeAsync,
-                        wrap -> session.setWrapAsync(buffer, wrap), this::setEditorWordWrap)
+                ? new ViewportFollower(styledText, new ViewportSession(session, buffer), new ViewportEditor())
                 : null;
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
         this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer, caretSync);
         // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are echoes.
-        this.caretSync.dropNeovimCursorWhile(() -> session.isEclipseTypingReady() && !session.isNeovimDrivenInsert());
+        this.caretSync.dropNeovimCursorWhile(this::eclipseTyping);
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
@@ -193,6 +197,18 @@ public final class NeovimEditorController implements AutoCloseable {
         session.setLeaveInsertPush(() -> {
             try {
                 synchronizer.pushDocumentToNeovim();
+                if (viewport != null) {
+                    // Eclipse scrolled alone while it typed (D6): its view is kept, and Neovim's
+                    // window, which has the lines now, is scrolled to it before the Esc. Read on
+                    // the UI thread, which never waits for the session's threads (no deadlock).
+                    int[] top = { 0 };
+                    SwtUiExecutor.INSTANCE.syncExec(() -> {
+                        if (!closed && !styledText.isDisposed()) {
+                            top[0] = viewport.eclipseTopLine();
+                        }
+                    });
+                    session.setTopLine(buffer, top[0]);
+                }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "push on leave insert failed", e);
             }
@@ -212,6 +228,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         if (viewport != null) {
             session.addWrapListener(wrapListener);
+            session.addTopLineListener(topLineListener);
         }
 
         modeStatus.addTo(editor.getEditorSite());
@@ -290,10 +307,107 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
-    /** Eclipse's word wrap (Alt+Shift+Y) for this editor, if it has one. UI thread. */
-    private void setEditorWordWrap(boolean wrap) {
-        if (editor instanceof ITextEditorExtension6 wrapping) { // it does nothing where wrap is not supported
-            wrapping.setWordWrap(wrap);
+    /**
+     * Neovim's window scrolled: the editor scrolls to its top line, on the UI thread, before the
+     * caret of the same key moves (the session reports the top line first, and both go through the
+     * same UI queue). Only for this editor's buffer and in Neovim mode, and not while Eclipse types
+     * or Esc is handled: Neovim's lines are behind until the push at Esc, so its view is of another
+     * text (decision D6: Eclipse scrolls alone in insert mode, and its view is kept at Esc; the
+     * replay of the typed text would otherwise scroll the editor back first). Session thread.
+     */
+    private void onNeovimTopLine(ViewportPort.TopLine top) {
+        if (closed || !neovimModeActive || top.bufnr() != buffer.bufnr() || eclipseTyping()
+                || session.isLeavingInsertMode()) {
+            return;
+        }
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed && !styledText.isDisposed()) {
+                caretSync.runAsFromNeovim(() -> viewport.onNeovimTopLine(top.line1()));
+            }
+        });
+    }
+
+    /** Whether Eclipse types in insert mode now (Neovim gets the text at Esc). */
+    private boolean eclipseTyping() {
+        return session.isEclipseTypingReady() && !session.isNeovimDrivenInsert();
+    }
+
+    /** {@link ViewportFollower}'s way to the session, for this editor's buffer. */
+    private final class ViewportSession implements ViewportFollower.Neovim {
+        private final NeovimSession session;
+        private final DocumentBuffer buffer;
+
+        ViewportSession(NeovimSession session, DocumentBuffer buffer) {
+            this.session = session;
+            this.buffer = buffer;
+        }
+
+        @Override
+        public void sendSize(int columns, int rows) {
+            session.setEditorSizeAsync(columns, rows);
+        }
+
+        @Override
+        public void sendWrap(boolean wrap) {
+            session.setWrapAsync(buffer, wrap);
+        }
+
+        @Override
+        public void sendTopLine(int line1) {
+            session.setTopLineAsync(buffer, line1);
+        }
+
+        @Override
+        public void sendScroll(int line1) {
+            // In insert mode Eclipse scrolls alone (D6) and Esc sends the view; in Eclipse mode
+            // (the toolbar button off) Neovim does not follow the editor at all.
+            if (neovimModeActive && !session.isTypingMode()) {
+                session.scrollToAsync(buffer, line1);
+            }
+        }
+    }
+
+    /**
+     * {@link ViewportFollower}'s view of this editor: word wrap through the editor, top lines through
+     * its text viewer, in document lines (the viewer converts to the widget's lines where code is
+     * folded). A top line hidden in a fold that Neovim keeps closed becomes that fold's caption line,
+     * which the widget shows (as for the caret, {@link FoldMirror#captionOffset}). UI thread.
+     */
+    private final class ViewportEditor implements ViewportFollower.Editor {
+        @Override
+        public void setWordWrap(boolean wrap) {
+            if (editor instanceof ITextEditorExtension6 wrapping) { // it does nothing where wrap is not supported
+                wrapping.setWordWrap(wrap);
+            }
+        }
+
+        @Override
+        public int topLine() {
+            ITextViewer viewer = viewerOf(editor);
+            return viewer == null ? styledText.getTopIndex() : Math.max(0, viewer.getTopIndex());
+        }
+
+        @Override
+        public void setTopLine(int line0) {
+            ITextViewer viewer = viewerOf(editor);
+            if (viewer == null) {
+                styledText.setTopIndex(line0);
+                return;
+            }
+            viewer.setTopIndex(captionLine(viewer, line0));
+        }
+
+        private int captionLine(ITextViewer viewer, int line0) {
+            IDocument document = viewer.getDocument();
+            if (foldMirror == null || document == null) {
+                return line0;
+            }
+            try {
+                int caption = foldMirror.captionOffset(document.getLineOffset(line0));
+                return caption < 0 ? line0 : document.getLineOfOffset(caption);
+            } catch (BadLocationException e) {
+                return line0; // past the end: the viewer clamps
+            }
         }
     }
 
@@ -597,7 +711,10 @@ public final class NeovimEditorController implements AutoCloseable {
         if (closed) {
             return;
         }
-        LOG.fine(() -> "Mode → " + mode);
+        if (!Objects.equals(mode, loggedMode)) {
+            loggedMode = mode;
+            LOG.fine(() -> "Mode → " + mode);
+        }
         if (!neovimModeActive) {
             return; // status shows ECLIPSE until user toggles back
         }
@@ -671,6 +788,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeCmdlineListener(cmdlineListener);
             session.removeFoldStateListener(foldListener);
             session.removeWrapListener(wrapListener);
+            session.removeTopLineListener(topLineListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }

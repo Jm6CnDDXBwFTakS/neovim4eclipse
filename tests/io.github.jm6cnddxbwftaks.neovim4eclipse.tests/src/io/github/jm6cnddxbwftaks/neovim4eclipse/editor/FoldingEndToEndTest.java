@@ -9,10 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.Position;
 import org.eclipse.jface.text.source.Annotation;
 import org.eclipse.jface.text.source.projection.ProjectionAnnotation;
@@ -116,6 +119,36 @@ class FoldingEndToEndTest extends EndToEndTestBase {
 
         typeSlowly(foldWidget, "j");
         waitUntil("the caret after the fold", TIMEOUT_MS, () -> caretLine() == 6, () -> "; it is on line " + caretLine());
+    }
+
+    /**
+     * The top line comes from Neovim in document lines; the editor's viewer converts them to the
+     * widget's, which leave out a collapsed fold's hidden lines (docs/design/VIEWPORT.md, 3.4).
+     */
+    @Test
+    void ctrlEStepsTheEditorsTopLineOverAClosedFold() throws Exception {
+        String text = SOURCE + IntStream.rangeClosed(1, 200).mapToObj(i -> "line " + i).collect(Collectors.joining("\n", "", "\n"));
+        IFile file = project.getFile("Long.fold");
+        file.create(new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)), true, null);
+        ITextEditor longEditor = (ITextEditor) IDE.openEditor(page(), file, "io.github.jm6cnddxbwftaks.neovim4eclipse.tests.foldingEditor", true);
+        try {
+            StyledText longWidget = widgetOf(longEditor);
+            waitForAttach(longEditor, "Long.fold");
+            waitUntil("the folds in Neovim", TIMEOUT_MS,
+                    () -> Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.b.neovim4eclipse_folds == true")));
+            typeSlowly(longWidget, "2Gzc");
+            waitUntil("m closed in Neovim", TIMEOUT_MS, () -> closedInNeovim(2));
+            ITextViewer viewer = longEditor.getAdapter(ITextViewer.class);
+            typeSlowly(longWidget, "gg");
+            session.inputAsync("<C-e>"); // top line 2, the closed fold m
+            session.inputAsync("<C-e>"); // top line 6: Neovim steps over the fold's lines 3 to 5
+            waitUntil("line 6 at the editor's top", TIMEOUT_MS, () -> viewer.getTopIndex() == 5,
+                    () -> "; the editor's top line is " + (viewer.getTopIndex() + 1) + ", Neovim's "
+                            + SessionProbe.lua(session, "return vim.fn.line('w0')"));
+            assertEquals(2, longWidget.getTopIndex(), "the widget's line 3: lines 3 to 5 are hidden under line 2");
+        } finally {
+            longEditor.getSite().getPage().closeEditor(longEditor, false);
+        }
     }
 
     @Test

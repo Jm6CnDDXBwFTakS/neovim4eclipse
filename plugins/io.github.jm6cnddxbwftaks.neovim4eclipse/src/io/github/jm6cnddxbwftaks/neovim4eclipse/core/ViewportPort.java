@@ -7,8 +7,8 @@ import java.util.function.Consumer;
 
 /**
  * What keeping Neovim's window the size of the editor needs from the session
- * (docs/design/VIEWPORT.md): whether the feature is on, the editor's size, and its word wrap in both
- * directions. An interface, rather than the whole {@link NeovimSession}, so that the editor's side
+ * (docs/design/VIEWPORT.md): whether the feature is on, the editor's size, its word wrap in both
+ * directions, and the window's top line (Neovim's to the editor, the editor's on attach and Esc). An interface, rather than the whole {@link NeovimSession}, so that the editor's side
  * is tested with a small fake. {@link NeovimSession} implements it.
  *
  * <p>The flow, for an editor made taller: the editor measures its text area (40 → 50 lines) and
@@ -51,11 +51,49 @@ public interface ViewportPort {
     void removeWrapListener(Consumer<WrapChange> listener);
 
     /**
+     * Scrolls Neovim's window so that {@code line1} (1-based) is its top line, after every key queued
+     * before: the editor's view is the one to keep (it was just attached, or Eclipse scrolled while
+     * it typed in insert mode). Neovim keeps its cursor visible, so it may choose another top line;
+     * that one comes back through {@link #addTopLineListener}. Nothing happens when {@code buffer}
+     * is no longer the one Neovim shows.
+     */
+    void setTopLineAsync(DocumentBuffer buffer, int line1);
+
+    /**
+     * The user scrolled the editor in normal or visual mode (the scroll bar, the wheel, Eclipse
+     * revealing a search hit): Neovim's window is scrolled to {@code line1} too, and its cursor
+     * dragged into the new view as {@code Ctrl-E} drags it, so that the editor's view is kept and
+     * {@code H}, {@code L} and the next {@code j} work on it. Scrolls that arrive faster than Neovim
+     * answers replace each other. Nothing happens when {@code buffer} is no longer the one shown.
+     */
+    void scrollToAsync(DocumentBuffer buffer, int line1);
+
+    /**
+     * Hears Neovim's window scroll ({@code Ctrl-E}, {@code zz}, {@code 50G}, a resize), on a session
+     * thread, before the cursor of the same key is reported (docs/design/VIEWPORT.md, 3.2): the
+     * editor scrolls to {@link TopLine#line1()}, then places the caret. Only for attached buffers,
+     * and only when the viewport is on. The same top line may come twice for one key; the second
+     * changes nothing.
+     */
+    void addTopLineListener(Consumer<TopLine> listener);
+
+    void removeTopLineListener(Consumer<TopLine> listener);
+
+    /**
      * Neovim's {@code 'wrap'} changed in its window, which shows buffer {@code bufnr}.
      *
      * @param bufnr Neovim's buffer number
      * @param wrap  the new value
      */
     record WrapChange(int bufnr, boolean wrap) {
+    }
+
+    /**
+     * Neovim's window, which shows buffer {@code bufnr}, has {@code line1} at its top.
+     *
+     * @param bufnr Neovim's buffer number
+     * @param line1 the window's top line, 1-based ({@code line('w0')})
+     */
+    record TopLine(int bufnr, int line1) {
     }
 }

@@ -126,3 +126,89 @@ t.test('SET_WRAP leaves the window alone when it shows another buffer by now', f
   t.run('SET_WRAP', tostring(first), '1')
   t.eq(false, wo('wrap'))
 end)
+
+-- ---- the top line (commit 2: Neovim's window scrolls, the editor follows) ----
+
+--- A buffer of `count` lines, "line 1" to "line {count}", with the cursor on line `cursor`.
+local function long_buffer(count, cursor)
+  local lines = {}
+  for i = 1, count do
+    lines[i] = 'line ' .. i
+  end
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  vim.api.nvim_win_set_cursor(0, { cursor, 0 })
+end
+
+--- SET_TOPLINE as the session sends it: the buffer number and the 1-based line, as strings.
+local function topline(line, buf)
+  t.run('SET_TOPLINE', tostring(buf or vim.api.nvim_get_current_buf()), tostring(line))
+end
+
+t.test("SET_TOPLINE scrolls the window to the editor's top line and keeps the cursor", function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 50)
+  topline(40)
+  t.eq(40, vim.fn.line('w0'), 'H now goes to line 40, as in the editor')
+  t.eq(50, vim.fn.line('.'), 'the cursor stays')
+end)
+
+t.test('SET_TOPLINE cannot hide the cursor: Neovim keeps it on the screen', function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 1)
+  topline(100)
+  t.eq(1, vim.fn.line('.'))
+  t.eq(1, vim.fn.line('w0'), 'clamped; WinScrolled would report what Neovim chose')
+end)
+
+t.test("SET_TOPLINE leaves another buffer's window alone", function()
+  start()
+  long_buffer(200, 1)
+  local other = vim.api.nvim_get_current_buf()
+  vim.cmd.enew()
+  long_buffer(200, 150)
+  local before = vim.fn.line('w0')
+  topline(140, other)
+  t.eq(before, vim.fn.line('w0'), 'the window shows another editor\'s document by now')
+end)
+
+-- The cursor report's top line and WinScrolled's eclipse_topline come from autocmds that fire in
+-- Neovim's main loop, which t.type's feedkeys does not reach: NeovimViewportIntegrationTest.
+
+--- SET_TOPLINE for a scroll in the editor: the cursor is dragged into the new view.
+local function scroll(line)
+  t.run('SET_TOPLINE', tostring(vim.api.nvim_get_current_buf()), tostring(line), '1')
+end
+
+t.test('a scroll in the editor drags the cursor down into the view, as Ctrl-E does', function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 5)
+  scroll(40)
+  t.eq(40, vim.fn.line('w0'), 'the view is the editor\'s, not clamped to the cursor')
+  t.eq(40, vim.fn.line('.'), 'the cursor on the first line of the view')
+end)
+
+t.test("a scroll keeps 'scrolloff' lines between the dragged cursor and the edge", function()
+  start()
+  vim.o.scrolloff = 3
+  long_buffer(200, 5)
+  scroll(40)
+  t.eq(40, vim.fn.line('w0'))
+  t.eq(43, vim.fn.line('.'))
+  vim.api.nvim_win_set_cursor(0, { 190, 0 })
+  scroll(10)
+  t.eq(10, vim.fn.line('w0'))
+  t.eq(vim.fn.line('w$') - 3, vim.fn.line('.'), 'scrolled up: the cursor dragged up to the bottom')
+end)
+
+t.test('a scroll that keeps the cursor in view leaves it where it is, column included', function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 45)
+  vim.api.nvim_win_set_cursor(0, { 45, 3 })
+  scroll(40)
+  t.eq(40, vim.fn.line('w0'))
+  t.eq({ 45, 3 }, vim.api.nvim_win_get_cursor(0))
+end)

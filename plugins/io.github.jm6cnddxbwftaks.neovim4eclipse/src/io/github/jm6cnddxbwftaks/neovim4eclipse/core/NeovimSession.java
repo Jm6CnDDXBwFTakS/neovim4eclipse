@@ -136,6 +136,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile boolean viewportEnabled;
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
+    /** The editor's newest scroll, not sent yet: a scroll-bar drag sends many, Neovim needs the last. */
+    private final LatestValue<Scroll> pendingScroll = new LatestValue<>();
     /**
      * The last editor size, {@code {columns, rows}}, kept for a resize that Neovim asks for itself
      * ({@code :set number}) and while no editor is attached (D8). {@code null} until an editor sent one.
@@ -298,6 +300,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public boolean isNeovimDrivenInsert() {
         return keyInput.isNeovimDrivenInsert() && isTypingMode();
+    }
+
+    /**
+     * Whether Esc is being handled now: the typed text replayed into Neovim, the document pushed,
+     * the editor's top line sent ({@link #setLeaveInsertPush}). What Neovim reports meanwhile is of
+     * a window about to be scrolled to the editor's view, so the editor ignores its top lines.
+     */
+    public boolean isLeavingInsertMode() {
+        return keyInput.isLeavingInsertMode();
     }
 
     /** Whether Eclipse may type in the current insert mode. See {@link StateSync#isEclipseTypingReady()}. */
@@ -716,6 +727,62 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     @Override
+    public void setTopLineAsync(DocumentBuffer buffer, int line1) {
+        if (!viewportEnabled || line1 < 1) {
+            return;
+        }
+        submit("top line " + line1 + " for " + buffer.name(), Level.FINE, () -> setTopLine(buffer, line1));
+    }
+
+    @Override
+    public void scrollToAsync(DocumentBuffer buffer, int line1) {
+        if (!viewportEnabled || line1 < 1) {
+            return;
+        }
+        if (pendingScroll.offer(new Scroll(buffer, line1))) {
+            submit("scroll", Level.FINE, () -> {
+                Scroll latest = pendingScroll.take();
+                if (latest != null) {
+                    sendTopLine(latest.buffer(), latest.line1(), true);
+                }
+            });
+        }
+    }
+
+    /** A scroll of the editor, for {@link #pendingScroll}. */
+    private record Scroll(DocumentBuffer buffer, int line1) {
+    }
+
+    /**
+     * {@link #setTopLineAsync} on the input thread itself, for a step that must come before the next
+     * one of the same task: at Esc, the editor's top line goes to Neovim after the document and
+     * before {@code <Esc>}, whose cursor report would otherwise carry Neovim's own top line
+     * ({@code KeyInput.leaveInsertMode}). Input thread only.
+     */
+    public void setTopLine(DocumentBuffer buffer, int line1) throws Exception {
+        sendTopLine(buffer, line1, false);
+    }
+
+    /** {@link LuaScripts#SET_TOPLINE}, dragging the cursor along or keeping it. Input thread. */
+    private void sendTopLine(DocumentBuffer buffer, int line1, boolean drag) throws Exception {
+        if (!viewportEnabled || line1 < 1 || buffers.handleOf(buffer) == null || !buffer.loaded) {
+            return; // off, not created yet, or gone; SET_TOPLINE itself skips a buffer not shown
+        }
+        await(api.execLua(LuaScripts.SET_TOPLINE,
+                List.of(String.valueOf(buffer.bufnr), String.valueOf(line1), flag(drag))));
+    }
+
+    @Override
+    public void addTopLineListener(Consumer<TopLine> listener) {
+        events.addTopLineListener(listener);
+    }
+
+    @Override
+    public void removeTopLineListener(Consumer<TopLine> listener) {
+        events.removeTopLineListener(listener);
+    }
+
+    @Override
     public void addWrapListener(Consumer<WrapChange> listener) {
         events.addWrapListener(listener);
     }
@@ -1093,6 +1160,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         public void onWrap(int bufnr, boolean wrap) {
             LOG.fine(() -> "Neovim set " + (wrap ? "wrap" : "nowrap") + " for buffer " + bufnr);
             events.wrap(new WrapChange(bufnr, wrap));
+        }
+
+        @Override
+        public void onTopLine(int bufnr, int line1) {
+            if (viewportEnabled && buffers.isAttached(bufnr)) {
+                LOG.finest(() -> "Neovim's top line " + line1 + " in buffer " + bufnr);
+                events.topLine(new TopLine(bufnr, line1));
+            }
         }
 
         @Override

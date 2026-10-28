@@ -43,6 +43,7 @@ class NotificationBridgeTest {
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap) { events.add("wrap@" + bufnr + ":" + wrap); }
             @Override public void onViewportOverheadChanged() { events.add("overhead"); }
+            @Override public void onTopLine(int bufnr, int line1) { events.add("top@" + bufnr + ":" + line1); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
             }
@@ -131,6 +132,20 @@ class NotificationBridgeTest {
         notify("eclipse_wrap", 3, 1);
         notify("eclipse_wrap");
         assertEquals(List.of("wrap@3:true", "wrap@3:false"), events);
+    }
+
+    @Test
+    void aScrollCarriesTheBufferAndTheTopLine() {
+        notify("eclipse_topline", 3, 40);
+        notify("eclipse_topline", 3, 0); // not a line
+        notify("eclipse_topline", 3);
+        assertEquals(List.of("top@3:40"), events);
+    }
+
+    @Test
+    void theCursorsTopLineComesBeforeTheCursor() {
+        notify("eclipse_cursor", 50, 2, 3, 40);
+        assertEquals(List.of("top@3:40", "cursor:50:2@3"), events, "the editor scrolls, then the caret moves");
     }
 
     @Test
