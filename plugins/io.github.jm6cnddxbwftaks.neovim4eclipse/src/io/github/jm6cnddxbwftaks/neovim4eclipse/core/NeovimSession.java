@@ -145,6 +145,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile int[] editorSize;
     /** The grid last sent to Neovim: the same size is not sent twice. Input thread only. */
     private ViewportSize gridSent;
+    /**
+     * Set when {@link #resizeGrid} was skipped because Neovim waited for the rest of a command
+     * ({@code z}, {@code r}, {@code "}): the resize is tried again after each piece of input-thread
+     * work until it goes through. Input thread.
+     */
+    private boolean gridPending;
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
     private volatile Consumer<Integer> bufferClosedHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -688,15 +694,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Resizes Neovim's screen for the last editor size: asks Neovim what its screen has besides the
      * window ({@link LuaScripts#VIEWPORT_OVERHEAD}), adds it ({@link ViewportSize#forEditor}) and
-     * sends the grid if it changed. Skipped while Neovim waits for the rest of a command (an operator,
-     * {@code getchar()}): it would not answer the overhead question then; the next resize or
-     * attach sends the size. Input thread.
+     * sends the grid if it changed. Skipped while Neovim waits for the rest of a command
+     * ({@code nvim_get_mode().blocking}: after {@code z}, {@code r}, {@code "}, in {@code getchar()}):
+     * it would not answer the overhead question then. The skip is remembered ({@link #gridPending})
+     * and the resize sent after the key that ends the command. Example: {@code z} typed, the window
+     * resized, then {@code <Esc>}: the resize goes out after the {@code <Esc>}. Input thread.
      */
     private void resizeGrid() throws Exception {
         int[] size = editorSize;
-        if (size == null || isBlocked()) {
+        if (size == null) {
             return;
         }
+        if (isBlocked()) {
+            gridPending = true;
+            return;
+        }
+        gridPending = false;
         Object answer = await(api.execLua(LuaScripts.VIEWPORT_OVERHEAD, List.of()));
         ViewportSize.Overhead overhead = ViewportSize.Overhead.NONE;
         if (answer instanceof List<?> pair && pair.size() == 2 && pair.get(0) instanceof Number rows
@@ -1015,6 +1028,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return inputThread.submit(what, failureLevel, () -> {
             try {
                 work.run();
+                if (gridPending && !closed) {
+                    resizeGrid(); // skipped while Neovim waited; this work may have ended the wait
+                }
             } finally {
                 events.inputHandled();
             }
