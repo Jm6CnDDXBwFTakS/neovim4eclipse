@@ -1,6 +1,6 @@
 # Design note: Neovim's window follows the editor's view
 
-Status: **planned**, not implemented; for 0.1.10, on `feature/viewport` cut from `release/0.1.10`.
+Status: **in progress** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commit 1 (size, wrap, opt-out) is built, see *As built*.
 Planned on `feature/diagnostics` at `589485a`. The experiments used Neovim 0.12.6 (the plug-in's
 minimum) on Linux (arm64), through a small msgpack client attached with the plug-in's own UI options
 (`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer on
@@ -41,6 +41,31 @@ The plug-in implements none of the commands above; it copies sizes and top lines
 
 Size: about 400 lines of code and 500 of tests, in four commits (section 6). Uncertain: the
 SWT measuring with variable line heights (section 3.1) may grow it.
+
+## As built (differences from the plan)
+
+Commit 1 (size, `'wrap'` and `'linebreak'`, the opt-out):
+
+- **One editor class, not two.** The measuring (3.1's `ViewportMeasure`) is a static method of
+  `editor/ViewportFollower` (`cells`), which also listens and keeps the wrap; it needs only SWT and
+  is tested in `tests/swt` (`ViewportFollowerTest`). Word wrap is seen on the widget
+  (`StyledText.getWordWrap()` at the next paint), not through Eclipse's command, which catches the
+  key, the menu, the toolbar and code alike.
+- **Rows by pixels.** The text area's height over the line height, not
+  `JFaceTextUtil.getBottomIndex`: that index stops at the document's end (a short file would get a
+  short window) and moves with code minings while scrolling, which would resize Neovim on every
+  scroll. Lines made taller by code minings are therefore not counted (README says so).
+- **A font change** is noticed at the next paint (the font object differs), with the character
+  width read once per font; no font-registry listener.
+- **Session side.** `ViewportPort` (`setEditorSizeAsync`, `setWrapAsync`, wrap listener) on
+  `NeovimSession`; sizes merged in a `LatestValue`; the grid is not sent twice, and not while Neovim
+  waits for the rest of a command (it would not answer the overhead question; the next size or
+  attach sends it). The overhead options' `OptionSet` sends `eclipse_viewport`, scheduled so that
+  `:set nu rnu` resizes once.
+- **`'showbreak'` is set to `NONE`**, not `''`: it is global-local, and an empty local value falls
+  back to the global one.
+- **Checked in the Lua tests:** `OptionSet` fires for a modeline (`vim: set nolinebreak:`), so a
+  modeline is set back like a typed `:set` (D7).
 
 ## 1. Behavior
 

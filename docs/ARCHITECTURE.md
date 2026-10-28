@@ -90,7 +90,7 @@ line and byte column of the character under the pointer, Shift and Alt as `S`/`A
 select a word (from a bracket, up to its match), three the line (`V`), four a block, a drag selects, Shift+click
 extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a click while recording is recorded.
 
-- *Neovim's screen is not the editor's.* Neovim's window (40 rows) does not scroll with the editor, so a
+- *Neovim's screen is not the editor's.* Neovim's window has the editor's size (section 9) but does not scroll with it yet, so a
   character may be off its screen. The script then scrolls Neovim's window for a press; for a drag in visual mode
   it moves the cursor there (which extends the selection, as the drag would; scrolling first would lose the drag's
   start); a first drag goes to the nearest edge of Neovim's screen. Measured: about 0.2 ms per event, the state
@@ -208,6 +208,20 @@ an unchanged list is not sent again: Neovim's diagnostics move with edits by the
 `SETUP` makes the namespace draw nothing (Eclipse draws the problems) and, unless the user's config
 has one, sets `vim.diagnostic`'s `on_jump` hook to echo the message after a jump, which reaches the
 message line like any message. Design and decisions: [design/DIAGNOSTICS.md](design/DIAGNOSTICS.md).
+
+### 9. Neovim's window is the editor's size
+
+The plug-in draws nothing of Neovim's screen, but Neovim's screen commands (`H`, `L`, `Ctrl-D`,
+`'scrolloff'`) count its rows, so they must be the editor's. `editor/ViewportFollower` measures the
+attached editor's text area in cells (width over the font's average character width, height over
+the line height) on every resize and paint, and sends a changed size with `setEditorSizeAsync`. The
+session asks `LuaScripts.VIEWPORT_OVERHEAD` what Neovim draws besides the window (status line rows,
+number and sign columns, the user's own settings), adds it (`util/ViewportSize`), and calls
+`nvim_ui_try_resize`; an `OptionSet` on such an option (`:set number`) makes it resize again. With
+no editor attached the last size stays. The same follower keeps `'wrap'` and Eclipse's word wrap
+one setting (`SET_WRAP` one way, the `eclipse_wrap` notification the other, neither echoed), with
+`'linebreak'` while wrapping. `vim.g.neovim4eclipse_viewport = 0` keeps the fixed 120 × 40 screen.
+Scrolling is not synced yet. Design and decisions: [design/VIEWPORT.md](design/VIEWPORT.md).
 
 ## Ideas for future work
 

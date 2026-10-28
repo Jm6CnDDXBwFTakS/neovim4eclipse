@@ -41,6 +41,8 @@ class NotificationBridgeTest {
             }
             @Override public void onBufferEnter(int bufnr) { events.add("enter:" + bufnr); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
+            @Override public void onWrap(int bufnr, boolean wrap) { events.add("wrap@" + bufnr + ":" + wrap); }
+            @Override public void onViewportOverheadChanged() { events.add("overhead"); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
             }
@@ -119,6 +121,22 @@ class NotificationBridgeTest {
         notify("eclipse_buffer_closed", 4);
         notify("eclipse_buffer_closed");
         assertEquals(List.of("closed:4"), events);
+    }
+
+    /** {@code :set wrap} in Neovim (LuaScripts.VIEWPORT); a payload without a boolean is ignored. */
+    @Test
+    void wrapCarriesTheBufferAndTheValue() {
+        notify("eclipse_wrap", 3, true);
+        notify("eclipse_wrap", 3, false);
+        notify("eclipse_wrap", 3, 1);
+        notify("eclipse_wrap");
+        assertEquals(List.of("wrap@3:true", "wrap@3:false"), events);
+    }
+
+    @Test
+    void anOverheadChangeHasNoPayload() {
+        notify("eclipse_viewport");
+        assertEquals(List.of("overhead"), events);
     }
 
     @Test

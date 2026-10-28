@@ -63,6 +63,11 @@ public final class MsgpackNeovimApi implements NeovimApi {
     }
 
     @Override
+    public CompletableFuture<Void> uiTryResize(int width, int height) {
+        return call(MsgpackNeovimApi::nothing, "nvim_ui_try_resize", width, height);
+    }
+
+    @Override
     public CompletableFuture<Mode> getMode() {
         return call(answer -> {
             Map<?, ?> map = map("nvim_get_mode", answer, "a map with mode and blocking");

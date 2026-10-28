@@ -98,6 +98,18 @@ final class NotificationBridge implements Incoming {
          */
         DocumentWrite.Result onWrite(int bufnr, DocumentWrite.Request request);
 
+        /**
+         * {@code :set wrap} or {@code :set nowrap} in Neovim's window, which shows buffer
+         * {@code bufnr} ({@link LuaScripts#VIEWPORT}); Eclipse makes it the editor's word wrap.
+         */
+        void onWrap(int bufnr, boolean wrap);
+
+        /**
+         * An option that takes rows or columns of Neovim's screen besides the window's text changed
+         * ({@code :set number}, {@code 'laststatus'}): the screen is resized again for the editor.
+         */
+        void onViewportOverheadChanged();
+
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
 
@@ -146,6 +158,8 @@ final class NotificationBridge implements Incoming {
             case "eclipse_action" -> onAction(args);
             case "eclipse_command" -> onCommand(args);
             case "eclipse_showcmd" -> onShowcmd(args);
+            case "eclipse_wrap" -> onWrap(args);
+            case "eclipse_viewport" -> sink.onViewportOverheadChanged();
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -192,6 +206,14 @@ final class NotificationBridge implements Incoming {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             sink.onBufferEnter(buf);
+        }
+    }
+
+    /** Payload: {@code [bufnr, wrap]}, from {@link LuaScripts#VIEWPORT}'s {@code OptionSet}. */
+    private void onWrap(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        if (buf != null && args.size() >= 2 && args.get(1) instanceof Boolean wrap) {
+            sink.onWrap(buf, wrap);
         }
     }
 

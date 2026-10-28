@@ -23,6 +23,7 @@ import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.ITextEditorExtension6;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
@@ -33,6 +34,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ViewportPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
@@ -111,6 +113,11 @@ public final class NeovimEditorController implements AutoCloseable {
      * opt-out) or the editor cannot fold (no {@link ProjectionViewer}). See {@link #sendFolds()}.
      */
     private final FoldMirror foldMirror;
+    /**
+     * Neovim's window kept the size of this editor's text area, and {@code 'wrap'} its word wrap;
+     * {@code null} when the user turned the viewport off ({@code vim.g.neovim4eclipse_viewport = 0}).
+     */
+    private final ViewportFollower viewport;
     private volatile boolean closed;
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
@@ -125,6 +132,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<HostCommand> hostCommandListener = this::onHostCommand;
     private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
     private final Consumer<FoldState> foldListener = this::onFolds;
+    private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
             DocumentBuffer buffer, boolean takeNeovimCursor) {
@@ -144,6 +152,10 @@ public final class NeovimEditorController implements AutoCloseable {
         if (foldMirror != null) {
             caret.setFoldCaption(foldMirror::captionOffset); // a closed fold's caption, without unfolding
         }
+        this.viewport = session.viewportEnabled()
+                ? new ViewportFollower(styledText, session::setEditorSizeAsync,
+                        wrap -> session.setWrapAsync(buffer, wrap), this::setEditorWordWrap)
+                : null;
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
@@ -198,6 +210,9 @@ public final class NeovimEditorController implements AutoCloseable {
         if (foldMirror != null) {
             session.addFoldStateListener(foldListener);
         }
+        if (viewport != null) {
+            session.addWrapListener(wrapListener);
+        }
 
         modeStatus.addTo(editor.getEditorSite());
 
@@ -205,6 +220,9 @@ public final class NeovimEditorController implements AutoCloseable {
 
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
         setWindowFolder();
+        if (viewport != null) {
+            viewport.start(); // after the push: the wrap is for this editor's buffer
+        }
 
         onModeChanged(session.getMode());
         LOG.fine("Attached Neovim to editor: " + editor.getTitle());
@@ -255,6 +273,28 @@ public final class NeovimEditorController implements AutoCloseable {
                 caretSync.runAsFromNeovim(() -> foldMirror.applyNeovimState(folds.closed()));
             }
         });
+    }
+
+    /**
+     * Neovim's {@code 'wrap'} changed ({@code :set wrap}) in its window: the editor's word wrap
+     * follows, when the window shows this editor's buffer. Session thread.
+     */
+    private void onNeovimWrap(ViewportPort.WrapChange change) {
+        if (closed || change.bufnr() != buffer.bufnr()) {
+            return;
+        }
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed && !styledText.isDisposed()) {
+                viewport.onNeovimWrap(change.wrap());
+            }
+        });
+    }
+
+    /** Eclipse's word wrap (Alt+Shift+Y) for this editor, if it has one. UI thread. */
+    private void setEditorWordWrap(boolean wrap) {
+        if (editor instanceof ITextEditorExtension6 wrapping) { // it does nothing where wrap is not supported
+            wrapping.setWordWrap(wrap);
+        }
     }
 
     /**
@@ -630,12 +670,16 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeHostCommandListener(hostCommandListener);
             session.removeCmdlineListener(cmdlineListener);
             session.removeFoldStateListener(foldListener);
+            session.removeWrapListener(wrapListener);
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }
         try {
             if (foldMirror != null) {
                 foldMirror.close();
+            }
+            if (viewport != null) {
+                viewport.close();
             }
             caretSync.dispose();
             mouse.dispose();

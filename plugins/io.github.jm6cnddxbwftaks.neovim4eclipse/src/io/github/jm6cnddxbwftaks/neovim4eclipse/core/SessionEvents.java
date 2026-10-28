@@ -34,6 +34,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<Void> inputHandledListeners = new ListenerList<>("input handled", Level.WARNING);
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
+    private final ListenerList<ViewportPort.WrapChange> wrapListeners = new ListenerList<>("wrap", Level.WARNING);
 
     // ---- firing ----
 
@@ -75,6 +76,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** Neovim handed a command to Eclipse ({@code :Eclipse quit}; see {@link HostCommand}). */
     void hostCommand(HostCommand command) {
         hostCommandListeners.fire(command);
+    }
+
+    /** {@code :set wrap} or {@code :set nowrap} in Neovim (see {@link ViewportPort#addWrapListener}). */
+    void wrap(ViewportPort.WrapChange change) {
+        wrapListeners.fire(change);
     }
 
     /** Neovim's command line changed: opened, edited, completed or closed (see {@code CmdlineState}). */
@@ -157,5 +163,13 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
         cmdlineListeners.remove(listener);
+    }
+
+    void addWrapListener(Consumer<ViewportPort.WrapChange> listener) {
+        wrapListeners.add(listener);
+    }
+
+    void removeWrapListener(Consumer<ViewportPort.WrapChange> listener) {
+        wrapListeners.remove(listener);
     }
 }

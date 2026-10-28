@@ -30,6 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
@@ -62,7 +63,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  * other buffers are dropped.
  */
 public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort,
-        DocumentBufferPort, DiagnosticsPort, FoldsPort {
+        DocumentBufferPort, DiagnosticsPort, FoldsPort, ViewportPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
@@ -127,6 +128,21 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * in {@link #initialize}, before the session is handed out.
      */
     private volatile boolean problemsEnabled;
+    /**
+     * Whether Neovim's window follows the editor ({@link ViewportPort#viewportEnabled()}): the answer
+     * of {@link LuaScripts#VIEWPORT}, run once at start after the user's config. Written once, in
+     * {@link #initialize}, before the session is handed out.
+     */
+    private volatile boolean viewportEnabled;
+    /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
+    private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
+    /**
+     * The last editor size, {@code {columns, rows}}, kept for a resize that Neovim asks for itself
+     * ({@code :set number}) and while no editor is attached (D8). {@code null} until an editor sent one.
+     */
+    private volatile int[] editorSize;
+    /** The grid last sent to Neovim: the same size is not sent twice. Input thread only. */
+    private ViewportSize gridSent;
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
     private volatile Consumer<Integer> bufferClosedHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -215,6 +231,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // The same for the problems (docs/design/DIAGNOSTICS.md, "Turning it off").
         session.problemsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.PROBLEMS, List.of())));
         LOG.info(() -> "Eclipse's problems " + (session.problemsEnabled ? "sent to Neovim" : "off (g:neovim4eclipse_problems)"));
+        // And for the viewport (docs/design/VIEWPORT.md, D5): when off, the screen stays 120 × 40.
+        session.viewportEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.VIEWPORT, List.of())));
+        LOG.info(() -> "viewport " + (session.viewportEnabled ? "follows the editor" : "off (g:neovim4eclipse_viewport)"));
         Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -635,6 +654,78 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     @Override
+    public boolean viewportEnabled() {
+        return viewportEnabled;
+    }
+
+    @Override
+    public void setEditorSizeAsync(int columns, int rows) {
+        if (!viewportEnabled) {
+            return;
+        }
+        if (pendingEditorSize.offer(new int[] { columns, rows })) {
+            submit("editor size", Level.FINE, () -> {
+                int[] latest = pendingEditorSize.take();
+                if (latest != null) {
+                    editorSize = latest;
+                    resizeGrid();
+                }
+            });
+        }
+    }
+
+    /**
+     * Resizes Neovim's screen for the last editor size: asks Neovim what its screen has besides the
+     * window ({@link LuaScripts#VIEWPORT_OVERHEAD}), adds it ({@link ViewportSize#forEditor}) and
+     * sends the grid if it changed. Skipped while Neovim waits for the rest of a command (an operator,
+     * {@code getchar()}): it would not answer the overhead question then; the next resize or
+     * attach sends the size. Input thread.
+     */
+    private void resizeGrid() throws Exception {
+        int[] size = editorSize;
+        if (size == null || isBlocked()) {
+            return;
+        }
+        Object answer = await(api.execLua(LuaScripts.VIEWPORT_OVERHEAD, List.of()));
+        ViewportSize.Overhead overhead = ViewportSize.Overhead.NONE;
+        if (answer instanceof List<?> pair && pair.size() == 2 && pair.get(0) instanceof Number rows
+                && pair.get(1) instanceof Number columns) {
+            overhead = new ViewportSize.Overhead(Math.max(0, rows.intValue()), Math.max(0, columns.intValue()));
+        }
+        ViewportSize grid = ViewportSize.forEditor(size[0], size[1], overhead);
+        if (!grid.equals(gridSent)) {
+            ViewportSize.Overhead used = overhead;
+            LOG.fine(() -> "Neovim's screen " + grid + " for an editor of " + size[0] + "×" + size[1]
+                    + " (overhead " + used.rows() + " rows, " + used.columns() + " columns)");
+            await(api.uiTryResize(grid.columns(), grid.rows()));
+            gridSent = grid;
+        }
+    }
+
+    @Override
+    public void setWrapAsync(DocumentBuffer buffer, boolean wrap) {
+        if (!viewportEnabled) {
+            return;
+        }
+        submit("wrap " + wrap + " for " + buffer.name(), Level.FINE, () -> {
+            if (buffers.handleOf(buffer) == null || !buffer.loaded) {
+                return; // not created yet, or gone; SET_WRAP itself skips a buffer not shown
+            }
+            await(api.execLua(LuaScripts.SET_WRAP, List.of(String.valueOf(buffer.bufnr), flag(wrap))));
+        });
+    }
+
+    @Override
+    public void addWrapListener(Consumer<WrapChange> listener) {
+        events.addWrapListener(listener);
+    }
+
+    @Override
+    public void removeWrapListener(Consumer<WrapChange> listener) {
+        events.removeWrapListener(listener);
+    }
+
+    @Override
     public void addFoldStateListener(Consumer<FoldState> listener) {
         events.addFoldListener(listener);
     }
@@ -996,6 +1087,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.fine(() -> "clipboard paste register=" + register + " regtype=" + paste.regtype()
                     + " lines=" + paste.lines().size());
             return paste.toRpc();
+        }
+
+        @Override
+        public void onWrap(int bufnr, boolean wrap) {
+            LOG.fine(() -> "Neovim set " + (wrap ? "wrap" : "nowrap") + " for buffer " + bufnr);
+            events.wrap(new WrapChange(bufnr, wrap));
+        }
+
+        @Override
+        public void onViewportOverheadChanged() {
+            if (!closed && viewportEnabled) {
+                submit("viewport overhead", Level.FINE, NeovimSession.this::resizeGrid);
+            }
         }
 
         @Override
