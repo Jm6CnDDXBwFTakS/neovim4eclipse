@@ -225,14 +225,18 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * {@code :w !cat} shows the text in the output popup, and Neovim then asks for a key itself
+     * {@code :w !sort} shows the text in the output popup, and Neovim then asks for a key itself
      * ({@code :!cmd} does not), which the {@code :} box shows. "Press any key to continue" appears
      * once, in the box: the popup leaves out its own prompt line while the box takes the keys. One
      * key closes both and changes nothing.
+     *
+     * <p>{@code sort} rather than {@code cat}: Windows has a {@code sort} command but no {@code cat}
+     * (a shell started from Git Bash finds Git's {@code cat}, one started from PowerShell does not).
+     * The lines are already in order, so {@code sort} gives them back unchanged on every system.
      */
     @Test
     void wBangCmdShowsItsOutputAboveOnePrompt() {
-        runInBox(widget, "w !cat");
+        runInBox(widget, "w !sort");
 
         waitUntil("the output and Neovim's prompt", TIMEOUT_MS, () -> {
             StyledText popup = outputPopupIn(widget);
@@ -241,7 +245,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
                     && box != null && box.getText().equals("Press any key to continue");
         }, () -> "; popup " + (outputPopupIn(widget) == null ? "none" : "\"" + outputPopupIn(widget).getText() + "\"")
                 + ", box " + (textChildOf(widget) == null ? "none" : "\"" + textChildOf(widget).getText() + "\""));
-        assertEquals(":w !cat\nalpha\nbeta\ngamma", outputPopupIn(widget).getText(), "no prompt line of its own");
+        assertEquals(":w !sort\nalpha\nbeta\ngamma", outputPopupIn(widget).getText(), "no prompt line of its own");
 
         Event key = new Event();
         key.character = 'x';
