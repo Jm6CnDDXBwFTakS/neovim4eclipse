@@ -19,12 +19,12 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
- * Two editors on one file (Window › New Editor) share one Neovim buffer ({@code core/EditorBuffers}),
+ * Two editors on one file (Window › Editor › Clone) share one Neovim buffer ({@code core/EditorBuffers}),
  * and the buffer goes with the last of them; each has its own Neovim window (docs/design/WINDOWS.md).
  */
 class TwoEditorsEndToEndTest extends EndToEndTestBase {
 
-    /** Window › New Editor on test.txt, attached. */
+    /** Window › Editor › Clone on test.txt, attached. */
     private ITextEditor openSecondEditor() throws Exception {
         page().getActivePart().getSite().getService(IHandlerService.class)
                 .executeCommand("org.eclipse.ui.window.newEditor", null);

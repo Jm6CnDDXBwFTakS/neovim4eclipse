@@ -131,7 +131,7 @@ class EditorBuffersTest {
         assertTrue(buffers.isSharedWithAnotherEditor("A.java", "editor 2"));
         assertFalse(buffers.isSharedWithAnotherEditor("B.java", "editor 1"), "a document without a buffer");
 
-        buffers.add("A.java", "editor 2", () -> "A"); // Window > New Editor
+        buffers.add("A.java", "editor 2", () -> "A"); // Window > Editor > Clone
         assertTrue(buffers.isSharedWithAnotherEditor("A.java", "editor 1"));
     }
 

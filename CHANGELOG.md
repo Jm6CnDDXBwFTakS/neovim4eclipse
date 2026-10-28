@@ -16,7 +16,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - Each editor has a Neovim window of its own (in a hidden tabpage), which keeps its cursor, column,
   scroll position, folds, window-local options, jump history, location list and `:lcd` while you
-  work in other editors. Two editors on one file (*Window → New Editor*) now have a cursor each
+  work in other editors. Two editors on one file (*Window → Editor → Clone*) now have a cursor each
   and share the text and undo history, as two Vim windows on one buffer. `Ctrl-O` into another
   file takes the window along, so the jump history stays one chain. See the README, "Known
   limitations".
@@ -26,7 +26,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `:close`, `:tabclose` and, when Ctrl+W goes to Neovim, `Ctrl+W q` and `Ctrl+W c` close the
   editor as `:q` does (Eclipse asks about changes; `:close!` discards them). `:split`, `:vsplit`,
   `:new`, `:tabnew`, `:tabonly` and `Ctrl+W s` / `v` are refused with a message naming Eclipse's
-  split editor and *New Editor*; a window a plug-in opens beside an editor's is closed again.
+  split editor and *Clone*; a window a plug-in opens beside an editor's is closed again.
 - The folder Neovim works in (`:lcd`) is set once per editor, when its window opens, instead of on
   every editor switch, so a `:lcd` you type stays with that editor. An untitled document gets the
   folder of the editor active before it, or your home folder; `'autochdir'` is honored.
