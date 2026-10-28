@@ -9,14 +9,23 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.eclipse.jface.text.ITextViewer;
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.ToolBar;
+import org.eclipse.swt.widgets.ToolItem;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
+import org.eclipse.ui.texteditor.ITextEditorExtension5;
 import org.eclipse.ui.texteditor.ITextEditorExtension6;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -248,26 +257,61 @@ class ViewportEndToEndTest extends EndToEndTestBase {
                 () -> Boolean.FALSE.equals(SessionProbe.lua(session, "return vim.wo.wrap")));
     }
 
-    /** Eclipse ends block selection to wrap (AbstractTextEditor.setWordWrap), so :set wrap still wraps. */
+    /**
+     * Eclipse ends block selection to wrap ({@code AbstractTextEditor.setWordWrap}), so {@code :set
+     * wrap} still wraps. A manual test found the toolbar's block selection button still pressed
+     * afterward: Eclipse updates its buttons when its own key or button runs, not on
+     * {@code setWordWrap} from code.
+     */
     @Test
-    void setWrapEndsBlockSelection() {
-        org.eclipse.ui.texteditor.ITextEditorExtension5 block = (org.eclipse.ui.texteditor.ITextEditorExtension5) editor;
-        block.setBlockSelectionMode(true);
+    void setWrapEndsBlockSelectionAndItsToolbarButton() {
+        ToolItem button = toolItem("Toggle Block Selection");
+        button.setSelection(true); // a click: SWT presses a check item, then tells its listeners
+        button.notifyListeners(SWT.Selection, new Event());
+        ITextEditorExtension5 block = (ITextEditorExtension5) editor;
+        waitUntil("block selection on", TIMEOUT_MS, block::isBlockSelectionModeEnabled);
         session.commandAsync("set wrap");
         waitUntil("the editor's word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
         assertTrue(!block.isBlockSelectionModeEnabled(), "block selection ended");
+        waitUntil("the block selection button released", TIMEOUT_MS, () -> !button.getSelection());
         assertTrue(Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.wo.wrap")), "Neovim keeps 'wrap'");
+    }
+
+    /** The workbench window's toolbar item whose tooltip starts with {@code tooltip}. */
+    private static ToolItem toolItem(String tooltip) {
+        List<ToolItem> found = new ArrayList<>();
+        waitUntil("the toolbar button " + tooltip, TIMEOUT_MS, () -> {
+            found.clear();
+            collect(PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell(), tooltip, found);
+            return !found.isEmpty();
+        });
+        return found.get(0);
+    }
+
+    private static void collect(Control control, String tooltip, List<ToolItem> into) {
+        if (control instanceof ToolBar bar) {
+            for (ToolItem item : bar.getItems()) {
+                if (item.getToolTipText() != null && item.getToolTipText().startsWith(tooltip)) {
+                    into.add(item);
+                }
+            }
+        }
+        if (control instanceof Composite composite) {
+            for (Control child : composite.getChildren()) {
+                collect(child, tooltip, into);
+            }
+        }
     }
 
     /** The key itself, not the command: Eclipse's binding must win over the plug-in's key handling. */
     @Test
     void altShiftYTogglesWordWrap() {
-        org.eclipse.swt.widgets.Event event = new org.eclipse.swt.widgets.Event();
+        Event event = new Event();
         event.keyCode = 'y';
         event.character = 'Y';
-        event.stateMask = org.eclipse.swt.SWT.ALT | org.eclipse.swt.SWT.SHIFT;
+        event.stateMask = SWT.ALT | SWT.SHIFT;
         event.doit = true;
-        widget.notifyListeners(org.eclipse.swt.SWT.KeyDown, event);
+        widget.notifyListeners(SWT.KeyDown, event);
         waitUntil("word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
     }
 

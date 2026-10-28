@@ -25,7 +25,9 @@ import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 import org.eclipse.ui.texteditor.ITextEditorExtension6;
+import org.eclipse.ui.texteditor.IUpdate;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
@@ -378,6 +380,17 @@ public final class NeovimEditorController implements AutoCloseable {
         public void setWordWrap(boolean wrap) {
             if (editor instanceof ITextEditorExtension6 wrapping) { // it does nothing where wrap is not supported
                 wrapping.setWordWrap(wrap);
+                // Eclipse's key and button run an action that updates the toolbar's toggle buttons
+                // afterward; setWordWrap alone does not. Word wrap on also ends block selection, so
+                // that button would otherwise stay pressed after a :set wrap.
+                updateAction(ITextEditorActionConstants.WORD_WRAP);
+                updateAction(ITextEditorActionConstants.BLOCK_SELECTION_MODE);
+            }
+        }
+
+        private void updateAction(String id) {
+            if (editor.getAction(id) instanceof IUpdate action) {
+                action.update();
             }
         }
 
