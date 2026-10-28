@@ -12,6 +12,16 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Neovim's window is now the size of the editor's text area, so `H`, `M`, `L` and `Ctrl-D` work on
+  the lines the editor shows (before, on a fixed screen of 40 lines nobody saw). Resizing the
+  window, the part or the font resizes it too. `vim.g.neovim4eclipse_viewport = 0` in `init.lua`
+  keeps the old fixed screen. See the README, "The editor's size and word wrap".
+- Eclipse's word wrap (`Alt+Shift+Y`) and Neovim's `'wrap'` are one setting: changing either changes
+  the other, and Eclipse's preference decides when an editor opens. While wrap is on, `'linebreak'`
+  stays on, so that lines wrap at the same words in both.
+
 ## [0.1.9] - 2026-10-28
 
 ### Added

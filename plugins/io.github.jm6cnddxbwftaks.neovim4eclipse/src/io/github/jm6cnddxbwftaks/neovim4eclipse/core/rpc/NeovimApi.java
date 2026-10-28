@@ -71,6 +71,16 @@ public interface NeovimApi {
      */
     CompletableFuture<Void> uiAttach(int width, int height, Map<String, Object> options);
 
+    /**
+     * {@code nvim_ui_try_resize(width, height)}: asks Neovim to make this UI's screen
+     * {@code width} × {@code height} cells. Neovim resizes its windows to fit (the screen is the
+     * smallest of all attached UIs; the plug-in is the only one), so {@code &lines},
+     * {@code &columns} and {@code winheight(0)} change, and {@code VimResized} fires. Example:
+     * {@code uiTryResize(104, 41)} for an editor of 100 × 40 with a status line and line numbers
+     * (docs/design/VIEWPORT.md).
+     */
+    CompletableFuture<Void> uiTryResize(int width, int height);
+
     /** {@code nvim_get_mode()}: answered even while Neovim waits for the rest of a command. */
     CompletableFuture<Mode> getMode();
 

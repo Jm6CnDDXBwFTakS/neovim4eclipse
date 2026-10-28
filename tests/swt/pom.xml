@@ -157,6 +157,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimMouse.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/FoldMirror.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ViewportFollower.java</include>
           </includes>
         </configuration>
       </plugin>

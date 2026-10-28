@@ -993,6 +993,198 @@ final class LuaScripts {
             """;
 
     /**
+     * Installs the viewport module, {@code require('neovim4eclipse.viewport')}, unless the user's
+     * config turned the feature off with {@code vim.g.neovim4eclipse_viewport = 0} (or
+     * {@code false}), and returns whether it is on. The session runs it once at start, after
+     * {@link #SETUP} (so after {@code init.lua}), and keeps the answer
+     * ({@code NeovimSession.viewportEnabled()}): when off, Neovim keeps its fixed 120 × 40 screen and
+     * no other viewport script is sent (docs/design/VIEWPORT.md, D5). Changing the variable later
+     * needs a Neovim restart.
+     *
+     * <p><b>What it is for.</b> Neovim's window is made the size of the editor
+     * ({@code nvim_ui_try_resize}, sent by the session), so that {@code H}, {@code L},
+     * {@code Ctrl-D} and {@code 'scrolloff'} work on the lines the editor shows. The module supplies
+     * what the session cannot know, and keeps {@code 'wrap'} the same as Eclipse's word wrap:
+     * <ul>
+     *   <li>{@code overhead()}, used by {@link #VIEWPORT_OVERHEAD}: {@code { &lines - winheight(0),
+     *       textoff }}, the rows and columns Neovim's screen has besides the window's text (status
+     *       line, line numbers, signs). The grid is made larger by them ({@code util/ViewportSize}).
+     *       Example: {@code { 1, 4 }} with the default status line and {@code set number}.</li>
+     *   <li>{@code set_wrap(on)}, used by {@link #SET_WRAP}: Eclipse's word wrap for the current
+     *       window (decision D2: Eclipse's state wins on attach).</li>
+     * </ul>
+     *
+     * <p><b>{@code 'linebreak'} while wrap is on</b> (D7). Eclipse wraps a long line at a word
+     * boundary; Neovim, without {@code 'linebreak'}, in the middle of a word. The line would then take
+     * a different number of screen rows on each side, and {@code gj}, {@code H} or {@code Ctrl-D}
+     * would land on another row than the one shown. So while wrap is on the window gets
+     * {@code 'linebreak'}, no {@code 'breakindent'} and {@code 'showbreak'} {@code NONE} (Eclipse
+     * draws neither an indent nor a marker for a wrapped part); the user's own values are kept in
+     * {@code w:neovim4eclipse_saved} and come back when wrap goes off. A change of one of the three
+     * while wrap is on is set back, with a message the first time in each Neovim session only: a
+     * filetype plug-in or a modeline that sets them would otherwise show it for every file. The value
+     * the user asked for is remembered, so it applies once wrap is off.
+     *
+     * <p><b>Changes made in Neovim reach Eclipse</b> by notification, on the plug-in's channel
+     * ({@code g:neovim4eclipse_channel}):
+     * <ul>
+     *   <li>{@code eclipse_wrap(buf, on)}: {@code :set wrap} or {@code :set nowrap}, which Eclipse
+     *       turns into the editor's word wrap. An option the plug-in set itself is not reported back
+     *       (the {@code applying} flag), as {@code CaretSync} ignores its own caret moves.</li>
+     *   <li>{@code eclipse_viewport()}: an option that changes the overhead changed
+     *       ({@code :set number}, {@code laststatus}, ...); the session measures it again and resizes.
+     *       Sent once per batch (scheduled), so {@code :set nu rnu} resizes once.</li>
+     * </ul>
+     */
+    static final String VIEWPORT = """
+            local enabled = vim.g.neovim4eclipse_viewport
+            if enabled == 0 or enabled == false then
+              return false
+            end
+            local M = {}
+            -- True while the plug-in sets options itself: their OptionSet is not the user's.
+            local applying = false
+            -- The 'linebreak' message is shown once per Neovim session (see the Java comment).
+            local told = false
+            -- While wrap is on: break at words as Eclipse does, no indent and no marker for the
+            -- wrapped part (Eclipse draws neither). showbreak is global-local: NONE overrides the
+            -- global value for this window, '' would fall back to it.
+            local BREAK = { linebreak = true, breakindent = false, showbreak = 'NONE' }
+
+            local function getlocal(win, name)
+              return vim.api.nvim_get_option_value(name, { scope = 'local', win = win })
+            end
+            local function setlocal(win, name, value)
+              vim.api.nvim_set_option_value(name, value, { scope = 'local', win = win })
+            end
+            local function notify(...)
+              local chan = vim.g.neovim4eclipse_channel
+              if chan then
+                vim.rpcnotify(chan, ...)
+              end
+            end
+
+            -- Wrap on: keep the user's three values once, then set the plug-in's. Wrap off: give
+            -- them back. A window variable, so each window keeps its own.
+            local function apply_break(win, on)
+              local saved = vim.w[win].neovim4eclipse_saved
+              if on then
+                if not saved then
+                  saved = {}
+                  for name in pairs(BREAK) do
+                    saved[name] = getlocal(win, name)
+                  end
+                  vim.w[win].neovim4eclipse_saved = saved
+                end
+                for name, value in pairs(BREAK) do
+                  setlocal(win, name, value)
+                end
+              elseif saved then
+                for name, value in pairs(saved) do
+                  setlocal(win, name, value)
+                end
+                vim.w[win].neovim4eclipse_saved = nil
+              end
+            end
+
+            function M.overhead()
+              local win = vim.api.nvim_get_current_win()
+              return { vim.o.lines - vim.fn.winheight(win), vim.fn.getwininfo(win)[1].textoff }
+            end
+
+            function M.set_wrap(on)
+              local win = vim.api.nvim_get_current_win()
+              applying = true
+              local ok, err = pcall(function()
+                setlocal(win, 'wrap', on)
+                apply_break(win, on)
+              end)
+              applying = false
+              assert(ok, err)
+            end
+
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_viewport', { clear = true })
+            vim.api.nvim_create_autocmd('OptionSet', {
+              group = group,
+              pattern = 'wrap',
+              callback = function()
+                if applying then
+                  return
+                end
+                local win = vim.api.nvim_get_current_win()
+                local on = vim.wo[win].wrap
+                applying = true
+                pcall(apply_break, win, on)
+                applying = false
+                notify('eclipse_wrap', vim.api.nvim_get_current_buf(), on)
+              end,
+            })
+            vim.api.nvim_create_autocmd('OptionSet', {
+              group = group,
+              pattern = { 'linebreak', 'breakindent', 'showbreak' },
+              callback = function(ev)
+                local win = vim.api.nvim_get_current_win()
+                local saved = vim.w[win].neovim4eclipse_saved
+                if applying or not saved or not vim.wo[win].wrap then
+                  return
+                end
+                local name = ev.match
+                saved[name] = getlocal(win, name) -- the user's wish, for when wrap is off again
+                vim.w[win].neovim4eclipse_saved = saved
+                applying = true
+                pcall(setlocal, win, name, BREAK[name])
+                applying = false
+                if not told then
+                  told = true
+                  vim.api.nvim_echo({ { "neovim4eclipse: '" .. name .. "' stays as it is while word wrap is"
+                    .. ' on, so that lines wrap where Eclipse wraps them', 'WarningMsg' } }, true, {})
+                end
+              end,
+            })
+            local pending = false
+            vim.api.nvim_create_autocmd('OptionSet', {
+              group = group,
+              pattern = { 'number', 'relativenumber', 'numberwidth', 'signcolumn', 'foldcolumn',
+                          'statuscolumn', 'laststatus', 'winbar', 'showtabline', 'cmdheight' },
+              callback = function()
+                if pending then
+                  return
+                end
+                pending = true
+                vim.schedule(function()
+                  pending = false
+                  notify('eclipse_viewport')
+                end)
+              end,
+            })
+            package.loaded['neovim4eclipse.viewport'] = M
+            return true
+            """;
+
+    /**
+     * The rows and columns Neovim's screen has besides the current window's text,
+     * {@code { rows, columns }}; see {@link #VIEWPORT}'s {@code overhead}. Sent only when the
+     * viewport is on, so the module is there.
+     */
+    static final String VIEWPORT_OVERHEAD = """
+            return require('neovim4eclipse.viewport').overhead()
+            """;
+
+    /**
+     * Sets {@code 'wrap'} (and with it {@code 'linebreak'}, see {@link #VIEWPORT}) in the current
+     * window to Eclipse's word wrap (arguments: the buffer number, {@code "1"} for wrap or {@code "0"}).
+     * Nothing when that buffer is not the current one: the window shows another editor's document
+     * by now, whose own word wrap is sent when it is attached.
+     */
+    static final String SET_WRAP = """
+            local buf, on = tonumber((select(1, ...))), (select(2, ...))
+            if vim.api.nvim_get_current_buf() ~= buf then
+              return
+            end
+            require('neovim4eclipse.viewport').set_wrap(on == true or on == 1 or on == '1')
+            """;
+
+    /**
      * Sets the current buffer's indentation options (arguments: tabstop, "1" to indent with tabs,
      * indent width, "1" to follow braces, cinoptions). See {@code util/Indentation} for why.
      * {@code 'shiftwidth'} is one indent level, used by {@code >>}, {@code o} and {@code cindent};
