@@ -59,8 +59,10 @@ Commit 1 (size, `'wrap'` and `'linebreak'`, the opt-out):
   width read once per font; no font-registry listener.
 - **Session side.** `ViewportPort` (`setEditorSizeAsync`, `setWrapAsync`, wrap listener) on
   `NeovimSession`; sizes merged in a `LatestValue`; the grid is not sent twice, and not while Neovim
-  waits for the rest of a command (it would not answer the overhead question; the next size or
-  attach sends it). The overhead options' `OptionSet` sends `eclipse_viewport`, scheduled so that
+  waits for the rest of a command (`nvim_get_mode().blocking`, after `z`, `r` or `"`; it would not
+  answer the overhead question). A skipped resize is sent after the input that ends the wait. (At
+  first it was dropped until the next resize: a manual test then found `L` acting like Page Down,
+  since Neovim's window kept the previous editor's height.) The overhead options' `OptionSet` sends `eclipse_viewport`, scheduled so that
   `:set nu rnu` resizes once.
 - **`'showbreak'` is set to `NONE`**, not `''`: it is global-local, and an empty local value falls
   back to the global one.

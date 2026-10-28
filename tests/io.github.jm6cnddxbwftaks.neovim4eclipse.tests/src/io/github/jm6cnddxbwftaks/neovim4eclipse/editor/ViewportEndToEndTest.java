@@ -191,6 +191,29 @@ class ViewportEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A manual test found {@code L} pressed again and again scrolling the editor down like Page Down.
+     * In Vim it stays on the last line. Here the editor is scrolled half a line, as a touchpad or the
+     * scroll bar leaves it.
+     */
+    @Test
+    void lPressedAgainStaysPutAfterAScrollByPixels() {
+        longDocument();
+        widget.setTopPixel(widget.getLineHeight() * 20 + widget.getLineHeight() / 2);
+        waitUntil("Neovim's window scrolled with the editor", TIMEOUT_MS, this::topsAgree, this::tops);
+        settle();
+        session.inputAsync("L");
+        settle();
+        int line = cursorLine();
+        int top = editorTop();
+        for (int i = 0; i < 3; i++) {
+            session.inputAsync("L");
+            settle();
+        }
+        assertEquals(line, cursorLine(), "L again stays on the same line" + tops());
+        assertEquals(top, editorTop(), "and the editor does not scroll" + tops());
+    }
+
+    /**
      * Decision D6: in insert mode Eclipse scrolls alone (the wheel, the scroll bar), and Neovim does
      * not hear of it until Esc. Without the top line sent at Esc, the cursor report of the Esc carried
      * Neovim's old top line, and the editor jumped back there.
@@ -223,6 +246,18 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         runCommand(ITextEditorActionDefinitionIds.WORD_WRAP);
         waitUntil("nowrap in Neovim", TIMEOUT_MS,
                 () -> Boolean.FALSE.equals(SessionProbe.lua(session, "return vim.wo.wrap")));
+    }
+
+    /** The key itself, not the command: Eclipse's binding must win over the plug-in's key handling. */
+    @Test
+    void altShiftYTogglesWordWrap() {
+        org.eclipse.swt.widgets.Event event = new org.eclipse.swt.widgets.Event();
+        event.keyCode = 'y';
+        event.character = 'Y';
+        event.stateMask = org.eclipse.swt.SWT.ALT | org.eclipse.swt.SWT.SHIFT;
+        event.doit = true;
+        widget.notifyListeners(org.eclipse.swt.SWT.KeyDown, event);
+        waitUntil("word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
     }
 
     @Test

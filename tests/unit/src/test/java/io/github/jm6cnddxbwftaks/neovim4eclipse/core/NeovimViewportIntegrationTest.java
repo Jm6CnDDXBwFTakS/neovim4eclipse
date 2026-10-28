@@ -143,6 +143,26 @@ class NeovimViewportIntegrationTest {
         }
     }
 
+    /**
+     * A size that arrives while Neovim waits for the rest of a command ({@code z}, then its second
+     * key; {@code nvim_get_mode().blocking}, which an operator's {@code d} does not set) is
+     * not sent then (Neovim would not answer the overhead question), but once the command is done.
+     * Before, it was dropped, and Neovim kept the previous editor's size until the next resize.
+     */
+    @Test
+    void aSizeThatArrivesMidCommandIsSentWhenTheCommandEnds() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(IntStream.rangeClosed(1, 200).mapToObj(i -> "line " + i).toList());
+            s.setEditorSizeAsync(100, 30);
+            waitFor(() -> windowIs(s, 100, 30), "100 × 30");
+            s.inputAsync("z"); // Neovim waits for the second key
+            s.setEditorSizeAsync(80, 20);
+            NeovimBarrier.pass(s);
+            s.inputAsync("<Esc>");
+            waitFor(() -> windowIs(s, 80, 20), "the size, sent after the command ended");
+        }
+    }
+
     @Test
     void theOptOutKeepsNeovimsFixedScreen() throws Exception {
         try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_viewport = 0")) {
