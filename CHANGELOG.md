@@ -26,6 +26,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   relative name is relative to the project folder.
 - `:saveas new.txt` saves the file as `new.txt` and moves the editor there, like *File → Save As*
   without the dialog. Neovim's undo history comes along; the old file stays as it was.
+- *Neovim → Restart Neovim...* stops Neovim and starts a new one, after asking: for a change to
+  `init.lua` without restarting Eclipse, or a Neovim that is stuck. The editors' text is kept;
+  what only Neovim holds (undo history, registers, marks) is not.
 - Neovim's `]d` and `[d` (and `]D`, `[D`) move between the errors, warnings and infos Eclipse shows
   in the file, with counts, in macros and in the jumplist; the message line then shows the
   problem's message. Eclipse's problems are Neovim diagnostics of the file's buffer, so your own
@@ -38,6 +41,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The *Neovim* menu has *Attach Neovim* again, and *Preferences...* is now last, below
+  *Welcome...*, as in Eclipse's *Window* menu. *Attach* no longer opens a dialog when it works.
 - Moving into folded code no longer opens it unless your `'foldopen'` says so (Vim's default: a
   search opens a fold, `j` and `G` do not). `set foldopen=all` brings back the old behavior. The
   caret on a closed Java method stands on its signature.

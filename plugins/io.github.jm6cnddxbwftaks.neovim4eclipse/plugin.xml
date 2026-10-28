@@ -15,6 +15,11 @@
             description="Detach Neovim from the active text editor">
       </command>
       <command
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart"
+            name="Neovim: Restart Neovim"
+            description="Stop the embedded Neovim and start a new one (after changing init.lua, or when it is stuck)">
+      </command>
+      <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences"
             name="Neovim: Preferences"
             description="Open the Neovim preferences with their sub-pages expanded">
@@ -322,6 +327,10 @@
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.detach">
       </handler>
       <handler
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.RestartNeovimHandler"
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart">
+      </handler>
+      <handler
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.OpenPreferencesHandler"
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences">
       </handler>
@@ -441,8 +450,10 @@
 
    <extension point="org.eclipse.ui.menus">
       <menuContribution locationURI="menu:org.eclipse.ui.main.menu?after=additions">
-         <!-- Attach and Detach have no menu entries (attaching is automatic); their commands remain,
-              reachable through their key bindings and Quick Access (Ctrl+3). -->
+         <!-- The order: the mode (used most), then what acts on the running Neovim, then the
+              dialogs, Preferences last as in Eclipse's Window menu. Attach is here for an editor
+              that did not attach by itself; Detach is not (Neovim Mode off already gives the keys
+              back to Eclipse), its command stays reachable through Quick Access (Ctrl+3). -->
          <menu id="io.github.jm6cnddxbwftaks.neovim4eclipse.menu" label="Neovim" mnemonic="N">
             <!-- The "Show Neovim menu in the menu bar" preference (NeovimPropertyTester). -->
             <visibleWhen checkEnabled="false">
@@ -456,15 +467,26 @@
                   label="Neovim Mode"
                   style="toggle">
             </command>
-            <separator name="prefs" visible="true"/>
+            <separator name="session" visible="true"/>
             <command
-                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences"
-                  label="Preferences..."
+                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.attach"
+                  label="Attach Neovim"
                   style="push">
             </command>
             <command
+                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart"
+                  label="Restart Neovim..."
+                  style="push">
+            </command>
+            <separator name="prefs" visible="true"/>
+            <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome"
                   label="Welcome..."
+                  style="push">
+            </command>
+            <command
+                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences"
+                  label="Preferences..."
                   style="push">
             </command>
          </menu>

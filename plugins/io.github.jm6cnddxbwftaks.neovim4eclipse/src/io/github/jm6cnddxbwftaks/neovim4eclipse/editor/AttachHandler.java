@@ -14,8 +14,15 @@ import org.eclipse.ui.handlers.HandlerUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.AttachRefusal;
 
 /**
- * Command "Neovim: Attach to Active Editor" (Ctrl+Shift+N, Cmd+Shift+N on macOS, or Quick Access). Auto-attach normally
- * makes it unnecessary, so it has no menu entry.
+ * Command "Neovim: Attach to Active Editor" (<em>Neovim → Attach Neovim</em>, Ctrl+Shift+N, Cmd+Shift+N
+ * on macOS, or Quick Access). Auto-attach normally makes it unnecessary; it is for an editor that did
+ * not attach by itself. It also starts a new Neovim if the old one died
+ * ({@code Activator.getOrCreateSession}).
+ *
+ * <p>Quiet when it works: the editor's status line shows the Vim mode, which says enough, and a
+ * dialog on every attach would be noise from a menu. An editor already attached is left as it is.
+ * Only a refusal (no text editor) gets a dialog; a failure to start Neovim gets the start-failure
+ * notice ({@code StartFailureNotice}) and the error below.
  *
  * <p>A <em>handler</em> is the code behind a command. {@code plugin.xml} declares the command
  * ({@code org.eclipse.ui.commands}), binds a key to it ({@code org.eclipse.ui.bindings}) and names this class as its handler
@@ -39,10 +46,6 @@ public class AttachHandler extends AbstractHandler {
         }
         try {
             EditorAttachManager.getInstance().attach(editor, true);
-            MessageDialog.openInformation(window.getShell(), "Neovim",
-                    "Attached Neovim to: " + editor.getTitle() + "\n\n"
-                            + "Keys are handled by Neovim (motions, text objects, insert).\n"
-                            + "Examples: j/k, w/e/b, diw, ci\", dd, i…Esc");
         } catch (Exception e) {
             throw new ExecutionException("Failed to attach Neovim", e);
         }

@@ -171,8 +171,18 @@ public class Activator extends AbstractUIPlugin {
     }
 
     /**
+     * Stops Neovim and starts a new one attached to the active editor: <em>Neovim → Restart
+     * Neovim...</em> ({@code editor/RestartNeovimHandler}, which asks first). The same as changing
+     * the executable in the preferences. UI thread.
+     */
+    public void restartNeovim() {
+        resetSession();
+    }
+
+    /**
      * Stops the current session and detaches the editor so the next attach starts a fresh
-     * {@code nvim} with the current preferences, then re-attaches the active editor.
+     * {@code nvim} with the current preferences (and a fresh read of {@code init.lua}), then
+     * re-attaches the active editor.
      */
     private synchronized void resetSession() {
         EditorAttachManager manager = EditorAttachManager.getInstance();
