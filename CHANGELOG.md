@@ -44,7 +44,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - The *Neovim* menu has *Attach Neovim* again, and *Preferences...* is now last, below
   *Welcome...*, as in Eclipse's *Window* menu. *Attach* no longer opens a dialog when it works, and has no
-  key any more (it was `Ctrl+Shift+N`; bind one in *General → Keys* if you miss it).
+  key any more (it was `Ctrl+Shift+N`; bind one in *General → Keys* if you miss it). In Quick Access the commands are now *Neovim: Attach
+  Neovim* and *Neovim: Detach Neovim*, as in the menu.
 - Moving into folded code no longer opens it unless your `'foldopen'` says so (Vim's default: a
   search opens a fold, `j` and `G` do not). `set foldopen=all` brings back the old behavior. The
   caret on a closed Java method stands on its signature.

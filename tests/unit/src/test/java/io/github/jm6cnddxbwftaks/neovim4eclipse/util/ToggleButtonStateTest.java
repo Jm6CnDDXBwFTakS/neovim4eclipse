@@ -26,7 +26,7 @@ class ToggleButtonStateTest {
     /** The default: attach has no key, so the tooltip names the command, as Quick Access lists it. */
     @Test
     void withoutAnAttachKeyTheTooltipNamesTheCommand() {
-        assertEquals("Neovim mode unavailable (Neovim: Attach to Active Editor attaches Neovim).",
+        assertEquals("Neovim mode unavailable (Neovim > Attach Neovim attaches it).",
                 ToggleButtonState.of(Editor.TEXT_WITHOUT_NEOVIM, false, "Ctrl+Shift+M", null).tooltip());
     }
 

@@ -6,12 +6,12 @@
    <extension point="org.eclipse.ui.commands">
       <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.attach"
-            name="Neovim: Attach to Active Editor"
+            name="Neovim: Attach Neovim"
             description="Attach an embedded Neovim instance to the active text editor">
       </command>
       <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.detach"
-            name="Neovim: Detach from Active Editor"
+            name="Neovim: Detach Neovim"
             description="Detach Neovim from the active text editor">
       </command>
       <command

@@ -36,4 +36,4 @@ For a headless CI build of the plug-in and update site, use Maven/Tycho (`./mvnw
   expanded.
 - **Neovim → Attach Neovim** attaches Neovim to an editor that did not attach by itself (no key;
   bind one in *General → Keys* if you want). **Neovim → Restart Neovim...** asks, then starts a
-  new Neovim. *Detach from Active Editor* has no menu entry; run it from Quick Access (`Ctrl+3`).
+  new Neovim. *Neovim: Detach Neovim* has no menu entry; run it from Quick Access (`Ctrl+3`).

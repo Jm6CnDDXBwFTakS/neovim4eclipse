@@ -11,7 +11,7 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 /**
- * Command "Neovim: Detach from Active Editor" (Quick Access). Stops Neovim handling keys in the active editor until the next
+ * Command "Neovim: Detach Neovim" (Quick Access only). Stops Neovim handling keys in the active editor until the next
  * attach (another editor activated, or Attach). See {@link AttachHandler} for how handlers work.
  */
 public class DetachHandler extends AbstractHandler {
