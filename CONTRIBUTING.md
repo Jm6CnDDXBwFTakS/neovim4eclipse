@@ -437,7 +437,24 @@ fix/<name>, feature/<name>  ──►  release/<next version>  ──►  main  
   `release/0.1.2` from `main` for the fix alone, release it, then merge `main` into
   `release/0.1.3` so it has the fix too.
 
-Pull requests are optional: merging directly (preferably as a fast-forward) keeps the same flow.
+Pull requests are optional: merging directly keeps the same flow.
+
+**History stays linear: no merge commits.** A straight line of commits reads like a story in
+`git log`, and `git bisect` steps through it one change at a time. So a branch is rebased onto the
+one it goes into, then merged as a fast-forward:
+
+```bash
+git switch fix/my-change && git rebase release/0.1.2   # replay the work on top of the release branch
+git switch release/0.1.2 && git merge --ff-only fix/my-change
+```
+
+Rerun the tests after a rebase that had conflicts. Three guards keep it so:
+
+- the repository's branch ruleset requires a linear history;
+- GitHub offers only *Rebase and merge* and *Squash and merge* on a pull request (merge commits are
+  turned off);
+- `git config merge.ff only` in your clone makes a plain `git merge` refuse to make a merge commit
+  (set it once; it stays in `.git/config`, which is not shared).
 
 ## Commits and pull requests
 
