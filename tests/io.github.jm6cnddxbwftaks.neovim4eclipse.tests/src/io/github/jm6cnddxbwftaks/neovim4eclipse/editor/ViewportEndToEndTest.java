@@ -24,6 +24,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.swt.widgets.ToolItem;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.eclipse.ui.texteditor.ITextEditorExtension5;
 import org.eclipse.ui.texteditor.ITextEditorExtension6;
@@ -139,6 +140,30 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         waitUntil("the cursor on line 150", TIMEOUT_MS, () -> cursorLine() == 150);
         waitUntil("the editor scrolled as Neovim's window", TIMEOUT_MS, this::topsAgree, this::tops);
         assertTrue(editorTop() > 1);
+    }
+
+    /**
+     * Each editor has its own Neovim window (docs/design/WINDOWS.md), which keeps its view: back
+     * from another editor, the editor and Neovim agree on the same top line and cursor as before.
+     */
+    @Test
+    void anEditorSwitchKeepsEachEditorsView() throws Exception {
+        longDocument();
+        session.inputAsync("1");
+        session.inputAsync("5");
+        session.inputAsync("0");
+        session.inputAsync("G");
+        waitUntil("the cursor on line 150", TIMEOUT_MS, () -> cursorLine() == 150);
+        waitUntil("both agree", TIMEOUT_MS, this::topsAgree, this::tops);
+        int top = editorTop();
+        ITextEditor other = openOtherFile();
+        page().activate(editor);
+        waitForAttach(editor, "test.txt again");
+        settle();
+        assertEquals(top, editorTop(), "the editor's view" + tops());
+        assertEquals(top, neovim("w0"), "its window's view" + tops());
+        assertEquals(150, cursorLine());
+        page().closeEditor(other, false);
     }
 
     @Test
