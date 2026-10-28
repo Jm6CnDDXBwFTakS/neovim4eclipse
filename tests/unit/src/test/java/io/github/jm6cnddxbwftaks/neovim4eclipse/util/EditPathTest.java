@@ -4,82 +4,50 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * {@link EditPath}: the file an {@code :e} or {@code :wq} name means when it reaches Eclipse as
+ * typed. Normally Neovim has already made it absolute (host_commands_spec.lua); the rule is
+ * Neovim's either way: relative to the window's folder, {@code ./} and {@code ../} included.
+ */
 class EditPathTest {
 
     private static final Path HOME = Path.of("/home/user").toAbsolutePath();
-    private static final Path SRC = Path.of("/ws/app/src").toAbsolutePath();
+    /** The window's folder: the project root, where the plug-in's {@code :lcd} puts it. */
     private static final Path PROJECT = Path.of("/ws/app").toAbsolutePath();
 
     @Test
-    void relativeNamesTryTheFileDirectoryThenTheProject() {
-        assertEquals(List.of(SRC.resolve("Util.java"), PROJECT.resolve("Util.java")),
-                EditPath.candidates("Util.java", HOME, List.of(SRC, PROJECT)));
+    void aRelativeNameIsInTheWindowsFolder() {
+        assertEquals(PROJECT.resolve("Util.java"), EditPath.resolve("Util.java", HOME, PROJECT));
+        assertEquals(PROJECT.resolve("src/Util.java"), EditPath.resolve("src/Util.java", HOME, PROJECT));
     }
 
+    /** As in Neovim, {@code ./x} is the same file as {@code x} (until 0.1.9 it meant the file's folder). */
     @Test
-    void dotDotIsNormalizedAndDuplicatesDropped() {
-        assertEquals(List.of(PROJECT.resolve("pom.xml")),
-                EditPath.candidates("../pom.xml", HOME, List.of(SRC, SRC)));
-    }
-
-    @Test
-    void dotSlashLooksOnlyInTheEditedFilesFolder() {
-        assertEquals(List.of(SRC.resolve("Util.java")),
-                EditPath.candidates("./Util.java", HOME, List.of(SRC, PROJECT)));
-        assertEquals(List.of(SRC.resolve("Util.java")),
-                EditPath.candidates(".\\Util.java".replace('\\', java.io.File.separatorChar), HOME,
-                        List.of(SRC, PROJECT)));
-    }
-
-    @Test
-    void dotDotIsResolvedFromTheEditedFilesFolderOnlyAndMayLeaveTheProject() {
-        assertEquals(List.of(PROJECT.resolve("pom.xml")),
-                EditPath.candidates("../pom.xml", HOME, List.of(SRC, PROJECT)));
-        assertEquals(List.of(PROJECT.getParent().resolve("x.txt")),
-                EditPath.candidates("../../x.txt", HOME, List.of(SRC, PROJECT)),
-                "not also tried from the project root, and not stopped at it");
-    }
-
-    @Test
-    void dotSlashWithoutAnEditedFileFolderGivesNothing() {
-        assertTrue(EditPath.candidates("./a.txt", HOME, Arrays.asList(null, PROJECT)).isEmpty());
-        assertEquals(List.of(PROJECT.resolve("a.txt")),
-                EditPath.candidates("a.txt", HOME, Arrays.asList(null, PROJECT)));
-    }
-
-    @Test
-    void whichNamesCountAsFromTheCurrentFolder() {
-        for (String name : new String[] { "./a", ".\\a", "../a", "..\\a", ".", "..", " ./a " }) {
-            assertTrue(EditPath.isFromCurrentFolder(name), name);
-        }
-        for (String name : new String[] { "a", ".a", "..a", ".hidden/x", "/abs", "~/x", "", null }) {
-            assertFalse(EditPath.isFromCurrentFolder(name), String.valueOf(name));
-        }
+    void dotSlashAndDotDotAreTheWindowsFolderToo() {
+        assertEquals(PROJECT.resolve("Util.java"), EditPath.resolve("./Util.java", HOME, PROJECT));
+        assertEquals(PROJECT.resolveSibling("x.txt"), EditPath.resolve("../x.txt", HOME, PROJECT),
+                "not limited to the project");
     }
 
     @Test
     void homeAndAbsolutePathsAreUsedAsTheyAre() {
-        assertEquals(List.of(HOME.resolve(".config/nvim/init.lua")),
-                EditPath.candidates("~/.config/nvim/init.lua", HOME, List.of(SRC)));
-        assertEquals(List.of(HOME), EditPath.candidates("~", HOME, List.of(SRC)));
-        Path absolute = PROJECT.resolve("README.md");
-        assertEquals(List.of(absolute), EditPath.candidates(absolute.toString(), HOME, List.of(SRC)));
+        assertEquals(HOME.resolve(".config/nvim/init.lua"), EditPath.resolve("~/.config/nvim/init.lua", HOME, PROJECT));
+        assertEquals(HOME, EditPath.resolve("~", HOME, PROJECT));
+        Path absolute = Path.of("/etc/hosts").toAbsolutePath();
+        assertEquals(absolute, EditPath.resolve(absolute.toString(), HOME, PROJECT));
+        assertEquals(absolute, EditPath.resolve(absolute.toString(), HOME, null), "no folder needed");
     }
 
     @Test
-    void missingBasesAreSkippedAndBlankNamesGiveNothing() {
-        assertEquals(List.of(PROJECT.resolve("a.txt")),
-                EditPath.candidates("a.txt", HOME, Arrays.asList(null, PROJECT)));
-        assertTrue(EditPath.candidates("  ", HOME, List.of(SRC)).isEmpty());
-        assertTrue(EditPath.candidates(null, HOME, List.of(SRC)).isEmpty());
+    void nothingForABlankNameOrARelativeOneWithoutAFolder() {
+        assertNull(EditPath.resolve("a.txt", HOME, null), "a document without a file, outside any project");
+        assertNull(EditPath.resolve("  ", HOME, PROJECT));
+        assertNull(EditPath.resolve(null, HOME, PROJECT));
     }
 }

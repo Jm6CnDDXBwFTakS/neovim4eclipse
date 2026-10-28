@@ -387,9 +387,12 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         closeAll();
     }
 
-    /** {@code ./} means beside the current file, even when the project root has a file of that name. */
+    /**
+     * As in Neovim, {@code ./} is the window's folder (the project root), like a plain name; the
+     * file's own folder is {@code %:h}, which Neovim expands. From {@code src/Nested.txt}.
+     */
     @Test
-    void dotSlashCreatesBesideTheCurrentFileNotAtTheRoot() throws Exception {
+    void dotSlashIsTheProjectRootAndPercentHIsTheFilesFolder() throws Exception {
         project.getFolder("src").create(true, true, null);
         IFile nested = createFile("src/Nested.txt", "nested\n");
         createFile("Foo.txt", "root\n");
@@ -397,10 +400,16 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         waitForAttach(nestedEditor, "src/Nested.txt");
 
         runInBox(widgetOf(nestedEditor), "e ./Foo.txt");
+        ITextEditor root = activeEditorNamed("Foo.txt");
+        assertEquals(project.getFile("Foo.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(root.getEditorInput())));
+        assertEquals("root\n", documentOf(root).get(), "the root's Foo.txt");
+        page().activate(nestedEditor);
+        waitForAttach(nestedEditor, "src/Nested.txt");
 
-        ITextEditor opened = activeEditorNamed("Foo.txt");
-        assertEquals(project.getFile("src/Foo.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(opened.getEditorInput())));
-        assertEquals("", documentOf(opened).get(), "a new file, not the root's Foo.txt");
+        runInBox(widgetOf(nestedEditor), "e %:h/New.txt");
+        ITextEditor created = activeEditorNamed("New.txt");
+        assertEquals(project.getFile("src/New.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(created.getEditorInput())));
+        assertEquals("", documentOf(created).get(), "a new file beside Nested.txt");
         closeAll();
     }
 }

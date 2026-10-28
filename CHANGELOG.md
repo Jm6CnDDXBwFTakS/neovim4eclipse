@@ -57,6 +57,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   off the screen is dragged into it.
 - The FINE log line "Mode → …" is written when the mode changes, not again for every key typed on
   the command line.
+- `:e name` opens the file Neovim's `:e` would: relative to the editor's project folder (its
+  window's `:lcd`), like `:w name`, `./name` included. Before, it looked beside the current file
+  first, and `./name` meant that folder. Neovim now expands the name, so `:e %:h/name` (beside the
+  current file) and `:e #` work.
 
 ### Fixed
 
