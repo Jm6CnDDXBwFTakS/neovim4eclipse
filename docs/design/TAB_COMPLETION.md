@@ -124,6 +124,8 @@ there either, as in Vim).
 
 ## 3. `:e` file names
 
+(Since 0.1.10 `:e` resolves names as Neovim does, against the window's folder; see NEW_FILE.md.)
+
 Vim resolves a relative file name against its working directory, which for the embedded Neovim is
 wherever Eclipse was started. The plug-in's `:e` instead looks in the edited file's folder, then the
 project root (`util/EditPath`, `EclipseFileCommands.findFile`). Completion has to use the same two

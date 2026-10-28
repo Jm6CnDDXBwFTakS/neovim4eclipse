@@ -41,7 +41,9 @@ t.test('arguments are passed as typed, a count becomes the argument, and | goes 
   t.type(':2tabn<CR>')
   t.type(':Eclipse! quit | let g:after = 1<CR>')
   t.eq({
-    { 'edit', false, { 'my file.txt' } }, -- the backslash keeps it one argument; :Eclipse's fargs drop it
+    -- The backslash keeps it one argument; :Eclipse's fargs drop it. A file name is made a full
+    -- path (the next tests).
+    { 'edit', false, { vim.fn.getcwd() .. '/my file.txt' } },
     { 'tabnext', false, { '2' } },
     { 'quit', true, {} },
   }, t.sent('eclipse_command'))
@@ -155,3 +157,58 @@ end)
 -- by itself when the keys run out (see harness.lua), so the window would close either way;
 -- NeovimSessionIntegrationTest.theCommandLineWindowClosesWithAMessage checks it with keys sent one
 -- at a time.
+
+-- ---- file names: the full path Neovim's own :edit or :write would use ----
+
+--- A window working in /tmp/.../app (as the plug-in's :lcd to the project root), editing
+--- app/src/Main.java. Returns the project folder.
+local function editing_main_in_a_project()
+  start()
+  local app = vim.fn.tempname() .. '/app'
+  vim.fn.mkdir(app .. '/src', 'p')
+  app = vim.fn.resolve(app) -- getcwd() resolves links (macOS: /var is /private/var)
+  vim.cmd.lcd(vim.fn.fnameescape(app))
+  vim.cmd.file(vim.fn.fnameescape(app .. '/src/Main.java'))
+  return app
+end
+
+t.test(':e name, ./name and ../name are relative to the window\'s folder, as in Neovim', function()
+  local app = editing_main_in_a_project()
+  t.type(':e notes.txt<CR>')
+  t.type(':e ./notes.txt<CR>')
+  t.type(':e ../other/x.txt<CR>')
+  t.eq({
+    { 'edit', false, { app .. '/notes.txt' } },
+    { 'edit', false, { app .. '/notes.txt' } }, -- ./ is the same folder, not the file's
+    { 'edit', false, { vim.fn.fnamemodify(app, ':h') .. '/other/x.txt' } },
+  }, t.sent('eclipse_command'))
+end)
+
+t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without one is E194', function()
+  local app = editing_main_in_a_project()
+  t.type(':e %:h/Util.java<CR>')
+  t.type(':e ~/a.txt<CR>')
+  t.type(':e #<CR>')
+  t.eq({
+    { 'edit', false, { app .. '/src/Util.java' } }, -- beside Main.java
+    { 'edit', false, { vim.fn.expand('~') .. '/a.txt' } },
+  }, t.sent('eclipse_command'), 'nothing is sent for #')
+  t.ok(vim.fn.execute('messages'):find('E194', 1, true), 'the error is shown')
+end)
+
+t.test(':wq name and :x name get the same full path as :w name; ++p stays', function()
+  local app = editing_main_in_a_project()
+  t.type(':wq copy.txt<CR>')
+  t.type(':x ++p out/copy.txt<CR>')
+  t.eq({
+    { 'wq', false, { app .. '/copy.txt' } },
+    { 'xit', false, { '++p', app .. '/out/copy.txt' } },
+  }, t.sent('eclipse_command'))
+end)
+
+t.test(':e alone and :e! are left as they are', function()
+  editing_main_in_a_project()
+  t.type(':e<CR>')
+  t.type(':e!<CR>')
+  t.eq({ { 'edit', false, {} }, { 'edit', true, {} } }, t.sent('eclipse_command'))
+end)

@@ -263,6 +263,13 @@ final class LuaScripts {
      * replaced one is, and {@code @:} repeats it. Only {@code :reg :} shows the replacement.
      * (Experiment X7 of the cleanup plan, 2026-10-26.)
      *
+     * <p><b>A file name arrives as a full path</b> ({@code :e name}, {@code :wq name},
+     * {@code :x name}). {@code :Eclipse} expands it as Neovim's own command would
+     * ({@code expandcmd()}: {@code %:h/x}, {@code #}, {@code ~}) and makes it absolute against the
+     * window's folder ({@code fnamemodify(':p')}, then {@code vim.fs.normalize}), so Eclipse uses the file Neovim would, and
+     * {@code :e x}, {@code :w x} and {@code :wq x} mean the same file. {@code ./x} is that folder
+     * too, as in Neovim; the file's own folder is {@code %:h/x}.
+     *
      * <p>Not replaced, so left to Neovim: a range the command does not take ({@code :5,10w}),
      * arguments it does not take ({@code :q foo}: Neovim reports E488), a line Neovim cannot parse.
      * A range of buffers ({@code :3,5bd}, {@code :%bd}) becomes the listed buffers it covers, and a
@@ -308,6 +315,7 @@ final class LuaScripts {
               end
               return false
             end
+            local file_commands = { edit = true, wq = true, xit = true, exit = true } -- take a file name
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
                 vim.fn.histdel(':', -1) -- the replacement
@@ -325,7 +333,29 @@ final class LuaScripts {
                 vim.api.nvim_echo({ { 'E492: Not an Eclipse command: ' .. name } }, true, { err = true })
                 return
               end
-              vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, vim.list_slice(o.fargs, 2))
+              local args = vim.list_slice(o.fargs, 2)
+              -- A file name (:e name, :wq name, :x name): Neovim turns it into the full path its
+              -- own :edit or :write would use, and Eclipse uses that. expandcmd() expands what those
+              -- commands expand (%, #, ~, $HOME; E194 when there is no alternate file for #), and
+              -- fnamemodify(':p') makes the name absolute against the window's folder (getcwd(0):
+              -- the project's root, or a folder you went to with :cd or :lcd), as Neovim's own
+              -- :w other.txt does. ++opt words (++p) are left as they are. Example, editing
+              -- src/Main.java in /ws/app: `:e notes.txt` and `:e ./notes.txt` send
+              -- /ws/app/notes.txt, `:wq %:h/Copy.java` sends /ws/app/src/Copy.java.
+              if file_commands[name] then
+                for i, word in ipairs(args) do
+                  if word:sub(1, 1) ~= '+' then
+                    local ok, expanded = pcall(vim.fn.expandcmd, word, { errmsg = true })
+                    if not ok then
+                      vim.api.nvim_echo({ { (tostring(expanded):gsub('^Vim:', '')) } }, true, { err = true })
+                      return
+                    end
+                    -- normalize: ../ resolved, as :edit shows the name (fnamemodify keeps it)
+                    args[i] = vim.fs.normalize(vim.fn.fnamemodify(expanded, ':p'))
+                  end
+                end
+              end
+              vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, args)
             end, { nargs = '+', bang = true, bar = true, desc = 'Eclipse carries out an ex command (:Eclipse quit)' })
 
             -- The :Eclipse form of one parsed command (p, from nvim_parse_cmd; what follows a | is

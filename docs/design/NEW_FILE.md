@@ -5,6 +5,16 @@ experiments used Neovim 0.12.4 on Windows 11, and the plug-in's UI test runtime.
 the maintainer are marked *(decided)*. The plan below is kept as written; *As built* says where the
 code differs from it and why.
 
+> **Revised 2026-10-27 (0.1.10): where a name points.** `:e name` no longer searches the current
+> file's folder and then the project root, and `./` no longer means the current file's folder
+> (section 1). As in Neovim, a relative name, `./` and `../` included, is relative to the window's
+> folder, which the plug-in sets to the project root (`:lcd`, decision D5 of the Neovim cleanup
+> plan). Neovim expands the name before Eclipse sees it (`LuaScripts.HOST_COMMANDS`), so `%:h/name`
+> is the file beside the current one, and a new file goes where the name points. Why: the search
+> came from a time when Neovim's working folder was wherever Eclipse had started; with `:lcd` it
+> made `:e name` and `:w name` mean different files. The rest of this note (new editors, `:w`
+> creating the file) is unchanged.
+
 ## Summary
 
 In Vim, `:e new.txt` for a file that does not exist opens an empty buffer named `new.txt` and shows

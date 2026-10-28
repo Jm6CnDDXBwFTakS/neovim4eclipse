@@ -391,8 +391,8 @@ search inside an operator (`d/`), and prompts such as `input()` and `confirm()`.
 Tab completes the line as Neovim does (commands, options and their values, buffers, help tags,
 variables, functions, file names), following your `'wildmode'`; Shift+Tab goes back. A line above the
 box lists the candidates, with the selected one highlighted. File names complete from the editor's
-project folder (the editor's Neovim window works there, `:lcd`); `:e` itself still looks next to
-the current file first, then in the project. The folder is set once, when the editor's window
+project folder (the editor's Neovim window works there, `:lcd`), and `:e` opens what Tab completes:
+a relative name is relative to that folder, as in Neovim. The folder is set once, when the editor's window
 opens, so a `:lcd` you type stays with that editor. An untitled document (*File → New → Untitled
 Text File*) gets the folder of the editor that was active before it, or your home folder if none
 was. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its file's folder
@@ -415,7 +415,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
 | `:wqa[ll]`, `:xa[ll]` | save all, then close all |
-| `:e[dit] file` | open `file`, looked for next to the current file, then in its project; `./file` and `../file` only from the current file's folder; `~` and absolute paths work. A file not found opens as a new, empty editor next to the current file (`"file" [New]`); nothing is written until `:w` |
+| `:e[dit] file` | open `file`, as Neovim's `:e` names it: relative to the editor's project folder (the window's folder, `:lcd`), `./file` too; `%:h/file` is beside the current file, `#` the alternate file, and `~` and absolute paths work. A file that does not exist opens as a new, empty editor (`"file" [New]`); nothing is written until `:w` |
 | `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
@@ -445,7 +445,7 @@ the file's own encoding, `++p` creating missing folders), and the editor stays o
 unsaved changes, so a later `:w` still saves it. A relative name is relative to the folder
 Neovim's window works in, the editor's project folder (`:lcd`, as Tab completion shows), so from
 `src/Main.java`, `:w copy.txt` writes `copy.txt` at the project's root; `:w %:h/copy.txt` writes it
-beside the file (`%:h` is the file's own folder, `:help filename-modifiers`). `:wq` and `:x`
+beside the file (`%:h` is the file's own folder, `:help filename-modifiers`). `:e`, `:wq` and `:x`
 read a name the same way. Inside a project the
 copy appears in the Project Explorer at once. As in Vim, an existing file needs `!` (`:w! other.txt`), and a file another Neovim
 buffer has is refused (E139). A copy is the text as it is: Eclipse's save actions (format on save) are
@@ -800,7 +800,7 @@ These are real and deliberate to know about before extending the code:
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
    every line, all keys go to Neovim until Esc, so content assist and IME composition do not work in that
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
-3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w other.txt`, `:5,10w part.txt` and `:saveas new.txt` work as in Vim, but `:file name` is undone; `:e` does not expand `%` or wildcards; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
+3. **Eclipse's commands are a fixed set** (table under *Command line*). `:w other.txt`, `:5,10w part.txt` and `:saveas new.txt` work as in Vim, but `:file name` is undone; `:e` does not expand wildcards (`:e *.txt`); a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after
    `:let ... |` or inside `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within the current editor
    stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`

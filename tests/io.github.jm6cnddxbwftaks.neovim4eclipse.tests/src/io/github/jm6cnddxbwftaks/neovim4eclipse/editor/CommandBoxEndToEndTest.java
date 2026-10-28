@@ -260,12 +260,17 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
 
     // ---- Where :e looks ----
 
-    /** From a file in a subfolder, {@code :e} also looks in the project's root folder. */
+    /**
+     * From a file in a subfolder, {@code :e name} is the project root's {@code name}, as
+     * {@code :w name} is: relative to the window's folder, as in Neovim. A file of that name beside
+     * the edited one is not looked at (until 0.1.9 it was, first).
+     */
     @Test
     void editFindsAFileAtTheProjectRoot() throws Exception {
         IFolder folder = project.getFolder("src");
         folder.create(true, true, null);
         IFile nested = createFile("src/Nested.txt", "nested\n");
+        createFile("src/root.txt", "beside\n");
         createFile("root.txt", "root\n");
         ITextEditor nestedEditor = (ITextEditor) IDE.openEditor(page(), nested, TEXT_EDITOR, true);
         waitForAttach(nestedEditor, "src/Nested.txt");
@@ -273,6 +278,8 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         runInBox(widgetOf(nestedEditor), "e root.txt");
 
         waitUntil("root.txt to open", TIMEOUT_MS, () -> activeEditorIs("root.txt"));
+        ITextEditor opened = (ITextEditor) page().getActiveEditor();
+        assertEquals("root\n", documentOf(opened).get(), "the root's root.txt, not src/root.txt");
         page().closeAllEditors(false);
         editor = null;
     }

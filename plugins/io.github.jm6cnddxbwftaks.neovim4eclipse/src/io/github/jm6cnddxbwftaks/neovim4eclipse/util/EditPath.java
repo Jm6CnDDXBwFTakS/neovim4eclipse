@@ -5,26 +5,28 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * Where {@code :e <file>} looks for {@code <file>}.
+ * Which file {@code :e <file>} means, for a name that reaches Eclipse as typed.
  *
- * <p>Vim resolves a relative name against its working directory. An embedded Neovim's working
- * directory is wherever Eclipse was started, which means nothing to the user, so names are resolved
- * against places that do: first the directory of the file being edited, then the root of its
- * project. {@code ~} is the home directory; absolute paths are used as they are.
+ * <p>Normally Neovim has already turned the name into a full path ({@code LuaScripts.HOST_COMMANDS}:
+ * {@code expandcmd()} and {@code fnamemodify(':p')}), the one its own {@code :edit} would open, so
+ * this class only passes it on. It is the fallback for a name that arrives relative anyway (a test,
+ * a future caller), and follows the same rule as Neovim: a relative name, {@code ./} and
+ * {@code ../} included, is relative to the window's working folder. The plug-in sets that folder to
+ * the editor's project root ({@code :lcd}), or to the file's folder for a file outside any project,
+ * so {@code :e notes.txt} and {@code :w notes.txt} mean the same file. {@code ~} is the home
+ * directory; absolute paths are used as they are.
  *
- * <p>Example: editing {@code /ws/app/src/Main.java} in project {@code /ws/app},
- * {@code :e Util.java} tries {@code /ws/app/src/Util.java}, then {@code /ws/app/Util.java}.
+ * <p>Example, editing {@code /ws/app/src/Main.java} in project {@code /ws/app}: {@code :e Util.java}
+ * and {@code :e ./Util.java} are {@code /ws/app/Util.java}; the file beside {@code Main.java} is
+ * {@code :e %:h/Util.java}, which only Neovim can expand.
  *
- * <p>A name starting with {@code ./} or {@code ../} is resolved against the first directory only
- * (the edited file's): {@code :e ./Util.java} means the one beside {@code Main.java}, never the
- * project root's. This is the plug-in's rule, not Vim's (Vim has no second directory to opt out
- * of); it works like a shell, where {@code ./script} runs the file here and {@code script} searches
- * {@code PATH}. {@code ../} is not limited to the project: from {@code src/}, {@code ../../x} is
- * {@code /ws/x}.
+ * <p>History: until 0.1.9 a plain name was looked for beside the file first, then in the project
+ * root, and {@code ./} meant the file's folder. That came from a time when Neovim's working folder
+ * was wherever Eclipse had started. Once each window worked in its project ({@code :lcd}, decision
+ * D5 of the Neovim cleanup plan) the reason was gone, and the search made {@code :e} and {@code :w}
+ * disagree about the same name.
  */
 public final class EditPath {
 
@@ -32,62 +34,32 @@ public final class EditPath {
     }
 
     /**
-     * @param argument the file name as typed after {@code :e}; quotes are not interpreted
-     * @param home     the user's home directory
-     * @param bases    directories to resolve a relative name against, in order; {@code null}
-     *                 entries are skipped. A {@code ./} or {@code ../} name uses only the first
-     *                 entry, and gives nothing when it is {@code null}
-     * @return candidate paths, normalized and without duplicates, best first; empty if
-     *         {@code argument} is blank or not a valid path on this system
+     * @param argument     the file name after {@code :e}; quotes are not interpreted
+     * @param home         the user's home directory
+     * @param windowFolder the window's working folder, for a relative name; {@code null} if unknown
+     *                     (then a relative name gives nothing)
+     * @return the path, normalized, or {@code null} if {@code argument} is blank, not a valid path on
+     *         this system, or relative to a folder that is not known
      */
-    public static List<Path> candidates(String argument, Path home, List<Path> bases) {
-        List<Path> out = new ArrayList<>();
+    public static Path resolve(String argument, Path home, Path windowFolder) {
         if (argument == null || argument.isBlank()) {
-            return out;
+            return null;
         }
         String name = argument.strip();
         try {
             if (name.equals("~")) {
-                out.add(home.normalize());
-                return out;
+                return home.normalize();
             }
             if (name.startsWith("~/") || name.startsWith("~\\")) {
-                out.add(home.resolve(name.substring(2)).normalize());
-                return out;
+                return home.resolve(name.substring(2)).normalize();
             }
             Path typed = Path.of(name);
             if (typed.isAbsolute()) {
-                out.add(typed.normalize());
-                return out;
+                return typed.normalize();
             }
-            List<Path> searched = isFromCurrentFolder(name) && !bases.isEmpty()
-                    ? bases.subList(0, 1) : bases;
-            for (Path base : searched) {
-                if (base != null) {
-                    Path candidate = base.resolve(typed).normalize();
-                    if (!out.contains(candidate)) {
-                        out.add(candidate);
-                    }
-                }
-            }
+            return windowFolder == null ? null : windowFolder.resolve(typed).normalize();
         } catch (InvalidPathException e) {
-            out.clear(); // a name such as "a\0b" cannot be a file anywhere
+            return null; // a name such as "a\0b" cannot be a file anywhere
         }
-        return out;
-    }
-
-    /**
-     * Whether {@code argument} starts with {@code ./} or {@code ../} ({@code .\} and {@code ..\} too,
-     * for Windows users), so it is resolved against the edited file's folder only. A bare {@code .}
-     * or {@code ..} counts as well.
-     */
-    public static boolean isFromCurrentFolder(String argument) {
-        if (argument == null) {
-            return false;
-        }
-        String name = argument.strip();
-        return name.equals(".") || name.equals("..")
-                || name.startsWith("./") || name.startsWith(".\\")
-                || name.startsWith("../") || name.startsWith("..\\");
     }
 }
