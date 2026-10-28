@@ -1608,8 +1608,9 @@ final class LuaScripts {
      * character clicked in the document. Returns whether the event was handed to Neovim's mouse.
      *
      * <p><b>Why a script.</b> {@code nvim_input_mouse} takes a <em>screen</em> cell, not a buffer
-     * position, and the plug-in draws nothing of Neovim's screen: Neovim's window (40 rows, see
-     * {@code NeovimConnection}) does not scroll with the editor. So the script asks Neovim where the
+     * position, and the plug-in draws nothing of Neovim's screen. Neovim's window shows what the
+     * editor shows ({@link #VIEWPORT}), but not always: with the viewport off (a fixed 40 rows),
+     * past the end of the document, or while a scroll is on its way. So the script asks Neovim where the
      * character is on its screen ({@code screenpos()}), which also accounts for tabs, wide
      * characters and wrapped lines. A character that is not on Neovim's screen is brought there:
      * <ul>

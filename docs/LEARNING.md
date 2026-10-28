@@ -383,6 +383,8 @@ to FINEST: every message in and out is logged.
 
 A Neovim instance with no UI attached does not process typed input reliably. `NeovimSession.start`
 therefore calls `nvim_ui_attach(120, 40, ...)` even though Eclipse draws nothing of Neovim's screen.
+The size is only a start: once an editor attaches, `nvim_ui_try_resize` makes the screen the
+editor's size, so that Neovim's screen commands count the lines you see (3.2b).
 Neovim then sends `redraw` notifications describing that screen. The options passed to
 `nvim_ui_attach` choose parts that come as *events* instead of drawn cells (`:help ui-ext-options`);
 the plug-in asks for three (`NeovimConnection.TERMINAL_UI`) and ignores the rest of the screen:
@@ -583,6 +585,35 @@ Collapsing the annotation makes the widget leave those lines out (hence `WidgetO
 
 The other way, a fold collapsed with the ruler changes the annotation model; the mirror's listener
 sends every fold again (one send per UI turn), and Neovim closes it. Design: [FOLDING.md](design/FOLDING.md).
+
+### 3.2b Scrolling: `Ctrl-E`, and the mouse wheel
+
+Neovim decides where its window is scrolled, and the editor copies it. Before that can mean
+anything, Neovim's window must be as tall as the editor: `editor/ViewportFollower` measures the text
+area in cells (its height over the line height: 520 pixels of 13-pixel lines are 40 rows), the
+session adds the rows Neovim has besides the window (its status line, read with
+`LuaScripts.VIEWPORT_OVERHEAD`) and calls `nvim_ui_try_resize`. Then, with the editor showing lines
+1 to 40:
+
+1. `Ctrl-E` goes to Neovim like `x` (3.2). Neovim scrolls its window one line; its cursor, on line
+   10, stays.
+2. Neovim's main loop notices the scroll and fires `WinScrolled`. The viewport module's autocmd
+   (`LuaScripts.VIEWPORT`) sends `eclipse_topline(buf, 2)`.
+3. `NotificationBridge` passes it to the session as a top line, which `SessionEvents` hands to
+   `NeovimEditorController.onNeovimTopLine`: on the UI thread, `ViewportFollower.onNeovimTopLine`
+   calls `ITextViewer.setTopIndex(1)` (0-based, in document lines; the viewer converts where code is
+   folded). The editor shows lines 2 to 41.
+4. A key that moves the cursor and scrolls (`50G`) fires `CursorMoved` first, whose report
+   (`eclipse_cursor`) carries `line('w0')`, already the new top line. The bridge passes the top line
+   on before the cursor, so the editor scrolls, then the caret moves onto a line it shows and
+   Eclipse's own reveal does nothing.
+
+The mouse wheel takes the same road the other way first: `editor/NeovimWheel`, a display filter,
+swallows the wheel event, `util/WheelScroll` turns SWT's `count` into lines (−3 is three lines down
+on Linux), and `LuaScripts.SCROLL_LINES` steps Neovim's top line as `Ctrl-E` would, dragging the
+cursor into the view. From step 2 on it is `Ctrl-E`. The editor never scrolls by itself, so the two
+cannot disagree. When it does scroll by itself (the scroll bar, a search hit), the next paint sends
+its top line to Neovim, which drags its cursor the same way. Design: [VIEWPORT.md](design/VIEWPORT.md).
 
 ### 3.3 Insert mode
 

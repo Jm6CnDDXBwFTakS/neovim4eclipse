@@ -90,10 +90,12 @@ line and byte column of the character under the pointer, Shift and Alt as `S`/`A
 select a word (from a bracket, up to its match), three the line (`V`), four a block, a drag selects, Shift+click
 extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a click while recording is recorded.
 
-- *Neovim's screen is not the editor's.* Neovim's window has the editor's size (section 9) but does not scroll with it yet, so a
-  character may be off its screen. The script then scrolls Neovim's window for a press; for a drag in visual mode
-  it moves the cursor there (which extends the selection, as the drag would; scrolling first would lose the drag's
-  start); a first drag goes to the nearest edge of Neovim's screen. Measured: about 0.2 ms per event, the state
+- *A click off Neovim's screen.* Neovim's window shows what the editor shows (section 9), so a clicked character
+  is normally on its screen. It may not be with the viewport turned off (`vim.g.neovim4eclipse_viewport = 0`,
+  Neovim's fixed 120 × 40 screen), past the end of the document (Neovim can scroll further than Eclipse), or for a
+  moment while a scroll is on its way. The script then scrolls Neovim's window for a press; for a drag in visual
+  mode it moves the cursor there (which extends the selection, as the drag would; scrolling first would lose the
+  drag's start); a first drag goes to the nearest edge of Neovim's screen. Measured: about 0.2 ms per event, the state
   read included.
 - *Drags are merged.* Mouse moves can come faster than Neovim answers; `util/LatestValue` keeps only the newest
   drag until the input thread sends it, and a release still comes after it.

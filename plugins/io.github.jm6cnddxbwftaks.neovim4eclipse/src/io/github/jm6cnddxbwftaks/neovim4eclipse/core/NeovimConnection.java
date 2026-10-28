@@ -60,7 +60,10 @@ final class NeovimConnection implements AutoCloseable {
 
     /**
      * The size reported with {@code nvim_ui_attach}. The plug-in draws nothing from Neovim's screen,
-     * but the size still matters a little: it is what {@code &columns} and {@code &lines} say.
+     * but the size matters: it is what {@code &columns} and {@code &lines} say, and what {@code L}
+     * and {@code Ctrl-D} count. It holds until an editor attaches, which resizes the screen to its
+     * own size ({@code NeovimSession.setEditorSizeAsync}), and for good with the viewport turned
+     * off ({@code vim.g.neovim4eclipse_viewport = 0}).
      */
     private static final int UI_WIDTH = 120;
     private static final int UI_HEIGHT = 40;

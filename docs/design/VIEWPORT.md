@@ -1,6 +1,6 @@
 # Design note: Neovim's window follows the editor's view
 
-Status: **in progress** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commits 1 (size, wrap, opt-out), 2 (scrolling both ways) and 3 (the wheel through Neovim) are built, see *As built*; commit 4 (docs) is left.
+Status: **built** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commits 1 (size, wrap, opt-out), 2 (scrolling both ways), 3 (the wheel through Neovim) and 4 (docs), with fixes from the manual tests; see *As built*.
 Planned on `feature/diagnostics` at `589485a`. The experiments used Neovim 0.12.6 (the plug-in's
 minimum) on Linux (arm64), through a small msgpack client attached with the plug-in's own UI options
 (`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer on

@@ -17,6 +17,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
 | `gd`, `K`, `gt`, `gT` in normal mode | Neovim first, which hands them to Eclipse (below) |
 | The left mouse button in normal and visual mode | Neovim's own mouse (`nvim_input_mouse`); Ctrl/Cmd+click, the right and middle buttons stay Eclipse's (README, "Mouse") |
+| The vertical mouse wheel and touchpad in normal and visual mode | Neovim, which scrolls its window by the lines the system reports and drags the cursor, as `Ctrl-E`; the editor follows. With Ctrl, Shift or Cmd held, sideways, and in insert mode: Eclipse (README, "The editor's size, scrolling and word wrap") |
 | Eclipse mode (the Neovim toolbar button, the logo) | Eclipse, always |
 
 ## `Ctrl` keys
