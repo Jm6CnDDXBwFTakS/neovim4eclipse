@@ -26,8 +26,17 @@ import org.eclipse.swt.widgets.Listener;
  *
  * <p>{@code :} starts the next command as in Vim: the command line opens below the popup, which
  * stays visible until that command is run or canceled ({@link #makeRoomBelow}). UI thread only.
+ *
+ * <p><b>The prompt line.</b> The popup ends with {@value #PROMPT} only while it takes the keys
+ * itself. With the command line box below it, the box does: either the user typed {@code :}, or
+ * Neovim asks for a key on its own, which it does after {@code :w !cmd} (its {@code cmdline_show}
+ * with the prompt {@code "Press any key to continue"}, unlike {@code :!cmd}). Both prompts showed
+ * then, one above the other; the box's is the one that answers.
  */
 final class OutputPopup {
+
+    /** The last line while the popup takes the keys itself (see the class comment). */
+    static final String PROMPT = "Press any key to continue";
 
     /** The popup never covers more than this share of the editor; longer output scrolls. */
     private static final double MAX_HEIGHT_FRACTION = 0.6;
@@ -39,8 +48,13 @@ final class OutputPopup {
     private StyledText view;
     /** Space kept free below the popup for the command line box. */
     private int bottomInset;
-    /** True while the command line box has the focus: losing it then does not close the popup. */
+    /**
+     * True while the command line box has the focus: losing it then does not close the popup, and
+     * the popup shows no prompt line of its own (the box takes the keys).
+     */
     private boolean heldForCommandLine;
+    /** What is shown, without the prompt line: the title (if any) and the output. */
+    private String shown = "";
     /**
      * True while the popup is shown without the focus ({@link #showOverEditor}): it opened while the
      * user typed elsewhere in Eclipse, and the next key or click in the editor closes it.
@@ -138,11 +152,10 @@ final class OutputPopup {
         if (host.isDisposed() || output == null || output.isBlank()) {
             return;
         }
-        String text = (title == null || title.isEmpty() ? "" : title + "\n") + output.stripTrailing() + "\n"
-                + "Press any key to continue";
+        shown = (title == null || title.isEmpty() ? "" : title + "\n") + output.stripTrailing();
         if (isOpen() && !heldForCommandLine) {
             int top = view.getTopIndex();
-            view.setText(text);
+            view.setText(text());
             view.setTopIndex(top);
             reposition();
             return;
@@ -155,7 +168,8 @@ final class OutputPopup {
         frame = new OverlayFrame<>(host, parent -> new StyledText(parent,
                 SWT.MULTI | SWT.READ_ONLY | SWT.V_SCROLL | SWT.H_SCROLL | (refusesFocus ? SWT.NO_FOCUS : SWT.NONE)));
         view = frame.content();
-        view.setText(text);
+        heldForCommandLine = holdForCommandLine; // before text(): held, it shows no prompt line
+        view.setText(text());
         if (refusesFocus) {
             view.addListener(SWT.MouseDown, event -> {
                 stopClosingWithEditorInput(); // focused, it closes as any popup does
@@ -170,7 +184,6 @@ final class OutputPopup {
         }));
         host.addPaintListener(repositionOnPaint);
         host.addControlListener(repositionOnResize);
-        heldForCommandLine = holdForCommandLine;
         reposition();
         if (takeFocus) {
             view.setFocus();
@@ -186,7 +199,7 @@ final class OutputPopup {
         }
         e.doit = false;
         if (e.character == ':') {
-            heldForCommandLine = true; // the command line takes the focus; this listing stays until it is done
+            holdForCommandLine(); // the command line takes the focus; this listing stays until it is done
             colonHandler.run();
             return;
         }
@@ -217,10 +230,25 @@ final class OutputPopup {
      */
     void makeRoomBelow(int pixels) {
         if (isOpen()) {
-            heldForCommandLine = true;
+            holdForCommandLine();
             bottomInset = pixels;
             reposition();
         }
+    }
+
+    /** The command line box below takes the keys from now on: no prompt line of the popup's own. */
+    private void holdForCommandLine() {
+        if (!heldForCommandLine) {
+            heldForCommandLine = true;
+            int top = view.getTopIndex();
+            view.setText(text());
+            view.setTopIndex(top);
+        }
+    }
+
+    /** The popup's text: what is shown, and the prompt line unless the command line box takes the keys. */
+    private String text() {
+        return heldForCommandLine ? shown : shown + "\n" + PROMPT;
     }
 
     /** Fits the text up to {@link #MAX_HEIGHT_FRACTION} of the editor, near its bottom edge. */
