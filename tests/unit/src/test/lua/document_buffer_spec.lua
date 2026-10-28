@@ -120,12 +120,17 @@ t.test(':saveas asks Eclipse to save as the new file, which becomes the buffer\'
   local new = vim.fs.dirname(name) .. '/B.txt'
   vim.cmd.saveas(vim.fn.fnameescape(new))
   t.eq({ { buf, '', 'saveas', new } }, asked)
-  t.eq(new, vim.api.nvim_buf_get_name(buf))
-  t.eq(new, vim.b[buf].neovim4eclipse_file, 'later writes compare with the new file')
+  -- Compared in one form: on Windows the buffer's name can come back with backslashes
+  -- (C:\Users\RUNNER~1\...\B.txt on GitHub's runner, whose user folder has an 8.3 short name)
+  -- while new has the forward slashes of vim.fs.dirname. The plug-in compares names the same way
+  -- (canonical() in LuaScripts.DOCUMENT_BUFFER).
+  local same = vim.fs.normalize
+  t.eq(same(new), same(vim.api.nvim_buf_get_name(buf)))
+  t.eq(same(new), same(vim.b[buf].neovim4eclipse_file), 'later writes compare with the new file')
   t.eq(false, vim.bo[buf].modified)
   t.ok(vim.fn.bufexists(name) == 1, 'Neovim keeps a buffer of the old name, as Vim does for :e #')
   t.wait_for('that buffer wiped', function() return vim.fn.bufexists(name) == 0 end)
-  t.eq(new, vim.api.nvim_buf_get_name(buf), 'the scheduled check leaves the new name alone')
+  t.eq(same(new), same(vim.api.nvim_buf_get_name(buf)), 'the scheduled check leaves the new name alone')
   vim.cmd.write()
   t.eq({ buf, '' }, asked[2], 'a :w then saves the new file')
 end)
