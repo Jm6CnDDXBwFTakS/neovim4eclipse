@@ -33,7 +33,7 @@ class ViewportFollowerTest {
     private final List<String> sent = new ArrayList<>();
     private Shell shell;
     private StyledText text;
-    /** What the editor allows: {@code false} plays an editor in block selection mode. */
+    /** What the editor allows: {@code false} plays an editor without word wrap support. */
     private boolean editorCanWrap = true;
     private ViewportFollower follower;
     /** How often the editor was scrolled by the follower. */
