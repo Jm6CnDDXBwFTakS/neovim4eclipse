@@ -87,6 +87,8 @@ t.test("the folder is set once with :lcd; without one the window keeps the folde
   vim.cmd.lcd(other)
   local without = open(buffer(1), '')
   t.eq(cwd(0), cwd(without), "the current window's :lcd, copied as Vim copies it")
+  t.ok(not vim.fn.execute('messages'):find(vim.fs.basename(vim.fs.normalize(dir)), 1, true),
+    'silent: no message replaces the one the user reads')
 end)
 
 t.test('a folder that does not exist yet is skipped: the window opens with the copied one', function()

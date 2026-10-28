@@ -1,9 +1,9 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- LuaScripts.SET_WINDOW_FOLDER (:lcd to the attached editor's project) and LEAVE_FOLDER (Neovim
--- leaves a project's folder before Eclipse deletes or closes it; Windows refuses to delete a folder
--- a process works in). Paths are real paths: macOS's /var is a link to /private/var, and getcwd()
+-- LuaScripts.LEAVE_FOLDER (Neovim leaves a project's folder before Eclipse deletes or closes it;
+-- Windows refuses to delete a folder a process works in). Setting the folder is OPEN_WINDOW's, in
+-- windows_spec.lua. Paths are real paths: macOS's /var is a link to /private/var, and getcwd()
 -- resolves it.
 
 local t = ...
@@ -18,14 +18,6 @@ end
 local function cwd(...)
   return vim.fs.normalize(vim.fn.getcwd(...))
 end
-
-t.test('the window\'s folder is set with :lcd, silently', function()
-  local dir = folder('project')
-  t.run('SET_WINDOW_FOLDER', dir)
-  t.eq(dir, cwd(0))
-  t.eq(1, vim.fn.haslocaldir(0), 'window-local')
-  t.ok(not vim.fn.execute('messages'):find(dir, 1, true), 'no message replaces the one the user reads')
-end)
 
 t.test('leaving a folder moves every working folder inside it to its parent, and only those', function()
   local src, root = folder('app', 'src')

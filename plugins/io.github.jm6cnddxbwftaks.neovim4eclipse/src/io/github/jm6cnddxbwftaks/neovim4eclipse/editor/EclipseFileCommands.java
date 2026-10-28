@@ -320,7 +320,7 @@ public final class EclipseFileCommands {
     }
 
     /**
-     * The folder Neovim's window works in for this editor ({@code :lcd}, set at attach): the
+     * The folder Neovim's window works in for this editor ({@code :lcd}, set when the editor's window opens): the
      * project's root, or the file's own folder for a file outside any project; {@code null} for a
      * document without a file outside any project.
      */
