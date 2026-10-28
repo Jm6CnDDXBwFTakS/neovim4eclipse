@@ -27,8 +27,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `:saveas new.txt` saves the file as `new.txt` and moves the editor there, like *File → Save As*
   without the dialog. Neovim's undo history comes along; the old file stays as it was.
 - *Neovim → Restart Neovim...* stops Neovim and starts a new one, after asking: for a change to
-  `init.lua` without restarting Eclipse, or a Neovim that is stuck. The editors' text is kept;
-  what only Neovim holds (undo history, registers, marks) is not.
+  `init.lua` without restarting Eclipse, or a Neovim that is stuck. The editors' text is kept,
+  and registers, marks and history come back from Neovim's ShaDa file; the undo history and what
+  you set by hand (`:set`, `:map`) are lost.
 - Neovim's `]d` and `[d` (and `]D`, `[D`) move between the errors, warnings and infos Eclipse shows
   in the file, with counts, in macros and in the jumplist; the message line then shows the
   problem's message. Eclipse's problems are Neovim diagnostics of the file's buffer, so your own

@@ -21,7 +21,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 /**
  * <em>Neovim → Restart Neovim...</em> ({@link RestartNeovimHandler}): the question comes first, and
  * Cancel keeps the running Neovim; a restart gives a new Neovim, attached to the editor, with the
- * editor's text and without the old Neovim's registers.
+ * editor's text. What the question says is lost (a {@code :let} variable) is gone, and what it says
+ * comes back from ShaDa (a register) is there. The test Neovim's ShaDa file is under
+ * {@code target/neovim-home/state} (this module's {@code pom.xml}).
  */
 class RestartNeovimEndToEndTest extends EndToEndTestBase {
 
@@ -52,6 +54,7 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
     @Test
     void aRestartStartsANewNeovimAttachedToTheEditor() {
         eval(session, "setreg('a', 'from the old Neovim')");
+        eval(session, "execute('let g:set_by_hand = 1')");
 
         Activator.getDefault().restartNeovim();
 
@@ -62,7 +65,8 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
             NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
             return c != null && c.getEditor() == editor && !c.isClosed();
         });
-        assertEquals("", eval(fresh, "getreg('a')"), "the old registers are gone");
+        assertEquals("0", eval(fresh, "exists('g:set_by_hand')"), "what was set by hand is gone");
+        assertEquals("from the old Neovim", eval(fresh, "getreg('a')"), "registers come back from ShaDa");
         waitUntil("the editor's text in the new buffer", TIMEOUT_MS,
                 () -> "alpha".equals(eval(fresh, "getline(1)")),
                 () -> "; line 1 is " + eval(fresh, "getline(1)"));
