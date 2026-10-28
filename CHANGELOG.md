@@ -14,18 +14,6 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
-- `:w other.txt` writes a copy of the file, as in Vim, instead of being refused. The editor stays on
-  its own file and keeps its unsaved changes; `:w!` overwrites an existing file, and `++p` creates
-  missing folders. A copy over a file that another Eclipse editor has open with unsaved changes is
-  refused.
-- `:5,10w part.txt` writes those lines to another file, and `:w >> log.txt` (or `:5,10w >> log.txt`)
-  adds them to the end of one, as in Vim. Both stay refused for the editor's own file, which Eclipse
-  saves only whole.
-- `:wq other.txt` and `:x other.txt` write the copy, then close the editor, as in Vim. Before, they
-  ignored the name and saved the editor's own file. The copy goes where `:w other.txt` puts it: a
-  relative name is relative to the project folder.
-- `:saveas new.txt` saves the file as `new.txt` and moves the editor there, like *File → Save As*
-  without the dialog. Neovim's undo history comes along; the old file stays as it was.
 - *Neovim → Restart Neovim...* stops Neovim and starts a new one, after asking: for a change to
   `init.lua` without restarting Eclipse, or a Neovim that is stuck. The editors' text is kept,
   and registers, marks and history come back from Neovim's ShaDa file; the undo history and what
@@ -39,13 +27,26 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `za`, `zM`, `zR`, `zj`, `zk` and the rest open and close Eclipse's folds, `j` steps over a closed
   fold, and a fold collapsed in Eclipse is closed in Neovim too. `vim.g.neovim4eclipse_folds = 0` in
   `init.lua` turns it off. See the README, "Folding".
+- `:w other.txt` writes a copy of the file, as in Vim, instead of being refused. The editor stays on
+  its own file and keeps its unsaved changes; `:w!` overwrites an existing file, and `++p` creates
+  missing folders. A copy over a file that another Eclipse editor has open with unsaved changes is
+  refused.
+- `:5,10w part.txt` writes those lines to another file, and `:w >> log.txt` (or `:5,10w >> log.txt`)
+  adds them to the end of one, as in Vim. Both stay refused for the editor's own file, which Eclipse
+  saves only whole.
+- `:wq other.txt` and `:x other.txt` write the copy, then close the editor, as in Vim. Before, they
+  ignored the name and saved the editor's own file. The copy goes where `:w other.txt` puts it: a
+  relative name is relative to the project folder.
+- `:saveas new.txt` saves the file as `new.txt` and moves the editor there, like *File → Save As*
+  without the dialog. Neovim's undo history comes along; the old file stays as it was.
 
 ### Changed
 
 - The *Neovim* menu has *Attach Neovim* again, and *Preferences...* is now last, below
-  *Welcome...*, as in Eclipse's *Window* menu. *Attach* no longer opens a dialog when it works, and has no
-  key any more (it was `Ctrl+Shift+N`; bind one in *General → Keys* if you miss it). In Quick Access the commands are now *Neovim: Attach
-  Neovim* and *Neovim: Detach Neovim*, as in the menu.
+  *Welcome...*, as in Eclipse's *Window* menu. *Attach* no longer opens a dialog when it works, and
+  has no key any more (it was `Ctrl+Shift+N`; bind one in *General → Keys* if you miss it). In
+  Quick Access the commands are now *Neovim: Attach Neovim* and *Neovim: Detach Neovim*, as in the
+  menu.
 - Moving into folded code no longer opens it unless your `'foldopen'` says so (Vim's default: a
   search opens a fold, `j` and `G` do not). `set foldopen=all` brings back the old behavior. The
   caret on a closed Java method stands on its signature.
@@ -54,17 +55,20 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
-- After `:w !cmd`, "Press any key to continue" shows once, in the `:` box, where Neovim asks for the
-  key, instead of a second time at the bottom of the output above it.
-- `:saveas other.txt` (and `:file other.txt` followed by `:w`) no longer saves the changes over the
-  original file while Neovim calls the buffer by the new name. `:file other.txt` is now undone, since
-  the editor's file stays the same.
+- Attaching Neovim to an editor whose caret is down in the file, when the file gets a new Neovim
+  buffer (after *Restart Neovim...*, for example), no longer scrolls the caret's line to the bottom
+  of the editor. The caret went to line 1 and back, following the new buffer's cursor.
 - In insert mode, Enter after a `{` (which Eclipse answers with the closing brace and an indented
   line) could leave the caret at the start of the new line instead of after its indentation, when
   the line was opened with `O` or `o`.
 - The plug-in no longer sets `'timeoutlen'` to 400 ms, over the value in your `init.lua`. With so
   short a wait, a pause between `[` and `d` ran Vim's older `[d` (E388: Couldn't find definition)
   instead of going to a problem. Neovim's default (1000 ms) or your own setting now applies.
+- After `:w !cmd`, "Press any key to continue" shows once, in the `:` box, where Neovim asks for the
+  key, instead of a second time at the bottom of the output above it.
+- `:saveas other.txt` (and `:file other.txt` followed by `:w`) no longer saves the changes over the
+  original file while Neovim calls the buffer by the new name. `:file other.txt` is now undone, since
+  the editor's file stays the same.
 
 ## [0.1.8] - 2026-10-27
 

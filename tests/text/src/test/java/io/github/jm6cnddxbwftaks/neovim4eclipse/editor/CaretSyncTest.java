@@ -94,6 +94,19 @@ class CaretSyncTest {
         caret.assertCaretPosition(1, 0);
     }
 
+    /** While an attach push places Neovim's cursor at the caret (DocumentPush.Caret). */
+    @Test
+    void whileThePushPlacesTheCursorNeovimsReportsAreIgnored() {
+        caret.userMovesTo(3, 2);
+        sync.ignoreNeovimCursor();
+        sync.onNeovimCursor(new CursorPos(1, 0)); // a new buffer's cursor, before it is placed
+        caret.assertCaretPosition(3, 2);
+
+        sync.followNeovimCursor();
+        sync.onNeovimCursor(new CursorPos(2, 1));
+        caret.assertCaretPosition(2, 1);
+    }
+
     @Test
     void theCaretRestoreAfterARemoteChangeStillApplies() {
         sync.dropNeovimCursorWhile(() -> true);
