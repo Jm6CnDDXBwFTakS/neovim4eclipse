@@ -1,9 +1,11 @@
 # Design note: Neovim's window follows the editor's view
 
-Status: **planned**, not implemented. Planned on `feature/diagnostics` at `589485a`. The experiments
-used Neovim 0.12.6 on Linux (arm64), through a small msgpack client attached with the plug-in's own UI
-options (`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer
-on 2026-10-27. It is built after [FOLDING.md](FOLDING.md) (D3). After the feature is built, add a section *As built*
+Status: **planned**, not implemented; for 0.1.10, on `feature/viewport` cut from `release/0.1.10`.
+Planned on `feature/diagnostics` at `589485a`. The experiments used Neovim 0.12.6 (the plug-in's
+minimum) on Linux (arm64), through a small msgpack client attached with the plug-in's own UI options
+(`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer on
+2026-10-27, D5 to D8 on 2026-10-28; D9 (the touchpad) waits on a measurement. [FOLDING.md](FOLDING.md)
+was built first (D3) and released in 0.1.9. After the feature is built, add a section *As built*
 after the summary, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 
 ## Summary
@@ -50,16 +52,25 @@ SWT measuring with variable line heights (section 3.1) may grow it.
 - The mouse wheel scrolls as in Neovim *(D1)*: by `'mousescroll'` lines (default `ver:3`), and the
   cursor is pulled along when it would leave the screen. That is a change from today, where the
   wheel scrolls Eclipse alone and the caret may stay off screen.
-- In insert mode Eclipse types and scrolls as today; Neovim's top line is set to the editor's when
-  insert mode ends.
+- In insert mode the wheel is Eclipse's, as today *(D6)*: the view scrolls and the caret stays where
+  you type, even off screen; the next key brings the view back to the caret, as Eclipse does. At Esc
+  Neovim takes the editor's top line. Why not Neovim's wheel: while Eclipse types, Neovim does not
+  have the typed lines until Esc (docs/ARCHITECTURE.md, "Folding: the workarounds"), so it cannot
+  scroll or drag a cursor through them.
 - A user's `'laststatus'`, `'number'`, `'signcolumn'` stay theirs. The plug-in measures what they
   take (section 3.1) instead of turning them off.
 - `'wrap'` and Eclipse's word wrap (Alt+Shift+Y) are one setting (D2): toggling either changes
   the other, for that editor. On attach Eclipse's state wins, so the default is Eclipse's preference
   "Enable word wrap when opening an editor", not a `set wrap` in `init.lua`. With word wrap on,
-  `'linebreak'` is set too (Eclipse wraps at word boundaries). The wrap points can still differ by a
+  `'linebreak'` is set too (Eclipse wraps at word boundaries), and a `:set nolinebreak` then gets a
+  message saying why it is needed *(D7)*. The wrap points can still differ by a
   word now and then (Eclipse measures pixels, Neovim cells).
 - Horizontal scrolling stays Eclipse's (D4): `zl` `zh` `zs` `ze` change nothing visible.
+- With no editor attached (after *Detach*, or with every editor closed) Neovim keeps the last
+  editor's size *(D8)*; nobody sees its screen then.
+- `vim.g.neovim4eclipse_viewport = 0` in `init.lua` turns the feature off *(D5)*: the fixed
+  120 × 40 grid, no scroll sync, the wheel Eclipse's, `'wrap'` left alone. Read once at start, like
+  `vim.g.neovim4eclipse_problems` and `_folds`.
 
 ## 2. Background, with the experiments
 
@@ -181,6 +192,28 @@ column conversion (bytes, cells, pixels) is its own work.
 - **D4, horizontal scrolling** *(decided 2026-10-27)*: out of scope. Eclipse keeps its own horizontal
   scroll (it reveals the caret as today); `zl` `zh` `zs` `ze` change nothing visible. A follow-up can
   sync `leftcol` through `WinScrolled`, which reports it (`win_viewport` does not).
+- **D5, an opt-out** *(decided 2026-10-28)*: `vim.g.neovim4eclipse_viewport = 0`, read at start
+  like the other `vim.g.neovim4eclipse_*` switches. The feature changes the wheel for everyone, so
+  there is a way back.
+- **D6, the wheel in insert mode** *(decided 2026-10-28)*: Eclipse's, the caret stays (section 1).
+  Rejected: dragging the caret along as Vim does (it closes an open content-assist popup and moves
+  the typing to another line), and ending insert mode on the first wheel step (a scroll would
+  quietly leave insert mode, which Vim never does).
+- **D7, `'linebreak'`** *(decided 2026-10-28)*: set in the window while word wrap is on, with
+  `'breakindent'` off and `'showbreak'` empty; the user's values come back when wrap goes off.
+  An `OptionSet` on any of the three while wrap is on sets it back and shows a message (for
+  example "neovim4eclipse: 'linebreak' stays on while word wrap is on, so that lines wrap where
+  Eclipse wraps them"), once per Neovim session; later changes are set back silently. Once, because
+  `OptionSet` also fires for a filetype plug-in, another plug-in or (to check in the Lua test) a
+  modeline, so a Markdown plug-in that sets `'nolinebreak'` would otherwise show it for every file. Why: with `'nolinebreak'` Neovim breaks mid-word and Eclipse at the word, so
+  a long line has a different number of screen rows on each side, and `gj`, `H`, `Ctrl-D` and the
+  top lines drift. Rejected: following the user's value (screen commands wrong on long lines).
+- **D8, the size with no editor attached** *(decided 2026-10-28)*: the last editor's.
+- **D9, the touchpad** *(open)*: measure what SWT reports for touchpad scrolling on Linux, macOS
+  and Windows (many small wheel events, few large ones, or a marker that tells them from a mouse
+  wheel), then decide between whole-line steps for every wheel (D1 as is) and keeping Eclipse's
+  pixel scrolling for the touchpad, followed by the top line as in 3.3. Asked again after the
+  measurement.
 
 ## 5. Tests
 
@@ -199,8 +232,9 @@ column conversion (bytes, cells, pixels) is its own work.
 
 ## 6. Commits
 
-1. Size: `ViewportSize`, `ViewportMeasure`, `VIEWPORT_SIZE`, resize on attach and resize; `'wrap'`
-   (D2).
+0. The touchpad measurement (D9), before commit 3; its result is added to section 2.
+1. Size: `ViewportSize`, `ViewportMeasure`, `VIEWPORT_SIZE`, resize on attach and resize, the last
+   size kept (D8); `'wrap'` and `'linebreak'` (D2, D7); the opt-out (D5).
 2. Neovim to Eclipse: `ViewportEvent`, top line applied before the caret.
 3. Eclipse to Neovim: the wheel through `NeovimMouse` (D1), `SET_TOPLINE` for the rest, insert mode
    at Esc.
