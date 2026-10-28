@@ -195,12 +195,34 @@ class OutputPopupTest {
         assertEquals(before - 100, frameBounds().y);
     }
 
+    /** Its bottom edge moves up (it also loses its prompt line, so its top moves by less). */
     @Test
     void makeRoomBelowMovesThePopupUpForTheCommandLine() {
         popup.show(":ls", "one line");
-        int before = frameBounds().y;
+        int before = frameBounds().y + frameBounds().height;
         popup.makeRoomBelow(30);
-        assertEquals(before - 30, frameBounds().y);
+        assertEquals(before - 30, frameBounds().y + frameBounds().height);
+    }
+
+    /**
+     * With the command line box below, the box takes the keys, so the popup's own prompt line goes:
+     * after {@code :w !cmd} Neovim asks for a key itself, and the box shows that prompt. Before,
+     * "Press any key to continue" showed twice, one above the other.
+     */
+    @Test
+    void withTheCommandLineBelowThePromptLineIsTheBoxs() {
+        popup.show(":w !cat", "a\nb");
+        popup.makeRoomBelow(30);
+        assertEquals(":w !cat\na\nb", view().getText());
+        popup.show(":w !cat", "a\nb\nc", false); // more output meanwhile, as the open box passes it on
+        assertFalse(view().getText().contains(OutputPopup.PROMPT), view().getText());
+    }
+
+    /** Output shown while a command line is open ({@code show(..., false)}) has none either. */
+    @Test
+    void outputForAnOpenCommandLineHasNoPromptLine() {
+        popup.show("", "a timer's message\nof two lines", false);
+        assertEquals("a timer's message\nof two lines", view().getText());
     }
 
     @Test
@@ -278,6 +300,7 @@ class OutputPopupTest {
         popup.show(":ls", "output");
         assertFalse(type(':').doit);
         assertEquals(1, colonPresses);
+        assertEquals(":ls\noutput", view().getText(), "the command line takes the keys: no prompt line");
         view().notifyListeners(SWT.FocusOut, new Event()); // the command line box takes the focus
         assertTrue(popup.isOpen());
     }

@@ -29,6 +29,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- After `:w !cmd`, "Press any key to continue" shows once, in the `:` box, where Neovim asks for the
+  key, instead of a second time at the bottom of the output above it.
 - `:saveas other.txt` (and `:file other.txt` followed by `:w`) no longer saves the changes over the
   original file while Neovim calls the buffer by the new name. `:file other.txt` is now undone, since
   the editor's file stays the same.

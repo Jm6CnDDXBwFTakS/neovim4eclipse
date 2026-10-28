@@ -206,6 +206,54 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         page().closeEditor(page().getActiveEditor(), false);
     }
 
+    // ---- Output above a prompt of Neovim's ----
+
+    /** The output popup inside {@code parent}: a {@link StyledText} below the editor's own widget. */
+    private static StyledText outputPopupIn(org.eclipse.swt.widgets.Composite parent) {
+        for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
+            if (child instanceof StyledText text && !text.isDisposed()) {
+                return text;
+            }
+            if (child instanceof org.eclipse.swt.widgets.Composite composite) {
+                StyledText found = outputPopupIn(composite);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * {@code :w !cat} shows the text in the output popup, and Neovim then asks for a key itself
+     * ({@code :!cmd} does not), which the {@code :} box shows. "Press any key to continue" appears
+     * once, in the box: the popup leaves out its own prompt line while the box takes the keys. One
+     * key closes both and changes nothing.
+     */
+    @Test
+    void wBangCmdShowsItsOutputAboveOnePrompt() {
+        runInBox(widget, "w !cat");
+
+        waitUntil("the output and Neovim's prompt", TIMEOUT_MS, () -> {
+            StyledText popup = outputPopupIn(widget);
+            Text box = textChildOf(widget);
+            return popup != null && popup.getText().contains("gamma")
+                    && box != null && box.getText().equals("Press any key to continue");
+        }, () -> "; popup " + (outputPopupIn(widget) == null ? "none" : "\"" + outputPopupIn(widget).getText() + "\"")
+                + ", box " + (textChildOf(widget) == null ? "none" : "\"" + textChildOf(widget).getText() + "\""));
+        assertEquals(":w !cat\nalpha\nbeta\ngamma", outputPopupIn(widget).getText(), "no prompt line of its own");
+
+        Event key = new Event();
+        key.character = 'x';
+        key.keyCode = 'x';
+        key.doit = true;
+        textChildOf(widget).notifyListeners(SWT.KeyDown, key);
+
+        waitUntil("both to close", TIMEOUT_MS, () -> outputPopupIn(widget) == null && textChildOf(widget) == null);
+        settle();
+        assertEquals("alpha\nbeta\ngamma\n", document.get(), "the key answered the prompt, nothing else");
+    }
+
     // ---- Where :e looks ----
 
     /** From a file in a subfolder, {@code :e} also looks in the project's root folder. */
