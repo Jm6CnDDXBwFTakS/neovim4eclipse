@@ -7,9 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 /** {@link DocumentWrite}: the write request's {@code ++p} and the answer sent back to Neovim. */
 class DocumentWriteTest {
@@ -28,13 +31,24 @@ class DocumentWriteTest {
         assertEquals(DocumentWrite.Request.own(true), DocumentWrite.Request.of(" ++p", "", "", 0, 0, false));
         assertEquals(DocumentWrite.Request.own(false), DocumentWrite.Request.of("", null, null, 0, 0, false),
                 "a plain save sends none of them");
-        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.COPY, "/ws/p/b.txt", 0, 0, true, false),
+        // The file in the system's form (on Windows \ws\p\b.txt): see theFileIsInTheSystemsForm.
+        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.COPY, Path.of("/ws/p/b.txt").toString(), 0, 0, true, false),
                 DocumentWrite.Request.of("", "copy", "/ws/p/b.txt", 0, 0, true));
-        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.LINES, "/ws/p/part.txt", 5, 10, false, false),
+        assertEquals(new DocumentWrite.Request(DocumentWrite.Kind.LINES, Path.of("/ws/p/part.txt").toString(), 5, 10, false, false),
                 DocumentWrite.Request.of("", "lines", "/ws/p/part.txt", 5, 10, false));
         assertEquals(DocumentWrite.Kind.APPEND, DocumentWrite.Kind.named("append"));
         assertEquals(DocumentWrite.Kind.SAVE_AS, DocumentWrite.Kind.named("saveas"));
         assertEquals(DocumentWrite.Kind.OWN, DocumentWrite.Kind.named("unknown"), "an unknown kind is a save, never a copy");
+    }
+
+    /**
+     * Neovim on Windows names the written file with forward slashes ({@code C:/ws/p/b.txt}); Eclipse's
+     * paths have backslashes, and the two must compare equal (the editor's own file, an open editor).
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void theFileIsInTheSystemsForm() {
+        assertEquals("C:\\ws\\p\\b.txt", DocumentWrite.Request.of("", "copy", "C:/ws/p/b.txt", 0, 0, false).target());
     }
 
     @Test

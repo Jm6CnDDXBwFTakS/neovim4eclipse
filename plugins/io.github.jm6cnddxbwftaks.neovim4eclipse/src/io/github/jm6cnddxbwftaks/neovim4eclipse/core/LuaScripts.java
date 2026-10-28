@@ -583,21 +583,34 @@ final class LuaScripts {
      * {@code init.lua}) all stay Neovim's. The wrapper only adds words; it does not redo anything
      * Neovim does (the project's rule: let Neovim do the work).
      *
-     * <p>Only Neovim's default mappings are wrapped, recognized by where their function was defined
-     * ({@code vim/_core/defaults}). A key the user mapped or unmapped in {@code init.lua} is left as
-     * it is. Should a later Neovim move its defaults elsewhere, nothing is wrapped and Neovim's own
-     * message appears: harmless.
+     * <p>Only Neovim's default mappings are wrapped. One is recognized by two things: its description
+     * is Neovim's ({@code "Jump to the next diagnostic in the current buffer"} for {@code ]d}), and its
+     * function comes from Neovim's own runtime: defined in {@code vim/_core/defaults}, or with no
+     * source at all ({@code "?"}). The Windows build of Neovim 0.12.6 compiles its runtime without
+     * debug information, so there {@code debug.getinfo} gives {@code "?"}, where Linux and macOS give
+     * {@code "@vim/_core/defaults"}; a function from a user's {@code init.lua} always names its file.
+     * A key the user mapped or unmapped in {@code init.lua} is left as it is, even one that copies
+     * Neovim's description. Should a later Neovim change the descriptions, nothing is wrapped and
+     * Neovim's own message appears: harmless.
      */
     static final String PROBLEMS = """
             local enabled = vim.g.neovim4eclipse_problems
             if enabled ~= 0 and enabled ~= false then
               return true
             end
+            local defaults = { -- Neovim's descriptions of its own mappings (runtime/lua/vim/_core/defaults.lua)
+              [']d'] = 'Jump to the next diagnostic in the current buffer',
+              ['[d'] = 'Jump to the previous diagnostic in the current buffer',
+              [']D'] = 'Jump to the last diagnostic in the current buffer',
+              ['[D'] = 'Jump to the first diagnostic in the current buffer',
+            }
             for _, lhs in ipairs({ ']d', '[d', ']D', '[D' }) do
               local default = vim.fn.maparg(lhs, 'n', false, true)
               local source = type(default.callback) == 'function'
                 and debug.getinfo(default.callback, 'S').source or ''
-              if source:find('vim/_core/defaults', 1, true) then
+              -- '?': the Windows build has no debug information for its runtime (see above)
+              local neovims = source:find('vim/_core/defaults', 1, true) or source == '?'
+              if neovims and default.desc == defaults[lhs] then
                 vim.keymap.set('n', lhs, function()
                   if #vim.diagnostic.get(0) == 0 then
                     vim.api.nvim_echo({ { lhs .. ": Eclipse's problems are not sent to Neovim"
@@ -1131,10 +1144,13 @@ final class LuaScripts {
             -- wiped once the command is over. A document buffer, or any loaded one, is never touched.
             local function wipe_left_over(keep, names)
               vim.schedule(function()
+                -- Compared canonically: on Windows Neovim reports a written name with forward slashes
+                -- (C:/tmp/other.txt) while the buffer left behind keeps backslashes.
+                local wanted = vim.tbl_map(canonical, names)
                 for _, other in ipairs(vim.api.nvim_list_bufs()) do
                   local name = vim.api.nvim_buf_get_name(other)
                   if other ~= keep and not vim.api.nvim_buf_is_loaded(other) and not vim.b[other].neovim4eclipse_file
-                      and vim.tbl_contains(names, name) then
+                      and name ~= '' and vim.tbl_contains(wanted, canonical(name)) then
                     pcall(vim.api.nvim_buf_delete, other, { force = true })
                   end
                 end

@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -52,8 +54,11 @@ public final class DocumentWrite {
      * One write Neovim asks for.
      *
      * @param kind          what to write where
-     * @param target        the file written, a full path as Neovim names it ({@code /ws/p/other.txt});
-     *                      "" for {@link Kind#OWN}
+     * @param target        the file written, a full path in the system's own form
+     *                      ({@code /ws/p/other.txt}; on Windows {@code C:\ws\p\other.txt}); "" for
+     *                      {@link Kind#OWN}. Neovim on Windows names it with forward slashes
+     *                      ({@code C:/ws/p/other.txt}); {@link #of} turns that into the system's form, so
+     *                      that it compares equal with the paths Eclipse has
      * @param first         for {@link Kind#LINES} and {@link Kind#APPEND}: the first line written, 1-based
      * @param last          the last line written, 1-based; 0 with {@code first} for the whole document
      * @param force         the write had {@code !}: {@code :w! >> log.txt} creates a missing file
@@ -76,7 +81,19 @@ public final class DocumentWrite {
          * {@code ["", "append", "/ws/p/log.txt", 5, 10, true]}.
          */
         static Request of(String cmdarg, String kind, String target, int first, int last, boolean bang) {
-            return new Request(Kind.named(kind), target, first, last, bang, createsFolders(cmdarg));
+            return new Request(Kind.named(kind), systemForm(target), first, last, bang, createsFolders(cmdarg));
+        }
+
+        /** {@code target} with the system's separators ({@code Path.of} reads either slash on Windows). */
+        private static String systemForm(String target) {
+            if (target == null || target.isEmpty()) {
+                return "";
+            }
+            try {
+                return Path.of(target).toString();
+            } catch (InvalidPathException e) {
+                return target; // Eclipse then reports it as a file it cannot write
+            }
         }
     }
 
