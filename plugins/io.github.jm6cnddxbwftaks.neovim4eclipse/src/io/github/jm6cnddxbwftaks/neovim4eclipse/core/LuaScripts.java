@@ -1015,11 +1015,13 @@ final class LuaScripts {
      *       Example: {@code { 1, 4 }} with the default status line and {@code set number}.</li>
      *   <li>{@code set_wrap(on)}, used by {@link #SET_WRAP}: Eclipse's word wrap for the current
      *       window (decision D2: Eclipse's state wins on attach).</li>
-     *   <li>{@code set_topline(line, drag)}, used by {@link #SET_TOPLINE}: the editor's top line.
-     *       Without {@code drag} (attach, Esc) the cursor stays and Neovim keeps it visible, which may
-     *       change the top line. With {@code drag} (the user scrolled the editor: the scroll bar,
-     *       the wheel) the cursor is dragged into the new view as {@code Ctrl-E} and {@code Ctrl-Y}
-     *       drag it, {@code 'scrolloff'} lines from its edges, so that the view is kept.</li>
+     *   <li>{@code set_topline(line, mode)}, used by {@link #SET_TOPLINE}: the editor's top line.
+     *       {@code 'keep'} (attach): the cursor stays and Neovim keeps it visible, which may change
+     *       the top line. {@code 'drag'} (the user scrolled the editor: the scroll bar, the wheel):
+     *       the cursor is dragged into the new view as {@code Ctrl-E} and {@code Ctrl-Y} drag it,
+     *       {@code 'scrolloff'} lines from its edges, so that the view is kept. {@code 'show'} (Esc,
+     *       after Eclipse scrolled while it typed): a cursor in the view stays, one outside it is
+     *       dragged in, so the view is kept as Neovim's wheel would have kept it.</li>
      *   <li>{@code scroll_lines(n)}, used by {@link #SCROLL_LINES}: the mouse wheel. Scrolls {@code n}
      *       lines down (negative: up) as {@code n} times {@code Ctrl-E} ({@code Ctrl-Y}) would, a
      *       closed fold counting as one line, and drags the cursor along.</li>
@@ -1175,15 +1177,16 @@ final class LuaScripts {
               end,
             })
 
-            -- Without drag, winrestview keeps the cursor: a top line that would hide it is clamped
-            -- (Neovim's own rule), and WinScrolled then reports the line Neovim chose, which the
-            -- editor takes. With drag, the cursor goes into the new view first, as Ctrl-E moves it.
-            -- Example, 20 rows, 'scrolloff' 0, cursor on 5: set_topline(40, true) leaves the cursor
-            -- on 40; set_topline(40, false) scrolls only as far as the cursor allows (topline 5).
-            function M.set_topline(line, drag)
+            -- 'keep': winrestview keeps the cursor, and a top line that would hide it is clamped
+            -- (Neovim's own rule); WinScrolled then reports the line Neovim chose, which the editor
+            -- takes. 'drag': the cursor goes into the new view first, as Ctrl-E moves it. 'show':
+            -- 'drag' for a cursor outside the new view, 'keep' for one inside it.
+            -- Example, 20 rows, 'scrolloff' 0, cursor on 5: set_topline(40, 'drag') leaves the
+            -- cursor on 40; set_topline(40, 'keep') scrolls only as far as the cursor allows (topline 5).
+            function M.set_topline(line, mode)
               local last = vim.api.nvim_buf_line_count(0)
               line = math.max(1, math.min(line, last))
-              if not drag then
+              if mode == 'keep' then
                 vim.fn.winrestview({ topline = line })
                 return
               end
@@ -1191,6 +1194,10 @@ final class LuaScripts {
               -- The cursor on the top line first: nothing clamps, and line('w$') is the new view's.
               vim.fn.winrestview({ topline = line, lnum = line, col = 0 })
               local bottom = vim.fn.line('w$')
+              if mode == 'show' and view.lnum >= line and view.lnum <= bottom then
+                vim.fn.winrestview({ topline = line, lnum = view.lnum, col = view.col, curswant = view.curswant })
+                return
+              end
               local so = vim.wo.scrolloff
               if so < 0 then
                 so = vim.o.scrolloff -- global-local: -1 means the global value
@@ -1226,7 +1233,7 @@ final class LuaScripts {
                   end
                 end
               end
-              M.set_topline(top, true)
+              M.set_topline(top, 'drag')
             end
 
             vim.api.nvim_create_autocmd('WinScrolled', {
@@ -1268,18 +1275,18 @@ final class LuaScripts {
 
     /**
      * Scrolls the current window so that its top line is the editor's (arguments: the buffer number,
-     * the 1-based line, and {@code "1"} to drag the cursor into the view or {@code "0"} to keep it,
-     * as strings); see {@link #VIEWPORT}'s {@code set_topline}. Nothing when that buffer is not the
+     * the 1-based line as a string, and the mode: {@code "keep"}, {@code "drag"} or {@code "show"});
+     * see {@link #VIEWPORT}'s {@code set_topline}. Nothing when that buffer is not the
      * current one (the window shows another editor's document by now). Example: the editor shows
      * lines 40 to 60 when it is attached; Neovim's window, which has placed the cursor on line 50, is
      * scrolled to line 40, so that {@code H} goes to line 40.
      */
     static final String SET_TOPLINE = """
-            local buf, line, drag = tonumber((select(1, ...))), tonumber((select(2, ...))), (select(3, ...))
+            local buf, line, mode = tonumber((select(1, ...))), tonumber((select(2, ...))), (select(3, ...))
             if vim.api.nvim_get_current_buf() ~= buf or not line then
               return
             end
-            require('neovim4eclipse.viewport').set_topline(line, drag == '1')
+            require('neovim4eclipse.viewport').set_topline(line, mode)
             """;
 
     /**

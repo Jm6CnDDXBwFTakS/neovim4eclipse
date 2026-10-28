@@ -99,11 +99,21 @@ final class KeyInput {
      */
     private volatile boolean neovimDrivenInsert;
     /**
-     * Set while {@link #leaveInsertMode} runs. Neovim's views until it ends are of text it does not
-     * have yet (the replay types into the old lines), so the editor ignores their top lines
-     * ({@code NeovimSession.isLeavingInsertMode}); the editor's own top line is sent with the push.
+     * Set while {@link #leaveInsertMode} runs, until Neovim's state is read at its end. What Neovim
+     * reports until then is of text it does not have yet (the replay types into the old lines) or of
+     * a cursor about to be dragged into the editor's view, so the editor ignores those cursors and
+     * top lines ({@code NeovimSession.isLeavingInsertMode}). Example: the caret on line 1, the wheel
+     * scrolled the editor to line 101 in insert mode; the replay's cursor report on line 1 would
+     * make Eclipse reveal line 1 before the editor's view is sent.
      */
     private volatile boolean leavingInsert;
+    /**
+     * Runs at Esc once Neovim's cursor is final (after the push, the replay's cursor or the
+     * {@code <Esc>}): the editor's view goes to Neovim ({@code NeovimSession.showTopLine}). After
+     * the cursor, because the view step may drag the cursor, and a later {@code setCursor} would
+     * move it back off the screen. {@code null} for none.
+     */
+    private volatile Runnable leaveInsertView;
     /** Set by a lone {@code @}: the next key names the macro register and starts the playback. */
     private boolean macroRegisterPending;
 
@@ -284,6 +294,15 @@ final class KeyInput {
         } finally {
             leavingInsert = false;
         }
+        // After the flag: the editor ignores Neovim's cursor and top line while Esc is handled
+        // (the replay's and the <Esc>'s reports would scroll the editor to the old caret), and
+        // takes the final ones from here.
+        state.syncModeAndCursor();
+    }
+
+    /** See {@link #leaveInsertView}. */
+    void setLeaveInsertView(Runnable view) {
+        this.leaveInsertView = view;
     }
 
     /** Whether {@link #leaveInsertMode} runs now (see {@link #leavingInsert}). Any thread. */
@@ -309,8 +328,12 @@ final class KeyInput {
             }
             nvim.type("<Esc>");
         }
+        Runnable view = leaveInsertView;
+        if (view != null) {
+            nvim.awaitKeysConsumed(); // the <Esc> has moved the cursor
+            view.run();
+        }
         neovimDrivenInsert = false;
-        state.syncModeAndCursor();
     }
 
     /**

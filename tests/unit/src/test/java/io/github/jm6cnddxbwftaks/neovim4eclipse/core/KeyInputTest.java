@@ -252,6 +252,22 @@ class KeyInputTest {
     }
 
     @Test
+    void theViewStepRunsOnceTheCursorIsFinal() throws Exception {
+        nvim.keyWithLineEvent = "abc";
+        keys.setLeaveInsertView(() -> nvim.calls.add("view"));
+
+        keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2));
+        assertEquals(List.of("setCursor 1:0", "type abc", "keysConsumed", "type <Esc>", "keysConsumed",
+                "push document", "setCursor 1:2", "keysConsumed", "view", "snapshot"), nvim.calls,
+                "after the replay's cursor: a dragged cursor is not moved back");
+
+        nvim.calls.clear();
+        keys.leaveInsertMode(null);
+        assertEquals(List.of("push document", "type <Esc>", "keysConsumed", "view", "snapshot"), nvim.calls,
+                "after the <Esc> has moved the cursor");
+    }
+
+    @Test
     void withoutAReplayPlanTheDocumentIsPushedBeforeEsc() throws Exception {
         keys.leaveInsertMode(null);
 

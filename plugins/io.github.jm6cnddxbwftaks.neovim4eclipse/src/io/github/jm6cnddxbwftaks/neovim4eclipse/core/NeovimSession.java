@@ -340,6 +340,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         this.leaveInsertPush = leaveInsertPush;
     }
 
+    /**
+     * Runs at Esc on the input thread once Neovim's cursor is final, before Neovim's state is read:
+     * the editor sends its view ({@link #showTopLine}). {@code null} for none.
+     */
+    public void setLeaveInsertView(Runnable view) {
+        keyInput.setLeaveInsertView(view);
+    }
+
     /** Register being recorded into, or "" when not recording. */
     public String getRecordingRegister() {
         return status.recordingRegister();
@@ -748,7 +756,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (!viewportEnabled || line1 < 1) {
             return;
         }
-        submit("top line " + line1 + " for " + buffer.name(), Level.FINE, () -> setTopLine(buffer, line1));
+        submit("top line " + line1 + " for " + buffer.name(), Level.FINE, () -> sendTopLine(buffer, line1, "keep"));
     }
 
     @Override
@@ -760,7 +768,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             submit("scroll", Level.FINE, () -> {
                 Scroll latest = pendingScroll.take();
                 if (latest != null) {
-                    sendTopLine(latest.buffer(), latest.line1(), true);
+                    sendTopLine(latest.buffer(), latest.line1(), "drag");
                 }
             });
         }
@@ -791,22 +799,25 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * {@link #setTopLineAsync} on the input thread itself, for a step that must come before the next
-     * one of the same task: at Esc, the editor's top line goes to Neovim after the document and
-     * before {@code <Esc>}, whose cursor report would otherwise carry Neovim's own top line
-     * ({@code KeyInput.leaveInsertMode}). Input thread only.
+     * At Esc, after Eclipse scrolled alone while it typed (decision D6): Neovim's window takes the
+     * editor's top line, and its cursor is dragged into that view only if it is outside it (mode
+     * {@code show} of {@link LuaScripts#SET_TOPLINE}). So the view stays where it was scrolled, as
+     * with Neovim's own wheel, where the cursor would have been dragged along. Example: lines 1 to
+     * 20 shown, the caret on line 10, the wheel scrolls the editor to 60; at Esc Neovim's window
+     * shows 60 to 79 with the cursor on 60. Runs once the cursor is final
+     * ({@link #setLeaveInsertView}). Input thread only.
      */
-    public void setTopLine(DocumentBuffer buffer, int line1) throws Exception {
-        sendTopLine(buffer, line1, false);
+    public void showTopLine(DocumentBuffer buffer, int line1) throws Exception {
+        sendTopLine(buffer, line1, "show");
     }
 
-    /** {@link LuaScripts#SET_TOPLINE}, dragging the cursor along or keeping it. Input thread. */
-    private void sendTopLine(DocumentBuffer buffer, int line1, boolean drag) throws Exception {
+    /** {@link LuaScripts#SET_TOPLINE}: {@code mode} is {@code keep}, {@code drag} or {@code show}. Input thread. */
+    private void sendTopLine(DocumentBuffer buffer, int line1, String mode) throws Exception {
         if (!viewportEnabled || line1 < 1 || buffers.handleOf(buffer) == null || !buffer.loaded) {
             return; // off, not created yet, or gone; SET_TOPLINE itself skips a buffer not shown
         }
         await(api.execLua(LuaScripts.SET_TOPLINE,
-                List.of(String.valueOf(buffer.bufnr), String.valueOf(line1), flag(drag))));
+                List.of(String.valueOf(buffer.bufnr), String.valueOf(line1), mode)));
     }
 
     @Override

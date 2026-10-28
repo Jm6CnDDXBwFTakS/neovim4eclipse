@@ -87,7 +87,7 @@ class NeovimWheelTest {
         forward = false;
         assertTrue(roll(-3, SWT.SCROLL_LINE, 0).doit, "insert mode: Eclipse scrolls");
         forward = true;
-        assertTrue(roll(-3, SWT.SCROLL_LINE, SWT.CTRL).doit, "Ctrl+wheel zooms");
+        assertTrue(roll(-3, SWT.SCROLL_LINE, SWT.CTRL).doit, "Ctrl+wheel is Eclipse's");
         assertTrue(roll(-3, SWT.SCROLL_LINE, SWT.SHIFT).doit, "Shift+wheel scrolls sideways");
         assertEquals(List.of(), sent);
     }

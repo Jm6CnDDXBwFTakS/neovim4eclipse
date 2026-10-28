@@ -168,8 +168,9 @@ public final class NeovimEditorController implements AutoCloseable {
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
         this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer, caretSync);
-        // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are echoes.
-        this.caretSync.dropNeovimCursorWhile(this::eclipseTyping);
+        // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are
+        // echoes; and while Esc is handled they are of a cursor about to move (KeyInput.leavingInsert).
+        this.caretSync.dropNeovimCursorWhile(() -> eclipseTyping() || session.isLeavingInsertMode());
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
@@ -204,22 +205,29 @@ public final class NeovimEditorController implements AutoCloseable {
         session.setLeaveInsertPush(() -> {
             try {
                 synchronizer.pushDocumentToNeovim();
-                if (viewport != null) {
-                    // Eclipse scrolled alone while it typed (D6): its view is kept, and Neovim's
-                    // window, which has the lines now, is scrolled to it before the Esc. Read on
-                    // the UI thread, which never waits for the session's threads (no deadlock).
-                    int[] top = { 0 };
-                    SwtUiExecutor.INSTANCE.syncExec(() -> {
-                        if (!closed && !styledText.isDisposed()) {
-                            top[0] = viewport.eclipseTopLine();
-                        }
-                    });
-                    session.setTopLine(buffer, top[0]);
-                }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "push on leave insert failed", e);
             }
         });
+        if (viewport != null) {
+            // Eclipse scrolled alone while it typed (D6): its view is kept, and Neovim's window,
+            // which has the lines and the final cursor now, is scrolled to it; a cursor the view
+            // left behind is dragged in, as Neovim's own wheel would have dragged it. Read on the
+            // UI thread, which never waits for the session's threads (no deadlock).
+            session.setLeaveInsertView(() -> {
+                int[] top = { 0 };
+                SwtUiExecutor.INSTANCE.syncExec(() -> {
+                    if (!closed && !styledText.isDisposed()) {
+                        top[0] = viewport.eclipseTopLine();
+                    }
+                });
+                try {
+                    session.showTopLine(buffer, top[0]);
+                } catch (Exception e) {
+                    LOG.log(Level.FINE, "the editor's view at Esc", e);
+                }
+            });
+        }
 
         session.addModeListener(modeListener);
         session.addCursorListener(cursorListener);
@@ -807,6 +815,9 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeFoldStateListener(foldListener);
             session.removeWrapListener(wrapListener);
             session.removeTopLineListener(topLineListener);
+            if (viewport != null) {
+                session.setLeaveInsertView(null); // the next editor's attach sets its own
+            }
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }

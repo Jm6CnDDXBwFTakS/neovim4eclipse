@@ -141,7 +141,7 @@ end
 
 --- SET_TOPLINE as the session sends it: the buffer number and the 1-based line, as strings.
 local function topline(line, buf)
-  t.run('SET_TOPLINE', tostring(buf or vim.api.nvim_get_current_buf()), tostring(line))
+  t.run('SET_TOPLINE', tostring(buf or vim.api.nvim_get_current_buf()), tostring(line), 'keep')
 end
 
 t.test("SET_TOPLINE scrolls the window to the editor's top line and keeps the cursor", function()
@@ -178,7 +178,7 @@ end)
 
 --- SET_TOPLINE for a scroll in the editor: the cursor is dragged into the new view.
 local function scroll(line)
-  t.run('SET_TOPLINE', tostring(vim.api.nvim_get_current_buf()), tostring(line), '1')
+  t.run('SET_TOPLINE', tostring(vim.api.nvim_get_current_buf()), tostring(line), 'drag')
 end
 
 t.test('a scroll in the editor drags the cursor down into the view, as Ctrl-E does', function()
@@ -248,4 +248,26 @@ t.test('the wheel stops with the last line at the top, as Ctrl-E does', function
   long_buffer(30, 1)
   wheel(100)
   t.eq(30, vim.fn.line('w0'))
+end)
+
+--- SET_TOPLINE at Esc: a cursor in the editor's view stays, one outside it is dragged in.
+local function show(line)
+  t.run('SET_TOPLINE', tostring(vim.api.nvim_get_current_buf()), tostring(line), 'show')
+end
+
+t.test("at Esc a cursor the editor scrolled away from is dragged into the editor's view", function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 10)
+  show(60)
+  t.eq(60, vim.fn.line('w0'), 'the view stays where the wheel left it')
+  t.eq(60, vim.fn.line('.'), 'as Neovim\'s wheel would have dragged the cursor')
+end)
+
+t.test('at Esc a cursor still in the view stays where it is', function()
+  start()
+  vim.o.scrolloff = 5
+  long_buffer(200, 70)
+  show(60)
+  t.eq(70, vim.fn.line('.'), "not moved for 'scrolloff', unlike a drag")
 end)

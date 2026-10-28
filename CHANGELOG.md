@@ -27,7 +27,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - The mouse wheel and the touchpad scroll Neovim's window in normal and visual mode, by the lines
   your system reports, and drag the caret into the view as `Ctrl-E` does in Vim (before, the editor
   scrolled alone and the caret could stay off the screen). The scroll bar does the same. In insert
-  mode Eclipse scrolls alone, the caret stays, and the view is kept at `Esc`.
+  mode Eclipse scrolls alone and the caret stays; at `Esc` the view is kept, and a caret scrolled
+  off the screen is dragged into it.
 - The FINE log line "Mode → …" is written when the mode changes, not again for every key typed on
   the command line.
 

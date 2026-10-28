@@ -137,7 +137,7 @@ class NeovimViewportIntegrationTest {
             waitFor(() -> windowIs(s, 80, 20), "80 × 20");
             List<String> heard = follow(s);
             // What SET_TOPLINE runs (the script itself, with its buffer check, is viewport_spec.lua).
-            s.lua("require('neovim4eclipse.viewport').set_topline(40)");
+            s.lua("require('neovim4eclipse.viewport').set_topline(40, 'keep')");
             waitFor(() -> heard.contains("top 40"), "WinScrolled reports the line Neovim kept: " + heard);
             assertEquals(40, line(s, "w0"));
         }
@@ -156,8 +156,8 @@ class NeovimViewportIntegrationTest {
             s.setEditorSizeAsync(100, 30);
             waitFor(() -> windowIs(s, 100, 30), "100 × 30");
             s.inputAsync("z"); // Neovim waits for the second key
-            s.setEditorSizeAsync(80, 20);
-            NeovimBarrier.pass(s);
+            s.setEditorSizeAsync(80, 20); // queued after the z, before the Esc; nothing may ask Neovim
+                                          // anything meanwhile: it would not answer until the Esc
             s.inputAsync("<Esc>");
             waitFor(() -> windowIs(s, 80, 20), "the size, sent after the command ended");
         }
