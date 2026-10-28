@@ -14,8 +14,8 @@ import org.eclipse.ui.handlers.HandlerUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.AttachRefusal;
 
 /**
- * Command "Neovim: Attach to Active Editor" (<em>Neovim → Attach Neovim</em>, Ctrl+Shift+N, Cmd+Shift+N
- * on macOS, or Quick Access). Auto-attach normally makes it unnecessary; it is for an editor that did
+ * Command "Neovim: Attach to Active Editor" (<em>Neovim → Attach Neovim</em>, or Quick Access;
+ * no key since 0.1.9, a user can bind one). Auto-attach normally makes it unnecessary; it is for an editor that did
  * not attach by itself. It also starts a new Neovim if the old one died
  * ({@code Activator.getOrCreateSession}).
  *

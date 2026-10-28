@@ -100,8 +100,8 @@ To use the plug-in in your own Eclipse, without building it.
    install. To check a release by hand, the key is `releng/signing-key.asc` in this repository and
    on [keys.openpgp.org](https://keys.openpgp.org/search?q=A91F53D8931B7FD0D14686186CC9E446147B063C).
 4. Restart Eclipse when asked.
-5. Open any text file: Neovim attaches to the editor automatically. *Neovim: Attach to Active Editor*
-   (`Ctrl+Shift+N`) attaches by hand; the toolbar toggle turns it off and on. The first time, a
+5. Open any text file: Neovim attaches to the editor automatically. *Neovim → Attach Neovim* attaches by
+   hand; the toolbar toggle turns it off and on. The first time, a
    welcome note says how to turn it off and where the preferences and documentation are
    (*Neovim → Welcome...* shows it again). After an update to a new minor version (0.2, 0.3, ...),
    a short note links to the change log instead.
@@ -142,7 +142,7 @@ are needed to [install](#install) it.
    `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/lib/`. Their versions are set only in the root `pom.xml`.
 2. *File → Import → Existing Projects into Workspace* → `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse`.
 3. Open `META-INF/MANIFEST.MF` → *Launch an Eclipse application*. See [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md).
-4. Open a text file; Neovim attaches automatically (or press `Ctrl+Shift+N`, *Neovim: Attach to Active Editor*).
+4. Open a text file; Neovim attaches automatically (or choose *Neovim → Attach Neovim*).
 
 Things to try: `hjkl`, `diw`, `ci"`, `dd`, `u`, `v` + motion, `i … Esc`, `:` then `%s/foo/bar/g`, `/pattern`.
 
@@ -646,8 +646,8 @@ the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`)
 through *Window → Preferences*.
 Changing the executable restarts Neovim and re-attaches the active editor.
 
-The *Neovim* menu, top to bottom: *Neovim Mode* (the toggle, `Ctrl+Shift+M`); *Attach Neovim*
-(`Ctrl+Shift+N`), for an editor that did not attach by itself, which also starts a new Neovim if
+The *Neovim* menu, top to bottom: *Neovim Mode* (the toggle, `Ctrl+Shift+M`); *Attach Neovim*,
+for an editor that did not attach by itself, which also starts a new Neovim if
 the old one stopped; *Restart Neovim...*, which asks, then stops Neovim and starts a new one, for
 example after changing `init.lua` (Neovim's undo history, registers, macros, marks and jumps are
 lost; the editors' text, unsaved changes included, is kept); *Welcome...*; *Preferences...*.

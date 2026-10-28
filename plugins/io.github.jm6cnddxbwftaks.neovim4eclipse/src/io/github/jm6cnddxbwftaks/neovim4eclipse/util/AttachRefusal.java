@@ -4,7 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
- * Why <em>Neovim: Attach to Active Editor</em> ({@code Ctrl+Shift+N}) cannot attach, said to the
+ * Why <em>Neovim: Attach to Active Editor</em> (<em>Neovim → Attach Neovim</em>) cannot attach, said to the
  * user in a message. Without it, attaching to an image failed with an exception that Eclipse only
  * writes to its Error Log, and the key seemed to do nothing.
  *

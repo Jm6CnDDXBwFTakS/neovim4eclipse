@@ -13,6 +13,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ToggleButtonState.Editor;
 
 class ToggleButtonStateTest {
 
+    /** A key the user bound to attach (plugin.xml binds none). */
     @Test
     void aTextEditorWithoutNeovimIsGreyedOutAndNamesTheAttachKey() {
         ToggleButtonState state = ToggleButtonState.of(Editor.TEXT_WITHOUT_NEOVIM, true, "Ctrl+Shift+M", "Ctrl+Shift+N");
@@ -22,6 +23,7 @@ class ToggleButtonStateTest {
         assertEquals("Neovim mode unavailable (Ctrl+Shift+N attaches Neovim).", state.tooltip());
     }
 
+    /** The default: attach has no key, so the tooltip names the command, as Quick Access lists it. */
     @Test
     void withoutAnAttachKeyTheTooltipNamesTheCommand() {
         assertEquals("Neovim mode unavailable (Neovim: Attach to Active Editor attaches Neovim).",
