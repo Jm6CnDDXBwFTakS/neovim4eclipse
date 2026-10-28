@@ -98,6 +98,14 @@ final class CaretSync implements DocumentPush.Caret {
         placingNeovimCursor = false;
     }
 
+    /**
+     * Whether an attach push is placing Neovim's cursor at the caret ({@link #ignoreNeovimCursor}).
+     * The editor's viewport drops Neovim's top lines for the same span. Any thread.
+     */
+    boolean isPlacingNeovimCursor() {
+        return placingNeovimCursor;
+    }
+
     /** See the class comment, <em>While Eclipse types</em>. Called once, at setup. */
     void dropNeovimCursorWhile(BooleanSupplier eclipseTyping) {
         this.eclipseTyping = eclipseTyping;

@@ -332,8 +332,13 @@ public final class NeovimEditorController implements AutoCloseable {
      * replay of the typed text would otherwise scroll the editor back first). Session thread.
      */
     private void onNeovimTopLine(ViewportPort.TopLine top) {
+        // Dropped while the attach places Neovim's cursor at the caret, as the cursor reports are:
+        // entering the editor's window reports the view the window remembers, before the attach
+        // sends the editor's own (docs/design/WINDOWS.md, "The viewport"), and following it would
+        // scroll the editor to the old view and back. (An attach that follows a jump of Neovim's
+        // takes Neovim's cursor and view instead, and drops nothing.)
         if (closed || !neovimModeActive || top.bufnr() != buffer.bufnr() || eclipseTyping()
-                || session.isLeavingInsertMode()) {
+                || session.isLeavingInsertMode() || caretSync.isPlacingNeovimCursor()) {
             return;
         }
         SwtUiExecutor.INSTANCE.asyncExec(() -> {
