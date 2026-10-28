@@ -25,7 +25,7 @@ import org.eclipse.swt.widgets.Listener;
  * which is cheap, since the character width is read once per font. The session adds what Neovim
  * draws besides the window (status line, number column) and resizes Neovim's screen.
  *
- * <p><b>Word wrap.</b> Eclipse's wins on attach ({@link #start}). Alt+Shift+Y in Eclipse is seen at
+ * <p><b>Word wrap.</b> Eclipse's wins on attach ({@link #start}). Alt+Shift+Y in Eclipse (Cmd+Option+Y on macOS) is seen at
  * the next paint ({@code StyledText.getWordWrap()} changed) and sent to Neovim; a {@code :set wrap}
  * in Neovim comes back through {@link #onNeovimWrap}, which sets the editor's word wrap. Neither is
  * echoed: the value last agreed on is kept, and only a difference from it is sent. An editor that
@@ -195,7 +195,7 @@ final class ViewportFollower {
             return;
         }
         if (text.getWordWrap() != wrap) {
-            wrap = text.getWordWrap(); // Alt+Shift+Y, the menu, the toolbar
+            wrap = text.getWordWrap(); // Alt+Shift+Y (Cmd+Option+Y on macOS), the menu, the toolbar
             neovim.sendWrap(wrap);
         }
         update();

@@ -350,7 +350,7 @@ If the wheel or touchpad scrolls too far or too little, start Eclipse with
 `-Dneovim4eclipse.logLevel=FINE` (a line after `-vmargs` in `eclipse.ini`), scroll a little, and
 send the `wheel count=… detail=…` lines from the Error Log with your system and device in an issue.
 
-- **Word wrap is one setting.** Eclipse's word wrap (`Alt+Shift+Y`) and Neovim's `'wrap'` follow
+- **Word wrap is one setting.** Eclipse's word wrap (`Alt+Shift+Y`; `Cmd+Option+Y` on macOS) and Neovim's `'wrap'` follow
   each other, for that editor. When an editor attaches, Eclipse's wins: set the default with
   *Window → Preferences → General → Editors → Text Editors → Enable word wrap when opening an
   editor*, not with `set wrap` in `init.lua`.

@@ -18,7 +18,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the lines the editor shows (before, on a fixed screen of 40 lines nobody saw). Resizing the
   window, the part or the font resizes it too. `vim.g.neovim4eclipse_viewport = 0` in `init.lua`
   keeps the old fixed screen. See the README, "The editor's size, scrolling and word wrap".
-- Eclipse's word wrap (`Alt+Shift+Y`) and Neovim's `'wrap'` are one setting: changing either changes
+- Eclipse's word wrap (`Alt+Shift+Y`, on macOS `Cmd+Option+Y`) and Neovim's `'wrap'` are one setting: changing either changes
   the other, and Eclipse's preference decides when an editor opens. While wrap is on, `'linebreak'`
   stays on, so that lines wrap at the same words in both.
 - The editor scrolls where Neovim's window scrolls (`Ctrl-E`, `Ctrl-D`, `zz`, `zt`, a jump,

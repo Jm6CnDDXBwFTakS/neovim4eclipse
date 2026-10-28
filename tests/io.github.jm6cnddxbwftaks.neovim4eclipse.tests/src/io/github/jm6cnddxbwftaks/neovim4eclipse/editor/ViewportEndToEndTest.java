@@ -353,13 +353,19 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    /** The key itself, not the command: Eclipse's binding must win over the plug-in's key handling. */
+    /**
+     * The key itself, not the command: Eclipse's binding must win over the plug-in's key handling.
+     * Alt+Shift+Y, except on macOS, where Eclipse unbinds it and uses Cmd+Option+Y (its
+     * {@code org.eclipse.ui.workbench.texteditor} plugin.xml, platform "carbon"); the test sent
+     * Alt+Shift+Y there at first and failed.
+     */
     @Test
-    void altShiftYTogglesWordWrap() {
+    void theWordWrapKeyTogglesWordWrap() {
+        boolean mac = org.eclipse.jface.util.Util.isMac();
         Event event = new Event();
         event.keyCode = 'y';
-        event.character = 'Y';
-        event.stateMask = SWT.ALT | SWT.SHIFT;
+        event.character = mac ? 'y' : 'Y';
+        event.stateMask = mac ? SWT.COMMAND | SWT.ALT : SWT.ALT | SWT.SHIFT;
         event.doit = true;
         widget.notifyListeners(SWT.KeyDown, event);
         waitUntil("word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
