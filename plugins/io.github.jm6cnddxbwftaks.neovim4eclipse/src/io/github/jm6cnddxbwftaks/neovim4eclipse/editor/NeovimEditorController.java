@@ -122,6 +122,8 @@ public final class NeovimEditorController implements AutoCloseable {
      * {@code null} when the user turned the viewport off ({@code vim.g.neovim4eclipse_viewport = 0}).
      */
     private final ViewportFollower viewport;
+    /** The wheel through Neovim; {@code null} with the viewport off. */
+    private final NeovimWheel wheel;
     private volatile boolean closed;
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
@@ -195,6 +197,9 @@ public final class NeovimEditorController implements AutoCloseable {
                 editor.getSite().getService(IHandlerService.class), commandLine);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
+        this.wheel = viewport == null ? null
+                : new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
+                        lines -> session.scrollLinesAsync(buffer, lines));
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         session.setLeaveInsertPush(() -> {
             try {
@@ -814,6 +819,9 @@ public final class NeovimEditorController implements AutoCloseable {
             }
             caretSync.dispose();
             mouse.dispose();
+            if (wheel != null) {
+                wheel.dispose();
+            }
             commandLineEdits.dispose();
             commandLine.dispose();
             messageLine.dispose();

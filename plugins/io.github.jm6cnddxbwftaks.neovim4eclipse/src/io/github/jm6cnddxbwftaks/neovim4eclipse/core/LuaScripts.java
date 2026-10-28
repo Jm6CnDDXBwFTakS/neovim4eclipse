@@ -1020,6 +1020,9 @@ final class LuaScripts {
      *       change the top line. With {@code drag} (the user scrolled the editor: the scroll bar,
      *       the wheel) the cursor is dragged into the new view as {@code Ctrl-E} and {@code Ctrl-Y}
      *       drag it, {@code 'scrolloff'} lines from its edges, so that the view is kept.</li>
+     *   <li>{@code scroll_lines(n)}, used by {@link #SCROLL_LINES}: the mouse wheel. Scrolls {@code n}
+     *       lines down (negative: up) as {@code n} times {@code Ctrl-E} ({@code Ctrl-Y}) would, a
+     *       closed fold counting as one line, and drags the cursor along.</li>
      * </ul>
      *
      * <p><b>{@code 'linebreak'} while wrap is on</b> (D7). Eclipse wraps a long line at a word
@@ -1199,6 +1202,33 @@ final class LuaScripts {
               vim.fn.winrestview({ topline = line, lnum = lnum, col = view.col, curswant = view.curswant })
             end
 
+            -- n lines from top, a closed fold counting as one, as Ctrl-E and Ctrl-Y step. Stops at
+            -- the first line, and at the last (Ctrl-E can put it at the top). Example: top 1, a
+            -- closed fold on lines 5-10, n = 5: 2, 3, 4, 5, then 11.
+            function M.scroll_lines(n)
+              local top, last = vim.fn.line('w0'), vim.api.nvim_buf_line_count(0)
+              for _ = 1, math.abs(n) do
+                if n > 0 then
+                  local fold_end = vim.fn.foldclosedend(top)
+                  local next_top = (fold_end ~= -1 and fold_end or top) + 1
+                  if next_top > last then
+                    break
+                  end
+                  top = next_top
+                else
+                  if top <= 1 then
+                    break
+                  end
+                  top = top - 1
+                  local fold_start = vim.fn.foldclosed(top)
+                  if fold_start ~= -1 then
+                    top = fold_start
+                  end
+                end
+              end
+              M.set_topline(top, true)
+            end
+
             vim.api.nvim_create_autocmd('WinScrolled', {
               group = group,
               callback = function()
@@ -1250,6 +1280,20 @@ final class LuaScripts {
               return
             end
             require('neovim4eclipse.viewport').set_topline(line, drag == '1')
+            """;
+
+    /**
+     * Scrolls the current window by the mouse wheel (arguments: the buffer number and the lines,
+     * positive down, as strings); see {@link #VIEWPORT}'s {@code scroll_lines} and
+     * {@code util/WheelScroll}. Nothing when that buffer is not the current one. Example:
+     * {@code ("3", "-3")} scrolls three lines up, as {@code 3 Ctrl-Y}.
+     */
+    static final String SCROLL_LINES = """
+            local buf, n = tonumber((select(1, ...))), tonumber((select(2, ...)))
+            if vim.api.nvim_get_current_buf() ~= buf or not n or n == 0 then
+              return
+            end
+            require('neovim4eclipse.viewport').scroll_lines(n)
             """;
 
     /**

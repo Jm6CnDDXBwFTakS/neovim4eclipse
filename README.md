@@ -335,13 +335,19 @@ or font (`Ctrl+=`) changes `&lines` and `&columns` with it.
 
 The editor scrolls where Neovim's window scrolls: `Ctrl-E`, `Ctrl-Y`, `Ctrl-D`, `zz`, `zt`, `zb`, a
 jump such as `150G`, and your `'scrolloff'`, which keeps lines around the cursor in the editor too.
-The other way round, scrolling the editor (the scroll bar, the mouse wheel, Eclipse showing a
-search hit) scrolls Neovim's window to the same line, and in normal and visual mode the cursor is
-dragged into the view as `Ctrl-E` drags it, `'scrolloff'` lines from the edge, so the caret moves
-when you scroll it off the screen, as in Vim. In insert mode Eclipse scrolls alone and the caret
-stays; at `Esc` Neovim's window is scrolled to the editor's view. When an editor attaches, Neovim's
-window is scrolled to the editor's view too. The wheel scrolls by Eclipse's amount for now; a later
-release lets Neovim scroll by the wheel ([design](docs/design/VIEWPORT.md)).
+In normal and visual mode the mouse wheel and the touchpad scroll Neovim's window, by as many lines
+as your system reports (its speed and momentum, so as far as Eclipse would scroll; Neovim's
+`'mousescroll'` is not used), and the cursor is dragged into the view as `Ctrl-E` drags it,
+`'scrolloff'` lines from the edge: the caret moves when you scroll it off the screen, as in Vim.
+Ctrl+wheel still zooms, and the sideways wheel stays Eclipse's. Scrolling the editor otherwise (the
+scroll bar, Eclipse showing a search hit) scrolls Neovim's window to the same line and drags the
+cursor the same way. In insert mode Eclipse scrolls alone and the caret stays where you type; at
+`Esc` Neovim's window is scrolled to the editor's view. When an editor attaches, Neovim's window is
+scrolled to the editor's view too ([design](docs/design/VIEWPORT.md)).
+
+If the wheel or touchpad scrolls too far or too little, start Eclipse with
+`-Dneovim4eclipse.logLevel=FINE` (a line after `-vmargs` in `eclipse.ini`), scroll a little, and
+send the `wheel count=… detail=…` lines from the Error Log with your system and device in an issue.
 
 - **Word wrap is one setting.** Eclipse's word wrap (`Alt+Shift+Y`) and Neovim's `'wrap'` follow
   each other, for that editor. When an editor attaches, Eclipse's wins: set the default with

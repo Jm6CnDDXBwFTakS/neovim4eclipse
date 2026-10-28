@@ -212,3 +212,40 @@ t.test('a scroll that keeps the cursor in view leaves it where it is, column inc
   t.eq(40, vim.fn.line('w0'))
   t.eq({ 45, 3 }, vim.api.nvim_win_get_cursor(0))
 end)
+
+--- SCROLL_LINES as the session sends it for the mouse wheel: the buffer number and the lines.
+local function wheel(n)
+  t.run('SCROLL_LINES', tostring(vim.api.nvim_get_current_buf()), tostring(n))
+end
+
+t.test('the wheel scrolls by lines and drags the cursor along, as Ctrl-E and Ctrl-Y', function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 1)
+  wheel(3)
+  t.eq(4, vim.fn.line('w0'), 'three lines down')
+  t.eq(4, vim.fn.line('.'), 'the cursor dragged to the top line')
+  wheel(-2)
+  t.eq(2, vim.fn.line('w0'))
+  wheel(-10)
+  t.eq(1, vim.fn.line('w0'), 'stops at the first line')
+end)
+
+t.test('a closed fold is one line for the wheel', function()
+  start()
+  vim.o.scrolloff = 0
+  long_buffer(200, 1)
+  vim.wo.foldmethod = 'manual'
+  vim.cmd('5,10fold')
+  wheel(5)
+  t.eq(11, vim.fn.line('w0'), '2, 3, 4, the fold, then 11')
+  wheel(-1)
+  t.eq(5, vim.fn.line('w0'), 'back onto the fold, at its first line')
+end)
+
+t.test('the wheel stops with the last line at the top, as Ctrl-E does', function()
+  start()
+  long_buffer(30, 1)
+  wheel(100)
+  t.eq(30, vim.fn.line('w0'))
+end)

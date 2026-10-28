@@ -175,6 +175,32 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         assertEquals(top, editorTop(), "the editor did not scroll for L");
     }
 
+    /** One notch of the mouse wheel as SWT reports it on Linux: {@code count} −3 is three lines down. */
+    private void wheelDown() {
+        Event event = new Event();
+        event.count = -3;
+        event.detail = SWT.SCROLL_LINE;
+        event.doit = true;
+        widget.notifyListeners(SWT.MouseVerticalWheel, event);
+    }
+
+    /**
+     * Decisions D1 and D9: the wheel scrolls Neovim's window by the lines SWT reports, drags the
+     * cursor along as {@code Ctrl-E} does, and the editor follows Neovim's top line.
+     */
+    @Test
+    void theWheelScrollsNeovimAndTheEditorFollows() {
+        longDocument();
+        session.inputAsync("g");
+        session.inputAsync("g");
+        settle();
+        wheelDown();
+        wheelDown();
+        waitUntil("Neovim's window six lines down", TIMEOUT_MS, () -> neovim("w0") == 7, this::tops);
+        waitUntil("the editor with it", TIMEOUT_MS, () -> editorTop() == 7, this::tops);
+        assertEquals(7, cursorLine(), "the cursor dragged to the top line ('scrolloff' 0)");
+    }
+
     /**
      * The scroll bar (or the wheel, or Eclipse revealing a search hit) scrolls the editor: Neovim's
      * window goes there too and drags its cursor along, so the next key does not scroll the editor
