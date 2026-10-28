@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-28
+
 ### Added
 
 - *Neovim → Restart Neovim...* stops Neovim and starts a new one, after asking: for a change to
