@@ -789,8 +789,8 @@ These are real and deliberate to know about before extending the code:
    `Ctrl+W s`) is not something Eclipse shows; use Eclipse's split editor or *New Editor*.
    Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor (after `:bufdo` or `:argdo`,
    only the editor of the file they end in), and the window goes along: the two editors swap
-   windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window. Jumps
-   to anything else
+   windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window
+   ([docs/design/WINDOWS.md](docs/design/WINDOWS.md)). Jumps to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
    reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the
