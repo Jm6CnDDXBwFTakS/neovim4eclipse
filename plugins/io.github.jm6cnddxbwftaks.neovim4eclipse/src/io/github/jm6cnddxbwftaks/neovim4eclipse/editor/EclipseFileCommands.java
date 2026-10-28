@@ -91,7 +91,10 @@ public final class EclipseFileCommands {
      * Neovim's own {@code :w other.txt} checks for an existing file before Eclipse is asked; here the
      * command is Eclipse's, so this does it: E13 without {@code !}. UI thread.
      *
-     * @param name          as typed: relative to the edited file's folder, absolute, or {@code ~/...}
+     * @param name          as typed: relative to the window's folder ({@link #windowFolder}, the
+     *                      project root), as Neovim's own {@code :w other.txt} reads it, so
+     *                      {@code :w copy.txt} and {@code :wq copy.txt} write the same file; or
+     *                      absolute, or {@code ~/...}
      * @param onlyIfChanged {@code :x}: nothing is written when the editor has no unsaved changes
      * @return whether the copy was written, or nothing needed writing
      */
@@ -100,7 +103,7 @@ public final class EclipseFileCommands {
         if (onlyIfChanged && !part.isDirty()) {
             return true;
         }
-        Path target = newFilePath(editor, name);
+        Path target = copyPath(editor, name);
         if (target == null) {
             HostCommands.showError(editor, "Eclipse cannot tell where \"" + name + "\" goes: this file has no folder");
             return false;
@@ -314,6 +317,34 @@ public final class EclipseFileCommands {
             }
         }
         return null;
+    }
+
+    /**
+     * The folder Neovim's window works in for this editor ({@code :lcd}, set at attach): the
+     * project's root, or the file's own folder for a file outside any project; {@code null} for a
+     * document without a file outside any project.
+     */
+    static Path windowFolder(ITextEditor editor) {
+        List<Path> folders = editFolders(editor);
+        return folders.get(1) != null ? folders.get(1) : folders.get(0);
+    }
+
+    /**
+     * Where {@code :wq name} and {@code :x name} write their copy: {@code name} relative to the
+     * window's folder, where Neovim's own {@code :w name} writes it (Neovim reads a relative name
+     * against its working folder, which the plug-in sets to the project root). {@code ./name} is that
+     * folder too, as in Neovim. Example, editing {@code src/Main.java} in {@code /ws/app}:
+     * {@code :wq copy.txt} writes {@code /ws/app/copy.txt}, beside the copy {@code :w copy.txt}
+     * makes, and {@code :w %:h/copy.txt} (Neovim's, which expands {@code %}) writes beside the file.
+     * {@code null} when the name is relative and there is no folder (an untitled document).
+     *
+     * <p>Unlike {@code :e}, which still looks beside the edited file first (a rule kept until the
+     * windows plan; see {@link EditPath}).
+     */
+    private static Path copyPath(ITextEditor editor, String name) {
+        List<Path> candidates = EditPath.candidates(name, Path.of(System.getProperty("user.home")),
+                Collections.singletonList(windowFolder(editor)));
+        return candidates.isEmpty() ? null : candidates.get(0);
     }
 
     /**
