@@ -253,6 +253,30 @@ class ViewportEndToEndTest extends EndToEndTestBase {
      * not hear of it until Esc. Without the top line sent at Esc, the cursor report of the Esc carried
      * Neovim's old top line, and the editor jumped back there.
      */
+    /**
+     * The manual test of commit 3: the wheel in insert mode scrolled the caret off the screen, and
+     * Esc scrolled back to it. In Neovim the wheel would have dragged the cursor along, so at Esc the
+     * cursor is dragged into the editor's view instead, and the view stays.
+     */
+    @Test
+    void escDragsACursorTheEditorScrolledAwayFromIntoItsView() {
+        longDocument();
+        session.inputAsync("g");
+        session.inputAsync("g");
+        settle();
+        type(widget, 'i');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, 'x');
+        editor.getAdapter(ITextViewer.class).setTopIndex(100); // as the wheel in insert mode: line 101 on top
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        settle();
+        waitUntil("Neovim's window at the editor's view", TIMEOUT_MS, this::topsAgree, this::tops);
+        assertEquals(101, editorTop(), "the view stays where it was scrolled");
+        assertEquals(101, cursorLine(), "the cursor dragged to its top line ('scrolloff' 0)");
+        assertEquals("x" + "line 1", document.get().substring(0, 7), "the typed text is there");
+    }
+
     @Test
     void escKeepsTheViewEclipseScrolledToInInsertMode() {
         longDocument();

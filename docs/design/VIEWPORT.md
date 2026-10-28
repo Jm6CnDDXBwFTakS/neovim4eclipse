@@ -111,8 +111,8 @@ Commit 3 (the wheel through Neovim):
   (`SWT.SCROLL_PAGE`, Windows' "one screen at a time") scrolls the editor's rows less two, as
   `Ctrl-F`.
 - **`editor/NeovimWheel`**, a display filter as `NeovimMouse` is, swallows the vertical wheel in
-  normal and visual mode, unless a modifier is held (Ctrl+wheel zooms, Shift+wheel may scroll
-  sideways), and sends its lines with `scrollLinesAsync`, added up while Neovim is busy. Tested in
+  normal and visual mode, unless a modifier is held (Shift+wheel may scroll sideways; Ctrl+wheel
+  scrolls in Eclipse's text editor, checked on Linux), and sends its lines with `scrollLinesAsync`, added up while Neovim is busy. Tested in
   `tests/swt` (`NeovimWheelTest`).
 - **`LuaScripts.SCROLL_LINES`** steps the top line as `Ctrl-E` and `Ctrl-Y` do, a closed fold
   counting as one line, and then uses `set_topline(…, drag)`; no `:normal`, which would end visual
@@ -121,6 +121,16 @@ Commit 3 (the wheel through Neovim):
   editor's own scroll drags Neovim's cursor the same way, so the result would not differ.
 - **A FINE log line per event** (`wheel count=-3 detail=1: 3 lines`); README asks users to send
   them for a device that scrolls wrongly.
+- **Esc after scrolling in insert mode** (found in the manual test): the view went back to the
+  caret, since Neovim keeps its cursor on screen, while Neovim's own wheel would have dragged the
+  cursor along. Now `SET_TOPLINE` has a third mode, `show`: a cursor outside the editor's view is
+  dragged in, one inside it stays (not moved for `'scrolloff'`). It runs as the last step of Esc,
+  once the cursor is final (after the replay's `setCursor` or the `<Esc>`; earlier, that cursor
+  would be put back off screen), and Neovim's cursor reports are ignored while Esc is handled, as
+  its top lines already were: the replay's report of the old caret made Eclipse reveal it first.
+  D6 stands for insert mode itself.
+- **Ctrl+wheel and Cmd+wheel** scroll in Eclipse's text editor (checked on Linux and macOS), so
+  leaving the wheel with a modifier to Eclipse changes nothing visible there.
 
 ## 1. Behavior
 

@@ -229,9 +229,11 @@ autocmd sends `eclipse_topline` for scrolls that leave the cursor (`Ctrl-E`, `zt
 controller's UI queue scrolls the editor (`ITextViewer.setTopIndex`, in document lines, a fold's
 caption where Neovim's top line is hidden) and then places the caret, which is then on screen and
 causes no reveal of its own. The other way round is `LuaScripts.SET_TOPLINE` (`winrestview`, which
-keeps the cursor visible): on attach, and at Esc after Eclipse scrolled alone while it typed (sent
-after the push and before `<Esc>`, with Neovim's top lines ignored while Esc is handled, since the
-replay of the typed text runs in Neovim's old view). When the editor scrolls by itself in normal or
+keeps the cursor visible): on attach; and at Esc, after Eclipse scrolled alone while it typed, in
+mode `show` (a cursor outside the view is dragged in), as a last step once Neovim's cursor is final
+(`KeyInput`'s leave-insert view hook). While Esc is handled, Neovim's cursors and top lines are
+ignored: the replay of the typed text runs in Neovim's old view, and its cursor would make Eclipse
+reveal the old caret. When the editor scrolls by itself in normal or
 visual mode (scroll bar, a reveal), the follower sees a top line other than the one last agreed at
 the next paint and sends it with `scrollToAsync` (newest only); the same script then drags the
 cursor into the view as `Ctrl-E` does. The vertical wheel does not scroll the editor at all in

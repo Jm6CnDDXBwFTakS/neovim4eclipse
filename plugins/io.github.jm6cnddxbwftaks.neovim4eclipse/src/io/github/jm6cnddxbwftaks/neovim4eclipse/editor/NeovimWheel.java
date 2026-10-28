@@ -30,8 +30,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WheelScroll;
  * scrolls three lines down, as Eclipse would have.
  *
  * <p><b>What stays Eclipse's.</b> Insert mode (D6: the caret stays where you type; Esc then sends
- * the editor's view), Eclipse mode, the sideways wheel (D4), and the wheel with a modifier:
- * Ctrl+wheel zooms the font, Shift+wheel scrolls sideways on some systems. Neovim's
+ * the editor's view), Eclipse mode, the sideways wheel (D4), and the wheel with a modifier: what
+ * Eclipse or the system does with it stays (Shift+wheel scrolls sideways on some systems; Ctrl+wheel
+ * zooms in some editors and scrolls in Eclipse's text editor). Neovim's
  * {@code 'mouse'} and {@code 'mousescroll'} are not used: the lines are the system's (D9), and
  * without this the editor's own scroll would drag Neovim's cursor the same way
  * ({@code ViewportFollower}), so turning the mouse off in Neovim would change nothing.

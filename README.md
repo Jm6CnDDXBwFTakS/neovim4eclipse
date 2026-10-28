@@ -339,10 +339,11 @@ In normal and visual mode the mouse wheel and the touchpad scroll Neovim's windo
 as your system reports (its speed and momentum, so as far as Eclipse would scroll; Neovim's
 `'mousescroll'` is not used), and the cursor is dragged into the view as `Ctrl-E` drags it,
 `'scrolloff'` lines from the edge: the caret moves when you scroll it off the screen, as in Vim.
-Ctrl+wheel still zooms, and the sideways wheel stays Eclipse's. Scrolling the editor otherwise (the
+The wheel with Ctrl or Shift held, and the sideways wheel, stay Eclipse's. Scrolling the editor otherwise (the
 scroll bar, Eclipse showing a search hit) scrolls Neovim's window to the same line and drags the
 cursor the same way. In insert mode Eclipse scrolls alone and the caret stays where you type; at
-`Esc` Neovim's window is scrolled to the editor's view. When an editor attaches, Neovim's window is
+`Esc` the view stays where you scrolled, and a caret you scrolled off the screen is dragged into it,
+as Neovim's own wheel would have dragged it. When an editor attaches, Neovim's window is
 scrolled to the editor's view too ([design](docs/design/VIEWPORT.md)).
 
 If the wheel or touchpad scrolls too far or too little, start Eclipse with
