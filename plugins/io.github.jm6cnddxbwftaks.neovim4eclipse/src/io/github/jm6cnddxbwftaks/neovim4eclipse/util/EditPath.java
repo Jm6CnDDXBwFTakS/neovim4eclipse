@@ -62,4 +62,25 @@ public final class EditPath {
             return null; // a name such as "a\0b" cannot be a file anywhere
         }
     }
+
+    /**
+     * {@code file} as Neovim shows a file name in its messages ({@code fnamemodify(name, ':~:.')}):
+     * relative to the window's folder when it is inside it, else with {@code ~} for the home
+     * directory, else in full. Eclipse gets full paths from Neovim, but {@code :e new.txt} should say
+     * {@code "new.txt" [New]}, as Neovim would, not the whole path.
+     *
+     * <p>Example, window folder {@code /ws/app}, home {@code /home/user}: {@code /ws/app/src/A.java}
+     * is {@code src/A.java}, {@code /home/user/notes.txt} {@code ~/notes.txt}, {@code /etc/hosts}
+     * {@code /etc/hosts}.
+     */
+    public static String shown(Path file, Path home, Path windowFolder) {
+        Path normal = file.normalize();
+        if (windowFolder != null && normal.startsWith(windowFolder.normalize()) && !normal.equals(windowFolder.normalize())) {
+            return windowFolder.normalize().relativize(normal).toString();
+        }
+        if (home != null && normal.startsWith(home.normalize()) && !normal.equals(home.normalize())) {
+            return "~" + java.io.File.separator + home.normalize().relativize(normal);
+        }
+        return normal.toString();
+    }
 }

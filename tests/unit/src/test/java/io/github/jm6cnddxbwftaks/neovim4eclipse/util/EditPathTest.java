@@ -50,4 +50,15 @@ class EditPathTest {
         assertNull(EditPath.resolve("  ", HOME, PROJECT));
         assertNull(EditPath.resolve(null, HOME, PROJECT));
     }
+
+    /** As Neovim's messages show a name ({@code :~:.}): {@code "new.txt" [New]}, not the full path. */
+    @Test
+    void aNameIsShownRelativeToTheWindowsFolderOrHome() {
+        assertEquals("new.txt", EditPath.shown(PROJECT.resolve("new.txt"), HOME, PROJECT));
+        assertEquals(Path.of("src", "A.java").toString(), EditPath.shown(PROJECT.resolve("src/A.java"), HOME, PROJECT));
+        assertEquals("~" + java.io.File.separator + "notes.txt", EditPath.shown(HOME.resolve("notes.txt"), HOME, PROJECT));
+        Path outside = Path.of("/etc/hosts").toAbsolutePath();
+        assertEquals(outside.toString(), EditPath.shown(outside, HOME, PROJECT));
+        assertEquals(PROJECT.resolve("x").toString(), EditPath.shown(PROJECT.resolve("x"), HOME, null), "no folder: in full");
+    }
 }
