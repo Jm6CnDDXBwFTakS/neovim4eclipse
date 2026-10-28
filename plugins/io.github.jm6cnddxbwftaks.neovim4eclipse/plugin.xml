@@ -524,12 +524,8 @@
    </extension>
 
    <extension point="org.eclipse.ui.bindings">
-      <key
-            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.attach"
-            contextId="org.eclipse.ui.contexts.window"
-            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
-            sequence="M1+M2+N">
-      </key>
+      <!-- Attach has no key (Ctrl+Shift+N until 0.1.9): it attaches by itself, and is rarely needed
+           by hand (Neovim > Attach Neovim, Quick Access). A user can bind one in General > Keys. -->
       <key
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
             contextId="org.eclipse.ui.contexts.window"

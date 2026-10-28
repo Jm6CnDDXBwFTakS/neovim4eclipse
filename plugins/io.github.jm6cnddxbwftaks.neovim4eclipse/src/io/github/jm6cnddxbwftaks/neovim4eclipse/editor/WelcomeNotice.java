@@ -135,7 +135,8 @@ final class WelcomeNotice {
      * unless the user rebound the key.
      *
      * @param commandId       the command, as in {@code plugin.xml}
-     * @param defaultSequence its binding in {@code plugin.xml}, in Eclipse's notation ({@code M1+M2+M})
+     * @param defaultSequence its binding in {@code plugin.xml}, in Eclipse's notation ({@code M1+M2+M}),
+     *                        or {@code null} if it has none (the attach command)
      * @return the binding, or {@code null} if none can be named
      */
     static String keyBinding(String commandId, String defaultSequence) {
@@ -144,7 +145,7 @@ final class WelcomeNotice {
                 : null;
         String active = bindings == null ? null
                 : bindings.getBestActiveBindingFormattedFor(commandId);
-        if (active != null) {
+        if (active != null || defaultSequence == null) {
             return active;
         }
         try {

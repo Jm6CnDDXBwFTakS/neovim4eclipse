@@ -11,7 +11,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * <pre>
  *   not a text editor       greyed out  color logo  "Neovim mode unavailable: not a text editor."
  *   no editor open          greyed out  color logo  "Neovim mode unavailable: no editor open."
- *   text editor, no Neovim  greyed out  color logo  "Neovim mode unavailable (Ctrl+Shift+N attaches Neovim)."
+ *   text editor, no Neovim  greyed out  color logo  "Neovim mode unavailable (Neovim: Attach to Active Editor attaches Neovim)."
  *   Neovim mode             pressed     color logo  "Neovim mode: Neovim gets the keys. Click or (Ctrl+Shift+M) to switch to Eclipse mode."
  *   Eclipse mode            raised      grey logo   "Eclipse mode: Eclipse gets the keys. Click or (Ctrl+Shift+M) to switch to Neovim mode."
  * </pre>
@@ -53,21 +53,21 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
     /** The logo in grey ({@code releng/render-icon.py --grey}): Eclipse mode. */
     public static final String ICON_OFF = "icons/neovim-off.png";
 
-    /** The attach command (plugin.xml), which the greyed-out button's tooltip names. */
-    public static final String ATTACH_COMMAND_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.attach";
     /**
-     * The attach command's key binding as {@code plugin.xml} declares it ({@code M1} is Ctrl, or
-     * Command on macOS), named when Eclipse cannot say which binding is active.
-     * {@code PluginXmlConsistencyTest} checks that it matches {@code plugin.xml}.
+     * The attach command (plugin.xml), which the greyed-out button's tooltip names. It has no key
+     * binding of its own (no more since 0.1.9); one the user binds in <em>General › Keys</em> is
+     * named instead of the command's name.
      */
-    public static final String DEFAULT_ATTACH_SEQUENCE = "M1+M2+N";
+    public static final String ATTACH_COMMAND_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.attach";
 
     /**
      * @param editor     the active editor's kind
      * @param neovimMode Neovim gets the keys (ignored unless {@link Editor#ATTACHED})
      * @param toggleKey  the toggle's key binding as shown to the user ({@code Ctrl+Shift+M}), or
      *                   {@code null} if it has none
-     * @param attachKey  the attach command's key binding ({@code Ctrl+Shift+N}), or {@code null}
+     * @param attachKey  a key binding the user gave the attach command (say {@code Ctrl+Alt+A}), or
+     *                   {@code null} (the default: the tooltip then names the command, which Quick
+     *                   Access finds)
      */
     public static ToggleButtonState of(Editor editor, boolean neovimMode, String toggleKey, String attachKey) {
         switch (editor) {

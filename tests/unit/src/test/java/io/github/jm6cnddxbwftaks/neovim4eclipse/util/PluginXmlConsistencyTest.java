@@ -80,11 +80,11 @@ class PluginXmlConsistencyTest {
                 "WelcomeNote.DEFAULT_TOGGLE_SEQUENCE must be the toggle's binding in plugin.xml");
     }
 
+    /** The toggle button's tooltip names the command, not a key, because plugin.xml binds none. */
     @Test
-    void theToggleButtonNamesTheAttachKeyThatPluginXmlBinds() throws Exception {
-        assertEquals(Set.of(ToggleButtonState.DEFAULT_ATTACH_SEQUENCE),
-                keySequencesOf(ToggleButtonState.ATTACH_COMMAND_ID),
-                "ToggleButtonState.DEFAULT_ATTACH_SEQUENCE must be the attach binding in plugin.xml");
+    void attachHasNoKeyBindingInPluginXml() throws Exception {
+        assertEquals(Set.of(), keySequencesOf(ToggleButtonState.ATTACH_COMMAND_ID),
+                "attach has no default key (ToggleNeovimModeHandler passes no default sequence)");
     }
 
     private static Set<String> keySequencesOf(String commandId) throws Exception {

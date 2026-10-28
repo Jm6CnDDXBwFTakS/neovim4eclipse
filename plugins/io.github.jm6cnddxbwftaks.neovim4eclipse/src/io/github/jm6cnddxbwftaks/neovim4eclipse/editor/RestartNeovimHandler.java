@@ -25,7 +25,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
  * and each buffer is filled again from its document when its editor attaches. What lives only in
  * Neovim is lost, which is what the question says (undo history, registers, marks...).
  *
- * <p>When Neovim has died on its own, Attach (Ctrl+Shift+N) already starts a new one without asking,
+ * <p>When Neovim has died on its own, <em>Attach Neovim</em> already starts a new one without asking,
  * since nothing is left to lose; this command is for a Neovim that still runs.
  */
 public final class RestartNeovimHandler extends AbstractHandler {
