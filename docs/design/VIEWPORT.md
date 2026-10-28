@@ -150,7 +150,7 @@ Commit 3 (the wheel through Neovim):
   scroll or drag a cursor through them.
 - A user's `'laststatus'`, `'number'`, `'signcolumn'` stay theirs. The plug-in measures what they
   take (section 3.1) instead of turning them off.
-- `'wrap'` and Eclipse's word wrap (Alt+Shift+Y) are one setting (D2): toggling either changes
+- `'wrap'` and Eclipse's word wrap (Alt+Shift+Y; Cmd+Option+Y on macOS) are one setting (D2): toggling either changes
   the other, for that editor. On attach Eclipse's state wins, so the default is Eclipse's preference
   "Enable word wrap when opening an editor", not a `set wrap` in `init.lua`. With word wrap on,
   `'linebreak'` is set too (Eclipse wraps at word boundaries), and a `:set nolinebreak` then gets a
@@ -291,7 +291,7 @@ column conversion (bytes, cells, pixels) is its own work.
   the cursor dragged along, no race). Rejected: Eclipse scrolls, then sends its top line as in 3.3
   (the caret is still dragged, by the script, since Neovim's cursor cannot be off screen, and
   Neovim's late answers need the stale-event rule). The touchpad question this left open is D9.
-- **D2, `'wrap'`** *(decided 2026-10-27)*: synced both ways. On attach and on Alt+Shift+Y the
+- **D2, `'wrap'`** *(decided 2026-10-27)*: synced both ways. On attach and on Alt+Shift+Y (Cmd+Option+Y on macOS) the
   plug-in sets the window's `'wrap'` from the editor's word wrap; an `OptionSet` autocommand turns a
   `:set wrap` / `:set nowrap` in Neovim into Eclipse's word wrap for that editor. Eclipse's state
   wins on attach, so a `set wrap` in `init.lua` does not fight Eclipse's preference ("Enable word
