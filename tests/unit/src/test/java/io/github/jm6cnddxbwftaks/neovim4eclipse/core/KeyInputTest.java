@@ -239,6 +239,19 @@ class KeyInputTest {
     }
 
     @Test
+    void escIsBeingHandledFromTheReplayToThePushAndNotAfter() throws Exception {
+        nvim.keyWithLineEvent = "abc";
+        push = () -> nvim.calls.add("push, leaving " + keys.isLeavingInsertMode());
+        assertFalse(keys.isLeavingInsertMode());
+
+        keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2));
+
+        assertTrue(nvim.calls.contains("push, leaving true"),
+                "Neovim's top lines from the replay are ignored until the push: " + nvim.calls);
+        assertFalse(keys.isLeavingInsertMode(), "Neovim's top lines count again");
+    }
+
+    @Test
     void withoutAReplayPlanTheDocumentIsPushedBeforeEsc() throws Exception {
         keys.leaveInsertMode(null);
 

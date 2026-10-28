@@ -23,8 +23,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link ViewportFollower}: the text area's size in cells, and word wrap kept the same both ways,
- * with a real {@link StyledText} and fakes for the session and the editor. Neovim's side (the grid,
+ * {@link ViewportFollower}: the text area's size in cells, word wrap kept the same both ways, and
+ * the top line taken from Neovim, with a real {@link StyledText} and fakes for the session and the
+ * editor (whose lines are the widget's here: nothing is folded). Neovim's side (the grid,
  * {@code 'linebreak'}) is {@code ViewportSizeTest} and {@code viewport_spec.lua}.
  */
 class ViewportFollowerTest {
@@ -35,6 +36,8 @@ class ViewportFollowerTest {
     /** What the editor allows: {@code false} plays an editor in block selection mode. */
     private boolean editorCanWrap = true;
     private ViewportFollower follower;
+    /** How often the editor was scrolled by the follower. */
+    private int scrolls;
 
     @BeforeEach
     void create() {
@@ -44,12 +47,54 @@ class ViewportFollowerTest {
         text.setText("one\ntwo\nthree\n");
         shell.setSize(500, 300);
         shell.layout();
-        follower = new ViewportFollower(text, (columns, rows) -> sent.add("size " + columns + "x" + rows),
-                wrap -> sent.add("wrap " + wrap), wrap -> {
-                    if (editorCanWrap) {
-                        text.setWordWrap(wrap);
-                    }
-                });
+        follower = new ViewportFollower(text, new ViewportFollower.Neovim() {
+            @Override
+            public void sendSize(int columns, int rows) {
+                sent.add("size " + columns + "x" + rows);
+            }
+
+            @Override
+            public void sendWrap(boolean wrap) {
+                sent.add("wrap " + wrap);
+            }
+
+            @Override
+            public void sendTopLine(int line1) {
+                sent.add("top " + line1);
+            }
+
+            @Override
+            public void sendScroll(int line1) {
+                sent.add("scroll " + line1);
+            }
+        }, new ViewportFollower.Editor() {
+            @Override
+            public void setWordWrap(boolean wrap) {
+                if (editorCanWrap) {
+                    text.setWordWrap(wrap);
+                }
+            }
+
+            @Override
+            public int topLine() {
+                return text.getTopIndex();
+            }
+
+            @Override
+            public void setTopLine(int line0) {
+                scrolls++;
+                text.setTopIndex(line0);
+            }
+        });
+    }
+
+    /** A document of {@code count} lines, "line 1" to "line {count}". */
+    private void lines(int count) {
+        StringBuilder lines = new StringBuilder();
+        for (int i = 1; i <= count; i++) {
+            lines.append("line ").append(i).append('\n');
+        }
+        text.setText(lines.toString());
     }
 
     @AfterEach
@@ -68,9 +113,53 @@ class ViewportFollowerTest {
     }
 
     @Test
-    void startSendsTheEditorsWrapThenItsSize() {
+    void startSendsTheEditorsWrapThenItsSizeThenItsTopLine() {
+        lines(200);
+        text.setTopIndex(30);
         follower.start();
-        assertEquals(List.of("wrap false", size()), sent, "Eclipse's word wrap wins on attach (D2)");
+        assertEquals(List.of("wrap false", size(), "top 31"), sent,
+                "Eclipse's word wrap wins on attach (D2); the top line needs the window's height");
+    }
+
+    @Test
+    void neovimsTopLineScrollsTheEditorOnce() {
+        lines(200);
+        follower.start();
+        follower.onNeovimTopLine(40);
+        assertEquals(39, text.getTopIndex(), "line 40 at the top");
+        follower.onNeovimTopLine(40); // the cursor report and WinScrolled carry the same line
+        assertEquals(1, scrolls, "already there: no second scroll");
+    }
+
+    @Test
+    void theEditorsOwnScrollIsSentOnceAtThePaint() {
+        lines(200);
+        follower.start();
+        sent.clear();
+        text.setTopIndex(70); // the scroll bar, or Eclipse revealing a search hit
+        paint();
+        paint();
+        assertEquals(List.of("scroll 71"), sent, "Neovim drags its cursor into the editor's view");
+        assertEquals(71, follower.eclipseTopLine(), "what Esc sends to Neovim");
+    }
+
+    @Test
+    void neovimsTopLineIsNotSentBackAsAScroll() {
+        lines(200);
+        follower.start();
+        sent.clear();
+        follower.onNeovimTopLine(40);
+        paint();
+        assertEquals(List.of(), sent, "no echo");
+    }
+
+    @Test
+    void aTopLineBeforeStartIsIgnored() {
+        lines(200);
+        follower.onNeovimTopLine(40);
+        assertEquals(0, text.getTopIndex());
+        follower.onNeovimTopLine(0); // not a line
+        assertEquals(0, scrolls);
     }
 
     @Test
@@ -139,6 +228,8 @@ class ViewportFollowerTest {
         text.setWordWrap(true);
         paint();
         follower.onNeovimWrap(false);
+        follower.onNeovimTopLine(2);
         assertEquals(List.of(), sent);
+        assertEquals(0, scrolls);
     }
 }

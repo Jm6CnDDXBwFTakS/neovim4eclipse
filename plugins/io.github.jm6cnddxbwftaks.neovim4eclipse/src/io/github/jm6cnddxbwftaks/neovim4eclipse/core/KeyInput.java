@@ -98,6 +98,12 @@ final class KeyInput {
      * inserting them itself (see {@code KeyInterceptor}).
      */
     private volatile boolean neovimDrivenInsert;
+    /**
+     * Set while {@link #leaveInsertMode} runs. Neovim's views until it ends are of text it does not
+     * have yet (the replay types into the old lines), so the editor ignores their top lines
+     * ({@code NeovimSession.isLeavingInsertMode}); the editor's own top line is sent with the push.
+     */
+    private volatile boolean leavingInsert;
     /** Set by a lone {@code @}: the next key names the macro register and starts the playback. */
     private boolean macroRegisterPending;
 
@@ -272,6 +278,20 @@ final class KeyInput {
      * @param replay what to re-type, or {@code null}
      */
     void leaveInsertMode(InsertReplay.Plan replay) throws Exception {
+        leavingInsert = true;
+        try {
+            leaveInsertModeNow(replay);
+        } finally {
+            leavingInsert = false;
+        }
+    }
+
+    /** Whether {@link #leaveInsertMode} runs now (see {@link #leavingInsert}). Any thread. */
+    boolean isLeavingInsertMode() {
+        return leavingInsert;
+    }
+
+    private void leaveInsertModeNow(InsertReplay.Plan replay) throws Exception {
         Runnable push = leaveInsertPush.get();
         boolean replayed = replay != null && replayTypedText(replay);
         if (replayed) {

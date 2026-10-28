@@ -83,6 +83,66 @@ class NeovimViewportIntegrationTest {
         }
     }
 
+    /** The top lines and cursor lines the session reports, in order: {@code "top 40"}, {@code "cursor 50"}. */
+    private static List<String> follow(NeovimSession s) {
+        List<String> heard = new java.util.concurrent.CopyOnWriteArrayList<>();
+        s.addTopLineListener(top -> heard.add("top " + top.line1()));
+        s.addCursorListener(pos -> heard.add("cursor " + pos.line1Based()));
+        return heard;
+    }
+
+    private static int line(NeovimSession s, String expr) throws Exception {
+        return ((Number) s.lua("return vim.fn.line('" + expr + "')")).intValue();
+    }
+
+    @Test
+    void aJumpReportsTheNewTopLineBeforeTheCursor() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(IntStream.rangeClosed(1, 300).mapToObj(i -> "line " + i).toList());
+            s.lua("vim.o.scrolloff = 0");
+            s.setEditorSizeAsync(80, 20);
+            waitFor(() -> windowIs(s, 80, 20), "80 × 20");
+            List<String> heard = follow(s);
+            s.inputAsync("150G");
+            waitFor(() -> heard.contains("cursor 150"), "the cursor on line 150");
+            int top = line(s, "w0");
+            assertTrue(top > 1, "the jump scrolled Neovim's window");
+            assertTrue(heard.indexOf("top " + top) >= 0 && heard.indexOf("top " + top) < heard.indexOf("cursor 150"),
+                    "the editor scrolls first, then the caret moves: " + heard);
+        }
+    }
+
+    @Test
+    void ctrlEReportsTheTopLineWithoutACursorMove() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(IntStream.rangeClosed(1, 300).mapToObj(i -> "line " + i).toList());
+            s.lua("vim.o.scrolloff = 0 vim.api.nvim_win_set_cursor(0, { 30, 0 })");
+            s.setEditorSizeAsync(80, 20);
+            waitFor(() -> windowIs(s, 80, 20), "80 × 20");
+            int before = line(s, "w0"); // the resize may have scrolled already
+            List<String> heard = follow(s);
+            s.inputAsync("<C-e>"); // one key per call, as the editor sends them
+            s.inputAsync("<C-e>");
+            waitFor(() -> heard.contains("top " + (before + 2)), "Neovim's window scrolled by two lines");
+            assertEquals(30, line(s, "."), "the cursor stays");
+        }
+    }
+
+    @Test
+    void theEditorsTopLineScrollsNeovimsWindowAndNeovimsAnswerComesBack() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(IntStream.rangeClosed(1, 300).mapToObj(i -> "line " + i).toList());
+            s.lua("vim.o.scrolloff = 0 vim.api.nvim_win_set_cursor(0, { 50, 0 })");
+            s.setEditorSizeAsync(80, 20);
+            waitFor(() -> windowIs(s, 80, 20), "80 × 20");
+            List<String> heard = follow(s);
+            // What SET_TOPLINE runs (the script itself, with its buffer check, is viewport_spec.lua).
+            s.lua("require('neovim4eclipse.viewport').set_topline(40)");
+            waitFor(() -> heard.contains("top 40"), "WinScrolled reports the line Neovim kept: " + heard);
+            assertEquals(40, line(s, "w0"));
+        }
+    }
+
     @Test
     void theOptOutKeepsNeovimsFixedScreen() throws Exception {
         try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_viewport = 0")) {

@@ -17,10 +17,18 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Neovim's window is now the size of the editor's text area, so `H`, `M`, `L` and `Ctrl-D` work on
   the lines the editor shows (before, on a fixed screen of 40 lines nobody saw). Resizing the
   window, the part or the font resizes it too. `vim.g.neovim4eclipse_viewport = 0` in `init.lua`
-  keeps the old fixed screen. See the README, "The editor's size and word wrap".
+  keeps the old fixed screen. See the README, "The editor's size, scrolling and word wrap".
 - Eclipse's word wrap (`Alt+Shift+Y`) and Neovim's `'wrap'` are one setting: changing either changes
   the other, and Eclipse's preference decides when an editor opens. While wrap is on, `'linebreak'`
   stays on, so that lines wrap at the same words in both.
+- The editor scrolls where Neovim's window scrolls (`Ctrl-E`, `Ctrl-D`, `zz`, `zt`, a jump,
+  `'scrolloff'`), so `H` and `L` go to lines on the screen also after a jump or a resize (before,
+  shrinking the window could make `L` land below the editor's last line).
+- Scrolling the editor (scroll bar, mouse wheel) in normal and visual mode scrolls Neovim's window
+  too and drags the caret into the view, as `Ctrl-E` does in Vim (before, the caret stayed off the
+  screen). In insert mode the caret stays, and the view is kept at `Esc`.
+- The FINE log line "Mode → …" is written when the mode changes, not again for every key typed on
+  the command line.
 
 ## [0.1.9] - 2026-10-28
 

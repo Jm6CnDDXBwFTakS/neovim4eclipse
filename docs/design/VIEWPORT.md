@@ -1,6 +1,6 @@
 # Design note: Neovim's window follows the editor's view
 
-Status: **in progress** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commit 1 (size, wrap, opt-out) is built, see *As built*.
+Status: **in progress** for 0.1.10, on `feature/viewport` cut from `release/0.1.10`: commits 1 (size, wrap, opt-out) and 2 (scrolling both ways, except the wheel through Neovim) are built, see *As built*.
 Planned on `feature/diagnostics` at `589485a`. The experiments used Neovim 0.12.6 (the plug-in's
 minimum) on Linux (arm64), through a small msgpack client attached with the plug-in's own UI options
 (`NeovimConnection.TERMINAL_UI`). Decisions D1 to D4 (section 4) were made with the maintainer on
@@ -66,6 +66,41 @@ Commit 1 (size, `'wrap'` and `'linebreak'`, the opt-out):
   back to the global one.
 - **Checked in the Lua tests:** `OptionSet` fires for a modeline (`vim: set nolinebreak:`), so a
   modeline is set back like a typed `:set` (D7).
+
+Commit 2 (Neovim's scrolling in the editor, and the editor's in Neovim):
+
+- **No `win_viewport` parsing, two autocmds instead.** The `CursorMoved` report (`eclipse_cursor`)
+  carries `line('w0')`, and a `WinScrolled` autocmd sends `eclipse_topline(buf, line)` for scrolls
+  that leave the cursor (`Ctrl-E`, `zt`, a resize). Both name the buffer, as the other reports do,
+  and `WinScrolled`'s `v:event` tells the current window from a split or float; no `util/ViewportEvent`.
+  Checked with Neovim 0.12.6 (2026-10-28): `CursorMoved` fires before `WinScrolled`, and `w0` is
+  already the new top line in it (`50G`: `cur 50 w0=40`, then `scr w0=40`; `L`: only `cur`; `Ctrl-E`:
+  only `scr`). Neither fires inside the Lua tests' `feedkeys(…, 'x')`, so those two are tested in
+  `NeovimViewportIntegrationTest`.
+- **The top line before the caret.** `NotificationBridge` passes a cursor report's top line on first
+  (`Sink.onTopLine`), so the controller's UI queue scrolls the editor, then places the caret, which
+  is then on screen. A top line hidden in a closed fold becomes the fold's caption line
+  (`FoldMirror.captionOffset`); `ITextViewer.setTopIndex` converts document lines to widget lines.
+- **Eclipse's scrolling moved here from commit 3** (3.3, "everything else"). With only Neovim to
+  Eclipse, a scroll-bar drag was undone by the next key, or by a click: `LuaScripts.MOUSE` scrolls
+  Neovim's window to a clicked line it does not show, and the editor would have followed. Built as
+  planned, but without `util/ScrollFollow`: `ViewportFollower` keeps the top line last agreed with
+  Neovim and sends any other one it sees at a paint (`scrollToAsync`, newest only), and a top line
+  from Neovim becomes the agreed one once applied. A late report from an earlier key can still
+  scroll the editor back for a moment before Neovim's answer to the scroll arrives.
+- **`SET_TOPLINE` has both behaviors** (a third argument): keep the cursor (attach, Esc; Neovim's
+  `winrestview` clamps the top line to keep it visible) or drag it as `Ctrl-E` does (a scroll in the
+  editor). The drag counts lines, not screen rows, for `'scrolloff'`; with closed folds or wrapped
+  lines Neovim may then move the top line a little, and the editor follows.
+- **Insert mode** as planned (D6): Eclipse scrolls alone; at Esc its top line goes to Neovim after the
+  push and before `<Esc>` (`session.setTopLine`, on the input thread). Neovim's top lines are
+  ignored while Esc is handled (`KeyInput.isLeavingInsertMode`): the replay of the typed text runs in
+  Neovim's old view, and its cursor reports would scroll the editor back first.
+- **The end of the document:** Neovim can scroll until the last line is at the top (`Ctrl-E`),
+  Eclipse cannot; the editor stops at its end, and that position becomes the agreed one (not sent
+  back). README says so.
+- **Left for commit 3:** the wheel through Neovim (D1, D9: `WheelScroll`, `SCROLL_LINES`). Until
+  then the wheel scrolls by Eclipse's amount, and the drag above moves the cursor.
 
 ## 1. Behavior
 
@@ -288,8 +323,8 @@ column conversion (bytes, cells, pixels) is its own work.
 1. Size: `ViewportSize`, `ViewportMeasure`, `VIEWPORT_SIZE`, resize on attach and resize, the last
    size kept (D8); `'wrap'` and `'linebreak'` (D2, D7); the opt-out (D5).
 2. Neovim to Eclipse: `ViewportEvent`, top line applied before the caret.
-3. Eclipse to Neovim: the wheel through `WheelScroll` and `SCROLL_LINES` (D1, D9), `SET_TOPLINE`
-   for the rest, insert mode at Esc.
+3. Eclipse to Neovim: the wheel through `WheelScroll` and `SCROLL_LINES` (D1, D9). (`SET_TOPLINE`
+   for the rest and insert mode at Esc were built in commit 2; see *As built*.)
 4. Docs: README (screen commands now match the editor; D3 shortfall), docs/KEYS.md,
    docs/ARCHITECTURE.md (drop "Neovim's screen is not the editor's", describe the viewport),
    docs/LEARNING.md (a walkthrough of `Ctrl-E`), CHANGELOG under *Unreleased*.

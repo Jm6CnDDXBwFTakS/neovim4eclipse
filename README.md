@@ -325,14 +325,23 @@ the open and closed state the same both ways: a fold collapsed with the ruler's 
   with `Ctrl+Numpad -`/`+` in Eclipse mode, and in an Eclipse without this plug-in. Any motion
   brings the caret back.
 
-## The editor's size and word wrap (`H`, `L`, `Ctrl-D`)
+## The editor's size, scrolling and word wrap (`H`, `L`, `Ctrl-D`, `zz`)
 
 Neovim's window is the size of the editor's text area: as many lines and columns as the editor
 shows, whatever you have in Neovim besides the text (status line, `set number`, signs). So the
 commands that work on "the screen" work on what you see: `H`, `M` and `L` go to the editor's top,
 middle and last full line, `Ctrl-D` scrolls half the editor's height, and a resized window, part
-or font (`Ctrl+=`) changes `&lines` and `&columns` with it. Neovim does not yet scroll the editor:
-`Ctrl-E`, `zt` and the mouse wheel come in a later release ([design](docs/design/VIEWPORT.md)).
+or font (`Ctrl+=`) changes `&lines` and `&columns` with it.
+
+The editor scrolls where Neovim's window scrolls: `Ctrl-E`, `Ctrl-Y`, `Ctrl-D`, `zz`, `zt`, `zb`, a
+jump such as `150G`, and your `'scrolloff'`, which keeps lines around the cursor in the editor too.
+The other way round, scrolling the editor (the scroll bar, the mouse wheel, Eclipse showing a
+search hit) scrolls Neovim's window to the same line, and in normal and visual mode the cursor is
+dragged into the view as `Ctrl-E` drags it, `'scrolloff'` lines from the edge, so the caret moves
+when you scroll it off the screen, as in Vim. In insert mode Eclipse scrolls alone and the caret
+stays; at `Esc` Neovim's window is scrolled to the editor's view. When an editor attaches, Neovim's
+window is scrolled to the editor's view too. The wheel scrolls by Eclipse's amount for now; a later
+release lets Neovim scroll by the wheel ([design](docs/design/VIEWPORT.md)).
 
 - **Word wrap is one setting.** Eclipse's word wrap (`Alt+Shift+Y`) and Neovim's `'wrap'` follow
   each other, for that editor. When an editor attaches, Eclipse's wins: set the default with
@@ -348,6 +357,8 @@ or font (`Ctrl+=`) changes `&lines` and `&columns` with it. Neovim does not yet 
   in `init.lua`. The setting is read once when Neovim starts (*Neovim → Restart Neovim...*).
 - Lines made taller by code minings (the Java editor's reference counts) are not measured: there
   `L` can land a line or two below the editor's last line.
+- At the end of a file Neovim can scroll further than Eclipse (`Ctrl-E` until the last line is at
+  the top); the editor stops at its own end, and `H` then goes to a line above the editor's top.
 
 ## Command line (`:`, `/`, `?`)
 
@@ -648,8 +659,8 @@ narrowly as it can, and it is listed here.
   limitations). With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
 
 - **`'linebreak'`, `'breakindent'` and `'showbreak'`, window-local, while word wrap is on.** On,
-  off and `NONE`, so that lines wrap where Eclipse wraps them ([The editor's size and word
-  wrap](#the-editors-size-and-word-wrap-h-l-ctrl-d)); your values come back when wrap goes off, and
+  off and `NONE`, so that lines wrap where Eclipse wraps them ([The editor's size, scrolling and
+  word wrap](#the-editors-size-scrolling-and-word-wrap-h-l-ctrl-d-zz)); your values come back when wrap goes off, and
   `'wrap'` itself is the editor's word wrap. With `vim.g.neovim4eclipse_viewport = 0`, none of this
   is set.
 

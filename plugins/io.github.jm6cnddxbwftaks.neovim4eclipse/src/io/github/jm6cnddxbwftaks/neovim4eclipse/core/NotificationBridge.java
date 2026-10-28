@@ -110,6 +110,14 @@ final class NotificationBridge implements Incoming {
          */
         void onViewportOverheadChanged();
 
+        /**
+         * Neovim's window, which shows buffer {@code bufnr}, has {@code line1} (1-based) as its top
+         * line now: it scrolled ({@code Ctrl-E}, {@code zt}), or the cursor report carried it. Comes
+         * before the cursor of the same report, so that the editor scrolls first and the caret then
+         * lands on a visible line without a scroll of its own (docs/design/VIEWPORT.md, 3.2).
+         */
+        void onTopLine(int bufnr, int line1);
+
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
 
@@ -160,6 +168,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_showcmd" -> onShowcmd(args);
             case "eclipse_wrap" -> onWrap(args);
             case "eclipse_viewport" -> sink.onViewportOverheadChanged();
+            case "eclipse_topline" -> onTopLine(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -196,7 +205,11 @@ final class NotificationBridge implements Incoming {
             Integer line = toInt(args.get(0));
             Integer col = toInt(args.get(1));
             Integer buf = args.size() >= 3 ? toInt(args.get(2)) : null;
+            Integer top = args.size() >= 4 ? toInt(args.get(3)) : null;
             if (line != null && col != null) {
+                if (buf != null && top != null && top >= 1) {
+                    sink.onTopLine(buf, top); // first: see Sink.onTopLine
+                }
                 sink.onCursor(line, col, buf == null ? UNKNOWN_BUFFER : buf);
             }
         }
@@ -206,6 +219,15 @@ final class NotificationBridge implements Incoming {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             sink.onBufferEnter(buf);
+        }
+    }
+
+    /** Payload: {@code [bufnr, line1]}, from {@link LuaScripts#VIEWPORT}'s {@code WinScrolled}. */
+    private void onTopLine(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        Integer top = args.size() >= 2 ? toInt(args.get(1)) : null;
+        if (buf != null && top != null && top >= 1) {
+            sink.onTopLine(buf, top);
         }
     }
 

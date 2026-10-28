@@ -209,7 +209,7 @@ an unchanged list is not sent again: Neovim's diagnostics move with edits by the
 has one, sets `vim.diagnostic`'s `on_jump` hook to echo the message after a jump, which reaches the
 message line like any message. Design and decisions: [design/DIAGNOSTICS.md](design/DIAGNOSTICS.md).
 
-### 9. Neovim's window is the editor's size
+### 9. Neovim's window is the editor's size and scroll position
 
 The plug-in draws nothing of Neovim's screen, but Neovim's screen commands (`H`, `L`, `Ctrl-D`,
 `'scrolloff'`) count its rows, so they must be the editor's. `editor/ViewportFollower` measures the
@@ -221,7 +221,21 @@ number and sign columns, the user's own settings), adds it (`util/ViewportSize`)
 no editor attached the last size stays. The same follower keeps `'wrap'` and Eclipse's word wrap
 one setting (`SET_WRAP` one way, the `eclipse_wrap` notification the other, neither echoed), with
 `'linebreak'` while wrapping. `vim.g.neovim4eclipse_viewport = 0` keeps the fixed 120 × 40 screen.
-Scrolling is not synced yet. Design and decisions: [design/VIEWPORT.md](design/VIEWPORT.md).
+
+Neovim decides where its window is scrolled, and the editor follows. The `CursorMoved` report
+(`eclipse_cursor`) carries `line('w0')`, which Neovim has already updated then, and a `WinScrolled`
+autocmd sends `eclipse_topline` for scrolls that leave the cursor (`Ctrl-E`, `zt`, a resize).
+`NotificationBridge` passes the top line on *before* the cursor of the same report, so the
+controller's UI queue scrolls the editor (`ITextViewer.setTopIndex`, in document lines, a fold's
+caption where Neovim's top line is hidden) and then places the caret, which is then on screen and
+causes no reveal of its own. The other way round is `LuaScripts.SET_TOPLINE` (`winrestview`, which
+keeps the cursor visible): on attach, and at Esc after Eclipse scrolled alone while it typed (sent
+after the push and before `<Esc>`, with Neovim's top lines ignored while Esc is handled, since the
+replay of the typed text runs in Neovim's old view). When the editor scrolls by itself in normal or
+visual mode (scroll bar, wheel, a reveal), the follower sees a top line other than the one last
+agreed at the next paint and sends it with `scrollToAsync` (newest only); the same script then drags
+the cursor into the view as `Ctrl-E` does. A top line from Neovim becomes the agreed one once
+applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](design/VIEWPORT.md).
 
 ## Ideas for future work
 
