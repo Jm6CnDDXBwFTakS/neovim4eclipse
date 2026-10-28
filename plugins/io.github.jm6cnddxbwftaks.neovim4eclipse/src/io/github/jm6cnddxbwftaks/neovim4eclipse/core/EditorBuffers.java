@@ -21,7 +21,7 @@ import java.util.function.Supplier;
  *
  * <h2>The rules</h2>
  * <ul>
- *   <li><b>Shared:</b> two editors on one document (<em>Window → New Editor</em>, or a multi-page
+ *   <li><b>Shared:</b> two editors on one document (<em>Window → Editor → Clone</em>, or a multi-page
  *       editor and a plain one on the same file) get the same buffer, so they share undo history
  *       and marks, as two Vim windows on one buffer do.</li>
  *   <li><b>Found:</b> when Neovim switches to buffer N by itself ({@code Ctrl-O} across files,
@@ -102,7 +102,7 @@ public final class EditorBuffers<D, E> {
 
     /**
      * Whether an editor other than {@code editor} shows {@code document}. Example: after
-     * <em>Window → New Editor</em> on {@code A.java} each of the two editors shares it; with one
+     * <em>Window → Editor → Clone</em> on {@code A.java} each of the two editors shares it; with one
      * editor, or for a document without a buffer, it is not shared.
      */
     public boolean isSharedWithAnotherEditor(D document, E editor) {

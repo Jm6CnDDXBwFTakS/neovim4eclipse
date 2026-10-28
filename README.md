@@ -420,7 +420,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
-| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › New Editor*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message |
+| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
@@ -783,10 +783,10 @@ These are real and deliberate to know about before extending the code:
    Neovim buffer (named after the file, so undo history and marks survive switching editors), and
    each editor its own Neovim window, which keeps that editor's cursor, column, scroll position,
    folds, window options (`:setlocal`), jump history, location list and folder (`:lcd`) while
-   other editors are active. Two editors on one file (*Window → New Editor*) share its text, undo
+   other editors are active. Two editors on one file (*Window → Editor → Clone*) share its text, undo
    history and marks, and each has its own cursor, as two Vim windows on one buffer. Only the
    active editor is attached. Vim's own window layout (`:split`, `:vsplit`, `:tabnew`,
-   `Ctrl+W s`) is not something Eclipse shows; use Eclipse's split editor or *New Editor*.
+   `Ctrl+W s`) is not something Eclipse shows; use Eclipse's split editor or *Clone*.
    Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor (after `:bufdo` or `:argdo`,
    only the editor of the file they end in), and the window goes along: the two editors swap
    windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window

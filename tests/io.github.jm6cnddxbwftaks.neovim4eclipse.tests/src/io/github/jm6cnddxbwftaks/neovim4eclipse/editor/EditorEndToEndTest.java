@@ -162,7 +162,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         type(widget, "jmAj");
         settle();
         IWorkbenchPage page = editor.getSite().getPage();
-        // A second editor on the same file (Window > New Editor): it shares test.txt's buffer.
+        // A second editor on the same file (Window > Editor > Clone): it shares test.txt's buffer.
         IEditorPart second = page.openEditor(editor.getEditorInput(), "org.eclipse.ui.DefaultTextEditor", true,
                 IWorkbenchPage.MATCH_NONE);
         waitForAttach((ITextEditor) second, "the second editor on test.txt");

@@ -523,7 +523,7 @@ public final class EditorAttachManager {
      * the current one ({@code HostCommand.Kind.BUFFER_DELETE}). A number is a buffer number; a
      * name is looked up in Neovim with {@code bufnr()} ({@link BufferRefs}), asynchronously, so its
      * editor closes a moment later. A buffer no editor shows gets Vim's error in {@code from}'s
-     * message line. With two editors on one file (Window > New Editor), the first is closed. UI
+     * message line. With two editors on one file (Window > Editor > Clone), the first is closed. UI
      * thread.
      *
      * @param from    the editor the command was typed in, for error messages

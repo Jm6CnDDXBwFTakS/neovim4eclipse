@@ -702,7 +702,7 @@ final class LuaScripts {
             end
 
             --- Why Vim's split and tab commands do not run (WINDOW_COMMANDS refuses them).
-            M.REFUSED = "Eclipse shows one window per editor: use Window > Editor > Toggle Split Editor, or Window > New Editor"
+            M.REFUSED = "Eclipse shows one window per editor: use Window > Editor > Toggle Split Editor, or Window > Editor > Clone"
 
             local group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true })
             vim.api.nvim_create_autocmd('WinClosed', {
@@ -749,7 +749,7 @@ final class LuaScripts {
      *
      * <ul>
      *   <li>Refused, with {@code name: Eclipse shows one window per editor: use Window > Editor >
-     *       Toggle Split Editor, or Window > New Editor}: {@code :split}, {@code :vsplit},
+     *       Toggle Split Editor, or Window > Editor > Clone}: {@code :split}, {@code :vsplit},
      *       {@code :new}, {@code :vnew}, {@code :sview}, {@code :sfind}, {@code :sbuffer},
      *       {@code :tabnew}, {@code :tabedit}, {@code :tabfind}, {@code :tabonly}. A second
      *       window would be invisible and take the keys; {@code :tabonly} would close every other
