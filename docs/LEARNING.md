@@ -93,9 +93,18 @@ both whenever Neovim attaches, detaches or changes mode:
 ```text
 controller.setNeovimModeActive(false)
   └─ ToggleButtonRefresh.request()  ──asyncExec──►  handler.setBaseEnabled(attached)   (greyed out?)
+                                                    send REQUEST_ENABLEMENT_UPDATE_TOPIC
+                                                      └─ (100 ms later) toolbar asks the handler again
                                                     refreshElements(toggleMode)
                                                       └─ handler.updateElement(button) (pressed? tooltip)
 ```
+
+A catch in the middle line: an Eclipse 4 toolbar item keeps its own copy of "enabled". The
+handler's change makes the button redraw from that copy, and the copy is refreshed (by asking the
+handler) only on the event `UIEvents.REQUEST_ENABLEMENT_UPDATE_TOPIC`, sent through the
+`IEventBroker`, or when the window's active contexts, selection or shell change. Before the plug-in
+sent the event itself, the button greyed out only if such an unrelated change happened to come
+afterwards, which a busy machine sometimes reversed.
 
 ### 1.3 The workbench: windows, pages, parts
 
