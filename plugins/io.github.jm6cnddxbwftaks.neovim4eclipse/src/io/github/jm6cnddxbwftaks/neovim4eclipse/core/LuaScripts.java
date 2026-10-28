@@ -560,6 +560,9 @@ final class LuaScripts {
             local home_buf = tonumber((select(1, ...)))
             local M = {}
             local home = vim.api.nvim_get_current_win()
+            -- The windows the plug-in opened (the home window and the editors'): any other window
+            -- that is not floating or special is a stray one (the WinNew safety net below).
+            local own = { [home] = true }
             vim.o.showtabline = 0
 
             --- Runs fn(...) with every autocommand off ('eventignore' all) and without Neovim's file
@@ -587,6 +590,7 @@ final class LuaScripts {
                 home = quietly(function()
                   return vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
                 end)
+                own[home] = true
               end
               return home
             end
@@ -620,6 +624,7 @@ final class LuaScripts {
               -- Not entered: fires WinNew, TabNew, BufWinEnter and WinScrolled only (E7), so the
               -- user's BufWinEnter autocommands run, and Eclipse sees no switch.
               local win = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
+              own[win] = true
               vim.api.nvim_win_call(win, function()
                 -- A new window copies the jump history of the current one (E7): another editor's
                 -- jumps. Ctrl-O in a fresh editor then has nowhere to go, as in a fresh Vim window.
@@ -694,14 +699,92 @@ final class LuaScripts {
               return closed
             end
 
+            --- Why Vim's split and tab commands do not run (WINDOW_COMMANDS refuses them).
+            M.REFUSED = "Eclipse shows one window per editor: use Window > Editor > Toggle Split Editor, or Window > New Editor"
+
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true })
             vim.api.nvim_create_autocmd('WinClosed', {
-              group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true }),
+              group = group,
               callback = function(ev)
+                own[tonumber(ev.match)] = nil
                 vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_window_closed', tonumber(ev.match))
+              end,
+            })
+            -- The second safety net: a window opened next to an editor's, in its tab, by something the
+            -- refusals do not see (a plug-in's :split, <Cmd>split, vim.cmd.split()). Eclipse would not
+            -- show it, but it would take the keys and half the editor's rows. Closed once the
+            -- command that opened it is over (it cannot close inside its own WinNew, where the
+            -- current window is still the old one). Left alone: the plug-in's own windows, floating
+            -- windows (hover, completion documentation), and Neovim's special windows, whose type
+            -- win_gettype() names ('command', 'autocmd', 'quickfix', 'loclist', 'preview',
+            -- 'popup'); the command-line window has its own rule (SETUP).
+            vim.api.nvim_create_autocmd('WinNew', {
+              group = group,
+              callback = function()
+                vim.schedule(function()
+                  local closed = false
+                  for _, win in ipairs(vim.api.nvim_list_wins()) do
+                    if not own[win] and vim.api.nvim_win_get_config(win).relative == ''
+                        and vim.fn.win_gettype(win) == '' then
+                      closed = pcall(vim.api.nvim_win_close, win, true) or closed
+                    end
+                  end
+                  if closed then
+                    vim.api.nvim_echo({ { 'Window closed: ' .. M.REFUSED } }, true, { err = true })
+                  end
+                end)
               end,
             })
             package.loaded['neovim4eclipse.windows'] = M
             return home
+            """;
+
+    /**
+     * Refuses Vim's commands that would open a second window next to an editor's, or a tab, or
+     * close the other editors' tabs (docs/design/WINDOWS.md, E4), through the host commands'
+     * {@code refuse} hook ({@link #HOST_COMMANDS}), and maps the {@code Ctrl-W} keys that do the
+     * same. Run after {@link #HOST_COMMANDS} and {@link #WINDOWS}.
+     *
+     * <ul>
+     *   <li>Refused, with {@code name: Eclipse shows one window per editor: use Window > Editor >
+     *       Toggle Split Editor, or Window > New Editor}: {@code :split}, {@code :vsplit},
+     *       {@code :new}, {@code :vnew}, {@code :sview}, {@code :sfind}, {@code :sbuffer},
+     *       {@code :tabnew}, {@code :tabedit}, {@code :tabfind}, {@code :tabonly}. A second
+     *       window would be invisible and take the keys; {@code :tabonly} would close every other
+     *       editor's window. Mapping them onto Eclipse's split editor is a later plan.</li>
+     *   <li>{@code :close} and {@code :tabclose} close the editor: {@code util/HostCommand}.</li>
+     *   <li>{@code Ctrl-W s}, {@code S}, {@code Ctrl-S}, {@code v}, {@code Ctrl-V}, {@code n},
+     *       {@code Ctrl-N} and {@code T} show the same error; {@code Ctrl-W q}, {@code Ctrl-Q} and
+     *       {@code c} close the editor ({@code :Eclipse quit}). Only where the user's config maps none
+     *       of them itself. These keys reach Neovim only when Ctrl+W goes to Neovim in the
+     *       preferences (docs/KEYS.md).</li>
+     * </ul>
+     *
+     * <p>What gets past (a plug-in's {@code :split}) is closed by the {@code WinNew} safety net of
+     * {@link #WINDOWS}.
+     */
+    static final String WINDOW_COMMANDS = """
+            local why = require('neovim4eclipse.windows').REFUSED
+            local host = require('neovim4eclipse.host_commands')
+            for _, name in ipairs({ 'split', 'vsplit', 'new', 'vnew', 'sview', 'sfind', 'sbuffer',
+                                    'tabnew', 'tabedit', 'tabfind', 'tabonly' }) do
+              host.refuse(name, function() return why end)
+            end
+            local function refused()
+              vim.api.nvim_echo({ { why } }, true, { err = true })
+            end
+            local keys = {
+              ['<C-w>s'] = refused, ['<C-w>S'] = refused, ['<C-w><C-s>'] = refused,
+              ['<C-w>v'] = refused, ['<C-w><C-v>'] = refused, ['<C-w>n'] = refused,
+              ['<C-w><C-n>'] = refused, ['<C-w>T'] = refused,
+              ['<C-w>q'] = '<Cmd>Eclipse quit<CR>', ['<C-w><C-q>'] = '<Cmd>Eclipse quit<CR>',
+              ['<C-w>c'] = '<Cmd>Eclipse quit<CR>',
+            }
+            for lhs, rhs in pairs(keys) do
+              if vim.fn.maparg(lhs, 'n') == '' then
+                vim.keymap.set('n', lhs, rhs, { desc = 'Eclipse: one window per editor' })
+              end
+            end
             """;
 
     /**

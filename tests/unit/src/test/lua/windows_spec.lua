@@ -214,3 +214,79 @@ t.test("before a buffer is wiped, the editor windows on it close and the home wi
   t.eq({}, vim.fn.win_findbuf(a), 'nothing shows it: the wipe makes Neovim enter nothing')
   t.eq({}, t.sent('eclipse_window_closed'))
 end)
+
+--- The window commands as the session installs them: HOST_COMMANDS, then WINDOW_COMMANDS.
+local function commands()
+  local home, home_buf = start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  t.run('WINDOW_COMMANDS')
+  local a = buffer(3)
+  local win = open(a)
+  show(win, a)
+  t.forget()
+  return win, home, home_buf
+end
+
+local function windows_in_tab()
+  return #vim.api.nvim_tabpage_list_wins(0)
+end
+
+t.test(':split, :vsplit, :tabnew and :tabonly are refused with Eclipse\'s way to do it', function()
+  commands()
+  local tabs = #vim.api.nvim_list_tabpages()
+  for _, line in ipairs({ 'split', 'vs', 'new', 'tabnew', 'tabe x.txt', 'tabonly', 'tab split' }) do
+    vim.v.errmsg = ''
+    t.type(':' .. line .. '<CR>')
+    t.ok(vim.v.errmsg:find('Toggle Split Editor', 1, true), line .. ': ' .. vim.v.errmsg)
+  end
+  t.eq(1, windows_in_tab(), 'no second window')
+  t.eq(tabs, #vim.api.nvim_list_tabpages(), 'no tab opened or closed')
+  t.eq({}, t.sent('eclipse_command'))
+end)
+
+t.test(':close and :tabclose go to Eclipse, which closes the editor', function()
+  commands()
+  t.type(':close<CR>')
+  t.type(':tabc!<CR>')
+  t.eq({ { 'close', false, {} }, { 'tabclose', true, {} } }, t.sent('eclipse_command'))
+  t.eq(2, #vim.api.nvim_list_tabpages(), 'Neovim closed nothing itself')
+end)
+
+t.test('Ctrl-W s and v are refused, Ctrl-W q and c close the editor', function()
+  commands()
+  vim.v.errmsg = ''
+  t.type('<C-w>s')
+  t.type('<C-w>v')
+  t.eq(1, windows_in_tab())
+  t.type('<C-w>q')
+  t.type('<C-w>c')
+  t.eq({ { 'quit', false, {} }, { 'quit', false, {} } }, t.sent('eclipse_command'))
+end)
+
+t.test("a Ctrl-W key the user's config maps is left to it", function()
+  start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  vim.keymap.set('n', '<C-w>s', '<Cmd>let g:mine = 1<CR>')
+  t.run('WINDOW_COMMANDS')
+  t.type('<C-w>s')
+  t.eq(1, vim.g.mine)
+end)
+
+t.test('a split a plug-in opens in an editor\'s tab is closed again: the safety net', function()
+  local win = commands()
+  vim.cmd.split() -- not the command line: no refusal sees it
+  t.eq(2, windows_in_tab())
+  t.wait_for('the stray window to close', function() return windows_in_tab() == 1 end)
+  t.ok(vim.api.nvim_win_is_valid(win), "the editor's window stays")
+  t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
+end)
+
+t.test('floating windows are left alone', function()
+  commands()
+  local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  -- The net's check is scheduled; one scheduled after it runs after it.
+  local after = false
+  vim.schedule(function() after = true end)
+  t.wait_for("the net's check", function() return after end)
+  t.ok(vim.api.nvim_win_is_valid(float))
+end)

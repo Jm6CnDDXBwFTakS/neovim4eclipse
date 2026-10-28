@@ -193,7 +193,10 @@ from the editor attached before, or gets the home folder. Without a token (`show
 document is shown in the *home window*, the one Neovim starts with, which only tests use now. A
 window closed in Neovim by itself sends `eclipse_window_closed` (`WinClosed`) and is opened again
 at its editor's next show; closing an editor closes its window (`closeWindowAsync`) before its
-buffer may be wiped.
+buffer may be wiped. Vim's window commands: `:close` and `:tabclose` are host commands that close
+the editor (`util/HostCommand`, `QUIT`); `LuaScripts.WINDOW_COMMANDS` refuses the split and tab
+commands through the host commands' `refuse` hook and maps the `Ctrl-W` keys; a `WinNew` safety
+net closes any other window that is not the plug-in's, floating or special.
 
 ### 7. Eclipse is Neovim's clipboard provider
 

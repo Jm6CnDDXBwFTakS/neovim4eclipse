@@ -23,6 +23,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- `:close`, `:tabclose` and, when Ctrl+W goes to Neovim, `Ctrl+W q` and `Ctrl+W c` close the
+  editor as `:q` does (Eclipse asks about changes; `:close!` discards them). `:split`, `:vsplit`,
+  `:new`, `:tabnew`, `:tabonly` and `Ctrl+W s` / `v` are refused with a message naming Eclipse's
+  split editor and *New Editor*; a window a plug-in opens beside an editor's is closed again.
 - The folder Neovim works in (`:lcd`) is set once per editor, when its window opens, instead of on
   every editor switch, so a `:lcd` you type stays with that editor. An untitled document gets the
   folder of the editor active before it, or your home folder; `'autochdir'` is honored.
