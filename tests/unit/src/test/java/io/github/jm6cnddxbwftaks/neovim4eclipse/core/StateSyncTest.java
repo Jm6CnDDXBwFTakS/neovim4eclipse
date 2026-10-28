@@ -102,7 +102,7 @@ class StateSyncTest {
     private final FakeNeovim nvim = new FakeNeovim();
     private final RecordingListeners listeners = new RecordingListeners();
     private final StatusTracker status = new StatusTracker();
-    private final StateSync state = new StateSync(nvim, listeners, status, bufnr -> bufnr == ATTACHED,
+    private final StateSync state = new StateSync(nvim, listeners, status, (winid, bufnr) -> bufnr == ATTACHED,
             mode -> listeners.heard.add("onModeChanged " + mode)); // stands in for KeyInput#onModeChanged
 
     /**

@@ -147,7 +147,7 @@ class KeyInputTest {
     /** The register being recorded into, as the state snapshot reports it ("" = not recording). */
     private String recording = "";
     private Runnable push = () -> nvim.calls.add("push document");
-    private final StateSync state = new StateSync(nvim, editor, status, bufnr -> bufnr == 1, this::modeChanged);
+    private final StateSync state = new StateSync(nvim, editor, status, (winid, bufnr) -> bufnr == 1, this::modeChanged);
     private final KeyInput keys = new KeyInput(nvim, state, status, () -> push, Duration.ofMillis(50));
 
     /** Wired like the session: every mode change reaches KeyInput first. */

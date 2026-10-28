@@ -33,17 +33,19 @@ class NotificationBridgeTest {
     void setUp() {
         bridge = new NotificationBridge(new NotificationBridge.Sink() {
             @Override public void onMode(String mode) { events.add("mode:" + mode); }
-            @Override public void onCursor(int line1, int col0, int bufnr) {
-                events.add("cursor:" + line1 + ":" + col0 + (bufnr == NotificationBridge.UNKNOWN_BUFFER ? "" : "@" + bufnr));
+            @Override public void onCursor(int line1, int col0, int bufnr, int winid) {
+                events.add("cursor:" + line1 + ":" + col0 + (bufnr == NotificationBridge.UNKNOWN_BUFFER ? "" : "@" + bufnr)
+                        + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid));
             }
             @Override public void onBufferLines(int bufnr, int first, int last, List<String> lines) {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
-            @Override public void onBufferEnter(int bufnr) { events.add("enter:" + bufnr); }
+            @Override public void onBufferEnter(int bufnr, int winid) { events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
+            @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
-            @Override public void onWrap(int bufnr, boolean wrap) { events.add("wrap@" + bufnr + ":" + wrap); }
+            @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onViewportOverheadChanged() { events.add("overhead"); }
-            @Override public void onTopLine(int bufnr, int line1) { events.add("top@" + bufnr + ":" + line1); }
+            @Override public void onTopLine(int bufnr, int line1, int winid) { events.add("top@" + bufnr + ":" + line1 + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
             }
@@ -131,7 +133,8 @@ class NotificationBridgeTest {
         notify("eclipse_wrap", 3, false);
         notify("eclipse_wrap", 3, 1);
         notify("eclipse_wrap");
-        assertEquals(List.of("wrap@3:true", "wrap@3:false"), events);
+        notify("eclipse_wrap", 3, true, 1001);
+        assertEquals(List.of("wrap@3:true", "wrap@3:false", "wrap@3:true#1001"), events);
     }
 
     @Test
@@ -139,13 +142,31 @@ class NotificationBridgeTest {
         notify("eclipse_topline", 3, 40);
         notify("eclipse_topline", 3, 0); // not a line
         notify("eclipse_topline", 3);
-        assertEquals(List.of("top@3:40"), events);
+        notify("eclipse_topline", 3, 41, 1002);
+        assertEquals(List.of("top@3:40", "top@3:41#1002"), events);
     }
 
     @Test
     void theCursorsTopLineComesBeforeTheCursor() {
         notify("eclipse_cursor", 50, 2, 3, 40);
         assertEquals(List.of("top@3:40", "cursor:50:2@3"), events, "the editor scrolls, then the caret moves");
+    }
+
+    /** With a window per editor (docs/design/WINDOWS.md) the reports say which window they are from. */
+    @Test
+    void theCursorAndTheBufferEnterCarryTheWindow() {
+        notify("eclipse_cursor", 50, 2, 3, 40, 1001);
+        notify("eclipse_buf_enter", 3, 1002L);
+        notify("eclipse_buf_enter", 3, "x"); // not a window: unknown
+        assertEquals(List.of("top@3:40#1001", "cursor:50:2@3#1001", "enter:3#1002", "enter:3"), events);
+    }
+
+    /** The safety net of LuaScripts.WINDOWS: a window closed in Neovim by itself. */
+    @Test
+    void aWindowClosedInNeovimCarriesItsId() {
+        notify("eclipse_window_closed", 1003);
+        notify("eclipse_window_closed");
+        assertEquals(List.of("winclosed:1003"), events);
     }
 
     @Test

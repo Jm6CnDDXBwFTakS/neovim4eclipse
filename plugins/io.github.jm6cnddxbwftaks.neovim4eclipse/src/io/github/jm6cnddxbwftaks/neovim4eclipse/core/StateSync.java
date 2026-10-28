@@ -6,7 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.IntPredicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -71,8 +70,8 @@ final class StateSync {
     private final Neovim nvim;
     private final Listeners listeners;
     private final StatusTracker status;
-    /** Whether a buffer number is the attached buffer (the one the editor mirrors). */
-    private final IntPredicate isAttached;
+    /** Whether a window and buffer are the attached ones (the editor's window, the document it mirrors). */
+    private final Attached isAttached;
     /** Told about every mode change before the listeners (see {@code KeyInput#onModeChanged}). */
     private final Consumer<String> onModeChanged;
 
@@ -98,7 +97,17 @@ final class StateSync {
      */
     private volatile boolean foldsEnabled;
 
-    StateSync(Neovim nvim, Listeners listeners, StatusTracker status, IntPredicate isAttached,
+    /**
+     * Whether Neovim's current window and buffer are the attached ones; {@code DocumentBuffers.isAttached}
+     * in the session. Example: after {@code Ctrl-O} into another file, the window is the editor's but
+     * the buffer is not, and the cursor there is not the editor's caret.
+     */
+    @FunctionalInterface
+    interface Attached {
+        boolean test(int winid, int bufnr);
+    }
+
+    StateSync(Neovim nvim, Listeners listeners, StatusTracker status, Attached isAttached,
             Consumer<String> onModeChanged) {
         this.nvim = nvim;
         this.listeners = listeners;
@@ -212,7 +221,7 @@ final class StateSync {
             String snapshotMode = StateSnapshot.mode(raw);
             String current = snapshotMode != null ? snapshotMode : mode;
             dispatchMode(current);
-            if (isAttached.test(StateSnapshot.buffer(raw))) {
+            if (isAttached.test(StateSnapshot.window(raw), StateSnapshot.buffer(raw))) {
                 // The folds before the cursor: the editor applies them in this order (one UI queue),
                 // so the caret lands on text that is shown. Example: after zo, a caret placed while
                 // the fold was still collapsed in Eclipse would go to its caption line and stay there.

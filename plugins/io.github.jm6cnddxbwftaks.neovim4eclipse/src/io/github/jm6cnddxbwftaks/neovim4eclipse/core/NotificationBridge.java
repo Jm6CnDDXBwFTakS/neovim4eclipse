@@ -49,8 +49,9 @@ final class NotificationBridge implements Incoming {
         /**
          * @param line1 1-based line; @param col0 0-based UTF-8 byte column (Neovim's convention)
          * @param bufnr the buffer the cursor is in, or {@link #UNKNOWN_BUFFER}
+         * @param winid the window it is in, or {@link EditorWindow#UNKNOWN}
          */
-        void onCursor(int line1, int col0, int bufnr);
+        void onCursor(int line1, int col0, int bufnr, int winid);
 
         /**
          * Lines {@code [firstLine, lastLine)} (0-based) of buffer {@code bufnr} were replaced by
@@ -58,8 +59,17 @@ final class NotificationBridge implements Incoming {
          */
         void onBufferLines(int bufnr, int firstLine, int lastLine, List<String> newLines);
 
-        /** Neovim made {@code bufnr} its current buffer (a jump, {@code :b}, or a switch by Eclipse). */
-        void onBufferEnter(int bufnr);
+        /**
+         * Neovim made {@code bufnr} its current buffer in window {@code winid} (a jump, {@code :b},
+         * or a switch by Eclipse); {@code winid} is {@link EditorWindow#UNKNOWN} if not sent.
+         */
+        void onBufferEnter(int bufnr, int winid);
+
+        /**
+         * Neovim closed window {@code winid} by itself ({@code :tabclose}, a plug-in): the safety net
+         * of {@link LuaScripts#WINDOWS}. The plug-in's own closes do not send it.
+         */
+        void onWindowClosed(int winid);
 
         /**
          * Neovim deleted document buffer {@code bufnr}, or is quitting its window, by itself
@@ -99,10 +109,10 @@ final class NotificationBridge implements Incoming {
         DocumentWrite.Result onWrite(int bufnr, DocumentWrite.Request request);
 
         /**
-         * {@code :set wrap} or {@code :set nowrap} in Neovim's window, which shows buffer
-         * {@code bufnr} ({@link LuaScripts#VIEWPORT}); Eclipse makes it the editor's word wrap.
+         * {@code :set wrap} or {@code :set nowrap} in Neovim's window {@code winid}, which shows
+         * buffer {@code bufnr} ({@link LuaScripts#VIEWPORT}); Eclipse makes it the editor's word wrap.
          */
-        void onWrap(int bufnr, boolean wrap);
+        void onWrap(int bufnr, boolean wrap, int winid);
 
         /**
          * An option that takes rows or columns of Neovim's screen besides the window's text changed
@@ -111,12 +121,12 @@ final class NotificationBridge implements Incoming {
         void onViewportOverheadChanged();
 
         /**
-         * Neovim's window, which shows buffer {@code bufnr}, has {@code line1} (1-based) as its top
+         * Neovim's window {@code winid}, which shows buffer {@code bufnr}, has {@code line1} (1-based) as its top
          * line now: it scrolled ({@code Ctrl-E}, {@code zt}), or the cursor report carried it. Comes
          * before the cursor of the same report, so that the editor scrolls first and the caret then
          * lands on a visible line without a scroll of its own (docs/design/VIEWPORT.md, 3.2).
          */
-        void onTopLine(int bufnr, int line1);
+        void onTopLine(int bufnr, int line1, int winid);
 
         /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gt}, ...). */
         void onIdeAction(IdeAction action);
@@ -169,6 +179,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_wrap" -> onWrap(args);
             case "eclipse_viewport" -> sink.onViewportOverheadChanged();
             case "eclipse_topline" -> onTopLine(args);
+            case "eclipse_window_closed" -> onWindowClosed(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -206,11 +217,12 @@ final class NotificationBridge implements Incoming {
             Integer col = toInt(args.get(1));
             Integer buf = args.size() >= 3 ? toInt(args.get(2)) : null;
             Integer top = args.size() >= 4 ? toInt(args.get(3)) : null;
+            int win = window(args, 4);
             if (line != null && col != null) {
                 if (buf != null && top != null && top >= 1) {
-                    sink.onTopLine(buf, top); // first: see Sink.onTopLine
+                    sink.onTopLine(buf, top, win); // first: see Sink.onTopLine
                 }
-                sink.onCursor(line, col, buf == null ? UNKNOWN_BUFFER : buf);
+                sink.onCursor(line, col, buf == null ? UNKNOWN_BUFFER : buf, win);
             }
         }
     }
@@ -218,24 +230,38 @@ final class NotificationBridge implements Incoming {
     private void onBufEnter(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
-            sink.onBufferEnter(buf);
+            sink.onBufferEnter(buf, window(args, 1));
         }
     }
 
-    /** Payload: {@code [bufnr, line1]}, from {@link LuaScripts#VIEWPORT}'s {@code WinScrolled}. */
+    /** Payload: {@code [winid]}, from {@link LuaScripts#WINDOWS}'s {@code WinClosed}. */
+    private void onWindowClosed(List<?> args) {
+        int win = window(args, 0);
+        if (win != EditorWindow.UNKNOWN) {
+            sink.onWindowClosed(win);
+        }
+    }
+
+    /** The window id at {@code index}, or {@link EditorWindow#UNKNOWN} when not sent or not a number. */
+    private static int window(List<?> args, int index) {
+        Integer win = args.size() > index ? toInt(args.get(index)) : null;
+        return win == null ? EditorWindow.UNKNOWN : win;
+    }
+
+    /** Payload: {@code [bufnr, line1, winid]}, from {@link LuaScripts#VIEWPORT}'s {@code WinScrolled}. */
     private void onTopLine(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         Integer top = args.size() >= 2 ? toInt(args.get(1)) : null;
         if (buf != null && top != null && top >= 1) {
-            sink.onTopLine(buf, top);
+            sink.onTopLine(buf, top, window(args, 2));
         }
     }
 
-    /** Payload: {@code [bufnr, wrap]}, from {@link LuaScripts#VIEWPORT}'s {@code OptionSet}. */
+    /** Payload: {@code [bufnr, wrap, winid]}, from {@link LuaScripts#VIEWPORT}'s {@code OptionSet}. */
     private void onWrap(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null && args.size() >= 2 && args.get(1) instanceof Boolean wrap) {
-            sink.onWrap(buf, wrap);
+            sink.onWrap(buf, wrap, window(args, 2));
         }
     }
 

@@ -178,10 +178,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** The view last passed to the command-line listeners. */
     private CmdlineState.View lastCmdline = CmdlineState.View.CLOSED;
 
-    private NeovimSession(NeovimConnection connection, Handle homeBuffer, ClipboardPort clipboard) {
+    private NeovimSession(NeovimConnection connection, Handle homeBuffer, int homeWin, ClipboardPort clipboard) {
         this.connection = connection;
         this.api = connection.api();
-        this.buffers = new DocumentBuffers(api, homeBuffer);
+        this.buffers = new DocumentBuffers(api, homeBuffer, homeWin);
         // StateSync tells KeyInput about every mode change, and KeyInput uses StateSync. So StateSync is
         // built first and given this::modeChanged, which reaches keyInput only when a mode arrives.
         this.state = new StateSync(new StateSyncNeovim(), events, status, buffers::isAttached,
@@ -227,8 +227,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         await(api.execLua(LuaScripts.SHOW_BUFFER, List.of(String.valueOf(homeBuffer.id()))));
         await(api.bufAttach(homeBuffer, true)); // line-change notifications
         await(api.execLua(LuaScripts.DELETE_STARTUP_BUFFER, List.of(String.valueOf(homeBuffer.id()))));
+        // A window per editor, each in its own tabpage (docs/design/WINDOWS.md); the current window
+        // stays the home window.
+        Object homeWin = await(api.execLua(LuaScripts.WINDOWS, List.of(String.valueOf(homeBuffer.id()))));
+        if (!(homeWin instanceof Number)) {
+            throw new IllegalStateException("Unexpected answer installing the windows module: " + homeWin);
+        }
 
-        NeovimSession session = new NeovimSession(connection, homeBuffer, clipboard);
+        NeovimSession session = new NeovimSession(connection, homeBuffer, ((Number) homeWin).intValue(), clipboard);
         NotificationBridge bridge = new NotificationBridge(session.new EventSink());
         connection.setIncoming(bridge);
 
@@ -507,6 +513,48 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void showBuffer(DocumentBuffer buffer) throws Exception {
         buffers.show(buffer);
+    }
+
+    /**
+     * Makes {@code buffer} the attached buffer, shown in the editor's own Neovim window, which
+     * becomes the current one: opened in a new tabpage on first use, and again after Restart Neovim
+     * or after it was closed in Neovim (docs/design/WINDOWS.md). Blocking: input thread only.
+     *
+     * @param window the editor's window token; {@code null} shows the buffer in the home window,
+     *               as {@link #showBuffer} does
+     * @param folder the window's folder ({@code :lcd}), set once when it is opened: normally the
+     *               editor's project; "" keeps the folder of the window current before, as a Vim
+     *               window inherits it. Ignored when {@code 'autochdir'} is set.
+     */
+    public void showWindow(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
+        buffers.show(buffer, window, folder);
+    }
+
+    /**
+     * Closes an editor's window and its tabpage (the editor closed). The buffer stays for the
+     * document's other editors; {@link #closeBufferAsync} wipes it after the last.
+     */
+    public void closeWindowAsync(EditorWindow window) {
+        submit("close window", Level.FINE, () -> buffers.closeWindow(window));
+    }
+
+    /**
+     * A window travelling on {@code Ctrl-O} across files (docs/design/WINDOWS.md, E2): {@code mover},
+     * the attached editor's window, has jumped into the buffer {@code other}'s editor shows. The two
+     * editors swap windows; {@code other}'s old window gets {@code leftBehind} with the attached
+     * editor's last cursor in it. The caller then shows {@code other}'s editor as usual. Blocking:
+     * input thread only.
+     */
+    public void travelWindow(EditorWindow mover, EditorWindow other, DocumentBuffer leftBehind) throws Exception {
+        // The last cursor reported in the attached buffer: the cursor reports of the jump, in the
+        // other buffer, were not taken (DocumentBuffers.isAttached).
+        CursorPos cursor = state.lastCursor();
+        buffers.travel(mover, other, leftBehind, cursor.line1Based(), cursor.col0Based());
+    }
+
+    /** The id of the window showing the attached buffer (an editor's own, or the home window). */
+    public int getAttachedWinid() {
+        return buffers.attachedWin();
     }
 
     /** Wipes a document's buffer, with its undo history and marks (its last editor closed). */
@@ -1132,8 +1180,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onCursor(int line1, int col0, int bufnr) {
-            if (buffers.isAttached(bufnr)) {
+        public void onCursor(int line1, int col0, int bufnr, int winid) {
+            if (buffers.isAttached(winid, bufnr)) {
                 state.dispatchCursor(line1, col0);
             }
         }
@@ -1161,8 +1209,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onBufferEnter(int bufnr) {
-            buffers.onEntered(bufnr, NeovimSession.this::returnToAttachedBufferAsync);
+        public void onBufferEnter(int bufnr, int winid) {
+            buffers.onEntered(bufnr, winid, NeovimSession.this::returnToAttachedBufferAsync);
+        }
+
+        @Override
+        public void onWindowClosed(int winid) {
+            if (!closed) {
+                // On the input thread, where the windows change: in order with the shows queued there.
+                submit("window closed", Level.FINE, () -> buffers.onWindowClosed(winid));
+            }
         }
 
         @Override
@@ -1208,14 +1264,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onWrap(int bufnr, boolean wrap) {
+        public void onWrap(int bufnr, boolean wrap, int winid) {
+            if (winid != EditorWindow.UNKNOWN && winid != buffers.attachedWin()) {
+                return; // another editor's window (a script ran there); its editor keeps its word wrap
+            }
             LOG.fine(() -> "Neovim set " + (wrap ? "wrap" : "nowrap") + " for buffer " + bufnr);
             events.wrap(new WrapChange(bufnr, wrap));
         }
 
         @Override
-        public void onTopLine(int bufnr, int line1) {
-            if (viewportEnabled && buffers.isAttached(bufnr)) {
+        public void onTopLine(int bufnr, int line1, int winid) {
+            if (viewportEnabled && buffers.isAttached(winid, bufnr)) {
                 LOG.finest(() -> "Neovim's top line " + line1 + " in buffer " + bufnr);
                 events.topLine(new TopLine(bufnr, line1));
             }

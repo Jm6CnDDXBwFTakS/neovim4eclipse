@@ -9,7 +9,7 @@
 local t = ...
 
 -- The answer's fields, by position (see the STATE_SNAPSHOT comment).
-local BLOCK, FULL_MODE = 11, 12
+local BUFNR, BLOCK, FULL_MODE, WINID = 10, 11, 12, 14
 
 local function snapshot_after(lines, keys)
   vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
@@ -40,4 +40,11 @@ t.test('outside blockwise visual mode there is no block', function()
   local snap = snapshot_after({ 'abcd', 'efgh' }, 'ggvj')
   t.eq('v', snap[FULL_MODE])
   t.ok(snap[BLOCK] == nil or vim.tbl_isempty(snap[BLOCK]), vim.inspect(snap[BLOCK]))
+end)
+
+t.test('the answer ends with the current buffer and window, to tell the attached editor from another', function()
+  local snap = snapshot_after({ 'abc' }, 'l')
+  t.eq(vim.api.nvim_get_current_buf(), snap[BUFNR])
+  t.eq(vim.api.nvim_get_current_win(), snap[WINID], 'docs/design/WINDOWS.md')
+  t.eq(WINID, #snap, 'the last field')
 end)
