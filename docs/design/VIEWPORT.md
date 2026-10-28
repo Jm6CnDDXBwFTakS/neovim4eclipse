@@ -112,7 +112,7 @@ Commit 3 (the wheel through Neovim):
   `Ctrl-F`.
 - **`editor/NeovimWheel`**, a display filter as `NeovimMouse` is, swallows the vertical wheel in
   normal and visual mode, unless a modifier is held (Shift+wheel may scroll sideways; Ctrl+wheel
-  scrolls in Eclipse's text editor, checked on Linux), and sends its lines with `scrollLinesAsync`, added up while Neovim is busy. Tested in
+  scrolls in Eclipse's text editor on Linux, macOS and Windows), and sends its lines with `scrollLinesAsync`, added up while Neovim is busy. Tested in
   `tests/swt` (`NeovimWheelTest`).
 - **`LuaScripts.SCROLL_LINES`** steps the top line as `Ctrl-E` and `Ctrl-Y` do, a closed fold
   counting as one line, and then uses `set_topline(…, drag)`; no `:normal`, which would end visual
@@ -129,7 +129,7 @@ Commit 3 (the wheel through Neovim):
   would be put back off screen), and Neovim's cursor reports are ignored while Esc is handled, as
   its top lines already were: the replay's report of the old caret made Eclipse reveal it first.
   D6 stands for insert mode itself.
-- **Ctrl+wheel and Cmd+wheel** scroll in Eclipse's text editor (checked on Linux and macOS), so
+- **Ctrl+wheel and Cmd+wheel** scroll in Eclipse's text editor (checked on Linux, macOS and Windows), so
   leaving the wheel with a modifier to Eclipse changes nothing visible there.
 
 ## 1. Behavior
