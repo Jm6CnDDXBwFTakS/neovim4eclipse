@@ -80,10 +80,13 @@ Phase 2, the Eclipse glue:
   reports are dropped. Whether the single window of 0.1.10 flickered the same way on a switch was
   not measured; a switch back now finds the window where it was, so the attach's top line usually
   changes nothing (`ViewportEndToEndTest.anEditorSwitchKeepsEachEditorsView`).
-- **Not done:** skipping the document push when an existing window is shown again and the
-  document did not change (the push already sends only the lines that differ, so it costs a
-  `nvim_buf_get_lines` of the whole buffer). `SET_WINDOW_FOLDER` and `setWindowFolderAsync`, the
-  folder on every attach, are no longer called.
+- **After the hand test plan, two follow-ups.** The attach skips the document push when neither
+  side changed since the editor was detached: the detach push records the document's
+  modification stamp in its `DocumentBuffer` (`markInSyncAt`), any line event Neovim sends for
+  that buffer clears it, and `DocumentPush` compares it with the document's stamp at attach. An
+  editor switch then reads neither the whole document (on the UI thread) nor the whole buffer
+  (`nvim_buf_get_lines`). And `SET_WINDOW_FOLDER` and `setWindowFolderAsync`, the folder on every
+  attach, were removed; `OPEN_WINDOW`'s `:lcd` is silent the same way.
 
 ## 1. Decisions
 

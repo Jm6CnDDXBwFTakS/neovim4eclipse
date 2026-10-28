@@ -127,6 +127,29 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * A change Neovim makes to a document's buffer clears its "in sync" stamp
+     * (DocumentBuffer.syncedStamp), so the next attach pushes the document again; Eclipse's own write
+     * does not.
+     */
+    @Test
+    void aChangeNeovimMakesToABufferClearsItsInSyncStamp() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer("");
+            DocumentBuffer b = new DocumentBuffer("");
+            s.showBuffer(a);
+            s.setBufferLines(List.of("a"));
+            s.showBuffer(b);
+            s.setDocumentBufferLines(a, List.of("a", "by Eclipse"));
+            a.markInSyncAt(7);
+            NeovimBarrier.pass(s);
+            assertTrue(a.isInSyncAt(7), "the echo of Eclipse's own write");
+
+            s.lua("vim.api.nvim_buf_set_lines(" + a.bufnr() + ", 0, -1, false, {'by Neovim'})");
+            waitFor(() -> !a.isInSyncAt(7), "the change to clear it");
+        }
+    }
+
     /** {@code :bufdo} edits buffers that are not attached; each change goes to that document's listener. */
     @Test
     void changesToADocumentThatIsNotAttachedGoToItsOwnListener() throws Exception {

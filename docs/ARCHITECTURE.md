@@ -160,7 +160,10 @@ attached to that document's listener (`core/DocumentBufferPort`), which applies 
 (the RPC thread must not wait, or `:bufdo`'s `BufEnter`s would queue up behind the changes); and each
 change Eclipse makes to the document is pushed to its buffer (`setDocumentBufferLines`, which drops the
 echo of its own write). While the document is attached, `BufferSynchronizer` does the pushing; on
-detach, one push leaves the buffer equal to the document. Both sides changing the same document at once
+detach, one push leaves the buffer equal to the document, and records the document's modification
+stamp in its `DocumentBuffer`. Any line event Neovim sends for the buffer clears it; an attach whose
+document still has that stamp skips its push (`DocumentPush`), so switching back to an unchanged
+editor reads neither the whole document nor the whole buffer. Both sides changing the same document at once
 is applied in arrival order; a Neovim change that no longer fits is logged and replaced by Eclipse's text.
 
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is

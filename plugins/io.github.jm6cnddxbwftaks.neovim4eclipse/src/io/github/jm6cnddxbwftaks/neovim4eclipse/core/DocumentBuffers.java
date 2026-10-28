@@ -195,6 +195,7 @@ final class DocumentBuffers {
             buffer.bufnr = bufnr(target);
             buffer.owner = this;
             buffer.loaded = false;
+            buffer.markOutOfSync();
             documents.put(buffer.bufnr, buffer);
         }
         int win = window == null ? homeWin : windowFor(window, target, folder);

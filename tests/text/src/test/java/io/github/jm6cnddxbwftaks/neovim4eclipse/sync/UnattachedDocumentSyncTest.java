@@ -4,7 +4,9 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -143,6 +145,24 @@ class UnattachedDocumentSyncTest {
 
         assertEquals(List.of(List.of("typed", "beta", "gamma")), neovim.pushed,
                 "e.g. text typed in insert mode that Neovim had not been sent");
+    }
+
+    /**
+     * The detach push records the document's stamp: attached again with nothing changed, the editor
+     * skips its push (DocumentPush). An Eclipse change moves the stamp.
+     */
+    @Test
+    void theDetachPushRecordsTheStampTheBufferEquals() throws Exception {
+        sync.start();
+        sync.setAttached(true);
+        sync.setAttached(false);
+        neovim.runQueued();
+        long stamp = BufferSynchronizer.stampOf(document);
+        assertTrue(buffer.isInSyncAt(stamp));
+
+        sync.setAttached(true);
+        document.replace(0, 5, "typed");
+        assertFalse(buffer.isInSyncAt(BufferSynchronizer.stampOf(document)), "changed while attached");
     }
 
     @Test

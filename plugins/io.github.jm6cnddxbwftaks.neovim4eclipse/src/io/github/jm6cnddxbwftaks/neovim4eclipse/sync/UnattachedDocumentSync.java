@@ -183,33 +183,44 @@ public final class UnattachedDocumentSync implements AutoCloseable {
             if (closed) {
                 return;
             }
-            List<String> lines = documentLinesOnUi();
-            if (lines == null) {
+            Snapshot snapshot = documentOnUi();
+            if (snapshot == null) {
                 return;
             }
             try {
-                session.setDocumentBufferLines(buffer, lines);
+                if (session.setDocumentBufferLines(buffer, snapshot.lines())) {
+                    // The buffer equals the document at this stamp: the next attach can skip its push.
+                    buffer.markInSyncAt(snapshot.stamp());
+                }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Could not push " + describe() + " to Neovim", e);
             }
         });
     }
 
-    /** The document's lines, read on the UI thread (see {@link BufferSynchronizer#pushDocumentToNeovim}). */
-    private List<String> documentLinesOnUi() {
+    /** The document's lines and its modification stamp, read together. */
+    private record Snapshot(List<String> lines, long stamp) {
+    }
+
+    /** The document's lines and stamp, read on the UI thread (see {@link BufferSynchronizer#pushDocumentToNeovim}). */
+    private Snapshot documentOnUi() {
         if (ui.isUiThread()) {
-            return FinalNewlines.linesToPush(document);
+            return snapshot();
         }
         if (!ui.isAvailable()) {
             return null;
         }
-        List<List<String>> snapshot = new ArrayList<>(1);
+        List<Snapshot> taken = new ArrayList<>(1);
         ui.syncExec(() -> {
             if (!closed) {
-                snapshot.add(FinalNewlines.linesToPush(document));
+                taken.add(snapshot());
             }
         });
-        return snapshot.isEmpty() ? null : snapshot.get(0);
+        return taken.isEmpty() ? null : taken.get(0);
+    }
+
+    private Snapshot snapshot() {
+        return new Snapshot(FinalNewlines.linesToPush(document), BufferSynchronizer.stampOf(document));
     }
 
     private String describe() {
