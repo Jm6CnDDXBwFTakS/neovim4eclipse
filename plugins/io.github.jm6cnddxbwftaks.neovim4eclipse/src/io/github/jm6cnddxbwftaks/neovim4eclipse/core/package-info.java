@@ -22,8 +22,10 @@
  *             macros, host {@code :} commands). It does not know the session: it is given
  *             {@code StateSync}, {@code StatusTracker} and its own small {@code KeyInput.Neovim}
  *             interface, so the session depends on it and not the other way round;</li>
- *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, and which is attached
- *             (the Neovim side; {@code EditorBuffers}, below, is the Eclipse side);</li>
+ *         <li>{@code DocumentBuffers}: one Neovim buffer per Eclipse document, the editors'
+ *             windows, and which buffer and window are attached (the Neovim side;
+ *             {@code EditorBuffers}, below, is the Eclipse side); {@code EditorWindows} keeps which
+ *             {@code EditorWindow} token holds which Neovim window (docs/design/WINDOWS.md);</li>
  *         <li>{@code CommandRunner}: submitted {@code :} commands and searches, typed into Neovim,
  *             and {@code :normal!}; sees Neovim through its small {@code Neovim} interface;</li>
  *         <li>{@code StateSync}: mode, cursor and whether Eclipse may type; reads them from
@@ -39,7 +41,8 @@
  *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call.</li>
  *       </ul></li>
  *   <li>Value types passed to listeners: {@code CursorPos}, {@code VisualSelection},
- *       {@code BufferChange}, {@code FoldState}; and {@code DocumentBuffer}, the handle of one document's buffer.</li>
+ *       {@code BufferChange}, {@code FoldState}; and {@code DocumentBuffer}, the handle of one document's buffer,
+ *       and {@code EditorWindow}, the handle of one editor's window.</li>
  *   <li>{@code KeyRouter}: whether each key goes to Neovim or stays with Eclipse; the SWT listener
  *       ({@code editor/KeyInterceptor}) only feeds it. {@code NeovimSession} implements its small
  *       {@code KeyRouter.Neovim} interface, so tests use a fake session.</li>

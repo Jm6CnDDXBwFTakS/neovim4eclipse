@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.core.Rpc.await;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,11 +16,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 
 /**
- * The Neovim buffers that mirror Eclipse documents, and which of them is <em>attached</em>.
+ * The Neovim buffers that mirror Eclipse documents, the windows of the editors that show them, and
+ * which buffer and window are <em>attached</em>.
  *
  * <h2>Buffers in Neovim</h2>
  * A Neovim buffer is the text of one file in memory, with its own undo history and marks. A
- * <em>window</em> shows one buffer at a time; the embedded Neovim has a single window. Giving each
+ * <em>window</em> shows one buffer at a time. Giving each
  * Eclipse document its own buffer (instead of reloading one buffer on every editor switch) keeps
  * undo history and marks per file, and lets Vim's own file jumps ({@code Ctrl-O} across files,
  * {@code 'A}, {@code :b}) work.
@@ -35,6 +37,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
  *       open document) or switch back (help, {@code :e} of an unrelated file, a closed document).</li>
  * </ul>
  *
+ * <h2>Windows</h2>
+ * Each editor can have its own Neovim window ({@link EditorWindow}, docs/design/WINDOWS.md), alone in
+ * a hidden tabpage, so that it keeps its own cursor, scroll position, folds and jump history between
+ * editor switches. The <em>home window</em>, the one Neovim started with, shows the home buffer, and
+ * the document of an editor shown without a window of its own ({@link #show(DocumentBuffer)}, as all
+ * editors were before windows). The <em>attached window</em> is the one showing the attached buffer:
+ * cursor reports and the state snapshot count only from it ({@link #isAttached(int, int)}), so two
+ * editors on one file are told apart. The Neovim side is {@link LuaScripts#WINDOWS}; which token
+ * holds which window is {@link EditorWindows}.
+ *
  * <p>Methods that talk to Neovim block and must run on the session's input thread.
  */
 final class DocumentBuffers {
@@ -43,6 +55,15 @@ final class DocumentBuffers {
 
     private final NeovimApi api;
     private final Handle home;
+    /** The editor windows (Java side); the home window is not one of them. */
+    private final EditorWindows windows = new EditorWindows();
+    /**
+     * The home window's id; {@link EditorWindow#UNKNOWN} after the user closed it, until the next
+     * show of it opens it again ({@link LuaScripts#SHOW_WINDOW} with -1).
+     */
+    private volatile int homeWin;
+    /** The window showing the attached buffer; {@link EditorWindow#UNKNOWN} after it was closed in Neovim. */
+    private volatile int attachedWin;
     /** Changed on the input thread only; read from any thread. */
     private volatile Handle attached;
     private volatile int attachedBufnr;
@@ -60,9 +81,15 @@ final class DocumentBuffers {
      */
     private volatile int enteredBufnr;
 
-    DocumentBuffers(NeovimApi api, Handle home) {
+    /**
+     * @param home    the home buffer, shown in the home window
+     * @param homeWin the home window, as {@link LuaScripts#WINDOWS} returned it
+     */
+    DocumentBuffers(NeovimApi api, Handle home, int homeWin) {
         this.api = api;
         this.home = home;
+        this.homeWin = homeWin;
+        this.attachedWin = homeWin;
         this.attached = home;
         this.attachedBufnr = bufnr(home);
         this.enteredBufnr = attachedBufnr;
@@ -79,6 +106,16 @@ final class DocumentBuffers {
 
     int attachedBufnr() {
         return attachedBufnr;
+    }
+
+    /** The window showing the attached buffer: an editor's own, or the home window. */
+    int attachedWin() {
+        return attachedWin;
+    }
+
+    /** The editor windows of this session. */
+    EditorWindows windows() {
+        return windows;
     }
 
     /**
@@ -103,6 +140,18 @@ final class DocumentBuffers {
         return bufnr == NotificationBridge.UNKNOWN_BUFFER || bufnr == attachedBufnr;
     }
 
+    /**
+     * Whether a cursor report or a snapshot from window {@code winid} on buffer {@code bufnr} is the
+     * attached editor's: both must match ({@link EditorWindow#UNKNOWN} and
+     * {@link NotificationBridge#UNKNOWN_BUFFER} match anything). Example: two editors on one file,
+     * windows 1001 and 1002; with the first attached, a cursor report from 1002 (a script ran there)
+     * is not its caret. And after {@code Ctrl-O} into another file the window matches but the buffer
+     * does not.
+     */
+    boolean isAttached(int winid, int bufnr) {
+        return (winid == EditorWindow.UNKNOWN || winid == attachedWin) && isAttached(bufnr);
+    }
+
     /** Whether {@code buffer} was created by this registry and still exists. */
     boolean owns(DocumentBuffer buffer) {
         return buffer.owner == this && buffer.bufnr > 0;
@@ -121,8 +170,25 @@ final class DocumentBuffers {
         return owns(buffer) ? created.get(buffer.bufnr) : null;
     }
 
-    /** Makes {@code buffer} the attached buffer and Neovim's current one, creating it on first use. */
+    /**
+     * Makes {@code buffer} the attached buffer and Neovim's current one, in the home window, creating
+     * the buffer on first use (an editor without a window of its own).
+     */
     void show(DocumentBuffer buffer) throws Exception {
+        show(buffer, null, "");
+    }
+
+    /**
+     * Makes {@code buffer} the attached buffer and {@code window} the attached window, Neovim's
+     * current one, creating either on first use (and again after Restart Neovim, or after the window
+     * was closed in Neovim: the safety net).
+     *
+     * @param window the editor's window, or {@code null} for the home window
+     * @param folder the folder for {@code :lcd} when the window is opened ({@link LuaScripts#OPEN_WINDOW}),
+     *               normally the editor's project; "" keeps the folder the new window copies from
+     *               the current one
+     */
+    void show(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         Handle target = owns(buffer) ? created.get(buffer.bufnr) : null;
         if (target == null) {
             target = create(buffer.name);
@@ -131,16 +197,122 @@ final class DocumentBuffers {
             buffer.loaded = false;
             documents.put(buffer.bufnr, buffer);
         }
+        int win = window == null ? homeWin : windowFor(window, target, folder);
         // Attach first: the BufEnter this switch causes is then recognized as Eclipse's own.
         attached = target;
         attachedBufnr = buffer.bufnr;
         attachedDocument = buffer;
-        showBuffer(target);
+        attachedWin = win;
+        int shown = showWindow(win, buffer.bufnr);
+        if (shown == EditorWindow.UNKNOWN && window != null) {
+            // Closed in Neovim since (the WinClosed notice may still be on its way): a new one.
+            windows.forget(window);
+            win = windowFor(window, target, folder);
+            attachedWin = win;
+            shown = showWindow(win, buffer.bufnr);
+        }
+        attachedWin = shown;
     }
 
-    /** Makes {@code buffer} Neovim's current one, without its file info message ({@link LuaScripts#SHOW_BUFFER}). */
-    private void showBuffer(Handle buffer) throws Exception {
-        await(api.execLua(LuaScripts.SHOW_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
+    /** The editor's window, opened in a new tabpage on {@code buffer} if it has none in this session. */
+    private int windowFor(EditorWindow window, Handle buffer, String folder) throws Exception {
+        if (windows.owns(window)) {
+            return window.winid;
+        }
+        Object answer = await(api.execLua(LuaScripts.OPEN_WINDOW,
+                List.of(String.valueOf(bufnr(buffer)), folder == null ? "" : folder)));
+        if (!(answer instanceof Number id)) {
+            throw new IllegalStateException("Unexpected answer opening a window: " + answer);
+        }
+        windows.add(window, id.intValue());
+        LOG.fine(() -> "Opened window " + id + " on buffer " + bufnr(buffer));
+        return id.intValue();
+    }
+
+    /**
+     * Enters window {@code win} showing buffer {@code bufnr} ({@link LuaScripts#SHOW_WINDOW}), and
+     * returns the window shown: for the home window its (perhaps new) id, which is remembered; for
+     * an editor window {@link EditorWindow#UNKNOWN} when it was closed in Neovim.
+     */
+    private int showWindow(int win, int bufnr) throws Exception {
+        boolean toHome = win == EditorWindow.UNKNOWN || win == homeWin;
+        Object answer = await(api.execLua(LuaScripts.SHOW_WINDOW,
+                List.of(String.valueOf(toHome ? -1 : win), String.valueOf(bufnr))));
+        int shown = answer instanceof Number id && id.intValue() > 0 ? id.intValue() : EditorWindow.UNKNOWN;
+        if (toHome && shown != EditorWindow.UNKNOWN) {
+            homeWin = shown;
+        }
+        return shown;
+    }
+
+    /**
+     * Closes an editor's window and its tabpage (its editor closed). The buffer stays, for the
+     * document's other editors; {@link #close(DocumentBuffer)} wipes it after the last one. When it
+     * was the attached window, the home buffer in the home window is attached until Eclipse shows the
+     * next editor.
+     */
+    void closeWindow(EditorWindow window) throws Exception {
+        if (!windows.owns(window)) {
+            return;
+        }
+        int win = window.winid;
+        windows.forget(window);
+        if (attachedWin == win) {
+            attached = home;
+            attachedBufnr = bufnr(home);
+            attachedDocument = null;
+            attachedWin = homeWin;
+        }
+        Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW,
+                List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
+        if (answer instanceof Number id) {
+            boolean attachedHome = attachedWin == homeWin;
+            homeWin = id.intValue();
+            if (attachedHome) {
+                attachedWin = homeWin;
+            }
+        }
+    }
+
+    /**
+     * The Neovim half of a window travelling on {@code Ctrl-O} across files (docs/design/WINDOWS.md,
+     * E2): {@code mover}'s window jumped into the buffer {@code other}'s editor shows. {@code other}'s
+     * window is quietly given {@code leftBehind} and its cursor ({@link LuaScripts#TRAVEL_WINDOW}),
+     * and the two tokens swap windows ({@link EditorWindows#swap}). Example: editor A (window 1001,
+     * a.txt) runs {@code :b b.txt}; editor B holds 1002 on b.txt. After the travel B holds 1001, which
+     * shows b.txt and keeps the whole jump history, and A holds 1002, now on a.txt at A's cursor.
+     * Eclipse then activates B's editor, whose show finds its window current already.
+     *
+     * @param line1 the 1-based line of {@code mover}'s cursor in {@code leftBehind} before the jump
+     * @param col0  its 0-based byte column
+     */
+    void travel(EditorWindow mover, EditorWindow other, DocumentBuffer leftBehind, int line1, int col0)
+            throws Exception {
+        Handle back = handleOf(leftBehind);
+        if (!windows.owns(mover) || !windows.owns(other) || back == null) {
+            throw new IllegalStateException("travel needs two open windows and an open buffer: "
+                    + mover + ", " + other + ", " + leftBehind.name);
+        }
+        await(api.execLua(LuaScripts.TRAVEL_WINDOW, List.of(String.valueOf(other.winid),
+                String.valueOf(bufnr(back)), String.valueOf(line1), String.valueOf(col0))));
+        windows.swap(mover, other);
+    }
+
+    /**
+     * Neovim closed window {@code winid} by itself ({@code :tabclose}; the safety net of
+     * {@link LuaScripts#WINDOWS}). Its editor gets a new window at its next show. When it was the
+     * attached window, events count from no window until Eclipse returns to the attached buffer
+     * (Neovim has entered some other window, whose {@code BufEnter} asks for that).
+     */
+    void onWindowClosed(int winid) {
+        EditorWindow window = windows.forget(winid);
+        LOG.fine(() -> "Neovim closed window " + winid + (window == null ? "" : ", an editor's"));
+        if (winid == homeWin) {
+            homeWin = EditorWindow.UNKNOWN;
+        }
+        if (winid == attachedWin) {
+            attachedWin = EditorWindow.UNKNOWN;
+        }
     }
 
     private Handle create(String name) throws Exception {
@@ -188,14 +360,44 @@ final class DocumentBuffers {
             attachedDocument = null;
         }
         // Leave the buffer first: wiping the window's buffer makes Neovim enter some other one,
-        // which Eclipse would follow by activating that editor.
-        showBuffer(attached);
+        // which Eclipse would follow by activating that editor. Editor windows still showing it
+        // are closed; the home window shows the attached buffer instead.
+        Object closed = await(api.execLua(LuaScripts.RELEASE_BUFFER,
+                List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
+        for (int winid : ids(closed)) {
+            windows.forget(winid);
+            if (winid == attachedWin) {
+                attachedWin = homeWin;
+            }
+        }
+        returnToAttached();
         await(api.bufDelete(doomed, true, false)); // force: unsaved changes live in Eclipse
     }
 
-    /** Switches Neovim back to the attached buffer. */
+    private static List<Integer> ids(Object answer) {
+        List<Integer> ids = new ArrayList<>();
+        if (answer instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Number n) {
+                    ids.add(n.intValue());
+                }
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Switches Neovim back to the attached buffer in the attached window. If that window was closed
+     * in Neovim, the home window shows the attached buffer from then on, until the editor's next
+     * show opens it a window again.
+     */
     void returnToAttached() throws Exception {
-        showBuffer(attached);
+        int shown = showWindow(attachedWin, attachedBufnr);
+        if (shown == EditorWindow.UNKNOWN) {
+            attachedWin = homeWin;
+            shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
+        }
+        attachedWin = shown;
     }
 
     void setEnterHandler(Consumer<Integer> handler) {
@@ -203,13 +405,20 @@ final class DocumentBuffers {
     }
 
     /**
-     * Neovim entered buffer {@code bufnr} ({@code BufEnter}). Another document's buffer goes to the
-     * enter handler; anything else is undone with {@code returnBack}.
+     * Neovim entered buffer {@code bufnr} in window {@code winid} ({@code BufEnter}). In the attached
+     * window, another document's buffer goes to the enter handler; anything else is undone with
+     * {@code returnBack}: another buffer, or another window Neovim entered by itself (a
+     * {@code :tabnext} the user typed, the window it entered after a {@code :tabclose}).
      */
-    void onEntered(int bufnr, Runnable returnBack) {
+    void onEntered(int bufnr, int winid, Runnable returnBack) {
         enteredBufnr = bufnr; // first: a follow-up queued for an earlier buffer must see it
-        if (bufnr == attachedBufnr) {
+        boolean attachedWindow = winid == EditorWindow.UNKNOWN || winid == attachedWin;
+        if (attachedWindow && bufnr == attachedBufnr) {
             return; // Eclipse's own switch, or Neovim came back
+        }
+        if (!attachedWindow) {
+            returnBack.run();
+            return;
         }
         Consumer<Integer> handler = enterHandler;
         if (handler != null && created.containsKey(bufnr)) {

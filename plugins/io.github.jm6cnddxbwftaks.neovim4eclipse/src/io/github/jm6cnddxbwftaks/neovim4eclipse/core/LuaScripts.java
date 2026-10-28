@@ -25,9 +25,10 @@ final class LuaScripts {
      *       definition, E388) instead of the diagnostics mapping, as it does in plain Neovim when
      *       the pause is longer than the wait.</li>
      *   <li>{@code showmode=false}: Eclipse shows the mode in its own status line.</li>
-     *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number and
-     *       the window's top line, {@code line('w0')}),
-     *       {@code eclipse_buf_enter} and {@code eclipse_yank} notifications handled by
+     *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number,
+     *       the window's top line, {@code line('w0')}, and the window id),
+     *       {@code eclipse_buf_enter} (the buffer and the window id: with a window per editor,
+     *       docs/design/WINDOWS.md, the window tells two editors on one file apart) and {@code eclipse_yank} notifications handled by
      *       {@link NotificationBridge}.</li>
      *   <li>Unless the user's config sets {@code g:clipboard}, a clipboard provider whose copy sends
      *       {@code eclipse_clipboard_copy} and whose paste is the {@code eclipse_clipboard_paste}
@@ -72,14 +73,15 @@ final class LuaScripts {
             vim.api.nvim_create_autocmd({'CursorMoved', 'CursorMovedI'}, {
               callback = function()
                 local p = vim.api.nvim_win_get_cursor(0)
-                vim.rpcnotify(0, 'eclipse_cursor', p[1], p[2], vim.api.nvim_get_current_buf(), vim.fn.line('w0'))
+                vim.rpcnotify(0, 'eclipse_cursor', p[1], p[2], vim.api.nvim_get_current_buf(), vim.fn.line('w0'),
+                    vim.api.nvim_get_current_win())
               end
             })
             -- Each Eclipse document has its own buffer. When Neovim switches buffers by itself
             -- (Ctrl-O across files, 'A, :b), Eclipse follows by activating that file's editor.
             vim.api.nvim_create_autocmd('BufEnter', {
               callback = function(ev)
-                vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf)
+                vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, vim.api.nvim_get_current_win())
               end
             })
             vim.api.nvim_create_autocmd('TextYankPost', {
@@ -380,8 +382,9 @@ final class LuaScripts {
     /**
      * Everything the UI needs after a key, in ONE round trip:
      * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, recording,
-     * statusline, bufnr, block, full_mode, folds}}. {@code bufnr} tells whether the cursor is still in the
-     * buffer Eclipse shows (Neovim may just have jumped to another file). {@code full_mode} is
+     * statusline, bufnr, block, full_mode, folds, winid}}. {@code bufnr} tells whether the cursor is still in the
+     * buffer Eclipse shows (Neovim may just have jumped to another file), {@code winid} whether it is
+     * still in the attached editor's window (docs/design/WINDOWS.md). {@code full_mode} is
      * {@code nvim_get_mode().mode} ({@code "n"}, {@code "no"}, {@code "c"}, ...), the mode the editor
      * publishes; {@code mode} ({@code mode()}, one letter) is the visual mode for the selection.
      *
@@ -431,7 +434,8 @@ final class LuaScripts {
               folds = package.loaded['neovim4eclipse.folds'].poll(vim.api.nvim_get_current_win())
             end
             return { c[1], c[2], s[2], s[3], e[2], e[3], mode, vim.fn.reg_recording(), statusline,
-                     vim.api.nvim_get_current_buf(), block, vim.api.nvim_get_mode().mode, folds }
+                     vim.api.nvim_get_current_buf(), block, vim.api.nvim_get_mode().mode, folds,
+                     vim.api.nvim_get_current_win() }
             """;
 
     /**
@@ -518,6 +522,233 @@ final class LuaScripts {
             if not ok then
               error(err, 0)
             end
+            """;
+
+    /**
+     * Installs the module {@code neovim4eclipse.windows}: a Neovim window per Eclipse editor, each
+     * alone in its own tabpage (docs/design/WINDOWS.md; Java side {@code DocumentBuffers} and
+     * {@code EditorWindows}). Argument: the home buffer's number. Returns the <em>home window</em>'s
+     * id: the window the plug-in started in, which shows a document when its editor has no window of
+     * its own, and is never closed by the plug-in.
+     *
+     * <p>Why tabpages: one window per tab fills Neovim's screen, which is the attached editor's size
+     * (VIEWPORT.md), so {@code H}, {@code L} and {@code Ctrl-D} match the editor, and window commands
+     * stay inside the editor's tab. {@code 'showtabline'} is set to 0, a setting the plug-in changes
+     * (README, "Neovim settings the plug-in changes"): Neovim's default, 1, would show a tab line as
+     * soon as a second editor has a window, and take a row from the editor.
+     *
+     * <p>The functions, each called by one of the scripts below:
+     * <ul>
+     *   <li>{@code open(buf, folder)}: {@link #OPEN_WINDOW}.</li>
+     *   <li>{@code show(win, buf)}: {@link #SHOW_WINDOW}.</li>
+     *   <li>{@code travel(win, buf, line, col)}: {@link #TRAVEL_WINDOW}.</li>
+     *   <li>{@code close(win, fallback)}: {@link #CLOSE_WINDOW}.</li>
+     *   <li>{@code release(buf, fallback)}: {@link #RELEASE_BUFFER}.</li>
+     * </ul>
+     *
+     * <p><b>Quietly</b> means with {@code 'eventignore'} set to {@code all}: what the plug-in does to
+     * a window that is not the current one fires no autocommand, so Eclipse does not take it for
+     * something the user did. Example: {@code nvim_win_set_buf} on a window of another tab enters it
+     * for a moment and fires {@code BufEnter} (WINDOWS.md, E7), which Eclipse would follow as a jump.
+     *
+     * <p>The safety net: {@code WinClosed} sends {@code eclipse_window_closed(win)}, so that a window
+     * the user closed in Neovim ({@code :tabclose}, a plug-in's {@code nvim_win_close}) is forgotten,
+     * and its editor gets a new one at its next attach. The plug-in's own closes are quiet and do not
+     * send it. A home window closed that way is opened again by the next {@code show} of it.
+     */
+    static final String WINDOWS = """
+            local home_buf = tonumber((select(1, ...)))
+            local M = {}
+            local home = vim.api.nvim_get_current_win()
+            vim.o.showtabline = 0
+
+            --- Runs fn(...) with every autocommand off ('eventignore' all), and returns its result.
+            local function quietly(fn, ...)
+              local saved = vim.o.eventignore
+              vim.o.eventignore = 'all'
+              local ok, result = pcall(fn, ...)
+              vim.o.eventignore = saved
+              if not ok then
+                error(result, 0)
+              end
+              return result
+            end
+
+            --- The home window, opened again (quietly, in a new tab) if the user closed it.
+            function M.home()
+              if not vim.api.nvim_win_is_valid(home) then
+                local buf = vim.api.nvim_buf_is_valid(home_buf) and home_buf or vim.api.nvim_create_buf(false, true)
+                home = quietly(function()
+                  return vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
+                end)
+              end
+              return home
+            end
+
+            --- Puts buf in the current window without Neovim's file info message (see SHOW_BUFFER).
+            local function set_current_buf(buf)
+              local saved = vim.o.shortmess
+              if not saved:find('F', 1, true) then
+                vim.o.shortmess = saved .. 'F'
+              end
+              local ok, err = pcall(vim.api.nvim_set_current_buf, buf)
+              vim.o.shortmess = saved
+              if not ok then
+                error(err, 0)
+              end
+            end
+
+            --- Puts buf in win: as Neovim does it when win is current (BufEnter tells Eclipse), quietly if not.
+            local function set_buf(win, buf)
+              if vim.api.nvim_win_get_buf(win) == buf then
+                return
+              end
+              if win == vim.api.nvim_get_current_win() then
+                set_current_buf(buf)
+              else
+                quietly(vim.api.nvim_win_set_buf, win, buf)
+              end
+            end
+
+            function M.open(buf, folder)
+              -- Not entered: fires WinNew, TabNew, BufWinEnter and WinScrolled only (E7), so the
+              -- user's BufWinEnter autocommands run, and Eclipse sees no switch.
+              local win = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
+              vim.api.nvim_win_call(win, function()
+                -- A new window copies the jump history of the current one (E7): another editor's
+                -- jumps. Ctrl-O in a fresh editor then has nowhere to go, as in a fresh Vim window.
+                vim.cmd('clearjumps')
+                -- The folder once, here, so a :lcd the user types stays with the editor. Without
+                -- one, the window keeps the folder it copied from the current window (the editor
+                -- attached before, as a Vim window inherits it). With 'autochdir', Neovim moves to
+                -- the file's folder on entering the window anyway (checked on 0.12.6).
+                if folder ~= nil and folder ~= '' and not vim.o.autochdir then
+                  vim.cmd.lcd({ args = { folder }, mods = { silent = true } })
+                end
+              end)
+              return win
+            end
+
+            function M.show(win, buf)
+              if win < 0 then
+                win = M.home()
+              elseif not vim.api.nvim_win_is_valid(win) then
+                return -1 -- closed in Neovim: Eclipse opens a new one
+              end
+              local current = vim.api.nvim_get_current_win()
+              set_buf(win, buf)
+              if win ~= current then
+                vim.api.nvim_set_current_win(win) -- BufEnter, with the buffer Eclipse expects
+              end
+              return win
+            end
+
+            function M.travel(win, buf, line, col)
+              quietly(function()
+                vim.api.nvim_win_set_buf(win, buf)
+                local last = vim.api.nvim_buf_line_count(buf)
+                pcall(vim.api.nvim_win_set_cursor, win, { math.max(1, math.min(line, last)), math.max(0, col) })
+              end)
+            end
+
+            --- Leaves win (quietly) for the home window showing fallback, if win is the current one.
+            local function leave(win, fallback)
+              if win == vim.api.nvim_get_current_win() then
+                local to = M.home()
+                quietly(function()
+                  vim.api.nvim_set_current_win(to)
+                  if vim.api.nvim_buf_is_valid(fallback) then
+                    vim.api.nvim_win_set_buf(to, fallback)
+                  end
+                end)
+              end
+            end
+
+            function M.close(win, fallback)
+              if vim.api.nvim_win_is_valid(win) and win ~= home then
+                leave(win, fallback)
+                quietly(vim.api.nvim_win_close, win, true)
+              end
+              return M.home()
+            end
+
+            function M.release(buf, fallback)
+              local closed = {}
+              for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+                if win == home then
+                  set_buf(win, fallback)
+                else
+                  leave(win, fallback)
+                  quietly(vim.api.nvim_win_close, win, true)
+                  closed[#closed + 1] = win
+                end
+              end
+              return closed
+            end
+
+            vim.api.nvim_create_autocmd('WinClosed', {
+              group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true }),
+              callback = function(ev)
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_window_closed', tonumber(ev.match))
+              end,
+            })
+            package.loaded['neovim4eclipse.windows'] = M
+            return home
+            """;
+
+    /**
+     * Opens the window of an editor (arguments: the buffer number, and the folder for {@code :lcd},
+     * "" to keep the one it copies) in a new tabpage, without entering it, and returns its id. Its
+     * jump history starts empty. See {@link #WINDOWS}.
+     */
+    static final String OPEN_WINDOW = """
+            local buf, folder = tonumber((select(1, ...))), (select(2, ...))
+            return require('neovim4eclipse.windows').open(buf, folder)
+            """;
+
+    /**
+     * Makes a window the current one, showing a buffer (arguments: the window id, -1 for the home
+     * window, and the buffer number), and returns the id of the window shown, or -1 without doing
+     * anything when that window was closed in Neovim (Eclipse then opens a new one). Example: {@code ("1001", "3")} enters editor B's
+     * window, which shows buffer 3 already; Neovim fires {@code BufEnter} for buffer 3 there, which
+     * Eclipse recognizes as its own switch. See {@link #WINDOWS}.
+     */
+    static final String SHOW_WINDOW = """
+            local win, buf = tonumber((select(1, ...))), tonumber((select(2, ...)))
+            return require('neovim4eclipse.windows').show(win, buf)
+            """;
+
+    /**
+     * The Neovim half of a window travelling on {@code Ctrl-O} (arguments: the other editor's
+     * window, the buffer left behind, its 1-based line and 0-based byte column): the other editor's
+     * window, which is not the current one, is quietly given the buffer the jump left and its cursor.
+     * {@code EditorWindows.swap} then gives each editor the other's window. See {@link #WINDOWS}.
+     */
+    static final String TRAVEL_WINDOW = """
+            local win, buf = tonumber((select(1, ...))), tonumber((select(2, ...)))
+            local line, col = tonumber((select(3, ...))), tonumber((select(4, ...)))
+            require('neovim4eclipse.windows').travel(win, buf, line, col)
+            """;
+
+    /**
+     * Closes an editor's window and its tab quietly (arguments: the window id, and the buffer the
+     * home window shows if the closed window was the current one), and returns the home window's
+     * id (it may have been opened again). See {@link #WINDOWS}.
+     */
+    static final String CLOSE_WINDOW = """
+            local win, fallback = tonumber((select(1, ...))), tonumber((select(2, ...)))
+            return require('neovim4eclipse.windows').close(win, fallback)
+            """;
+
+    /**
+     * Before a document's buffer is wiped (arguments: its number, and the buffer shown instead):
+     * closes the editor windows that show it, quietly, and returns their ids; the home window shows
+     * the other buffer instead. Wiping a buffer shown in a window would make Neovim close that window
+     * or put some other buffer in it, by itself. See {@link #WINDOWS}.
+     */
+    static final String RELEASE_BUFFER = """
+            local buf, fallback = tonumber((select(1, ...))), tonumber((select(2, ...)))
+            return require('neovim4eclipse.windows').release(buf, fallback)
             """;
 
     /**
@@ -1041,13 +1272,13 @@ final class LuaScripts {
      * <p><b>Changes made in Neovim reach Eclipse</b> by notification, on the plug-in's channel
      * ({@code g:neovim4eclipse_channel}):
      * <ul>
-     *   <li>{@code eclipse_wrap(buf, on)}: {@code :set wrap} or {@code :set nowrap}, which Eclipse
+     *   <li>{@code eclipse_wrap(buf, on, win)}: {@code :set wrap} or {@code :set nowrap}, which Eclipse
      *       turns into the editor's word wrap. An option the plug-in set itself is not reported back
      *       (the {@code applying} flag), as {@code CaretSync} ignores its own caret moves.</li>
      *   <li>{@code eclipse_viewport()}: an option that changes the overhead changed
      *       ({@code :set number}, {@code laststatus}, ...); the session measures it again and resizes.
      *       Sent once per batch (scheduled), so {@code :set nu rnu} resizes once.</li>
-     *   <li>{@code eclipse_topline(buf, line)}: the current window scrolled without the cursor moving
+     *   <li>{@code eclipse_topline(buf, line, win)}: the current window scrolled without the cursor moving
      *       ({@code Ctrl-E}, {@code zt}, a resize); the editor scrolls to {@code line}. A scroll that
      *       moves the cursor ({@code 50G}, {@code j} at the bottom) is reported again here, after
      *       {@code eclipse_cursor} already carried the same top line; the second changes nothing.
@@ -1135,7 +1366,7 @@ final class LuaScripts {
                 applying = true
                 pcall(apply_break, win, on)
                 applying = false
-                notify('eclipse_wrap', vim.api.nvim_get_current_buf(), on)
+                notify('eclipse_wrap', vim.api.nvim_get_current_buf(), on, win)
               end,
             })
             vim.api.nvim_create_autocmd('OptionSet', {
@@ -1243,7 +1474,7 @@ final class LuaScripts {
                 if vim.v.event[tostring(win)] == nil then
                   return -- another window (a split, a float) scrolled
                 end
-                notify('eclipse_topline', vim.api.nvim_get_current_buf(), vim.fn.line('w0', win))
+                notify('eclipse_topline', vim.api.nvim_get_current_buf(), vim.fn.line('w0', win), win)
               end,
             })
             package.loaded['neovim4eclipse.viewport'] = M

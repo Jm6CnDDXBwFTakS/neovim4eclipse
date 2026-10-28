@@ -172,6 +172,22 @@ flicking through all of them. A switch to any other
 buffer is undone (`returnToAttachedBufferAsync`). When a document's last editor closes, its buffer
 is wiped (`closeBufferAsync`).
 
+**A window per editor (being built, docs/design/WINDOWS.md).** The core can give each editor its
+own Neovim window, alone in a hidden tabpage (`'showtabline'` 0), so that it keeps its own cursor,
+scroll position, folds and jump history between editor switches, and two editors on one file have a
+cursor each. The editor holds a `core/EditorWindow` token as it holds a `DocumentBuffer`;
+`NeovimSession.showWindow(buffer, window, folder)` opens the window at first use
+(`nvim_open_tabpage` without entering it, its jump history cleared, `:lcd` to the folder once) and
+enters it afterwards; `closeWindowAsync` closes it, and `travelWindow` swaps two editors' windows for
+`Ctrl-O` across files. `core/EditorWindows` is the bookkeeping (which token holds which window id),
+`DocumentBuffers` the Neovim side, through the Lua module `LuaScripts.WINDOWS`, which does to windows
+that are not current what it does with autocommands off. Cursor reports, `BufEnter`, `WinScrolled`,
+the wrap `OptionSet` and the state snapshot carry the window id, and only the attached window's count
+(`DocumentBuffers.isAttached(winid, bufnr)`). Without a token (`showBuffer`) a document is shown in
+the *home window*, the one Neovim starts with, as all editors still are until the editor glue is
+built (WINDOWS.md, phase 2). A window closed in Neovim by itself sends `eclipse_window_closed`
+(`WinClosed`) and is opened again at its editor's next show.
+
 ### 7. Eclipse is Neovim's clipboard provider
 
 Neovim reads and writes the system clipboard only through a *provider*, the `copy` and `paste`
@@ -643,6 +659,7 @@ reason is gone.
 | Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
 | Re-sync and who types the insert, after each key | `util/ModeTransition` | `ModeTransitionTest` |
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
+| A window per editor: which token holds which window, the travel swap | `core/EditorWindows`, `core/EditorWindow`; Neovim side `core/DocumentBuffers`, `LuaScripts.WINDOWS` | `EditorWindowsTest`, `windows_spec.lua`, `NeovimWindowsIntegrationTest` (needs nvim) |
 | Status bar parts, messages and output, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
 | Message events from `redraw`; where each message goes | `util/MessageEvent`, `util/MessageRoute` | `MessageEventTest`, `MessageRouteTest`, `NeovimSessionIntegrationTest` (needs nvim) |
 | Messages and errors in the editor, error flash | `editor/MessageLine` (colors: `util/OverlayColors`) | `tests/swt` `MessageLineTest`, `OverlayColorsTest`, UI `MessageLineEndToEndTest` |

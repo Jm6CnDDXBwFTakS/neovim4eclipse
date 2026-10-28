@@ -173,6 +173,16 @@ class StateSnapshotTest {
         assertEquals(NotificationBridge.UNKNOWN_BUFFER, StateSnapshot.buffer("garbage"));
     }
 
+    @Test
+    void snapshotWindowIsTheLastElement() {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(StateSnapshot.WINID, (Object) ""));
+        raw.add(1001);
+        assertEquals(1001, StateSnapshot.window(raw));
+        assertEquals(EditorWindow.UNKNOWN, StateSnapshot.window(raw.subList(0, StateSnapshot.WINID)),
+                "an answer without it: from any window");
+        assertEquals(EditorWindow.UNKNOWN, StateSnapshot.window("garbage"));
+    }
+
     // ---- folds ----
 
     private static List<Object> withFolds(Object folds) {

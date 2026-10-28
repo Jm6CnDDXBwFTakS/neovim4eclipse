@@ -74,10 +74,10 @@ t.test('what Eclipse sets is not sent back; a :set wrap typed in Neovim is', fun
   wrap(false)
   t.eq({}, t.sent('eclipse_wrap'), 'no echo')
   t.type(':set wrap<CR>')
-  t.eq({ { vim.api.nvim_get_current_buf(), true } }, t.sent('eclipse_wrap'))
+  t.eq({ { vim.api.nvim_get_current_buf(), true, vim.api.nvim_get_current_win() } }, t.sent('eclipse_wrap'))
   t.eq(true, wo('linebreak'), 'wrap from Neovim breaks at words too')
   t.type(':set nowrap<CR>')
-  t.eq({ vim.api.nvim_get_current_buf(), false }, t.sent('eclipse_wrap')[2])
+  t.eq({ vim.api.nvim_get_current_buf(), false, vim.api.nvim_get_current_win() }, t.sent('eclipse_wrap')[2])
 end)
 
 t.test("'nolinebreak' while wrap is on is set back, with a message only the first time", function()

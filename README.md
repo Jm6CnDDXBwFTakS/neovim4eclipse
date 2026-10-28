@@ -680,6 +680,11 @@ narrowly as it can, and it is listed here.
   `neovim4eclipse`, which holds Eclipse's problems, is set to draw nothing; your other namespaces
   keep their display settings.
 
+- **`'showtabline'` 0.** The plug-in keeps editors' Neovim windows each in a tabpage of its own,
+  hidden; a tab line would list them and take a row from the editor (with Neovim's default, 1, as
+  soon as there are two). It is set once at start-up, after your config; a `:set showtabline=2`
+  later shows the tab line again, for as long as you want it.
+
 - **`'shortmess'` `F`, while Eclipse switches editors.** When another editor becomes active, the
   plug-in makes Neovim enter that file's buffer with `F` added to `'shortmess'`, and puts your value
   back right after. Without `F` (common in configs carried over from Vim), Neovim would show its

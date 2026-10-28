@@ -14,6 +14,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- Neovim's `'showtabline'` is 0, set after your config: each editor is getting a Neovim window
+  of its own, in a hidden tabpage, and a tab line would take a row from the editor. See the README,
+  "Neovim settings the plug-in changes".
 - Neovim's window is now the size of the editor's text area, so `H`, `M`, `L` and `Ctrl-D` work on
   the lines the editor shows (before, on a fixed screen of 40 lines nobody saw). Resizing the
   window, the part or the font resizes it too. `vim.g.neovim4eclipse_viewport = 0` in `init.lua`

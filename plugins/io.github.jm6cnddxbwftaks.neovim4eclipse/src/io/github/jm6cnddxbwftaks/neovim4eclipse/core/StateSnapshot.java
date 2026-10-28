@@ -35,6 +35,8 @@ final class StateSnapshot {
     static final int MODE = 11;
     /** The outermost closed folds' indexes, when folding is on; see {@link #closedFolds}. */
     static final int FOLDS = 12;
+    /** The current window's id, to tell the attached editor's window from another (docs/design/WINDOWS.md). */
+    static final int WINID = 13;
 
     private StateSnapshot() {
     }
@@ -98,6 +100,14 @@ final class StateSnapshot {
             return toInt(list.get(BUFNR), NotificationBridge.UNKNOWN_BUFFER);
         }
         return NotificationBridge.UNKNOWN_BUFFER;
+    }
+
+    /** The current window's id, or {@link EditorWindow#UNKNOWN}. */
+    static int window(Object raw) {
+        if (raw instanceof List<?> list && list.size() > WINID) {
+            return toInt(list.get(WINID), EditorWindow.UNKNOWN);
+        }
+        return EditorWindow.UNKNOWN;
     }
 
     /** The cursor, or {@code null} if the payload is not understood. */
