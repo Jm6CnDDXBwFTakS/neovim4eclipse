@@ -185,8 +185,8 @@ final class DocumentBuffers {
      *
      * @param window the editor's window, or {@code null} for the home window
      * @param folder the folder for {@code :lcd} when the window is opened ({@link LuaScripts#OPEN_WINDOW}),
-     *               normally the editor's project; "" keeps the folder the new window copies from
-     *               the current one
+     *               normally the editor's project; {@code null} or "" for a document with no folder
+     *               of its own (an untitled one): see {@link #folderOfNewWindow}
      */
     void show(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         Handle target = owns(buffer) ? created.get(buffer.bufnr) : null;
@@ -220,13 +220,28 @@ final class DocumentBuffers {
             return window.winid;
         }
         Object answer = await(api.execLua(LuaScripts.OPEN_WINDOW,
-                List.of(String.valueOf(bufnr(buffer)), folder == null ? "" : folder)));
+                List.of(String.valueOf(bufnr(buffer)), folderOfNewWindow(folder))));
         if (!(answer instanceof Number id)) {
             throw new IllegalStateException("Unexpected answer opening a window: " + answer);
         }
         windows.add(window, id.intValue());
         LOG.fine(() -> "Opened window " + id + " on buffer " + bufnr(buffer));
         return id.intValue();
+    }
+
+    /**
+     * The folder a new window is given (docs/design/WINDOWS.md, "Working folder per window"):
+     * {@code folder} when there is one; else "" (keep the folder it copies, as a Vim window inherits
+     * it) when the current window is another editor's, the editor attached just before; else, with
+     * no editor before it, the user's home folder. Example: working in {@code app/src/Main.java},
+     * open an untitled document: {@code :pwd} there shows {@code app}, and {@code :w notes.txt}
+     * writes {@code app/notes.txt}.
+     */
+    private String folderOfNewWindow(String folder) {
+        if (folder != null && !folder.isEmpty()) {
+            return folder;
+        }
+        return windows.of(attachedWin) != null ? "" : System.getProperty("user.home", "");
     }
 
     /**
@@ -281,7 +296,9 @@ final class DocumentBuffers {
      * and the two tokens swap windows ({@link EditorWindows#swap}). Example: editor A (window 1001,
      * a.txt) runs {@code :b b.txt}; editor B holds 1002 on b.txt. After the travel B holds 1001, which
      * shows b.txt and keeps the whole jump history, and A holds 1002, now on a.txt at A's cursor.
-     * Eclipse then activates B's editor, whose show finds its window current already.
+     * Eclipse then activates B's editor, whose show finds its window current already. When
+     * {@code other} has no window yet (B was never attached in this session), it simply takes
+     * {@code mover}'s, and {@code mover} gets a new one at its next show.
      *
      * @param line1 the 1-based line of {@code mover}'s cursor in {@code leftBehind} before the jump
      * @param col0  its 0-based byte column
@@ -289,9 +306,12 @@ final class DocumentBuffers {
     void travel(EditorWindow mover, EditorWindow other, DocumentBuffer leftBehind, int line1, int col0)
             throws Exception {
         Handle back = handleOf(leftBehind);
-        if (!windows.owns(mover) || !windows.owns(other) || back == null) {
-            throw new IllegalStateException("travel needs two open windows and an open buffer: "
-                    + mover + ", " + other + ", " + leftBehind.name);
+        if (!windows.owns(mover) || back == null) {
+            throw new IllegalStateException("travel needs an open window and buffer: " + mover + ", " + leftBehind.name);
+        }
+        if (!windows.owns(other)) {
+            windows.transfer(mover, other);
+            return;
         }
         await(api.execLua(LuaScripts.TRAVEL_WINDOW, List.of(String.valueOf(other.winid),
                 String.valueOf(bufnr(back)), String.valueOf(line1), String.valueOf(col0))));

@@ -523,8 +523,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * @param window the editor's window token; {@code null} shows the buffer in the home window,
      *               as {@link #showBuffer} does
      * @param folder the window's folder ({@code :lcd}), set once when it is opened: normally the
-     *               editor's project; "" keeps the folder of the window current before, as a Vim
-     *               window inherits it. Ignored when {@code 'autochdir'} is set.
+     *               editor's project; {@code null} or "" (an untitled document) takes the folder of
+     *               the editor attached before, as a Vim window inherits it, or the home folder if
+     *               none was. Ignored when {@code 'autochdir'} is set.
      */
     public void showWindow(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         buffers.show(buffer, window, folder);
@@ -550,6 +551,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // other buffer, were not taken (DocumentBuffers.isAttached).
         CursorPos cursor = state.lastCursor();
         buffers.travel(mover, other, leftBehind, cursor.line1Based(), cursor.col0Based());
+    }
+
+    /**
+     * {@link #travelWindow}, queued on the input thread, so that the attach that follows (its push
+     * shows {@code other}'s editor) runs after it. UI thread.
+     */
+    public void travelWindowAsync(EditorWindow mover, EditorWindow other, DocumentBuffer leftBehind) {
+        submit("window travel", Level.WARNING, () -> travelWindow(mover, other, leftBehind));
     }
 
     /** The id of the window showing the attached buffer (an editor's own, or the home window). */

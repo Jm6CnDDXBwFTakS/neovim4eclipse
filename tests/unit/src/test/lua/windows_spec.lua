@@ -89,6 +89,24 @@ t.test("the folder is set once with :lcd; without one the window keeps the folde
   t.eq(cwd(0), cwd(without), "the current window's :lcd, copied as Vim copies it")
 end)
 
+t.test('a folder that does not exist yet is skipped: the window opens with the copied one', function()
+  start()
+  local win = open(buffer(1), vim.fn.tempname() .. '/missing')
+  t.eq(cwd(0), cwd(win))
+end)
+
+t.test("putting a buffer in a window quietly gives no file info, even without 'shortmess' F", function()
+  start()
+  vim.o.shortmess = vim.o.shortmess:gsub('F', '')
+  local a, b = vim.fn.bufadd(vim.fn.tempname() .. '/a.txt'), buffer(3)
+  vim.fn.bufload(a)
+  local other = open(b)
+  vim.cmd('messages clear')
+  t.run('TRAVEL_WINDOW', tostring(other), tostring(a), '1', '0')
+  t.eq('', vim.trim(vim.api.nvim_exec2('messages', { output = true }).output))
+  t.ok(not vim.o.shortmess:find('F', 1, true), "the user's 'shortmess' is back")
+end)
+
 t.test("with 'autochdir' the plug-in leaves the folder to Neovim", function()
   start()
   vim.o.autochdir = true

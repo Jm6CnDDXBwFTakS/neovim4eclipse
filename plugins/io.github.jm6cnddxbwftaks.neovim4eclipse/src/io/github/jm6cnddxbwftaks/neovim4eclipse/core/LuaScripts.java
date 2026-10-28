@@ -562,12 +562,18 @@ final class LuaScripts {
             local home = vim.api.nvim_get_current_win()
             vim.o.showtabline = 0
 
-            --- Runs fn(...) with every autocommand off ('eventignore' all), and returns its result.
+            --- Runs fn(...) with every autocommand off ('eventignore' all) and without Neovim's file
+            --- info message ('shortmess' F: putting a buffer in a window gives one, as :b does, and
+            --- two messages in a row would open Eclipse's output popup), and returns its result.
             local function quietly(fn, ...)
-              local saved = vim.o.eventignore
+              local saved, saved_shm = vim.o.eventignore, vim.o.shortmess
               vim.o.eventignore = 'all'
+              if not saved_shm:find('F', 1, true) then
+                vim.o.shortmess = saved_shm .. 'F'
+              end
               local ok, result = pcall(fn, ...)
               vim.o.eventignore = saved
+              vim.o.shortmess = saved_shm
               if not ok then
                 error(result, 0)
               end
@@ -622,8 +628,10 @@ final class LuaScripts {
                 -- one, the window keeps the folder it copied from the current window (the editor
                 -- attached before, as a Vim window inherits it). With 'autochdir', Neovim moves to
                 -- the file's folder on entering the window anyway (checked on 0.12.6).
-                if folder ~= nil and folder ~= '' and not vim.o.autochdir then
-                  vim.cmd.lcd({ args = { folder }, mods = { silent = true } })
+                -- A folder that does not exist (yet: a new file in a missing folder, written with
+                -- :w ++p) is skipped, keeping the copied one.
+                if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
+                  pcall(vim.cmd.lcd, { args = { folder }, mods = { silent = true } })
                 end
               end)
               return win

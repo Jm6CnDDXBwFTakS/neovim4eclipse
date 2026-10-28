@@ -172,10 +172,11 @@ flicking through all of them. A switch to any other
 buffer is undone (`returnToAttachedBufferAsync`). When a document's last editor closes, its buffer
 is wiped (`closeBufferAsync`).
 
-**A window per editor (being built, docs/design/WINDOWS.md).** The core can give each editor its
+**A window per editor (docs/design/WINDOWS.md).** Each editor has its
 own Neovim window, alone in a hidden tabpage (`'showtabline'` 0), so that it keeps its own cursor,
 scroll position, folds and jump history between editor switches, and two editors on one file have a
-cursor each. The editor holds a `core/EditorWindow` token as it holds a `DocumentBuffer`;
+cursor each. `EditorAttachManager` keeps a `core/EditorWindow` token per editor part, as it keeps a
+`DocumentBuffer` per document, and the attach push (`DocumentPush`) shows it;
 `NeovimSession.showWindow(buffer, window, folder)` opens the window at first use
 (`nvim_open_tabpage` without entering it, its jump history cleared, `:lcd` to the folder once) and
 enters it afterwards; `closeWindowAsync` closes it, and `travelWindow` swaps two editors' windows for
@@ -183,10 +184,16 @@ enters it afterwards; `closeWindowAsync` closes it, and `travelWindow` swaps two
 `DocumentBuffers` the Neovim side, through the Lua module `LuaScripts.WINDOWS`, which does to windows
 that are not current what it does with autocommands off. Cursor reports, `BufEnter`, `WinScrolled`,
 the wrap `OptionSet` and the state snapshot carry the window id, and only the attached window's count
-(`DocumentBuffers.isAttached(winid, bufnr)`). Without a token (`showBuffer`) a document is shown in
-the *home window*, the one Neovim starts with, as all editors still are until the editor glue is
-built (WINDOWS.md, phase 2). A window closed in Neovim by itself sends `eclipse_window_closed`
-(`WinClosed`) and is opened again at its editor's next show.
+(`DocumentBuffers.isAttached(winid, bufnr)`). When Neovim jumps into another open document,
+`EditorAttachManager.followNeovimInto` queues the travel (`travelWindowAsync`) before attaching
+that document's editor: the editors swap windows, and the editor jumped into, if it had none yet,
+takes the window. The folder (`EclipseFileCommands.windowFolder`, the project root) is set when
+the window opens, not on every attach; an untitled document's window keeps the folder it copies
+from the editor attached before, or gets the home folder. Without a token (`showBuffer`) a
+document is shown in the *home window*, the one Neovim starts with, which only tests use now. A
+window closed in Neovim by itself sends `eclipse_window_closed` (`WinClosed`) and is opened again
+at its editor's next show; closing an editor closes its window (`closeWindowAsync`) before its
+buffer may be wiped.
 
 ### 7. Eclipse is Neovim's clipboard provider
 

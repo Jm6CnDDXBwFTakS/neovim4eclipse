@@ -81,6 +81,18 @@ class EditorWindowsTest {
         assertEquals(2, windows.size());
     }
 
+    /** Ctrl-O into the file of an editor that has no window yet: it takes the mover's. */
+    @Test
+    void anEditorWithoutAWindowTakesTheTravellingOne() {
+        windows.add(a, 1001);
+        windows.transfer(a, b);
+        assertEquals(1001, b.winid());
+        assertSame(b, windows.of(1001));
+        assertFalse(windows.owns(a), "a new window at its next show");
+        assertEquals(1, windows.size());
+        assertThrows(IllegalStateException.class, () -> windows.transfer(a, b), "a has none to give");
+    }
+
     @Test
     void aSwapNeedsTwoOpenWindows() {
         windows.add(a, 1001);

@@ -84,6 +84,19 @@ final class EditorWindows {
         byWinid.put(bWin, a);
     }
 
+    /**
+     * Gives {@code from}'s window to {@code to}, which has none: the travel when the editor jumped
+     * into had no window yet. {@code from} has none afterwards.
+     */
+    void transfer(EditorWindow from, EditorWindow to) {
+        if (!owns(from) || owns(to)) {
+            throw new IllegalStateException("transfer needs an open window and a token without one: " + from + ", " + to);
+        }
+        int win = from.winid;
+        clear(from);
+        add(to, win);
+    }
+
     /** How many editor windows are open (the home window is not counted). */
     int size() {
         return byWinid.size();

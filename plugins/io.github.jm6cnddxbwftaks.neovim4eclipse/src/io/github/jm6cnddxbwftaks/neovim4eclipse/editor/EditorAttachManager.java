@@ -43,6 +43,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorBuffers;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
@@ -82,7 +83,7 @@ public final class EditorAttachManager {
     /** How long Neovim waits for Eclipse to save a document whose buffer it writes; see {@link #saveForNeovim}. */
     static final long SAVE_TIMEOUT_MS = 30_000;
 
-    /** Guarded by {@code this}. At most one editor is attached at a time (Neovim has one window). */
+    /** Guarded by {@code this}. At most one editor is attached at a time (Neovim has one current window). */
     private NeovimEditorController activeController;
     /** Guarded by {@code this}. The workbench part attached to: the text editor or its multi-page host. */
     private IEditorPart attachedPart;
@@ -91,6 +92,12 @@ public final class EditorAttachManager {
             Collections.newSetFromMap(new WeakHashMap<>());
     /** Guarded by {@code this}. The Neovim buffer of every document opened while attached, with its editors. */
     private final EditorBuffers<IDocument, IEditorPart> documents = new EditorBuffers<>();
+    /**
+     * Guarded by {@code this}. Each editor's Neovim window (docs/design/WINDOWS.md), by the part
+     * attached to (the text editor or its multi-page host), from its first attach until it closes.
+     * The token outlives a Restart Neovim: the new session opens a new window at the next attach.
+     */
+    private final Map<IEditorPart, EditorWindow> windows = new HashMap<>();
     /** Guarded by {@code this}. The session whose buffer switches are followed. */
     private NeovimSession followedSession;
     /**
@@ -392,7 +399,8 @@ public final class EditorAttachManager {
         });
         sync.setAttached(true); // before the controller's synchronizer takes over
         attachedBuffer = buffer;
-        activeController = NeovimEditorController.attach(textEditor, session, buffer, takeNeovimCursor);
+        EditorWindow window = windows.computeIfAbsent(editor, part -> new EditorWindow());
+        activeController = NeovimEditorController.attach(textEditor, session, buffer, window, takeNeovimCursor);
         attachedPart = editor;
         // After the controller: its attach queued the buffer's creation and first load, and the
         // problems sent now are queued behind them, so they land on the document's text.
@@ -444,7 +452,11 @@ public final class EditorAttachManager {
     private void followNeovimInto(int bufnr) {
         NeovimSession session;
         Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
+        EditorWindow mover;
+        DocumentBuffer leftBehind;
         synchronized (this) {
+            mover = attachedPart == null ? null : windows.get(attachedPart);
+            leftBehind = attachedBuffer;
             session = followedSession;
             if (session == null) {
                 return;
@@ -468,6 +480,7 @@ public final class EditorAttachManager {
                 ITextEditor textEditor = textEditorOf(target);
                 // A multi-page editor may open on a form page: no text editor to follow into.
                 if (textEditor != null && documentOf(textEditor) == showing.get().document()) {
+                    travel(session, mover, target, leftBehind);
                     NeovimEditorController followed = attach(target, false, true);
                     if (followed != null) {
                         // The message of the command that moved Neovim here (:b's file info) may have
@@ -482,6 +495,27 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not follow Neovim into buffer " + bufnr, e);
         }
         session.returnToAttachedBufferAsync();
+    }
+
+    /**
+     * The window that jumped into {@code target}'s document travels to {@code target}
+     * (docs/design/WINDOWS.md, E2, "window travels"): the two editors swap Neovim windows, so the
+     * jump history stays one chain, as it was with one window, and {@code Ctrl-O} in {@code target}
+     * goes back to the file it came from (which travels back the same way). Queued on the input
+     * thread before the attach's push, which then finds {@code target}'s window current already.
+     * Nothing when the attached editor had no window ({@code mover} {@code null}) or is
+     * {@code target} itself. UI thread.
+     *
+     * @param leftBehind the document the jump left, which {@code target}'s old window now shows
+     */
+    private void travel(NeovimSession session, EditorWindow mover, IEditorPart target, DocumentBuffer leftBehind) {
+        EditorWindow other;
+        synchronized (this) {
+            other = windows.computeIfAbsent(target, part -> new EditorWindow());
+        }
+        if (mover != null && mover != other && leftBehind != null) {
+            session.travelWindowAsync(mover, other, leftBehind);
+        }
     }
 
     /**
@@ -724,13 +758,18 @@ public final class EditorAttachManager {
         }
     }
 
-    /** Forgets {@code part}; the buffer of a document whose last editor closed is wiped in Neovim. */
+    /**
+     * Forgets {@code part}: its Neovim window and tabpage are closed, and the buffer of a document
+     * whose last editor closed is wiped in Neovim.
+     */
     private void releaseDocumentsOf(IEditorPart part) {
         part.removePropertyListener(dirtyListener);
         List<DocumentBuffer> unused;
         NeovimSession session;
+        EditorWindow window;
         synchronized (this) {
             session = followedSession;
+            window = windows.remove(part);
             unused = documents.remove(part);
             for (DocumentBuffer buffer : unused) {
                 UnattachedDocumentSync sync = unattachedSyncs.remove(buffer);
@@ -741,6 +780,9 @@ public final class EditorAttachManager {
             }
         }
         if (session != null && session.isAlive()) {
+            if (window != null) {
+                session.closeWindowAsync(window); // first: the buffer is wiped from no window then
+            }
             unused.forEach(session::closeBufferAsync);
         }
     }

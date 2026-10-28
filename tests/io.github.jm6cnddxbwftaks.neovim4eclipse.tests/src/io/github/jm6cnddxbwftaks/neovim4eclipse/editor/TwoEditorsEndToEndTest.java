@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 import org.eclipse.core.resources.IFile;
@@ -19,7 +20,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
  * Two editors on one file (Window › New Editor) share one Neovim buffer ({@code core/EditorBuffers}),
- * and the buffer goes with the last of them.
+ * and the buffer goes with the last of them; each has its own Neovim window (docs/design/WINDOWS.md).
  */
 class TwoEditorsEndToEndTest extends EndToEndTestBase {
 
@@ -38,6 +39,35 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
         Object count = SessionProbe.lua(session, "return #vim.tbl_filter(function(b) "
                 + "return vim.api.nvim_buf_get_name(b):match('test%.txt$') ~= nil end, vim.api.nvim_list_bufs())");
         return ((Number) count).intValue();
+    }
+
+    private int currentWindow() {
+        return ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
+    }
+
+    /**
+     * Each editor has a Neovim window of its own: a window-local option set in one ({@code :setlocal
+     * list}) is not set in the other, and is still set when the editor comes back.
+     */
+    @Test
+    void eachEditorOnOneFileHasItsOwnNeovimWindow() throws Exception {
+        ITextEditor second = openSecondEditor();
+        settle();
+        int secondWindow = currentWindow();
+        SessionProbe.lua(session, "vim.wo.list = true");
+
+        page().activate(editor);
+        waitForAttach(editor, "the first editor");
+        settle();
+        assertNotEquals(secondWindow, currentWindow(), "another window");
+        assertEquals(false, SessionProbe.lua(session, "return vim.wo.list"));
+
+        page().activate(second);
+        waitForAttach(second, "the second editor");
+        settle();
+        assertEquals(secondWindow, currentWindow());
+        assertEquals(true, SessionProbe.lua(session, "return vim.wo.list"), "kept in its window");
+        page().closeEditor(second, false);
     }
 
     /** {@code dd} in one editor, {@code u} in the other: the line comes back, one undo history. */

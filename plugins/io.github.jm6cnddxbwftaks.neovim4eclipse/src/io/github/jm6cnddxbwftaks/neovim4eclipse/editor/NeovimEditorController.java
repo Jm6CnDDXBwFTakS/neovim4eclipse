@@ -33,6 +33,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPos;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FoldState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
@@ -144,7 +145,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private volatile String loggedMode;
 
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
-            DocumentBuffer buffer, boolean takeNeovimCursor) {
+            DocumentBuffer buffer, EditorWindow window, boolean takeNeovimCursor) {
         this.editor = editor;
         this.session = session;
         this.styledText = styledText;
@@ -167,7 +168,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
-        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer, caretSync);
+        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer, window, windowFolder(editor)),
+                synchronizer, caretSync);
         // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are
         // echoes; and while Esc is handled they are of a cursor about to move (KeyInput.leavingInsert).
         this.caretSync.dropNeovimCursorWhile(() -> eclipseTyping() || session.isLeavingInsertMode());
@@ -251,7 +253,6 @@ public final class NeovimEditorController implements AutoCloseable {
         int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offsets.caretModelOffset());
 
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
-        setWindowFolder();
         if (viewport != null) {
             viewport.start(); // after the push: the wrap is for this editor's buffer
         }
@@ -450,17 +451,18 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Neovim's window works in this editor's project ({@code :lcd}): {@code :e} completion,
-     * {@code :!} and {@code :find} start at the project's root, or at the file's folder for a file
-     * outside any project (decision D5 of the cleanup plan). {@code :w}, {@code :wq} and {@code :x}
-     * names are relative to it, as in Neovim; {@code :e} still looks beside the file first
-     * ({@code EclipseFileCommands.editFolders}).
+     * The folder this editor's Neovim window works in ({@code :lcd}), set once when the window is
+     * opened (docs/design/WINDOWS.md, "Working folder per window"), so that a {@code :lcd} the user
+     * types stays with the editor: {@code :e} completion, {@code :!} and {@code :find} start at the
+     * project's root, or at the file's folder for a file outside any project (decision D5 of the
+     * cleanup plan). {@code :w}, {@code :wq} and {@code :x} names are relative to it, as in Neovim;
+     * {@code :e} still looks beside the file first ({@code EclipseFileCommands.editFolders}).
+     * {@code null} for an untitled document: its window takes the folder of the editor attached
+     * before it, or the home folder ({@link NeovimSession#showWindow}).
      */
-    private void setWindowFolder() {
+    private static String windowFolder(ITextEditor editor) {
         Path folder = EclipseFileCommands.windowFolder(editor);
-        if (folder != null) {
-            session.setWindowFolderAsync(folder.toString());
-        }
+        return folder == null ? null : folder.toString();
     }
 
     /** The editor's current document (looked up each time; may be {@code null}). */
@@ -488,7 +490,7 @@ public final class NeovimEditorController implements AutoCloseable {
      *                         Neovim's cursor instead of Neovim's cursor following the caret
      */
     public static NeovimEditorController attach(IEditorPart part, NeovimSession session, DocumentBuffer buffer,
-            boolean takeNeovimCursor) throws Exception {
+            EditorWindow window, boolean takeNeovimCursor) throws Exception {
         if (!(part instanceof ITextEditor textEditor)) {
             throw new IllegalArgumentException("Active part is not an ITextEditor");
         }
@@ -510,7 +512,7 @@ public final class NeovimEditorController implements AutoCloseable {
         if (documentOf(textEditor) == null) {
             throw new IllegalStateException("Editor has no IDocument");
         }
-        return new NeovimEditorController(textEditor, session, widget, buffer, takeNeovimCursor);
+        return new NeovimEditorController(textEditor, session, widget, buffer, window, takeNeovimCursor);
     }
 
     public ITextEditor getEditor() {
@@ -876,8 +878,13 @@ public final class NeovimEditorController implements AutoCloseable {
         }
     }
 
-    /** {@link DocumentPush.Neovim} on the session, for this editor's buffer. */
-    private record SessionPushTarget(NeovimSession session, DocumentBuffer buffer) implements DocumentPush.Neovim {
+    /**
+     * {@link DocumentPush.Neovim} on the session, for this editor's buffer in its own window.
+     *
+     * @param folder the window's folder, or {@code null} (see {@link #windowFolder})
+     */
+    private record SessionPushTarget(NeovimSession session, DocumentBuffer buffer, EditorWindow window,
+            String folder) implements DocumentPush.Neovim {
         @Override
         public void queue(Runnable work) {
             session.runAttachSetup(work);
@@ -885,7 +892,7 @@ public final class NeovimEditorController implements AutoCloseable {
 
         @Override
         public void showDocumentBuffer() throws Exception {
-            session.showBuffer(buffer);
+            session.showWindow(buffer, window, folder);
         }
 
         @Override
