@@ -4,7 +4,7 @@
 <feature
       id="io.github.jm6cnddxbwftaks.neovim4eclipse.feature"
       label="Neovim for Eclipse"
-      version="0.1.9.qualifier"
+      version="0.1.10.qualifier"
       provider-name="Jm6CnDDXBwFTakS">
 
    <!-- Shown under Help > Install New Software > Details, before the user installs, so it says
