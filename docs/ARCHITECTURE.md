@@ -239,6 +239,13 @@ message line like any message. Design and decisions: [design/DIAGNOSTICS.md](des
 
 ### 9. Neovim's window is the editor's size and scroll position
 
+Each editor has its own Neovim window (section 6, "A window per editor"); "Neovim's window" here is
+the attached editor's, the current one. The UI has one grid, the attached editor's size: only the
+current tab's window is resized at once, and an editor's window becomes current at its attach,
+which sends the size. Its top line, `'wrap'` and saved `'linebreak'` values stay in the window
+between switches; Neovim's top lines are ignored while an attach places Neovim's cursor, so the
+editor does not scroll to the window's remembered view and back.
+
 The plug-in draws nothing of Neovim's screen, but Neovim's screen commands (`H`, `L`, `Ctrl-D`,
 `'scrolloff'`) count its rows, so they must be the editor's. `editor/ViewportFollower` measures the
 attached editor's text area in cells (width over the font's average character width, height over

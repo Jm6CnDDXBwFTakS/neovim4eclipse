@@ -484,6 +484,32 @@ reply to `nvim_buf_set_lines`, the session drops the events that arrive while it
 Neovim has no notion of a final newline: a buffer is a list of lines. `util/LineTextUtil` explains how
 the plug-in keeps an Eclipse file's final newline.
 
+### 2.7a Windows and tabpages
+
+A *buffer* is text; a *window* is a view on one buffer, with its own cursor, scroll position, folds,
+jump history (`Ctrl-O`), location list, window-local options (`:setlocal list`) and folder
+(`:lcd`); a *tabpage* is a layout of windows, and Neovim shows one at a time. Two windows on one
+buffer share its text, undo history and marks. In the API they are handles like buffers:
+`nvim_get_current_win()` (ids start at 1000), `nvim_set_current_win(win)`,
+`nvim_win_set_buf(win, buf)`, `nvim_win_close(win, force)`, and `nvim_open_tabpage(buf, enter, {})`
+for a new tab with one window. `nvim_win_call(win, fn)` runs `fn` as if `win` were current, without
+entering it (and without autocommands), which is how a command such as `:clearjumps` or `:lcd`
+reaches a window that is not current.
+
+The plug-in gives each Eclipse editor a window of its own, alone in a hidden tabpage
+(`'showtabline'` 0), so that the window fills Neovim's screen, which is the editor's size, and keeps
+the editor's view while another editor is active ([design/WINDOWS.md](design/WINDOWS.md)). The
+editor's token is `core/EditorWindow`; the Neovim side is the Lua module `LuaScripts.WINDOWS`. Two
+habits from it are worth copying:
+
+- **Autocommands off for what the user did not do.** Putting a buffer in a window of another tab
+  enters that window for a moment and fires `BufEnter`, which Eclipse would take for a jump. The
+  module sets `'eventignore'` to `all` around it (and adds `F` to `'shortmess'`, against the file
+  info message).
+- **Every report says which window.** `CursorMoved` sends `nvim_get_current_win()` along, and the
+  session keeps only the attached window's: with two editors on one file, the buffer alone cannot
+  tell them apart.
+
 ### 2.8 Positions: bytes, not characters
 
 `nvim_win_get_cursor` returns a 1-based line and a 0-based **byte** column in UTF-8. Eclipse offsets

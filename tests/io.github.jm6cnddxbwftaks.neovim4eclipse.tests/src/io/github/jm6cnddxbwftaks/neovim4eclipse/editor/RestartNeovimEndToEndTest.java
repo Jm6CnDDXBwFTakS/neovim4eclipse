@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
@@ -71,6 +73,34 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
                 () -> "alpha".equals(eval(fresh, "getline(1)")),
                 () -> "; line 1 is " + eval(fresh, "getline(1)"));
         assertEquals("alpha\nbeta\ngamma\n", document.get(), "Eclipse's text is kept");
+    }
+
+    /**
+     * The windows of the old Neovim are gone with it; each editor gets a new one in the new Neovim at
+     * its next attach (docs/design/WINDOWS.md, the lazy rebuild): two editors, two windows, each in
+     * its own tab besides the home tab.
+     */
+    /** Waits until Neovim is attached to {@code target} (not with waitForAttach: it settles the old session). */
+    private static void attachedTo(ITextEditor target, String what) {
+        waitUntil(what, TIMEOUT_MS, () -> {
+            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
+            return c != null && c.getEditor() == target && !c.isClosed();
+        });
+    }
+
+    @Test
+    void afterARestartEachEditorGetsANewWindow() throws Exception {
+        ITextEditor other = openOtherFile();
+        Activator.getDefault().restartNeovim();
+        NeovimSession fresh = Activator.getDefault().currentSession();
+        attachedTo(other, "other.txt in the new Neovim");
+        String otherWindow = eval(fresh, "win_getid()");
+        page().activate(editor);
+        attachedTo(editor, "test.txt in the new Neovim");
+        waitUntil("test.txt's window current", TIMEOUT_MS, () -> !otherWindow.equals(eval(fresh, "win_getid()")));
+        assertNotEquals(otherWindow, eval(fresh, "win_getid()"));
+        assertEquals("3", eval(fresh, "tabpagenr('$')"), "the home tab and one per editor");
+        page().closeEditor(other, false);
     }
 
     /**

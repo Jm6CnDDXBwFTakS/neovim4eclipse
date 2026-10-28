@@ -140,9 +140,10 @@ The 0.1.7 cleanup and later work changed several things this feature builds on:
 | Nested folds: "check `foldclosed(l) == l` when two folds start on one line" | Checked (X3): creating them needs a specific order, and Neovim cannot report an inner fold's state while an outer one is closed. Both are now part of the design (3.1, 3.2). |
 | Neovim 0.12.4 | 0.12.6 is the minimum. Every Neovim result below was rerun with it; none differs from 0.12.4's. |
 
-Planned work that touches this one: one Neovim window per editor (a separate plan, not in the
-repository). Manual folds are kept per buffer in a window (X10), so one window per editor needs
-nothing new from this feature.
+Later work that touches this one: one Neovim window per editor ([WINDOWS.md](WINDOWS.md), built
+for 0.1.10). Manual folds are kept per buffer in a window (X10), so it needed nothing new from this
+feature: an editor's closed folds now stay in its own window between switches, two editors on one
+file have their own, and the send on attach finds them already there.
 
 ## 1. Behavior
 

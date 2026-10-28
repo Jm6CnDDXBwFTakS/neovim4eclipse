@@ -8,6 +8,11 @@ minimum) on Linux (arm64), through a small msgpack client attached with the plug
 was built first (D3) and released in 0.1.9. After the feature is built, add a section *As built*
 after the summary, as [TAB_COMPLETION.md](TAB_COMPLETION.md) does.
 
+Built for one Neovim window; since [WINDOWS.md](WINDOWS.md) (also 0.1.10) each editor has its own,
+and "Neovim's window" below is the attached editor's. The size, scroll and wrap sync are unchanged;
+each window keeps its view between switches, and the editor ignores Neovim's top lines while an
+attach places the cursor (WINDOWS.md, section 4).
+
 ## Summary
 
 The plug-in attaches to Neovim as a UI of a fixed 120 × 40 cells (`NeovimConnection.UI_WIDTH`,
