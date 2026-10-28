@@ -121,18 +121,20 @@ end)
 
 -- ---- the opt-out: vim.g.neovim4eclipse_problems = 0 (LuaScripts.PROBLEMS) ----
 
---- What ]d is mapped to now: its description, and whether its function is Neovim's own default.
+--- What ]d is mapped to now: its description and its function.
 local function bracket_d()
   local m = vim.fn.maparg(']d', 'n', false, true)
-  return m.desc, debug.getinfo(m.callback, 'S').source
+  return m.desc, m.callback
 end
 
 t.test('problems are sent unless the config says 0 or false; on, Neovim\'s keys are untouched', function()
+  local _, neovims = bracket_d()
   t.eq(true, t.run('PROBLEMS'), 'not set')
   vim.g.neovim4eclipse_problems = 1
   t.eq(true, t.run('PROBLEMS'), '1')
-  local _, source = bracket_d()
-  t.eq('@vim/_core/defaults', source, 'still Neovim\'s own ]d')
+  local desc, callback = bracket_d()
+  t.eq(neovims, callback, 'still Neovim\'s own ]d')
+  t.eq('Jump to the next diagnostic in the current buffer', desc)
   vim.g.neovim4eclipse_problems = false
   t.eq(false, t.run('PROBLEMS'), 'false')
 end)
@@ -165,6 +167,14 @@ t.test('off, diagnostics of the user\'s own still work through Neovim\'s ]d, wit
   t.type('2]d')
   t.eq(4, cursor_line(), '2]d: the count reaches Neovim\'s own ]d')
   t.wait_for('the on_jump echo', function() return echoed[#echoed] == 'lint two' end)
+end)
+
+t.test('off, a ]d of the user\'s that copies Neovim\'s description is left alone too', function()
+  local mine = function() end
+  vim.keymap.set('n', ']d', mine, { desc = 'Jump to the next diagnostic in the current buffer' })
+  vim.g.neovim4eclipse_problems = 0
+  t.run('PROBLEMS')
+  t.eq(mine, vim.fn.maparg(']d', 'n', false, true).callback, 'its function names this file, not Neovim\'s runtime')
 end)
 
 t.test('off, a ]d the user mapped is left alone', function()
