@@ -72,4 +72,34 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
                 () -> "; line 1 is " + eval(fresh, "getline(1)"));
         assertEquals("alpha\nbeta\ngamma\n", document.get(), "Eclipse's text is kept");
     }
+
+    /**
+     * The editor does not scroll. The new Neovim's buffer reported its cursor on line 1 before the
+     * cursor was placed at the caret; the caret went there and back, and Eclipse left the caret's
+     * line at the bottom of the editor (DocumentPush, "The caret stays put meanwhile").
+     */
+    @Test
+    void aRestartLeavesTheCaretAndTheScrollPositionAlone() {
+        StringBuilder text = new StringBuilder();
+        for (int i = 1; i <= 300; i++) {
+            text.append("line ").append(i).append('\n');
+        }
+        document.set(text.toString());
+        settle();
+        widget.setCaretOffset(widget.getOffsetAtLine(150));
+        widget.setTopIndex(140);
+        settle();
+        List<Integer> caretLines = new java.util.concurrent.CopyOnWriteArrayList<>();
+        widget.addCaretListener(e -> caretLines.add(widget.getLineAtOffset(e.caretOffset)));
+
+        Activator.getDefault().restartNeovim();
+        NeovimSession fresh = Activator.getDefault().currentSession();
+        waitUntil("the new Neovim's cursor on the caret's line", TIMEOUT_MS,
+                () -> "151".equals(eval(fresh, "line('.')")));
+        UiTestSupport.settle(fresh, TIMEOUT_MS);
+
+        assertEquals(150, widget.getLineAtOffset(widget.getCaretOffset()), "the caret's line (0-based)");
+        assertEquals(140, widget.getTopIndex(), "the editor did not scroll");
+        assertFalse(caretLines.contains(0), "the caret never went to line 1: " + caretLines);
+    }
 }

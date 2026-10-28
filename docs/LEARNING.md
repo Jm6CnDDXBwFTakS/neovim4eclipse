@@ -637,7 +637,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `UiExecutor` | `BufferSynchronizer`, `CaretSync`, `DiagnosticsSync` (`timerExec` for its debounce) | `editor/SwtUiExecutor` (`UiExecutor.IMMEDIATE` in tests, or a fake that holds timed work until the test runs it) |
 | `EditorCaret` | `CaretSync`, `VisualSelectionView` | `editor/StyledTextCaret` (`FakeCaret` in tests) |
 | `HostCommandRunner.Ide` | `util/HostCommandRunner` | a record inside `editor/HostCommands` |
-| `DocumentPush.Neovim`, `DocumentPush.Mirror` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer` |
+| `DocumentPush.Neovim`, `DocumentPush.Mirror`, `DocumentPush.Caret` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer`; `editor/CaretSync` |
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
 | `CommandLineBox.Commands` | `editor/CommandLineBox` | `SessionCommands` in `NeovimEditorController` (a fake that records the keys and pastes sent, in tests) |
 | `ClipboardPort` | `core/ClipboardRegisters` | `editor/ClipboardBridge` (`ClipboardPort.NONE`, or a fake that keeps one text per selection, in tests) |

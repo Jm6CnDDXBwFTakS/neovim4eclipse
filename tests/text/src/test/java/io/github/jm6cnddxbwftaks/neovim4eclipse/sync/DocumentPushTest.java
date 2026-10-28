@@ -25,7 +25,7 @@ class DocumentPushTest {
     private static final Indentation INDENT = new Indentation(false, 4, true);
 
     /** Both sides of the push, recording into one list. */
-    private static final class Fake implements DocumentPush.Neovim, DocumentPush.Mirror {
+    private static final class Fake implements DocumentPush.Neovim, DocumentPush.Mirror, DocumentPush.Caret {
         final List<String> calls = new ArrayList<>();
         final List<Runnable> queued = new ArrayList<>();
         /** The name of a step that throws. */
@@ -85,6 +85,16 @@ class DocumentPushTest {
             calls.add("start listening");
         }
 
+        @Override
+        public void ignoreNeovimCursor() {
+            calls.add("ignore cursor reports");
+        }
+
+        @Override
+        public void followNeovimCursor() {
+            calls.add("follow cursor reports");
+        }
+
         /** The input thread gets to the queued work. */
         void runQueued() {
             List<Runnable> work = List.copyOf(queued);
@@ -94,22 +104,27 @@ class DocumentPushTest {
     }
 
     private final Fake fake = new Fake();
-    private final DocumentPush push = new DocumentPush(fake, fake);
+    private final DocumentPush push = new DocumentPush(fake, fake, fake);
 
     @Test
     void listeningStopsAtOnceAndTheRestWaitsForTheInputThread() {
         push.start(4, INDENT, 2, 3, false);
 
-        assertEquals(List.of("stop listening", "queue"), fake.calls, "nothing reaches Neovim from the UI thread");
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue"), fake.calls,
+                "nothing reaches Neovim from the UI thread");
     }
 
+    /**
+     * Cursor reports are ignored until the cursor is placed: a new buffer reports line 1 when it is
+     * shown, and the caret would go there and back, scrolling the editor (DocumentPush's comment).
+     */
     @Test
     void theStepsRunInOrderAndTheCaretBecomesNeovimsCursor() {
         push.start(4, INDENT, 2, 3, false);
         fake.runQueued();
 
-        assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "push", "start listening",
-                "cursor 2:3"), fake.calls);
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
     }
 
     @Test
@@ -129,7 +144,8 @@ class DocumentPushTest {
             fake.runQueued();
 
             // No push: it would overwrite the buffer Neovim is in, another file's.
-            assertEquals(List.of("stop listening", "queue", "showBuffer", "start listening"), fake.calls);
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "start listening",
+                    "follow cursor reports"), fake.calls);
             log.assertLogged(Level.SEVERE, "Could not switch Neovim to the document's buffer");
         }
     }
@@ -141,8 +157,8 @@ class DocumentPushTest {
             push.start(4, INDENT, 2, 3, false);
             fake.runQueued();
 
-            assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "push", "start listening",
-                    "cursor 2:3"), fake.calls);
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                    "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
             log.assertLogged(Level.WARNING, "Could not set Neovim's tab and indent options");
         }
     }
@@ -153,8 +169,8 @@ class DocumentPushTest {
         push.start(4, INDENT, 2, 3, false);
 
         assertThrows(IllegalStateException.class, fake::runQueued); // the input thread logs it
-        assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "push", "start listening"),
-                fake.calls);
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                "start listening", "follow cursor reports"), fake.calls, "the caret follows Neovim again");
     }
 
     @Test
@@ -164,7 +180,8 @@ class DocumentPushTest {
             push.start(4, INDENT, 2, 3, false);
             fake.runQueued();
 
-            assertEquals("cursor 2:3", fake.calls.get(fake.calls.size() - 1));
+            assertEquals(List.of("cursor 2:3", "follow cursor reports"),
+                    fake.calls.subList(fake.calls.size() - 2, fake.calls.size()));
             log.assertLogged(Level.WARNING, "Failed to set Neovim cursor after push");
         }
     }
@@ -175,7 +192,8 @@ class DocumentPushTest {
             fake.failing = "queue";
             push.start(4, INDENT, 2, 3, false);
 
-            assertEquals(List.of("stop listening", "queue", "start listening"), fake.calls);
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "start listening",
+                    "follow cursor reports"), fake.calls);
             log.assertLogged(Level.WARNING, "Document push could not be scheduled");
         }
     }

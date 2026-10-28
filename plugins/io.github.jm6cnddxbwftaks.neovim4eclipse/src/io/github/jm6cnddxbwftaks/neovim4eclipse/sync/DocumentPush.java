@@ -30,6 +30,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *     </ol></li>
  * </ol>
  *
+ * <p><b>The caret stays put meanwhile.</b> When the caret is to be kept, Neovim's cursor reports
+ * are ignored from the start until Neovim's cursor is placed ({@link Caret}). A buffer Neovim has
+ * just made has its cursor on line 1, and switching to it reports that line before step 5 moves
+ * the cursor to the caret. Followed, the report sent the caret to line 1 and step 5 back, and
+ * Eclipse, scrolling as little as it can to show the caret again, left the caret's line at the
+ * bottom of the editor. Example: a restart of Neovim with the caret on line 150 of 300, lines 140
+ * to 160 on screen; afterward the screen showed 129 to 150. The reports are taken again in every
+ * case, failures included, or the caret would stop following Neovim.
+ *
  * <p>Whatever fails, Neovim's changes are applied again afterward: an editor that stopped listening
  * would silently stop showing what Neovim does, until it is attached again.
  *
@@ -58,6 +67,15 @@ public final class DocumentPush {
         void takeCursorFromNeovim();
     }
 
+    /** The editor's caret: {@code editor/CaretSync}. Both on the thread that calls them, any thread. */
+    public interface Caret {
+        /** Ignores Neovim's cursor reports from now on (the caret keeps its place). */
+        void ignoreNeovimCursor();
+
+        /** Takes Neovim's cursor reports again. */
+        void followNeovimCursor();
+    }
+
     /** The document side: {@link BufferSynchronizer} in the editor. */
     public interface Mirror {
         /** Stops applying Neovim's changes to the document. */
@@ -72,10 +90,12 @@ public final class DocumentPush {
 
     private final Neovim nvim;
     private final Mirror mirror;
+    private final Caret caret;
 
-    public DocumentPush(Neovim nvim, Mirror mirror) {
+    public DocumentPush(Neovim nvim, Mirror mirror, Caret caret) {
         this.nvim = nvim;
         this.mirror = mirror;
+        this.caret = caret;
     }
 
     /**
@@ -89,11 +109,25 @@ public final class DocumentPush {
      */
     public void start(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor) {
         mirror.stopRemoteListening();
+        if (!takeNeovimCursor) {
+            caret.ignoreNeovimCursor(); // see the class comment, "The caret stays put meanwhile"
+        }
         try {
-            nvim.queue(() -> run(tabWidth, indentation, line1, col0, takeNeovimCursor));
+            nvim.queue(() -> {
+                try {
+                    run(tabWidth, indentation, line1, col0, takeNeovimCursor);
+                } finally {
+                    if (!takeNeovimCursor) {
+                        caret.followNeovimCursor();
+                    }
+                }
+            });
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Document push could not be scheduled", e);
             mirror.startRemoteListening();
+            if (!takeNeovimCursor) {
+                caret.followNeovimCursor();
+            }
         }
     }
 

@@ -134,7 +134,6 @@ public final class NeovimEditorController implements AutoCloseable {
         this.keyInterceptor = new KeyInterceptor(session);
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session, SwtUiExecutor.INSTANCE);
-        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
         this.buffer = buffer;
         this.foldMirror = session.foldsEnabled() && viewerOf(editor) instanceof ProjectionViewer projection
@@ -148,6 +147,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
+        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer), synchronizer, caretSync);
         // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are echoes.
         this.caretSync.dropNeovimCursorWhile(() -> session.isEclipseTypingReady() && !session.isNeovimDrivenInsert());
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),

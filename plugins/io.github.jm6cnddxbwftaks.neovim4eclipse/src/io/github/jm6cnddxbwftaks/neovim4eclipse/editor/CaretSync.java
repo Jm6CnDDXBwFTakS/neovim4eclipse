@@ -13,6 +13,7 @@ import org.eclipse.jface.text.IDocument;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPos;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
 
 /**
  * Keeps the editor's caret and Neovim's cursor in the same place, in both directions:
@@ -47,7 +48,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
  * widget's own offsets leave out folded code), so this class is tested without a widget. Created
  * and disposed on the UI thread.
  */
-final class CaretSync {
+final class CaretSync implements DocumentPush.Caret {
 
     private static final Logger LOG = Logger.getLogger(CaretSync.class.getName());
 
@@ -64,6 +65,11 @@ final class CaretSync {
     private BooleanSupplier eclipseTyping = () -> false;
 
     private volatile boolean disposed;
+    /**
+     * Set while an attach push places Neovim's cursor at the caret ({@code sync/DocumentPush}, "The
+     * caret stays put meanwhile"): Neovim's reports until then are of a cursor about to move.
+     */
+    private volatile boolean placingNeovimCursor;
     /** Set while a caret change from Neovim is applied, so the listener does not echo it back. */
     private volatile boolean applyingFromNeovim;
 
@@ -80,6 +86,18 @@ final class CaretSync {
         caret.addMoveListener(moveListener);
     }
 
+    /** Drops Neovim's cursor reports from now on (an attach push places the cursor). Any thread. */
+    @Override
+    public void ignoreNeovimCursor() {
+        placingNeovimCursor = true;
+    }
+
+    /** Takes Neovim's cursor reports again. Any thread. */
+    @Override
+    public void followNeovimCursor() {
+        placingNeovimCursor = false;
+    }
+
     /** See the class comment, <em>While Eclipse types</em>. Called once, at setup. */
     void dropNeovimCursorWhile(BooleanSupplier eclipseTyping) {
         this.eclipseTyping = eclipseTyping;
@@ -90,7 +108,7 @@ final class CaretSync {
      * moves the caret there, unless Eclipse is typing (see the class comment). Any thread.
      */
     void onNeovimCursor(CursorPos pos) {
-        if (eclipseTyping.getAsBoolean()) {
+        if (eclipseTyping.getAsBoolean() || placingNeovimCursor) {
             return;
         }
         showNeovimCursor(pos);
