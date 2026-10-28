@@ -1049,14 +1049,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Sets the window's working folder ({@code :lcd}) for the editor being attached: its project's
-     * root, so that {@code :e} completion and {@code :!} start there (decision D5 of the cleanup plan).
-     */
-    public void setWindowFolderAsync(String folder) {
-        submit("lcd " + folder, Level.WARNING, () -> await(api.execLua(LuaScripts.SET_WINDOW_FOLDER, List.of(folder))));
-    }
-
-    /**
      * Moves Neovim out of {@code folder} ({@link LuaScripts#LEAVE_FOLDER}) and waits until it has,
      * for at most {@code timeout}: called before Eclipse deletes or closes the project in that
      * folder, which Windows refuses while Neovim's process works in it.

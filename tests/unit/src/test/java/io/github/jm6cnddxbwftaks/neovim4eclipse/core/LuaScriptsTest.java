@@ -60,10 +60,8 @@ class LuaScriptsTest {
     }
 
     @Test
-    void pasteAndTheWindowFolderUseNeovimsOwnCalls() {
+    void pasteUsesNeovimsOwnCall() {
         assertTrue(LuaScripts.PASTE.contains("vim.api.nvim_paste(select(1, ...), false, -1)"));
-        assertTrue(LuaScripts.SET_WINDOW_FOLDER.contains("vim.cmd.lcd({ args = { select(1, ...) }, mods = { silent = true } })"),
-                "silent: Neovim would echo the folder over the message being read");
     }
 
     @Test

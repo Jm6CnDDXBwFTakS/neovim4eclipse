@@ -634,7 +634,9 @@ final class LuaScripts {
                 -- attached before, as a Vim window inherits it). With 'autochdir', Neovim moves to
                 -- the file's folder on entering the window anyway (checked on 0.12.6).
                 -- A folder that does not exist (yet: a new file in a missing folder, written with
-                -- :w ++p) is skipped, keeping the copied one.
+                -- :w ++p) is skipped, keeping the copied one. Silent: Neovim echoes the new folder,
+                -- a message that would replace the one the user is reading (the write message of
+                -- the :w that just opened another editor, say).
                 if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
                   pcall(vim.cmd.lcd, { args = { folder }, mods = { silent = true } })
                 end
@@ -1998,21 +2000,13 @@ final class LuaScripts {
     static final String PASTE = "vim.api.nvim_paste(select(1, ...), false, -1)";
 
     /**
-     * Sets the current window's working folder to argument 1 ({@code :lcd}): {@code :e} completion,
-     * {@code :!} and {@code :find} then start in the attached editor's project. Silent: Neovim echoes
-     * the new folder, a message that would replace the one the user is reading (the write message
-     * of the {@code :w} that just switched editors, say).
-     */
-    static final String SET_WINDOW_FOLDER = "vim.cmd.lcd({ args = { select(1, ...) }, mods = { silent = true } })";
-
-    /**
      * Moves Neovim out of folder argument 1 and everything under it, before Eclipse deletes or
      * closes the project there, and returns how many working folders it moved (0 when none was in
      * it). Each working folder inside it, the global one ({@code :cd}), a tab page's ({@code :tcd})
      * and a window's ({@code :lcd}), becomes the folder's parent; the others stay as they are.
      *
      * <p>Why: Neovim's process works in the current window's folder, the attached editor's project
-     * ({@link #SET_WINDOW_FOLDER}), and Windows does not delete a folder a process works in: deleting
+     * (set when its window opens, {@link #OPEN_WINDOW}), and Windows does not delete a folder a process works in: deleting
      * that project failed with "The process cannot access the file because it is being used by
      * another process".
      *
