@@ -913,5 +913,10 @@ public final class NeovimEditorController implements AutoCloseable {
         public void takeCursorFromNeovim() {
             session.syncModeAndCursorFromNeovim();
         }
+
+        @Override
+        public boolean bufferInSyncAt(long stamp) {
+            return buffer.isOpenIn(session) && buffer.isInSyncAt(stamp);
+        }
     }
 }

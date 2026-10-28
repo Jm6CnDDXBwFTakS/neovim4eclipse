@@ -1193,6 +1193,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (bufnr != NotificationBridge.UNKNOWN_BUFFER && bufnr == writingBufnr) {
                 return; // the echo of Eclipse's own write (setDocumentBufferLines)
             }
+            DocumentBuffer changed = buffers.documentOf(bufnr);
+            if (changed != null) {
+                changed.markOutOfSync(); // the next attach pushes again (DocumentBuffer.syncedStamp)
+            }
             if (buffers.isAttached(bufnr)) {
                 state.dispatchBufferChange(firstLine, lastLine, newLines);
                 return;

@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 
 /**
@@ -23,7 +24,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *           overwrite whatever buffer Neovim is in, another file's text and undo history;</li>
  *       <li>set the tab width and indent options (a failure is only logged: Neovim then indents
  *           with its defaults);</li>
- *       <li>push the document;</li>
+ *       <li>push the document, unless neither it nor the buffer changed since the editor was
+ *           detached (its modification stamp, {@code DocumentBuffer.isInSyncAt}): an editor
+ *           switch then reads neither the whole document nor the whole buffer;</li>
  *       <li>apply Neovim's changes to the document again;</li>
  *       <li>put Neovim's cursor where the caret is, or, when Neovim itself jumped into this file
  *           ({@code Ctrl-O}, a mark like {@code 'A}), move the caret to Neovim's cursor instead.</li>
@@ -65,6 +68,14 @@ public final class DocumentPush {
 
         /** Reads Neovim's mode and cursor and passes them on, so the caret follows Neovim's cursor. */
         void takeCursorFromNeovim();
+
+        /**
+         * Whether the document's buffer is known to equal the document at modification stamp
+         * {@code stamp} ({@code DocumentBuffer.isInSyncAt}): then the push is skipped.
+         */
+        default boolean bufferInSyncAt(long stamp) {
+            return false;
+        }
     }
 
     /** The editor's caret: {@code editor/CaretSync}. Both on the thread that calls them, any thread. */
@@ -86,6 +97,14 @@ public final class DocumentPush {
 
         /** Applies Neovim's changes to the document again. */
         void startRemoteListening();
+
+        /**
+         * The document's modification stamp now, or {@code DocumentBuffer.NO_STAMP} if it has none
+         * (then the push is never skipped). On the thread that calls {@link #start}, the UI thread.
+         */
+        default long documentStamp() {
+            return DocumentBuffer.NO_STAMP;
+        }
     }
 
     private final Neovim nvim;
@@ -108,6 +127,7 @@ public final class DocumentPush {
      *                         instead, and {@code line1}/{@code col0} are ignored
      */
     public void start(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor) {
+        long stamp = mirror.documentStamp();
         mirror.stopRemoteListening();
         if (!takeNeovimCursor) {
             caret.ignoreNeovimCursor(); // see the class comment, "The caret stays put meanwhile"
@@ -115,7 +135,7 @@ public final class DocumentPush {
         try {
             nvim.queue(() -> {
                 try {
-                    run(tabWidth, indentation, line1, col0, takeNeovimCursor);
+                    run(tabWidth, indentation, line1, col0, takeNeovimCursor, stamp);
                 } finally {
                     if (!takeNeovimCursor) {
                         caret.followNeovimCursor();
@@ -132,7 +152,8 @@ public final class DocumentPush {
     }
 
     /** The input-thread part (see the class comment). */
-    private void run(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor) {
+    private void run(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor,
+            long stamp) {
         try {
             nvim.showDocumentBuffer();
         } catch (Exception e) {
@@ -148,7 +169,13 @@ public final class DocumentPush {
             LOG.log(Level.WARNING, "Could not set Neovim's tab and indent options", e);
         }
         try {
-            mirror.pushDocumentToNeovim();
+            if (nvim.bufferInSyncAt(stamp)) {
+                // Neither side changed since the editor was detached: the push would read the whole
+                // document and buffer to find nothing to send (see DocumentBuffer.syncedStamp).
+                LOG.fine("Document unchanged since its last push: not pushed again");
+            } else {
+                mirror.pushDocumentToNeovim();
+            }
         } finally {
             mirror.startRemoteListening();
         }

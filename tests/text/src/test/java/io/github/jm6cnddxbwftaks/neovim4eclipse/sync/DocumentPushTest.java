@@ -25,7 +25,7 @@ class DocumentPushTest {
     private static final Indentation INDENT = new Indentation(false, 4, true);
 
     /** Both sides of the push, recording into one list. */
-    private static final class Fake implements DocumentPush.Neovim, DocumentPush.Mirror, DocumentPush.Caret {
+    private static class Fake implements DocumentPush.Neovim, DocumentPush.Mirror, DocumentPush.Caret {
         final List<String> calls = new ArrayList<>();
         final List<Runnable> queued = new ArrayList<>();
         /** The name of a step that throws. */
@@ -125,6 +125,27 @@ class DocumentPushTest {
 
         assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
                 "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
+    }
+
+    /** Neither side changed since the editor was detached: the push is skipped, the rest is not. */
+    @Test
+    void aDocumentInSyncWithItsBufferIsNotPushedAgain() {
+        Fake unchanged = new Fake() {
+            @Override
+            public long documentStamp() {
+                return 42;
+            }
+
+            @Override
+            public boolean bufferInSyncAt(long stamp) {
+                return stamp == 42;
+            }
+        };
+        new DocumentPush(unchanged, unchanged, unchanged).start(4, INDENT, 2, 3, false);
+        unchanged.runQueued();
+
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4",
+                "start listening", "cursor 2:3", "follow cursor reports"), unchanged.calls);
     }
 
     @Test

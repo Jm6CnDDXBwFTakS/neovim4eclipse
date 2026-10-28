@@ -20,6 +20,7 @@ import org.eclipse.jface.text.IDocumentListener;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferChange;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit.Edit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineTextUtil;
@@ -327,6 +328,20 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                 LOG.log(Level.FINE, "caretRestorer failed", e);
             }
         }
+    }
+
+    @Override
+    public long documentStamp() {
+        return stampOf(document);
+    }
+
+    /** {@code document}'s modification stamp, or {@code DocumentBuffer.NO_STAMP} if it keeps none. */
+    static long stampOf(IDocument document) {
+        if (document instanceof IDocumentExtension4 ext4) {
+            long stamp = ext4.getModificationStamp();
+            return stamp == IDocumentExtension4.UNKNOWN_MODIFICATION_STAMP ? DocumentBuffer.NO_STAMP : stamp;
+        }
+        return DocumentBuffer.NO_STAMP;
     }
 
     static String lineDelimiter(IDocument document) {
