@@ -652,7 +652,7 @@ the old one stopped; *Restart Neovim...*, which asks, then stops Neovim and star
 example after changing `init.lua` (lost: the undo history, and what you set by hand with `:set`,
 `:map` or `:let`; kept: the editors' text, unsaved changes included, and the registers, marks and
 history, which Neovim's ShaDa file brings back as after a restart in a terminal); *Welcome...*; *Preferences...*.
-*Neovim: Detach from Active Editor* is in Quick Access (`Ctrl+3`) only: *Neovim Mode* off already
+*Neovim: Detach Neovim* is in Quick Access (`Ctrl+3`) only: *Neovim Mode* off already
 gives the keys back to Eclipse. *Flash the editor on errors*
 adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
 *Show a welcome after installing...* turns off the welcome and the update notes (step 5 of

@@ -11,7 +11,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * <pre>
  *   not a text editor       greyed out  color logo  "Neovim mode unavailable: not a text editor."
  *   no editor open          greyed out  color logo  "Neovim mode unavailable: no editor open."
- *   text editor, no Neovim  greyed out  color logo  "Neovim mode unavailable (Neovim: Attach to Active Editor attaches Neovim)."
+ *   text editor, no Neovim  greyed out  color logo  "Neovim mode unavailable (Neovim > Attach Neovim attaches it)."
  *   Neovim mode             pressed     color logo  "Neovim mode: Neovim gets the keys. Click or (Ctrl+Shift+M) to switch to Eclipse mode."
  *   Eclipse mode            raised      grey logo   "Eclipse mode: Eclipse gets the keys. Click or (Ctrl+Shift+M) to switch to Neovim mode."
  * </pre>
@@ -35,7 +35,7 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
     /**
      * What the active editor is, as far as Neovim is concerned. Only a text editor (or the text
      * page of a multi-page editor) can have Neovim; the attach key helps only there, for example
-     * after <em>Detach from Active Editor</em> or when Neovim failed to start.
+     * after <em>Neovim: Detach Neovim</em> or when Neovim failed to start.
      */
     public enum Editor {
         /** The active editor has Neovim attached. */
@@ -66,8 +66,9 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
      * @param toggleKey  the toggle's key binding as shown to the user ({@code Ctrl+Shift+M}), or
      *                   {@code null} if it has none
      * @param attachKey  a key binding the user gave the attach command (say {@code Ctrl+Alt+A}), or
-     *                   {@code null} (the default: the tooltip then names the command, which Quick
-     *                   Access finds)
+     *                   {@code null} (the default: the tooltip then names the menu entry,
+     *                   <em>Neovim > Attach Neovim</em>, which Quick Access also finds as
+     *                   "Neovim: Attach Neovim")
      */
     public static ToggleButtonState of(Editor editor, boolean neovimMode, String toggleKey, String attachKey) {
         switch (editor) {
@@ -77,7 +78,8 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
                 return unavailable("Neovim mode unavailable: no editor open.");
             case TEXT_WITHOUT_NEOVIM:
                 String hint = isBlank(attachKey)
-                        ? "Neovim: Attach to Active Editor attaches Neovim"
+                        // The menu entry's path; Quick Access lists the command by the same words.
+                        ? "Neovim > Attach Neovim attaches it"
                         : attachKey + " attaches Neovim";
                 return unavailable("Neovim mode unavailable (" + hint + ").");
             case ATTACHED:

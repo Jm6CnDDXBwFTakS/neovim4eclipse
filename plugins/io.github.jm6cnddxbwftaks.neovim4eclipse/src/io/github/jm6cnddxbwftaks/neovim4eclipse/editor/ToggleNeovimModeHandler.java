@@ -73,8 +73,8 @@ public class ToggleNeovimModeHandler extends AbstractHandler implements IElement
             MessageDialog.openInformation(HandlerUtil.getActiveShell(event), "Neovim",
                     "Neovim is not attached to this editor. It attaches to text editors by itself; if it"
                             + " did not, it may have failed to start (Window > Preferences > Neovim names the"
-                            + " executable). To try again: Neovim > Attach Neovim, or"
-                            + " Neovim: Attach to Active Editor in Quick Access (Ctrl+3).");
+                            + " executable). To try again: Neovim > Attach Neovim (also in"
+                            + " Quick Access, Ctrl+3).");
             return null;
         }
         // No confirmation dialog: the button and the status line show the resulting mode.
