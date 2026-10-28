@@ -44,7 +44,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorBuffers;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
@@ -404,11 +403,12 @@ public final class EditorAttachManager {
     }
 
     /**
-     * Starts sending {@code document}'s problems to its buffer, unless that already happens or its
-     * editor has no annotation model (some editors have none: nothing to send). Guarded by {@code this}.
+     * Starts sending {@code document}'s problems to its buffer, unless that already happens, the user
+     * turned it off ({@code vim.g.neovim4eclipse_problems = 0}), or its editor has no annotation model
+     * (some editors have none: nothing to send). Guarded by {@code this}.
      */
     private void startDiagnostics(ITextEditor editor, IDocument document, DocumentBuffer buffer, NeovimSession session) {
-        if (diagnosticsSyncs.containsKey(buffer)) {
+        if (!session.problemsEnabled() || diagnosticsSyncs.containsKey(buffer)) {
             return;
         }
         IAnnotationModel model = editor.getDocumentProvider() == null ? null
@@ -417,33 +417,9 @@ public final class EditorAttachManager {
             return;
         }
         DiagnosticsSync sync = new DiagnosticsSync(document, model, buffer, session, SwtUiExecutor.INSTANCE,
-                ProblemAnnotations::severityOf, EditorAttachManager::sendProblems);
+                ProblemAnnotations::severityOf);
         sync.start();
         diagnosticsSyncs.put(buffer, sync);
-    }
-
-    /** The preference "Send Eclipse's problems to Neovim". */
-    private static boolean sendProblems() {
-        Activator activator = Activator.getDefault();
-        return activator == null || activator.getPreferenceStore().getBoolean(PreferenceConstants.SEND_PROBLEMS);
-    }
-
-    /**
-     * Sends every document's problems again, or clears them (the preference "Send Eclipse's problems
-     * to Neovim" changed). Any thread; the work is done on the UI thread.
-     */
-    public void refreshDiagnostics() {
-        Display display = Display.getDefault();
-        if (display == null || display.isDisposed()) {
-            return;
-        }
-        display.asyncExec(() -> {
-            List<DiagnosticsSync> syncs;
-            synchronized (this) {
-                syncs = List.copyOf(diagnosticsSyncs.values());
-            }
-            syncs.forEach(DiagnosticsSync::refresh);
-        });
     }
 
     /** Stops sending {@code buffer}'s problems (its document went away). Guarded by {@code this}. */

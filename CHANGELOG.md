@@ -29,8 +29,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Neovim's `]d` and `[d` (and `]D`, `[D`) move between the errors, warnings and infos Eclipse shows
   in the file, with counts, in macros and in the jumplist; the message line then shows the
   problem's message. Eclipse's problems are Neovim diagnostics of the file's buffer, so your own
-  diagnostics (nvim-lint) work alongside them. *Window → Preferences → Neovim → Send Eclipse's
-  problems to Neovim* turns it off. See the README, "Problems".
+  diagnostics (nvim-lint) work alongside them. `vim.g.neovim4eclipse_problems = 0` in `init.lua`
+  turns it off; `]d` then says so rather than "No more valid diagnostics". See the README, "Problems".
 - Folding with Vim's `z` commands: in the Java editor (and other editors that fold), `zo`, `zc`,
   `za`, `zM`, `zR`, `zj`, `zk` and the rest open and close Eclipse's folds, `j` steps over a closed
   fold, and a fold collapsed in Eclipse is closed in Neovim too. `vim.g.neovim4eclipse_folds = 0` in

@@ -671,6 +671,16 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `Activator.getDefault().getPreferenceStore()`; if it must apply at once, handle it in the
 `Activator`'s property-change listener.
 
+**Add a setting for `init.lua` instead.** A Neovim-side switch that is set once and forgotten
+(`vim.g.neovim4eclipse_folds`, `vim.g.neovim4eclipse_problems`) is better as a global variable than
+a check box: it lives with the user's other Neovim settings and dotfiles, and keeps the preference
+pages short. The price: it is read once, so a change needs a Neovim restart. Read it in a small
+`LuaScripts` script that returns a boolean (`PROBLEMS`, `FOLDS`), run once in
+`NeovimSession.initialize` after `SETUP` (so after `init.lua`); keep the answer in a field and
+expose it on the feature's port (`DiagnosticsPort.problemsEnabled()`), so that off costs nothing.
+Treat `0` and `false` as off and anything else, unset included, as on. Test the script in a
+`*_spec.lua` and the read with `--cmd "let g:..."` in an integration test.
+
 **Send something Eclipse knows about each open file to Neovim.** Follow `sync/DiagnosticsSync`
 (Eclipse's problems, for `]d`): one object per document with a buffer, created and closed in
 `EditorAttachManager` next to its `UnattachedDocumentSync`, started after the controller's attach so

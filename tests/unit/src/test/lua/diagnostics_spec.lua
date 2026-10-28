@@ -2,7 +2,8 @@
 -- SPDX-License-Identifier: EPL-2.0
 
 -- Eclipse's problems as Neovim diagnostics: SET_DIAGNOSTICS fills a buffer's list, Neovim's own
--- default ]d [d ]D [D move between them, and SETUP's on_jump hook echoes the message landed on
+-- default ]d [d ]D [D move between them, SETUP's on_jump hook echoes the message landed on, and
+-- PROBLEMS reads the opt-out and, off, has ]d say why it finds nothing
 -- (docs/design/DIAGNOSTICS.md). How the arguments are made is DiagnosticTest and
 -- DiagnosticPositionsTest; when Eclipse sends them, DiagnosticsSyncTest (tests/text).
 
@@ -116,4 +117,61 @@ t.test('nothing of Eclipse\'s problems is drawn; other namespaces keep their dis
   t.eq({ false, false, false, false, false },
     { config.virtual_text, config.virtual_lines, config.signs, config.underline, config.update_in_insert })
   t.ok(vim.diagnostic.config().underline ~= false, 'the global setting is untouched')
+end)
+
+-- ---- the opt-out: vim.g.neovim4eclipse_problems = 0 (LuaScripts.PROBLEMS) ----
+
+--- What ]d is mapped to now: its description, and whether its function is Neovim's own default.
+local function bracket_d()
+  local m = vim.fn.maparg(']d', 'n', false, true)
+  return m.desc, debug.getinfo(m.callback, 'S').source
+end
+
+t.test('problems are sent unless the config says 0 or false; on, Neovim\'s keys are untouched', function()
+  t.eq(true, t.run('PROBLEMS'), 'not set')
+  vim.g.neovim4eclipse_problems = 1
+  t.eq(true, t.run('PROBLEMS'), '1')
+  local _, source = bracket_d()
+  t.eq('@vim/_core/defaults', source, 'still Neovim\'s own ]d')
+  vim.g.neovim4eclipse_problems = false
+  t.eq(false, t.run('PROBLEMS'), 'false')
+end)
+
+t.test('off, ]d [d ]D [D say why they find nothing, and do not move', function()
+  vim.g.neovim4eclipse_problems = 0
+  t.eq(false, t.run('PROBLEMS'))
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a', 'b', 'c' })
+  for _, key in ipairs({ ']d', '[d', ']D', '[D' }) do
+    t.type(key)
+    t.eq(key .. ": Eclipse's problems are not sent to Neovim (vim.g.neovim4eclipse_problems = 0)",
+      echoed[#echoed])
+    t.eq(1, cursor_line(), key .. ' does not move')
+  end
+end)
+
+t.test('off, diagnostics of the user\'s own still work through Neovim\'s ]d, with a count', function()
+  vim.g.neovim4eclipse_problems = 0
+  t.run('PROBLEMS')
+  t.setup() -- the on_jump echo, as in the session
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a', 'b', 'c', 'd', 'e' })
+  local mine = vim.api.nvim_create_namespace('mine') -- as nvim-lint would
+  vim.diagnostic.set(mine, buf, {
+    { lnum = 1, col = 0, message = 'lint one' },
+    { lnum = 3, col = 0, message = 'lint two' },
+  })
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  t.type('2]d')
+  t.eq(4, cursor_line(), '2]d: the count reaches Neovim\'s own ]d')
+  t.wait_for('the on_jump echo', function() return echoed[#echoed] == 'lint two' end)
+end)
+
+t.test('off, a ]d the user mapped is left alone', function()
+  local mine = function() end
+  vim.keymap.set('n', ']d', mine, { desc = 'mine' })
+  vim.g.neovim4eclipse_problems = 0
+  t.run('PROBLEMS')
+  t.eq('mine', (bracket_d()))
+  t.eq(mine, vim.fn.maparg(']d', 'n', false, true).callback)
 end)

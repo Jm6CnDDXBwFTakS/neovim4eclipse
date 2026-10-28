@@ -271,9 +271,14 @@ and shows `The import java.util.List is never used`.
   `]d` stops on theirs and Eclipse's alike, as Neovim does with several sources. The message after
   a jump is shown for any of them. A `vim.diagnostic.config({ jump = { on_jump = ... } })` of your
   own replaces the plug-in's message.
-- **To turn it off**: *Window → Preferences → Neovim → Send Eclipse's problems to Neovim* (on by
-  default). Off, Neovim has none of Eclipse's problems; useful when your own diagnostics cover the
-  same files.
+- **To turn it off**: `vim.g.neovim4eclipse_problems = 0` in `init.lua`, then restart Neovim
+  (*Window → Preferences → Neovim*; the variable is read once, when Neovim starts). Off, Neovim has
+  none of Eclipse's problems; useful when your own diagnostics cover the same files. In a file
+  with no diagnostics at all, `]d` then says
+  `]d: Eclipse's problems are not sent to Neovim (vim.g.neovim4eclipse_problems = 0)` instead of
+  Neovim's *No more valid diagnostics to move to*, so that you can tell the two cases apart.
+  Only those words change: with diagnostics of your own, `]d` is Neovim's, and a `]d` you mapped
+  yourself is left alone.
 
 How it works: [docs/design/DIAGNOSTICS.md](docs/design/DIAGNOSTICS.md).
 
@@ -641,8 +646,6 @@ the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`)
 through *Window → Preferences*.
 Changing the executable restarts Neovim and re-attaches the active editor. *Flash the editor on errors*
 adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
-*Send Eclipse's problems to Neovim* gives `]d` and `[d` Eclipse's errors and warnings to move
-between ([Problems](#problems-d-d)).
 *Show a welcome after installing...* turns off the welcome and the update notes (step 5 of
 [Install](#install)); an administrator can turn it off for everyone with the line
 `io.github.jm6cnddxbwftaks.neovim4eclipse/showWelcome=false` in the product's

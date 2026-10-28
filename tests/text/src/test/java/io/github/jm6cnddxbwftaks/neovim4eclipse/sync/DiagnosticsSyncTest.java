@@ -41,6 +41,11 @@ class DiagnosticsSyncTest {
             sent.add(diagnostics);
         }
 
+        @Override
+        public boolean problemsEnabled() {
+            return true; // the editor starts no sync when off
+        }
+
         List<Diagnostic> last() {
             return sent.get(sent.size() - 1);
         }
@@ -96,7 +101,6 @@ class DiagnosticsSyncTest {
     private final AnnotationModel model = new AnnotationModel();
     private final FakeSession session = new FakeSession();
     private final HeldTimers ui = new HeldTimers();
-    private boolean enabled = true;
     private DiagnosticsSync sync;
 
     @BeforeEach
@@ -113,8 +117,7 @@ class DiagnosticsSyncTest {
     }
 
     private DiagnosticsSync start() {
-        sync = new DiagnosticsSync(document, model, new DocumentBuffer("A.java"), session, ui, SEVERITY,
-                () -> enabled);
+        sync = new DiagnosticsSync(document, model, new DocumentBuffer("A.java"), session, ui, SEVERITY);
         sync.start();
         // AnnotationModel tells a listener about the model as soon as it is added: one more send is
         // scheduled, which finds the list unchanged. Settled here so that each test starts quiet.
@@ -209,19 +212,6 @@ class DiagnosticsSyncTest {
         marked.markDeleted(true); // JDT keeps it until the next reconcile
         start();
         assertEquals(List.of(), session.last());
-    }
-
-    @Test
-    void turnedOffSendsAnEmptyListAndRefreshSendsAgain() {
-        add("error", "one", 0, 3);
-        enabled = false;
-        start();
-        assertEquals(List.of(), session.last(), "off: Neovim's list is cleared");
-        enabled = true;
-        sync.refresh();
-        assertEquals(List.of(new Diagnostic(0, 0, 0, 3, Severity.ERROR, "one")), session.last());
-        sync.refresh();
-        assertEquals(3, session.sent.size(), "refresh sends even an unchanged list");
     }
 
     @Test

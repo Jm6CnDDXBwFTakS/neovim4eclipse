@@ -18,6 +18,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 public interface DiagnosticsPort {
 
     /**
+     * Whether Eclipse's problems go to Neovim: {@code true} unless the user's config sets
+     * {@code vim.g.neovim4eclipse_problems = 0} (or {@code false}). Read once when the session starts
+     * (a change needs a Neovim restart); when false, the editor starts no {@code DiagnosticsSync}, so
+     * nothing is read or sent.
+     */
+    boolean problemsEnabled();
+
+    /**
      * Replaces the diagnostics of {@code buffer} with {@code diagnostics} (an empty list clears them),
      * on the input thread, after every key and command queued before. Returns at once. Nothing happens
      * when the buffer does not exist in this session or has no text yet: the document's next list,
