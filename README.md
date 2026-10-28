@@ -473,8 +473,8 @@ the plugin makes sure everything you do is seen by Neovim as keys:
 
 Clicks in normal and visual mode are recorded, as Neovim records them (`<LeftMouse>`, without a
 position: playback clicks where the mouse was last). Not recorded: actions that happen only in Eclipse. Not supported: the command-line
-window (`q:`, `q/`, `q?`). Macros live in Neovim's registers and last until Neovim restarts (*Neovim → Restart
-Neovim...*, or changing the executable preference).
+window (`q:`, `q/`, `q?`). Macros live in Neovim's registers, which Neovim's ShaDa file keeps across restarts (*Neovim →
+Restart Neovim...*, a new executable, or Eclipse), as in a terminal.
 
 ## Repeating inserted text with `.`
 
@@ -649,8 +649,9 @@ Changing the executable restarts Neovim and re-attaches the active editor.
 The *Neovim* menu, top to bottom: *Neovim Mode* (the toggle, `Ctrl+Shift+M`); *Attach Neovim*,
 for an editor that did not attach by itself, which also starts a new Neovim if
 the old one stopped; *Restart Neovim...*, which asks, then stops Neovim and starts a new one, for
-example after changing `init.lua` (Neovim's undo history, registers, macros, marks and jumps are
-lost; the editors' text, unsaved changes included, is kept); *Welcome...*; *Preferences...*.
+example after changing `init.lua` (lost: the undo history, and what you set by hand with `:set`,
+`:map` or `:let`; kept: the editors' text, unsaved changes included, and the registers, marks and
+history, which Neovim's ShaDa file brings back as after a restart in a terminal); *Welcome...*; *Preferences...*.
 *Neovim: Detach from Active Editor* is in Quick Access (`Ctrl+3`) only: *Neovim Mode* off already
 gives the keys back to Eclipse. *Flash the editor on errors*
 adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
