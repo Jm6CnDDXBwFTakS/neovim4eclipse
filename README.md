@@ -271,8 +271,8 @@ and shows `The import java.util.List is never used`.
   `]d` stops on theirs and Eclipse's alike, as Neovim does with several sources. The message after
   a jump is shown for any of them. A `vim.diagnostic.config({ jump = { on_jump = ... } })` of your
   own replaces the plug-in's message.
-- **To turn it off**: `vim.g.neovim4eclipse_problems = 0` in `init.lua`, then restart Neovim
-  (*Window → Preferences → Neovim*; the variable is read once, when Neovim starts). Off, Neovim has
+- **To turn it off**: `vim.g.neovim4eclipse_problems = 0` in `init.lua`, then *Neovim → Restart
+  Neovim...* (the variable is read once, when Neovim starts). Off, Neovim has
   none of Eclipse's problems; useful when your own diagnostics cover the same files. In a file
   with no diagnostics at all, `]d` then says
   `]d: Eclipse's problems are not sent to Neovim (vim.g.neovim4eclipse_problems = 0)` instead of
@@ -317,7 +317,7 @@ the open and closed state the same both ways: a fold collapsed with the ruler's 
 - **To leave Neovim's folding alone**: `vim.g.neovim4eclipse_folds = 0` in `init.lua`. Eclipse then
   folds as it did before 0.1.9: the `z` commands do nothing to its folds, and moving into folded
   code opens it. The setting is read once when Neovim starts: changing it needs a restart of
-  Neovim (*Window → Preferences → Neovim*, or of Eclipse).
+  Neovim (*Neovim → Restart Neovim...*).
 - **For your config**: the `User` autocommand `Neovim4EclipseFolds` fires when the closed folds
   change, with `data = { buf = 3, closed = { ... } }`.
 - **The caret can vanish after a fold opens or closes** (seen on Linux, XFCE on X11): it stays in
@@ -473,8 +473,8 @@ the plugin makes sure everything you do is seen by Neovim as keys:
 
 Clicks in normal and visual mode are recorded, as Neovim records them (`<LeftMouse>`, without a
 position: playback clicks where the mouse was last). Not recorded: actions that happen only in Eclipse. Not supported: the command-line
-window (`q:`, `q/`, `q?`). Macros live in Neovim's registers and last until Neovim restarts (for example
-after changing the executable preference).
+window (`q:`, `q/`, `q?`). Macros live in Neovim's registers and last until Neovim restarts (*Neovim → Restart
+Neovim...*, or changing the executable preference).
 
 ## Repeating inserted text with `.`
 
@@ -591,7 +591,7 @@ Eclipse does not see it.
 **Errors in your config.** If `init.lua` reports an error while Neovim starts (a typo, or a
 Vimscript line such as `nnoremap ; :` in a Lua file: write `vim.keymap.set('n', ';', ':')`, or wrap
 it in `vim.cmd[[...]]`), Neovim starts anyway, with what your config set up before the error (after
-a syntax error, none of it), and a warning shows the error. Fix it and restart Eclipse. The terminal
+a syntax error, none of it), and a warning shows the error. Fix it and choose *Neovim → Restart Neovim...*. The terminal
 does the same after you press Enter.
 
 The variables starting with `eclipse_` work in two directions:
@@ -644,7 +644,15 @@ expanded): where Neovim is (blank to search, its folder, or the program; see
 whether to show the *Neovim* menu in the menu bar. With the menu hidden, its entries stay reachable:
 the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
 through *Window → Preferences*.
-Changing the executable restarts Neovim and re-attaches the active editor. *Flash the editor on errors*
+Changing the executable restarts Neovim and re-attaches the active editor.
+
+The *Neovim* menu, top to bottom: *Neovim Mode* (the toggle, `Ctrl+Shift+M`); *Attach Neovim*
+(`Ctrl+Shift+N`), for an editor that did not attach by itself, which also starts a new Neovim if
+the old one stopped; *Restart Neovim...*, which asks, then stops Neovim and starts a new one, for
+example after changing `init.lua` (Neovim's undo history, registers, macros, marks and jumps are
+lost; the editors' text, unsaved changes included, is kept); *Welcome...*; *Preferences...*.
+*Neovim: Detach from Active Editor* is in Quick Access (`Ctrl+3`) only: *Neovim Mode* off already
+gives the keys back to Eclipse. *Flash the editor on errors*
 adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
 *Show a welcome after installing...* turns off the welcome and the update notes (step 5 of
 [Install](#install)); an administrator can turn it off for everyone with the line
