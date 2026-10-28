@@ -57,6 +57,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- The toolbar button now always greys out after *Detach* (and enables again on *Attach*). It could
+  stay clickable until you clicked elsewhere or switched editors, because Eclipse re-reads a toolbar
+  button's enablement only when asked to, and the plug-in did not ask.
 - Attaching Neovim to an editor whose caret is down in the file, when the file gets a new Neovim
   buffer (after *Restart Neovim...*, for example), no longer scrolls the caret's line to the bottom
   of the editor. The caret went to line 1 and back, following the new buffer's cursor.

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.eclipse.e4.ui.model.application.ui.menu.MItem;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
@@ -55,6 +56,34 @@ class ToggleButtonEndToEndTest extends EndToEndTestBase {
         expectButton(button, false, false, "Neovim mode unavailable (");
         assertFalse(PlatformUI.getWorkbench().getService(ICommandService.class)
                 .getCommand(WelcomeNote.TOGGLE_COMMAND_ID).isEnabled(), "the key binding still works");
+
+        EditorAttachManager.getInstance().attach(editor, true);
+        expectButton(button, true, true, "Neovim mode: ");
+    }
+
+    /**
+     * The toolbar keeps its own copy of the button's "enabled" and re-reads it from the handler only
+     * when asked to. Here the copy is made stale on purpose (enabled while the handler says
+     * disabled), as a busy machine could leave it; a refresh request must then grey the button out
+     * by itself, without an unrelated change in Eclipse (a selection, a key binding context) to set
+     * off the re-read. See {@code ToggleButtonRefresh.requestEnablementUpdate}.
+     */
+    @Test
+    void aRefreshGreysTheButtonOutEvenWhenTheToolbarsCopyIsStale() throws Exception {
+        ToolItem button = toggleButton();
+        expectButton(button, true, true, "Neovim mode: ");
+        EditorAttachManager.getInstance().detachQuietly();
+        expectButton(button, false, false, "Neovim mode unavailable (");
+
+        // The toolbar's copy: the model item the button was rendered from
+        // (AbstractPartRenderer.OWNING_ME, "modelElement"). Setting it redraws the button enabled.
+        MItem model = (MItem) button.getData("modelElement");
+        assertNotNull(model, "the button's model item");
+        model.setEnabled(true);
+        waitUntil("the stale copy shown", TIMEOUT_MS, button::getEnabled);
+
+        ToggleButtonRefresh.request();
+        expectButton(button, false, false, "Neovim mode unavailable (");
 
         EditorAttachManager.getInstance().attach(editor, true);
         expectButton(button, true, true, "Neovim mode: ");
