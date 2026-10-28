@@ -210,12 +210,12 @@ public final class NeovimEditorController implements AutoCloseable {
     /**
      * Neovim's window works in this editor's project ({@code :lcd}): {@code :e} completion,
      * {@code :!} and {@code :find} start at the project's root, or at the file's folder for a file
-     * outside any project (decision D5 of the cleanup plan). Where {@code :e} then looks for a name is
-     * still the plug-in's rule, the file's folder first ({@code EclipseFileCommands.editFolders}).
+     * outside any project (decision D5 of the cleanup plan). {@code :w}, {@code :wq} and {@code :x}
+     * names are relative to it, as in Neovim; {@code :e} still looks beside the file first
+     * ({@code EclipseFileCommands.editFolders}).
      */
     private void setWindowFolder() {
-        List<Path> folders = EclipseFileCommands.editFolders(editor);
-        Path folder = folders.get(1) != null ? folders.get(1) : folders.get(0);
+        Path folder = EclipseFileCommands.windowFolder(editor);
         if (folder != null) {
             session.setWindowFolderAsync(folder.toString());
         }

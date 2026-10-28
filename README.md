@@ -312,7 +312,8 @@ the file's own encoding, `++p` creating missing folders), and the editor stays o
 unsaved changes, so a later `:w` still saves it. A relative name is relative to the folder
 Neovim's window works in, the editor's project folder (`:lcd`, as Tab completion shows), so from
 `src/Main.java`, `:w copy.txt` writes `copy.txt` at the project's root; `:w %:h/copy.txt` writes it
-beside the file (`%:h` is the file's own folder, `:help filename-modifiers`). Inside a project the
+beside the file (`%:h` is the file's own folder, `:help filename-modifiers`). `:wq` and `:x`
+read a name the same way. Inside a project the
 copy appears in the Project Explorer at once. As in Vim, an existing file needs `!` (`:w! other.txt`), and a file another Neovim
 buffer has is refused (E139). A copy is the text as it is: Eclipse's save actions (format on save) are
 for an editor's own save. A copy over a file that an Eclipse editor has open with unsaved changes is
