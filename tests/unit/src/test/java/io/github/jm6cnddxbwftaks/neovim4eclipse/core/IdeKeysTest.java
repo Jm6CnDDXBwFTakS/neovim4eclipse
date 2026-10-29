@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -20,15 +22,25 @@ import org.junit.jupiter.api.Test;
  */
 class IdeKeysTest {
 
-    /** The actions {@code editor/IdeActions} carries out itself, without an Eclipse command. */
-    private static final Set<String> BUILT_IN = Set.of(IdeAction.NEXT_TAB, IdeAction.PREVIOUS_TAB);
+    /** The action names {@link IdeAction} defines (its {@code public static final String} constants). */
+    private static Set<String> definedActions() throws IllegalAccessException {
+        Set<String> names = new HashSet<>();
+        for (Field field : IdeAction.class.getFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class) {
+                names.add((String) field.get(null));
+            }
+        }
+        return names;
+    }
 
     @Test
-    void everyKeySendsAnActionEclipseCarriesOut() {
+    void everyKeySendsAnActionIdeActionDefines() throws Exception {
+        // A command action is run from the table; the others (gt, gT) by editor/IdeActions itself.
+        Set<String> defined = definedActions();
         for (IdeKeys.Key key : IdeKeys.KEYS) {
-            assertTrue(IdeKeys.COMMANDS.containsKey(key.action()) || BUILT_IN.contains(key.action()),
-                    key.lhs() + " sends " + key.action() + ", which Eclipse does not know");
+            assertTrue(defined.contains(key.action()), key.lhs() + " sends " + key.action() + ", which IdeAction does not define");
         }
+        assertTrue(defined.containsAll(IdeKeys.COMMANDS.keySet()), "every command action is an IdeAction");
     }
 
     @Test

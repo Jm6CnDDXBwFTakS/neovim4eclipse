@@ -6,7 +6,18 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.eclipse.core.commands.ExecutionEvent;
+import org.eclipse.core.commands.ExecutionException;
+import org.eclipse.core.commands.IExecutionListener;
+import org.eclipse.core.commands.NotHandledException;
+import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewer;
+import org.eclipse.swt.widgets.Shell;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.junit.jupiter.api.Test;
 
@@ -57,5 +68,53 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         typeSlowly("grn");
         waitUntil("the message", TIMEOUT_MS, () -> "grn: Rename is not available in this editor".equals(messageText(editor)),
                 () -> "; the message line shows \"" + messageText(editor) + "\"");
+    }
+
+    /**
+     * Visual {@code gra} runs Quick Fix with Neovim's visual selection as the editor's selection, so a
+     * Quick Assist works on the selected text (Extract Local Variable, in Java). Seen from the
+     * command's execution: the editor's selection when Quick Fix starts.
+     */
+    @Test
+    void visualGraRunsQuickFixOnTheSelection() {
+        ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
+        List<String> selections = new CopyOnWriteArrayList<>();
+        IExecutionListener listener = new IExecutionListener() {
+            @Override
+            public void preExecute(String commandId, ExecutionEvent event) {
+                if (IdeKeys.QUICK_ASSIST.equals(commandId)) {
+                    selections.add(((ITextSelection) editor.getSelectionProvider().getSelection()).getText());
+                }
+            }
+
+            @Override
+            public void postExecuteSuccess(String commandId, Object returnValue) {
+            }
+
+            @Override
+            public void postExecuteFailure(String commandId, ExecutionException exception) {
+            }
+
+            @Override
+            public void notHandled(String commandId, NotHandledException exception) {
+            }
+        };
+        commands.addExecutionListener(listener);
+        Shell window = editor.getSite().getShell();
+        try {
+            typeSlowly("gg0vegra");
+            waitUntil("Quick Fix to run", TIMEOUT_MS, () -> !selections.isEmpty());
+            assertEquals(List.of("alpha"), selections, "on the visual selection");
+        } finally {
+            commands.removeExecutionListener(listener);
+            for (Shell shell : window.getDisplay().getShells()) { // Quick Fix's popup, if it opened one
+                if (shell != window && !shell.isDisposed() && shell.isVisible()) {
+                    shell.close();
+                }
+            }
+            page().activate(editor);
+            session.inputAsync("<Esc>");
+            settle();
+        }
     }
 }
