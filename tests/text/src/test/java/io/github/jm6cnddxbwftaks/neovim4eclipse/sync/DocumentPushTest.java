@@ -30,6 +30,8 @@ class DocumentPushTest {
         final List<Runnable> queued = new ArrayList<>();
         /** The name of a step that throws. */
         String failing = "";
+        /** Whether the buffer was kept from a closed editor, with a last position to go to. */
+        boolean reopened;
 
         private void step(String name) throws Exception {
             calls.add(name);
@@ -65,6 +67,15 @@ class DocumentPushTest {
         @Override
         public void takeCursorFromNeovim() {
             calls.add("take Neovim's cursor");
+        }
+
+        @Override
+        public boolean goToLastPosition() throws Exception {
+            if (!reopened) {
+                return false;
+            }
+            step("last position");
+            return true;
         }
 
         @Override
@@ -125,6 +136,33 @@ class DocumentPushTest {
 
         assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
                 "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
+    }
+
+    /**
+     * A file opened again, its buffer kept from its closed editor: Neovim's cursor goes where it was
+     * left ({@code '"}), and the caret follows it instead of placing Neovim's cursor at the caret.
+     */
+    @Test
+    void aReopenedFilesCaretGoesWhereItWasLeft() {
+        fake.reopened = true;
+        push.start(4, INDENT, 1, 0, false);
+        fake.runQueued();
+
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                "start listening", "last position", "follow cursor reports", "take Neovim's cursor",
+                "follow cursor reports"), fake.calls);
+    }
+
+    /** If that fails, the caret's own place is used, as for any other file. */
+    @Test
+    void aReopenedFileWhoseLastPositionFailsKeepsTheCaret() {
+        fake.reopened = true;
+        fake.failing = "last position";
+        push.start(4, INDENT, 2, 3, false);
+        fake.runQueued();
+
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                "start listening", "last position", "cursor 2:3", "follow cursor reports"), fake.calls);
     }
 
     /** Neither side changed since the editor was detached: the push is skipped, the rest is not. */

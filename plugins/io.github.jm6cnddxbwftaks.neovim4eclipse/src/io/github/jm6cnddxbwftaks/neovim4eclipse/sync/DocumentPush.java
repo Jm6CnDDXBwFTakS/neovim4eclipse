@@ -29,7 +29,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *           switch then reads neither the whole document nor the whole buffer;</li>
  *       <li>apply Neovim's changes to the document again;</li>
  *       <li>put Neovim's cursor where the caret is, or, when Neovim itself jumped into this file
- *           ({@code Ctrl-O}, a mark like {@code 'A}), move the caret to Neovim's cursor instead.</li>
+ *           ({@code Ctrl-O}, a mark like {@code 'A}), move the caret to Neovim's cursor instead.
+ *           A file opened again, whose buffer was kept from its closed editor, puts Neovim's cursor
+ *           where it was left ({@code '"}, as Vim's {@code :e} does) and the caret follows it
+ *           (docs/design/BUFFER_NUMBERS.md).</li>
  *     </ol></li>
  * </ol>
  *
@@ -68,6 +71,15 @@ public final class DocumentPush {
 
         /** Reads Neovim's mode and cursor and passes them on, so the caret follows Neovim's cursor. */
         void takeCursorFromNeovim();
+
+        /**
+         * After the push into a buffer kept from a closed editor of the file, puts Neovim's cursor
+         * where it was left ({@code '"}), and returns whether it did; {@code false} for any other
+         * buffer.
+         */
+        default boolean goToLastPosition() throws Exception {
+            return false;
+        }
 
         /**
          * Whether the document's buffer is known to equal the document at modification stamp
@@ -183,6 +195,15 @@ public final class DocumentPush {
         if (takeNeovimCursor) {
             nvim.takeCursorFromNeovim();
             return;
+        }
+        try {
+            if (nvim.goToLastPosition()) {
+                caret.followNeovimCursor(); // the caret goes where Neovim's cursor is now
+                nvim.takeCursorFromNeovim();
+                return;
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Could not put Neovim's cursor where the reopened file was left", e);
         }
         try {
             nvim.setCursor(line1, col0);

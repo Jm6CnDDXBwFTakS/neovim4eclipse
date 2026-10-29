@@ -19,6 +19,12 @@ public final class DocumentBuffer {
      */
     volatile boolean loaded;
     /**
+     * Whether the buffer is the file's buffer kept from a closed editor (Vim's {@code :bd} keeps it;
+     * docs/design/BUFFER_NUMBERS.md): its first push then puts the cursor where it was left
+     * ({@link NeovimSession#goToLastPositionIfReopened}). Cleared by that push.
+     */
+    volatile boolean reopened;
+    /**
      * Whether Eclipse has unsaved changes in the document (its editor is dirty). Neovim's
      * {@code 'modified'} follows it ({@link NeovimSession#setModifiedAsync}), so that {@code :update}
      * and {@code :wall} write exactly what Eclipse would save, and {@code :ls} shows {@code +}.

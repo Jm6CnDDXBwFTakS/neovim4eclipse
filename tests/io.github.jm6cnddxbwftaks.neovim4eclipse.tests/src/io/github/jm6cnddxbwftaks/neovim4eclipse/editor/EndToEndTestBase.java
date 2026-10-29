@@ -40,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -141,9 +142,32 @@ abstract class EndToEndTestBase {
         if (editor != null) {
             editor.getSite().getPage().closeEditor(editor, false);
         }
+        forgetClosedFilesBuffers();
         if (project != null && project.exists()) {
             project.delete(true, true, null);
         }
+    }
+
+    /**
+     * Wipes the buffers Neovim keeps for closed files (docs/design/BUFFER_NUMBERS.md: a closed file
+     * keeps its buffer, as after Vim's {@code :bd}), so that each test starts as with a fresh Neovim.
+     * One Neovim serves every test, and test.txt, made again for the next test, would get this test's
+     * buffer back, with its cursor on the line this test left it on.
+     */
+    private void forgetClosedFilesBuffers() {
+        // The running session: a test may have restarted Neovim (RestartNeovimEndToEndTest).
+        NeovimSession running = Activator.getDefault().currentSession();
+        if (running == null) {
+            return;
+        }
+        UiTestSupport.settle(running, TIMEOUT_MS); // the closes are queued in the session: let them happen first
+        SessionProbe.lua(running, """
+                for _, b in ipairs(vim.api.nvim_list_bufs()) do
+                  if not vim.api.nvim_buf_is_loaded(b) and vim.b[b].neovim4eclipse_file then
+                    pcall(vim.api.nvim_buf_delete, b, { force = true })
+                  end
+                end
+                return 0""");
     }
 
     /**

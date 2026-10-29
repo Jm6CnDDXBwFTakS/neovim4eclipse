@@ -88,8 +88,9 @@ end
 t.test('a document buffer is named, loaded, empty and not marked "not edited"', function()
   local name = vim.fn.tempname() .. '-a.txt'
   vim.fn.writefile({ 'on disk' }, name) -- not read: Eclipse pushes its own text
-  local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  local buf, named, reused = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
   t.eq(true, named)
+  t.eq(false, reused, 'a new buffer')
   t.eq(vim.fn.resolve(vim.fn.fnamemodify(name, ':p')), vim.fn.resolve(vim.api.nvim_buf_get_name(buf)))
   t.eq(true, vim.api.nvim_buf_is_loaded(buf))
   t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'the file was not read')
@@ -126,8 +127,8 @@ t.test('the file\'s buffer kept from before is reused, as :e reuses the one :bd 
   local kept = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_mark(kept, 'a', 1, 0, {})
   vim.cmd('enew | bdelete ' .. kept) -- unloaded and unlisted, number and marks kept
-  local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
-  t.eq({ kept, true }, { buf, named }, 'the same number')
+  local buf, named, reused = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq({ kept, true, true }, { buf, named, reused }, 'the same number, reused')
   t.eq(true, vim.api.nvim_buf_is_loaded(buf))
   t.eq(true, vim.bo[buf].buflisted)
   t.eq('nofile', vim.bo[buf].buftype)
@@ -143,4 +144,15 @@ t.test('a buffer Neovim loaded from disk itself (:b, Ctrl-^) is reused as it is'
   t.eq(loaded, buf)
   t.eq(false, vim.bo[buf].swapfile)
   t.eq({ 'on disk' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'Eclipse\'s text comes next')
+end)
+
+-- GO_TO_LAST_POSITION: the first push into a reused buffer puts the cursor where its window left it.
+t.test('the cursor goes to the buffer\'s last position, if it has one inside the text', function()
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '1', '2', '3' })
+  vim.api.nvim_buf_set_mark(0, '"', 3, 0, {})
+  t.eq(true, t.run('GO_TO_LAST_POSITION'))
+  t.eq({ 3, 0 }, vim.api.nvim_win_get_cursor(0))
+  -- The file got shorter while it was closed: the mark stays on line 3 of a one-line text.
+  vim.cmd('lockmarks call nvim_buf_set_lines(0, 0, -1, v:false, ["only"])')
+  t.eq(false, t.run('GO_TO_LAST_POSITION'), 'past the end: the caret\'s place instead')
 end)
