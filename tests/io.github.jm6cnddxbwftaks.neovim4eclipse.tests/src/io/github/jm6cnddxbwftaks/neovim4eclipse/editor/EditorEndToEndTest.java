@@ -9,6 +9,7 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -36,6 +37,7 @@ import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.INavigationLocation;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
@@ -266,10 +268,145 @@ class EditorEndToEndTest extends EndToEndTestBase {
             assertOnlyOneWay("<C-o>", -1);
             assertOnlyOneWay("<C-i>", +1);
         } finally {
-            for (IEditorReference ref : page.getEditorReferences()) {
-                if (ref.getEditor(false) != editor) {
-                    page.closeEditors(new IEditorReference[] { ref }, false);
-                }
+            closeAllBut(page, editor);
+        }
+    }
+
+    /**
+     * As reported: after a few {@code :e #} between two files, {@code Ctrl-O} went back about nine
+     * times and {@code Ctrl-I} forward about three. Neovim keeps two jumps (it drops repeats of a
+     * place); Eclipse's Back then walked through every editor switch the plug-in had made for the
+     * {@code :e} commands, and {@code Ctrl-I}'s first jump into the other file deleted Eclipse's way
+     * forward (NavigationHistorySteps). Now {@code Ctrl-O} is one Neovim jump, then Back past the
+     * plug-in's switches (and past the tab click, where the jump already is) to where other.txt was
+     * opened; {@code Ctrl-I} comes back through the same places.
+     */
+    @Test
+    void ctrlIRetracesCtrlOAfterEHash() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        INavigationLocation otherOpened = page.getNavigationHistory().getCurrentLocation();
+        try {
+            page.activate(editor);
+            waitForAttach(editor, "test.txt");
+            runInBox(widget, "e other.txt");
+            waitForAttach(other, "other.txt, after :e");
+            runInBox(widgetOf(other), "e #");
+            waitForAttach(editor, "test.txt, after :e #");
+            runInBox(widget, "e #");
+            waitForAttach(other, "other.txt, after a second :e #");
+
+            List<String> back = pressAndRecord("<C-o>", 2);
+            assertEquals(List.of("other.txt", "test.txt", "other.txt"), back);
+            assertSame(otherOpened, page.getNavigationHistory().getCurrentLocation(),
+                    "Back went to where other.txt was opened, past the plug-in's switches");
+            assertEquals(reversed(back), pressAndRecord("<C-i>", 2));
+        } finally {
+            closeAllBut(page, editor);
+        }
+    }
+
+    /**
+     * {@code Ctrl-I} comes back to where a Back started even when Eclipse's history lost that
+     * place: Back lands in test.txt, whose window has older jumps into other.txt; {@code Ctrl-O}
+     * goes on through them, and the plug-in's switch into other.txt deletes the entry of the tab
+     * click into third.txt ahead of it. {@code Ctrl-I} shows third.txt again.
+     */
+    @Test
+    void ctrlIComesBackToAPlaceEclipsesHistoryLost() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        ITextEditor third = openFile("third.txt", "third\n");
+        try {
+            page.activate(editor);
+            waitForAttach(editor, "test.txt");
+            runInBox(widget, "e other.txt");
+            waitForAttach(other, "other.txt, after :e");
+            runInBox(widgetOf(other), "e #");
+            waitForAttach(editor, "test.txt, after :e #");
+            page.activate(third); // a tab click
+            waitForAttach(third, "third.txt");
+
+            List<String> back = pressAndRecord("<C-o>", 3);
+            assertEquals(List.of("third.txt", "test.txt", "other.txt", "test.txt"), back,
+                    "Back, a Neovim jump in test.txt's window, Back");
+            assertEquals(reversed(back), pressAndRecord("<C-i>", 3));
+        } finally {
+            closeAllBut(page, editor);
+        }
+    }
+
+    /**
+     * {@code Ctrl-I} undoes the newest {@code Ctrl-O} step first, even where a window has an older
+     * one waiting (the trail in LuaScripts.SETUP). Here other.txt's editor holds the window that
+     * made the first step, a Neovim jump; a later Back comes to that editor again, and
+     * {@code Ctrl-I} there must undo the Back after it, not redo the jump. The caret's line tells
+     * the two visits of test.txt apart: line 2 after the tab clicks, line 1 where it was opened.
+     */
+    @Test
+    void ctrlIUndoesTheNewestCtrlOStepFirst() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        try {
+            page.activate(editor);
+            waitForAttach(editor, "test.txt");
+            page.activate(other);
+            waitForAttach(other, "other.txt, a tab click");
+            page.activate(editor);
+            waitForAttach(editor, "test.txt, a tab click");
+            type(widget, "j");
+            settle();
+            runInBox(widget, "e other.txt");
+            waitForAttach(other, "other.txt, after :e");
+            runInBox(widgetOf(other), "e #");
+            waitForAttach(editor, "test.txt, after :e #");
+
+            List<String> back = pressAndRecordWithLine("<C-o>", 4);
+            assertEquals(List.of("test.txt:2", "other.txt:1", "test.txt:2", "other.txt:1", "test.txt:1"), back,
+                    "a Neovim jump, then Back to the tab clicks and to where test.txt was activated");
+            assertEquals(reversed(back), pressAndRecordWithLine("<C-i>", 4));
+        } finally {
+            closeAllBut(page, editor);
+        }
+    }
+
+    /** As {@link #pressAndRecord}, with Neovim's cursor line: {@code "test.txt:2"}. */
+    private List<String> pressAndRecordWithLine(String key, int times) {
+        IWorkbenchPage page = editor.getSite().getPage();
+        List<String> seen = new ArrayList<>();
+        seen.add(page.getActiveEditor().getTitle() + ":" + cursorLine());
+        for (int i = 0; i < times; i++) {
+            session.inputAsync(key);
+            settle();
+            seen.add(page.getActiveEditor().getTitle() + ":" + cursorLine());
+        }
+        return seen;
+    }
+
+    /** The active editor before and after each of {@code times} presses of {@code key}. */
+    private List<String> pressAndRecord(String key, int times) {
+        IWorkbenchPage page = editor.getSite().getPage();
+        List<String> seen = new ArrayList<>();
+        seen.add(page.getActiveEditor().getTitle());
+        for (int i = 0; i < times; i++) {
+            session.inputAsync(key);
+            settle();
+            seen.add(page.getActiveEditor().getTitle());
+        }
+        return seen;
+    }
+
+    private static List<String> reversed(List<String> list) {
+        List<String> copy = new ArrayList<>(list);
+        java.util.Collections.reverse(copy);
+        return copy;
+    }
+
+    /** Closes every editor but {@code keep}: Back may have reopened earlier tests' editors. */
+    private static void closeAllBut(IWorkbenchPage page, ITextEditor keep) {
+        for (IEditorReference ref : page.getEditorReferences()) {
+            if (ref.getEditor(false) != keep) {
+                page.closeEditors(new IEditorReference[] { ref }, false);
             }
         }
     }

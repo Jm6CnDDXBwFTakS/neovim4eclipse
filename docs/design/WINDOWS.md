@@ -176,6 +176,34 @@ behind by a travel, a show), so each window gathered jumps the user never made: 
 between two editors found one more for ever, and at the end of a window's history Eclipse's Back
 found the other editor again. The module now uses `:keepjumps buffer!` (`put_buf`).
 
+**Back and Forward that retrace (2026-10-29).** After `:e other.txt`, `:e #`, `:e #`, `Ctrl-O`
+went back about nine times and `Ctrl-I` forward about three (measured: 8 and 2). Two causes, both
+from the editor switches the plug-in makes when a Neovim jump goes into another editor's file:
+
+- Eclipse records each such switch in its history, as it records a tab click. Neovim's history has
+  the jump too, but keeps fewer: it drops repeats of a place, so the three `:e` made two jumps and
+  five Eclipse entries. `Ctrl-O` went through the jumps, then through the same switches again as
+  Back.
+- A new entry deletes the entries ahead of it, as a new page does in a browser. `Ctrl-I`'s first
+  jump into the other file made one, and Eclipse's Forward had nothing left.
+
+Eclipse's API has no way to leave an entry out or to go to an entry directly
+(`INavigationHistory` gives the entries and the current one; Back and Forward are commands). So:
+the plug-in notes the entries its own switches add (`editor/NavigationHistorySteps.activateForNeovim`),
+Back steps over them, and a Back that lands where the editor already is (same editor, same caret)
+goes on to the next entry. Each Back is remembered with the editor and caret it left; `Ctrl-I` at
+the end of a window's jumps undoes the last one, through Eclipse's Forward while the place is still
+in its history, else by showing that editor again. A switch the user makes (a tab click, `F3`)
+forgets the remembered Backs, as it deletes Eclipse's way forward; Neovim jumps do not, as Vim
+never drops a jump. The decisions are in `util/HistorySteps`, tested without Eclipse.
+
+The order matters too: a Back can come to an editor whose window still has a newer jump, left from
+an earlier `Ctrl-O` of the same run, and `Ctrl-I` there took that jump first. So `LuaScripts.SETUP`
+keeps a trail of what each `Ctrl-O` step did (a jump in a window, or a Back), and `Ctrl-I` undoes the
+newest step. Eclipse reports Backs that went nowhere (the start of its history), which leave the
+trail. A key typed in between forgets the trail, and so does a jump step whose window is no longer
+current or has no newer jump: the keys then work as before.
+
 ### E3 Two editors on one file
 
 - Cursors and `curswant` are independent: `$j` in one window left the other at its column.

@@ -596,6 +596,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("return to attached buffer", Level.FINE, buffers::returnToAttached);
     }
 
+    /**
+     * Tells Neovim that Eclipse's Back went nowhere for {@code steps} {@code Ctrl-O} steps (the
+     * start of its history), so {@code Ctrl-I} does not first undo steps that moved nothing
+     * ({@link LuaScripts#HISTORY_NOWHERE}).
+     */
+    public void historyBacksWentNowhereAsync(int steps) {
+        submit("Ctrl-O went nowhere", Level.FINE,
+                () -> await(api.execLua(LuaScripts.HISTORY_NOWHERE, List.of(String.valueOf(steps)))));
+    }
+
     @Override
     public boolean setDocumentBufferLines(DocumentBuffer buffer, List<String> lines) throws Exception {
         Handle handle = buffers.handleOf(buffer);

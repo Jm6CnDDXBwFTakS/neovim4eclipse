@@ -138,3 +138,74 @@ t.test('a count larger than the jump history does nothing, as in Neovim', functi
   t.eq(9, vim.fn.line('.'))
   t.eq({}, t.sent('eclipse_action'), 'some older jump exists: Neovim\'s key, which does nothing')
 end)
+
+-- The trail of Ctrl-O steps (SETUP): Ctrl-I undoes the newest first. Here Back lands nowhere (no
+-- Eclipse), so the window still has its newer jumps when Ctrl-I comes; without the trail, Ctrl-I
+-- would take them first, before undoing the Back.
+local function lines_and_jumps()
+  t.setup()
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '1', '2', '3', '4', '5', '6' })
+  t.type('gg')
+  vim.cmd('clearjumps')
+  t.type('3G6G')
+  t.forget()
+end
+
+t.test('Ctrl-I undoes a Back before the jumps Ctrl-O made before it', function()
+  lines_and_jumps()
+  t.type('<C-o><C-o>')
+  t.eq(1, vim.fn.line('.'))
+  t.type('<C-o>') -- no older jump: Back
+  t.eq({ { 'history_back', 0 } }, t.sent('eclipse_action'))
+  t.forget()
+  t.type('<C-i>')
+  t.eq({ { 'history_forward', 0 } }, t.sent('eclipse_action'), 'the Back first')
+  t.eq(1, vim.fn.line('.'))
+  t.forget()
+  t.type('<C-i><C-i>')
+  t.eq(6, vim.fn.line('.'), 'then the two jumps')
+  t.eq({}, t.sent('eclipse_action'))
+end)
+
+t.test('a count is that many steps of the trail', function()
+  lines_and_jumps()
+  t.type('2<C-o>')
+  t.eq(1, vim.fn.line('.'))
+  t.type('3<C-o>')
+  t.eq({ { 'history_back', 3 } }, t.sent('eclipse_action'))
+  t.forget()
+  t.type('3<C-i>')
+  t.eq({ { 'history_forward', 3 } }, t.sent('eclipse_action'))
+  t.type('<C-i>')
+  t.eq(3, vim.fn.line('.'), 'one of the two jump steps')
+end)
+
+t.test('a key typed between forgets the trail', function()
+  lines_and_jumps()
+  t.type('<C-o><C-o><C-o>')
+  t.forget()
+  t.type('l<C-i>')
+  t.eq({}, t.sent('eclipse_action'), 'Neovim\'s own Ctrl-I: the window has a newer jump')
+  t.eq(3, vim.fn.line('.'))
+end)
+
+t.test('Backs Eclipse could not take are no steps for Ctrl-I to undo', function()
+  lines_and_jumps()
+  t.type('<C-o><C-o><C-o><C-o>') -- at once, as a key held down sends them
+  t.run('HISTORY_NOWHERE', '2') -- what Eclipse reports at the start of its history
+  t.forget()
+  t.type('<C-i>')
+  t.eq(3, vim.fn.line('.'), 'straight to the newest jump')
+  t.eq({}, t.sent('eclipse_action'))
+  t.eq({ { 'jump', 1, vim.api.nvim_get_current_win() } }, require('neovim4eclipse.history').trail())
+end)
+
+t.test('a jump step whose window is no longer current forgets the trail', function()
+  lines_and_jumps()
+  t.type('<C-o>')
+  vim.cmd('new | clearjumps') -- another window, as after an editor switch in Eclipse
+  t.forget()
+  t.type('<C-i>')
+  t.eq({ { 'history_forward', 0 } }, t.sent('eclipse_action'), 'the new window has no jumps: Forward')
+  t.eq({}, require('neovim4eclipse.history').trail())
+end)

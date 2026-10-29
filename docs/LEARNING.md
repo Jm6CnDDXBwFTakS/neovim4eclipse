@@ -774,6 +774,18 @@ the workbench, the whole way in a UI test. Example: `ZZ` and `ZQ` (`save_and_clo
 not Java: until 0.1.7 `KeyRouter` followed Vim's grammar itself (`KeyGrammar`, 392 lines) to know
 whether a `Z` or `:` started a command, and every new case (`gqq`, `zfzf`, `g??`) was a bug first.
 
+**Work with Eclipse's navigation history (Back, Forward).** Each workbench page keeps one history
+(`page.getNavigationHistory()`, an `INavigationHistory`): a list of locations, one current. Three
+things to know. Every editor activation adds an entry, also one your code makes, and it is added a
+moment later (Eclipse posts it with `asyncExec`), so read the history after your own `asyncExec`. A
+new entry deletes the entries ahead of the current one, as a browser does. And the API only reads:
+there is no call to leave an entry out or to go to one, so you move with the commands
+(`IWorkbenchCommandConstants.NAVIGATE_BACKWARD_HISTORY`, run through the window's
+`IHandlerService`) and count the steps yourself. Locations are compared by identity: Eclipse updates
+an entry's location in place. Example: `Ctrl-O` past Neovim's jumps steps over the entries the
+plug-in's own switches added (`util/HistorySteps` decides, `editor/NavigationHistorySteps` runs the
+commands; docs/design/WINDOWS.md, E2).
+
 **Get a new event from Neovim.** Add an autocommand to `LuaScripts.SETUP` that calls
 `vim.rpcnotify(0, 'eclipse_<name>', ...)`; add a `case "eclipse_<name>"` to
 `NotificationBridge.notification` (with a private method that reads the arguments) and a method to
