@@ -8,6 +8,13 @@
 
 local t = ...
 
+--- A full path as :Eclipse sends it: vim.fs.normalize'd, so with / only. On Windows getcwd(),
+--- tempname() and expand('~') give backslashes (C:\Users\me), and an expected path built from them
+--- with .. '/name' would mix the two; Java turns the / form into the system's (Path.of).
+local function sent_path(path)
+  return vim.fs.normalize(path)
+end
+
 local function start()
   t.setup()
   t.run('HOST_COMMANDS', t.host_rules)
@@ -43,7 +50,7 @@ t.test('arguments are passed as typed, a count becomes the argument, and | goes 
   t.eq({
     -- The backslash keeps it one argument; :Eclipse's fargs drop it. A file name is made a full
     -- path (the next tests).
-    { 'edit', false, { vim.fn.getcwd() .. '/my file.txt' } },
+    { 'edit', false, { sent_path(vim.fn.getcwd() .. '/my file.txt') } },
     { 'tabnext', false, { '2' } },
     { 'quit', true, {} },
   }, t.sent('eclipse_command'))
@@ -178,9 +185,9 @@ t.test(':e name, ./name and ../name are relative to the window\'s folder, as in 
   t.type(':e ./notes.txt<CR>')
   t.type(':e ../other/x.txt<CR>')
   t.eq({
-    { 'edit', false, { app .. '/notes.txt' } },
-    { 'edit', false, { app .. '/notes.txt' } }, -- ./ is the same folder, not the file's
-    { 'edit', false, { vim.fn.fnamemodify(app, ':h') .. '/other/x.txt' } },
+    { 'edit', false, { sent_path(app .. '/notes.txt') } },
+    { 'edit', false, { sent_path(app .. '/notes.txt') } }, -- ./ is the same folder, not the file's
+    { 'edit', false, { sent_path(vim.fn.fnamemodify(app, ':h') .. '/other/x.txt') } },
   }, t.sent('eclipse_command'))
 end)
 
@@ -190,8 +197,8 @@ t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without o
   t.type(':e ~/a.txt<CR>')
   t.type(':e #<CR>')
   t.eq({
-    { 'edit', false, { app .. '/src/Util.java' } }, -- beside Main.java
-    { 'edit', false, { vim.fn.expand('~') .. '/a.txt' } },
+    { 'edit', false, { sent_path(app .. '/src/Util.java') } }, -- beside Main.java
+    { 'edit', false, { sent_path(vim.fn.expand('~') .. '/a.txt') } },
   }, t.sent('eclipse_command'), 'nothing is sent for #')
   t.ok(vim.fn.execute('messages'):find('E194', 1, true), 'the error is shown')
 end)
@@ -201,8 +208,8 @@ t.test(':wq name and :x name get the same full path as :w name; ++p stays', func
   t.type(':wq copy.txt<CR>')
   t.type(':x ++p out/copy.txt<CR>')
   t.eq({
-    { 'wq', false, { app .. '/copy.txt' } },
-    { 'xit', false, { '++p', app .. '/out/copy.txt' } },
+    { 'wq', false, { sent_path(app .. '/copy.txt') } },
+    { 'xit', false, { '++p', sent_path(app .. '/out/copy.txt') } },
   }, t.sent('eclipse_command'))
 end)
 
