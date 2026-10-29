@@ -51,6 +51,7 @@
  *       (for {@code sync/UnattachedDocumentSync}), {@code DiagnosticsPort} (for
  *       {@code sync/DiagnosticsSync}), {@code FoldsPort} (for the editor's fold mirror),
  *       {@code ViewportPort} (the editor's size and word wrap, for Neovim's window),
+ *       {@code QuickfixPort} (the quickfix lists of {@code :Eproblems}, for {@code editor/QuickfixLists}),
  *       {@code CursorPort} (for
  *       {@code editor/CaretSync}), {@code KeyRouter.Neovim}; and the other direction, what core code
  *       and its callers need from Eclipse: {@code ClipboardPort}, {@code UiExecutor} (the UI thread;

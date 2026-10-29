@@ -19,6 +19,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolders;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.QuickfixLists;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ContributionVisibility;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
@@ -54,6 +55,8 @@ public class Activator extends AbstractUIPlugin {
     private ProjectFolderExit projectFolderExit;
     /** Tells Neovim the projects' folders again when projects or linked folders come or go. */
     private ProjectFolders projectFolders;
+    /** Keeps the quickfix lists of :Eproblems and :Etasks current as markers change. */
+    private QuickfixLists quickfixLists;
 
     @Override
     public void start(BundleContext context) throws Exception {
@@ -65,6 +68,7 @@ public class Activator extends AbstractUIPlugin {
         EditorAttachManager.getInstance().installWorkbenchListeners();
         projectFolderExit = ProjectFolderExit.install(this::currentSession);
         projectFolders = ProjectFolders.install(this::currentSession);
+        quickfixLists = QuickfixLists.install(this::currentSession);
 
         preferenceListener = event -> {
             String property = event.getProperty();
@@ -91,6 +95,8 @@ public class Activator extends AbstractUIPlugin {
         projectFolderExit = null;
         ProjectFolders.uninstall(projectFolders);
         projectFolders = null;
+        QuickfixLists.uninstall(quickfixLists);
+        quickfixLists = null;
         EditorAttachManager.getInstance().detachQuietly();
         shutdownSession();
         plugin = null;

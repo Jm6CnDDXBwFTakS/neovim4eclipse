@@ -13,6 +13,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 
 /**
  * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
@@ -150,6 +151,17 @@ final class NotificationBridge implements Incoming {
         void onHostCommand(HostCommand command);
 
         /**
+         * {@code :Eproblems[!] [severity]} or {@code :Etasks[!]} ran ({@link LuaScripts#QUICKFIX}):
+         * Eclipse fills the quickfix list.
+         *
+         * @param arg the severity word or the task tags
+         */
+        void onQuickfix(QuickfixEntries.Kind kind, String arg, boolean bang);
+
+        /** {@code :copen} with one of Eclipse's lists current: Eclipse shows the Problems or Tasks view. */
+        void onShowView(QuickfixEntries.Kind kind);
+
+        /**
          * The command-line, completion-menu and view events of one {@code redraw} notification, in
          * order (the UI is attached with {@code ext_cmdline} and {@code ext_popupmenu}; see
          * {@link CmdlineEvent}). Passed together so that the box is redrawn once for them.
@@ -188,6 +200,8 @@ final class NotificationBridge implements Incoming {
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
             case "eclipse_command" -> onCommand(args);
+            case "eclipse_quickfix" -> onQuickfix(args);
+            case "eclipse_show_view" -> onShowView(args);
             case "eclipse_showcmd" -> onShowcmd(args);
             case "eclipse_wrap" -> onWrap(args);
             case "eclipse_viewport" -> sink.onViewportOverheadChanged();
@@ -390,6 +404,28 @@ final class NotificationBridge implements Incoming {
             return;
         }
         sink.onHostCommand(command);
+    }
+
+    /**
+     * Payload: {@code [kind, arg, bang]}, as {@code :Eproblems! warning} sends it
+     * ({@code ["problems", "warning", true]}). An unknown kind is dropped.
+     */
+    private void onQuickfix(List<?> args) {
+        QuickfixEntries.Kind kind = args.isEmpty() ? null : QuickfixEntries.Kind.of(String.valueOf(args.get(0)));
+        if (kind == null) {
+            LOG.warning(() -> "Ignored eclipse_quickfix " + args);
+            return;
+        }
+        String arg = args.size() > 1 && args.get(1) instanceof String text ? text : "";
+        sink.onQuickfix(kind, arg, args.size() > 2 && Boolean.TRUE.equals(args.get(2)));
+    }
+
+    /** Payload: {@code [kind]} ({@code ["tasks"]}). An unknown kind is dropped. */
+    private void onShowView(List<?> args) {
+        QuickfixEntries.Kind kind = args.isEmpty() ? null : QuickfixEntries.Kind.of(String.valueOf(args.get(0)));
+        if (kind != null) {
+            sink.onShowView(kind);
+        }
     }
 
     /** Payload: {@code [bufnr, changedtick, firstline, lastline, linedata, more]}. */
