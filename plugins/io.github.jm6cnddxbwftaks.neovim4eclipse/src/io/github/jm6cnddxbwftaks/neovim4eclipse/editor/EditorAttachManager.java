@@ -19,6 +19,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.source.IAnnotationModel;
 import org.eclipse.swt.widgets.Display;
@@ -518,12 +519,25 @@ public final class EditorAttachManager {
      * Neovim switched by itself to a project's file that has no editor ({@code gf}, {@code 'A},
      * {@code :b} into a closed file, a quickfix entry), which the plug-in read for it
      * ({@code LuaScripts.PROJECT_FILES}). Called on an RPC thread; see {@link #followNeovimIntoFile}.
+     *
+     * <p>The workspace file is looked up in a {@link Job} first, not on the UI thread: a file made on
+     * disk since Eclipse's last refresh is refreshed then ({@link ProjectFileEditors#workspaceFile}),
+     * and a refresh waits for the workspace while another job holds it. A build holds it for as long
+     * as it runs, and the UI would freeze that long. Not on this RPC thread either, which reads every
+     * notification Neovim sends. Example: {@code git checkout} adds {@code B.java} and starts a build;
+     * {@code gf} onto it waits in the job, Eclipse stays usable, and the editor opens when the build
+     * is done (unless Neovim has moved on meanwhile).
      */
     private void onNeovimEnteredProjectFile(int bufnr, String file) {
-        Display display = Display.getDefault();
-        if (display != null && !display.isDisposed()) {
-            display.asyncExec(() -> followNeovimIntoFile(bufnr, file));
-        }
+        Job lookup = Job.create("Neovim: find " + file, monitor -> {
+            IFile target = ProjectFileEditors.workspaceFile(file);
+            Display display = Display.getDefault();
+            if (display != null && !display.isDisposed()) {
+                display.asyncExec(() -> followNeovimIntoFile(bufnr, file, target));
+            }
+        });
+        lookup.setSystem(true); // no progress shown: it takes milliseconds, unless a build runs
+        lookup.schedule();
     }
 
     /**
@@ -533,8 +547,10 @@ public final class EditorAttachManager {
      * {@code gf}, a mark or the quickfix entry put it). The attach finds the buffer by its name and
      * keeps it (its number, its marks: docs/design/BUFFER_NUMBERS.md, 2.2). A file Eclipse would not
      * open here ({@link ProjectFileEditors}) sends Neovim back, as before. UI thread.
+     *
+     * @param target the workspace file at {@code file}, or {@code null} when it is no open project's
      */
-    private void followNeovimIntoFile(int bufnr, String file) {
+    private void followNeovimIntoFile(int bufnr, String file, IFile target) {
         NeovimSession session;
         EditorWindow mover;
         DocumentBuffer leftBehind;
@@ -558,7 +574,7 @@ public final class EditorAttachManager {
                 IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
                 page = window == null ? null : window.getActivePage();
             }
-            IEditorPart opened = page == null ? null : ProjectFileEditors.open(page, file);
+            IEditorPart opened = page == null || target == null ? null : ProjectFileEditors.open(page, target);
             if (opened != null) {
                 NavigationHistorySteps.activateForNeovim(page, opened, jumped);
                 if (textEditorOf(opened) != null) {

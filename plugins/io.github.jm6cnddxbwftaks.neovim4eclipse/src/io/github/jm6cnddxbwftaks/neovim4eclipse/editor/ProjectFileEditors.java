@@ -14,7 +14,6 @@ import java.util.logging.Logger;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.ui.IEditorDescriptor;
 import org.eclipse.ui.IEditorPart;
@@ -33,11 +32,15 @@ import org.eclipse.ui.part.MultiPageEditorPart;
  * <ul>
  *   <li><b>Find the file.</b> {@code findFilesForLocationURI} by the name Neovim gave, then by its
  *       real path (a Windows junction or 8.3 short name in Neovim's name is not found otherwise);
- *       the first file that exists in an open project. A file under a linked folder is found once per
- *       link; any of them will do.</li>
+ *       the first in an open project ({@link NewFiles#workspaceFileAt}). Eclipse lists a nested
+ *       project's file first (a Maven module inside its parent's folder), so the module's editor
+ *       opens, with its build path. A file under a linked folder is found once per link; any of
+ *       them will do.</li>
  *   <li><b>Refresh it first.</b> A file made on disk since Eclipse's last refresh (by a build tool, a
  *       {@code git checkout}) is found but does not exist for Eclipse, and its editor would open
- *       empty. Its missing folders and the file are refreshed, one level each.</li>
+ *       empty. Its missing folders and the file are refreshed, one level each. A refresh waits for
+ *       the workspace while a build runs, so this part runs off the UI thread
+ *       ({@link #workspaceFile}).</li>
  *   <li><b>Only Eclipse's own editors.</b> {@code IDE.getEditorDescriptor} names the editor Eclipse
  *       would open; for a {@code .zip}, a {@code .pdf} or an unknown binary that is the system's
  *       program, which would start outside Eclipse. Then nothing opens.</li>
@@ -56,18 +59,13 @@ final class ProjectFileEditors {
     }
 
     /**
-     * Opens {@code file}'s editor in {@code page}, not activated. UI thread.
+     * Opens {@code target}'s editor in {@code page}, not activated. UI thread.
      *
-     * @param file the buffer's name in Neovim (an absolute path, as Neovim wrote it)
-     * @return the text editor or multi-page editor opened, or {@code null} when the file is no open
-     *         project's, Eclipse would open it outside the IDE, or it is no text (each logged)
+     * @param target the file, from {@link #workspaceFile}
+     * @return the text editor or multi-page editor opened, or {@code null} when Eclipse would open it
+     *         outside the IDE, or it is no text (each logged)
      */
-    static IEditorPart open(IWorkbenchPage page, String file) {
-        IFile target = workspaceFile(file);
-        if (target == null) {
-            LOG.fine(() -> "Not a file of an open project: " + file);
-            return null;
-        }
+    static IEditorPart open(IWorkbenchPage page, IFile target) {
         IEditorDescriptor editor;
         try {
             editor = IDE.getEditorDescriptor(target, true, false);
@@ -101,7 +99,12 @@ final class ProjectFileEditors {
 
     /**
      * The workspace file at Neovim's {@code name}, refreshed, or {@code null} when it is not a file of
-     * an open project (or not on disk).
+     * an open project (or not on disk; logged).
+     *
+     * <p>Never on the UI thread: a refresh waits for the workspace while another job (a build) holds
+     * it. Any other thread.
+     *
+     * @param name the buffer's name in Neovim (an absolute path, as Neovim wrote it)
      */
     static IFile workspaceFile(String name) {
         Path path;
@@ -121,22 +124,25 @@ final class ProjectFileEditors {
                 LOG.log(Level.FINE, "No real path for " + name, e);
             }
         }
+        if (found == null) {
+            LOG.fine(() -> "Not a file of an open project: " + name);
+        }
         return found;
     }
 
+    /**
+     * The file at {@code path} ({@link NewFiles#workspaceFileAt}: in a nested project, the inner
+     * project's), refreshed when Eclipse does not know it yet, or {@code null}.
+     */
     private static IFile existing(Path path) {
-        for (IFile file : ResourcesPlugin.getWorkspace().getRoot().findFilesForLocationURI(path.toUri())) {
-            if (!file.getProject().isAccessible()) {
-                continue;
-            }
-            if (!file.exists()) {
-                refresh(file);
-            }
-            if (file.isAccessible()) {
-                return file;
-            }
+        IFile file = NewFiles.workspaceFileAt(path);
+        if (file == null) {
+            return null;
         }
-        return null;
+        if (!file.exists()) {
+            refresh(file);
+        }
+        return file.isAccessible() ? file : null;
     }
 
     /** Refreshes {@code file} and the folders above it that Eclipse does not know yet, top down. */
