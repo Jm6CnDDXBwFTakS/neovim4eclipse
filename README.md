@@ -650,7 +650,7 @@ The variables starting with `eclipse_` work in two directions:
 | Variable | Set by | Meaning |
 |----------|--------|---------|
 | `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
-| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT`, `Ctrl-O`, `Ctrl-I` (not `ZZ`, `ZQ`; [docs/KEYBOARD.md](docs/KEYBOARD.md)) |
+| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT` (not `ZZ`, `ZQ`; [docs/KEYBOARD.md](docs/KEYBOARD.md)) |
 | `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with

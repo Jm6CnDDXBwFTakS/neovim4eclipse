@@ -90,15 +90,26 @@ still handles counts, the `g` prefix and arguments (`fZ` finds a `Z`; it is not 
 | `ZZ` | save the editor if it has changes, then close it (Vim's `:x`); a failed save keeps it open |
 | `ZQ` | close the editor without saving (Vim's `:q!`) |
 
-These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys
-(except `Ctrl-O` and `Ctrl-I`, which keep yours).
+These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys,
+except `Ctrl-O` and `Ctrl-I`: those keep yours, and that is also how to turn their fallback off,
+for Vim's exact "nothing at the end of the history":
+
+```lua
+vim.keymap.set('n', '<C-o>', '<C-o>')
+vim.keymap.set('n', '<C-i>', '<C-i>')
+```
+
+A count larger than the jump history (`5<C-o>` with two older jumps) does nothing, as in Neovim;
+only with no older jump at all does `Ctrl-O` go to Eclipse. Whether Neovim gets `Ctrl+O` and
+`Ctrl+I` at all is the *Ctrl Keys* preference (above); cleared, they are Eclipse's own keys and
+none of this applies.
 To keep Neovim's meaning instead, put this in `init.lua`:
 
 ```lua
 vim.g.neovim4eclipse_ide_keys = 0   -- or false
 ```
 
-`ZZ` and `ZQ` stay mapped either way: Neovim's own would quit the embedded Neovim, which every
+`ZZ`, `ZQ` and the `Ctrl-O` / `Ctrl-I` fallback stay either way: Neovim's own would quit the embedded Neovim, which every
 editor shares.
 
 ## Where this lives in the code
