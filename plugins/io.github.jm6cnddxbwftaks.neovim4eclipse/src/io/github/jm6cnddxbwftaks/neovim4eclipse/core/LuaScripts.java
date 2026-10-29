@@ -738,15 +738,29 @@ final class LuaScripts {
               return home
             end
 
+            --- Shows buf in win without adding to win's jump history (:keepjumps). nvim_win_set_buf
+            --- and nvim_set_current_buf add a jump to the window they change, and the plug-in changes
+            --- windows behind the user's back: the window left behind by a travel got a jump each
+            --- time. With such stray jumps, Ctrl-O (and Ctrl-I) never ran out between two editors:
+            --- each found one more jump into the other file, and at the end of a window's history
+            --- Eclipse's Back (the fallback, SETUP) found the other editor again. Example: :e
+            --- other.txt, :e #, :e #, then Ctrl-O held down went back and forth for ever. The !
+            --- hides the buffer left even with changes, which live in Eclipse's document.
+            local function put_buf(win, buf)
+              vim.api.nvim_win_call(win, function()
+                vim.cmd('keepjumps buffer! ' .. buf)
+              end)
+            end
+
             --- Puts buf in win: as Neovim does it when win is current (BufEnter tells Eclipse), quietly if not.
             local function set_buf(win, buf)
               if vim.api.nvim_win_get_buf(win) == buf then
                 return
               end
               if win == vim.api.nvim_get_current_win() then
-                without_file_info(vim.api.nvim_set_current_buf, buf)
+                without_file_info(put_buf, win, buf)
               else
-                quietly(vim.api.nvim_win_set_buf, win, buf)
+                quietly(put_buf, win, buf)
               end
             end
 
@@ -790,7 +804,7 @@ final class LuaScripts {
 
             function M.travel(win, buf, line, col)
               quietly(function()
-                vim.api.nvim_win_set_buf(win, buf)
+                put_buf(win, buf) -- no jump in the window left behind (see put_buf)
                 local last = vim.api.nvim_buf_line_count(buf)
                 pcall(vim.api.nvim_win_set_cursor, win, { math.max(1, math.min(line, last)), math.max(0, col) })
               end)
@@ -803,7 +817,7 @@ final class LuaScripts {
                 quietly(function()
                   vim.api.nvim_set_current_win(to)
                   if vim.api.nvim_buf_is_valid(fallback) then
-                    vim.api.nvim_win_set_buf(to, fallback)
+                    put_buf(to, fallback)
                   end
                 end)
               end

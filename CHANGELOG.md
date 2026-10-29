@@ -71,6 +71,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- `Ctrl-O` or `Ctrl-I` held down between two editors no longer goes back and forth for ever. Each
+  move of a Neovim window to another editor left a stray jump in the other editor's window, so
+  there was always one more jump, and Eclipse's Back found the other editor again.
 - Enter that accepts a rename (`Alt+Shift+R`) begun in normal mode now ends insert mode too, as
   Esc already did, with the cursor on the name's first letter. Neovim stayed in insert mode, and so
   did the next editor you switched to.

@@ -75,6 +75,32 @@ t.test("a new window's jump history starts empty instead of copying the current 
   t.eq({}, vim.api.nvim_win_call(win, vim.fn.getjumplist)[1])
 end)
 
+--- The window's jump history: its length and where Ctrl-O starts from, as "2:2".
+local function jumps(win)
+  return vim.api.nvim_win_call(win, function()
+    local list, pos = unpack(vim.fn.getjumplist())
+    return #list .. ':' .. pos
+  end)
+end
+
+t.test('putting another buffer in a window (a travel, a show) adds no jump to its history', function()
+  start()
+  local a, b = buffer(30), buffer(30)
+  local win = open(a)
+  vim.api.nvim_win_call(win, function()
+    vim.cmd('normal! 10G')
+    vim.cmd('normal! 20G')
+  end)
+  local before = jumps(win)
+  t.eq('2:2', before, 'the window has two jumps of its own')
+
+  t.run('TRAVEL_WINDOW', tostring(win), tostring(b), '5', '0') -- the window left behind by a travel
+  t.eq(b, vim.api.nvim_win_get_buf(win))
+  t.eq(before, jumps(win), 'no stray jump: Ctrl-O there would find one more for ever')
+  show(win, a) -- Eclipse shows its document there again
+  t.eq(before, jumps(win))
+end)
+
 t.test("the folder is set once with :lcd; without one the window keeps the folder it copied", function()
   start()
   local dir = vim.fn.fnamemodify(vim.fn.tempname(), ':p')
