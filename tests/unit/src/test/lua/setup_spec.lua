@@ -100,7 +100,7 @@ t.test('Ctrl-O and Ctrl-I are Neovim\'s while its jump history goes on, then Ecl
   t.type('gg')
   vim.cmd('clearjumps')
   t.type('<C-o>') -- no older jump: an editor switch made in Eclipse is in Eclipse's history only
-  t.eq({ { 'history_back', 0 } }, t.sent('eclipse_action'))
+  t.eq({ { 'history_back', 0, 1 } }, t.sent('eclipse_action'), 'with the id of its Back step')
   t.forget()
   t.type('G<C-o>') -- G is a jump: Neovim's own Ctrl-O goes back to line 1
   t.eq(1, vim.fn.line('.'))
@@ -108,8 +108,8 @@ t.test('Ctrl-O and Ctrl-I are Neovim\'s while its jump history goes on, then Ecl
   t.type('<C-i>') -- and Ctrl-I forward again, to line 3
   t.eq(3, vim.fn.line('.'))
   t.eq({}, t.sent('eclipse_action'))
-  t.type('2<C-i>') -- nothing newer: Forward, with the count
-  t.eq({ { 'history_forward', 2 } }, t.sent('eclipse_action'))
+  t.type('2<C-i>') -- nothing newer: Forward, with the count (no step: G forgot the Back)
+  t.eq({ { 'history_forward', 2, 0 } }, t.sent('eclipse_action'))
   t.eq(3, vim.fn.line('.'))
 end)
 
@@ -125,7 +125,7 @@ t.test('the IDE keys switch does not cover Ctrl-O and Ctrl-I: they still fall ba
   t.setup()
   vim.cmd('clearjumps')
   t.type('<C-o><C-i>')
-  t.eq({ { 'history_back', 0 }, { 'history_forward', 0 } }, t.sent('eclipse_action'))
+  t.eq({ { 'history_back', 0, 1 }, { 'history_forward', 0, 1 } }, t.sent('eclipse_action'))
 end)
 
 t.test('a count larger than the jump history does nothing, as in Neovim', function()
@@ -151,15 +151,19 @@ local function lines_and_jumps()
   t.forget()
 end
 
+local function trail()
+  return require('neovim4eclipse.history').trail()
+end
+
 t.test('Ctrl-I undoes a Back before the jumps Ctrl-O made before it', function()
   lines_and_jumps()
   t.type('<C-o><C-o>')
   t.eq(1, vim.fn.line('.'))
-  t.type('<C-o>') -- no older jump: Back
-  t.eq({ { 'history_back', 0 } }, t.sent('eclipse_action'))
+  t.type('<C-o>') -- no older jump: Back step 1
+  t.eq({ { 'history_back', 0, 1 } }, t.sent('eclipse_action'))
   t.forget()
   t.type('<C-i>')
-  t.eq({ { 'history_forward', 0 } }, t.sent('eclipse_action'), 'the Back first')
+  t.eq({ { 'history_forward', 0, 1 } }, t.sent('eclipse_action'), 'the Back first, by its id')
   t.eq(1, vim.fn.line('.'))
   t.forget()
   t.type('<C-i><C-i>')
@@ -167,17 +171,34 @@ t.test('Ctrl-I undoes a Back before the jumps Ctrl-O made before it', function()
   t.eq({}, t.sent('eclipse_action'))
 end)
 
-t.test('a count is that many steps of the trail', function()
+t.test('a count is that many steps, each Back step with its own id', function()
   lines_and_jumps()
   t.type('2<C-o>')
   t.eq(1, vim.fn.line('.'))
   t.type('3<C-o>')
-  t.eq({ { 'history_back', 3 } }, t.sent('eclipse_action'))
+  t.eq({ { 'history_back', 3, 1 } }, t.sent('eclipse_action'), 'steps 1, 2 and 3')
+  t.eq({ { 'jump', 2, vim.api.nvim_get_current_win() }, { 'back', 1 }, { 'back', 2 }, { 'back', 3 } }, trail())
   t.forget()
-  t.type('3<C-i>')
-  t.eq({ { 'history_forward', 3 } }, t.sent('eclipse_action'))
+  t.type('2<C-i>')
+  t.eq({ { 'history_forward', 2, 2 } }, t.sent('eclipse_action'), 'undo steps 3 and 2')
+  t.forget()
+  t.type('<C-i>')
+  t.eq({ { 'history_forward', 0, 1 } }, t.sent('eclipse_action'))
   t.type('<C-i>')
   t.eq(3, vim.fn.line('.'), 'one of the two jump steps')
+end)
+
+t.test('a count past the newest run of one kind does nothing', function()
+  lines_and_jumps()
+  t.type('<C-o><C-o><C-o>') -- two jumps, a Back
+  t.forget()
+  t.type('2<C-i>')
+  t.eq({}, t.sent('eclipse_action'), 'one Back, then jumps: no Forward')
+  t.eq(1, vim.fn.line('.'), 'and no jump')
+  t.type('<C-i>3<C-i>')
+  t.eq(1, vim.fn.line('.'), 'two jumps in the run, not three')
+  t.type('2<C-i>')
+  t.eq(6, vim.fn.line('.'))
 end)
 
 t.test('a key typed between forgets the trail', function()
@@ -189,15 +210,27 @@ t.test('a key typed between forgets the trail', function()
   t.eq(3, vim.fn.line('.'))
 end)
 
-t.test('Backs Eclipse could not take are no steps for Ctrl-I to undo', function()
+t.test('Back steps Eclipse could not take leave the trail by their ids', function()
   lines_and_jumps()
-  t.type('<C-o><C-o><C-o><C-o>') -- at once, as a key held down sends them
-  t.run('HISTORY_NOWHERE', '2') -- what Eclipse reports at the start of its history
+  t.type('<C-o><C-o><C-o><C-o><C-o>') -- at once, as a key held down sends them: two jumps, steps 1-3
+  t.run('HISTORY_NOWHERE', '2', '2') -- what Eclipse reports at the start of its history: 2 and 3
+  t.eq({ { 'jump', 2, vim.api.nvim_get_current_win() }, { 'back', 1 } }, trail())
   t.forget()
   t.type('<C-i>')
-  t.eq(3, vim.fn.line('.'), 'straight to the newest jump')
-  t.eq({}, t.sent('eclipse_action'))
-  t.eq({ { 'jump', 1, vim.api.nvim_get_current_win() } }, require('neovim4eclipse.history').trail())
+  t.eq({ { 'history_forward', 0, 1 } }, t.sent('eclipse_action'))
+  t.run('HISTORY_NOWHERE', '1', '1') -- late, after Ctrl-I took step 1: nothing else goes
+  t.eq({ { 'jump', 2, vim.api.nvim_get_current_win() } }, trail())
+end)
+
+t.test('Eclipse\'s forget, after an editor switch of the user\'s, clears the trail', function()
+  lines_and_jumps()
+  t.type('<C-o><C-o><C-o>')
+  t.run('HISTORY_FORGET')
+  t.eq({}, trail())
+  t.forget()
+  t.type('<C-i>')
+  t.eq({}, t.sent('eclipse_action'), 'Neovim\'s own Ctrl-I: the window has a newer jump')
+  t.eq(3, vim.fn.line('.'))
 end)
 
 t.test('a jump step whose window is no longer current forgets the trail', function()
@@ -206,6 +239,20 @@ t.test('a jump step whose window is no longer current forgets the trail', functi
   vim.cmd('new | clearjumps') -- another window, as after an editor switch in Eclipse
   t.forget()
   t.type('<C-i>')
-  t.eq({ { 'history_forward', 0 } }, t.sent('eclipse_action'), 'the new window has no jumps: Forward')
-  t.eq({}, require('neovim4eclipse.history').trail())
+  t.eq({ { 'history_forward', 0, 0 } }, t.sent('eclipse_action'), 'the new window has no jumps: Forward')
+  t.eq({}, trail())
+end)
+
+t.test('BufEnter says whether the move is in the jump history', function()
+  t.setup()
+  local a = vim.api.nvim_get_current_buf()
+  local b = vim.api.nvim_create_buf(true, false)
+  local c = vim.api.nvim_create_buf(true, false)
+  vim.cmd('clearjumps')
+  t.forget()
+  vim.cmd('buffer ' .. b)
+  vim.cmd('keepjumps buffer ' .. c)
+  local win = vim.api.nvim_get_current_win()
+  t.eq({ { b, win, true }, { c, win, false } }, t.sent('eclipse_buf_enter'), ':b is a jump, :keepjumps b not')
+  t.eq(true, a > 0)
 end)

@@ -62,8 +62,9 @@ final class NotificationBridge implements Incoming {
         /**
          * Neovim made {@code bufnr} its current buffer in window {@code winid} (a jump, {@code :b},
          * or a switch by Eclipse); {@code winid} is {@link EditorWindow#UNKNOWN} if not sent.
+         * {@code jumped}: the move is in the window's jump history (false if not sent).
          */
-        void onBufferEnter(int bufnr, int winid);
+        void onBufferEnter(int bufnr, int winid, boolean jumped);
 
         /**
          * Neovim closed window {@code winid} by itself ({@code :tabclose}, a plug-in): the safety net
@@ -227,10 +228,11 @@ final class NotificationBridge implements Incoming {
         }
     }
 
+    /** Payload: {@code [bufnr, winid, jumped]} (see {@link Sink#onBufferEnter}). */
     private void onBufEnter(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
-            sink.onBufferEnter(buf, window(args, 1));
+            sink.onBufferEnter(buf, window(args, 1), args.size() > 2 && Boolean.TRUE.equals(args.get(2)));
         }
     }
 
@@ -339,11 +341,13 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [name, count]} (see {@link IdeAction}). */
+    /** Payload: {@code [name, count]}, or {@code [name, count, step]} for Back and Forward (see {@link IdeAction}). */
     private void onAction(List<?> args) {
         if (!args.isEmpty() && args.get(0) != null) {
             Integer count = args.size() >= 2 ? toInt(args.get(1)) : null;
-            sink.onIdeAction(new IdeAction(String.valueOf(args.get(0)), count == null ? 0 : Math.max(0, count)));
+            Integer step = args.size() >= 3 ? toInt(args.get(2)) : null;
+            sink.onIdeAction(new IdeAction(String.valueOf(args.get(0)), count == null ? 0 : Math.max(0, count),
+                    step == null ? 0 : Math.max(0, step)));
         }
     }
 

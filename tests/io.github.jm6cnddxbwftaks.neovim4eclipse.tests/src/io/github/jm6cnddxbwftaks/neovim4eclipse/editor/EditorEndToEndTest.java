@@ -296,11 +296,11 @@ class EditorEndToEndTest extends EndToEndTestBase {
             runInBox(widget, "e #");
             waitForAttach(other, "other.txt, after a second :e #");
 
-            List<String> back = pressAndRecord("<C-o>", 2);
+            List<String> back = pressAndRecord("<C-o>", 2, this::activeEditor);
             assertEquals(List.of("other.txt", "test.txt", "other.txt"), back);
             assertSame(otherOpened, page.getNavigationHistory().getCurrentLocation(),
                     "Back went to where other.txt was opened, past the plug-in's switches");
-            assertEquals(reversed(back), pressAndRecord("<C-i>", 2));
+            assertEquals(reversed(back), pressAndRecord("<C-i>", 2, this::activeEditor));
         } finally {
             closeAllBut(page, editor);
         }
@@ -327,10 +327,42 @@ class EditorEndToEndTest extends EndToEndTestBase {
             page.activate(third); // a tab click
             waitForAttach(third, "third.txt");
 
-            List<String> back = pressAndRecord("<C-o>", 3);
+            List<String> back = pressAndRecord("<C-o>", 3, this::activeEditor);
             assertEquals(List.of("third.txt", "test.txt", "other.txt", "test.txt"), back,
                     "Back, a Neovim jump in test.txt's window, Back");
-            assertEquals(reversed(back), pressAndRecord("<C-i>", 3));
+            assertEquals(reversed(back), pressAndRecord("<C-i>", 3, this::activeEditor));
+        } finally {
+            closeAllBut(page, editor);
+        }
+    }
+
+    /**
+     * The place a Back started from is gone for good when its editor was closed: {@code Ctrl-I}
+     * stops there, and does not reopen it. As {@link #ctrlIComesBackToAPlaceEclipsesHistoryLost},
+     * with third.txt closed before the {@code Ctrl-I}.
+     */
+    @Test
+    void ctrlIDoesNotReopenTheEditorABackLeftWhenItWasClosed() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        ITextEditor third = openFile("third.txt", "third\n");
+        try {
+            page.activate(editor);
+            waitForAttach(editor, "test.txt");
+            runInBox(widget, "e other.txt");
+            waitForAttach(other, "other.txt, after :e");
+            runInBox(widgetOf(other), "e #");
+            waitForAttach(editor, "test.txt, after :e #");
+            page.activate(third);
+            waitForAttach(third, "third.txt");
+            pressAndRecord("<C-o>", 3, this::activeEditor);
+            page.closeEditor(third, false);
+            settle();
+
+            assertEquals(List.of("test.txt", "other.txt", "test.txt", "test.txt"),
+                    pressAndRecord("<C-i>", 3, this::activeEditor), "the last Ctrl-I has nowhere to go");
+            assertTrue(java.util.Arrays.stream(page.getEditorReferences())
+                    .noneMatch(ref -> "third.txt".equals(ref.getName())), "third.txt stays closed");
         } finally {
             closeAllBut(page, editor);
         }
@@ -361,39 +393,35 @@ class EditorEndToEndTest extends EndToEndTestBase {
             runInBox(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
 
-            List<String> back = pressAndRecordWithLine("<C-o>", 4);
+            List<String> back = pressAndRecord("<C-o>", 4, this::activeEditorAndLine);
             assertEquals(List.of("test.txt:2", "other.txt:1", "test.txt:2", "other.txt:1", "test.txt:1"), back,
                     "a Neovim jump, then Back to the tab clicks and to where test.txt was activated");
-            assertEquals(reversed(back), pressAndRecordWithLine("<C-i>", 4));
+            assertEquals(reversed(back), pressAndRecord("<C-i>", 4, this::activeEditorAndLine));
         } finally {
             closeAllBut(page, editor);
         }
     }
 
-    /** As {@link #pressAndRecord}, with Neovim's cursor line: {@code "test.txt:2"}. */
-    private List<String> pressAndRecordWithLine(String key, int times) {
-        IWorkbenchPage page = editor.getSite().getPage();
+    /** {@code state} before and after each of {@code times} presses of {@code key}. */
+    private List<String> pressAndRecord(String key, int times, java.util.function.Supplier<String> state) {
         List<String> seen = new ArrayList<>();
-        seen.add(page.getActiveEditor().getTitle() + ":" + cursorLine());
+        seen.add(state.get());
         for (int i = 0; i < times; i++) {
             session.inputAsync(key);
             settle();
-            seen.add(page.getActiveEditor().getTitle() + ":" + cursorLine());
+            seen.add(state.get());
         }
         return seen;
     }
 
-    /** The active editor before and after each of {@code times} presses of {@code key}. */
-    private List<String> pressAndRecord(String key, int times) {
-        IWorkbenchPage page = editor.getSite().getPage();
-        List<String> seen = new ArrayList<>();
-        seen.add(page.getActiveEditor().getTitle());
-        for (int i = 0; i < times; i++) {
-            session.inputAsync(key);
-            settle();
-            seen.add(page.getActiveEditor().getTitle());
-        }
-        return seen;
+    /** The active editor's name: {@code "test.txt"}. */
+    private String activeEditor() {
+        return editor.getSite().getPage().getActiveEditor().getTitle();
+    }
+
+    /** The active editor's name and Neovim's cursor line: {@code "test.txt:2"}. */
+    private String activeEditorAndLine() {
+        return activeEditor() + ":" + cursorLine();
     }
 
     private static List<String> reversed(List<String> list) {

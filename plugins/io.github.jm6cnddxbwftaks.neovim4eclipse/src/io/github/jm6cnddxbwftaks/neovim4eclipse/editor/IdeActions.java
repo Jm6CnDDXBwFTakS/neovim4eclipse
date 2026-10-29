@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,10 +55,10 @@ final class IdeActions {
      * @param viewer   the editor's text viewer, or {@code null}; for the hyperlink check of {@code gd}
      * @param caret    the caret as a document offset, for the same check
      * @param neovimGd runs Neovim's own {@code gd}, bypassing the plug-in's mapping
-     * @param nowhere  told how many {@code Ctrl-O} steps Eclipse's Back could not take (its start)
+     * @param trail    Neovim's trail of {@code Ctrl-O} steps, told of Back steps that went nowhere
      */
     static void run(IdeAction action, ITextEditor editor, ITextViewer viewer, int caret, Runnable neovimGd,
-            IntConsumer nowhere) {
+            NavigationHistorySteps.Trail trail) {
         switch (action.name()) {
             case IdeAction.DEFINITION -> {
                 String bound = commandBoundTo("F3");
@@ -78,8 +77,10 @@ final class IdeActions {
             }
             case IdeAction.NEXT_TAB -> EditorTabs.go(editor, TabNavigation.Action.NEXT, action.count());
             case IdeAction.PREVIOUS_TAB -> EditorTabs.go(editor, TabNavigation.Action.PREVIOUS, action.count());
-            case IdeAction.HISTORY_BACK -> NavigationHistorySteps.back(editor.getSite().getPage(), action.count(), nowhere);
-            case IdeAction.HISTORY_FORWARD -> NavigationHistorySteps.forward(editor.getSite().getPage(), action.count());
+            case IdeAction.HISTORY_BACK -> NavigationHistorySteps.back(editor.getSite().getPage(), action.count(),
+                    action.step(), trail);
+            case IdeAction.HISTORY_FORWARD -> NavigationHistorySteps.forward(editor.getSite().getPage(), action.count(),
+                    action.step());
             case IdeAction.SAVE_AND_CLOSE -> EclipseFileCommands.zz(editor);
             case IdeAction.CLOSE -> EclipseFileCommands.zq(editor);
             default -> LOG.fine(() -> "Unknown IDE action ignored: " + action);

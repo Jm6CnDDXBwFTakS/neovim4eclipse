@@ -21,8 +21,17 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  *
  * @param name  one of the {@code *} constants below; others are ignored by the editor
  * @param count Vim's count ({@code v:count}): 0 when none was typed
+ * @param step  for {@link #HISTORY_BACK}, the id of its first Back step (the others follow:
+ *              {@code 3 Ctrl-O} is steps {@code step}, {@code step + 1}, {@code step + 2}); for
+ *              {@link #HISTORY_FORWARD}, the id of the oldest Back step to undo, or 0 for plain
+ *              Forward. The ids are Neovim's (the trail in {@link LuaScripts#SETUP}); 0 otherwise
  */
-public record IdeAction(String name, int count) {
+public record IdeAction(String name, int count, long step) {
+
+    /** An action without a Back step id. */
+    public IdeAction(String name, int count) {
+        this(name, count, 0);
+    }
 
     /** {@code gd}: the IDE's Open Declaration. */
     public static final String DEFINITION = "definition";
@@ -38,7 +47,10 @@ public record IdeAction(String name, int count) {
      * editors in Eclipse (a tab click) is no Neovim jump, so Eclipse's history takes over there.
      */
     public static final String HISTORY_BACK = "history_back";
-    /** {@code Ctrl-I} when Neovim's jump history has no newer entry: Eclipse's Forward (Alt+Right). */
+    /**
+     * {@code Ctrl-I} when its newest step to undo is a Back, or when Neovim's jump history has no
+     * newer entry: Eclipse's Forward (Alt+Right).
+     */
     public static final String HISTORY_FORWARD = "history_forward";
     /** {@code ZZ}: save the editor if it is dirty, then close it (Vim's {@code :x}). */
     public static final String SAVE_AND_CLOSE = "save_and_close";

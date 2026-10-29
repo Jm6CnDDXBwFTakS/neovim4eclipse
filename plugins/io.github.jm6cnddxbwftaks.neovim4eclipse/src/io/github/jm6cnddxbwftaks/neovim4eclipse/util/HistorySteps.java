@@ -22,17 +22,21 @@ import java.util.Set;
  * <ol>
  *   <li><b>Repeats.</b> The switch is in both histories. {@code Ctrl-O} first walks back through
  *       the Neovim jumps, then, as Back, through the same switches again. So Back steps over the
- *       entries the plug-in made ({@link #markOwn}): Neovim's history already has them.</li>
+ *       entries the plug-in made for Neovim's jumps ({@link #markOwn}): Neovim's history has them.</li>
  *   <li><b>A lost way forward.</b> A new entry deletes every entry ahead of it, as a new page does
  *       in a browser. When {@code Ctrl-I} undoes a Neovim jump across files, or {@code Ctrl-O} makes
  *       one after a Back, the plug-in's switch adds such an entry, and Eclipse's Forward has
- *       nothing left. So every Back is remembered here ({@link #wentBack}), with what is needed to
- *       come back to where it started, and Forward undoes the Backs in reverse order
- *       ({@link #forward}): through Eclipse's Forward while the place is still in its history,
- *       else by showing the editor again.</li>
+ *       nothing left. So every Back step is remembered here under its id ({@link #wentBack}), with
+ *       what is needed to come back to where it started, and {@link #forward} goes back to it:
+ *       through Eclipse's Forward while the place is still in its history, else by showing the
+ *       editor again.</li>
  * </ol>
- * When {@code Ctrl-I} undoes a Back rather than a Neovim jump is Neovim's to decide: it keeps a
- * trail of the {@code Ctrl-O} steps ({@code LuaScripts.SETUP}).
+ *
+ * <p><b>Step ids.</b> Neovim keeps the order of the {@code Ctrl-O} steps (the trail in
+ * {@code LuaScripts.SETUP}: jumps and Back steps). Each Back step has an id that Neovim chooses
+ * and sends along; {@code Ctrl-I} sends back the id of the step to undo. So the two sides never
+ * match steps by counting: a step that went nowhere, or that Neovim gave up, is simply an id with
+ * no entry here, and nothing moves.
  *
  * <p>Example: two files, {@code :e other.txt}, {@code :e #}, {@code :e #}. Neovim keeps two jumps
  * (it drops repeats of a place), Eclipse seven entries, five of them the plug-in's. Before:
@@ -40,9 +44,9 @@ import java.util.Set;
  * Now: one jump, then Back past the plug-in's entries to the editor switches the user made, and
  * {@code Ctrl-I} retraces the same places in reverse.
  *
- * <p>The remembered Backs are forgotten when Eclipse's history gets an entry the plug-in did not
- * make (a tab click, Open Declaration, opening a file): that is a new way to go, as in Eclipse.
- * Neovim jumps do not forget them, since Vim never drops a jump either.
+ * <p>The remembered Back steps are forgotten when Eclipse's history gets an entry the plug-in did
+ * not make (a tab click, Open Declaration, opening a file): that is a new way to go, as in Eclipse
+ * ({@link #userMovedOn}).
  *
  * <p>Locations are compared by identity: Eclipse updates an entry's location in place, and two
  * entries can describe the same place. Not thread-safe (the UI thread uses it).
@@ -51,6 +55,12 @@ import java.util.Set;
  * @param <S> what is needed to come back without Eclipse's Forward (the editor and its caret)
  */
 public final class HistorySteps<L, S> {
+
+    /**
+     * At most this many Back steps are remembered; the oldest go first. Eclipse's own history holds
+     * 50 entries, and every Back step goes back at least one of them.
+     */
+    static final int MAX_STEPS = 100;
 
     /** Where Forward goes: Eclipse's Forward {@code steps} times, or back to a remembered place. */
     public sealed interface Forward<S> {
@@ -64,11 +74,12 @@ public final class HistorySteps<L, S> {
     public record Restore<S>(S state) implements Forward<S> {
     }
 
-    /** One Back: where it started, and how many presses it counts for ({@code 3 Ctrl-O} is one). */
-    private record Departure<L, S>(L location, S state, int count) {
+    /** One Back step: its id (Neovim's), and where it started. */
+    private record Departure<L, S>(long id, L location, S state) {
     }
 
     private final Set<L> own = identitySet();
+    /** Newest first. */
     private final Deque<Departure<L, S>> departures = new ArrayDeque<>();
     /** The history when the last Back was remembered: an entry not in it, nor own, is the user's. */
     private Set<L> seen = identitySet();
@@ -80,73 +91,84 @@ public final class HistorySteps<L, S> {
         }
     }
 
+    /**
+     * An entry the plug-in added that Back does not step over: a switch for a Neovim move that is
+     * not in its jump history ({@code :keepjumps}), or a place shown again by {@link Restore}. It is
+     * no user's entry, so it does not forget the remembered Back steps ({@code null} is ignored).
+     */
+    public void markKnown(L location) {
+        if (location != null) {
+            seen.add(location);
+        }
+    }
+
     /** Whether {@code location} is an entry the plug-in added. */
     public boolean isOwn(L location) {
         return location != null && own.contains(location);
     }
 
     /**
-     * How many of Eclipse's Back steps {@code count} presses of {@code Ctrl-O} take: each press goes
-     * to the nearest older entry the plug-in did not add. Example: {@code [a, b*, c*, d]} with
-     * {@code d} current and {@code *} the plug-in's: one press is 3 steps, to {@code a}. When the
-     * oldest entries are all the plug-in's, the last press stops on the oldest entry.
+     * How many of Eclipse's Back steps one press of {@code Ctrl-O} takes: to the nearest older entry
+     * the plug-in did not add. Example: {@code [a, b*, c*, d]} with {@code d} current and {@code *}
+     * the plug-in's: 3 steps, to {@code a}. When the oldest entries are all the plug-in's, it stops
+     * on the oldest entry.
      *
      * @param history Eclipse's entries, oldest first
      * @param current the current entry
-     * @param count   Vim's count (0 for none)
      * @return the steps; 0 at the start of the history. With the current entry unknown (not in
-     *         {@code history}), the presses as steps, as Eclipse's own Back would take
+     *         {@code history}), 1, as Eclipse's own Back would take
      */
-    public int backSteps(List<L> history, L current, int count) {
+    public int backSteps(List<L> history, L current) {
         int from = indexOf(history, current);
         if (from < 0) {
-            return Math.max(1, count);
+            return 1;
         }
-        int to = from;
-        for (int press = 0; press < Math.max(1, count) && to > 0; press++) {
+        int to = from - 1;
+        while (to > 0 && isOwn(history.get(to))) {
             to--;
-            while (to > 0 && isOwn(history.get(to))) {
-                to--;
-            }
         }
-        return from - to;
+        return to < 0 ? 0 : from - to;
     }
 
     /**
-     * Remembers a Back that is about to start from {@code current}, so that {@link #forward} can
-     * come back. Forgets the earlier ones first if the user made a new entry since.
+     * Remembers Back step {@code id}, about to start from {@code current}. Forgets the earlier ones
+     * first if the user made a new entry since.
      *
      * @param state the editor and caret at {@code current}, for when Eclipse's Forward cannot reach it
-     * @param count the presses the Back counts for (Vim's count, at least 1)
      */
-    public void wentBack(List<L> history, L current, S state, int count) {
-        forgetIfTheUserMovedOn(history);
-        departures.push(new Departure<>(current, state, Math.max(1, count)));
+    public void wentBack(long id, List<L> history, L current, S state) {
+        userMovedOn(history);
+        departures.push(new Departure<>(id, current, state));
+        while (departures.size() > MAX_STEPS) {
+            departures.removeLast();
+        }
         seen = identitySet();
         seen.addAll(history);
     }
 
+    /** Forgets Back step {@code id}: it moved nothing the user could see. */
+    public void wentNowhere(long id) {
+        departures.removeIf(d -> d.id() == id);
+    }
+
     /**
-     * Where {@code count} presses of {@code Ctrl-I} go: back to where the last Backs started,
-     * newest first; with none remembered, Eclipse's Forward, stepping over the plug-in's entries
-     * to the last of them (where a Back started from, before it skipped them).
+     * Where {@code Ctrl-I} goes to undo the Back steps from the newest down to {@code id}: back to
+     * where step {@code id} started. Those steps are forgotten.
      *
      * @param history Eclipse's entries, oldest first
      * @param current the current entry
-     * @param count   Vim's count (0 for none)
+     * @return {@code Steps(0)} when no such step is remembered (it went nowhere, or was forgotten)
      */
-    public Forward<S> forward(List<L> history, L current, int count) {
-        forgetIfTheUserMovedOn(history);
-        int from = indexOf(history, current);
-        if (departures.isEmpty()) {
-            return new Steps<>(from < 0 ? Math.max(1, count) : plainForwardSteps(history, from, count));
-        }
-        Departure<L, S> target = departures.pop();
-        int presses = target.count();
-        while (presses < Math.max(1, count) && !departures.isEmpty()) {
+    public Forward<S> forward(long id, List<L> history, L current) {
+        userMovedOn(history);
+        Departure<L, S> target = null;
+        while (!departures.isEmpty() && departures.peek().id() >= id) {
             target = departures.pop();
-            presses += target.count();
         }
+        if (target == null || target.id() != id) {
+            return new Steps<>(0);
+        }
+        int from = indexOf(history, current);
         int to = indexOf(history, target.location());
         if (from >= 0 && to > from) {
             return new Steps<>(to - from);
@@ -154,37 +176,17 @@ public final class HistorySteps<L, S> {
         return to >= 0 && to == from ? new Steps<>(0) : new Restore<>(target.state());
     }
 
-    /** Forgets the remembered Backs (an editor in them closed, say). */
-    public void forget() {
-        departures.clear();
-    }
-
-    /** Whether a Back is remembered (for tests). */
-    public boolean remembersBacks() {
-        return !departures.isEmpty();
-    }
-
     /**
-     * Drops what refers to entries Eclipse no longer has (its history holds 50), and the
-     * remembered Backs if an entry appeared that is neither the plug-in's nor seen at the last Back.
+     * {@code Ctrl-I} with no Back step to undo (Neovim's trail was given up: a key typed between):
+     * Eclipse's Forward, stepping over a run of the plug-in's entries to its last (where a Back
+     * started from, before it skipped them). The remembered steps are forgotten.
      */
-    private void forgetIfTheUserMovedOn(List<L> history) {
-        Set<L> now = identitySet();
-        now.addAll(history);
-        own.retainAll(now);
-        if (departures.isEmpty()) {
-            return;
+    public int plainForwardSteps(List<L> history, L current, int count) {
+        departures.clear();
+        int from = indexOf(history, current);
+        if (from < 0) {
+            return Math.max(1, count);
         }
-        for (L location : history) {
-            if (location != null && !seen.contains(location) && !own.contains(location)) {
-                departures.clear();
-                return;
-            }
-        }
-    }
-
-    /** Eclipse's Forward without remembered Backs: over a run of the plug-in's entries to its last. */
-    private int plainForwardSteps(List<L> history, int from, int count) {
         int to = from;
         for (int press = 0; press < Math.max(1, count) && to + 1 < history.size(); press++) {
             to++;
@@ -193,6 +195,39 @@ public final class HistorySteps<L, S> {
             }
         }
         return to - from;
+    }
+
+    /** Forgets the remembered Back steps (an editor in them closed, say). */
+    public void forget() {
+        departures.clear();
+    }
+
+    /**
+     * Drops what refers to entries Eclipse no longer has (its history holds 50), and forgets the
+     * remembered Back steps if an entry appeared that is neither the plug-in's nor seen at the last
+     * Back: the user went somewhere new.
+     *
+     * @return whether remembered steps were forgotten (Neovim's trail should forget its own then)
+     */
+    public boolean userMovedOn(List<L> history) {
+        Set<L> now = identitySet();
+        now.addAll(history);
+        own.retainAll(now);
+        if (departures.isEmpty()) {
+            return false;
+        }
+        for (L location : history) {
+            if (location != null && !seen.contains(location) && !own.contains(location)) {
+                departures.clear();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** How many Back steps are remembered (for tests). */
+    int remembered() {
+        return departures.size();
     }
 
     private static <L> int indexOf(List<L> history, L location) {
