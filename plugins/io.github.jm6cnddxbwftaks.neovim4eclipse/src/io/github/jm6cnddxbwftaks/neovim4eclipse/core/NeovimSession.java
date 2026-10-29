@@ -250,6 +250,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         await(api.execLua(LuaScripts.PROJECT_FILES, List.of()));
         await(api.execLua(LuaScripts.HOST_COMMANDS, List.of(HostCommand.rulesForNeovim())));
         await(api.execLua(LuaScripts.WINDOW_COMMANDS, List.of())); // after HOST_COMMANDS: its refuse hook
+        await(api.execLua(LuaScripts.QUICKFIX, List.of())); // :Eproblems, :Etasks; :copen through WINDOWS
         // Once, here: the opt-out then costs nothing per key (docs/design/FOLDING.md, 3.6).
         session.foldsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FOLDS, List.of())));
         session.state.setFoldsEnabled(session.foldsEnabled);
