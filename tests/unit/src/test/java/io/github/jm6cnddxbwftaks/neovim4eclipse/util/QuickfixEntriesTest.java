@@ -93,6 +93,26 @@ class QuickfixEntriesTest {
     }
 
     @Test
+    void markersOnFoldersOrProjectsWithTheSameTextAreKeptApart() {
+        // No file on disk for either: the workspace path tells them apart.
+        Entry a = new Entry(0, "", "a", 0, 0, Severity.ERROR, "The project cannot be built until build path errors are resolved");
+        Entry b = new Entry(0, "", "b", 0, 0, Severity.ERROR, "The project cannot be built until build path errors are resolved");
+        assertEquals(List.of(a, b), QuickfixEntries.sorted(List.of(b, a)));
+        assertEquals(List.of(a), QuickfixEntries.sorted(List.of(a, a)), "the same one twice is still one");
+    }
+
+    @Test
+    void aLineOnlyEntryGivesWayToTheSameProblemAtAColumn() {
+        // An open file of a nested project: its editor's problem, and the other IFile's marker.
+        Entry exact = new Entry(3, "/ws/app/lib/x.txt", "lib/x.txt", 4, 9, Severity.ERROR, "bad");
+        Entry lineOnly = new Entry(0, "/ws/app/lib/x.txt", "app/lib/x.txt", 4, 0, Severity.ERROR, "bad");
+        Entry otherLine = new Entry(0, "/ws/app/lib/x.txt", "app/lib/x.txt", 5, 0, Severity.ERROR, "bad");
+        Entry otherFile = new Entry(0, "/ws/app/y.txt", "app/y.txt", 4, 0, Severity.ERROR, "bad");
+        assertEquals(List.of(otherLine, otherFile, exact), // sorted by workspace path
+                QuickfixEntries.sorted(List.of(lineOnly, exact, otherLine, otherFile)));
+    }
+
+    @Test
     void anEntryWithoutALineHasNoColumn() {
         Entry entry = new Entry(0, "/ws/a", "a", 0, 7, Severity.ERROR, "x");
         assertEquals(0, entry.col());

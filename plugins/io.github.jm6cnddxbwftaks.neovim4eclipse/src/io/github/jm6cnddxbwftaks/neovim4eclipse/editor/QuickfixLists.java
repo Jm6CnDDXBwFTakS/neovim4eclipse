@@ -91,7 +91,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries.TaskTags;
  * buffer or lost it ({@link #changed}), or an open document's problems changed (JDT's reconcile,
  * through {@link #watching}). The update asks Neovim for the current list first (Neovim has no event
  * for a change of the current list); only one of ours with its severity or tags is read again and
- * sent, by action {@code 'u'}, which keeps the entry the user is on. Before the first
+ * sent, by action {@code 'u'}, which keeps the entry the user is on; a list equal to the one sent
+ * last is not sent again. Before the first
  * {@code :Eproblems} or {@code :Etasks} of a Neovim no list of ours can exist, so a change costs
  * nothing then.
  *
@@ -223,6 +224,12 @@ public final class QuickfixLists implements IResourceChangeListener {
         private volatile NeovimSession target;
         /** The session in which a command made a list: before that, there is nothing to update. */
         private volatile NeovimSession listsIn;
+        /**
+         * The list sent last, so that an update equal to it is not sent again. Job thread only. An
+         * equal list would change nothing in Neovim, but {@code setqflist()} still takes its time on
+         * Neovim's input thread (about 150 ms for 9,000 entries), where it holds up keys.
+         */
+        private Sent lastSent;
 
         Runner() {
             super("Neovim: quickfix list");
@@ -248,7 +255,10 @@ public final class QuickfixLists implements IResourceChangeListener {
                 return;
             }
             target = session;
-            if (update.compareAndSet(false, true)) {
+            // A command waiting for its run makes the list anew, which covers this change; and while
+            // the job runs, this schedule() would set the rerun's delay, so the command would wait
+            // UPDATE_DELAY_MS. The run takes the flag along with the command either way.
+            if (update.compareAndSet(false, true) && command.get() == null) {
                 schedule(UPDATE_DELAY_MS); // running: once more afterwards
             }
         }
@@ -263,11 +273,11 @@ public final class QuickfixLists implements IResourceChangeListener {
             }
             try {
                 if (next != null) {
-                    send(neovim, next.kind(), next.arg(), Mode.COMMAND, !next.bang());
+                    lastSent = send(neovim, next.kind(), next.arg(), Mode.COMMAND, !next.bang(), null);
                 } else if (changed) {
                     Current current = neovim.currentQuickfixAsync().get(CURRENT_TIMEOUT_SEC, TimeUnit.SECONDS);
                     if (current != null) {
-                        send(neovim, current.kind(), current.arg(), Mode.UPDATE, false);
+                        lastSent = send(neovim, current.kind(), current.arg(), Mode.UPDATE, false, lastSent);
                     }
                 }
             } catch (InterruptedException e) {
@@ -279,13 +289,27 @@ public final class QuickfixLists implements IResourceChangeListener {
         }
     }
 
-    private static void send(NeovimSession neovim, Kind kind, String arg, Mode mode, boolean jump) {
+    /** A list as sent: to whom, which, and its entries. */
+    private record Sent(NeovimSession session, Kind kind, String arg, List<Entry> entries) {
+    }
+
+    /**
+     * Reads the list and sends it, unless it equals {@code last} (an update that changes nothing).
+     * Returns what Neovim has now: the list sent, or {@code last}.
+     */
+    private static Sent send(NeovimSession neovim, Kind kind, String arg, Mode mode, boolean jump, Sent last) {
         List<Entry> entries = read(kind, arg);
         if (entries == null) {
-            return;
+            return last;
+        }
+        Sent now = new Sent(neovim, kind, arg, entries);
+        if (now.equals(last)) {
+            LOG.finer(() -> kind.title() + " (" + arg + "): unchanged, not sent");
+            return last;
         }
         LOG.fine(() -> kind.title() + " (" + arg + "): " + entries.size() + " entries, " + mode);
         neovim.setQuickfixAsync(kind, arg, mode, jump, entries);
+        return now;
     }
 
     // ---- reading the workspace -----------------------------------------------------------------
@@ -324,10 +348,13 @@ public final class QuickfixLists implements IResourceChangeListener {
             LOG.log(Level.WARNING, "Could not read the workspace's markers", e);
         }
         List<Entry> entries = new ArrayList<>();
-        // The open editors on the UI thread; whatever they do not cover, from the markers here.
-        Map<IResource, List<Entry>> fromEditors = onUiThread(() -> fromOpenEditors(kind, least, markers));
+        // The open editors on the UI thread; whatever they do not cover, from the markers here. Both
+        // by the file's place on disk, not its IFile: a file of a nested project is two IFiles
+        // (app/lib/X.java and lib/X.java), and its open editor covers both.
+        Map<String, List<Entry>> fromEditors = onUiThread(() -> fromOpenEditors(kind, least, markers));
         for (Map.Entry<IResource, List<MarkerRead>> file : markers.entrySet()) {
-            if (!fromEditors.containsKey(file.getKey())) {
+            String location = fileOf(file.getKey());
+            if (location.isEmpty() || !fromEditors.containsKey(location)) {
                 for (MarkerRead read : file.getValue()) {
                     entries.add(lineOnly(read));
                 }
@@ -368,17 +395,34 @@ public final class QuickfixLists implements IResourceChangeListener {
     }
 
     /**
-     * The entries of the files with an open text editor, by file. Problems: every problem the editor
-     * shows (its annotations). Tasks: the file's task markers, where its model has them now. UI thread.
+     * The entries of the files with an open text editor, by the file's place on disk. Problems: every
+     * problem the editor shows (its annotations), when its model holds the file's markers
+     * ({@link AbstractMarkerAnnotationModel}, as every Eclipse text editor's does); an editor whose
+     * model does not is left out, so its file is listed from its markers, by line. Tasks: the task
+     * markers of the file (through any of its IFiles), where the editor's model has them now. UI
+     * thread.
      */
-    private static Map<IResource, List<Entry>> fromOpenEditors(Kind kind, Severity least,
+    private static Map<String, List<Entry>> fromOpenEditors(Kind kind, Severity least,
             Map<IResource, List<MarkerRead>> markers) {
-        Map<IResource, List<Entry>> byFile = new HashMap<>();
+        Map<String, List<MarkerRead>> markersByLocation = new HashMap<>();
+        markers.forEach((resource, reads) -> {
+            String location = fileOf(resource);
+            if (!location.isEmpty()) {
+                markersByLocation.computeIfAbsent(location, l -> new ArrayList<>()).addAll(reads);
+            }
+        });
+        Map<String, List<Entry>> byFile = new HashMap<>();
         openFiles().forEach((file, open) -> {
             List<Entry> entries = new ArrayList<>();
             String path = fileOf(file);
             String module = moduleOf(file);
+            if (path.isEmpty() || byFile.containsKey(path)) {
+                return; // no place on disk, or already read through its other IFile
+            }
             if (kind == Kind.PROBLEMS) {
+                if (!(open.model() instanceof AbstractMarkerAnnotationModel)) {
+                    return; // its annotations may lack the markers: read the file from its markers
+                }
                 for (Diagnostic d : DiagnosticsSync.read(open.document(), open.model(), ProblemAnnotations::severityOf)) {
                     if (QuickfixEntries.atLeast(d.severity(), least)) {
                         entries.add(new Entry(open.bufnr(), path, module, d.lnum() + 1, d.col() + 1, d.severity(), d.message()));
@@ -386,7 +430,7 @@ public final class QuickfixLists implements IResourceChangeListener {
                 }
             } else {
                 DiagnosticPositions.Lines lines = DiagnosticsSync.lines(open.document());
-                for (MarkerRead read : markers.getOrDefault(file, List.of())) {
+                for (MarkerRead read : markersByLocation.getOrDefault(path, List.of())) {
                     Position at = open.model() instanceof AbstractMarkerAnnotationModel model
                             ? model.getMarkerPosition(read.marker()) : null;
                     if (at == null || at.isDeleted()) {
@@ -398,7 +442,7 @@ public final class QuickfixLists implements IResourceChangeListener {
                     entries.add(new Entry(open.bufnr(), path, module, d.lnum() + 1, d.col() + 1, null, read.message()));
                 }
             }
-            byFile.put(file, entries);
+            byFile.put(path, entries);
         });
         return byFile;
     }
@@ -438,12 +482,12 @@ public final class QuickfixLists implements IResourceChangeListener {
      * Runs {@code read} on the UI thread and returns its answer; an empty map when there is no UI
      * (the workbench is closing), so that every file is read from its markers.
      */
-    private static Map<IResource, List<Entry>> onUiThread(Supplier<Map<IResource, List<Entry>>> read) {
+    private static Map<String, List<Entry>> onUiThread(Supplier<Map<String, List<Entry>>> read) {
         Display display = PlatformUI.isWorkbenchRunning() ? PlatformUI.getWorkbench().getDisplay() : null;
         if (display == null || display.isDisposed()) {
             return Map.of();
         }
-        AtomicReference<Map<IResource, List<Entry>>> result = new AtomicReference<>(Map.of());
+        AtomicReference<Map<String, List<Entry>>> result = new AtomicReference<>(Map.of());
         try {
             display.syncExec(() -> {
                 try {

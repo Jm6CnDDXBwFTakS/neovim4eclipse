@@ -11,12 +11,16 @@ import java.util.Map;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IProjectDescription;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IFileEditorInput;
 import org.eclipse.ui.IPageLayout;
 import org.eclipse.ui.IViewPart;
+import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -149,6 +153,74 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
         settle();
         first.delete();
         waitForTexts(List.of("second", "third", "in a closed file"));
+    }
+
+    /**
+     * An update that changes nothing is not sent: a task marker added while the problems list is
+     * current schedules an update (the job cannot tell which kind changed before asking), whose list
+     * is the one Neovim has. A problem added afterwards is sent.
+     */
+    @Test
+    void anUnchangedListIsNotSentAgain() throws Exception {
+        marker(file(), IMarker.PROBLEM, IMarker.SEVERITY_ERROR, "only", 0, 1);
+        waitUntil("the problem in Neovim's diagnostics", TIMEOUT_MS, () -> number(SessionProbe.lua(session,
+                "return #vim.diagnostic.get(0)")) == 1);
+        session.inputAsync(":Eproblems!<CR>");
+        waitForTexts(List.of("only"));
+        waitForTheJob();
+        settle();
+        SessionProbe.lua(session, """
+                local qf = require('neovim4eclipse.quickfix')
+                _G.neovim4eclipse_test_sets, _G.neovim4eclipse_test_set = 0, qf.set
+                qf.set = function(...)
+                  _G.neovim4eclipse_test_sets = _G.neovim4eclipse_test_sets + 1
+                  return _G.neovim4eclipse_test_set(...)
+                end
+                return 0""");
+        try {
+            marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "TODO not a problem", 6, 2);
+            waitForTheJob();
+            settle();
+            assertEquals(0, number(SessionProbe.lua(session, "return _G.neovim4eclipse_test_sets")),
+                    "the same list, not sent");
+
+            marker(file(), IMarker.PROBLEM, IMarker.SEVERITY_WARNING, "another", 6, 2);
+            waitForTexts(List.of("only", "another"));
+        } finally {
+            SessionProbe.lua(session, "require('neovim4eclipse.quickfix').set = _G.neovim4eclipse_test_set return 0");
+        }
+    }
+
+    /**
+     * A file of a project nested in another's folder is two workspace files; a builder may mark
+     * both. With its editor open, the problem is listed once, at its column.
+     */
+    @Test
+    void aNestedProjectsOpenFileIsListedOnce() throws Exception {
+        project.getFolder("inner").create(true, true, null);
+        IFile outer = createFile("inner/n.txt", "one\n    two\n");
+        IProject nested = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-nested");
+        IProjectDescription description = ResourcesPlugin.getWorkspace().newProjectDescription(nested.getName());
+        description.setLocation(project.getLocation().append("inner")); // its folder is e2e/inner
+        try {
+            nested.create(description, null);
+            nested.open(null);
+            IFile inner = nested.getFile("n.txt");
+            marker(outer, IMarker.PROBLEM, IMarker.SEVERITY_ERROR, "twice marked", 8, 2);
+            marker(inner, IMarker.PROBLEM, IMarker.SEVERITY_ERROR, "twice marked", 8, 2);
+            ITextEditor opened = (ITextEditor) IDE.openEditor(page(), inner, TEXT_EDITOR, true);
+            waitForAttach(opened, "n.txt of the nested project");
+
+            // Errors only: Eclipse warns about the new project's encoding by itself.
+            session.inputAsync(":Eproblems! error<CR>");
+
+            waitForTexts(List.of("twice marked"));
+            assertEquals(5, number(SessionProbe.lua(session, "return vim.fn.getqflist()[1].col")),
+                    "at its column: the open editor's");
+        } finally {
+            closeAllButTheTestFile();
+            nested.delete(false, true, null); // the files are the test project's: deleted with it
+        }
     }
 
     /** {@code :Eproblems warning} lists errors and warnings, not infos. */
