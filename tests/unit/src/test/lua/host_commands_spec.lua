@@ -213,6 +213,59 @@ t.test(':wq name and :x name get the same full path as :w name; ++p stays', func
   }, t.sent('eclipse_command'))
 end)
 
+--- The names of the commands sent to Eclipse, with a ! for a bang: { 'edit', 'edit!' }.
+local function sent_names()
+  return vim.tbl_map(function(c)
+    return c[1] .. (c[2] and '!' or '')
+  end, t.sent('eclipse_command'))
+end
+
+t.test(':e of a file another editor has open is Neovim\'s :edit, so :e # toggles as in one window', function()
+  start()
+  local a, a_name = t.document('a.txt')
+  local b = t.document('b.txt')
+  t.forget()
+
+  t.type(':e ' .. vim.fn.fnameescape(a_name) .. '<CR>')
+  t.eq({}, t.sent('eclipse_command'), 'not sent to Eclipse')
+  t.eq(a, vim.api.nvim_get_current_buf(), 'Neovim entered a.txt (Eclipse follows into its editor)')
+  t.type(':e #<CR>')
+  t.eq(b, vim.api.nvim_get_current_buf())
+  t.type(':e #<CR>')
+  t.eq(a, vim.api.nvim_get_current_buf(), ':e # toggles')
+  t.type('<C-o>')
+  t.eq(b, vim.api.nvim_get_current_buf(), 'each :e is a jump, as in Vim')
+  t.eq({}, t.sent('eclipse_command'))
+end)
+
+t.test('Eclipse still runs :e of a file without an editor, :e!, :e +cmd, :e ++opt and :e %', function()
+  start()
+  local _, a_name = t.document('a.txt')
+  t.document('b.txt')
+  local name = vim.fn.fnameescape(a_name)
+  t.forget()
+
+  t.type(':e ' .. vim.fn.fnameescape(vim.fn.tempname() .. '-new.txt') .. '<CR>') -- no editor: only Eclipse makes one
+  t.type(':e! ' .. name .. '<CR>')
+  t.type(':e +2 ' .. name .. '<CR>')
+  t.type(':e ++ff=unix ' .. name .. '<CR>')
+  t.type(':e %<CR>') -- the current file: Neovim's :edit would read it again
+  t.eq({ 'edit', 'edit!', 'edit', 'edit', 'edit' }, sent_names())
+end)
+
+t.test(':e of a document whose buffer Neovim has not loaded goes to Eclipse', function()
+  start()
+  local a, a_name = t.document('a.txt')
+  t.document('b.txt')
+  vim.api.nvim_buf_call(a, function()
+    vim.cmd('silent! bunload!')
+  end)
+  t.ok(not vim.api.nvim_buf_is_loaded(a), 'a.txt unloaded')
+  t.forget()
+  t.type(':e ' .. vim.fn.fnameescape(a_name) .. '<CR>')
+  t.eq({ 'edit' }, sent_names())
+end)
+
 t.test(':e alone and :e! are left as they are', function()
   editing_main_in_a_project()
   t.type(':e<CR>')

@@ -787,7 +787,8 @@ These are real and deliberate to know about before extending the code:
    history and marks, and each has its own cursor, as two Vim windows on one buffer. Only the
    active editor is attached. Vim's own window layout (`:split`, `:vsplit`, `:tabnew`,
    `Ctrl+W s`) is not something Eclipse shows; use Eclipse's split editor or *Clone*.
-   Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor (after `:bufdo` or `:argdo`,
+   Jumps into another open file (Ctrl-O, Ctrl-^, `'A`, `:b`, and `:e` of a file that has an editor)
+   activate its editor (after `:bufdo` or `:argdo`,
    only the editor of the file they end in), and the window goes along: the two editors swap
    windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window
    ([docs/design/WINDOWS.md](docs/design/WINDOWS.md)). Switching editors in Eclipse (a tab click,

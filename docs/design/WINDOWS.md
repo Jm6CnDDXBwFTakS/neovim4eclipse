@@ -190,6 +190,7 @@ history (`getjumplist()` only reads), so the plug-in cannot write the switch in.
 | `:tabonly` | Every other tab closed, home window included. | Refuse |
 | `:only`, `<C-w>o`, `<C-w>w`, `:windo` | No effect (one window per tab). | Leave alone |
 | `:bufdo`, `:argdo` | The editor's window ends on the last buffer. | Follow, as before |
+| `:e name` of a file that has an editor | Neovim's `:edit` would enter its buffer in this window. | Leave it to Neovim (`LuaScripts.HOST_COMMANDS`, `edits_an_open_document`): the window travels as for `:b` (E2), so `:e #` toggles and `Ctrl-O` goes back, as in one Vim window. Added 2026-10-29; before, Eclipse switched editors and each kept its own `#`, so a second `:e #` found none. A file with no editor, `:e!`, `:e +cmd`, `:e ++opt` and `:e %` stay Eclipse's. |
 
 `:q` never reaches Neovim; the plug-in already handles it. `Ctrl+W` keys reach Neovim only when the
 user gives `Ctrl+W` to Neovim in the preferences (KEYBOARD.md).
