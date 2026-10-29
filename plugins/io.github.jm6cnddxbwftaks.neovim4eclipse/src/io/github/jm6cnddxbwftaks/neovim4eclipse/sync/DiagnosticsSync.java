@@ -127,7 +127,7 @@ public final class DiagnosticsSync implements AutoCloseable {
         }
         List<Diagnostic> diagnostics;
         try {
-            diagnostics = DiagnosticPositions.toDiagnostics(problems(), lines());
+            diagnostics = read(document, model, severity);
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Could not read the problems of " + describe(), e);
             return;
@@ -139,18 +139,29 @@ public final class DiagnosticsSync implements AutoCloseable {
         session.setDiagnosticsAsync(buffer, diagnostics);
     }
 
+    /**
+     * The problems of {@code model} as Neovim diagnostics of {@code document}'s lines, sorted: what
+     * this sync sends, and what {@code editor/QuickfixLists} lists for a file with an open editor.
+     * UI thread (the document is read).
+     *
+     * @param severity the severity of an annotation that is a problem, {@code null} for any other
+     */
+    public static List<Diagnostic> read(IDocument document, IAnnotationModel model, Function<Annotation, Severity> severity) {
+        return DiagnosticPositions.toDiagnostics(problems(model, severity), lines(document));
+    }
+
     /** The model's problems, read under its lock if it has one (another thread may change it meanwhile). */
-    List<Problem> problems() {
+    static List<Problem> problems(IAnnotationModel model, Function<Annotation, Severity> severity) {
         Object lock = model instanceof ISynchronizable synchronizable ? synchronizable.getLockObject() : null;
         if (lock == null) {
-            return readProblems();
+            return readProblems(model, severity);
         }
         synchronized (lock) {
-            return readProblems();
+            return readProblems(model, severity);
         }
     }
 
-    private List<Problem> readProblems() {
+    private static List<Problem> readProblems(IAnnotationModel model, Function<Annotation, Severity> severity) {
         List<Problem> problems = new ArrayList<>();
         for (Iterator<Annotation> it = model.getAnnotationIterator(); it.hasNext();) {
             Annotation annotation = it.next();
@@ -167,8 +178,11 @@ public final class DiagnosticsSync implements AutoCloseable {
         return problems;
     }
 
-    /** The document's lines as {@link DiagnosticPositions} reads them, counted as Neovim does. */
-    private DiagnosticPositions.Lines lines() {
+    /**
+     * The document's lines as {@link DiagnosticPositions} reads them, counted as Neovim does. Public
+     * for {@code editor/QuickfixLists}, which places task markers with it. UI thread.
+     */
+    public static DiagnosticPositions.Lines lines(IDocument document) {
         int neovimLines = UnattachedDocumentSync.neovimLineCount(document, FinalNewlines.of(document));
         return new DiagnosticPositions.Lines() {
             @Override

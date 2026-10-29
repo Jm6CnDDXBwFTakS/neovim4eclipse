@@ -32,6 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
@@ -66,7 +67,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  * other buffers are dropped.
  */
 public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort,
-        DocumentBufferPort, DiagnosticsPort, FoldsPort, ViewportPort {
+        DocumentBufferPort, DiagnosticsPort, FoldsPort, ViewportPort, QuickfixPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
@@ -165,6 +166,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile Runnable leaveInsertPush;
     /** Saves a document when Neovim writes its buffer; see {@link #setWriteHandler}. */
     private volatile DocumentWrite.Handler writeHandler;
+    /** Fills the quickfix lists of {@code :Eproblems} and {@code :Etasks}; see {@link #setQuickfixHandler}. */
+    private volatile QuickfixPort.Handler quickfixHandler;
 
     /** Mode, buffer change, cursor, selection and IDE action listeners. */
     private final SessionEvents events = new SessionEvents();
@@ -847,6 +850,36 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     @Override
+    public void setQuickfixHandler(QuickfixPort.Handler handler) {
+        this.quickfixHandler = handler;
+    }
+
+    @Override
+    public void setQuickfixAsync(QuickfixEntries.Kind kind, String arg, QuickfixEntries.Mode mode, boolean jump,
+            List<QuickfixEntries.Entry> entries) {
+        List<String> args = QuickfixEntries.toLuaArgs(kind, arg, mode, jump, entries);
+        submit(entries.size() + " entries for " + kind.title(), Level.FINE,
+                () -> await(api.execLua(LuaScripts.SET_QUICKFIX, args)));
+    }
+
+    @Override
+    public CompletableFuture<QuickfixEntries.Current> currentQuickfixAsync() {
+        CompletableFuture<QuickfixEntries.Current> answer = new CompletableFuture<>();
+        boolean queued = submit("current quickfix list", Level.FINE, () -> {
+            try {
+                answer.complete(QuickfixEntries.Current.fromLua(await(api.execLua(LuaScripts.QUICKFIX_CURRENT, List.of()))));
+            } catch (Exception e) {
+                answer.completeExceptionally(e);
+                throw e;
+            }
+        });
+        if (!queued) {
+            answer.completeExceptionally(new IllegalStateException("Neovim is closed"));
+        }
+        return answer;
+    }
+
+    @Override
     public boolean problemsEnabled() {
         return problemsEnabled;
     }
@@ -1453,6 +1486,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         public void onHostCommand(HostCommand command) {
             LOG.fine(() -> "host command " + command);
             events.hostCommand(command);
+        }
+
+        @Override
+        public void onQuickfix(QuickfixEntries.Kind kind, String arg, boolean bang) {
+            QuickfixPort.Handler handler = quickfixHandler;
+            LOG.fine(() -> ":" + (kind == QuickfixEntries.Kind.PROBLEMS ? "Eproblems" : "Etasks") + (bang ? "! " : " ") + arg);
+            if (!closed && handler != null) {
+                handler.request(kind, arg, bang);
+            }
+        }
+
+        @Override
+        public void onShowView(QuickfixEntries.Kind kind) {
+            QuickfixPort.Handler handler = quickfixHandler;
+            if (!closed && handler != null) {
+                handler.showView(kind);
+            }
         }
 
         @Override

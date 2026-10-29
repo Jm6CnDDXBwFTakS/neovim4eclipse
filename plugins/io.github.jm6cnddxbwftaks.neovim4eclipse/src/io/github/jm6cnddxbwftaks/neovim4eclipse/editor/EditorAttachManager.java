@@ -390,6 +390,7 @@ public final class EditorAttachManager {
             session.setReloadHandler(this::onNeovimReloadedDocument);
             session.setBufferClosedHandler(this::onNeovimClosedBuffer);
             session.setWriteHandler(this::saveForNeovim);
+            session.setQuickfixHandler(QuickfixLists.handlerFor(session)); // :Eproblems, :Etasks, :copen
             // Neovim then reads no project's file by itself (docs/design/BUFFER_NUMBERS.md, 2.3).
             ProjectFolders.sendTo(session);
             // A new Neovim has none of the old buffers; each document gets a new one on its next attach.
@@ -409,6 +410,9 @@ public final class EditorAttachManager {
         UnattachedDocumentSync sync = unattachedSyncs.computeIfAbsent(buffer, b -> {
             UnattachedDocumentSync created = new UnattachedDocumentSync(document, b, session, SwtUiExecutor.INSTANCE);
             created.start();
+            // A file the quickfix list named by path only (a closed file's line) now has an editor:
+            // its entries get columns (QuickfixLists).
+            QuickfixLists.changed(session);
             return created;
         });
         sync.setAttached(true); // before the controller's synchronizer takes over
@@ -438,8 +442,9 @@ public final class EditorAttachManager {
         if (model == null) {
             return;
         }
-        DiagnosticsSync sync = new DiagnosticsSync(document, model, buffer, session, SwtUiExecutor.INSTANCE,
-                ProblemAnnotations::severityOf);
+        // Through QuickfixLists.watching: a changed list of problems also updates :Eproblems's list.
+        DiagnosticsSync sync = new DiagnosticsSync(document, model, buffer, QuickfixLists.watching(session),
+                SwtUiExecutor.INSTANCE, ProblemAnnotations::severityOf);
         sync.start();
         diagnosticsSyncs.put(buffer, sync);
     }
@@ -902,7 +907,24 @@ public final class EditorAttachManager {
                 session.closeWindowAsync(window); // first: the buffer is wiped from no window then
             }
             unused.forEach(session::closeBufferAsync);
+            if (!unused.isEmpty()) {
+                QuickfixLists.changed(session); // their entries go back to the markers, by file name
+            }
         }
+    }
+
+    /**
+     * The number of {@code document}'s buffer in the running Neovim, or 0 when it has none there (no
+     * attach yet, or a Neovim restarted since: the old number could be another buffer's). Any thread.
+     */
+    int bufferNumberOf(IDocument document) {
+        DocumentBuffer buffer;
+        NeovimSession session;
+        synchronized (this) {
+            session = followedSession;
+            buffer = documents.bufferOf(document).orElse(null);
+        }
+        return session != null && buffer != null && buffer.isOpenIn(session) && buffer.bufnr() > 0 ? buffer.bufnr() : 0;
     }
 
     private static IDocument documentOf(ITextEditor editor) {

@@ -230,6 +230,34 @@ public final class QuickfixEntries {
         return kept;
     }
 
+    /**
+     * The current quickfix list when it is one of Eclipse's: its kind and argument (the severity
+     * word, or the task tags), as {@code LuaScripts.QUICKFIX_CURRENT} answers.
+     */
+    public record Current(Kind kind, String arg) {
+
+        public Current {
+            Objects.requireNonNull(kind, "kind");
+            arg = arg == null ? "" : arg;
+        }
+
+        /**
+         * The answer of {@code QUICKFIX_CURRENT}: {@code ["problems", "warning"]}, or {@code null}
+         * (Lua's {@code nil}) when the current list is not ours. {@code null} for anything else.
+         */
+        public static Current fromLua(Object answer) {
+            if (!(answer instanceof List<?> list) || list.isEmpty()) {
+                return null;
+            }
+            Kind kind = Kind.of(String.valueOf(list.get(0)));
+            if (kind == null) {
+                return null;
+            }
+            Object arg = list.size() > 1 ? list.get(1) : "";
+            return new Current(kind, arg instanceof String text ? text : "");
+        }
+    }
+
     /** How many arguments one entry takes in {@link #toLuaArgs}. */
     public static final int LUA_ARGS_PER_ENTRY = 7;
 

@@ -121,6 +121,17 @@ class QuickfixEntriesTest {
     }
 
     @Test
+    void theCurrentListIsReadFromNeovimsAnswer() {
+        assertEquals(new QuickfixEntries.Current(Kind.PROBLEMS, "warning"),
+                QuickfixEntries.Current.fromLua(List.of("problems", "warning")));
+        assertEquals(new QuickfixEntries.Current(Kind.TASKS, ""), QuickfixEntries.Current.fromLua(List.of("tasks")));
+        assertNull(QuickfixEntries.Current.fromLua(null), "nil: another list is current");
+        assertNull(QuickfixEntries.Current.fromLua(List.of()));
+        assertNull(QuickfixEntries.Current.fromLua(List.of("vimgrep", "")));
+        assertNull(QuickfixEntries.Current.fromLua("problems"));
+    }
+
+    @Test
     void kindsAreNamedAsInNeovim() {
         assertEquals(Kind.PROBLEMS, Kind.of("problems"));
         assertEquals(Kind.TASKS, Kind.of("tasks"));

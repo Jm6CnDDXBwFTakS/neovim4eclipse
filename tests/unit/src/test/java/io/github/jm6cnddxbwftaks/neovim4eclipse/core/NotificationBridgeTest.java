@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 
 /**
  * {@link NotificationBridge} as the RPC layer calls it: {@code notification(name, args)} and
@@ -79,6 +80,12 @@ class NotificationBridgeTest {
             @Override public void onHostCommand(HostCommand command) {
                 events.add("command:" + command.kind() + (command.force() ? "!" : "") + ":" + command.args());
             }
+            @Override public void onQuickfix(QuickfixEntries.Kind kind, String arg, boolean bang) {
+                events.add("quickfix:" + kind + (bang ? "!" : "") + ":" + arg);
+            }
+            @Override public void onShowView(QuickfixEntries.Kind kind) {
+                events.add("view:" + kind);
+            }
             @Override public void onCmdline(List<CmdlineEvent> cmdline) {
                 for (CmdlineEvent event : cmdline) {
                     events.add(event instanceof CmdlineEvent.Show show ? "cmdline" + show.firstc() + show.content()
@@ -122,6 +129,20 @@ class NotificationBridgeTest {
         notify("eclipse_command", "substitute", false, List.of()); // not Eclipse's: dropped
         notify("eclipse_command", "quit");                          // malformed: dropped
         assertEquals(List.of("command:EDIT:[my file.txt]", "command:QUIT!:[]"), events);
+    }
+
+    /** {@code :Eproblems! warning}, {@code :Etasks}: the kind, the argument, the bang; and {@code :copen}'s view. */
+    @Test
+    void quickfixCommandsCarryKindArgumentAndBang() {
+        notify("eclipse_quickfix", "problems", "warning", true);
+        notify("eclipse_quickfix", "tasks", "JM6,FIXME", false);
+        notify("eclipse_quickfix", "problems");           // no argument, no bang
+        notify("eclipse_quickfix", "vimgrep", "", false); // not a kind of ours: dropped
+        notify("eclipse_quickfix");                       // malformed: dropped
+        notify("eclipse_show_view", "tasks");
+        notify("eclipse_show_view", "other");
+        assertEquals(List.of("quickfix:PROBLEMS!:warning", "quickfix:TASKS:JM6,FIXME", "quickfix:PROBLEMS:",
+                "view:TASKS"), events);
     }
 
     /** The safety nets: Neovim deleted a document buffer, or is quitting its window, by itself. */
