@@ -170,6 +170,12 @@ history (`getjumplist()` only reads), so the plug-in cannot write the switch in.
 | Fall back to Eclipse's Back and Forward (chosen) | Editors keep their windows. `Ctrl-O` / `Ctrl-I` are Neovim's while the window's history goes on, Eclipse's `Backward History` / `Forward History` at its end (`LuaScripts.SETUP`, `editor/IdeActions`). Eclipse's history also holds its own entries (Open Declaration), so the two histories can disagree. |
 | Leave it, as per-window behavior | Matches Vim's windows, but most users expect `Ctrl-O` to go back to the last editor. |
 
+**No stray jumps (2026-10-29).** `nvim_win_set_buf` and `nvim_set_current_buf` add a jump to the
+window they change. The plug-in puts buffers in windows behind the user's back (the window left
+behind by a travel, a show), so each window gathered jumps the user never made: `Ctrl-O` held down
+between two editors found one more for ever, and at the end of a window's history Eclipse's Back
+found the other editor again. The module now uses `:keepjumps buffer!` (`put_buf`).
+
 ### E3 Two editors on one file
 
 - Cursors and `curswant` are independent: `$j` in one window left the other at its column.

@@ -35,6 +35,7 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
@@ -234,6 +235,90 @@ class EditorEndToEndTest extends EndToEndTestBase {
         waitForAttach(editor, "test.txt, after Ctrl-O");
         assertEquals(editor, page.getActiveEditor());
         page.closeEditor(other, false);
+    }
+
+    /**
+     * As reported: {@code Ctrl-O} held down after a few {@code :e #} between two files went back and
+     * forth between them for ever. Each travel left a stray jump in the window left behind (WINDOWS
+     * module, put_buf), so a window came back with its place reset to the end of its history, and
+     * {@code Ctrl-O} always found one more jump. Checked as Vim has it: while {@code Ctrl-O} is held
+     * down, no window's jump history grows and no window's place in it moves forward (and the other
+     * way for {@code Ctrl-I}).
+     *
+     * <p>Not "it stops after N presses": at the end of the editors' own histories {@code Ctrl-O} is
+     * Eclipse's Back, whose history is the whole test Eclipse's, with earlier tests' editors in it.
+     * For the same reason the editors that Back reopens are closed at the end.
+     */
+    @Test
+    void ctrlOAndCtrlIHeldDownAfterEHashOnlyGoOneWay() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        try {
+            page.activate(editor);
+            waitForAttach(editor, "test.txt");
+            runInBox(widget, "e other.txt");
+            waitForAttach(other, "other.txt, after :e");
+            runInBox(widgetOf(other), "e #");
+            waitForAttach(editor, "test.txt, after :e #");
+            runInBox(widget, "e #");
+            waitForAttach(other, "other.txt, after a second :e #");
+
+            assertOnlyOneWay("<C-o>", -1);
+            assertOnlyOneWay("<C-i>", +1);
+        } finally {
+            for (IEditorReference ref : page.getEditorReferences()) {
+                if (ref.getEditor(false) != editor) {
+                    page.closeEditors(new IEditorReference[] { ref }, false);
+                }
+            }
+        }
+    }
+
+    /**
+     * Presses {@code key} 8 times (enough for the old loop to come round four times) and checks
+     * each window's jump history after each press: its length never grows, and its place moves only
+     * in {@code direction} (-1 back, +1 forward) or stays. The windows' histories are read from
+     * Neovim: {@code {winid, length, place}} for every editor window.
+     */
+    private void assertOnlyOneWay(String key, int direction) throws Exception {
+        java.util.Map<Long, long[]> before = jumpHistories();
+        List<String> seen = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            session.inputAsync(key);
+            settle();
+            java.util.Map<Long, long[]> now = jumpHistories();
+            seen.add(String.valueOf(now.entrySet().stream()
+                    .map(e -> e.getKey() + "=" + e.getValue()[0] + ":" + e.getValue()[1]).toList()));
+            for (var e : now.entrySet()) {
+                long[] was = before.get(e.getKey());
+                if (was == null) {
+                    continue; // a window opened meanwhile (Back reopened an older editor)
+                }
+                long[] is = e.getValue();
+                assertTrue(is[0] <= was[0], key + ": window " + e.getKey() + "'s history grew: " + seen);
+                assertTrue(Long.signum(is[1] - was[1]) * direction >= 0,
+                        key + ": window " + e.getKey() + " moved the wrong way in its history: " + seen);
+            }
+            before = now;
+        }
+    }
+
+    /** Each window's jump history: winid to {length, place}. */
+    private java.util.Map<Long, long[]> jumpHistories() {
+        Object answer = io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, """
+                local out = {}
+                for _, win in ipairs(vim.api.nvim_list_wins()) do
+                  local list, place = unpack(vim.api.nvim_win_call(win, vim.fn.getjumplist))
+                  out[#out + 1] = { win, #list, place }
+                end
+                return out""");
+        java.util.Map<Long, long[]> histories = new java.util.HashMap<>();
+        for (Object row : (List<?>) answer) {
+            List<?> r = (List<?>) row;
+            histories.put(((Number) r.get(0)).longValue(),
+                    new long[] { ((Number) r.get(1)).longValue(), ((Number) r.get(2)).longValue() });
+        }
+        return histories;
     }
 
     /**
