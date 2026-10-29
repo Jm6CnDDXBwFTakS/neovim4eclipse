@@ -15,7 +15,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Keys typed within milliseconds of entering insert mode, before Eclipse has Neovim's text | Neovim, for the rest of that insert, so nothing is lost |
 | `:`, `/`, `?` in normal mode | Neovim, which opens its command line; the editor shows it in the `:` box, whose keys all go to Neovim (Paste and Copy stay Eclipse's, acting on the box) |
 | `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
-| `gd`, `Ctrl-]`, `K`, `gt`, `gT` in normal mode | Neovim first, which hands them to Eclipse (below) |
+| `gd`, `Ctrl-]`, `K`, `grn`, `gra`, `grr`, `gri`, `grt`, `gO`, `gt`, `gT` in normal mode (`gra` in visual mode too) | Neovim first, which hands them to Eclipse (below) |
 | The left mouse button in normal and visual mode | Neovim's own mouse (`nvim_input_mouse`); Ctrl/Cmd+click, the right and middle buttons stay Eclipse's (README, "Mouse") |
 | The vertical mouse wheel and touchpad in normal and visual mode | Neovim, which scrolls its window by the lines the system reports and drags the cursor, as `Ctrl-E`; the editor follows. With Ctrl, Shift or Cmd held, sideways, and in insert mode: Eclipse (README, "The editor's size, scrolling and word wrap") |
 | Eclipse mode (the Neovim toolbar button, the logo) | Eclipse, always |
@@ -95,7 +95,7 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,
   arrows, `Home`, `End`, unbound function keys as `<F5>` and so on.
 
-## Keys Neovim hands to Eclipse: `gd`, `Ctrl-]`, `K`, `gt`, `gT`, `ZZ`, `ZQ`
+## Keys Neovim hands to Eclipse: `gd`, `Ctrl-]`, `K`, `gr*`, `gO`, `gt`, `gT`, `ZZ`, `ZQ`
 
 Some normal-mode keys mean something only the IDE can do. The plug-in maps them in Neovim to a small
 Lua function that sends an `eclipse_action` notification back to Eclipse (`core/IdeAction`), so Neovim
@@ -106,11 +106,24 @@ still handles counts, the `g` prefix and arguments (`fZ` finds a `Z`; it is not 
 | `gd` | the command bound to `F3` in this editor (Open Declaration in the Java editor); in an editor without one (the plain Text Editor), or where that command cannot run (another plug-in may bind `F3` for every text editor), Neovim's own `gd` (the word's first use). The Generic Editor binds `F3` to Open Hyperlink, which is also how Language Server files go to a definition; there `gd` does what `F3` does where the editor knows a definition under the cursor, and is Neovim's own `gd` elsewhere. In short: `gd` goes to a definition when Eclipse knows one, else it is Vim's `gd`, so a plain `.txt` file behaves the same in the Text Editor and the Generic Editor. URLs and file paths are not followed by `gd` in either; that is `Ctrl`+click |
 | `Ctrl-]` | the same as `gd` (Vim's jump to the tag under the cursor; Neovim's language-server setup sends it to the definition too) |
 | `K` | Show Tooltip Description (`F2`): the hover information |
+| `grn` | Rename: the command bound to `Alt+Shift+R` in this editor (Java's Rename refactoring) |
+| `gra` | Quick Fix (`Ctrl+1`), in every text editor; in visual mode (`v`, `V`) on the selection, so Quick Assists such as *Extract Local Variable* work on it |
+| `grr` | References: the command bound to `Ctrl+Shift+G` (Java's References in Workspace; the Generic Editor's Find References for Language Server files) |
+| `gri` | Open Implementation (Java) |
+| `grt` | Open Declared Type (Java): the type of the variable or expression under the cursor, as `Ctrl`+click offers it |
+| `gO` | Quick Outline (Java's `Ctrl+O`, which is Neovim's `Ctrl-O` here) |
 | `gt`, `{N}gt` | next editor tab, or tab N |
 | `gT`, `{N}gT` | previous editor tab, or N tabs back |
 | `Ctrl-O`, `Ctrl-I` | Neovim's own while its jump history has an older (newer) entry; at its end, Eclipse's Back (`Alt+Left`) or Forward (`Alt+Right`), with the count. Each editor is a Neovim window with its own jump history, and switching editors in Eclipse (a tab click, `Ctrl+F6`, `F3`) is no Neovim jump, so `Ctrl-O` after a tab click goes back through Eclipse's history instead of doing nothing. Back steps over the switches the plug-in made itself for Neovim's jumps (those are in Neovim's history already), and `Ctrl-I` retraces `Ctrl-O` (`editor/NavigationHistorySteps`, [design/WINDOWS.md](design/WINDOWS.md), E2). As Eclipse's Back does, they can reopen an editor you closed (`:bd`); Neovim alone would not. Not where `init.lua` maps the key itself |
 | `ZZ` | save the editor if it has changes, then close it (Vim's `:x`); a failed save keeps it open |
 | `ZQ` | close the editor without saving (Vim's `:q!`) |
+
+`grn`, `gra`, `grr`, `gri`, `grt` and `gO` are Neovim's own defaults for a language server
+(`:help grn`); here Eclipse is that server, so they run its commands. Where the editor has no such
+command (Rename in a plain text file) the message line says so:
+`grn: Rename is not available in this editor`. `grx` (run a code lens) has no Eclipse counterpart
+and stays Neovim's. Which Eclipse command each key runs, and how it is found, is one table in the
+code (`core/IdeKeys`), which also makes Neovim's mappings.
 
 These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys,
 except `Ctrl-O` and `Ctrl-I`: those keep yours, and that is also how to turn their fallback off,

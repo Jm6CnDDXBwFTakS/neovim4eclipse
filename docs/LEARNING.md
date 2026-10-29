@@ -833,12 +833,21 @@ writes it *before* opening the dialog (so a crash does not repeat it), and opens
 `test-customization.ini`, or the first test that triggers it waits for a click until it times out.
 
 **Hand a normal-mode key to Eclipse.** Do not catch it in Java: map it in Neovim, so Neovim keeps
-reading counts, prefixes and arguments (`fZ` is not `ZZ`). Add a constant to `core/IdeAction`, a
-`vim.keymap.set` in `LuaScripts.SETUP` that calls `vim.rpcnotify(0, 'eclipse_action', '<name>', vim.v.count)`
-(inside the `neovim4eclipse_ide_keys` check if the user may want Neovim's meaning back), and a `case`
-in `editor/IdeActions.run`. Test the mapping in Lua (`src/test/lua/setup_spec.lua`: the key sends
-the notification, with its count), the reading of it in `NotificationBridgeTest`, and, if it changes
-the workbench, the whole way in a UI test. Example: `ZZ` and `ZQ` (`save_and_close`, `close`). Why
+reading counts, prefixes and arguments (`fZ` is not `ZZ`). For a key that runs an Eclipse command
+(`gd`, `K`, `grn`), add a constant to `core/IdeAction` and two rows to `core/IdeKeys`: the key in
+`KEYS` (modes, action) and the command in `COMMANDS` (its label, and the *ways* to find it, tried in
+order: the command bound to Eclipse's usual key, `Way.boundTo("M2+M3+R")`, so each editor's own
+runs; a command id, `Way.command(...)`; or a hyperlink detector, `Way.hyperlink(...)`). That is
+all: `LuaScripts.IDE_KEYS` maps every key of the table (inside the `neovim4eclipse_ide_keys`
+check), and `editor/IdeActions` chooses and runs from it (`choose` is testable without running
+anything). Check the command ids in a running Eclipse first: a temporary UI test that lists
+`ICommandService.getDefinedCommandIds()` with `isHandled()` and `IBindingService.getActiveBindingsFor`
+per editor shows them. A key the plug-in's own key contexts take (`Ctrl+O`) cannot be looked up by
+binding; use the command id. For a key with an action of its own (`ZZ`, `ZQ`), add a
+`vim.keymap.set` in `LuaScripts.SETUP` and a `case` in `editor/IdeActions.run`. Test the mapping in
+Lua (`src/test/lua/setup_spec.lua`: the key sends the notification, with its count), the table in
+`IdeKeysTest`, and the choice per editor in a UI test (`IdeKeysEndToEndTest`, or
+`JavaEditorEndToEndTest` for Java). Example: `ZZ` and `ZQ` (`save_and_close`, `close`). Why
 not Java: until 0.1.7 `KeyRouter` followed Vim's grammar itself (`KeyGrammar`, 392 lines) to know
 whether a `Z` or `:` started a command, and every new case (`gqq`, `zfzf`, `g??`) was a bug first.
 

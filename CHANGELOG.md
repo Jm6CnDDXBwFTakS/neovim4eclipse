@@ -14,6 +14,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
+- Neovim's language-server keys run Eclipse's commands: `grn` Rename, `gra` Quick Fix (also on a
+  visual selection), `grr` References, `gri` Open Implementation, `grt` Open Declared Type, `gO`
+  Quick Outline. Where an editor has no such command, the message line says so.
+  `vim.g.neovim4eclipse_ide_keys = 0` gives them back to Neovim, as it does `gd` and `K`.
 - `:Eproblems` puts the workspace's problems in Neovim's quickfix list, and `:Etasks` the tasks with
   your tags (`vim.g.neovim4eclipse_task_tags = 'JM6,FIXME'` in `init.lua`); both go to the first
   entry (`!`: they do not). `:Eproblems warning` leaves out infos, `:Eproblems error` warnings too.
