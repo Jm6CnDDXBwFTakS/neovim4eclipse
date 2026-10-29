@@ -1,4 +1,4 @@
-# Keys: who gets which key
+# Keyboard: who gets which key
 
 Every key press in an attached editor goes either to Neovim or to Eclipse. This page explains the
 rules, and why three `Ctrl` keys stay with Eclipse unless you change them. For the mechanism (key

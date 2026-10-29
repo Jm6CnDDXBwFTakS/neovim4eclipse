@@ -103,7 +103,7 @@ caught up. And no guess covers keys that mappings give a new meaning.
    mode), each typed into Neovim key by key; after each prefix it checks that the router's decision
    for `:` `/` `?` and `q` matches Neovim's mode. New cases become one line in the corpus. This is
    the guard that the grammar matches Vim's, and it will find cases this note missed.
-4. Docs: KEYS.md and ARCHITECTURE.md ("Arguments vs prompts"), CHANGELOG *Fixed*, and a Known
+4. Docs: KEYBOARD.md and ARCHITECTURE.md ("Arguments vs prompts"), CHANGELOG *Fixed*, and a Known
    limitations entry for mappings until phase 2.
 
 Size: one class replaced by a tested one, two to three commits. No behavior change for keys that work

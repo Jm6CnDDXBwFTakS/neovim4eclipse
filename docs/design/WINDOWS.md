@@ -192,7 +192,7 @@ history (`getjumplist()` only reads), so the plug-in cannot write the switch in.
 | `:bufdo`, `:argdo` | The editor's window ends on the last buffer. | Follow, as before |
 
 `:q` never reaches Neovim; the plug-in already handles it. `Ctrl+W` keys reach Neovim only when the
-user gives `Ctrl+W` to Neovim in the preferences (KEYS.md).
+user gives `Ctrl+W` to Neovim in the preferences (KEYBOARD.md).
 
 ### E5 Folds
 

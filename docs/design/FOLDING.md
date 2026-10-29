@@ -162,7 +162,7 @@ file have their own, and the send on attach finds them already there.
 - **`'foldopen'` is the user's,** and the plug-in does not set it *(decided)*. Out of the box this
   is Vim's behavior: `j` steps over a closed fold, and a search into one opens it. `set
   foldopen=all` in `init.lua` gives Eclipse's behavior, where any move into folded code opens it.
-  README and `docs/KEYS.md` say so.
+  README and `docs/KEYBOARD.md` say so.
 - **`zf`, `zF`, `zd`, `zD`, `zE`, `:fold` and `:folddelete` are not supported** in a mirrored
   buffer *(decided)*. They show an error such as `zf: Eclipse defines the folds in this editor`. Folds
   the user creates are out of scope (section 8). In editors that cannot fold, these commands keep
@@ -544,7 +544,7 @@ All waits use `TestWait`; "nothing more arrived" uses `NeovimBarrier.pass`. Noth
 
 - **README:** a row in the feature table, and a short folding section with `'foldopen'` and the
   opt-out.
-- **`docs/KEYS.md`:** the `z` keys go to Neovim. List what is not supported, and say where
+- **`docs/KEYBOARD.md`:** the `z` keys go to Neovim. List what is not supported, and say where
   folding is off.
 - **`docs/ARCHITECTURE.md`:** replace the *Folding* bullet (folds are mirrored, the caption
   line), and add rows to the "Where logic lives" table.
@@ -566,7 +566,7 @@ AGENTS.md asks:
 2. **The Eclipse side:** `FoldMirror`, the controller and `DocumentPush` wiring, the caret on the
    caption line, and `nofoldenable` for editors that cannot fold. SWT, UI and heavy Java tests, and
    the docs and CHANGELOG of section 6.
-3. **`zf`/`zd`/`zE` and `:fold`/`:folddelete` errors,** with their tests and a line in KEYS.md.
+3. **`zf`/`zd`/`zE` and `:fold`/`:folddelete` errors,** with their tests and a line in KEYBOARD.md.
 
 Because the branch is stacked on `feature/diagnostics`, it merges into `release/0.1.9` only after
 that branch has; if diagnostics changes first, `feature/folding` is rebased onto it.

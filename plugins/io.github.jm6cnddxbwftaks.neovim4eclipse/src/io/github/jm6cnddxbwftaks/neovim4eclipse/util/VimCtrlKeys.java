@@ -54,7 +54,7 @@ public final class VimCtrlKeys {
     /**
      * Letters that stay with Eclipse unless the user changes it: Ctrl+S saves, Ctrl+W closes the
      * editor (Vim's window commands are meaningless with one embedded window, and Ctrl+W q would quit
-     * Neovim), Ctrl+Z undoes (Vim's suspend is meaningless when embedded). See {@code docs/KEYS.md}.
+     * Neovim), Ctrl+Z undoes (Vim's suspend is meaningless when embedded). See {@code docs/KEYBOARD.md}.
      */
     public static final String ECLIPSE_BY_DEFAULT = "swz";
 

@@ -279,7 +279,7 @@ empty file and in a new outside file it is not, and waiting does not help.
 ## 7. Docs and commits
 
 - **README**, command-line section: `:e` of a missing file, `./`, and `:w ++p`.
-- **`docs/KEYS.md`:** no change.
+- **`docs/KEYBOARD.md`:** no change.
 - **`docs/ARCHITECTURE.md`:** the host-command row mentions new files.
 - **`CHANGELOG.md`, *Unreleased*:**
   - *Added*: `:e` of a missing file opens an empty editor, `:w` creates the file, and `:w ++p`

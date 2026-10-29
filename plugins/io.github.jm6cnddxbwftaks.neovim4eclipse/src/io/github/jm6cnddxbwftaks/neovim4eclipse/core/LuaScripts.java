@@ -848,7 +848,7 @@ final class LuaScripts {
      *       {@code Ctrl-N} and {@code T} show the same error; {@code Ctrl-W q}, {@code Ctrl-Q} and
      *       {@code c} close the editor ({@code :Eclipse quit}). Only where the user's config maps none
      *       of them itself. These keys reach Neovim only when Ctrl+W goes to Neovim in the
-     *       preferences (docs/KEYS.md).</li>
+     *       preferences (docs/KEYBOARD.md).</li>
      *   <li>In a <em>side window</em> ({@code is_side_window} of {@link #WINDOWS}: a floating
      *       window the user entered, such as hover documentation), {@code :q}, {@code :close},
      *       {@code Ctrl-W q} and {@code Ctrl-W c} are Neovim's again, through the host commands'

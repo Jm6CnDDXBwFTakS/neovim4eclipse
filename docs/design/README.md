@@ -25,4 +25,4 @@ note the place to learn *why* the code is the way it is, which the code itself c
 above. Keep the status here and in the note current as the work goes on.
 
 Notes about how the plug-in works today, rather than one change, live one level up in `docs/`
-(for example [ARCHITECTURE.md](../ARCHITECTURE.md) and [KEYS.md](../KEYS.md)).
+(for example [ARCHITECTURE.md](../ARCHITECTURE.md) and [KEYBOARD.md](../KEYBOARD.md)).

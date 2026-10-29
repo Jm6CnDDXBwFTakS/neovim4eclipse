@@ -368,6 +368,6 @@ column conversion (bytes, cells, pixels) is its own work.
 2. Neovim to Eclipse: `ViewportEvent`, top line applied before the caret.
 3. Eclipse to Neovim: the wheel through `WheelScroll` and `SCROLL_LINES` (D1, D9). (`SET_TOPLINE`
    for the rest and insert mode at Esc were built in commit 2; see *As built*.)
-4. Docs: README (screen commands now match the editor; D3 shortfall), docs/KEYS.md,
+4. Docs: README (screen commands now match the editor; D3 shortfall), docs/KEYBOARD.md,
    docs/ARCHITECTURE.md (drop "Neovim's screen is not the editor's", describe the viewport),
    docs/LEARNING.md (a walkthrough of `Ctrl-E`), CHANGELOG under *Unreleased*.
