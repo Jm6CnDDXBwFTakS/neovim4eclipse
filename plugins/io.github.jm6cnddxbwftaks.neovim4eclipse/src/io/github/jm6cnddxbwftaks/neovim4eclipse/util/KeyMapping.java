@@ -42,6 +42,28 @@ public final class KeyMapping {
     public static final int SWT_F12 = SWT_F1 + 11;
     public static final int SWT_KEYPAD_CR = KEYCODE_BIT + 80;
 
+    /**
+     * The punctuation of Vim's other Ctrl keys: {@code <C-@>}, {@code <C-\>}, {@code <C-]>},
+     * {@code <C-^>} and {@code <C-_>}. In ASCII, Ctrl with one of these gives the control code 0x40
+     * lower: {@code ^} is 0x5E, so Ctrl-^ is 0x1E. Systems report such a key either way, as that
+     * control code (often for a key with Shift, such as Ctrl+Shift+6 for Ctrl-^ on a US keyboard) or
+     * as the punctuation with Ctrl held; {@link #ctrlPunctuation} reads both. {@code [} is not here:
+     * Ctrl-[ is code 27, Esc, handled as Esc. Example: Ctrl-^ edits the alternate file, Ctrl-] goes
+     * to the definition ({@code LuaScripts.SETUP} hands it to Eclipse, as {@code gd}).
+     *
+     * <p>To add one: Vim names only these five; the rest of 0x00-0x1F are Ctrl+letter, read above.
+     */
+    private static final String CTRL_PUNCTUATION = "@\\]^_";
+
+    /**
+     * Keys Vim also takes for one of {@link #CTRL_PUNCTUATION}, as its GUIs do, keyed by the key
+     * pressed with Ctrl: Ctrl+6 is Ctrl-^ (on many layouts {@code ^} is not Shift+6; on a German
+     * keyboard it is a dead key). Not Vim's Ctrl+2 for Ctrl-@ or Ctrl+- for Ctrl-_: Eclipse binds
+     * those (Quick Assist, Zoom Out), and in normal mode Vim does nothing with either.
+     */
+    private static final String CTRL_ALIAS_KEYS = "6";
+    private static final String CTRL_ALIAS_TARGETS = "^";
+
     private KeyMapping() {
     }
 
@@ -70,6 +92,10 @@ public final class KeyMapping {
         if (ctrl && !alt && keyCode < 128 && lowerKey >= 'a' && lowerKey <= 'z') {
             return "<C-" + (char) lowerKey + ">";
         }
+        char punctuation = ctrlPunctuation(keyCode, ctrl, alt, character);
+        if (punctuation != 0) {
+            return "<C-" + punctuation + ">";
+        }
         if (keyCode == SWT_CR || keyCode == SWT_KEYPAD_CR || character == SWT_CR || character == SWT_LF) {
             return wrapModifiers("CR", ctrl, alt, shift);
         }
@@ -88,6 +114,34 @@ public final class KeyMapping {
         }
 
         return null;
+    }
+
+    /**
+     * The punctuation of a Ctrl key in {@link #CTRL_PUNCTUATION} (the {@code ^} of Ctrl-^), or 0.
+     * Read from the control code when the system sends one, else from the character or the key with
+     * Ctrl held, else from an alias key ({@link #CTRL_ALIAS_KEYS}). Not with Alt: Ctrl+Alt is AltGr
+     * on Windows, which types characters such as {@code \} and {@code ]} on many layouts.
+     */
+    private static char ctrlPunctuation(int keyCode, boolean ctrl, boolean alt, char character) {
+        if (alt) {
+            return 0;
+        }
+        if (character >= 0x1C && character <= 0x1F) { // 0x00 (Ctrl-@) is SWT's "no character"
+            return (char) (character | 0x40);
+        }
+        if (!ctrl) {
+            return 0;
+        }
+        for (char c : new char[] { character, keyCode < 128 ? (char) keyCode : 0 }) {
+            if (c != 0 && CTRL_PUNCTUATION.indexOf(c) >= 0) {
+                return c;
+            }
+            int alias = c == 0 ? -1 : CTRL_ALIAS_KEYS.indexOf(c);
+            if (alias >= 0) {
+                return CTRL_ALIAS_TARGETS.charAt(alias);
+            }
+        }
+        return 0;
     }
 
     private static String printableKey(char character, boolean ctrl, boolean alt) {

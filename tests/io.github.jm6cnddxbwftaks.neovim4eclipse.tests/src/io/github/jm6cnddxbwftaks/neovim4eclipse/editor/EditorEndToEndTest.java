@@ -179,6 +179,38 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code Ctrl-^} (Ctrl+Shift+6 on a US keyboard) toggles between two files' editors, as it does
+     * between two buffers in one Vim window. other.txt's editor is opened from test.txt's, so its
+     * window's alternate file is test.txt; {@code Ctrl-^} there edits test.txt in that window,
+     * which travels to test.txt's editor with its alternate, other.txt (docs/design/WINDOWS.md, E2),
+     * and the next {@code Ctrl-^} comes back.
+     */
+    @Test
+    void ctrlCaretTogglesBetweenTwoFilesEditors() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+
+        ctrlShift6(widgetOf(other));
+        waitForAttach(editor, "test.txt, after Ctrl-^");
+        assertEquals(editor, page.getActiveEditor());
+
+        ctrlShift6(widget);
+        waitForAttach(other, "other.txt, after a second Ctrl-^");
+        assertEquals(other, page.getActiveEditor());
+        page.closeEditor(other, false);
+    }
+
+    /** Ctrl+Shift+6 as GTK reports it: the key 6 and the control code 0x1E that Ctrl-^ is in ASCII. */
+    private static void ctrlShift6(StyledText target) {
+        Event event = new Event();
+        event.keyCode = '6';
+        event.character = (char) 0x1E;
+        event.stateMask = SWT.CTRL | SWT.SHIFT;
+        event.doit = true; // as for a real key press; a new Event defaults to false (key ignored)
+        target.notifyListeners(SWT.KeyDown, event);
+    }
+
+    /**
      * {@code Ctrl-O} across files goes back through one jump history, as in Vim with one window:
      * test.txt's Neovim window jumps into other.txt and travels to other.txt's editor (the two swap
      * windows, docs/design/WINDOWS.md, E2), so its history comes along. Here: {@code G} in test.txt

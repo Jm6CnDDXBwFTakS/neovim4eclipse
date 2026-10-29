@@ -8,14 +8,16 @@
 
 local t = ...
 
-t.test('gd, K, gt and gT go to the IDE, with the count typed before them', function()
+t.test('gd, Ctrl-], K, gt and gT go to the IDE, with the count typed before them', function()
   t.setup()
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'a', 'b' })
   t.type('gt')
   t.type('3gT')
   t.type('gd')
+  t.type('<C-]>')
   t.type('K')
-  t.eq({ { 'next_tab', 0 }, { 'previous_tab', 3 }, { 'definition', 0 }, { 'hover', 0 } }, t.sent('eclipse_action'))
+  t.eq({ { 'next_tab', 0 }, { 'previous_tab', 3 }, { 'definition', 0 }, { 'definition', 0 }, { 'hover', 0 } },
+    t.sent('eclipse_action'))
   t.type('ggjdd') -- the g prefix still works for Neovim's own commands
   t.eq({ 'a' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
 end)
