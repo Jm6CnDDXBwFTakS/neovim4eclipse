@@ -237,6 +237,37 @@ class NeovimWindowsIntegrationTest {
     }
 
     /**
+     * The travel moves the attached buffer along with its window: should the attach of the editor
+     * jumped into fail, going back to the attached buffer puts it in A's new window, not in the one
+     * B now holds.
+     */
+    @Test
+    void afterATravelTheAttachedBufferGoesBackToItsEditorsNewWindow() throws Exception {
+        try (NeovimSession s = start()) {
+            List<Integer> entered = new CopyOnWriteArrayList<>();
+            s.setBufferEnterHandler(entered::add);
+            DocumentBuffer docA = new DocumentBuffer("");
+            DocumentBuffer docB = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            EditorWindow b = new EditorWindow();
+            s.showWindow(docB, b, "");
+            s.showWindow(docA, a, "");
+            int aWin = a.winid();
+            int bWin = b.winid();
+            s.command("buffer " + docB.bufnr());
+            waitFor(() -> entered.contains(docB.bufnr()), "the jump to be reported");
+            s.travelWindow(a, b, docA);
+            assertEquals(bWin, s.getAttachedWinid(), "A's buffer is in A's new window");
+
+            s.returnToAttachedBufferAsync(); // what follows a failed attach of B's editor
+            waitFor(() -> currentWin(s) == bWin, "A's new window to be entered");
+            assertEquals(docA.bufnr(), number(s, "return vim.api.nvim_get_current_buf()"));
+            assertEquals(docB.bufnr(), number(s, "return vim.api.nvim_win_get_buf(" + aWin + ")"),
+                    "B's window keeps B's buffer");
+        }
+    }
+
+    /**
      * An untitled document has no folder of its own: its window keeps the folder of the editor
      * attached before (copied by Neovim), or gets the home folder when there was none.
      */
@@ -251,6 +282,30 @@ class NeovimWindowsIntegrationTest {
             EditorWindow untitled = new EditorWindow();
             s.showWindow(new DocumentBuffer(""), untitled, null);
             assertEquals(dir.toRealPath(), cwd(s), "the folder of the editor attached before");
+        }
+    }
+
+    /**
+     * An untitled editor's window closed in Neovim without the plug-in hearing of it yet (no
+     * {@code WinClosed}): its next show finds it gone and opens a new one, which still inherits the
+     * folder of the editor attached before, as the first one did.
+     */
+    @Test
+    void anUntitledWindowOpenedAgainStillTakesTheFolderOfTheEditorBefore(@TempDir Path dir) throws Exception {
+        try (NeovimSession s = start()) {
+            EditorWindow project = new EditorWindow();
+            DocumentBuffer projectDoc = new DocumentBuffer("");
+            s.showWindow(projectDoc, project, dir.toString());
+            EditorWindow untitled = new EditorWindow();
+            DocumentBuffer untitledDoc = new DocumentBuffer("");
+            s.showWindow(untitledDoc, untitled, null);
+            s.showWindow(projectDoc, project, dir.toString());
+            int old = untitled.winid();
+            s.lua("vim.o.eventignore = 'all'; vim.api.nvim_win_close(" + old + ", true); vim.o.eventignore = ''");
+
+            s.showWindow(untitledDoc, untitled, null);
+            assertNotEquals(old, untitled.winid(), "a new window");
+            assertEquals(dir.toRealPath(), cwd(s), "the project editor's folder, not the home folder");
         }
     }
 
