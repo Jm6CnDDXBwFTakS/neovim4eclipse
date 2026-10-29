@@ -210,6 +210,15 @@ forgotten when a key is typed in between, when the user switches editors in Ecli
 each activation: an entry that is neither the plug-in's nor seen at the last Back), and when a jump
 step's window is no longer current or has no newer jump: the keys then work as before.
 
+**Closed editors (decided 2026-10-29: Eclipse's way).** After `:e root` and `:bd`, `Ctrl-O` or
+`Ctrl-I` past Neovim's jumps can open `root` again: Eclipse keeps a closed editor's entry (with no
+input and an empty name) and Back and Forward reopen it, as `Alt+Left` does. Neovim would not
+(`'jumpoptions'` has `clean` by default: a deleted buffer's jumps go). Skipping those entries was
+probed and dropped: Back moves one entry at a time and reopens the editor of every entry it passes
+over, and the API has no way to go to an entry directly. Stopping at a closed entry, or closing the
+editors that Back reopened, were weighed too; the first loses the older places, the second fights
+Eclipse.
+
 ### E3 Two editors on one file
 
 - Cursors and `curswant` are independent: `$j` in one window left the other at its column.
