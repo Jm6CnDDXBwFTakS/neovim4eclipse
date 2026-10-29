@@ -593,11 +593,11 @@ public final class EditorAttachManager {
     }
 
     /**
-     * Neovim unloaded and loaded {@code buffer} again by itself ({@code :edit!} from a script or a
-     * plug-in; a typed {@code :e!} reverts in Eclipse instead). The plug-in left the buffer empty
-     * rather than read the disk ({@code LuaScripts.PROJECT_FILES}): the document's text, unsaved
-     * changes included, goes into it again. Called on an RPC thread; the document is read on the UI
-     * thread.
+     * Neovim loaded {@code buffer} empty by itself: a plug-in unloaded it ({@code :bunload}) and it
+     * was read later, with no text kept from the unload (an {@code :edit!} keeps it, and needs
+     * nothing from here: {@code LuaScripts.DOCUMENT_BUFFER}). The plug-in did not read the disk, so
+     * the document's text, unsaved changes included, goes into it again. Called on an RPC thread;
+     * the document is read on the UI thread.
      */
     private void onNeovimReloadedDocument(DocumentBuffer buffer) {
         Display display = Display.getDefault();

@@ -70,11 +70,12 @@ final class NotificationBridge implements Incoming {
         void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile);
 
         /**
-         * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script):
-         * {@link LuaScripts#PROJECT_FILES} left it empty, for Eclipse to load the document's text into
-         * it again.
+         * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script;
+         * {@link LuaScripts#DOCUMENT_BUFFER}). {@code kept}: the text from before the unload was put
+         * back, and only the attach is to be renewed; otherwise the buffer is empty, for Eclipse to
+         * load the document's text into it ({@code false} if not sent).
          */
-        void onBufferReload(int bufnr);
+        void onBufferReload(int bufnr, boolean kept);
 
         /**
          * Neovim closed window {@code winid} by itself ({@code :tabclose}, a plug-in): the safety net
@@ -248,11 +249,11 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr]}, from {@link LuaScripts#PROJECT_FILES} (see {@link Sink#onBufferReload}). */
+    /** Payload: {@code [bufnr, kept]}, from {@link LuaScripts#DOCUMENT_BUFFER} (see {@link Sink#onBufferReload}). */
     private void onBufferReload(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
-            sink.onBufferReload(buf);
+            sink.onBufferReload(buf, args.size() > 1 && Boolean.TRUE.equals(args.get(1)));
         }
     }
 
