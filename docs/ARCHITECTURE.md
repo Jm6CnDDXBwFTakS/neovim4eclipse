@@ -647,6 +647,8 @@ reason is gone.
 | Neovim's cursor reports are dropped while Eclipse types | `editor/CaretSync.onNeovimCursor` | The caret sent to Neovim came back clamped to Neovim's old line (`CursorMovedI`). `CaretSyncTest`, `JavaEditorEndToEndTest.enterAfterABrace...` |
 | Neovim's fold changes are applied as from Neovim | `NeovimEditorController.onFolds` (`CaretSync.runAsFromNeovim`) | Collapsing makes the widget move its caret below the fold; that move reached Neovim as the user's. `JavaEditorEndToEndTest.zcInTheBodyOfAMethodWithJavadocAndZoReopensIt` |
 | The session reports folds before the cursor | `core/StateSync.publishState` | Both go through one UI queue: the folds must be applied before the caret lands. `StateSyncTest` |
+| A caret offset still hidden after unfolding rebuilds Eclipse's hidden ranges | `editor/WidgetOffsets.toWidgetRevealing` (`ProjectionViewer.reinitializeProjection`) | JFace keeps text inserted where a hidden range starts hidden, even when the fold moves past it: `O` above a folded header comment whose `/*` line is hidden left the new line hidden and the caret on the caption. `WidgetOffsetsTest`, `JavaEditorEndToEndTest.oAboveAFoldedHeaderCommentTypesOnTheNewLine` |
+| Not worked around: a `//` line typed above a folded `//` header | (Eclipse) | JDT's reconcile grows the collapsed header fold over the new comment line, hiding the line being typed; plain Eclipse does the same. |
 | Not worked around: the caret is sometimes not drawn after a fold change | (Eclipse) | SWT's own behavior, also without the plug-in; noted in the README. |
 
 ## Where logic lives (and how it is tested)

@@ -681,6 +681,24 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
                 () -> "; it is at " + caretLineCol() + " in\n" + javaText());
     }
 
+    /**
+     * For a failure message: each fold as offset+length, with c when collapsed, then the widget line
+     * of the document's first line (-1: hidden). Example: "1+53c line1->widget 0".
+     */
+    private String foldPositions() {
+        org.eclipse.jface.text.source.projection.ProjectionViewer viewer =
+                (org.eclipse.jface.text.source.projection.ProjectionViewer) javaEditor
+                        .getAdapter(org.eclipse.jface.text.ITextOperationTarget.class);
+        var model = viewer.getProjectionAnnotationModel();
+        StringBuilder out = new StringBuilder();
+        for (var it = model.getAnnotationIterator(); it.hasNext();) {
+            var a = (org.eclipse.jface.text.source.projection.ProjectionAnnotation) it.next();
+            var pos = model.getPosition(a);
+            out.append(pos.getOffset()).append('+').append(pos.getLength()).append(a.isCollapsed() ? "c " : " ");
+        }
+        return out + "line1->widget " + viewer.modelLine2WidgetLine(0);
+    }
+
     /** How many fold annotations the Java editor has. */
     private int foldCount() {
         org.eclipse.jface.text.source.projection.ProjectionViewer viewer =
@@ -691,6 +709,48 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
             count++;
         }
         return count;
+    }
+
+    /**
+     * As reported: JDT folds a file's header comment (the copyright) when the editor opens, hiding
+     * its {@code /*} line (the caption is the first line with text). {@code O} on line 1 opens a line
+     * above the fold, and what is typed then belongs on that new line: {@code //x} on line 1, the
+     * header unchanged below it. The new line stayed hidden, and the caret went to the caption line
+     * (WidgetOffsets, "Text hidden by no fold").
+     *
+     * <p>Not tested here, because Eclipse does it without the plug-in too: with a header of
+     * {@code //} lines, the {@code //} typed on the new line makes it part of the header comment,
+     * and JDT's reconcile grows the collapsed fold over it, hiding the line being typed.
+     */
+    @Test
+    void oAboveAFoldedHeaderCommentTypesOnTheNewLine() throws Exception {
+        openJava("H.java", """
+                /*
+                 * Copyright line one.
+                 * Copyright line two.
+                 */
+                package p;
+
+                class H {
+                }
+                """);
+        waitForFoldsInNeovim();
+        assertTrue(someLinesHidden(), "JDT folds the header comment at first");
+        type(javaWidget, "gg");
+        settle();
+        String before = foldPositions();
+        type(javaWidget, "O");
+        settle();
+        waitUntil("the caret on the new line 1", TIMEOUT_MS, () -> caretLineCol().equals("1:0"),
+                () -> "; it is at " + caretLineCol() + "; folds before " + before + ", after " + foldPositions()
+                        + " in\n" + javaText());
+        type(javaWidget, "//x");
+        settle();
+        assertEquals("1:3", caretLineCol(), "the caret after //x, in\n" + javaText());
+        escape(javaWidget);
+        settle();
+        assertTrue(javaText().startsWith("//x\n/*\n * Copyright line one."), javaText());
+        expectNeovimHasTheDocument();
     }
 
     /** {@code zM} collapses every member; {@code zR} opens them all. */
