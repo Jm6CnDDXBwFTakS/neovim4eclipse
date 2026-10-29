@@ -63,8 +63,18 @@ final class NotificationBridge implements Incoming {
          * Neovim made {@code bufnr} its current buffer in window {@code winid} (a jump, {@code :b},
          * or a switch by Eclipse); {@code winid} is {@link EditorWindow#UNKNOWN} if not sent.
          * {@code jumped}: the move is in the window's jump history (false if not sent).
+         * {@code projectFile}: the buffer's file when it belongs to an open project and has no editor
+         * yet, read by {@link LuaScripts#PROJECT_FILES} ({@code gf}, {@code 'A}, a quickfix entry);
+         * Eclipse opens its editor. {@code ""} for any other buffer, or if not sent.
          */
-        void onBufferEnter(int bufnr, int winid, boolean jumped);
+        void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile);
+
+        /**
+         * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script):
+         * {@link LuaScripts#PROJECT_FILES} left it empty, for Eclipse to load the document's text into
+         * it again.
+         */
+        void onBufferReload(int bufnr);
 
         /**
          * Neovim closed window {@code winid} by itself ({@code :tabclose}, a plug-in): the safety net
@@ -172,6 +182,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_cursor" -> onCursor(args);
             case "eclipse_buf_enter" -> onBufEnter(args);
             case "eclipse_buffer_closed" -> onBufferClosed(args);
+            case "eclipse_reload" -> onBufferReload(args);
             case "eclipse_yank" -> onYank(args);
             case "eclipse_clipboard_copy" -> onClipboardCopy(args);
             case "eclipse_action" -> onAction(args);
@@ -228,11 +239,20 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr, winid, jumped]} (see {@link Sink#onBufferEnter}). */
+    /** Payload: {@code [bufnr, winid, jumped, projectFile]} (see {@link Sink#onBufferEnter}). */
     private void onBufEnter(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
-            sink.onBufferEnter(buf, window(args, 1), args.size() > 2 && Boolean.TRUE.equals(args.get(2)));
+            String file = args.size() > 3 && args.get(3) instanceof String name ? name : "";
+            sink.onBufferEnter(buf, window(args, 1), args.size() > 2 && Boolean.TRUE.equals(args.get(2)), file);
+        }
+    }
+
+    /** Payload: {@code [bufnr]}, from {@link LuaScripts#PROJECT_FILES} (see {@link Sink#onBufferReload}). */
+    private void onBufferReload(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        if (buf != null) {
+            sink.onBufferReload(buf);
         }
     }
 

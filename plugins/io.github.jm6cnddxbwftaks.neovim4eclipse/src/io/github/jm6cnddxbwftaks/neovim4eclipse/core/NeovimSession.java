@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -157,6 +159,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private boolean gridPending;
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
     private volatile Consumer<Integer> bufferClosedHandler;
+    /** Loads a document's text into its buffer again; see {@link #setReloadHandler}. */
+    private volatile Consumer<DocumentBuffer> reloadHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
     private volatile Runnable leaveInsertPush;
     /** Saves a document when Neovim writes its buffer; see {@link #setWriteHandler}. */
@@ -241,6 +245,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
         int channel = await(api.getChannelId());
         await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
+        // Before any document's buffer: each new buffer is checked against the project folders,
+        // which Eclipse sends at the first attach (docs/design/BUFFER_NUMBERS.md, 2.3).
+        await(api.execLua(LuaScripts.PROJECT_FILES, List.of()));
         await(api.execLua(LuaScripts.HOST_COMMANDS, List.of(HostCommand.rulesForNeovim())));
         await(api.execLua(LuaScripts.WINDOW_COMMANDS, List.of())); // after HOST_COMMANDS: its refuse hook
         // Once, here: the opt-out then costs nothing per key (docs/design/FOLDING.md, 3.6).
@@ -589,6 +596,59 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void setBufferClosedHandler(Consumer<Integer> handler) {
         this.bufferClosedHandler = handler;
+    }
+
+    /**
+     * Handles Neovim entering a project's file that has no editor yet ({@code gf}, {@code 'A}, a
+     * quickfix entry; read by {@link LuaScripts#PROJECT_FILES}): the handler gets the buffer number
+     * and the file, opens the file's editor and follows into it, or calls
+     * {@link #returnToAttachedBufferAsync()}. Called on an RPC thread. Without a handler, Neovim is
+     * switched back.
+     */
+    public void setProjectFileHandler(BiConsumer<Integer, String> handler) {
+        buffers.setProjectFileHandler(handler);
+    }
+
+    /**
+     * Handles Neovim reloading a document's buffer by itself ({@code :edit!} from a script, which
+     * left it empty: {@link LuaScripts#PROJECT_FILES}). The handler should read the document's text
+     * and pass it to {@link #reloadDocumentAsync}. Called on an RPC thread.
+     */
+    public void setReloadHandler(Consumer<DocumentBuffer> handler) {
+        this.reloadHandler = handler;
+    }
+
+    /**
+     * Loads {@code lines}, the document's text, into its buffer again after Neovim reloaded it
+     * ({@link #setReloadHandler}), without an undo step, and has Neovim send the buffer's changes
+     * again: unloading a buffer ended {@code nvim_buf_attach} for it. Then {@code 'modified'} follows
+     * Eclipse's dirty flag. Nothing for a buffer that is gone. Any thread.
+     */
+    public void reloadDocumentAsync(DocumentBuffer buffer, List<String> lines) {
+        List<String> target = lines.isEmpty() ? List.of("") : List.copyOf(lines);
+        submit("reload " + buffer.name(), Level.FINE, () -> {
+            Handle handle = buffers.handleOf(buffer);
+            if (handle == null) {
+                return;
+            }
+            List<String> args = new ArrayList<>(target.size() + 1);
+            args.add(String.valueOf(buffer.bufnr));
+            args.addAll(target);
+            await(api.execLua(LuaScripts.RELOAD_DOCUMENT_BUFFER, args)); // before the attach: no line event for it
+            await(api.bufAttach(handle, false));
+            applyModified(buffer);
+        });
+    }
+
+    /**
+     * Tells Neovim the open projects' folders ({@link LuaScripts#SET_PROJECT_FOLDERS}): it reads no
+     * file inside them by itself ({@link LuaScripts#PROJECT_FILES}). Any thread.
+     *
+     * @param folders the folders as Eclipse gives them ({@code IPath.toOSString()})
+     */
+    public void setProjectFoldersAsync(List<String> folders) {
+        List<String> copy = List.copyOf(folders);
+        submit(copy.size() + " project folders", Level.FINE, () -> await(api.execLua(LuaScripts.SET_PROJECT_FOLDERS, copy)));
     }
 
     /** Switches Neovim back to the attached buffer (it entered one that Eclipse does not show). */
@@ -1257,8 +1317,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onBufferEnter(int bufnr, int winid, boolean jumped) {
-            buffers.onEntered(bufnr, winid, jumped, NeovimSession.this::returnToAttachedBufferAsync);
+        public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile) {
+            buffers.onEntered(bufnr, winid, jumped, projectFile, NeovimSession.this::returnToAttachedBufferAsync);
+        }
+
+        @Override
+        public void onBufferReload(int bufnr) {
+            Consumer<DocumentBuffer> handler = reloadHandler;
+            DocumentBuffer document = buffers.documentAt(bufnr);
+            if (!closed && handler != null && document != null) {
+                LOG.fine(() -> "Neovim reloaded document buffer " + bufnr + ": Eclipse loads its text again");
+                handler.accept(document);
+            }
         }
 
         @Override
