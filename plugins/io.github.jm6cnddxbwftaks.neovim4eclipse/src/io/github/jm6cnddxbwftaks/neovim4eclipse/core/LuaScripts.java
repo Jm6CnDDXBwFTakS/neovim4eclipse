@@ -2239,15 +2239,18 @@ final class LuaScripts {
      * <p>Under {@code :lockmarks}: a reused buffer (CREATE_DOCUMENT_BUFFER) keeps its marks from
      * before its editor closed, and replacing all lines would move them. Example: {@code 'a} on line
      * 2 of a reloaded, empty buffer; the one empty line is replaced by four, and {@code 'a} would go
-     * to line 5 (docs/design/BUFFER_NUMBERS.md, X10). The lines go through {@code g:} because
-     * {@code :lockmarks} takes a command, not a Lua function.
+     * to line 5 (docs/design/BUFFER_NUMBERS.md, X10). {@code :lockmarks} takes an Ex command, not a
+     * Lua function, so the call runs as {@code :lockmarks lua ...}; that chunk cannot see this
+     * script's locals, so the lines wait for it in {@code package.loaded}, out of {@code g:} (where
+     * they would be converted to a Vimscript list and back: 35 ms for 200,000 lines, against 13 ms
+     * this way).
      */
     static final String LOAD_WITHOUT_UNDO = """
             local saved = vim.bo.undolevels
             vim.bo.undolevels = -1
-            vim.g.neovim4eclipse_load = { ... }
-            local ok, err = pcall(vim.cmd, 'lockmarks call nvim_buf_set_lines(0, 0, -1, v:false, g:neovim4eclipse_load)')
-            vim.g.neovim4eclipse_load = nil
+            package.loaded['neovim4eclipse.load'] = { ... }
+            local ok, err = pcall(vim.cmd, "lockmarks lua vim.api.nvim_buf_set_lines(0, 0, -1, false, package.loaded['neovim4eclipse.load'])")
+            package.loaded['neovim4eclipse.load'] = nil
             vim.bo.undolevels = saved
             if not ok then
               error(err)
