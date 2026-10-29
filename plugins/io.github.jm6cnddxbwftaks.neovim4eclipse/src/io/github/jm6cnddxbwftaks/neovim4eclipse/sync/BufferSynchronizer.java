@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -231,19 +232,30 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * @return the lines, or {@code null} if there is no UI any more or the synchronizer was closed
      */
     private List<String> documentLinesOnUi() {
+        return onUi(() -> FinalNewlines.linesToPush(document));
+    }
+
+    /**
+     * {@code read}'s result, read on the UI thread, where the document changes, so between two of
+     * its events. Waits for the UI thread when called from another one; the UI thread never waits
+     * for the session's threads, so this cannot deadlock.
+     *
+     * @return the result, or {@code null} if there is no UI any more or the synchronizer was closed
+     */
+    private <T> T onUi(Supplier<T> read) {
         if (ui.isUiThread()) {
-            return FinalNewlines.linesToPush(document);
+            return read.get();
         }
         if (!ui.isAvailable()) {
             return null;
         }
-        List<List<String>> snapshot = new ArrayList<>(1);
+        List<T> result = new ArrayList<>(1);
         ui.syncExec(() -> {
             if (!closed) {
-                snapshot.add(FinalNewlines.linesToPush(document));
+                result.add(read.get());
             }
         });
-        return snapshot.isEmpty() ? null : snapshot.get(0);
+        return result.isEmpty() ? null : result.get(0);
     }
 
     /**
@@ -330,9 +342,11 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
     }
 
+    /** Read on the UI thread (waiting for it when called from another), as the push reads the lines. */
     @Override
     public long documentStamp() {
-        return stampOf(document);
+        Long stamp = onUi(() -> stampOf(document));
+        return stamp == null ? DocumentBuffer.NO_STAMP : stamp;
     }
 
     /** {@code document}'s modification stamp, or {@code DocumentBuffer.NO_STAMP} if it keeps none. */
