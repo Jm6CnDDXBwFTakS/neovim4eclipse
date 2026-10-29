@@ -236,7 +236,8 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
     /**
      * As reported: a rename started in normal mode, {@code ea} and a suffix typed, and Enter, which
      * Eclipse takes to accept the rename. As in Vim, where the insert ends where the change ends,
-     * Neovim is back in normal mode; it stayed in insert mode, into the next editor.
+     * Neovim is back in normal mode; it stayed in insert mode, into the next editor. The cursor is
+     * on the name's first letter, where Eclipse puts the caret.
      */
     @Test
     void enterThatAcceptsARenameStartedInNormalModeLeavesInsertMode() throws Exception {
@@ -262,6 +263,13 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()),
                 () -> "; mode " + session.getMode() + ", the document:\n" + javaText());
         expectNeovimHasTheDocument();
+        // On the name's first letter, where Enter put the caret: not one before it, where the Esc's
+        // step to the left put Neovim's cursor.
+        waitUntil("Neovim's cursor on the c of countTotal", TIMEOUT_MS,
+                () -> List.of(4L, 6L).equals(SessionProbe.lua(session, "return vim.api.nvim_win_get_cursor(0)")),
+                () -> "; it is at " + SessionProbe.lua(session, "return vim.api.nvim_win_get_cursor(0)"));
+        settle();
+        assertEquals("4:6", caretLineCol(), "the caret");
     }
 
     /**
