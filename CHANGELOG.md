@@ -64,6 +64,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   window's `:lcd`), like `:w name`, `./name` included. Before, it looked beside the current file
   first, and `./name` meant that folder. Neovim now expands the name, so `:e %:h/name` (beside the
   current file) and `:e #` work.
+- `:e name` of a file that already has an editor is now Neovim's own `:edit`: the window moves to
+  that editor, as with `:b` and `Ctrl-^`, so `:e #` toggles between two editors and `Ctrl-O` goes
+  back, as in one Vim window. Before, a second `:e #` found no alternate file (E499). A file without
+  an editor still opens through Eclipse.
 
 ### Fixed
 

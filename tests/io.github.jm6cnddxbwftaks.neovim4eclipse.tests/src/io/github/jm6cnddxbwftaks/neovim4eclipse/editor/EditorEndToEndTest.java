@@ -211,6 +211,32 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code :e} of a file that already has an editor is Neovim's own {@code :edit}: the window
+     * travels into that editor, as for {@code :b}, so {@code :e #} toggles between the two editors
+     * as in one Vim window, and {@code Ctrl-O} goes back through the same jump history.
+     */
+    @Test
+    void eOfAnOpenFileTravelsSoEHashTogglesAndCtrlOGoesBack() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor other = openOtherFile();
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+
+        runInBox(widget, "e other.txt");
+        waitForAttach(other, "other.txt, after :e");
+        runInBox(widgetOf(other), "e #");
+        waitForAttach(editor, "test.txt, after :e #");
+        runInBox(widget, "e #");
+        waitForAttach(other, "other.txt, after a second :e #");
+        assertEquals(other, page.getActiveEditor());
+
+        session.inputAsync("<C-o>");
+        waitForAttach(editor, "test.txt, after Ctrl-O");
+        assertEquals(editor, page.getActiveEditor());
+        page.closeEditor(other, false);
+    }
+
+    /**
      * {@code Ctrl-O} across files goes back through one jump history, as in Vim with one window:
      * test.txt's Neovim window jumps into other.txt and travels to other.txt's editor (the two swap
      * windows, docs/design/WINDOWS.md, E2), so its history comes along. Here: {@code G} in test.txt
