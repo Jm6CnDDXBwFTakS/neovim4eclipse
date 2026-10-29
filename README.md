@@ -410,7 +410,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
 | `:clo[se]`, `:tabc[lose]` | close the editor, as `:q`: the editor is its Neovim window and tab (`:close!` discards changes). `:tabclose` with a number (`:tabclose 2`, `:2tabclose`, `:tabclose +`) is refused: it would close another editor's window and leave that editor without it. In a floating window you entered (hover documentation), `:q`, `:close`, `Ctrl+W q` and `Ctrl+W c` close that window, as in Neovim |
-| `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes) |
+| `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes). The buffer is kept, as after Vim's `:bd`: `:b 3` (its number) or Ctrl-^ opens the file again |
 | `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). A range closes the editors of the buffers it covers (`:3,5bd`); `:%bd` closes all editors |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
 | `:wq`, `:x[it]`, `:exi[t]` | save, then close |
@@ -503,7 +503,11 @@ options to match the file:
   Other files keep `'autoindent'` (the new line copies the current line's indent).
 
 These options replace any your `init.lua` sets for the buffer. Filetype detection is not used, so
-your filetype plugins (and language servers they may start) do not run in the embedded Neovim.
+your filetype plugins (and language servers they may start) do not run in the embedded Neovim. That
+holds for a project's file Neovim reaches by itself too (`gf`, `'A`, a quickfix entry): the plug-in
+reads it for Neovim, without filetype detection, and Eclipse opens its editor. A file outside the
+open projects is read by Neovim as usual, and gets its filetype
+([docs/design/BUFFER_NUMBERS.md](docs/design/BUFFER_NUMBERS.md)).
 
 ## Macros (`q`)
 
@@ -795,9 +799,13 @@ These are real and deliberate to know about before extending the code:
    Ctrl+F6) is no Neovim jump: once the editor's own jump history runs out, Ctrl-O and Ctrl-I are
    Eclipse's Back and Forward, which recorded the switch ([docs/KEYBOARD.md](docs/KEYBOARD.md)).
    Back steps over the switches the plug-in made for Neovim's jumps, which Neovim's history
-   already has, and Ctrl-I comes back through the same places Ctrl-O went. Jumps to anything else
-   (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
-   when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
+   already has, and Ctrl-I comes back through the same places Ctrl-O went. A jump into a project's
+   file that has no editor open (`gf`, `'A`, `:b 3` of a closed file, Ctrl-^, a quickfix entry)
+   opens its editor and goes along the same way. Jumps to anything else (`:help`, a file outside the
+   open projects, a file Eclipse opens in another program, such as a `.zip`) are undone. When a
+   file's last editor closes, its buffer is kept, as after Vim's `:bd`: `:ls!` lists it with `u`,
+   and its number, marks and last cursor position come back when the file is opened again (its undo
+   history goes, as in Vim). Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
    reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the
    same command (`:bufdo %s/old/new/g | update`).
 2. **Block-visual `I` / `A` / `c` disable Eclipse typing for that insert.** To let Vim repeat the text on
