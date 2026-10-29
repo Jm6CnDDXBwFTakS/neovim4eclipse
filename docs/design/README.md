@@ -15,6 +15,7 @@ note the place to learn *why* the code is the way it is, which the code itself c
 | [FOLDING.md](FOLDING.md) | Folding with `zo`, `zc` and the other `z` commands, mirroring Eclipse's folds into Neovim | built (0.1.9); the redraw trigger (X12) to try |
 | [VIEWPORT.md](VIEWPORT.md) | Neovim's window follows the editor's size and scroll position, so `H`, `L`, `Ctrl-D`, `zz` act on what is on screen | built (0.1.10) |
 | [WINDOWS.md](WINDOWS.md) | One Neovim window per Eclipse editor, each alone in a hidden tabpage: per-editor cursors, views, folds and jump history; `Ctrl-O` takes the window along | built (0.1.10) |
+| [BUFFER_NUMBERS.md](BUFFER_NUMBERS.md) | A closed file keeps its buffer number, marks and last position, as with Vim's `:bd`; `:b N` reopens its editor | planned |
 | [NEW_FILE.md](NEW_FILE.md) | `:e newfile` opens an empty editor that `:w` creates | implemented |
 | [TAB_COMPLETION.md](TAB_COMPLETION.md) | Tab completion in the `:` command line | superseded in 0.1.7: Tab is Neovim's own, in Neovim's command line |
 | [LOG_LEVEL.md](LOG_LEVEL.md) | One switch for the plug-in's log level, and why it is the only one | implemented |
