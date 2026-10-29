@@ -117,7 +117,7 @@ t.test('a closed document\'s buffer is read by the hook: its number, marks and l
   t.eq(3, vim.api.nvim_win_get_cursor(0)[1], "the cursor on '\"")
 end)
 
-t.test('a document reloaded by a script\'s :edit! asks Eclipse for its text, and the reload loads it', function()
+t.test('a document reloaded by a script\'s :edit! keeps its text; loaded empty, Eclipse\'s reload fills it', function()
   local root = project()
   local path = file(root, 'src', 'B.java')
   local made = t.run('CREATE_DOCUMENT_BUFFER', path)
@@ -128,8 +128,10 @@ t.test('a document reloaded by a script\'s :edit! asks Eclipse for its text, and
   vim.api.nvim_buf_set_mark(b, 'a', 1, 0, {})
   t.forget()
   vim.cmd('edit!')
-  t.eq({ { b } }, t.sent('eclipse_reload'))
-  t.eq({ '' }, vim.api.nvim_buf_get_lines(b, 0, -1, false), 'the disk is not read')
+  t.eq({ { b, true } }, t.sent('eclipse_reload'), 'once: the project hook leaves it to the document')
+  t.eq({ 'unsaved in Eclipse' }, vim.api.nvim_buf_get_lines(b, 0, -1, false), 'the disk is not read')
+  -- RELOAD_DOCUMENT_BUFFER, for a buffer Neovim loaded empty (see document_buffer_spec):
+  vim.api.nvim_buf_set_lines(b, 0, -1, false, { '' })
   local other = vim.api.nvim_create_buf(true, true)
   vim.api.nvim_win_set_buf(0, other) -- the reload works on a buffer that is not the current one
   t.run('RELOAD_DOCUMENT_BUFFER', tostring(b), 'unsaved in Eclipse', 'two')

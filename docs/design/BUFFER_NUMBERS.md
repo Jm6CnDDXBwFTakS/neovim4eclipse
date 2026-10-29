@@ -232,8 +232,18 @@ Probed and left as they are: nested projects (Eclipse lists the inner project's 
 Maven module's editor opens); a multi-page editor that opens on a form page (Neovim goes back until
 the source tab is chosen, then `Ctrl-O` returns through Eclipse's Back); junctions, 8.3 names, a
 lower-case drive letter and `/` on Windows (`bufexists` of the real path finds the same buffer, on
-Linux through a symbolic link too). Keys typed in the moment between a script's `:edit!` and
-Eclipse's reload (about 1 to 15 ms) are lost on both sides alike; the two still agree.
+Linux through a symbolic link too).
+
+Then, decided with the maintainer: keys typed in the moment between a script's `:edit!` and
+Eclipse's reload (about 1 to 15 ms) were lost on both sides (probe: `RACE` queued before the reload
+reached neither), and the cursor went to line 1, as the buffer was empty for that moment. Now the
+text is kept across the reload (`BufUnload` keeps the lines, `'modified'` and the marks, which
+Neovim drops for an `acwrite` buffer; the `BufReadCmd` puts them back) and the buffer is attached
+again with `send_buffer`, so a change in between reaches the document as a minimal edit; while
+Eclipse types in insert mode the attach sends nothing (the document is ahead until Esc). A buffer
+unloaded on its own and read later is still filled from the document. Tests:
+`document_buffer_spec.lua`, `ProjectFilesEndToEndTest` (each half of the attach rule undone fails
+one of them).
 
 Known limits: a linked single file (not folder) is read by Neovim as before; a link whose target
 changes in place is seen at the next project or link change; on Windows a folder literally named

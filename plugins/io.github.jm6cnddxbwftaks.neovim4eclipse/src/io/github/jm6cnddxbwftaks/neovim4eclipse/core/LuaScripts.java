@@ -1398,9 +1398,9 @@ final class LuaScripts {
 
     /**
      * Loads a document's text into its buffer again (arguments: the buffer number, then the lines),
-     * as the first load does ({@link #LOAD_WITHOUT_UNDO}: no undo step, marks kept): after a script's
-     * {@code :edit!} unloaded and reloaded the buffer ({@link #PROJECT_FILES}, "A document's
-     * reload"). Nothing for a buffer that is gone.
+     * as the first load does ({@link #LOAD_WITHOUT_UNDO}: no undo step, marks kept): after Neovim
+     * loaded it empty by itself, with no text kept from the unload ({@link #DOCUMENT_BUFFER},
+     * "Reloaded by Neovim"). Nothing for a buffer that is gone.
      */
     static final String RELOAD_DOCUMENT_BUFFER = "local function load(...)\n" + LuaScripts.LOAD_WITHOUT_UNDO + """
             end
@@ -2344,14 +2344,26 @@ final class LuaScripts {
      * script's or a plug-in's {@code :edit!} (one that reloads files after a {@code git checkout},
      * say) runs inside Neovim: it unloads the buffer and reads the file from disk, over Eclipse's
      * text and its unsaved changes, and the unload ends the buffer's line events
-     * ({@code nvim_buf_attach}), so later changes in Neovim would never reach the document. A
-     * buffer-local {@code BufReadCmd} replaces that read: it reads nothing and sends
-     * {@code eclipse_reload(buf)}; Eclipse then loads the document's text into the buffer again and
-     * attaches it again ({@link #RELOAD_DOCUMENT_BUFFER}, {@code NeovimSession.reloadDocumentAsync}).
-     * Every document's buffer has it, whether its file is inside a project or not (a file opened
-     * with <i>File, Open File...</i>). Example: {@code a.txt} has an unsaved {@code x}; after
-     * {@code :lua vim.cmd('edit!')} the buffer is briefly empty, then holds Eclipse's text, with the
-     * {@code x}, and typing in Neovim still changes the document.
+     * ({@code nvim_buf_attach}), so later changes in Neovim would never reach the document. Every
+     * document's buffer, whether its file is inside a project or not (a file opened with <i>File,
+     * Open File...</i>), has two buffer-local autocommands instead:
+     * <ol>
+     *   <li>{@code BufUnload} keeps the buffer's lines, {@code 'modified'} and its marks (the text
+     *       is still there at that moment; Neovim drops an {@code acwrite} buffer's marks on unload,
+     *       where Vim's {@code :edit!} keeps them), until Neovim's next loop.</li>
+     *   <li>{@code BufReadCmd} replaces the read: it puts those lines back, under {@code :lockmarks}
+     *       and without an undo step, and sends {@code eclipse_reload(buf, true)}. The buffer is never
+     *       empty, so the cursor keeps its line (Neovim puts it back after the read, as for any
+     *       {@code :edit!}) and a script reading the buffer right after its {@code :edit!} sees the
+     *       text. Eclipse attaches the buffer again, with the whole buffer sent first, and applies
+     *       any difference: keys Neovim handled between the unload and the new attach reach the
+     *       document ({@code NeovimSession}, "re-attach after a reload").</li>
+     * </ol>
+     * A read with nothing kept (the buffer unloaded on its own, by a plug-in's {@code :bunload}, and
+     * read later) sends {@code eclipse_reload(buf, false)}, and Eclipse loads the document's text
+     * into it ({@link #RELOAD_DOCUMENT_BUFFER}). Example: {@code a.txt} has an unsaved {@code x} and
+     * the cursor on line 3; after {@code :lua vim.cmd('edit!')} the buffer still holds the {@code x},
+     * the cursor is still on line 3, and typing in Neovim still changes the document.
      */
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
@@ -2514,13 +2526,59 @@ final class LuaScripts {
               end,
             })
             -- Reloaded by Neovim (a script's or a plug-in's :edit!): nothing is read from disk, which
-            -- would replace Eclipse's text and its unsaved changes; Eclipse loads the document again.
+            -- would replace Eclipse's text and its unsaved changes. The text the unload took is put
+            -- back at once, so the buffer is never empty, and Eclipse attaches again
+            -- (eclipse_reload, true). Kept only until Neovim's next loop: a buffer unloaded on its own
+            -- (:bunload) and read much later gets Eclipse's text instead (eclipse_reload, false).
+            -- The marks too: Neovim drops an acwrite buffer's a-z marks when it unloads it, and puts
+            -- its A-Z marks on line 1 (BUFFER_NUMBERS.md, X4), where Vim's :edit! keeps them.
+            local kept
+            vim.api.nvim_create_autocmd('BufUnload', {
+              buf = buf,
+              group = group,
+              desc = 'Eclipse keeps the text for a reload',
+              callback = function(ev)
+                local marks = {}
+                for c in ('abcdefghijklmnopqrstuvwxyz'):gmatch('.') do
+                  local m = vim.api.nvim_buf_get_mark(ev.buf, c)
+                  if m[1] > 0 then
+                    marks[c] = m
+                  end
+                end
+                for c in ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'):gmatch('.') do
+                  local m = vim.api.nvim_get_mark(c, {})
+                  if m[3] == ev.buf and m[1] > 0 then
+                    marks[c] = { m[1], m[2] }
+                  end
+                end
+                kept = { lines = vim.api.nvim_buf_get_lines(ev.buf, 0, -1, false), modified = vim.bo[ev.buf].modified,
+                         marks = marks }
+                vim.schedule(function()
+                  kept = nil
+                end)
+              end,
+            })
             vim.api.nvim_create_autocmd('BufReadCmd', {
               buf = buf,
               group = group,
-              desc = 'Eclipse loads the document again',
+              desc = 'Eclipse keeps the document',
               callback = function(ev)
-                vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_reload', ev.buf)
+                local k = kept
+                kept = nil
+                if k then
+                  local saved = vim.bo[ev.buf].undolevels
+                  vim.bo[ev.buf].undolevels = -1 -- no undo step, as for a file just read
+                  package.loaded['neovim4eclipse.load'] = { buf = ev.buf, lines = k.lines }
+                  pcall(vim.cmd, "lockmarks lua local l = package.loaded['neovim4eclipse.load'] "
+                    .. "vim.api.nvim_buf_set_lines(l.buf, 0, -1, false, l.lines)")
+                  package.loaded['neovim4eclipse.load'] = nil
+                  vim.bo[ev.buf].undolevels = saved
+                  vim.bo[ev.buf].modified = k.modified
+                  for c, m in pairs(k.marks) do
+                    pcall(vim.api.nvim_buf_set_mark, ev.buf, c, m[1], m[2], {})
+                  end
+                end
+                vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_reload', ev.buf, k ~= nil)
               end,
             })
             """;

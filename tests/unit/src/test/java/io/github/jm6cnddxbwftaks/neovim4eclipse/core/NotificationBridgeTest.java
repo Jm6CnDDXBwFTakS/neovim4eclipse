@@ -44,7 +44,7 @@ class NotificationBridgeTest {
                 events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid) + (jumped ? " jump" : "")
                         + (projectFile.isEmpty() ? "" : " file " + projectFile));
             }
-            @Override public void onBufferReload(int bufnr) { events.add("reload:" + bufnr); }
+            @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
@@ -134,16 +134,20 @@ class NotificationBridgeTest {
 
     /**
      * LuaScripts.PROJECT_FILES: a project's file without an editor comes with its name, for Eclipse
-     * to open it; a document's buffer reloaded by a script asks for the document's text again.
+     * to open it. LuaScripts.DOCUMENT_BUFFER: a document's buffer reloaded by Neovim says whether it
+     * kept its text (an :edit!: only the attach is renewed) or is empty (Eclipse loads the text).
      */
     @Test
     void aProjectFileComesWithItsNameAndAReloadWithItsBuffer() {
         notify("eclipse_buf_enter", 5, 1002L, true, "/ws/app/B.java");
         notify("eclipse_buf_enter", 6, 1002L, false, "");
         notify("eclipse_buf_enter", 7, 1002L, false, 3L); // not a name: none
-        notify("eclipse_reload", 4);
+        notify("eclipse_reload", 4, true);
+        notify("eclipse_reload", 3, false);
+        notify("eclipse_reload", 2); // no flag: not kept
         notify("eclipse_reload");
-        assertEquals(List.of("enter:5#1002 jump file /ws/app/B.java", "enter:6#1002", "enter:7#1002", "reload:4"), events);
+        assertEquals(List.of("enter:5#1002 jump file /ws/app/B.java", "enter:6#1002", "enter:7#1002",
+                "reload:4 kept", "reload:3", "reload:2"), events);
     }
 
     /** {@code :set wrap} in Neovim (LuaScripts.VIEWPORT); a payload without a boolean is ignored. */

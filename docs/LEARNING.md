@@ -485,8 +485,15 @@ reply to `nvim_buf_set_lines`, the session drops the events that arrive while it
 but keeps the buffer itself: its number, marks and last cursor position (`'"`). `:bw` *wipes* it,
 and the number is gone. The plug-in does what `:bd` does when a file's last editor closes, so the
 file's next editor gets buffer 3 back, not a new number (docs/design/BUFFER_NUMBERS.md).
-`nvim_buf_attach` ends when a buffer unloads: a buffer Neovim reloads by itself (`:edit!` from a
-script) is attached again (`NeovimSession.reloadDocumentAsync`).
+`nvim_buf_attach` ends when a buffer unloads. A script's `:edit!` unloads and reads in one command,
+so the plug-in keeps the text across it: `BufUnload` copies the lines and marks, the `BufReadCmd`
+that replaces the read puts them back (`LuaScripts.DOCUMENT_BUFFER`), and Eclipse attaches again
+with `send_buffer` true. Neovim then sends the whole buffer first, in the same stream as every later
+change, so a key handled between the unload and the new attach is in that whole buffer and reaches
+the document as a minimal edit. Example: a plug-in runs `:edit!` and you type `x` at that moment;
+the `x` reaches Eclipse. (Not while Eclipse itself types in insert mode: the document is ahead of
+the buffer until Esc, and a plain attach loses nothing then; `NeovimSession`, "re-attach after a
+reload".)
 
 Neovim has no notion of a final newline: a buffer is a list of lines. `util/LineTextUtil` explains how
 the plug-in keeps an Eclipse file's final newline.

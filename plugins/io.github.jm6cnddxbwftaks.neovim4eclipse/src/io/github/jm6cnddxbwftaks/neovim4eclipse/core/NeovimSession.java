@@ -610,16 +610,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Handles Neovim reloading a document's buffer by itself ({@code :edit!} from a script, which
-     * left it empty: {@link LuaScripts#PROJECT_FILES}). The handler should read the document's text
-     * and pass it to {@link #reloadDocumentAsync}. Called on an RPC thread.
+     * Handles Neovim loading a document's buffer empty by itself (a plug-in's {@code :bunload}, then
+     * a read later: {@link LuaScripts#DOCUMENT_BUFFER}; an {@code :edit!} keeps the text instead). The
+     * handler should read the document's text and pass it to {@link #reloadDocumentAsync}. Called on
+     * an RPC thread.
      */
     public void setReloadHandler(Consumer<DocumentBuffer> handler) {
         this.reloadHandler = handler;
     }
 
     /**
-     * Loads {@code lines}, the document's text, into its buffer again after Neovim reloaded it
+     * Loads {@code lines}, the document's text, into its buffer again after Neovim loaded it empty
      * ({@link #setReloadHandler}), without an undo step, and has Neovim send the buffer's changes
      * again: unloading a buffer ended {@code nvim_buf_attach} for it. Then {@code 'modified'} follows
      * Eclipse's dirty flag. Nothing for a buffer that is gone. Any thread.
@@ -637,6 +638,35 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             await(api.execLua(LuaScripts.RELOAD_DOCUMENT_BUFFER, args)); // before the attach: no line event for it
             await(api.bufAttach(handle, false));
             applyModified(buffer);
+        });
+    }
+
+    /**
+     * Renews {@code buffer}'s attach after Neovim reloaded it with its text kept
+     * ({@link LuaScripts#DOCUMENT_BUFFER}, "Reloaded by Neovim"): the unload ended
+     * {@code nvim_buf_attach}, so Neovim's changes since then reached no one.
+     *
+     * <p><b>Re-attach after a reload.</b> The attach asks Neovim to send the whole buffer first
+     * ({@code send_buffer}), in the same event stream as every later change, so nothing falls
+     * between the two: keys queued before this task changed the buffer before the attach and are in
+     * the whole buffer, keys after it arrive as normal changes. The synchronizer (attached or not)
+     * turns the whole buffer into the minimal edit of the document, or none when nothing changed.
+     * Example: {@code :edit!} from a plug-in, then {@code x} typed before the attach: the whole
+     * buffer lacks the deleted character, and the document loses it too.
+     *
+     * <p>Not while Eclipse types in insert mode in this document: the document is then ahead of the
+     * buffer until Esc replays the typed text into Neovim, and the whole buffer would take that text
+     * out of the document again. No key reaches Neovim's buffer meanwhile, so a plain attach loses
+     * nothing. Session thread.
+     */
+    private void reattachAfterReloadAsync(DocumentBuffer buffer) {
+        submit("re-attach " + buffer.name(), Level.FINE, () -> {
+            Handle handle = buffers.handleOf(buffer);
+            if (handle == null) {
+                return;
+            }
+            boolean eclipseTypes = buffers.isAttached(buffer.bufnr) && isTypingMode() && !isNeovimDrivenInsert();
+            await(api.bufAttach(handle, !eclipseTypes));
         });
     }
 
@@ -1322,11 +1352,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onBufferReload(int bufnr) {
-            Consumer<DocumentBuffer> handler = reloadHandler;
+        public void onBufferReload(int bufnr, boolean kept) {
             DocumentBuffer document = buffers.documentAt(bufnr);
-            if (!closed && handler != null && document != null) {
-                LOG.fine(() -> "Neovim reloaded document buffer " + bufnr + ": Eclipse loads its text again");
+            if (closed || document == null) {
+                return;
+            }
+            if (kept) {
+                reattachAfterReloadAsync(document);
+                return;
+            }
+            Consumer<DocumentBuffer> handler = reloadHandler;
+            if (handler != null) {
+                LOG.fine(() -> "Neovim loaded document buffer " + bufnr + " empty: Eclipse loads its text again");
                 handler.accept(document);
             }
         }

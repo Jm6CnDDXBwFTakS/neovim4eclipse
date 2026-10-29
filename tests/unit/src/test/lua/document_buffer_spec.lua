@@ -260,17 +260,28 @@ t.test('a reused buffer gets the plug-in\'s autocommands once', function()
 end)
 
 -- A plug-in's :edit! (reloading files after a git checkout, say) must not read the disk over
--- Eclipse's text: the buffer is left empty and Eclipse is asked to load the document again. Here the
--- file is in no project (PROJECT_FILES is not even loaded), as a file opened with File > Open File.
-t.test('a script\'s :edit! on a document asks Eclipse for its text, in a project or not', function()
+-- Eclipse's text: the text the unload took is put back at once, and Eclipse is asked to attach again
+-- (true: kept). Here the file is in no project (PROJECT_FILES is not even loaded), as a file opened
+-- with File > Open File.
+t.test('a script\'s :edit! on a document keeps its text, marks and cursor, in a project or not', function()
   t.setup()
-  local buf, name = t.document('Outside.txt', { 'unsaved in Eclipse' })
+  local buf, name = t.document('Outside.txt', { 'one', 'unsaved in Eclipse', 'three' })
+  vim.bo[buf].modified = true -- Eclipse's editor is dirty
+  vim.api.nvim_buf_set_mark(buf, 'a', 2, 0, {})
+  vim.api.nvim_buf_set_mark(buf, 'Q', 3, 1, {})
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
   vim.fn.writefile({ 'disk' }, name)
   t.forget()
   vim.cmd('edit!')
-  t.eq({ { buf } }, t.sent('eclipse_reload'))
-  t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'the disk is not read')
+  t.eq({ { buf, true } }, t.sent('eclipse_reload'))
+  t.eq({ 'one', 'unsaved in Eclipse', 'three' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'the disk is not read')
+  t.eq(3, vim.api.nvim_win_get_cursor(0)[1], 'the cursor keeps its line')
+  t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'))
+  t.eq({ 3, 1 }, vim.api.nvim_buf_get_mark(buf, 'Q'), 'a file mark too')
+  t.eq(true, vim.bo[buf].modified, 'still as dirty as the editor')
   t.eq('acwrite', vim.bo[buf].buftype)
+  t.type('u')
+  t.eq({ 'one', 'unsaved in Eclipse', 'three' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'no undo step')
   -- Its editor closed, the buffer is a kept file's buffer again, which Neovim reads itself.
   vim.cmd('enew')
   t.run('CLOSE_DOCUMENT_BUFFER', tostring(buf))
@@ -278,6 +289,22 @@ t.test('a script\'s :edit! on a document asks Eclipse for its text, in a project
   vim.cmd('buffer ' .. buf)
   t.eq({ 'disk' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
   t.eq({}, t.sent('eclipse_reload'))
+end)
+
+-- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer
+-- a plug-in unloaded (:bunload) and that is read later must not get text that may be stale by then.
+t.test('a document buffer unloaded on its own and read later comes back empty, for Eclipse to fill', function()
+  t.setup()
+  local buf = t.document('Unloaded.txt', { 'from Eclipse' })
+  vim.cmd('enew')
+  vim.cmd('bunload! ' .. buf) -- !: the editor's unsaved changes live in Eclipse
+  local next_loop = false
+  vim.schedule(function() next_loop = true end) -- runs after the unload's own scheduled clean-up
+  t.wait_for("Neovim's next loop", function() return next_loop end)
+  t.forget()
+  vim.cmd('buffer ' .. buf)
+  t.eq({ { buf, false } }, t.sent('eclipse_reload'))
+  t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'neither the disk nor old text')
 end)
 
 t.test('closing a buffer that is gone does nothing', function()

@@ -189,10 +189,12 @@ comparing resolved paths on `BufNew`, a buffer-local `BufReadCmd` that reads onl
 buffer's file as its fourth value, for Eclipse to open; a background job finds and refreshes the
 workspace file (a refresh waits while a build runs), then the editor opens on the UI thread. The
 folders are walked and sent by one job, so the walks never run on the thread of a change and never
-overtake each other. Every document's buffer, in a project or not, has a `BufReadCmd` of its own
-(`LuaScripts.DOCUMENT_BUFFER`): a script's `:edit!` leaves it empty, and Eclipse refills it from the
-document and attaches it again (`eclipse_reload`, `reloadDocumentAsync`), instead of Neovim reading
-the file from disk over unsaved changes.
+overtake each other. Every document's buffer, in a project or not, has a `BufUnload` and a `BufReadCmd` of its own
+(`LuaScripts.DOCUMENT_BUFFER`): a script's `:edit!` gets its text and marks back at once instead of
+the file from disk, so the cursor keeps its line, and Eclipse attaches the buffer again with the
+whole buffer sent first, so a change Neovim made meanwhile reaches the document (`eclipse_reload`,
+`NeovimSession` "re-attach after a reload"). A buffer loaded empty later (after a plug-in's
+`:bunload`) is filled from the document (`reloadDocumentAsync`).
 
 **A window per editor (docs/design/WINDOWS.md).** Each editor has its
 own Neovim window, alone in a hidden tabpage (`'showtabline'` 0), so that it keeps its own cursor,

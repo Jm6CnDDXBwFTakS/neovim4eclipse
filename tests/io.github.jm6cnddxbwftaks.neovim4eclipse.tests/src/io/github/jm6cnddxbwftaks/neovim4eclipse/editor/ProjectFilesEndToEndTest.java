@@ -285,12 +285,54 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
         session.inputAsync("ggix<Esc>");
         expectText("xalpha\nbeta\ngamma\n");
         SessionProbe.lua(session, "vim.cmd('edit!') return 0");
+        settle(); // the attach's whole buffer is applied on the UI thread: let it run before asking Neovim
         waitUntil("the buffer to hold Eclipse's text again", TIMEOUT_MS,
                 () -> "xalpha".equals(String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_get_current_line()"))));
         expectText("xalpha\nbeta\ngamma\n");
         assertFalse(String.valueOf(bufferOption("filetype")).equals("text"), "not read by Neovim");
         session.inputAsync("jiy<Esc>");
         expectText("xalpha\nybeta\ngamma\n");
+    }
+
+    /**
+     * The buffer is never empty during a script's {@code :edit!}: the cursor keeps its line, and a
+     * change Neovim makes before Eclipse has attached the buffer again reaches the document (the
+     * attach sends the whole buffer first: NeovimSession, "re-attach after a reload"). Here the
+     * script changes line 2 itself, right after its {@code :edit!}, and keys follow at once.
+     */
+    @Test
+    void aScriptsEditBangKeepsTheCursorAndChangesRightAfterItReachTheDocument() {
+        session.inputAsync("ggix<Esc>3G");
+        expectText("xalpha\nbeta\ngamma\n");
+        settle();
+        SessionProbe.lua(session, "vim.cmd('edit!') vim.api.nvim_buf_set_lines(0, 1, 2, false, { 'BETA' }) return 0");
+        settle(); // the attach's whole buffer is applied on the UI thread: let it run before asking Neovim
+        assertEquals(3, cursorLine(), "the cursor keeps its line");
+        session.inputAsync("ggiR<Esc>");
+        expectText("Rxalpha\nBETA\ngamma\n");
+        session.inputAsync("Gix<Esc>");
+        expectText("Rxalpha\nBETA\nxgamma\n");
+    }
+
+    /**
+     * A script's {@code :edit!} while Eclipse types in insert mode: the text Eclipse typed is in the
+     * document only until Esc replays it into Neovim, so the reload must neither drop it from the
+     * document nor have it inserted twice.
+     */
+    @Test
+    void aScriptsEditBangWhileEclipseTypesKeepsTheTypedTextOnce() {
+        UiTestSupport.type(widget, "gg");
+        UiTestSupport.type(widget, 'I');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        UiTestSupport.type(widget, "ab"); // typed by Eclipse, not Neovim
+        expectText("abalpha\nbeta\ngamma\n");
+        SessionProbe.lua(session, "vim.cmd('edit!') return 0");
+        settle();
+        expectText("abalpha\nbeta\ngamma\n");
+        UiTestSupport.escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        expectText("abalpha\nbeta\ngamma\n");
+        assertEquals("abalpha", String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]")));
     }
 
     /**
@@ -309,6 +351,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             doc.replace(0, doc.getLength(), "unsaved\n");
             settle();
             SessionProbe.lua(session, "vim.cmd('edit!') return 0");
+            settle(); // the attach's whole buffer is applied on the UI thread: let it run before asking Neovim
             waitUntil("the buffer to hold Eclipse's text again", TIMEOUT_MS,
                     () -> "unsaved".equals(String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_get_current_line()"))));
             session.inputAsync("ggiZ<Esc>");
