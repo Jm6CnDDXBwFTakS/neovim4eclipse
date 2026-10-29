@@ -198,7 +198,9 @@ final class DocumentBuffers {
             buffer.markOutOfSync();
             documents.put(buffer.bufnr, buffer);
         }
-        int win = window == null ? homeWin : windowFor(window, target, folder);
+        // The window attached before, whose folder a new untitled window inherits (folderOfNewWindow).
+        int before = attachedWin;
+        int win = window == null ? homeWin : windowFor(window, target, folder, before);
         // Attach first: the BufEnter this switch causes is then recognized as Eclipse's own.
         attached = target;
         attachedBufnr = buffer.bufnr;
@@ -207,21 +209,26 @@ final class DocumentBuffers {
         int shown = showWindow(win, buffer.bufnr);
         if (shown == EditorWindow.UNKNOWN && window != null) {
             // Closed in Neovim since (the WinClosed notice may still be on its way): a new one.
+            // SHOW_WINDOW did nothing, so the current window is still the one attached before.
             windows.forget(window);
-            win = windowFor(window, target, folder);
+            win = windowFor(window, target, folder, before);
             attachedWin = win;
             shown = showWindow(win, buffer.bufnr);
         }
         attachedWin = shown;
     }
 
-    /** The editor's window, opened in a new tabpage on {@code buffer} if it has none in this session. */
-    private int windowFor(EditorWindow window, Handle buffer, String folder) throws Exception {
+    /**
+     * The editor's window, opened in a new tabpage on {@code buffer} if it has none in this session.
+     *
+     * @param before the window attached before this show (see {@link #folderOfNewWindow})
+     */
+    private int windowFor(EditorWindow window, Handle buffer, String folder, int before) throws Exception {
         if (windows.owns(window)) {
             return window.winid;
         }
         Object answer = await(api.execLua(LuaScripts.OPEN_WINDOW,
-                List.of(String.valueOf(bufnr(buffer)), folderOfNewWindow(folder))));
+                List.of(String.valueOf(bufnr(buffer)), folderOfNewWindow(folder, before))));
         if (!(answer instanceof Number id)) {
             throw new IllegalStateException("Unexpected answer opening a window: " + answer);
         }
@@ -237,12 +244,15 @@ final class DocumentBuffers {
      * no editor before it, the user's home folder. Example: working in {@code app/src/Main.java},
      * open an untitled document: {@code :pwd} there shows {@code app}, and {@code :w notes.txt}
      * writes {@code app/notes.txt}.
+     *
+     * @param before the window attached before (and still Neovim's current one): an editor's
+     *               window, or the home window
      */
-    private String folderOfNewWindow(String folder) {
+    private String folderOfNewWindow(String folder, int before) {
         if (folder != null && !folder.isEmpty()) {
             return folder;
         }
-        return windows.of(attachedWin) != null ? "" : System.getProperty("user.home", "");
+        return windows.of(before) != null ? "" : System.getProperty("user.home", "");
     }
 
     /**
@@ -310,13 +320,25 @@ final class DocumentBuffers {
         if (!windows.owns(mover) || back == null) {
             throw new IllegalStateException("travel needs an open window and buffer: " + mover + ", " + leftBehind.name);
         }
+        int moverWin = mover.winid;
         if (!windows.owns(other)) {
             windows.transfer(mover, other);
+            if (attachedWin == moverWin) {
+                // The attached editor has no window now: should the attach of other's editor fail,
+                // returnToAttached shows the attached buffer in the home window, not in other's.
+                attachedWin = homeWin;
+            }
             return;
         }
         await(api.execLua(LuaScripts.TRAVEL_WINDOW, List.of(String.valueOf(other.winid),
                 String.valueOf(bufnr(back)), String.valueOf(line1), String.valueOf(col0))));
         windows.swap(mover, other);
+        // The attached buffer (leftBehind, until Eclipse attaches other's editor) is now in mover's
+        // new window. Should that attach fail, returnToAttached then puts it back there, and not
+        // into the window other's editor now holds.
+        if (attachedWin == moverWin) {
+            attachedWin = mover.winid;
+        }
     }
 
     /**
