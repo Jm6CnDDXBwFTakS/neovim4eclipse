@@ -11,7 +11,6 @@ import java.util.Map;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
-import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -127,7 +126,7 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
     @Test
     void theListFollowsTheMarkersWhileItIsCurrentAndLeavesAnotherListAlone() throws Exception {
         IFile closed = createFile("z.txt", "z1\nz2\n");
-        marker(file(), IMarker.PROBLEM, IMarker.SEVERITY_ERROR, "first", 0, 1);
+        IMarker first = marker(file(), IMarker.PROBLEM, IMarker.SEVERITY_ERROR, "first", 0, 1);
         waitUntil("the problem in Neovim's diagnostics", TIMEOUT_MS, () -> number(SessionProbe.lua(session,
                 "return #vim.diagnostic.get(0)")) == 1); // its update is done before the list exists
         session.inputAsync(":Eproblems!<CR>");
@@ -148,7 +147,7 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
 
         session.inputAsync(":colder<CR>");
         settle();
-        file().findMarkers(IMarker.PROBLEM, false, IResource.DEPTH_ZERO)[0].delete(); // "first"
+        first.delete();
         waitForTexts(List.of("second", "third", "in a closed file"));
     }
 
