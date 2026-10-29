@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -75,6 +76,11 @@ final class DocumentBuffers {
     private final Map<Integer, DocumentBuffer> documents = new ConcurrentHashMap<>();
     /** Called with the number of a document buffer Neovim switched to by itself. */
     private volatile Consumer<Integer> enterHandler;
+    /**
+     * Called with the number and the file of a project's buffer without an editor that Neovim
+     * switched to by itself ({@code gf}, {@code 'A}; {@link LuaScripts#PROJECT_FILES}).
+     */
+    private volatile BiConsumer<Integer, String> projectFileHandler;
     /**
      * The buffer Neovim entered last ({@code BufEnter}), that is, its current buffer as far as the
      * notifications read so far tell. Written on the RPC thread, read from any thread.
@@ -473,16 +479,29 @@ final class DocumentBuffers {
         this.enterHandler = handler;
     }
 
+    void setProjectFileHandler(BiConsumer<Integer, String> handler) {
+        this.projectFileHandler = handler;
+    }
+
+    /** The document mirrored into buffer {@code bufnr}, or {@code null} when it is no document's. */
+    DocumentBuffer documentAt(int bufnr) {
+        return documents.get(bufnr);
+    }
+
     /**
      * Neovim entered buffer {@code bufnr} in window {@code winid} ({@code BufEnter}). In the attached
      * window, another document's buffer goes to the enter handler; anything else is undone with
      * {@code returnBack}: another buffer, or another window Neovim entered by itself (a
      * {@code :tabnext} the user typed, the window it entered after a {@code :tabclose}).
      *
-     * @param jumped whether the move is in the window's jump history ({@code :b}, {@code Ctrl-O};
-     *               not {@code :keepjumps})
+     * A project's file without an editor ({@code projectFile} not empty) goes to the project file
+     * handler, whose editor Eclipse then opens (docs/design/BUFFER_NUMBERS.md, 2.3).
+     *
+     * @param jumped      whether the move is in the window's jump history ({@code :b}, {@code Ctrl-O};
+     *                    not {@code :keepjumps})
+     * @param projectFile the buffer's file when it is a project's and no document's, else {@code ""}
      */
-    void onEntered(int bufnr, int winid, boolean jumped, Runnable returnBack) {
+    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, Runnable returnBack) {
         enteredByJump = jumped;
         enteredBufnr = bufnr; // first: a follow-up queued for an earlier buffer must see it
         boolean attachedWindow = winid == EditorWindow.UNKNOWN || winid == attachedWin;
@@ -494,8 +513,11 @@ final class DocumentBuffers {
             return;
         }
         Consumer<Integer> handler = enterHandler;
+        BiConsumer<Integer, String> fileHandler = projectFileHandler;
         if (handler != null && created.containsKey(bufnr)) {
             handler.accept(bufnr);
+        } else if (fileHandler != null && !projectFile.isEmpty()) {
+            fileHandler.accept(bufnr, projectFile);
         } else {
             returnBack.run(); // help, :e of another file, a closed document, ...
         }

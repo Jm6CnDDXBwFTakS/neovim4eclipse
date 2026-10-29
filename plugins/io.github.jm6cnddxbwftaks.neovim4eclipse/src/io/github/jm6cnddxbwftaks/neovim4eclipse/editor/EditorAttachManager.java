@@ -45,6 +45,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorBuffers;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
@@ -384,8 +385,12 @@ public final class EditorAttachManager {
         if (session != followedSession) { // first attach, or Neovim was restarted
             followedSession = session;
             session.setBufferEnterHandler(this::onNeovimEnteredBuffer);
+            session.setProjectFileHandler(this::onNeovimEnteredProjectFile);
+            session.setReloadHandler(this::onNeovimReloadedDocument);
             session.setBufferClosedHandler(this::onNeovimClosedBuffer);
             session.setWriteHandler(this::saveForNeovim);
+            // Neovim then reads no project's file by itself (docs/design/BUFFER_NUMBERS.md, 2.3).
+            ProjectFolders.sendTo(session);
             // A new Neovim has none of the old buffers; each document gets a new one on its next attach.
             unattachedSyncs.values().forEach(UnattachedDocumentSync::close);
             unattachedSyncs.clear();
@@ -507,6 +512,91 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not follow Neovim into buffer " + bufnr, e);
         }
         session.returnToAttachedBufferAsync();
+    }
+
+    /**
+     * Neovim switched by itself to a project's file that has no editor ({@code gf}, {@code 'A},
+     * {@code :b} into a closed file, a quickfix entry), which the plug-in read for it
+     * ({@code LuaScripts.PROJECT_FILES}). Called on an RPC thread; see {@link #followNeovimIntoFile}.
+     */
+    private void onNeovimEnteredProjectFile(int bufnr, String file) {
+        Display display = Display.getDefault();
+        if (display != null && !display.isDisposed()) {
+            display.asyncExec(() -> followNeovimIntoFile(bufnr, file));
+        }
+    }
+
+    /**
+     * Opens the editor of {@code file}, the project file Neovim moved into, and follows as
+     * {@link #followNeovimInto} does for an open document: the window that jumped travels into the
+     * new editor, so {@code Ctrl-O} there goes back, and the attach takes Neovim's cursor (where
+     * {@code gf}, a mark or the quickfix entry put it). The attach finds the buffer by its name and
+     * keeps it (its number, its marks: docs/design/BUFFER_NUMBERS.md, 2.2). A file Eclipse would not
+     * open here ({@link ProjectFileEditors}) sends Neovim back, as before. UI thread.
+     */
+    private void followNeovimIntoFile(int bufnr, String file) {
+        NeovimSession session;
+        EditorWindow mover;
+        DocumentBuffer leftBehind;
+        IWorkbenchPage page;
+        boolean jumped;
+        synchronized (this) {
+            session = followedSession;
+            if (session == null || bufnr == session.getAttachedBufnr()) {
+                return;
+            }
+            if (bufnr != session.getEnteredBufnr()) {
+                return; // Neovim has moved on since (:cdo walks every entry): only the last is followed
+            }
+            jumped = session.wasEnteredByJump();
+            mover = attachedPart == null ? null : windows.get(attachedPart);
+            leftBehind = attachedBuffer;
+            page = attachedPart == null ? null : attachedPart.getSite().getPage();
+        }
+        try {
+            if (page == null) {
+                IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+                page = window == null ? null : window.getActivePage();
+            }
+            IEditorPart opened = page == null ? null : ProjectFileEditors.open(page, file);
+            if (opened != null) {
+                NavigationHistorySteps.activateForNeovim(page, opened, jumped);
+                if (textEditorOf(opened) != null) {
+                    travel(session, mover, opened, leftBehind);
+                    NeovimEditorController followed = attach(opened, false, true);
+                    if (followed != null) {
+                        followed.showNeovimsCurrentStatus();
+                    }
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Could not open " + file + " for Neovim", e);
+        }
+        session.returnToAttachedBufferAsync();
+    }
+
+    /**
+     * Neovim unloaded and loaded {@code buffer} again by itself ({@code :edit!} from a script or a
+     * plug-in; a typed {@code :e!} reverts in Eclipse instead). The plug-in left the buffer empty
+     * rather than read the disk ({@code LuaScripts.PROJECT_FILES}): the document's text, unsaved
+     * changes included, goes into it again. Called on an RPC thread; the document is read on the UI
+     * thread.
+     */
+    private void onNeovimReloadedDocument(DocumentBuffer buffer) {
+        Display display = Display.getDefault();
+        if (display == null || display.isDisposed()) {
+            return;
+        }
+        display.asyncExec(() -> {
+            NeovimSession session;
+            Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
+            synchronized (this) {
+                session = followedSession;
+                showing = session == null ? Optional.empty() : documents.editorShowing(buffer.bufnr(), b -> b == buffer);
+            }
+            showing.ifPresent(s -> session.reloadDocumentAsync(buffer, BufferSynchronizer.documentToLines(s.document())));
+        });
     }
 
     /**

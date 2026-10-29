@@ -18,6 +18,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ContributionVisibility;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
@@ -51,6 +52,8 @@ public class Activator extends AbstractUIPlugin {
     private final LogLevelSwitch logLevelSwitch = new LogLevelSwitch();
     /** Moves Neovim out of a project folder before Eclipse deletes or closes the project. */
     private ProjectFolderExit projectFolderExit;
+    /** Tells Neovim the projects' folders again when projects or linked folders come or go. */
+    private ProjectFolders projectFolders;
 
     @Override
     public void start(BundleContext context) throws Exception {
@@ -61,6 +64,7 @@ public class Activator extends AbstractUIPlugin {
         applyLogLevel();
         EditorAttachManager.getInstance().installWorkbenchListeners();
         projectFolderExit = ProjectFolderExit.install(this::currentSession);
+        projectFolders = ProjectFolders.install(this::currentSession);
 
         preferenceListener = event -> {
             String property = event.getProperty();
@@ -85,6 +89,8 @@ public class Activator extends AbstractUIPlugin {
         }
         ProjectFolderExit.uninstall(projectFolderExit);
         projectFolderExit = null;
+        ProjectFolders.uninstall(projectFolders);
+        projectFolders = null;
         EditorAttachManager.getInstance().detachQuietly();
         shutdownSession();
         plugin = null;

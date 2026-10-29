@@ -40,7 +40,11 @@ class NotificationBridgeTest {
             @Override public void onBufferLines(int bufnr, int first, int last, List<String> lines) {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
-            @Override public void onBufferEnter(int bufnr, int winid, boolean jumped) { events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid) + (jumped ? " jump" : "")); }
+            @Override public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile) {
+                events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid) + (jumped ? " jump" : "")
+                        + (projectFile.isEmpty() ? "" : " file " + projectFile));
+            }
+            @Override public void onBufferReload(int bufnr) { events.add("reload:" + bufnr); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
@@ -126,6 +130,20 @@ class NotificationBridgeTest {
         notify("eclipse_buffer_closed", 4);
         notify("eclipse_buffer_closed");
         assertEquals(List.of("closed:4"), events);
+    }
+
+    /**
+     * LuaScripts.PROJECT_FILES: a project's file without an editor comes with its name, for Eclipse
+     * to open it; a document's buffer reloaded by a script asks for the document's text again.
+     */
+    @Test
+    void aProjectFileComesWithItsNameAndAReloadWithItsBuffer() {
+        notify("eclipse_buf_enter", 5, 1002L, true, "/ws/app/B.java");
+        notify("eclipse_buf_enter", 6, 1002L, false, "");
+        notify("eclipse_buf_enter", 7, 1002L, false, 3L); // not a name: none
+        notify("eclipse_reload", 4);
+        notify("eclipse_reload");
+        assertEquals(List.of("enter:5#1002 jump file /ws/app/B.java", "enter:6#1002", "enter:7#1002", "reload:4"), events);
     }
 
     /** {@code :set wrap} in Neovim (LuaScripts.VIEWPORT); a payload without a boolean is ignored. */

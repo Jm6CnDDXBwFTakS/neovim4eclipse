@@ -28,7 +28,9 @@ final class LuaScripts {
      *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number,
      *       the window's top line, {@code line('w0')}, and the window id),
      *       {@code eclipse_buf_enter} (the buffer and the window id: with a window per editor,
-     *       docs/design/WINDOWS.md, the window tells two editors on one file apart) and {@code eclipse_yank} notifications handled by
+     *       docs/design/WINDOWS.md, the window tells two editors on one file apart; whether the move
+     *       is in the jump history; and the file of a project's buffer without an editor, from
+     *       {@link #PROJECT_FILES}, or {@code ""}) and {@code eclipse_yank} notifications handled by
      *       {@link NotificationBridge}.</li>
      *   <li>Unless the user's config sets {@code g:clipboard}, a clipboard provider whose copy sends
      *       {@code eclipse_clipboard_copy} and whose paste is the {@code eclipse_clipboard_paste}
@@ -97,7 +99,11 @@ final class LuaScripts {
                     end
                   end
                 end
-                vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, vim.api.nvim_get_current_win(), jumped)
+                -- The fourth value: the file of a project's buffer that has no editor yet (gf, 'A,
+                -- quickfix: PROJECT_FILES), whose editor Eclipse opens; '' for any other buffer.
+                local project = package.loaded['neovim4eclipse.project_files']
+                vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, vim.api.nvim_get_current_win(), jumped,
+                  project and project.file_of(ev.buf) or '')
               end
             })
             vim.api.nvim_create_autocmd('TextYankPost', {
@@ -1221,6 +1227,191 @@ final class LuaScripts {
             vim.bo[buf].buftype = ''
             vim.api.nvim_buf_delete(buf, { force = true, unload = true }) -- force: unsaved changes live in Eclipse
             vim.bo[buf].buflisted = false
+            """;
+
+    /**
+     * Module {@code neovim4eclipse.project_files}: Neovim never reads a file of an open Eclipse
+     * project by itself (docs/design/BUFFER_NUMBERS.md, 2.3 and Q3).
+     *
+     * <p><b>Why.</b> When Neovim reads a file ({@code gf}, {@code 'A}, {@code :b} into a closed file,
+     * a quickfix entry), it runs filetype detection, the filetype plug-ins ({@code indentexpr},
+     * {@code commentstring}) and the user's {@code FileType} autocommands, which may start a language
+     * server inside Eclipse's Neovim (Eclipse is that server already: jdtls is Eclipse's JDT). The
+     * buffers the plug-in fills from Eclipse's text never do. So such a file is read by a
+     * {@code BufReadCmd} of the plug-in's instead, which reads only the text; Eclipse then opens the
+     * file's editor ({@code EditorAttachManager}) and the attach takes the buffer over, as for a
+     * document's kept buffer.
+     *
+     * <p><b>Which buffers.</b> Eclipse sends the open projects' folders ({@link #SET_PROJECT_FOLDERS}).
+     * Each new buffer ({@code BufNew}, also sent after a rename) whose file is inside one gets a
+     * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. The paths
+     * are compared resolved ({@code fs_realpath}: symbolic links, Windows junctions and 8.3 short
+     * names, macOS's NFD names), with {@code /} separators and, where {@code 'fileignorecase'} is on
+     * (Windows, macOS), in lower case. Autocommand patterns were tried first and cannot match a
+     * junction, an 8.3 name or a folder named {@code $HOME} on Windows (BUFFER_NUMBERS.md, X18d).
+     * Example: with project {@code /ws/app}, {@code gf} on {@code src/B.java} in {@code /ws/app/A.java}
+     * is read by the hook; {@code /etc/hosts} and {@code /ws/app2/C.java} are read by Neovim.
+     *
+     * <p><b>The read.</b> {@code 'swapfile'} off first: with a swap file left by an earlier Neovim,
+     * the read would stop at the E325 question, which nothing can answer under {@code noautocmd}
+     * (X18c). Nothing for a file that does not exist. Then {@code :read ++edit} (Neovim's own decoding
+     * of encodings, line endings and a BOM) without autocommands, the empty first line removed, under
+     * {@code lockmarks} (the marks stay on their lines) and with {@code 'undolevels'} -1 (no undo
+     * step). A closed document's buffer then has its cursor put on {@code '"}, where Vim's {@code :b}
+     * puts it; a mark jump or a quickfix entry moves it on afterwards. A buffer that another
+     * {@code BufReadCmd} filled first (Neovim's {@code zip.vim} lists an archive's files, read-only)
+     * is left to it: reading the raw bytes on top of it failed with E21.
+     *
+     * <p><b>A document's reload.</b> A buffer with an editor ({@code 'buftype'} {@code acwrite}) is
+     * read again by {@code :edit!} from a script or a plug-in (a typed {@code :e!} goes to Eclipse,
+     * {@link #HOST_COMMANDS}). Its text is Eclipse's, with any unsaved changes, so the hook does not
+     * read the disk: it sends {@code eclipse_reload(buf)}, and Eclipse loads the document into the
+     * buffer again.
+     *
+     * <p>Functions: {@code set_folders(list)}; {@code file_of(buf)}, the buffer's file name when the
+     * hook is on it, else {@code ""} (sent with {@code eclipse_buf_enter}, {@link #SETUP});
+     * {@code inside(path)}.
+     */
+    static final String PROJECT_FILES = """
+            local M = {}
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_projects', { clear = true })
+            local roots = {} -- the folders, as canonical() gives them, each ending in '/'
+            local hooked = {} -- buffer number -> true, for the buffers that have the read hook
+
+            --- A path in one comparable form: resolved, with '/' separators, lower-cased where file
+            --- names ignore case. A file that does not exist (yet): its folder resolved, plus its name.
+            local function canonical(path)
+              local full = vim.fn.fnamemodify(path, ':p')
+              local real = vim.uv.fs_realpath(full)
+              if not real then
+                local dir = vim.uv.fs_realpath(vim.fn.fnamemodify(full, ':h'))
+                real = dir and (dir .. '/' .. vim.fn.fnamemodify(full, ':t')) or full
+              end
+              real = real:gsub('\\\\', '/')
+              if vim.o.fileignorecase then
+                real = real:lower()
+              end
+              return real
+            end
+
+            function M.inside(path)
+              if path == '' or #roots == 0 then
+                return false
+              end
+              local c = canonical(path)
+              for _, root in ipairs(roots) do
+                if c:sub(1, #root) == root then
+                  return true
+                end
+              end
+              return false
+            end
+
+            local function read(ev)
+              local buf = ev.buf
+              vim.bo[buf].swapfile = false -- first: a stale swap file would stop the read at E325
+              if vim.bo[buf].buftype == 'acwrite' then
+                vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_reload', buf)
+                return
+              end
+              local name = ev.match
+              if vim.fn.filereadable(name) == 0 then
+                return
+              end
+              -- Another reader came first (Neovim's zip.vim or tar.vim browse an archive with a
+              -- BufReadCmd of their own, defined before this one): the buffer is theirs.
+              local first = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+              if not vim.bo[buf].modifiable or vim.api.nvim_buf_line_count(buf) > 1 or (first and first ~= '') then
+                return
+              end
+              local saved = vim.bo[buf].undolevels
+              vim.bo[buf].undolevels = -1
+              local ok, err = pcall(vim.cmd, 'lockmarks keepalt noautocmd silent read ++edit ' .. vim.fn.fnameescape(name))
+              if ok then
+                vim.cmd('lockmarks keepjumps noautocmd silent 1delete _')
+              end
+              vim.bo[buf].undolevels = saved
+              vim.bo[buf].modified = false
+              if not ok then
+                vim.api.nvim_echo({ { tostring(err), 'ErrorMsg' } }, true, {})
+                return
+              end
+              if vim.b[buf].neovim4eclipse_file and vim.api.nvim_get_current_buf() == buf then
+                local mark = vim.api.nvim_buf_get_mark(buf, '"')
+                if mark[1] >= 1 and mark[1] <= vim.api.nvim_buf_line_count(buf) then
+                  pcall(vim.api.nvim_win_set_cursor, 0, mark)
+                end
+              end
+            end
+
+            local function hook(buf)
+              if not hooked[buf] then
+                hooked[buf] = true
+                vim.api.nvim_create_autocmd('BufReadCmd', { group = group, buffer = buf, callback = read })
+              end
+            end
+
+            local function unhook(buf)
+              if hooked[buf] then
+                hooked[buf] = nil
+                pcall(vim.api.nvim_clear_autocmds, { group = group, buffer = buf, event = 'BufReadCmd' })
+              end
+            end
+
+            local function check(buf)
+              if M.inside(vim.api.nvim_buf_get_name(buf)) then
+                hook(buf)
+              else
+                unhook(buf)
+              end
+            end
+
+            function M.set_folders(folders)
+              roots = {}
+              for _, folder in ipairs(folders) do
+                roots[#roots + 1] = (canonical(folder):gsub('/+$', '')) .. '/'
+              end
+              for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                check(buf)
+              end
+            end
+
+            function M.file_of(buf)
+              return hooked[buf] and vim.api.nvim_buf_get_name(buf) or ''
+            end
+
+            vim.api.nvim_create_autocmd('BufNew', { group = group, callback = function(ev)
+              check(ev.buf)
+            end })
+            vim.api.nvim_create_autocmd('BufWipeout', { group = group, callback = function(ev)
+              hooked[ev.buf] = nil
+            end })
+            package.loaded['neovim4eclipse.project_files'] = M
+            """;
+
+    /**
+     * Tells {@link #PROJECT_FILES} the open projects' folders (arguments: the folders, one each, as
+     * Eclipse gives them: {@code /ws/app}, {@code C:\ws\app}, a linked folder's target), and gives
+     * the read hook to the buffers inside them, or takes it from those no longer inside. Sent at the
+     * first attach and whenever a project or a linked folder comes or goes.
+     */
+    static final String SET_PROJECT_FOLDERS = """
+            require('neovim4eclipse.project_files').set_folders({ ... })
+            """;
+
+    /**
+     * Loads a document's text into its buffer again (arguments: the buffer number, then the lines),
+     * as the first load does ({@link #LOAD_WITHOUT_UNDO}: no undo step, marks kept): after a script's
+     * {@code :edit!} unloaded and reloaded the buffer ({@link #PROJECT_FILES}, "A document's
+     * reload"). Nothing for a buffer that is gone.
+     */
+    static final String RELOAD_DOCUMENT_BUFFER = "local function load(...)\n" + LuaScripts.LOAD_WITHOUT_UNDO + """
+            end
+            local buf = tonumber((select(1, ...)))
+            local lines = { select(2, ...) }
+            if vim.api.nvim_buf_is_valid(buf) then
+              vim.api.nvim_buf_call(buf, function() load(unpack(lines)) end)
+            end
             """;
 
     /**

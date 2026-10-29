@@ -152,7 +152,8 @@ abstract class EndToEndTestBase {
      * Wipes the buffers Neovim keeps for closed files (docs/design/BUFFER_NUMBERS.md: a closed file
      * keeps its buffer, as after Vim's {@code :bd}), so that each test starts as with a fresh Neovim.
      * One Neovim serves every test, and test.txt, made again for the next test, would get this test's
-     * buffer back, with its cursor on the line this test left it on.
+     * buffer back, with its cursor on the line this test left it on. Also wiped: the buffers of the
+     * test project's files that no editor took over (a {@code gf} onto a file Eclipse would not open).
      */
     private void forgetClosedFilesBuffers() {
         // The running session: a test may have restarted Neovim (RestartNeovimEndToEndTest).
@@ -161,13 +162,18 @@ abstract class EndToEndTestBase {
             return;
         }
         UiTestSupport.settle(running, TIMEOUT_MS); // the closes are queued in the session: let them happen first
+        String folder = project == null || project.getLocation() == null ? "" : project.getLocation().toOSString();
         SessionProbe.lua(running, """
+                local folder = vim.fs.normalize(FOLDER)
                 for _, b in ipairs(vim.api.nvim_list_bufs()) do
-                  if not vim.api.nvim_buf_is_loaded(b) and vim.b[b].neovim4eclipse_file then
+                  local name = vim.fs.normalize(vim.api.nvim_buf_get_name(b))
+                  local closed = not vim.api.nvim_buf_is_loaded(b) and vim.b[b].neovim4eclipse_file
+                  local stray = folder ~= '' and vim.bo[b].buftype == '' and name:sub(1, #folder + 1) == folder .. '/'
+                  if closed or stray then
                     pcall(vim.api.nvim_buf_delete, b, { force = true })
                   end
                 end
-                return 0""");
+                return 0""".replace("FOLDER", "'" + folder.replace("\\", "\\\\").replace("'", "\\'") + "'"));
     }
 
     /**
