@@ -37,6 +37,9 @@ final class LuaScripts {
      *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
      *   <li>Normal-mode mappings for {@code gd} (and {@code Ctrl-]}), {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
+     *   <li>{@code Ctrl-O} and {@code Ctrl-I} past the end of a window's jumps are Eclipse's Back and
+     *       Forward; a trail of the {@code Ctrl-O} steps (module {@code neovim4eclipse.history},
+     *       {@link #HISTORY_NOWHERE}) lets {@code Ctrl-I} undo the newest step first.</li>
      *   <li>The diagnostics namespace {@code neovim4eclipse} ({@link #SET_DIAGNOSTICS}) draws nothing,
      *       and, unless the user's config has its own, a {@code vim.diagnostic} {@code on_jump} hook
      *       echoes the first line of the problem {@code ]d} lands on.</li>
@@ -158,22 +161,99 @@ final class LuaScripts {
             -- A key init.lua maps itself is left alone, and that is the opt-out (no switch: the
             -- fallback acts only where Neovim would do nothing). vim.g.neovim4eclipse_ide_keys does
             -- not cover it: wanting Vim's gd is no reason to lose Ctrl-O back to the last editor.
-            local function history(key, action, desc, further)
-              if vim.fn.maparg(key, 'n') ~= '' then
-                return
-              end
-              vim.keymap.set('n', key, function()
-                local jumps = vim.fn.getjumplist()
-                if further(#jumps[1], jumps[2]) then
-                  return key -- not remapped (noremap): Neovim's own key, with the count typed
+            --
+            -- Ctrl-I retraces Ctrl-O. The trail is what each Ctrl-O press did, newest last: a jump
+            -- in a window ({ 'jump', n, win }) or a Back ({ 'back', n }); n is the steps (the
+            -- count). Ctrl-I undoes its newest step: Neovim's Ctrl-I for a jump, Eclipse's Forward
+            -- for a Back (editor/NavigationHistorySteps finds the way back). Without the trail,
+            -- Ctrl-I took a window's newer jump first, wherever it came in the run. Example: in
+            -- b.txt, Ctrl-O jumps into a.txt's file (the window moves into a.txt's editor), then
+            -- Backs go to b.txt's and a.txt's editors again; Ctrl-I in a.txt's editor must undo
+            -- the last Back, not the first jump. A key typed between (anything but Ctrl-O, Ctrl-I
+            -- and a count) forgets the trail, and so does a jump step whose window is no longer
+            -- current or has no newer jump; then the keys work as without it.
+            local trail = {}
+            local history = {}
+            --- Eclipse reports Backs that went nowhere (the start of its history): they are no
+            --- steps, so Ctrl-I does not have to undo them first.
+            function history.nowhere(n)
+              for i = #trail, 1, -1 do
+                local step = trail[i]
+                if n <= 0 then
+                  return
                 end
-                vim.rpcnotify(0, 'eclipse_action', action, vim.v.count)
-                return ''
-              end, { expr = true, desc = 'Eclipse: ' .. desc })
+                if step[1] == 'back' then
+                  local taken = math.min(n, step[2])
+                  step[2], n = step[2] - taken, n - taken
+                  if step[2] == 0 then
+                    table.remove(trail, i)
+                  end
+                end
+              end
             end
-            history('<C-o>', 'history_back', 'older jump, else Back', function(_, pos) return pos > 0 end)
-            history('<C-i>', 'history_forward', 'newer jump, else Forward',
-              function(count, pos) return pos + 1 < count end)
+            function history.trail()
+              return vim.deepcopy(trail)
+            end
+            package.loaded['neovim4eclipse.history'] = history
+            vim.on_key(function(_, typed)
+              if typed ~= nil and typed ~= '' and #trail > 0 then
+                -- typed can hold several keys (a key held down): each must be one of these.
+                local other = vim.fn.keytrans(typed):gsub('<C%-O>', ''):gsub('<C%-I>', ''):gsub('<Tab>', '')
+                if other:find('[^%d]') then
+                  trail = {}
+                end
+              end
+            end, vim.api.nvim_create_namespace('neovim4eclipse_history'))
+            local function step(kind, n, win)
+              local last = trail[#trail]
+              if last and last[1] == kind and last[3] == win then
+                last[2] = last[2] + n
+              else
+                trail[#trail + 1] = { kind, n, win }
+              end
+            end
+            local function mapped(key)
+              return vim.fn.maparg(key, 'n') ~= ''
+            end
+            if not mapped('<C-o>') then
+              vim.keymap.set('n', '<C-o>', function()
+                local n = math.max(1, vim.v.count)
+                local _, place = unpack(vim.fn.getjumplist())
+                if place > 0 then
+                  if place >= n then -- else Neovim does nothing: a count larger than the history
+                    step('jump', n, vim.api.nvim_get_current_win())
+                  end
+                  return '<C-o>' -- not remapped (noremap): Neovim's own key, with the count typed
+                end
+                step('back', n)
+                vim.rpcnotify(0, 'eclipse_action', 'history_back', vim.v.count)
+                return ''
+              end, { expr = true, desc = 'Eclipse: older jump, else Back' })
+            end
+            if not mapped('<C-i>') then
+              vim.keymap.set('n', '<C-i>', function()
+                local n = math.max(1, vim.v.count)
+                local list, place = unpack(vim.fn.getjumplist())
+                local newer = place + 1 < #list
+                local last = trail[#trail]
+                if last and last[1] == 'jump' and (last[3] ~= vim.api.nvim_get_current_win() or not newer) then
+                  trail, last = {}, nil
+                end
+                if last then
+                  last[2] = last[2] - n
+                  if last[2] <= 0 then
+                    trail[#trail] = nil
+                  end
+                  if last[1] == 'jump' then
+                    return '<C-i>'
+                  end
+                elseif newer then
+                  return '<C-i>'
+                end
+                vim.rpcnotify(0, 'eclipse_action', 'history_forward', vim.v.count)
+                return ''
+              end, { expr = true, desc = 'Eclipse: newer jump, else Forward' })
+            end
             -- ZZ and ZQ save and close the Eclipse editor. Always mapped, whatever
             -- neovim4eclipse_ide_keys says: Neovim's own ZZ (:x) would quit the embedded Neovim,
             -- which serves every editor. Being mappings, Neovim decides when they apply: fZ, rZ
@@ -1020,6 +1100,15 @@ final class LuaScripts {
             local win, buf = tonumber((select(1, ...))), tonumber((select(2, ...)))
             local line, col = tonumber((select(3, ...))), tonumber((select(4, ...)))
             require('neovim4eclipse.windows').travel(win, buf, line, col)
+            """;
+
+    /**
+     * Eclipse's Back went nowhere for that many {@code Ctrl-O} steps (argument: the number), at
+     * the start of its history: the trail of {@link #SETUP} forgets them, so that {@code Ctrl-I}
+     * does not undo steps that moved nothing.
+     */
+    static final String HISTORY_NOWHERE = """
+            require('neovim4eclipse.history').nowhere(tonumber((select(1, ...))))
             """;
 
     /**

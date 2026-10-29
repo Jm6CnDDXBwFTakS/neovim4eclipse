@@ -71,6 +71,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- `Ctrl-I` now comes back through the same places `Ctrl-O` went. After a few `:e #` between two
+  files, `Ctrl-O` went back about nine times and `Ctrl-I` forward about three: Eclipse's Back
+  repeated every editor switch Neovim's jumps had made, and the first jump forward into the other
+  file deleted Eclipse's Forward. Back now steps over those switches.
 - `Ctrl-O` or `Ctrl-I` held down between two editors no longer goes back and forth for ever. Each
   move of a Neovim window to another editor left a stray jump in the other editor's window, so
   there was always one more jump, and Eclipse's Back found the other editor again.

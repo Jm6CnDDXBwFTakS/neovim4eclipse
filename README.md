@@ -793,7 +793,9 @@ These are real and deliberate to know about before extending the code:
    windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window
    ([docs/design/WINDOWS.md](docs/design/WINDOWS.md)). Switching editors in Eclipse (a tab click,
    Ctrl+F6) is no Neovim jump: once the editor's own jump history runs out, Ctrl-O and Ctrl-I are
-   Eclipse's Back and Forward, which recorded the switch ([docs/KEYBOARD.md](docs/KEYBOARD.md)). Jumps to anything else
+   Eclipse's Back and Forward, which recorded the switch ([docs/KEYBOARD.md](docs/KEYBOARD.md)).
+   Back steps over the switches the plug-in made for Neovim's jumps, which Neovim's history
+   already has, and Ctrl-I comes back through the same places Ctrl-O went. Jumps to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
    reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the

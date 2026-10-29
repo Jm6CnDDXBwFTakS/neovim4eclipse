@@ -476,7 +476,9 @@ public final class EditorAttachManager {
         try {
             if (showing.isPresent()) {
                 IEditorPart target = showing.get().editor();
-                target.getSite().getPage().activate(target);
+                // Eclipse records the switch in its Back history; noted as the plug-in's, since
+                // Neovim's jump history has it already (NavigationHistorySteps).
+                NavigationHistorySteps.activateForNeovim(target.getSite().getPage(), target);
                 ITextEditor textEditor = textEditorOf(target);
                 // A multi-page editor may open on a form page: no text editor to follow into.
                 if (textEditor != null && documentOf(textEditor) == showing.get().document()) {
