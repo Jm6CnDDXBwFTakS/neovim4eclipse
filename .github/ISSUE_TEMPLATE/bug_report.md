@@ -25,4 +25,4 @@ labels: bug
 
 **Log**
 <!-- Relevant lines from Window > Show View > Error Log, or the console of a launched Eclipse.
-     docs/KEYS.md and the README's key-binding table explain the key-routing messages. -->
+     docs/KEYBOARD.md and the README's key-binding table explain the key-routing messages. -->

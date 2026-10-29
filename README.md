@@ -19,7 +19,7 @@ edges, see [Known limitations](#known-limitations).
 - [docs/LEARNING.md](docs/LEARNING.md): how Eclipse plug-ins and the Neovim API work, as used here.
   Start here if you want to understand or maintain the code.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design decisions and how each feature works.
-- [docs/KEYS.md](docs/KEYS.md): which keys go to Neovim and which to Eclipse, and why.
+- [docs/KEYBOARD.md](docs/KEYBOARD.md): which keys go to Neovim and which to Eclipse, and why.
 - [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, the rules the code relies on, and style.
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
@@ -568,7 +568,7 @@ Neovim's `tabstop` is set to the editor's tab width so both agree.
 Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that sends the key to Neovim.
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
 of the letters you send to Neovim (*Window → Preferences → Neovim → Ctrl Keys*; by default every letter
-except `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, see [docs/KEYS.md](docs/KEYS.md)). The bindings work only while Neovim owns normal/visual mode and the
+except `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, see [docs/KEYBOARD.md](docs/KEYBOARD.md)). The bindings work only while Neovim owns normal/visual mode and the
 editor has focus; in insert mode and in Eclipse mode (toggle with the toolbar button: color logo in
 Neovim mode, grey in Eclipse mode) Eclipse's own
 shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
@@ -650,7 +650,7 @@ The variables starting with `eclipse_` work in two directions:
 | Variable | Set by | Meaning |
 |----------|--------|---------|
 | `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
-| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT`, `Ctrl-O`, `Ctrl-I` (not `ZZ`, `ZQ`; [docs/KEYS.md](docs/KEYS.md)) |
+| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT`, `Ctrl-O`, `Ctrl-I` (not `ZZ`, `ZQ`; [docs/KEYBOARD.md](docs/KEYBOARD.md)) |
 | `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
@@ -727,7 +727,7 @@ adds a brief flash to errors in the message line ([Messages and errors](#message
 *Window → Preferences → Neovim → Ctrl Keys*: one check box per letter. Ticked `Ctrl+letter` keys go to
 Neovim in normal and visual mode; cleared ones keep their Eclipse shortcut. *Select All* and *Deselect
 All* set every box; *Restore Defaults* ticks all but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`. Changes apply
-immediately. [docs/KEYS.md](docs/KEYS.md) explains those three defaults and which keys go where.
+immediately. [docs/KEYBOARD.md](docs/KEYBOARD.md) explains those three defaults and which keys go where.
 
 ### Finding Neovim
 
@@ -792,7 +792,7 @@ These are real and deliberate to know about before extending the code:
    windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window
    ([docs/design/WINDOWS.md](docs/design/WINDOWS.md)). Switching editors in Eclipse (a tab click,
    Ctrl+F6) is no Neovim jump: once the editor's own jump history runs out, Ctrl-O and Ctrl-I are
-   Eclipse's Back and Forward, which recorded the switch ([docs/KEYS.md](docs/KEYS.md)). Jumps to anything else
+   Eclipse's Back and Forward, which recorded the switch ([docs/KEYBOARD.md](docs/KEYBOARD.md)). Jumps to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
    reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the
