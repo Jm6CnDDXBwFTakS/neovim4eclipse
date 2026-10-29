@@ -37,7 +37,7 @@ final class LuaScripts {
      *       request (see {@link ClipboardRegisters}).</li>
      *   <li>The one argument is Eclipse's RPC channel number, which requests are sent to. It is kept
      *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
-     *   <li>The mappings of {@code gd}, {@code K}, {@code gt} and {@code gT},
+     *   <li>The mappings of {@code gd}, {@code K}, the {@code gr*} keys, {@code gt} and {@code gT},
      *       which send {@code eclipse_action} so that the IDE does those, are {@link #IDE_KEYS}, run
      *       right after this script; {@code ZZ}, {@code ZQ} and the history keys below are here.</li>
      *   <li>{@code Ctrl-O} and {@code Ctrl-I} past the end of a window's jumps are Eclipse's Back and
@@ -151,7 +151,7 @@ final class LuaScripts {
               vim.g.loaded_clipboard_provider = nil
               vim.cmd('runtime autoload/provider/clipboard.vim')
             end
-            -- Keys only the IDE can carry out (gd, K, gt): IDE_KEYS, run right after
+            -- Keys only the IDE can carry out (gd, K, the gr* keys, gt): IDE_KEYS, run right after
             -- this script, from the one table core/IdeKeys.
             -- Ctrl-O and Ctrl-I are Neovim's, until its jump history has nothing further that
             -- way: then they are Eclipse's Back and Forward (Alt+Left, Alt+Right), which also
@@ -1526,11 +1526,12 @@ final class LuaScripts {
             """;
 
     /**
-     * Maps the keys only the IDE can carry out ({@code gd}, {@code K}, {@code gt}; see {@link IdeAction}): each sends {@code eclipse_action} with its action and Vim's
+     * Maps the keys only the IDE can carry out ({@code gd}, {@code K}, the {@code gr*} keys,
+     * {@code gt}; see {@link IdeAction}): each sends {@code eclipse_action} with its action and Vim's
      * count ({@code v:count}, the count typed before the key). Arguments: four per key, lhs, modes,
      * action, description, from the one table {@link IdeKeys} ({@code IdeKeys.toLuaArgs()}), which
-     * Eclipse's side reads too. Example: {@code "gd", "n", "definition", "Open Declaration"} maps
-     * {@code gd} in normal mode ({@code "nx"}: normal and visual), described {@code Eclipse: Open Declaration}.
+     * Eclipse's side reads too. Example: {@code "gra", "nx", "quick_fix", "Quick Fix"} maps
+     * {@code gra} in normal and visual mode, described {@code Eclipse: Quick Fix}.
      *
      * <p>Run right after {@link #SETUP}, so after the user's {@code init.lua}: it wins over their own
      * mappings of these keys. {@code vim.g.neovim4eclipse_ide_keys = 0} (or {@code false},

@@ -39,6 +39,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
@@ -850,5 +852,84 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
 
         waitUntil("the editor to close", TIMEOUT_MS, () -> page().findEditor(javaEditor.getEditorInput()) == null);
         assertEquals(List.of(), errorLog);
+    }
+
+    // ---- Neovim's language keys (gr*) run Java's commands ----
+
+    private static final String CALLS = """
+            package p;
+            interface I { void g(); }
+            class A implements I {
+                public void g() { String s = "x"; s.length(); }
+                void f(I i) { i.g(); }
+            }
+            """;
+
+    /** What an IDE key would run with the caret at {@code offset}, without running it. */
+    private IdeActions.Choice choiceAt(String action, int offset) {
+        caretTo(offset);
+        return IdeActions.choose(action, javaEditor, javaEditor.getAdapter(org.eclipse.jface.text.ITextViewer.class),
+                offset);
+    }
+
+    private static IdeActions.Choice command(String id) {
+        return new IdeActions.Choice(IdeActions.Choice.Kind.COMMAND, id);
+    }
+
+    /**
+     * In the Java editor each key finds Java's own command: the key Eclipse binds for it where the
+     * plug-in's contexts leave that key alone (F3, Alt+Shift+R, Ctrl+Shift+G), else the command's id;
+     * {@code grt} finds JDT's "Open Declared Type" link on a variable, and nothing on a keyword.
+     */
+    @Test
+    void theLanguageKeysFindJavasCommands() throws Exception {
+        openJava("A.java", CALLS);
+        int call = javaText().indexOf("i.g()") + 2;
+        assertEquals(command("org.eclipse.jdt.ui.edit.text.java.open.editor"), choiceAt(IdeAction.DEFINITION, call));
+        assertEquals(command(IdeKeys.SHOW_INFORMATION), choiceAt(IdeAction.HOVER, call));
+        assertEquals(command("org.eclipse.jdt.ui.edit.text.java.rename.element"), choiceAt(IdeAction.RENAME, call));
+        assertEquals(command(IdeKeys.QUICK_ASSIST), choiceAt(IdeAction.QUICK_FIX, call));
+        assertEquals(command("org.eclipse.jdt.ui.edit.text.java.search.references.in.workspace"),
+                choiceAt(IdeAction.REFERENCES, call));
+        assertEquals(command("org.eclipse.jdt.ui.edit.text.java.open.implementation"),
+                choiceAt(IdeAction.IMPLEMENTATION, call));
+        assertEquals(command("org.eclipse.jdt.ui.edit.text.java.show.outline"), choiceAt(IdeAction.OUTLINE, call));
+        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.LINK,
+                "org.eclipse.jdt.internal.ui.javaeditor.JavaElementHyperlinkDeclaredTypeDetector"),
+                choiceAt(IdeAction.TYPE_DEFINITION, javaText().indexOf("s.length")));
+        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.MESSAGE,
+                "grt: Open Declared Type is not available in this editor"),
+                choiceAt(IdeAction.TYPE_DEFINITION, javaText().indexOf("class A")));
+    }
+
+    /** {@code gri} on a call of an interface's method goes to its one implementation. */
+    @Test
+    void griGoesToTheImplementation() throws Exception {
+        openJava("A.java", CALLS);
+        caretTo(javaText().indexOf("i.g()") + 2);
+
+        type(javaWidget, "gri");
+
+        waitUntil("the cursor on A.g's line", TIMEOUT_MS, () -> cursorLine() == 4, () -> "; it is on " + cursorLine());
+    }
+
+    /** {@code grt} on a variable opens its type, as Ctrl+click's "Open Declared Type" does. */
+    @Test
+    void grtOpensTheDeclaredType() throws Exception {
+        openJava("A.java", CALLS);
+        caretTo(javaText().indexOf("s.length"));
+
+        type(javaWidget, "grt");
+
+        try {
+            waitUntil("String's editor", TIMEOUT_MS, () -> page().getActiveEditor() != null
+                    && page().getActiveEditor().getTitle().startsWith("String"),
+                    () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getTitle()));
+        } finally {
+            IEditorPart string = page().getActiveEditor();
+            if (string != null && string != javaEditor && string != editor) {
+                page().closeEditor(string, false);
+            }
+        }
     }
 }

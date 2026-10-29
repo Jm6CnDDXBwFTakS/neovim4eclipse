@@ -248,7 +248,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
         int channel = await(api.getChannelId());
         await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
-        await(api.execLua(LuaScripts.IDE_KEYS, IdeKeys.toLuaArgs())); // gd, K, gt: after init.lua
+        await(api.execLua(LuaScripts.IDE_KEYS, IdeKeys.toLuaArgs())); // gd, K, gr*: after init.lua
         // Before any document's buffer: each new buffer is checked against the project folders,
         // which Eclipse sends at the first attach (docs/design/BUFFER_NUMBERS.md, 2.3).
         await(api.execLua(LuaScripts.PROJECT_FILES, List.of()));

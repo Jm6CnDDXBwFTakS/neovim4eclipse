@@ -5,7 +5,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 /**
  * A normal-mode key that Neovim hands back to the IDE because only the IDE can do it: {@code gd}
- * (go to definition), {@code K} (show documentation), {@code gt} / {@code gT} (next or previous
+ * (go to definition), {@code K} (show documentation), Neovim's language keys {@code grn},
+ * {@code gra}, {@code grr}, {@code gri}, {@code grt} and {@code gO}, {@code gt} / {@code gT} (next or previous
  * editor tab), {@code ZZ} / {@code ZQ} (save and close, or close, the editor), and {@code Ctrl-O} /
  * {@code Ctrl-I} once Neovim's jump history runs out (Eclipse's Back and Forward).
  *
@@ -38,6 +39,18 @@ public record IdeAction(String name, int count, long step) {
     public static final String DEFINITION = "definition";
     /** {@code K}: the IDE's Show Tooltip Description (hover information). */
     public static final String HOVER = "hover";
+    /** {@code grn}: the IDE's Rename (Alt+Shift+R: the refactoring in Java). */
+    public static final String RENAME = "rename";
+    /** {@code gra}: the IDE's Quick Fix (Ctrl+1), on the selection in visual mode. */
+    public static final String QUICK_FIX = "quick_fix";
+    /** {@code grr}: the IDE's References (Ctrl+Shift+G: references in the workspace). */
+    public static final String REFERENCES = "references";
+    /** {@code gri}: the IDE's Open Implementation. */
+    public static final String IMPLEMENTATION = "implementation";
+    /** {@code grt}: the IDE's Open Declared Type (the type of the variable or expression under the cursor). */
+    public static final String TYPE_DEFINITION = "type_definition";
+    /** {@code gO}: the IDE's Quick Outline (Ctrl+O). */
+    public static final String OUTLINE = "outline";
     /** {@code gt}, {@code {N}gt}: next editor tab, or tab N. */
     public static final String NEXT_TAB = "next_tab";
     /** {@code gT}, {@code {N}gT}: previous editor tab, or N tabs back. */
