@@ -22,10 +22,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 
 /**
- * Carries out the keys Neovim hands back to the IDE ({@link IdeAction}): {@code gd}, {@code K},
- * {@code gt}, {@code gT}, {@code ZZ}, {@code ZQ}, and {@code Ctrl-O} / {@code Ctrl-I} past Neovim's jumps.
+ * Carries out the keys Neovim hands back to the IDE ({@link IdeAction}): {@code gd}, {@code K}, the
+ * {@code gr*} keys, {@code gt}, {@code gT}, {@code ZZ}, {@code ZQ}, and {@code Ctrl-O} /
+ * {@code Ctrl-I} past Neovim's jumps.
  *
- * <p><b>Commands, not code.</b> "Open Declaration" is different in every kind of editor
+ * <p><b>Commands, not code.</b> "Open Declaration" or "Rename" is different in every kind of editor
  * (Java, C, an LSP editor), so the plug-in does not implement it: it runs the editor's own Eclipse
  * <em>command</em>. Which one, and how it is found, is the one table {@link IdeKeys#COMMANDS}, which
  * this class only interprets ({@link #runCommand}), the same way for every key:
@@ -36,6 +37,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
  *       there it counts only when a link is under the caret ({@link HyperlinkProbe}), so a plain
  *       {@code .txt} file behaves the same in the Generic Editor as in the Text Editor.</li>
  *   <li>{@code K}: Show Tooltip Description (F2), the hover information of the text editor.</li>
+ *   <li>{@code grn} Rename (the command bound to Alt+Shift+R), {@code gra} Quick Fix (Ctrl+1, on the
+ *       selection in visual mode), {@code grr} References (bound to Ctrl+Shift+G), {@code gri} Open
+ *       Implementation, {@code grt} Open Declared Type (JDT's Ctrl+click link), {@code gO} Quick
+ *       Outline. Where the editor has none: {@code grn: Rename is not available in this editor}.</li>
  *   <li>{@code Ctrl-O} / {@code Ctrl-I} past the end of Neovim's jump history: Eclipse's Backward
  *       History and Forward History (Alt+Left, Alt+Right), stepping over the editor switches the
  *       plug-in made itself, so that {@code Ctrl-I} retraces {@code Ctrl-O}
@@ -54,7 +59,7 @@ final class IdeActions {
     /**
      * Runs {@code action} in {@code editor}; an unknown action name is logged and ignored.
      *
-     * @param viewer       the editor's text viewer, or {@code null}; for the hyperlink check of {@code gd}
+     * @param viewer       the editor's text viewer, or {@code null}; for the hyperlinks of {@code gd} and {@code grt}
      * @param caret        the caret as a document offset, for the same
      * @param neovimNormal runs Neovim's own keys, bypassing the plug-in's mappings ({@code gd}'s fallback)
      * @param trail        Neovim's trail of {@code Ctrl-O} steps, told of Back steps that went nowhere
@@ -80,8 +85,8 @@ final class IdeActions {
     }
 
     /**
-     * Runs what {@link #choose} picks for {@code command}: the command, Neovim's own keys,
-     * or the message {@code K: Show Tooltip Description is not available in this editor}.
+     * Runs what {@link #choose} picks for {@code command}: the command, the link, Neovim's own keys,
+     * or the message {@code grn: Rename is not available in this editor}.
      */
     private static void runCommand(String action, IdeKeys.Command command, ITextEditor editor, ITextViewer viewer,
             int caret, Consumer<String> neovimNormal) {
@@ -90,17 +95,22 @@ final class IdeActions {
         LOG.fine(() -> key + ": " + choice);
         switch (choice.kind()) {
             case COMMAND -> execute(editor, choice.value(), key);
+            case LINK -> {
+                if (!HyperlinkProbe.open(editor, viewer, caret, choice.value())) { // gone meanwhile
+                    HostCommands.showError(editor, unavailable(key, command));
+                }
+            }
             case NEOVIM -> neovimNormal.accept(choice.value());
             case MESSAGE -> HostCommands.showError(editor, choice.value());
         }
     }
 
     /**
-     * What an action does in an editor right now: run a command ({@code value} its id), run Neovim's
-     * own keys, or show a message.
+     * What an action does in an editor right now: run a command ({@code value} its id), open a link
+     * ({@code value} the detector's id), run Neovim's own keys, or show a message.
      */
     record Choice(Kind kind, String value) {
-        enum Kind { COMMAND, NEOVIM, MESSAGE }
+        enum Kind { COMMAND, LINK, NEOVIM, MESSAGE }
     }
 
     /** {@link #choose} for an action of {@link IdeKeys#COMMANDS} by name; for tests, which check the choice without running it. */
@@ -128,6 +138,11 @@ final class IdeActions {
                 case COMMAND -> {
                     if (runsHere(editor, way.value())) {
                         return new Choice(Choice.Kind.COMMAND, way.value());
+                    }
+                }
+                case HYPERLINK -> {
+                    if (viewer != null && HyperlinkProbe.isAt(editor, viewer, caret, way.value())) {
+                        return new Choice(Choice.Kind.LINK, way.value());
                     }
                 }
             }

@@ -107,7 +107,7 @@ function t.run(name, ...)
 end
 
 --- Runs SETUP with the test channel, as the session does first (g:neovim4eclipse_channel included),
---- then IDE_KEYS with core/IdeKeys's table (gd, K, gt), as the session does next.
+--- then IDE_KEYS with core/IdeKeys's table (gd, K, the gr* keys), as the session does next.
 function t.setup()
   local result = t.run('SETUP', tostring(t.channel))
   t.run('IDE_KEYS', unpack(generated.ide_keys))

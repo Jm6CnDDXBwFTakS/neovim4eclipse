@@ -23,11 +23,30 @@ t.test('gd, Ctrl-], K, gt and gT go to the IDE, with the count typed before them
   t.eq({ 'a' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
 end)
 
+t.test("Neovim's language keys grn, gra, grr, gri, grt and gO go to the IDE; gra in visual mode too", function()
+  t.setup()
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one two' })
+  for _, key in ipairs({ 'grn', 'gra', 'grr', 'gri', 'grt', 'gO' }) do
+    t.type(key)
+  end
+  t.eq({ { 'rename', 0 }, { 'quick_fix', 0 }, { 'references', 0 }, { 'implementation', 0 },
+    { 'type_definition', 0 }, { 'outline', 0 } }, t.sent('eclipse_action'))
+  t.forget()
+  local mode = t.during('0vegra', function() return vim.api.nvim_get_mode().mode end)
+  t.eq({ { 'quick_fix', 0 } }, t.sent('eclipse_action'), 'visual gra')
+  t.eq('v', mode, 'the selection stays, for Quick Assist to work on')
+  t.eq('Eclipse: Quick Fix', vim.fn.maparg('gra', 'x', false, true).desc)
+  t.ok(not vim.fn.maparg('grx', 'n', false, true).desc:find('Eclipse', 1, true),
+    "grx (a code lens) has no Eclipse counterpart and stays Neovim's")
+end)
+
 t.test('g:neovim4eclipse_ide_keys = 0 or v:false leaves those keys to Neovim', function()
   for _, off in ipairs({ 0, false }) do
     vim.g.neovim4eclipse_ide_keys = off
     t.setup()
     t.eq('', vim.fn.maparg('gd', 'n'), 'gd is not mapped with ' .. vim.inspect(off))
+    t.ok(not (vim.fn.maparg('grn', 'n', false, true).desc or ''):find('Eclipse', 1, true),
+      "grn is Neovim's own (its language server key)")
     t.type('gt') -- Neovim's own gt: one tab page, nothing happens
     t.eq({}, t.sent('eclipse_action'))
   end

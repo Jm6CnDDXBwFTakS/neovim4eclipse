@@ -54,6 +54,16 @@ class IdeKeysTest {
     }
 
     @Test
+    void neovimsLanguageKeysRunEclipsesCounterparts() {
+        // Neovim 0.12's defaults for a language server (:help grn); grx (code lens) has no counterpart.
+        assertEquals(List.of("grn", "gra", "grr", "gri", "grt", "gO"), IdeKeys.KEYS.stream().map(IdeKeys.Key::lhs)
+                .filter(lhs -> lhs.startsWith("gr") || lhs.equals("gO")).toList());
+        assertEquals("nx", IdeKeys.KEYS.stream().filter(k -> k.lhs().equals("gra")).findFirst().orElseThrow().modes(),
+                "gra in visual mode too, as Neovim's own");
+        assertTrue(IdeKeys.KEYS.stream().noneMatch(k -> k.lhs().equals("grx")));
+    }
+
+    @Test
     void onlyOpenDeclarationFallsBackToNeovim() {
         // gd without an Eclipse command is Vim's "go to local declaration"; the others show a message.
         IdeKeys.COMMANDS.forEach((action, command) -> assertEquals(
@@ -62,8 +72,8 @@ class IdeKeysTest {
 
     @Test
     void aKeyDescribedByItsCommandsLabel() {
-        IdeKeys.Key k = IdeKeys.KEYS.stream().filter(key -> key.lhs().equals("K")).findFirst().orElseThrow();
-        assertEquals("Show Tooltip Description", k.description());
+        IdeKeys.Key grn = IdeKeys.KEYS.stream().filter(k -> k.lhs().equals("grn")).findFirst().orElseThrow();
+        assertEquals("Rename", grn.description());
         assertEquals(Optional.of("gd"), IdeKeys.keyOf(IdeAction.DEFINITION), "the first of gd and Ctrl-]");
         assertEquals(Optional.empty(), IdeKeys.keyOf("nothing"));
     }
@@ -73,5 +83,7 @@ class IdeKeysTest {
         List<String> args = IdeKeys.toLuaArgs();
         assertEquals(4 * IdeKeys.KEYS.size(), args.size());
         assertEquals(List.of("gd", "n", "definition", "Open Declaration"), args.subList(0, 4));
+        int gra = args.indexOf("gra");
+        assertEquals(List.of("gra", "nx", "quick_fix", "Quick Fix"), args.subList(gra, gra + 4));
     }
 }

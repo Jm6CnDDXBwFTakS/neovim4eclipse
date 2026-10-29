@@ -43,8 +43,8 @@
  *   <li>Value types passed to listeners: {@code CursorPos}, {@code VisualSelection},
  *       {@code BufferChange}, {@code FoldState}; and {@code DocumentBuffer}, the handle of one document's buffer,
  *       and {@code EditorWindow}, the handle of one editor's window.</li>
- *   <li>{@code IdeKeys}: the one table of the keys Neovim hands to the IDE ({@code gd}, {@code K},
- *       {@code gt}): Neovim's mappings and Eclipse's commands both come from it.</li>
+ *   <li>{@code IdeKeys}: the one table of the keys Neovim hands to the IDE ({@code gd}, {@code K}, the
+ *       {@code gr*} keys): Neovim's mappings and Eclipse's commands both come from it.</li>
  *   <li>{@code KeyRouter}: whether each key goes to Neovim or stays with Eclipse; the SWT listener
  *       ({@code editor/KeyInterceptor}) only feeds it. {@code NeovimSession} implements its small
  *       {@code KeyRouter.Neovim} interface, so tests use a fake session.</li>
