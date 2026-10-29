@@ -211,23 +211,47 @@ public final class QuickfixEntries {
             .thenComparing(Entry::text);
 
     /**
-     * {@code entries} in {@link #ORDER}, each place once. A file seen through two projects (a project
-     * nested in another's folder has its files twice in the workspace) may carry the same problem
-     * twice; the one with the shorter workspace path is kept. Same place means the same file on disk,
-     * line, column, type and text.
+     * {@code entries} in {@link #ORDER}, each place once.
+     *
+     * <ul>
+     *   <li>A file seen through two projects (a project nested in another's folder has its files twice
+     *       in the workspace) may carry the same problem twice; the one with the shorter workspace path
+     *       is kept. Same place means the same file on disk (or, for a marker on a folder or project,
+     *       which has none, the same workspace path), line, column, type and text.</li>
+     *   <li>An entry by line only is dropped when the same file has an entry at a column with the same
+     *       line, type and text: the same problem, seen once through an open editor and once through
+     *       the other IFile's marker.</li>
+     * </ul>
+     * Example: {@code lib/X.java:4 col 9 error: bad} and {@code app/lib/X.java:4 error: bad} (the same
+     * file) give the first alone; the build-path error of project {@code a} and the same text on
+     * project {@code b} are both kept.
      */
     public static List<Entry> sorted(List<Entry> entries) {
         List<Entry> byPath = new ArrayList<>(entries);
         byPath.sort(Comparator.comparingInt((Entry e) -> e.module().length()).thenComparing(ORDER));
+        Set<List<Object>> placed = new HashSet<>(); // entries with a column, without it
+        for (Entry entry : byPath) {
+            if (entry.col() > 0) {
+                placed.add(Arrays.asList(place(entry), entry.lnum(), entry.type(), entry.firstLine()));
+            }
+        }
         Set<List<Object>> seen = new HashSet<>();
         List<Entry> kept = new ArrayList<>(byPath.size());
         for (Entry entry : byPath) {
-            if (seen.add(Arrays.asList(entry.file(), entry.lnum(), entry.col(), entry.type(), entry.firstLine()))) {
+            boolean coveredByColumn = entry.col() == 0
+                    && placed.contains(Arrays.asList(place(entry), entry.lnum(), entry.type(), entry.firstLine()));
+            if (!coveredByColumn
+                    && seen.add(Arrays.asList(place(entry), entry.lnum(), entry.col(), entry.type(), entry.firstLine()))) {
                 kept.add(entry);
             }
         }
         kept.sort(ORDER);
         return kept;
+    }
+
+    /** What makes two entries' places the same: the file on disk, or the workspace path when there is no file. */
+    private static String place(Entry entry) {
+        return entry.file().isEmpty() ? "\0" + entry.module() : entry.file();
     }
 
     /**
