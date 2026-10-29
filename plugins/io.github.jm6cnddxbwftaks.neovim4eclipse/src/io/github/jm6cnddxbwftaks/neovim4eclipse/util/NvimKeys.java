@@ -3,8 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
-import java.util.Set;
-
 /** Classification of keys in Neovim notation (the strings produced by {@link KeyMapping}). */
 public final class NvimKeys {
 

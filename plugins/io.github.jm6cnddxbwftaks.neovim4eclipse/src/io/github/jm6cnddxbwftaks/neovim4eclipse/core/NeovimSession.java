@@ -1432,9 +1432,5 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             await(api.execLua(LuaScripts.MOUSE, List.of("left", event.action().luaName(), event.modifiers(),
                     String.valueOf(event.line1()), String.valueOf(event.col0()))));
         }
-
-        private static String text(Object raw) {
-            return raw == null ? "" : String.valueOf(raw);
-        }
     }
 }

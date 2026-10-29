@@ -27,7 +27,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
@@ -248,13 +247,6 @@ class NeovimSessionIntegrationTest {
 
     // Commands Eclipse carries out (LuaScripts.HOST_COMMANDS) are tested in Lua, without the session:
     // src/test/lua/host_commands_spec.lua (run by LuaScriptsInNeovimTest).
-
-    /** {@code expression}'s value, asked through the session's queue (so after the keys before it). */
-    private static String eval(NeovimSession s, String expression) throws Exception {
-        java.util.concurrent.CompletableFuture<String> value = new java.util.concurrent.CompletableFuture<>();
-        s.evalAsync(expression, value::complete);
-        return value.get(WAIT_MS, TimeUnit.MILLISECONDS);
-    }
 
     // ---- messages (ext_messages): the message line and the output popup ----
 
