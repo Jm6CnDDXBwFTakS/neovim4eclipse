@@ -715,20 +715,34 @@ final class LuaScripts {
      * a moment, so the events are those of {@code nvim_create_buf}: {@code BufNew} and {@code BufAdd}.
      * (Neovim keeps an {@code acwrite} buffer's name as given, a full path, even after {@code :lcd}.)
      *
-     * <p>A name another buffer has already, which {@code bufadd()} would return, gives a new buffer
-     * left unnamed instead (the second result is {@code false}): two documents must not share one.
+     * <p><b>A buffer of that name already</b> ({@code bufadd()} returns it) is the same file, and is
+     * reused, as Vim's {@code :e} reuses the buffer {@code :bd} kept (docs/design/BUFFER_NUMBERS.md):
+     * same number, marks and last cursor position. Example: a.txt was buffer 1, its editor closed
+     * (CLOSE_DOCUMENT_BUFFER unloaded it), and opening it again gives buffer 1, not 3. It may be
+     * loaded already, with the file's text from disk, when Neovim moved into it by itself
+     * ({@code :b 1}, {@code Ctrl-^}); Eclipse's text replaces that. Only a buffer that is another
+     * document's now ({@code acwrite}, see {@link #DOCUMENT_BUFFER}), or a special one (help, a
+     * terminal), is not reused: a new buffer is made, left unnamed (the second result is
+     * {@code false}), since two documents must not share one.
      */
     static final String CREATE_DOCUMENT_BUFFER = """
             local name = select(1, ...)
+            local buf
             if vim.fn.bufexists(name) == 1 then
-              return { vim.api.nvim_create_buf(true, true), false }
+              buf = vim.fn.bufadd(name) -- the existing one, by its exact name
+              if vim.bo[buf].buftype ~= '' then
+                return { vim.api.nvim_create_buf(true, true), false }
+              end
+            else
+              buf = vim.fn.bufadd(name)
             end
-            local buf = vim.fn.bufadd(name)
             vim.bo[buf].buftype = 'nofile'
             vim.bo[buf].bufhidden = 'hide'
             vim.bo[buf].swapfile = false
             vim.bo[buf].modeline = false
-            vim.cmd('noautocmd call bufload(' .. buf .. ')')
+            if not vim.api.nvim_buf_is_loaded(buf) then
+              vim.cmd('noautocmd call bufload(' .. buf .. ')')
+            end
             vim.bo[buf].buflisted = true
             return { buf, true }
             """;
@@ -1989,12 +2003,19 @@ final class LuaScripts {
      * {@code 'undolevels'} to -1 for one change is Vim's documented way to do that (see
      * {@code :help clear-undo}); it also clears any earlier history. The buffer-local value is put
      * back afterwards, which may be "use the global value" (-123456).
+     *
+     * <p>Under {@code :lockmarks}: a reused buffer (CREATE_DOCUMENT_BUFFER) keeps its marks from
+     * before its editor closed, and replacing all lines would move them. Example: {@code 'a} on line
+     * 2 of a reloaded, empty buffer; the one empty line is replaced by four, and {@code 'a} would go
+     * to line 5 (docs/design/BUFFER_NUMBERS.md, X10). The lines go through {@code g:} because
+     * {@code :lockmarks} takes a command, not a Lua function.
      */
     static final String LOAD_WITHOUT_UNDO = """
-            local lines = { ... }
             local saved = vim.bo.undolevels
             vim.bo.undolevels = -1
-            local ok, err = pcall(vim.api.nvim_buf_set_lines, 0, 0, -1, false, lines)
+            vim.g.neovim4eclipse_load = { ... }
+            local ok, err = pcall(vim.cmd, 'lockmarks call nvim_buf_set_lines(0, 0, -1, v:false, g:neovim4eclipse_load)')
+            vim.g.neovim4eclipse_load = nil
             vim.bo.undolevels = saved
             if not ok then
               error(err)

@@ -382,8 +382,9 @@ final class DocumentBuffers {
     }
 
     /**
-     * A new buffer named {@code name}, as {@code :e} names one ({@link LuaScripts#CREATE_DOCUMENT_BUFFER});
-     * left unnamed if another buffer has that name already.
+     * The buffer for {@code name}, as {@code :e} names one ({@link LuaScripts#CREATE_DOCUMENT_BUFFER}):
+     * the file's buffer kept from an earlier editor (same number, marks), or a new one; left unnamed
+     * if another document's buffer has that name already.
      */
     private Handle createNamed(String name) throws Exception {
         Object result = await(api.execLua(LuaScripts.CREATE_DOCUMENT_BUFFER, List.of(name)));

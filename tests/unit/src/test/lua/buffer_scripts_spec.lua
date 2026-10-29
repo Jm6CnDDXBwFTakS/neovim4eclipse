@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: EPL-2.0
 
 -- The small scripts the session runs on a document's buffer: LOAD_WITHOUT_UNDO (the first load is no
--- undo step) and SET_MODIFIED ('modified' follows Eclipse's dirty flag). When the session runs them is
+-- undo step, and moves no mark) and SET_MODIFIED ('modified' follows Eclipse's dirty flag). When the session runs them is
 -- Java (NeovimBufferIntegrationTest keeps those round trips).
 
 local t = ...
@@ -35,6 +35,16 @@ t.test('the global undolevels stays global after a load', function()
   t.eq(-123456, vim.bo.undolevels, 'Neovim\'s "use the global value"')
   t.run('LOAD_WITHOUT_UNDO', 'x')
   t.eq(-123456, vim.bo.undolevels)
+end)
+
+t.test('a load keeps the marks on their lines (a reused buffer, BUFFER_NUMBERS.md X10)', function()
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '' }) -- reloaded: one empty line, marks from before
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '1', '2', '3' })
+  vim.api.nvim_buf_set_mark(0, 'a', 2, 0, {})
+  vim.cmd('lockmarks call nvim_buf_set_lines(0, 0, -1, v:false, [""])')
+  t.run('LOAD_WITHOUT_UNDO', 'one', 'two', 'three', 'four')
+  t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(0, 'a'), 'not moved down by the lines replacing the empty one')
+  t.eq(nil, vim.g.neovim4eclipse_load, 'nothing left in g:')
 end)
 
 t.test('modified is set and cleared on request, for a buffer that exists', function()
@@ -99,11 +109,38 @@ t.test('creating a document buffer neither reads the file nor enters the buffer'
   t.eq({}, fired)
 end)
 
-t.test('a name another buffer has already gives a new, unnamed buffer', function()
+t.test('a name another document\'s buffer has already gives a new, unnamed buffer', function()
   local name = vim.fn.tempname() .. '-c.txt'
-  local existing = vim.fn.bufadd(name)
+  local existing = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  vim.bo[existing].buftype = 'acwrite' -- a document now (DOCUMENT_BUFFER)
   local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
   t.eq(false, named)
   t.ok(buf ~= existing, 'a buffer of its own')
   t.eq('', vim.api.nvim_buf_get_name(buf))
+end)
+
+t.test('the file\'s buffer kept from before is reused, as :e reuses the one :bd kept', function()
+  local name = vim.fn.tempname() .. '-d.txt'
+  vim.fn.writefile({ 'on disk' }, name)
+  vim.cmd('edit ' .. vim.fn.fnameescape(name))
+  local kept = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_mark(kept, 'a', 1, 0, {})
+  vim.cmd('enew | bdelete ' .. kept) -- unloaded and unlisted, number and marks kept
+  local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq({ kept, true }, { buf, named }, 'the same number')
+  t.eq(true, vim.api.nvim_buf_is_loaded(buf))
+  t.eq(true, vim.bo[buf].buflisted)
+  t.eq('nofile', vim.bo[buf].buftype)
+  t.eq({ 1, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'))
+end)
+
+t.test('a buffer Neovim loaded from disk itself (:b, Ctrl-^) is reused as it is', function()
+  local name = vim.fn.tempname() .. '-e.txt'
+  vim.fn.writefile({ 'on disk' }, name)
+  vim.cmd('edit ' .. vim.fn.fnameescape(name))
+  local loaded = vim.api.nvim_get_current_buf()
+  local buf = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq(loaded, buf)
+  t.eq(false, vim.bo[buf].swapfile)
+  t.eq({ 'on disk' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'Eclipse\'s text comes next')
 end)
