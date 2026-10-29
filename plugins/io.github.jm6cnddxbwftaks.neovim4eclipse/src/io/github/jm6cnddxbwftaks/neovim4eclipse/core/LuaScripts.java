@@ -35,7 +35,7 @@ final class LuaScripts {
      *       request (see {@link ClipboardRegisters}).</li>
      *   <li>The one argument is Eclipse's RPC channel number, which requests are sent to. It is kept
      *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
-     *   <li>Normal-mode mappings for {@code gd}, {@code K}, {@code gt} and {@code gT} send
+     *   <li>Normal-mode mappings for {@code gd} (and {@code Ctrl-]}), {@code K}, {@code gt} and {@code gT} send
      *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
      *   <li>The diagnostics namespace {@code neovim4eclipse} ({@link #SET_DIAGNOSTICS}) draws nothing,
      *       and, unless the user's config has its own, a {@code vim.diagnostic} {@code on_jump} hook
@@ -140,6 +140,9 @@ final class LuaScripts {
                 end, { desc = 'Eclipse: ' .. desc })
               end
               ide('definition', 'gd', 'Open Declaration')
+              -- Vim's tag jump: in Neovim with a language server it goes to the definition too
+              -- (its 'tagfunc'), and the plug-in has no tags file. Eclipse's falls back to gd.
+              ide('definition', '<C-]>', 'Open Declaration')
               ide('hover', 'K', 'Show Tooltip Description')
               ide('next_tab', 'gt', 'next editor tab')
               ide('previous_tab', 'gT', 'previous editor tab')

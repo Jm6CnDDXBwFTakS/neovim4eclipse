@@ -20,6 +20,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   and share the text and undo history, as two Vim windows on one buffer. `Ctrl-O` into another
   file takes the window along, so the jump history stays one chain. See the README, "Known
   limitations".
+- `Ctrl-^` (`Ctrl+Shift+6`, or `Ctrl+6`) edits the alternate file, toggling between two files'
+  editors; it reached Neovim as `^` or not at all. `Ctrl-]` runs Open Declaration, as `gd` does.
+  `Ctrl-\`, `Ctrl-_` and `Ctrl-@` reach Neovim too.
 
 ### Changed
 

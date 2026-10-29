@@ -82,6 +82,45 @@ class KeyMappingTest {
         assertEquals("<C-Tab>", KeyMapping.toNeovimKey(KeyMapping.SWT_TAB, KeyMapping.SWT_CTRL, (char) KeyMapping.SWT_TAB));
     }
 
+    // ---- Ctrl with punctuation: <C-^>, <C-]>, <C-\>, <C-_>, <C-@> (KeyMapping.CTRL_PUNCTUATION) ----
+
+    private static final int CTRL = KeyMapping.SWT_CTRL;
+    private static final int CTRL_SHIFT = KeyMapping.SWT_CTRL | KeyMapping.SWT_SHIFT;
+
+    /** Ctrl-^ (edit the alternate file) in each form a system reports it. */
+    @Test
+    void ctrlCaretFromItsControlCodeTheCaretOrCtrl6() {
+        assertEquals("<C-^>", KeyMapping.toNeovimKey('6', CTRL_SHIFT, (char) 0x1E), "Ctrl+Shift+6, as its control code");
+        assertEquals("<C-^>", KeyMapping.toNeovimKey('6', CTRL_SHIFT, '^'), "Ctrl+Shift+6, as the caret");
+        assertEquals("<C-^>", KeyMapping.toNeovimKey('^', CTRL, '^'), "Ctrl+^ on a layout with a ^ key");
+        assertEquals("<C-^>", KeyMapping.toNeovimKey('6', CTRL, '6'), "Ctrl+6, Vim's other key for it");
+        assertEquals("<C-^>", KeyMapping.toNeovimKey(0, 0, (char) 0x1E), "the control code alone");
+    }
+
+    @Test
+    void ctrlBracketBackslashAndUnderscore() {
+        assertEquals("<C-]>", KeyMapping.toNeovimKey(']', CTRL, (char) 0x1D));
+        assertEquals("<C-]>", KeyMapping.toNeovimKey(']', CTRL, ']'));
+        assertEquals("<C-\\>", KeyMapping.toNeovimKey('\\', CTRL, (char) 0x1C));
+        assertEquals("<C-_>", KeyMapping.toNeovimKey('-', CTRL_SHIFT, (char) 0x1F));
+        assertEquals("<C-@>", KeyMapping.toNeovimKey('2', CTRL_SHIFT, '@'));
+    }
+
+    /** Ctrl-[ is Esc (code 27), as before; Ctrl+2 and Ctrl+- are Eclipse's, not Vim's aliases. */
+    @Test
+    void ctrlOpenBracketIsEscAndOtherDigitsAreNoAliases() {
+        assertEquals("<Esc>", KeyMapping.toNeovimKey('[', CTRL, (char) 27));
+        assertEquals("2", KeyMapping.toNeovimKey('2', CTRL, '2'));
+        assertEquals("-", KeyMapping.toNeovimKey('-', CTRL, '-'));
+    }
+
+    /** Ctrl+Alt is AltGr on Windows: AltGr+] types ] on many layouts, it is no Ctrl-]. */
+    @Test
+    void altGrPunctuationIsTyped() {
+        assertEquals("]", KeyMapping.toNeovimKey(']', CTRL | KeyMapping.SWT_ALT, ']'));
+        assertEquals("\\", KeyMapping.toNeovimKey('\\', CTRL | KeyMapping.SWT_ALT, '\\'));
+    }
+
     @Test
     void altLetter() {
         assertEquals("<A-x>", KeyMapping.toNeovimKey(0, KeyMapping.SWT_ALT, 'x'));
