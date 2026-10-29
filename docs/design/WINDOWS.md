@@ -45,7 +45,10 @@ Phase 1, the core (`fa3ac6e`):
 - **The safety nets.** `WinClosed` sends `eclipse_window_closed`, so a window closed in Neovim by
   itself is forgotten and its editor gets a new one at its next show (the plan named
   `TabClosedPre`; `WinClosed` covers it and any other close). A `WinNew` net (phase 2) closes any
-  window the plug-in did not open that is neither floating nor special.
+  window the plug-in did not open that is neither floating nor special, and also the quickfix,
+  location list and preview windows (Eclipse cannot show them, and in the editor's tab they took
+  its rows, so `H` and `L` no longer matched the editor; found in review). The module's set of its
+  own windows forgets a window on the plug-in's quiet closes too, which fire no `WinClosed`.
 - **Window ids in the events.** `eclipse_cursor`, `eclipse_buf_enter`, `eclipse_topline`,
   `eclipse_wrap` and the state snapshot (field 14) carry the window id; the session takes cursor
   reports, top lines, wrap changes and the snapshot only from the attached window
@@ -75,6 +78,12 @@ Phase 2, the Eclipse glue:
   maps them. The `WinNew` net could not use the current window (in `WinNew` it is still the old
   one, so a first version closed the editor's window); the module keeps the set of windows it
   opened, and the net closes the others. `:help` is closed by it too, with the same message.
+  After review: `:tabclose` with a number or count is refused (Neovim would close another
+  editor's window); in a *side window* (floating, such as hover documentation the user entered;
+  `is_side_window`), `:q`, `:close` and the `Ctrl-W q` / `c` keys are Neovim's again, through the
+  host commands' new `leave_to_neovim` hook, and close that window, not the editor. The travel
+  also moves the attached window to the attached editor's new one, so a failed attach of the
+  editor jumped into returns to the right window.
 - **`a11d4a6`.** The viewport item: Neovim's top lines are dropped while an attach places Neovim's
   cursor at the caret (`CaretSync.isPlacingNeovimCursor`), the same span in which its cursor
   reports are dropped. Whether the single window of 0.1.10 flickered the same way on a switch was

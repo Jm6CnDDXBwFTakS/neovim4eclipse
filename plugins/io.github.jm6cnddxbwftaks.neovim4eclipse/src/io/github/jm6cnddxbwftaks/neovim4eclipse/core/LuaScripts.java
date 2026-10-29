@@ -215,12 +215,20 @@ final class LuaScripts {
      *       Up in the {@code :} box recalls {@code tabn 3}.</li>
      *   <li><b>Refused commands.</b> Other scripts can make a built-in command an error where it
      *       must not run, through {@code require('neovim4eclipse.host_commands').refuse(name, why)}:
-     *       {@code why()} returns the reason, or {@code nil} to let the command run. Such a line
+     *       {@code why(p)} returns the reason, or {@code nil} to let the command run; {@code p} is
+     *       the command as {@code nvim_parse_cmd()} gives it, or {@code nil} for an {@code :Eclipse
+     *       name} typed or mapped as such. Such a line
      *       becomes {@code :Eclipse name}, which shows {@code name: reason} as an error and tells
      *       Eclipse nothing. A built-in command cannot be mapped, so this is the only way to stop
      *       one. Example: {@link #FOLDS} refuses {@code :fold} in buffers
      *       whose folds are Eclipse's, so {@code :3,5fold} shows
-     *       {@code fold: Eclipse defines the folds in this editor}.</li>
+     *       {@code fold: Eclipse defines the folds in this editor}; {@link #WINDOW_COMMANDS}
+     *       refuses {@code :tabclose 2}, but not {@code :tabclose}.</li>
+     *   <li><b>Commands left to Neovim.</b> {@code leave_to_neovim(fn)}: when {@code fn(name)}
+     *       returns true, the command is not replaced and runs as Neovim's, and the {@code QuitPre}
+     *       safety net below says nothing for a {@code :quit}. Example: {@link #WINDOW_COMMANDS}
+     *       leaves {@code :q} and {@code :close} typed in a floating window to Neovim, which closes
+     *       that window, not the editor.</li>
      * </ol>
      *
      * <p>Why replace the line rather than cancel it ({@code v:event.abort} in {@code CmdlineLeave}):
@@ -249,14 +257,29 @@ final class LuaScripts {
               rules[name] = rule
             end
             local typed -- the line as typed while its :Eclipse replacement runs (for the history)
-            local refusals = {} -- built-in command name -> function returning why it may not run, or nil
+            local refusals = {} -- built-in command name -> function(p) returning why it may not run, or nil
+            local leaves = {} -- functions(name) returning true to leave that command to Neovim
+            -- The reasons eclipse_form found in the line about to run, by name: its :Eclipse form
+            -- carries only the name, and the reason may depend on the rest (:tabclose 2).
+            local refusing = {}
             package.loaded['neovim4eclipse.host_commands'] = {
               refuse = function(name, why)
                 refusals[name] = why
               end,
+              leave_to_neovim = function(fn)
+                leaves[#leaves + 1] = fn
+              end,
             }
-            local function refused(name)
-              return refusals[name] and refusals[name]() or nil
+            local function refused(name, p)
+              return refusals[name] and refusals[name](p) or nil
+            end
+            local function left_to_neovim(name)
+              for _, fn in ipairs(leaves) do
+                if fn(name) then
+                  return true
+                end
+              end
+              return false
             end
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
@@ -265,7 +288,8 @@ final class LuaScripts {
                 typed = nil
               end
               local name = o.fargs[1]
-              local why = refused(name)
+              local why = refusing[name] or refused(name)
+              refusing[name] = nil
               if why then
                 vim.api.nvim_echo({ { name .. ': ' .. why } }, true, { err = true })
                 return
@@ -280,8 +304,13 @@ final class LuaScripts {
             -- The :Eclipse form of one parsed command (p, from nvim_parse_cmd; what follows a | is
             -- not part of it), or nil to leave the command to Neovim.
             local function eclipse_form(p)
-              if refused(p.cmd) then
+              local why = refused(p.cmd, p)
+              if why then
+                refusing[p.cmd] = why
                 return 'Eclipse ' .. p.cmd -- with any range and arguments: none of it runs
+              end
+              if left_to_neovim(p.cmd) then
+                return nil -- :q in a floating window: Neovim closes that window
               end
               local rule = rules[p.cmd]
               if not rule then
@@ -355,7 +384,9 @@ final class LuaScripts {
             vim.api.nvim_create_autocmd('QuitPre', {
               desc = 'Eclipse closes the editor',
               callback = function()
-                if vim.fn.getcmdwintype() == '' then
+                -- Nor for a quit left to Neovim (leave_to_neovim): it closes a floating window, whose
+                -- buffer may be a document's (a plug-in's preview of another file).
+                if vim.fn.getcmdwintype() == '' and not left_to_neovim('quit') then
                   vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', vim.api.nvim_get_current_buf())
                 end
               end,
@@ -370,6 +401,7 @@ final class LuaScripts {
                   return
                 end
                 local line = vim.fn.getcmdline()
+                refusing = {} -- a line that never got to its :Eclipse (an error before it) left some
                 local cmd = replacement(line)
                 if cmd then
                   typed = line
@@ -544,6 +576,8 @@ final class LuaScripts {
      *   <li>{@code travel(win, buf, line, col)}: {@link #TRAVEL_WINDOW}.</li>
      *   <li>{@code close(win, fallback)}: {@link #CLOSE_WINDOW}.</li>
      *   <li>{@code release(buf, fallback)}: {@link #RELEASE_BUFFER}.</li>
+     *   <li>{@code is_side_window(win)}: whether a window is a floating or special one beside an
+     *       editor's, where {@code :q} is Neovim's ({@link #WINDOW_COMMANDS}).</li>
      * </ul>
      *
      * <p><b>Quietly</b> means with {@code 'eventignore'} set to {@code all}: what the plug-in does to
@@ -560,23 +594,36 @@ final class LuaScripts {
             local home_buf = tonumber((select(1, ...)))
             local M = {}
             local home = vim.api.nvim_get_current_win()
-            -- The windows the plug-in opened (the home window and the editors'): any other window
-            -- that is not floating or special is a stray one (the WinNew safety net below).
+            -- The windows the plug-in opened and has not closed (the home window and the editors'):
+            -- any other plain window is a stray one (the WinNew safety net below), and a floating
+            -- or special one is a side window (M.is_side_window).
             local own = { [home] = true }
             vim.o.showtabline = 0
 
-            --- Runs fn(...) with every autocommand off ('eventignore' all) and without Neovim's file
-            --- info message ('shortmess' F: putting a buffer in a window gives one, as :b does, and
-            --- two messages in a row would open Eclipse's output popup), and returns its result.
-            local function quietly(fn, ...)
-              local saved, saved_shm = vim.o.eventignore, vim.o.shortmess
-              vim.o.eventignore = 'all'
-              if not saved_shm:find('F', 1, true) then
-                vim.o.shortmess = saved_shm .. 'F'
+            --- Runs fn(...) without Neovim's file info message ('shortmess' F: putting a buffer in a
+            --- window gives one, as :b does, and two messages in a row would open Eclipse's output
+            --- popup; see SHOW_BUFFER), and returns its result. An error in fn is raised again once
+            --- 'shortmess' is back as it was.
+            local function without_file_info(fn, ...)
+              local saved = vim.o.shortmess
+              if not saved:find('F', 1, true) then
+                vim.o.shortmess = saved .. 'F'
               end
               local ok, result = pcall(fn, ...)
+              vim.o.shortmess = saved
+              if not ok then
+                error(result, 0)
+              end
+              return result
+            end
+
+            --- Runs fn(...) with every autocommand off ('eventignore' all) and without the file info
+            --- message, and returns its result.
+            local function quietly(fn, ...)
+              local saved = vim.o.eventignore
+              vim.o.eventignore = 'all'
+              local ok, result = pcall(without_file_info, fn, ...)
               vim.o.eventignore = saved
-              vim.o.shortmess = saved_shm
               if not ok then
                 error(result, 0)
               end
@@ -595,26 +642,13 @@ final class LuaScripts {
               return home
             end
 
-            --- Puts buf in the current window without Neovim's file info message (see SHOW_BUFFER).
-            local function set_current_buf(buf)
-              local saved = vim.o.shortmess
-              if not saved:find('F', 1, true) then
-                vim.o.shortmess = saved .. 'F'
-              end
-              local ok, err = pcall(vim.api.nvim_set_current_buf, buf)
-              vim.o.shortmess = saved
-              if not ok then
-                error(err, 0)
-              end
-            end
-
             --- Puts buf in win: as Neovim does it when win is current (BufEnter tells Eclipse), quietly if not.
             local function set_buf(win, buf)
               if vim.api.nvim_win_get_buf(win) == buf then
                 return
               end
               if win == vim.api.nvim_get_current_win() then
-                set_current_buf(buf)
+                without_file_info(vim.api.nvim_set_current_buf, buf)
               else
                 quietly(vim.api.nvim_win_set_buf, win, buf)
               end
@@ -679,10 +713,17 @@ final class LuaScripts {
               end
             end
 
+            --- Closes an editor's window quietly. It is forgotten here too: being quiet, the close
+            --- fires no WinClosed, which would.
+            local function close_quietly(win)
+              quietly(vim.api.nvim_win_close, win, true)
+              own[win] = nil
+            end
+
             function M.close(win, fallback)
               if vim.api.nvim_win_is_valid(win) and win ~= home then
                 leave(win, fallback)
-                quietly(vim.api.nvim_win_close, win, true)
+                close_quietly(win)
               end
               return M.home()
             end
@@ -694,15 +735,32 @@ final class LuaScripts {
                   set_buf(win, fallback)
                 else
                   leave(win, fallback)
-                  quietly(vim.api.nvim_win_close, win, true)
+                  close_quietly(win)
                   closed[#closed + 1] = win
                 end
               end
               return closed
             end
 
+            --- Whether win (0: the current one) is a window Neovim opened beside an editor's for a
+            --- moment, which :q, :close and Ctrl-W c close in Neovim, not the editor: a floating
+            --- window the user entered (hover documentation, a plug-in's picker) or one of Neovim's
+            --- special windows the safety net below leaves open (the command-line window).
+            --- Example: Ctrl-W w into a hover float, then :q closes the float.
+            function M.is_side_window(win)
+              win = win == 0 and vim.api.nvim_get_current_win() or win
+              return not own[win] and vim.fn.win_gettype(win) ~= ''
+            end
+
             --- Why Vim's split and tab commands do not run (WINDOW_COMMANDS refuses them).
             M.REFUSED = "Eclipse shows one window per editor: use Window > Editor > Toggle Split Editor, or Window > Editor > Clone"
+            --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split).
+            local why_closed = {
+              [''] = M.REFUSED,
+              quickfix = 'Eclipse cannot show the quickfix window; :cnext, :cprevious and :cc still work',
+              loclist = 'Eclipse cannot show the location list window; :lnext, :lprevious and :ll still work',
+              preview = 'Eclipse cannot show the preview window',
+            }
 
             local group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true })
             vim.api.nvim_create_autocmd('WinClosed', {
@@ -716,23 +774,26 @@ final class LuaScripts {
             -- refusals do not see (a plug-in's :split, <Cmd>split, vim.cmd.split()). Eclipse would not
             -- show it, but it would take the keys and half the editor's rows. Closed once the
             -- command that opened it is over (it cannot close inside its own WinNew, where the
-            -- current window is still the old one). Left alone: the plug-in's own windows, floating
-            -- windows (hover, completion documentation), and Neovim's special windows, whose type
-            -- win_gettype() names ('command', 'autocmd', 'quickfix', 'loclist', 'preview',
-            -- 'popup'); the command-line window has its own rule (SETUP).
+            -- current window is still the old one). The quickfix, location list and preview windows
+            -- (:copen, :lopen, :pedit) are closed too: Eclipse cannot show them either, and in the
+            -- editor's tab they would take its rows, so H, L and scrolling would no longer match
+            -- the editor; the lists themselves stay, for :cnext and the like. Left alone: the
+            -- plug-in's own windows, floating windows (hover, completion documentation; their
+            -- win_gettype() is 'popup'), the windows of 'autocmd' (gone at once), and the
+            -- command-line window ('command'), which has its own rule (SETUP).
             vim.api.nvim_create_autocmd('WinNew', {
               group = group,
               callback = function()
                 vim.schedule(function()
-                  local closed = false
+                  local why
                   for _, win in ipairs(vim.api.nvim_list_wins()) do
-                    if not own[win] and vim.api.nvim_win_get_config(win).relative == ''
-                        and vim.fn.win_gettype(win) == '' then
-                      closed = pcall(vim.api.nvim_win_close, win, true) or closed
+                    local reason = not own[win] and why_closed[vim.fn.win_gettype(win)]
+                    if reason and pcall(vim.api.nvim_win_close, win, true) then
+                      why = why or reason
                     end
                   end
-                  if closed then
-                    vim.api.nvim_echo({ { 'Window closed: ' .. M.REFUSED } }, true, { err = true })
+                  if why then
+                    vim.api.nvim_echo({ { 'Window closed: ' .. why } }, true, { err = true })
                   end
                 end)
               end,
@@ -754,37 +815,65 @@ final class LuaScripts {
      *       {@code :tabnew}, {@code :tabedit}, {@code :tabfind}, {@code :tabonly}. A second
      *       window would be invisible and take the keys; {@code :tabonly} would close every other
      *       editor's window. Mapping them onto Eclipse's split editor is a later plan.</li>
-     *   <li>{@code :close} and {@code :tabclose} close the editor: {@code util/HostCommand}.</li>
+     *   <li>{@code :close} and {@code :tabclose} close the editor: {@code util/HostCommand}.
+     *       {@code :tabclose} with a tab number or count ({@code :tabclose 2}, {@code :2tabclose},
+     *       {@code :tabclose +}) is refused: Neovim would close another editor's window, and that
+     *       editor would stay open in Eclipse without its jumps, folds and options.</li>
      *   <li>{@code Ctrl-W s}, {@code S}, {@code Ctrl-S}, {@code v}, {@code Ctrl-V}, {@code n},
      *       {@code Ctrl-N} and {@code T} show the same error; {@code Ctrl-W q}, {@code Ctrl-Q} and
      *       {@code c} close the editor ({@code :Eclipse quit}). Only where the user's config maps none
      *       of them itself. These keys reach Neovim only when Ctrl+W goes to Neovim in the
      *       preferences (docs/KEYS.md).</li>
+     *   <li>In a <em>side window</em> ({@code is_side_window} of {@link #WINDOWS}: a floating
+     *       window the user entered, such as hover documentation), {@code :q}, {@code :close},
+     *       {@code Ctrl-W q} and {@code Ctrl-W c} are Neovim's again, through the host commands'
+     *       {@code leave_to_neovim} hook: they close that window, as in Neovim, not the editor.</li>
      * </ul>
      *
      * <p>What gets past (a plug-in's {@code :split}) is closed by the {@code WinNew} safety net of
      * {@link #WINDOWS}.
      */
     static final String WINDOW_COMMANDS = """
-            local why = require('neovim4eclipse.windows').REFUSED
+            local windows = require('neovim4eclipse.windows')
+            local why = windows.REFUSED
             local host = require('neovim4eclipse.host_commands')
             for _, name in ipairs({ 'split', 'vsplit', 'new', 'vnew', 'sview', 'sfind', 'sbuffer',
                                     'tabnew', 'tabedit', 'tabfind', 'tabonly' }) do
               host.refuse(name, function() return why end)
             end
+            -- p is the parsed command (nil for :Eclipse tabclose typed or mapped as such).
+            host.refuse('tabclose', function(p)
+              if p and (#p.args > 0 or (p.range and #p.range > 0)) then
+                return 'closes this editor only; close another with its tab, or with :bd and its buffer number'
+              end
+            end)
+            host.leave_to_neovim(function(name)
+              return (name == 'quit' or name == 'close') and windows.is_side_window(0)
+            end)
             local function refused()
               vim.api.nvim_echo({ { why } }, true, { err = true })
+            end
+            --- Closes the editor, or in a side window, the window: the key as Neovim has it (the
+            --- mapping is not recursive, so the key is Neovim's own there).
+            local function quit(key)
+              return function()
+                return windows.is_side_window(0) and key or '<Cmd>Eclipse quit<CR>'
+              end
             end
             local keys = {
               ['<C-w>s'] = refused, ['<C-w>S'] = refused, ['<C-w><C-s>'] = refused,
               ['<C-w>v'] = refused, ['<C-w><C-v>'] = refused, ['<C-w>n'] = refused,
               ['<C-w><C-n>'] = refused, ['<C-w>T'] = refused,
-              ['<C-w>q'] = '<Cmd>Eclipse quit<CR>', ['<C-w><C-q>'] = '<Cmd>Eclipse quit<CR>',
-              ['<C-w>c'] = '<Cmd>Eclipse quit<CR>',
             }
+            local quits = { '<C-w>q', '<C-w><C-q>', '<C-w>c' }
             for lhs, rhs in pairs(keys) do
               if vim.fn.maparg(lhs, 'n') == '' then
                 vim.keymap.set('n', lhs, rhs, { desc = 'Eclipse: one window per editor' })
+              end
+            end
+            for _, lhs in ipairs(quits) do
+              if vim.fn.maparg(lhs, 'n') == '' then
+                vim.keymap.set('n', lhs, quit(lhs), { expr = true, desc = 'Eclipse: close the editor' })
               end
             end
             """;

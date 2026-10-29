@@ -292,3 +292,69 @@ t.test('floating windows are left alone', function()
   t.wait_for("the net's check", function() return after end)
   t.ok(vim.api.nvim_win_is_valid(float))
 end)
+
+t.test('the quickfix and location list windows are closed too: they would take the editor\'s rows', function()
+  local win = commands()
+  vim.fn.setqflist({ { bufnr = vim.api.nvim_win_get_buf(win), lnum = 2, text = 'x' } })
+  vim.v.errmsg = ''
+  vim.cmd.copen()
+  t.eq(2, windows_in_tab())
+  t.wait_for('the quickfix window to close', function() return windows_in_tab() == 1 end)
+  t.ok(vim.api.nvim_win_is_valid(win), "the editor's window stays")
+  t.ok(vim.v.errmsg:find('cannot show the quickfix window', 1, true), vim.v.errmsg)
+  t.eq(1, #vim.fn.getqflist(), 'the list stays, for :cnext')
+end)
+
+--- A floating window entered, as Ctrl-W w enters hover documentation.
+local function enter_float()
+  return vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+end
+
+t.test('only floating and special windows are side windows', function()
+  local win, home = commands()
+  local float = enter_float()
+  local side = require('neovim4eclipse.windows').is_side_window
+  t.ok(side(0), 'the float is current')
+  t.ok(side(float))
+  t.ok(not side(win), "an editor's window")
+  t.ok(not side(home), 'the home window')
+end)
+
+t.test(':q, :close, Ctrl-W q and Ctrl-W c in a floating window close it, not the editor', function()
+  local win = commands()
+  for _, keys in ipairs({ ':q<CR>', ':close<CR>', '<C-w>q', '<C-w>c' }) do
+    local float = enter_float()
+    t.type(keys)
+    t.ok(not vim.api.nvim_win_is_valid(float), keys .. ' closed the float')
+    t.eq(win, vim.api.nvim_get_current_win(), keys .. ': back in the editor\'s window')
+  end
+  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.sent('eclipse_buffer_closed'), 'no QuitPre report either')
+  t.type(':q<CR>') -- in the editor's window again: Eclipse's
+  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+end)
+
+t.test(':tabclose with a tab number or count is refused; :tabclose alone closes the editor', function()
+  commands()
+  local tabs = #vim.api.nvim_list_tabpages()
+  for _, line in ipairs({ 'tabclose 1', '1tabclose', 'tabclose +', '$tabc' }) do
+    vim.v.errmsg = ''
+    t.type(':' .. line .. '<CR>')
+    t.ok(vim.v.errmsg:find('closes this editor only', 1, true), line .. ': ' .. vim.v.errmsg)
+  end
+  t.eq(tabs, #vim.api.nvim_list_tabpages(), 'Neovim closed no tab')
+  t.eq({}, t.sent('eclipse_command'))
+  t.type(':tabclose<CR>')
+  t.eq({ { 'tabclose', false, {} } }, t.sent('eclipse_command'), 'the refusal of the earlier line is not left over')
+end)
+
+t.test("the plug-in's own closes forget the window, though they fire no WinClosed", function()
+  local win, home, home_buf = commands()
+  local side = require('neovim4eclipse.windows').is_side_window
+  t.ok(not side(win), 'one of the plug-in\'s windows while open')
+  t.run('CLOSE_WINDOW', tostring(win), tostring(home_buf))
+  -- A closed window's type is 'unknown': it counts as the plug-in's no more.
+  t.ok(side(win), 'forgotten')
+  t.eq(home, vim.api.nvim_get_current_win())
+  t.eq({}, t.sent('eclipse_window_closed'))
+end)

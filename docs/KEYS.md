@@ -32,7 +32,7 @@ By default every letter goes to Neovim **except these three**:
 | Key | Eclipse (Windows, Linux) | Vim | Why it stays with Eclipse |
 |-----|--------------------------|-----|---------------------------|
 | `Ctrl+S` | Save | nothing in normal mode | Saving with the usual shortcut matters more than a key Vim does not use. |
-| `Ctrl+W` | Close editor | window commands (`Ctrl+W s`, `Ctrl+W q`, ...) | Each editor is one Neovim window, alone in its hidden tab (docs/design/WINDOWS.md), so splits and window moves have nothing to show. Given to Neovim, `Ctrl+W q`, `Ctrl+W Ctrl+Q` and `Ctrl+W c` close the editor (as `:q` and `:close` do), and `Ctrl+W s`, `v`, `n` and `T` are refused with a message pointing to Eclipse's split editor; your own mappings of these keys win. Closing the editor stays the default because it is what Eclipse users expect. |
+| `Ctrl+W` | Close editor | window commands (`Ctrl+W s`, `Ctrl+W q`, ...) | Each editor is one Neovim window, alone in its hidden tab (docs/design/WINDOWS.md), so splits and window moves have nothing to show. Given to Neovim, `Ctrl+W q`, `Ctrl+W Ctrl+Q` and `Ctrl+W c` close the editor (as `:q` and `:close` do; in a floating window you entered, they close that window, as in Neovim), and `Ctrl+W s`, `v`, `n` and `T` are refused with a message pointing to Eclipse's split editor; your own mappings of these keys win. Closing the editor stays the default because it is what Eclipse users expect. |
 | `Ctrl+Z` | Undo | suspend Neovim | Suspending makes no sense for an embedded Neovim, and Vim's undo is `u`. Eclipse's undo also undoes Neovim's changes, because they are applied to the Eclipse document, and the result is pushed back to Neovim. |
 
 Tick any of them to send it to Neovim instead.

@@ -199,7 +199,9 @@ at its editor's next show; closing an editor closes its window (`closeWindowAsyn
 buffer may be wiped. Vim's window commands: `:close` and `:tabclose` are host commands that close
 the editor (`util/HostCommand`, `QUIT`); `LuaScripts.WINDOW_COMMANDS` refuses the split and tab
 commands through the host commands' `refuse` hook and maps the `Ctrl-W` keys; a `WinNew` safety
-net closes any other window that is not the plug-in's, floating or special.
+net closes any other window that is not the plug-in's, floating or special, and the quickfix,
+location list and preview windows, which Eclipse cannot show; in a floating window the user
+entered, `:q` and `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
 ### 7. Eclipse is Neovim's clipboard provider
 
