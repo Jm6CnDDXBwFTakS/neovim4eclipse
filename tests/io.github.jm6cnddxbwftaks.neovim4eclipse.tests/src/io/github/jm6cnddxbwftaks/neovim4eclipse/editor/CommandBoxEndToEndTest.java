@@ -308,23 +308,28 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * An untitled file (File › New › Untitled Text File) has no folder to look in, so a relative
-     * name is not found, even one at the root of a project; an absolute path still opens.
+     * An untitled file (File › New › Untitled Text File) has no folder of its own: its Neovim window
+     * works in the folder of the editor active before it (docs/design/WINDOWS.md, "Working folder
+     * per window"), here the test project's root. So {@code :e root.txt} opens that project's
+     * {@code root.txt}, as Neovim's {@code :e} would in that folder, and an absolute path opens too.
+     * (Until untitled documents got that folder, a relative name was not found.)
      */
     @Test
-    void anUntitledFileFindsOnlyAbsolutePaths() throws Exception {
+    void anUntitledFileFindsNamesInTheFolderOfTheEditorBeforeIt() throws Exception {
         createFile("root.txt", "root\n");
         ITextEditor untitled = openUntitledFile();
         StyledText untitledWidget = widgetOf(untitled);
 
         runInBox(untitledWidget, "e root.txt");
-        waitUntil("the error in the message line", TIMEOUT_MS,
-                () -> messageText(untitled).equals("Can't find file \"root.txt\""),
+        waitUntil("root.txt to open", TIMEOUT_MS, () -> activeEditorIs("root.txt"),
                 () -> "; the message line shows " + messageText(untitled));
-        assertSame(untitled, page().getActiveEditor());
+        assertEquals("root\n", documentOf((ITextEditor) page().getActiveEditor()).get(), "the project's root.txt");
+        page().closeEditor(page().getActiveEditor(), false);
 
+        page().activate(untitled);
+        waitForAttach(untitled, "the untitled file");
         runInBox(untitledWidget, "e " + project.getFile("root.txt").getLocation().toOSString());
-        waitUntil("root.txt to open", TIMEOUT_MS, () -> activeEditorIs("root.txt"));
+        waitUntil("root.txt to open by its absolute path", TIMEOUT_MS, () -> activeEditorIs("root.txt"));
         page().closeAllEditors(false);
         editor = null;
     }
