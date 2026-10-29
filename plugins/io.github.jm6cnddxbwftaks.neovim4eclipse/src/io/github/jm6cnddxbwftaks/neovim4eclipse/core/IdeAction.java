@@ -15,7 +15,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * keys in Eclipse) lets Neovim do what it is good at: counts ({@code 3gt}), the {@code g} prefix
  * and {@code timeoutlen}. A user who wants Neovim's own meaning of these keys sets
  * {@code vim.g.neovim4eclipse_ide_keys = 0} in {@code init.lua}; that switch leaves {@code ZZ} and
- * {@code ZQ} mapped, because Neovim's own would quit the embedded Neovim, which every editor uses.
+ * {@code ZQ} mapped, because Neovim's own would quit the embedded Neovim, which every editor uses,
+ * and the {@code Ctrl-O} / {@code Ctrl-I} fallback, which acts only where Neovim would do nothing
+ * (a mapping of the key in {@code init.lua} turns it off).
  *
  * @param name  one of the {@code *} constants below; others are ignored by the editor
  * @param count Vim's count ({@code v:count}): 0 when none was typed
