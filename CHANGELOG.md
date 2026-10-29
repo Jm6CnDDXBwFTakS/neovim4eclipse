@@ -58,6 +58,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - The FINE log line "Mode → …" is written when the mode changes, not again for every key typed on
   the command line.
 
+### Fixed
+
+- In a Java file whose header comment is folded with its `/*` line hidden, `O` on line 1 left the
+  new line hidden, so the caret went to the comment's first line of text. The new line is now
+  shown and the comment stays folded.
+
 ## [0.1.9] - 2026-10-28
 
 ### Added

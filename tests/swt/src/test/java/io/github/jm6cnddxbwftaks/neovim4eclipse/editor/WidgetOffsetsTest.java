@@ -7,9 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Position;
+import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.source.AnnotationModel;
+import org.eclipse.jface.text.source.projection.IProjectionPosition;
 import org.eclipse.jface.text.source.projection.ProjectionAnnotation;
 import org.eclipse.jface.text.source.projection.ProjectionViewer;
 import org.eclipse.swt.SWT;
@@ -75,6 +80,54 @@ class WidgetOffsetsTest {
         assertTrue(widgetOffset >= 0, "offset should be visible after unfolding");
         assertFalse(fold.isCollapsed());
         assertEquals("c", widget.getText(widgetOffset, widgetOffset));
+    }
+
+    /**
+     * A fold whose caption is its second line, as the Java editor folds a header comment or a method
+     * with Javadoc: its first line and the lines after the caption are hidden.
+     */
+    private static final class CaptionOnSecondLine extends Position implements IProjectionPosition {
+        CaptionOnSecondLine(int offset, int length) {
+            super(offset, length);
+        }
+
+        @Override
+        public IRegion[] computeProjectionRegions(IDocument document) throws BadLocationException {
+            int first = document.getLineOfOffset(offset);
+            int captionEnd = document.getLineOffset(first + 2);
+            return new IRegion[] {
+                    new Region(offset, document.getLineOffset(first + 1) - offset),
+                    new Region(captionEnd, offset + length - captionEnd) };
+        }
+
+        @Override
+        public int computeCaptionOffset(IDocument document) throws BadLocationException {
+            return document.getLineOffset(document.getLineOfOffset(offset) + 1) - offset;
+        }
+    }
+
+    /**
+     * Neovim's {@code O} on the first line of such a closed fold inserts a line where the hidden
+     * first line starts. JFace keeps the new line hidden although the fold moved past it (see
+     * WidgetOffsets, "Text hidden by no fold"): revealing it rebuilds the hidden ranges, shows the
+     * new line and keeps the fold collapsed.
+     */
+    @Test
+    void aLineInsertedAboveAFoldWhoseFirstLineIsHiddenIsRevealedAndTheFoldStaysCollapsed() throws Exception {
+        viewer.getProjectionAnnotationModel().removeAllAnnotations();
+        ProjectionAnnotation header = new ProjectionAnnotation();
+        viewer.getProjectionAnnotationModel().addAnnotation(header, new CaptionOnSecondLine(0, 6)); // "a\nb\nc\n"
+        viewer.getProjectionAnnotationModel().collapse(header);
+        assertEquals("b\nd\ne\n", widget.getText(), "a and c hidden, b the caption");
+
+        document.replace(0, 0, "x\n");
+        assertEquals(-1, offsets.toWidget(0), "JFace hides the new line with a");
+
+        int widgetOffset = offsets.toWidgetRevealing(0);
+        assertTrue(widgetOffset >= 0, "the new line is shown");
+        assertEquals("x", widget.getText(widgetOffset, widgetOffset));
+        assertTrue(header.isCollapsed(), "the fold stays collapsed");
+        assertEquals("x\nb\nd\ne\n", widget.getText());
     }
 
     @Test
