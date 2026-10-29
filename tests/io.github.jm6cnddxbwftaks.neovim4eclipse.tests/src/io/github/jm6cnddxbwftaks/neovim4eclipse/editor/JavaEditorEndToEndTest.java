@@ -233,6 +233,73 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         expectNeovimHasTheDocument();
     }
 
+    /**
+     * As reported: a rename started in normal mode, {@code ea} and a suffix typed, and Enter, which
+     * Eclipse takes to accept the rename. As in Vim, where the insert ends where the change ends,
+     * Neovim is back in normal mode; it stayed in insert mode, into the next editor.
+     */
+    @Test
+    void enterThatAcceptsARenameStartedInNormalModeLeavesInsertMode() throws Exception {
+        String source = """
+                package p;
+                class A {
+                	int f() {
+                		int count = 1;
+                		return count + count;
+                	}
+                }
+                """;
+        openJava("A.java", source);
+        caretTo(source.indexOf("count"));
+        runCommand(RENAME);
+        settle();
+
+        type(javaWidget, "ea");
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(javaWidget, "Total");
+        type(javaWidget, '\r');
+        expectJava(source.replace("count", "countTotal"));
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()),
+                () -> "; mode " + session.getMode() + ", the document:\n" + javaText());
+        expectNeovimHasTheDocument();
+    }
+
+    /**
+     * A template inserted while typing keeps insert mode when Enter leaves its fields: Enter puts
+     * the caret in the loop's body, where the typing goes on. Only a linked edit started in normal
+     * mode (a rename) ends the insert at its Enter.
+     */
+    @Test
+    void enterThatLeavesATemplatesFieldsKeepsInsertMode() throws Exception {
+        String source = """
+                package p;
+                class A {
+                	void f(String[] args) {
+
+                	}
+                }
+                """;
+        openJava("A.java", source);
+        type(javaWidget, "4GA");
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(javaWidget, "fore");
+        List<Shell> before = visibleShells();
+        runCommand(CONTENT_ASSIST);
+        waitUntil("the proposals", TIMEOUT_MS, () -> proposalCount(before) > 0);
+        type(javaWidget, '\r'); // the first proposal
+        waitUntil("the template", TIMEOUT_MS, () -> javaText().contains("for (String "),
+                () -> "; the document is " + javaText());
+
+        type(javaWidget, '\r'); // leaves the template's fields, into the body
+        settle();
+        assertEquals("i", session.getMode(), "still in insert mode");
+        type(javaWidget, "go();");
+        escape(javaWidget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        assertTrue(javaText().contains("go();"), javaText());
+        expectNeovimHasTheDocument();
+    }
+
     /** Organize Imports (Ctrl+Shift+O) drops an unused import; then {@code gg jj dd} deletes the new third line. */
     @Test
     void organizeImportsReachesNeovim() throws Exception {
