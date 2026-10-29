@@ -45,7 +45,6 @@ class HostCommandsTest {
 
     private IProject project;
     private ITextEditor first;
-    private ITextEditor second;
     private boolean autoAttachBefore;
 
     @BeforeEach
@@ -61,7 +60,8 @@ class HostCommandsTest {
         }
         project.open(null);
         first = openModified(createFile("one.txt", "one\n"), "one changed\n");
-        second = openModified(createFile("two.txt", "two\n"), "two changed\n");
+        // Not kept in a field, but needed: the tab commands move between the two editors' tabs.
+        openModified(createFile("two.txt", "two\n"), "two changed\n");
     }
 
     @AfterEach

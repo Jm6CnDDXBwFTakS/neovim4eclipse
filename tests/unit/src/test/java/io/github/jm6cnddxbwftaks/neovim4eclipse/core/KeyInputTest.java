@@ -13,7 +13,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
@@ -21,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
  * The key-input pipeline without Neovim. A scripted fake plays Neovim: each key may switch it to a

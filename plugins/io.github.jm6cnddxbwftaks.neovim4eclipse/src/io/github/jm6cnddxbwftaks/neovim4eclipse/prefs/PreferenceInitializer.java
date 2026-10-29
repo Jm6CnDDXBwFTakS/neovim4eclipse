@@ -8,7 +8,6 @@ import org.eclipse.core.runtime.preferences.DefaultScope;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
