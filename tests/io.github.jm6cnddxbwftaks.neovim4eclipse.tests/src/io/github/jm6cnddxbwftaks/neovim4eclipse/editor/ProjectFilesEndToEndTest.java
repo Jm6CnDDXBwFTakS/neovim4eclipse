@@ -11,9 +11,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -190,6 +195,49 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             ITextEditor opened = waitForFollowInto("e.txt");
             expectText(opened, "outside\n");
         } finally {
+            closeAllBut(null);
+        }
+    }
+
+    /**
+     * The same while another job holds the workspace, as a build does for as long as it runs: the
+     * file's refresh waits for it, in the background, and the UI goes on meanwhile. The editor opens
+     * when the job is done. (Refreshed on the UI thread, the {@code settle()} below would wait for the
+     * job, which then has ended.)
+     */
+    @Test
+    void aFileMadeOutsideEclipseDuringABuildOpensAfterItWithoutHoldingUpTheUi() throws Exception {
+        Path dir = Path.of(project.getLocation().toOSString(), "built");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("f.txt"), "from the build\n", StandardCharsets.UTF_8);
+        open(createFile("a.txt", "see built/f.txt\n"));
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Job build = Job.create("test: hold the workspace as a build does", monitor -> {
+            holding.countDown();
+            try {
+                release.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return Status.OK_STATUS;
+        });
+        build.setRule(ResourcesPlugin.getWorkspace().getRoot()); // a build's rule (buildRule())
+        try {
+            build.schedule();
+            holding.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            session.inputAsync("0fb");
+            settle();
+            session.inputAsync("gf");
+            settle();
+            assertEquals(Job.RUNNING, build.getState(), "the UI went on while the workspace was held");
+            assertEquals(null, editorTitled("f.txt"), "not opened before the refresh");
+            release.countDown();
+            ITextEditor opened = waitForFollowInto("f.txt");
+            expectText(opened, "from the build\n");
+        } finally {
+            release.countDown();
+            build.join();
             closeAllBut(null);
         }
     }

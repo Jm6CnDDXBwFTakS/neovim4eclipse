@@ -14,7 +14,6 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
-import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
@@ -317,12 +316,10 @@ public final class EclipseFileCommands {
      */
     private static void open(IWorkbenchPage page, Path file) {
         try {
-            IFile[] inWorkspace = ResourcesPlugin.getWorkspace().getRoot().findFilesForLocationURI(file.toUri());
-            for (IFile candidate : inWorkspace) {
-                if (candidate.isAccessible()) {
-                    IDE.openEditor(page, candidate, true);
-                    return;
-                }
+            IFile candidate = NewFiles.workspaceFileAt(file);
+            if (candidate != null && candidate.isAccessible()) {
+                IDE.openEditor(page, candidate, true);
+                return;
             }
             IDE.openEditorOnFileStore(page, EFS.getLocalFileSystem().getStore(file.toUri()));
         } catch (Exception e) {
