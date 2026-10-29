@@ -62,6 +62,10 @@ assist, `Ctrl+V` to paste (on Windows and Linux), and so on. Vim's insert-mode `
   Neovim so that `.` can repeat it. When Eclipse takes `Esc` first (to leave linked editing, as in a
   Java rename or a template, or to close the completion popup), the same `Esc` still ends insert mode,
   as in Vim, where `Esc` closes the completion menu and leaves insert mode at once.
+- `Enter` that accepts a rename you began in normal mode (`Alt+Shift+R`, then `ea` and a suffix, or
+  `ciw` and a new name) also ends insert mode: the insert was only for the new name, as Vim's `ciw`
+  ends with the change. A template inserted while you type (content assist's `fore`) keeps insert
+  mode after its `Enter`, which puts the caret where the typing goes on (`util/LinkedEditInsert`).
 - Any other key with an Eclipse key binding is taken by Eclipse first, in every mode: function keys
   such as `F3` (Open Declaration) and most `Ctrl+Shift+...` and `Alt+Shift+...` shortcuts.
 - The `z` fold commands (`zo`, `zc`, `zM`, ...) are Neovim's like any normal-mode key. In an editor

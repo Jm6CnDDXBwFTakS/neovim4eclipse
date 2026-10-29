@@ -60,6 +60,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Enter that accepts a rename (`Alt+Shift+R`) begun in normal mode now ends insert mode too, as
+  Esc already did. Neovim stayed in insert mode, and so did the next editor you switched to.
 - In a Java file whose header comment is folded with its `/*` line hidden, `O` on line 1 left the
   new line hidden, so the caret went to the comment's first line of text. The new line is now
   shown and the comment stays folded.

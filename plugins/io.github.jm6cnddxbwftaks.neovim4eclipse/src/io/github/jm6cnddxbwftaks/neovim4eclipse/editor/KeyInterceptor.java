@@ -106,6 +106,17 @@ public final class KeyInterceptor implements VerifyKeyListener {
         router.route(ESCAPE);
     }
 
+    /**
+     * Leaves insert mode as an Esc typed in the editor would (Eclipse's typing goes to Neovim first),
+     * if Neovim is in insert or replace mode. For a linked edit that ended the insert's reason
+     * ({@code LinkedEditWatch}). UI thread.
+     */
+    public void leaveInsertMode() {
+        if (enabled && session.isAlive() && session.isTypingMode()) {
+            router.route(ESCAPE);
+        }
+    }
+
     /** Adds the {@link #afterKeyDown} listener to {@code widget}; undo with {@link #uninstall}. UI thread. */
     public void install(StyledText widget) {
         widget.addListener(SWT.KeyDown, afterKeyDown);

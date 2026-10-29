@@ -84,6 +84,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final NeovimSession session;
     private final StyledText styledText;
     private final KeyInterceptor keyInterceptor;
+    /** Ends the insert typed for a rename when Enter accepts it (UI thread). */
+    private final LinkedEditWatch linkedEditWatch;
     /** Viewer the key interceptor is prepended to; {@code null} if it sits on the widget instead. */
     private final ITextViewerExtension keyViewer;
     private final BufferSynchronizer synchronizer;
@@ -189,6 +191,8 @@ public final class NeovimEditorController implements AutoCloseable {
             styledText.addVerifyKeyListener(keyInterceptor);
         }
         keyInterceptor.install(styledText); // an Esc that Eclipse took first (linked mode) still ends insert mode
+        // A rename begun in normal mode and accepted with Enter ends the insert typed for it.
+        this.linkedEditWatch = new LinkedEditWatch(() -> documentOf(editor), keyInterceptor::leaveInsertMode);
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
@@ -740,6 +744,9 @@ public final class NeovimEditorController implements AutoCloseable {
         keyContext.refresh();
     }
 
+    /** Whether the last mode reported was insert or replace (for {@link #linkedEditWatch}). */
+    private volatile boolean typingSeen;
+
     private void onModeChanged(String mode) {
         if (closed) {
             return;
@@ -752,7 +759,21 @@ public final class NeovimEditorController implements AutoCloseable {
             return; // status shows ECLIPSE until user toggles back
         }
         keyContext.updateFromAnyThread(mode);
-        if (!VimModes.isTyping(mode)) {
+        boolean typing = VimModes.isTyping(mode);
+        if (typing != typingSeen) {
+            typingSeen = typing;
+            // On the UI thread, where linked mode is read; in the order the modes came.
+            SwtUiExecutor.INSTANCE.asyncExec(() -> {
+                if (!closed) {
+                    if (typing) {
+                        linkedEditWatch.insertBegan();
+                    } else {
+                        linkedEditWatch.insertEnded();
+                    }
+                }
+            });
+        }
+        if (!typing) {
             insertTracker.reset(); // an insert ended (or never started): drop any stale snapshot
             if (foldMirror != null) {
                 // Folds held while Eclipse typed; queued after the push at Esc, so the lines are there.
@@ -850,6 +871,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 styledText.removeVerifyKeyListener(keyInterceptor);
             }
             keyInterceptor.uninstall(styledText);
+            linkedEditWatch.insertEnded(); // stops listening to a rename still going on
         } catch (Exception e) {
             LOG.log(Level.FINE, "removeVerifyKeyListener", e);
         }
