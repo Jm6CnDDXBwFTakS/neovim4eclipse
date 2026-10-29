@@ -201,7 +201,9 @@ final class DocumentBuffers {
     void show(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         Handle target = owns(buffer) ? created.get(buffer.bufnr) : null;
         if (target == null) {
-            target = create(buffer.name);
+            Created made = create(buffer.name);
+            target = made.handle();
+            buffer.reopened = made.reused();
             buffer.bufnr = bufnr(target);
             buffer.owner = this;
             buffer.loaded = false;
@@ -368,17 +370,22 @@ final class DocumentBuffers {
         }
     }
 
-    private Handle create(String name) throws Exception {
+    /** A document's buffer: new, or the file's buffer kept from a closed editor ({@code reused}). */
+    private record Created(Handle handle, boolean reused) {
+    }
+
+    private Created create(String name) throws Exception {
         // Listed, so :ls and :b see it. Scratch: no swap file, and no filetype detection runs. Its
         // buftype=nofile is then changed to acwrite, so that a write asks Eclipse to save
         // (LuaScripts.DOCUMENT_BUFFER): Neovim never writes the file itself.
-        Handle buffer = name.isEmpty() ? await(api.createBuf(true, true)) : createNamed(name);
+        Created made = name.isEmpty() ? new Created(await(api.createBuf(true, true)), false) : createNamed(name);
+        Handle buffer = made.handle();
         await(api.execLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
         // nvim_buf_attach: Neovim now sends nvim_buf_lines_event for this buffer. No initial
         // full-buffer event (false): the document is pushed into the buffer instead.
         await(api.bufAttach(buffer, false));
         created.put(bufnr(buffer), buffer);
-        return buffer;
+        return made;
     }
 
     /**
@@ -386,15 +393,19 @@ final class DocumentBuffers {
      * the file's buffer kept from an earlier editor (same number, marks), or a new one; left unnamed
      * if another document's buffer has that name already.
      */
-    private Handle createNamed(String name) throws Exception {
+    private Created createNamed(String name) throws Exception {
         Object result = await(api.execLua(LuaScripts.CREATE_DOCUMENT_BUFFER, List.of(name)));
-        if (!(result instanceof List<?> pair) || pair.size() != 2 || !(pair.get(0) instanceof Number bufnr)) {
+        if (!(result instanceof List<?> answer) || answer.size() != 3 || !(answer.get(0) instanceof Number bufnr)) {
             throw new IllegalStateException("Unexpected answer creating the buffer for " + name + ": " + result);
         }
-        if (!Boolean.TRUE.equals(pair.get(1))) {
+        if (!Boolean.TRUE.equals(answer.get(1))) {
             LOG.fine(() -> "Buffer name already in use, left unnamed: " + name);
         }
-        return Handle.buffer(bufnr.longValue());
+        boolean reused = Boolean.TRUE.equals(answer.get(2));
+        if (reused) {
+            LOG.fine(() -> "Reusing the buffer kept from a closed editor of " + name + ": " + bufnr);
+        }
+        return new Created(Handle.buffer(bufnr.longValue()), reused);
     }
 
     /**

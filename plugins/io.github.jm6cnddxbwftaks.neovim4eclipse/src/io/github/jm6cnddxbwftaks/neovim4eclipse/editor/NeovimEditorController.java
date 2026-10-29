@@ -947,6 +947,11 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         @Override
+        public boolean goToLastPosition() throws Exception {
+            return session.goToLastPositionIfReopened(buffer);
+        }
+
+        @Override
         public void takeCursorFromNeovim() {
             session.syncModeAndCursorFromNeovim();
         }

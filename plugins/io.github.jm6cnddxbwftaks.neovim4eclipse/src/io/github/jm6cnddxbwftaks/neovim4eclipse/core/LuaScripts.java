@@ -723,15 +723,17 @@ final class LuaScripts {
      * ({@code :b 1}, {@code Ctrl-^}); Eclipse's text replaces that. Only a buffer that is another
      * document's now ({@code acwrite}, see {@link #DOCUMENT_BUFFER}), or a special one (help, a
      * terminal), is not reused: a new buffer is made, left unnamed (the second result is
-     * {@code false}), since two documents must not share one.
+     * {@code false}), since two documents must not share one. The third result says whether the
+     * buffer was reused: its first push then puts the cursor on {@code '"} ({@link #GO_TO_LAST_POSITION}).
      */
     static final String CREATE_DOCUMENT_BUFFER = """
             local name = select(1, ...)
             local buf
-            if vim.fn.bufexists(name) == 1 then
+            local reused = vim.fn.bufexists(name) == 1
+            if reused then
               buf = vim.fn.bufadd(name) -- the existing one, by its exact name
               if vim.bo[buf].buftype ~= '' then
-                return { vim.api.nvim_create_buf(true, true), false }
+                return { vim.api.nvim_create_buf(true, true), false, false }
               end
             else
               buf = vim.fn.bufadd(name)
@@ -744,7 +746,23 @@ final class LuaScripts {
               vim.cmd('noautocmd call bufload(' .. buf .. ')')
             end
             vim.bo[buf].buflisted = true
-            return { buf, true }
+            return { buf, true, reused }
+            """;
+
+    /**
+     * Puts the cursor of the current window on the current buffer's {@code '"} mark, where the cursor
+     * was when its window last left it, and returns whether it did (not when the mark is unset or
+     * past the end). Run after the first push into a reused buffer (CREATE_DOCUMENT_BUFFER): Vim puts
+     * the cursor there on {@code :e} of a buffer {@code :bd} kept, and the editor's caret follows
+     * (docs/design/BUFFER_NUMBERS.md, Q2). Example: a.txt closed with the cursor on line 40; opened
+     * again, its caret is on line 40, not line 1.
+     */
+    static final String GO_TO_LAST_POSITION = """
+            local mark = vim.api.nvim_buf_get_mark(0, '"')
+            if mark[1] < 1 or mark[1] > vim.api.nvim_buf_line_count(0) then
+              return false
+            end
+            return pcall(vim.api.nvim_win_set_cursor, 0, mark)
             """;
 
     /**

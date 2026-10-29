@@ -597,6 +597,21 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * After the first push into a reused buffer ({@link DocumentBuffer#reopened}), puts Neovim's
+     * cursor on the buffer's {@code '"} mark ({@link LuaScripts#GO_TO_LAST_POSITION}), as Vim does on
+     * {@code :e} of a buffer {@code :bd} kept. Once per reopening. Input thread (the attach push).
+     *
+     * @return whether the cursor was put there (the caret is then to follow Neovim's cursor)
+     */
+    public boolean goToLastPositionIfReopened(DocumentBuffer buffer) throws Exception {
+        if (!buffer.reopened) {
+            return false;
+        }
+        buffer.reopened = false;
+        return Boolean.TRUE.equals(await(api.execLua(LuaScripts.GO_TO_LAST_POSITION, List.of())));
+    }
+
+    /**
      * Tells Neovim that Eclipse's Back went nowhere for {@code steps} {@code Ctrl-O} steps from
      * step id {@code first} on (the start of its history), so {@code Ctrl-I} does not first undo
      * steps that moved nothing ({@link LuaScripts#HISTORY_NOWHERE}).
