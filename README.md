@@ -650,7 +650,7 @@ The variables starting with `eclipse_` work in two directions:
 | Variable | Set by | Meaning |
 |----------|--------|---------|
 | `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
-| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT` (not `ZZ`, `ZQ`; [docs/KEYS.md](docs/KEYS.md)) |
+| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `K`, `gt`, `gT`, `Ctrl-O`, `Ctrl-I` (not `ZZ`, `ZQ`; [docs/KEYS.md](docs/KEYS.md)) |
 | `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
@@ -790,7 +790,9 @@ These are real and deliberate to know about before extending the code:
    Jumps into another open file (Ctrl-O, `'A`, `:b`) activate its editor (after `:bufdo` or `:argdo`,
    only the editor of the file they end in), and the window goes along: the two editors swap
    windows, so Ctrl-O there keeps going back through one jump history, as in one Vim window
-   ([docs/design/WINDOWS.md](docs/design/WINDOWS.md)). Jumps to anything else
+   ([docs/design/WINDOWS.md](docs/design/WINDOWS.md)). Switching editors in Eclipse (a tab click,
+   Ctrl+F6) is no Neovim jump: once the editor's own jump history runs out, Ctrl-O and Ctrl-I are
+   Eclipse's Back and Forward, which recorded the switch ([docs/KEYS.md](docs/KEYS.md)). Jumps to anything else
    (`:e`, `:help`, a closed file) are undone. A file's buffer, with its undo history, is discarded
    when its last editor closes. Changes Neovim makes to another open file (`:bufdo`, `:argdo`)
    reach that file's editor, which is then dirty: save them with `:wa`, *File → Save All*, or in the

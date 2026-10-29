@@ -6,7 +6,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 /**
  * A normal-mode key that Neovim hands back to the IDE because only the IDE can do it: {@code gd}
  * (go to definition), {@code K} (show documentation), {@code gt} / {@code gT} (next or previous
- * editor tab), {@code ZZ} / {@code ZQ} (save and close, or close, the editor).
+ * editor tab), {@code ZZ} / {@code ZQ} (save and close, or close, the editor), and {@code Ctrl-O} /
+ * {@code Ctrl-I} once Neovim's jump history runs out (Eclipse's Back and Forward).
  *
  * <p>How it works: {@link LuaScripts#SETUP} maps those keys in Neovim to a Lua function that sends
  * an {@code eclipse_action} notification with the action's name and Vim's count; the
@@ -29,6 +30,14 @@ public record IdeAction(String name, int count) {
     public static final String NEXT_TAB = "next_tab";
     /** {@code gT}, {@code {N}gT}: previous editor tab, or N tabs back. */
     public static final String PREVIOUS_TAB = "previous_tab";
+    /**
+     * {@code Ctrl-O} when Neovim's jump history has no older entry: Eclipse's Back (Alt+Left),
+     * {@code count} times. Each editor is a Neovim window with its own jump history, and switching
+     * editors in Eclipse (a tab click) is no Neovim jump, so Eclipse's history takes over there.
+     */
+    public static final String HISTORY_BACK = "history_back";
+    /** {@code Ctrl-I} when Neovim's jump history has no newer entry: Eclipse's Forward (Alt+Right). */
+    public static final String HISTORY_FORWARD = "history_forward";
     /** {@code ZZ}: save the editor if it is dirty, then close it (Vim's {@code :x}). */
     public static final String SAVE_AND_CLOSE = "save_and_close";
     /** {@code ZQ}: close the editor without saving (Vim's {@code :q!}). */

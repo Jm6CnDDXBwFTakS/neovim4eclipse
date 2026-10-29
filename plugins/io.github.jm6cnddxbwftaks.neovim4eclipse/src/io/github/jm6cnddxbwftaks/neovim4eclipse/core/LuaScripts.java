@@ -143,6 +143,31 @@ final class LuaScripts {
               ide('hover', 'K', 'Show Tooltip Description')
               ide('next_tab', 'gt', 'next editor tab')
               ide('previous_tab', 'gT', 'previous editor tab')
+              -- Ctrl-O and Ctrl-I are Neovim's, until its jump history has nothing further that
+              -- way: then they are Eclipse's Back and Forward (Alt+Left, Alt+Right), which also
+              -- record editor switches made in Eclipse (a tab click, Ctrl+F6, F3). Each editor is a
+              -- Neovim window with its own jump history (docs/design/WINDOWS.md, E2), and an
+              -- Eclipse switch is no Neovim jump, so without this Ctrl-O after a tab click did
+              -- nothing. Example: G in a.txt, click b.txt's tab, Ctrl-O: back in a.txt's editor
+              -- on its last line. getjumplist() gives { entries, position }: the position is the
+              -- entry Ctrl-O went to last, or #entries when it was not used since the last jump.
+              -- A key init.lua maps itself is left alone.
+              local function history(key, action, desc, further)
+                if vim.fn.maparg(key, 'n') ~= '' then
+                  return
+                end
+                vim.keymap.set('n', key, function()
+                  local jumps = vim.fn.getjumplist()
+                  if further(#jumps[1], jumps[2]) then
+                    return key -- not remapped (noremap): Neovim's own key, with the count typed
+                  end
+                  vim.rpcnotify(0, 'eclipse_action', action, vim.v.count)
+                  return ''
+                end, { expr = true, desc = 'Eclipse: ' .. desc })
+              end
+              history('<C-o>', 'history_back', 'older jump, else Back', function(_, pos) return pos > 0 end)
+              history('<C-i>', 'history_forward', 'newer jump, else Forward',
+                function(count, pos) return pos + 1 < count end)
             end
             -- ZZ and ZQ save and close the Eclipse editor. Always mapped, whatever
             -- neovim4eclipse_ide_keys says: Neovim's own ZZ (:x) would quit the embedded Neovim,
