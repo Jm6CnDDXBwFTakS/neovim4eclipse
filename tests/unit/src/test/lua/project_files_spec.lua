@@ -69,7 +69,9 @@ end)
 t.test('a file reached through a link to the project is the project\'s', function()
   local root = project()
   local link = root .. '-link'
-  assert(vim.uv.fs_symlink(root, link))
+  -- On Windows a symbolic link needs developer mode or admin rights (EPERM without them); a
+  -- junction, the folder link Windows users usually make (mklink /J), needs neither.
+  assert(vim.uv.fs_symlink(root, link, vim.fn.has('win32') == 1 and { junction = true } or nil))
   vim.cmd.edit(vim.fn.fnameescape(file(link, 'src', 'B.java')))
   t.eq('', vim.bo.filetype)
   t.eq({ 'class B {', '\tint x;', '}' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
