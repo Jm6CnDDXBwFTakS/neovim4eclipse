@@ -42,6 +42,7 @@ edges, see [Known limitations](#known-limitations).
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
 | Finding errors and warnings (compiler, builders, language servers), sent to Neovim as diagnostics (see [Problems](#problems-d-d)) | `]d` / `[d` / `]D` / `[D` between them, with counts, in macros and the jumplist |
+| The workspace's problems and tasks, put in Neovim's quickfix list by `:Eproblems` / `:Etasks`, and the Problems / Tasks view for `:copen` (see [The quickfix list](#the-quickfix-list-eproblems-q)) | `]q` / `[q`, `:cnext`, `:cc 3` and the rest of Vim's quickfix commands |
 | Where the folds are (methods, imports, comments, language-server regions) and drawing them | Opening and closing them: `zo` `zc` `za` `zM` `zR` and the other `z` commands, `j` over a closed fold (see [Folding](#folding-zo-zc-zm)) |
 
 Details of what happens on each key are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -282,6 +283,50 @@ and shows `The import java.util.List is never used`.
 
 How it works: [docs/design/DIAGNOSTICS.md](docs/design/DIAGNOSTICS.md).
 
+## The quickfix list (`:Eproblems`, `]q`)
+
+`]d` walks one file's problems; Neovim's *quickfix list* walks a list of places across files. Two
+commands fill it with what Eclipse knows about the whole workspace:
+
+| Command | Fills the quickfix list with |
+|---------|------------------------------|
+| `:Eproblems` | every error, warning and info in the workspace (the Problems view's), and goes to the first |
+| `:Eproblems warning` | errors and warnings only; `:Eproblems error`, errors only |
+| `:Etasks` | the tasks (`TODO`, `FIXME` comments a builder found) whose tag you chose, and goes to the first |
+| `:Eproblems!`, `:Etasks!` | the same, without going to the first; the message line says how many |
+
+Then Neovim's own quickfix commands walk it, typed, mapped or in a macro: `]q` / `[q` (next /
+previous), `]Q` / `[Q` (last / first), `:cnext`, `:cprevious`, `:cc 3`, `:cnfile`, `:clist`,
+`:colder`. An entry in a file without an editor opens its editor. Example: errors in `A.java`
+(open) and `B.java` (closed): `:Eproblems` goes to `A.java`'s error and shows
+`(1 of 2) error: Type mismatch: ...`; `]q` opens `B.java` on its error's line.
+
+- **Columns**: a file with an open editor has each entry at the problem's column. A closed file's
+  entries have the line only (the cursor goes to the line's first non-blank); once its editor is
+  open, they get their columns, and the jump that opened it moves on to the column a moment later.
+- **The list follows Eclipse** while it is the current list: a build that finds or fixes problems,
+  a problem the Java editor finds while you type, a task you add. The entry you are on stays the
+  current one. A list of your own (`:vimgrep`) is never touched; `:colder` back to Eclipse's list,
+  and it follows Eclipse again from then on. Running `:Eproblems` again reuses its list (and makes
+  it current) instead of adding another to Neovim's ten.
+- **`:copen` and `:cwindow`** show Eclipse's Problems view for `:Eproblems`'s list, the Tasks view
+  for `:Etasks`'s; for any other list, its `:clist` in the output popup. Neovim's own quickfix
+  window cannot be shown (Eclipse shows one Neovim window per editor); `:lopen` shows the
+  location list's `:llist`.
+- **Task tags**: set them in `init.lua`, comma-separated, or `'*'` for every task:
+
+  ```lua
+  vim.g.neovim4eclipse_task_tags = 'JM6,FIXME' -- tasks whose comment starts with JM6 or FIXME
+  ```
+
+  The variable is read each time `:Etasks` runs, so `:let g:neovim4eclipse_task_tags = 'TODO'`
+  works at once. Without tags `:Etasks` says how to set them. A tag counts as a word at the start of
+  the task's text: `JM6` takes `// JM6 check this`, not `// JM67` or `// see JM6`. Choosing a tag of
+  your own keeps other people's `TODO`s out of the list. Only builders make tasks (in Java, the
+  compiler's *Task Tags*), so a `TODO` in a plain text file is not one.
+
+How it works: [docs/design/DIAGNOSTICS.md](docs/design/DIAGNOSTICS.md), section 5.
+
 ## Folding (`zo`, `zc`, `zM`)
 
 In an editor that folds (the Java editor; the Generic Editor with a language server), Eclipse's
@@ -420,7 +465,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
-| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message. So are the quickfix, location list and preview windows (`:copen`, `:lopen`, `:pedit`), which Eclipse cannot show either; the lists stay, so `:cnext`, `:cprevious` and `:cc` work |
+| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →

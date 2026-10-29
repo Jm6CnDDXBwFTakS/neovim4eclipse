@@ -159,6 +159,18 @@ so `IAnnotationAccessExtension.isSubtype` asks "an error of any kind?" without k
 (`editor/ProblemAnnotations`). Models change on other threads too (JDT's reconciler), so a listener
 only schedules work for the UI thread (`sync/DiagnosticsSync`).
 
+**Markers** are the workspace's own record of problems and tasks, kept on each resource
+(`IResource.createMarker`, `findMarkers`), saved with the workspace, and shown by the Problems and
+Tasks views whether a file is open or not. A marker is a type (`IMarker.PROBLEM`, `IMarker.TASK`,
+and subtypes such as JDT's `org.eclipse.jdt.core.problem`) and attributes (`MESSAGE`, `SEVERITY`,
+`LINE_NUMBER`, `CHAR_START`). `IWorkspaceRoot.findMarkers(IMarker.PROBLEM, true, DEPTH_INFINITE)`
+gives every problem of every file, subtypes included, from memory (milliseconds for thousands).
+A change of markers arrives as a resource change whose delta lists them
+(`IResourceChangeEvent.findMarkerDeltas`). An open editor shows each marker as a
+`MarkerAnnotation` whose position follows unsaved edits (`AbstractMarkerAnnotationModel.getMarkerPosition`),
+while the marker itself keeps the saved position until the next build: so for an open file the
+editor's model is the fresher source (`editor/QuickfixLists`).
+
 Multi-page editors (the POM editor, PDE's `MANIFEST.MF` editor) are not `ITextEditor`s. Their source
 tab is a nested text editor, which `EditorAttachManager` digs out.
 
@@ -740,6 +752,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `BufferPort` | `sync/BufferSynchronizer` | `NeovimSession` |
 | `DocumentBufferPort` | `sync/UnattachedDocumentSync` | `NeovimSession` |
 | `DiagnosticsPort` | `sync/DiagnosticsSync` | `NeovimSession` (a fake that records each list, in `DiagnosticsSyncTest`) |
+| `QuickfixPort` | `editor/QuickfixLists` | `NeovimSession` |
 | `CursorPort` | `editor/CaretSync` | `NeovimSession` |
 | `CommandRunner.Neovim` | `core/CommandRunner` | adapter inside `NeovimSession` |
 | `KeyInput.Neovim` | `core/KeyInput` | adapter inside `NeovimSession` (`KeyInputTest` scripts it: "after `i` the mode is `i`") |
@@ -801,6 +814,16 @@ model there, converts in a pure `util/` class (`DiagnosticPositions`), skips a l
 one, and sends with an `*Async` method of a small port (`core/DiagnosticsPort`), whose Lua script
 (`LuaScripts.SET_DIAGNOSTICS`) is tested in a `*_spec.lua`. Test the timing in `tests/text` with a fake
 port and held timers.
+
+**Answer a command of Neovim's with something of the whole workspace.** Follow `:Eproblems`
+(`editor/QuickfixLists`): a user command in a `LuaScripts` module checks its arguments and only
+sends a notification; the session hands it to a handler the editor sets (`QuickfixPort.Handler`,
+set in `EditorAttachManager` for each new session); one `Job` does the reading, one run at a time,
+so an older answer never overtakes a newer one, and hops to the UI thread only for what lives there
+(open editors, briefly, with `syncExec`); a pure `util/` class decides the content
+(`QuickfixEntries`); the answer goes back with an `*Async` method. To keep the answer current, let
+changes schedule the same job with a delay, and ask Neovim first whether it still shows that
+answer.
 
 **Show a dialog once (or once per version).** Put the decision in a pure class in `util/` that takes
 what was recorded and the running version, and returns what to show (`WelcomeNote.decide`); unit-test

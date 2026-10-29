@@ -221,7 +221,8 @@ buffer may be unloaded. Vim's window commands: `:close` and `:tabclose` are host
 the editor (`util/HostCommand`, `QUIT`); `LuaScripts.WINDOW_COMMANDS` refuses the split and tab
 commands through the host commands' `refuse` hook and maps the `Ctrl-W` keys; a `WinNew` safety
 net closes any other window that is not the plug-in's, floating or special, and the quickfix,
-location list and preview windows, which Eclipse cannot show; in a floating window the user
+location list and preview windows, which Eclipse cannot show (the quickfix and location list
+windows are then shown the Eclipse way, section 8); in a floating window the user
 entered, `:q` and `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
 ### 7. Eclipse is Neovim's clipboard provider
@@ -262,6 +263,21 @@ an unchanged list is not sent again: Neovim's diagnostics move with edits by the
 `SETUP` makes the namespace draw nothing (Eclipse draws the problems) and, unless the user's config
 has one, sets `vim.diagnostic`'s `on_jump` hook to echo the message after a jump, which reaches the
 message line like any message. Design and decisions: [design/DIAGNOSTICS.md](design/DIAGNOSTICS.md).
+
+The workspace's problems and tasks become Neovim's *quickfix list* on request. `:Eproblems` and
+`:Etasks` are user commands of `LuaScripts.QUICKFIX` that only send `eclipse_quickfix`;
+`editor/QuickfixLists` reads the markers in a job (`findMarkers`, milliseconds for thousands) and,
+on the UI thread, the open editors' annotation models (their problems, with columns, as
+`DiagnosticsSync` reads them), then `util/QuickfixEntries` filters, sorts and flattens them, and
+`setQuickfixAsync` runs `SET_QUICKFIX`, which reuses the list of that kind in the stack (found by
+its `context`, never its title) and updates it with `setqflist()`'s action `'u'`, keeping the
+entry the user is on. Neovim walks the list itself (`]q`, `:cnext`); a jump into a closed file
+opens its editor through the project-files hook (section 6). While the list is current it follows
+changes (marker deltas, a document's buffer coming or going, `DiagnosticsSync`'s sends), debounced
+500 ms; Neovim has no event for a change of the current list, so the job asks first
+(`QUICKFIX_CURRENT`). `:copen` reaches Eclipse through the `WinNew` safety net of section 6, which
+calls the quickfix module to show the Problems or Tasks view (`eclipse_show_view`) or the list's
+`:clist`.
 
 ### 9. Neovim's window is the editor's size and scroll position
 
@@ -691,6 +707,7 @@ reason is gone.
 | `gd`/`K`/`gt`/`gT` handed to Eclipse | `core/IdeAction`, `editor/IdeActions` | `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | `Ctrl-O`/`Ctrl-I` past Neovim's jumps: Back past the plug-in's own switches, Forward that retraces | `util/HistorySteps` (decisions), `editor/NavigationHistorySteps` (Eclipse glue), the trail of `Ctrl-O` steps in `LuaScripts.SETUP` | `HistoryStepsTest`, `setup_spec.lua`, `EditorEndToEndTest` |
 | Eclipse's problems as Neovim diagnostics (`]d`, `[d`) | `util/DiagnosticPositions` (offsets to lines and byte columns), `util/Diagnostic` (severity, Lua arguments), `sync/DiagnosticsSync` (annotation model to session, through `core/DiagnosticsPort`), `editor/ProblemAnnotations` (which annotations are problems), `LuaScripts.SET_DIAGNOSTICS` and `SETUP` (namespace, `on_jump` echo), `LuaScripts.PROBLEMS` (the opt-out `vim.g.neovim4eclipse_problems`, and the message `]d` gives then) | `DiagnosticPositionsTest`, `DiagnosticTest`, `tests/text` `DiagnosticsSyncTest` (real `AnnotationModel`: debounce, unchanged lists, close), `diagnostics_spec.lua` (real Neovim: `]d` with a count, Ctrl-O, the echo, the opt-out), `NeovimProblemsIntegrationTest` (the opt-out read at start), UI `DiagnosticsEndToEndTest` (a problem marker, `]d`, its message) |
+| The workspace's problems and tasks in the quickfix list (`:Eproblems`, `:Etasks`, `:copen`) | `util/QuickfixEntries` (severity filter, task tags, order, Lua arguments), `editor/QuickfixLists` (markers and open editors, the job, the listener, the views), `core/QuickfixPort`, `LuaScripts.QUICKFIX`, `SET_QUICKFIX`, `QUICKFIX_CURRENT`, the `WinNew` net of `LuaScripts.WINDOWS` | `QuickfixEntriesTest`, `NotificationBridgeTest`, `quickfix_spec.lua` (the commands, reuse, `'u'`, the column fix-up, `:copen`), UI `QuickfixEndToEndTest` (jumps, a closed file's column, updates, `:copen`, `:Etasks`) |
 | Attach push: buffer switch, indent options, push, listening, cursor; failures; Neovim's cursor reports ignored until its cursor is placed | `sync/DocumentPush` (session through `DocumentPush.Neovim`, document through `DocumentPush.Mirror` = `BufferSynchronizer`, caret through `DocumentPush.Caret` = `CaretSync`) | `tests/text` `DocumentPushTest` (fakes: order, each failure path), `CaretSyncTest`, UI `RestartNeovimEndToEndTest` (no scroll) |
 | A document that is not attached and its buffer in step (`:bufdo`, refactorings) | `sync/UnattachedDocumentSync` (session seen through `core/DocumentBufferPort`) | `tests/text` `UnattachedDocumentSyncTest` (fake port: both directions, coalescing, attach and detach, a change that no longer fits), `NeovimBufferIntegrationTest` (routing, echo), UI `EditorEndToEndTest` (`:bufdo` over three files) |
 | Document and buffer in step | `sync/BufferSynchronizer` (session seen through `core/BufferPort`, UI thread through `core/UiExecutor`) | `tests/text` `BufferSynchronizerTest` (fake port, real `Document`: edit bursts, edits during a push, linked-mode mirrors, echoes, close mid-event) |

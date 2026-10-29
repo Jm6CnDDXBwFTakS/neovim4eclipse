@@ -14,6 +14,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
+- `:Eproblems` puts the workspace's problems in Neovim's quickfix list, and `:Etasks` the tasks with
+  your tags (`vim.g.neovim4eclipse_task_tags = 'JM6,FIXME'` in `init.lua`); both go to the first
+  entry (`!`: they do not). `:Eproblems warning` leaves out infos, `:Eproblems error` warnings too.
+  Neovim's `]q`, `[q`, `:cnext` and `:cc` walk the list, opening a closed file's editor; the list
+  follows builds and edits while it is the current one, and `:copen` shows the Problems or Tasks
+  view. See the README, "The quickfix list".
 - Each editor has a Neovim window of its own (in a hidden tabpage), which keeps its cursor, column,
   scroll position, folds, window-local options, jump history, location list and `:lcd` while you
   work in other editors. Two editors on one file (*Window → Editor → Clone*) now have a cursor each
@@ -39,7 +45,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   editor as `:q` does (Eclipse asks about changes; `:close!` discards them). `:split`, `:vsplit`,
   `:new`, `:tabnew`, `:tabonly` and `Ctrl+W s` / `v` are refused with a message naming Eclipse's
   split editor and *Clone*; a window a plug-in opens beside an editor's is closed again, and so are
-  the quickfix, location list and preview windows (`:copen`; `:cnext` still works). `:tabclose 2`
+  the preview window (`:pedit`). The quickfix and location list windows cannot be shown either:
+  `:copen` and `:cwindow` show the Problems or Tasks view for Eclipse's lists (below), and any
+  other list's `:clist` in the output popup. `:tabclose 2`
   is refused. In a floating window you entered, `:q`, `:close` and `Ctrl+W q` / `c` close that
   window, not the editor.
 - `Ctrl-O` and `Ctrl-I` fall back to Eclipse's Back and Forward (`Alt+Left`, `Alt+Right`) when
