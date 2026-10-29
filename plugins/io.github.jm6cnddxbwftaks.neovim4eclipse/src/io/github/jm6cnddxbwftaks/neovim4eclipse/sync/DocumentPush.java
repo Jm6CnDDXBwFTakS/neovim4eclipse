@@ -100,7 +100,8 @@ public final class DocumentPush {
 
         /**
          * The document's modification stamp now, or {@code DocumentBuffer.NO_STAMP} if it has none
-         * (then the push is never skipped). On the thread that calls {@link #start}, the UI thread.
+         * (then the push is never skipped). Called on the input thread, where the push runs; read on
+         * the UI thread, as the push reads the document's lines.
          */
         default long documentStamp() {
             return DocumentBuffer.NO_STAMP;
@@ -127,7 +128,6 @@ public final class DocumentPush {
      *                         instead, and {@code line1}/{@code col0} are ignored
      */
     public void start(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor) {
-        long stamp = mirror.documentStamp();
         mirror.stopRemoteListening();
         if (!takeNeovimCursor) {
             caret.ignoreNeovimCursor(); // see the class comment, "The caret stays put meanwhile"
@@ -135,7 +135,7 @@ public final class DocumentPush {
         try {
             nvim.queue(() -> {
                 try {
-                    run(tabWidth, indentation, line1, col0, takeNeovimCursor, stamp);
+                    run(tabWidth, indentation, line1, col0, takeNeovimCursor);
                 } finally {
                     if (!takeNeovimCursor) {
                         caret.followNeovimCursor();
@@ -152,8 +152,7 @@ public final class DocumentPush {
     }
 
     /** The input-thread part (see the class comment). */
-    private void run(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor,
-            long stamp) {
+    private void run(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor) {
         try {
             nvim.showDocumentBuffer();
         } catch (Exception e) {
@@ -169,7 +168,9 @@ public final class DocumentPush {
             LOG.log(Level.WARNING, "Could not set Neovim's tab and indent options", e);
         }
         try {
-            if (nvim.bufferInSyncAt(stamp)) {
+            // The stamp now, where the push would read the document: one read when start() was
+            // called would miss an Eclipse change made while this waited in the queue.
+            if (nvim.bufferInSyncAt(mirror.documentStamp())) {
                 // Neither side changed since the editor was detached: the push would read the whole
                 // document and buffer to find nothing to send (see DocumentBuffer.syncedStamp).
                 LOG.fine("Document unchanged since its last push: not pushed again");

@@ -148,6 +148,32 @@ class DocumentPushTest {
                 "start listening", "cursor 2:3", "follow cursor reports"), unchanged.calls);
     }
 
+    /**
+     * The stamp is read when the push runs, not when it was queued: an Eclipse change made while the
+     * push waited for the input thread is pushed.
+     */
+    @Test
+    void aChangeWhileThePushWaitsInTheQueueIsPushed() {
+        long[] stamp = { 42 };
+        Fake changing = new Fake() {
+            @Override
+            public long documentStamp() {
+                return stamp[0];
+            }
+
+            @Override
+            public boolean bufferInSyncAt(long at) {
+                return at == 42;
+            }
+        };
+        new DocumentPush(changing, changing, changing).start(4, INDENT, 2, 3, false);
+        stamp[0] = 43; // Eclipse changed the document meanwhile
+        changing.runQueued();
+
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                "start listening", "cursor 2:3", "follow cursor reports"), changing.calls);
+    }
+
     @Test
     void whenNeovimJumpedIntoTheFileTheCaretFollowsNeovimInstead() {
         push.start(4, INDENT, 2, 3, true);
