@@ -9,7 +9,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * editor tab), {@code ZZ} / {@code ZQ} (save and close, or close, the editor), and {@code Ctrl-O} /
  * {@code Ctrl-I} once Neovim's jump history runs out (Eclipse's Back and Forward).
  *
- * <p>How it works: {@link LuaScripts#SETUP} maps those keys in Neovim to a Lua function that sends
+ * <p>How it works: {@link LuaScripts#IDE_KEYS} maps those keys ({@link IdeKeys}, one table for
+ * both sides; {@code ZZ}, {@code ZQ} and the history keys in {@link LuaScripts#SETUP}) in Neovim to a Lua function that sends
  * an {@code eclipse_action} notification with the action's name and Vim's count; the
  * {@link NotificationBridge} turns it into this record. Mapping in Neovim (rather than catching the
  * keys in Eclipse) lets Neovim do what it is good at: counts ({@code 3gt}), the {@code g} prefix

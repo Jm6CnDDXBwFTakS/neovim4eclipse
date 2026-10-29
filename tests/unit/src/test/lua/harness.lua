@@ -65,7 +65,7 @@ A spec file gets the harness as its argument:
 ]]
 
 local module_path, spec_path, wanted = arg[1], arg[2], arg[3]
-local generated = dofile(module_path) -- { scripts = { SETUP = '...', ... }, host_rules = '...' }
+local generated = dofile(module_path) -- { scripts = { SETUP = '...', ... }, host_rules = '...', ide_keys = { ... } }
 
 local t = {
   --- HostCommand.rulesForNeovim(): HOST_COMMANDS's argument, as the session passes it.
@@ -106,9 +106,12 @@ function t.run(name, ...)
   return assert(load(code, '=LuaScripts.' .. name))(...)
 end
 
---- Runs SETUP with the test channel, as the session does first (g:neovim4eclipse_channel included).
+--- Runs SETUP with the test channel, as the session does first (g:neovim4eclipse_channel included),
+--- then IDE_KEYS with core/IdeKeys's table (gd, K, gt), as the session does next.
 function t.setup()
-  return t.run('SETUP', tostring(t.channel))
+  local result = t.run('SETUP', tostring(t.channel))
+  t.run('IDE_KEYS', unpack(generated.ide_keys))
+  return result
 end
 
 --- Types keys as a person would, in Neovim's key notation ('<CR>', '<Esc>', '<Space>'), and returns

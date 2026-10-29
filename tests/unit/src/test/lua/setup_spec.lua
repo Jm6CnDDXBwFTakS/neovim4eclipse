@@ -1,7 +1,8 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- LuaScripts.SETUP, the session's first script: the keys only the IDE can carry out (eclipse_action),
+-- LuaScripts.SETUP, the session's first script, and IDE_KEYS after it: the keys only the IDE can
+-- carry out (eclipse_action; the table is core/IdeKeys, IdeKeysTest),
 -- the yank hook (eclipse_yank) and Eclipse as Neovim's clipboard provider (eclipse_clipboard_copy,
 -- the eclipse_clipboard_paste request). What Eclipse does with them is NotificationBridgeTest and
 -- ClipboardRegistersTest; paste round trips through the session stay in ClipboardIntegrationTest.

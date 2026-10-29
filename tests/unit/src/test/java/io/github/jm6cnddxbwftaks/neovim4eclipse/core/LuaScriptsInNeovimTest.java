@@ -144,10 +144,18 @@ class LuaScriptsInNeovimTest {
         }
     }
 
-    /** The Lua module the harness loads: every {@code static final String} of {@link LuaScripts}, and the host-command rules. */
+    /**
+     * The Lua module the harness loads: every {@code static final String} of {@link LuaScripts}, the
+     * host-command rules, and the IDE keys' arguments ({@link IdeKeys#toLuaArgs}), as the session
+     * passes them.
+     */
     static String scriptsModule() throws IllegalAccessException {
         StringBuilder lua = new StringBuilder("return {\n  host_rules = ").append(longString(HostCommand.rulesForNeovim()))
-                .append(",\n  scripts = {\n");
+                .append(",\n  ide_keys = {");
+        for (String arg : IdeKeys.toLuaArgs()) {
+            lua.append(' ').append(longString(arg)).append(',');
+        }
+        lua.append(" },\n  scripts = {\n");
         for (Field field : LuaScripts.class.getDeclaredFields()) {
             int m = field.getModifiers();
             if (Modifier.isStatic(m) && Modifier.isFinal(m) && field.getType() == String.class) {
