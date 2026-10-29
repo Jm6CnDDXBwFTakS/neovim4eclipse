@@ -30,6 +30,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the quickfix, location list and preview windows (`:copen`; `:cnext` still works). `:tabclose 2`
   is refused. In a floating window you entered, `:q`, `:close` and `Ctrl+W q` / `c` close that
   window, not the editor.
+- `Ctrl-O` and `Ctrl-I` fall back to Eclipse's Back and Forward (`Alt+Left`, `Alt+Right`) when
+  the editor's own jump history has nothing further, so `Ctrl-O` after switching editors with a tab
+  click goes back to the editor before. Your own `init.lua` mapping of either key is kept.
 - The folder Neovim works in (`:lcd`) is set once per editor, when its window opens, instead of on
   every editor switch, so a `:lcd` you type stays with that editor. An untitled document gets the
   folder of the editor active before it, or your home folder; `'autochdir'` is honored.

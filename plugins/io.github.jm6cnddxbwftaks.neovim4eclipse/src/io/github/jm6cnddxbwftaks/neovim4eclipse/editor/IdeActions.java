@@ -9,6 +9,7 @@ import java.util.logging.Logger;
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.commands.NotHandledException;
 import org.eclipse.jface.text.ITextViewer;
+import org.eclipse.ui.IWorkbenchCommandConstants;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
@@ -18,7 +19,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 
 /**
  * Carries out the keys Neovim hands back to the IDE ({@link IdeAction}): {@code gd}, {@code K},
- * {@code gt}, {@code gT}, {@code ZZ}, {@code ZQ}.
+ * {@code gt}, {@code gT}, {@code ZZ}, {@code ZQ}, and {@code Ctrl-O} / {@code Ctrl-I} past Neovim's jumps.
  *
  * <p><b>Commands, not code.</b> "Open Declaration" is different in every kind of editor (Java, C,
  * an LSP editor), so the plug-in does not implement it: it runs the Eclipse <em>command</em> the
@@ -34,6 +35,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
  *       under the caret ({@link HyperlinkProbe}), so a plain {@code .txt} file behaves the same in the
  *       Generic Editor as in the Text Editor.</li>
  *   <li>{@code K}: Show Tooltip Description (F2), the hover information of the text editor.</li>
+ *   <li>{@code Ctrl-O} / {@code Ctrl-I} past the end of Neovim's jump history: Eclipse's Backward
+ *       History and Forward History (Alt+Left, Alt+Right), run through the workbench window's handler
+ *       service, since the first step may activate another editor.</li>
  * </ul>
  *
  * <p>UI thread only.
@@ -71,9 +75,34 @@ final class IdeActions {
             }
             case IdeAction.NEXT_TAB -> EditorTabs.go(editor, TabNavigation.Action.NEXT, action.count());
             case IdeAction.PREVIOUS_TAB -> EditorTabs.go(editor, TabNavigation.Action.PREVIOUS, action.count());
+            case IdeAction.HISTORY_BACK -> history(editor, IWorkbenchCommandConstants.NAVIGATE_BACKWARD_HISTORY,
+                    action.count(), "Ctrl-O");
+            case IdeAction.HISTORY_FORWARD -> history(editor, IWorkbenchCommandConstants.NAVIGATE_FORWARD_HISTORY,
+                    action.count(), "Ctrl-I");
             case IdeAction.SAVE_AND_CLOSE -> EclipseFileCommands.zz(editor);
             case IdeAction.CLOSE -> EclipseFileCommands.zq(editor);
             default -> LOG.fine(() -> "Unknown IDE action ignored: " + action);
+        }
+    }
+
+    /**
+     * Steps through Eclipse's navigation history {@code count} times (once for 0, as Vim's count).
+     * Through the window's handler service, not the editor's: after the first step another editor
+     * may be active, and the old editor's site would no longer be the context of the command.
+     * Stops at the history's end: Eclipse then disables the command, as Vim beeps at its own end.
+     */
+    private static void history(ITextEditor editor, String commandId, int count, String vimKey) {
+        IHandlerService handlers = editor.getSite().getWorkbenchWindow().getService(IHandlerService.class);
+        for (int i = 0; i < Math.max(1, count); i++) {
+            try {
+                handlers.executeCommand(commandId, null);
+            } catch (NotHandledException | NotEnabledException e) {
+                LOG.fine(() -> vimKey + ": no further entry in Eclipse's navigation history");
+                return;
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, vimKey + ": running " + commandId + " failed", e);
+                return;
+            }
         }
     }
 

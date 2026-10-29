@@ -86,10 +86,12 @@ still handles counts, the `g` prefix and arguments (`fZ` finds a `Z`; it is not 
 | `K` | Show Tooltip Description (`F2`): the hover information |
 | `gt`, `{N}gt` | next editor tab, or tab N |
 | `gT`, `{N}gT` | previous editor tab, or N tabs back |
+| `Ctrl-O`, `Ctrl-I` | Neovim's own while its jump history has an older (newer) entry; at its end, Eclipse's Back (`Alt+Left`) or Forward (`Alt+Right`), with the count. Each editor is a Neovim window with its own jump history, and switching editors in Eclipse (a tab click, `Ctrl+F6`, `F3`) is no Neovim jump, so `Ctrl-O` after a tab click goes back through Eclipse's history instead of doing nothing. Not where `init.lua` maps the key itself |
 | `ZZ` | save the editor if it has changes, then close it (Vim's `:x`); a failed save keeps it open |
 | `ZQ` | close the editor without saving (Vim's `:q!`) |
 
-These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys.
+These mappings are made after your `init.lua` runs, so they replace your own mappings of those keys
+(except `Ctrl-O` and `Ctrl-I`, which keep yours).
 To keep Neovim's meaning instead, put this in `init.lua`:
 
 ```lua

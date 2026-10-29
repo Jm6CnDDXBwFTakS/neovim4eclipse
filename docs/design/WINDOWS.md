@@ -159,6 +159,17 @@ editor can end up in the other after a cross-file `Ctrl-O`.
 The swap sets a buffer in a window of a tab that is not current, which fires `BufLeave BufEnter
 BufWinEnter` (E7), so it runs with autocommands off, and Eclipse does not take it for a jump.
 
+**Switching editors in Eclipse (found in the manual test).** A tab click, `Ctrl+F6` or `F3` is no
+Neovim jump: B's own window is attached, and its jump history knows nothing of a.txt, so `Ctrl-O` in
+B after `G` in A and a tab click did nothing. Neovim has no function to add an entry to a jump
+history (`getjumplist()` only reads), so the plug-in cannot write the switch in. Weighed:
+
+| Candidate | Result |
+|---|---|
+| Every Eclipse switch travels, as `:b` does | `Ctrl-O` as with one window, but editors swap window-local options, folds and location lists on every tab click: per-editor settings would not hold. |
+| Fall back to Eclipse's Back and Forward (chosen) | Editors keep their windows. `Ctrl-O` / `Ctrl-I` are Neovim's while the window's history goes on, Eclipse's `Backward History` / `Forward History` at its end (`LuaScripts.SETUP`, `editor/IdeActions`). Eclipse's history also holds its own entries (Open Declaration), so the two histories can disagree. |
+| Leave it, as per-window behavior | Matches Vim's windows, but most users expect `Ctrl-O` to go back to the last editor. |
+
 ### E3 Two editors on one file
 
 - Cursors and `curswant` are independent: `$j` in one window left the other at its column.

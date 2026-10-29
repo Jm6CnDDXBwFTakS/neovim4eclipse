@@ -90,3 +90,37 @@ t.test('the user\'s config sees g:neovim4eclipse before the setup sets the chann
   t.setup()
   t.eq(t.channel, vim.g.neovim4eclipse_channel)
 end)
+
+t.test('Ctrl-O and Ctrl-I are Neovim\'s while its jump history goes on, then Eclipse\'s Back and Forward', function()
+  t.setup()
+  vim.cmd('clearjumps')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'a', 'b', 'c' })
+  t.type('gg')
+  vim.cmd('clearjumps')
+  t.type('<C-o>') -- no older jump: an editor switch made in Eclipse is in Eclipse's history only
+  t.eq({ { 'history_back', 0 } }, t.sent('eclipse_action'))
+  t.forget()
+  t.type('G<C-o>') -- G is a jump: Neovim's own Ctrl-O goes back to line 1
+  t.eq(1, vim.fn.line('.'))
+  t.eq({}, t.sent('eclipse_action'))
+  t.type('<C-i>') -- and Ctrl-I forward again, to line 3
+  t.eq(3, vim.fn.line('.'))
+  t.eq({}, t.sent('eclipse_action'))
+  t.type('2<C-i>') -- nothing newer: Forward, with the count
+  t.eq({ { 'history_forward', 2 } }, t.sent('eclipse_action'))
+  t.eq(3, vim.fn.line('.'))
+end)
+
+t.test('a Ctrl-O mapped in init.lua is left alone', function()
+  vim.keymap.set('n', '<C-o>', '<Nop>')
+  t.setup()
+  t.eq('<Nop>', vim.fn.maparg('<C-o>', 'n'))
+  t.eq(true, vim.fn.maparg('<C-i>', 'n') ~= '', 'Ctrl-I, not mapped by the user, still falls back')
+end)
+
+t.test('with the IDE keys off, Ctrl-O and Ctrl-I are Neovim\'s alone', function()
+  vim.g.neovim4eclipse_ide_keys = 0
+  t.setup()
+  t.eq('', vim.fn.maparg('<C-o>', 'n'))
+  t.eq('', vim.fn.maparg('<C-i>', 'n'))
+end)
