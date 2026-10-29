@@ -80,6 +80,11 @@ final class DocumentBuffers {
      * notifications read so far tell. Written on the RPC thread, read from any thread.
      */
     private volatile int enteredBufnr;
+    /**
+     * Whether Neovim's move into {@link #enteredBufnr} is in the window's jump history (see the
+     * {@code BufEnter} autocommand of {@link LuaScripts#SETUP}). Written before it, on the same thread.
+     */
+    private volatile boolean enteredByJump;
 
     /**
      * @param home    the home buffer, shown in the home window
@@ -125,6 +130,11 @@ final class DocumentBuffers {
      */
     int enteredBufnr() {
         return enteredBufnr;
+    }
+
+    /** Whether the move into {@link #enteredBufnr()} is in Neovim's jump history. */
+    boolean enteredByJump() {
+        return enteredByJump;
     }
 
     /** The document mirrored into the attached buffer, or {@code null} when the home buffer is attached. */
@@ -452,8 +462,12 @@ final class DocumentBuffers {
      * window, another document's buffer goes to the enter handler; anything else is undone with
      * {@code returnBack}: another buffer, or another window Neovim entered by itself (a
      * {@code :tabnext} the user typed, the window it entered after a {@code :tabclose}).
+     *
+     * @param jumped whether the move is in the window's jump history ({@code :b}, {@code Ctrl-O};
+     *               not {@code :keepjumps})
      */
-    void onEntered(int bufnr, int winid, Runnable returnBack) {
+    void onEntered(int bufnr, int winid, boolean jumped, Runnable returnBack) {
+        enteredByJump = jumped;
         enteredBufnr = bufnr; // first: a follow-up queued for an earlier buffer must see it
         boolean attachedWindow = winid == EditorWindow.UNKNOWN || winid == attachedWin;
         if (attachedWindow && bufnr == attachedBufnr) {

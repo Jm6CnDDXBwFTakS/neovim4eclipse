@@ -190,8 +190,9 @@ from the editor switches the plug-in makes when a Neovim jump goes into another 
 Eclipse's API has no way to leave an entry out or to go to an entry directly
 (`INavigationHistory` gives the entries and the current one; Back and Forward are commands). So:
 the plug-in notes the entries its own switches add (`editor/NavigationHistorySteps.activateForNeovim`),
-Back steps over them, and a Back that lands where the editor already is (same editor, same caret)
-goes on to the next entry. Each Back is remembered with the editor and caret it left; `Ctrl-I` at
+Back steps over those whose move is in Neovim's jump history (`BufEnter` says so: the window's jumps
+have an entry in the buffer left; not for `:keepjumps`), and a Back that lands where the editor
+already is (same editor, same caret) goes on to the next entry. Each Back is remembered with the editor and caret it left; `Ctrl-I` at
 the end of a window's jumps undoes the last one, through Eclipse's Forward while the place is still
 in its history, else by showing that editor again. A switch the user makes (a tab click, `F3`)
 forgets the remembered Backs, as it deletes Eclipse's way forward; Neovim jumps do not, as Vim
@@ -199,10 +200,15 @@ never drops a jump. The decisions are in `util/HistorySteps`, tested without Ecl
 
 The order matters too: a Back can come to an editor whose window still has a newer jump, left from
 an earlier `Ctrl-O` of the same run, and `Ctrl-I` there took that jump first. So `LuaScripts.SETUP`
-keeps a trail of what each `Ctrl-O` step did (a jump in a window, or a Back), and `Ctrl-I` undoes the
-newest step. Eclipse reports Backs that went nowhere (the start of its history), which leave the
-trail. A key typed in between forgets the trail, and so does a jump step whose window is no longer
-current or has no newer jump: the keys then work as before.
+keeps a trail of what each `Ctrl-O` step did (a jump in a window, or a Back step), and `Ctrl-I`
+undoes the newest step. Each Back step has an id, chosen by Neovim and sent with `history_back`;
+`Ctrl-I` sends back the id of the oldest step to undo. The two sides never match steps by counting:
+Eclipse reports the ids of Back steps that went nowhere (the start of its history), which leave the
+trail, and an id Eclipse no longer has moves nothing. A count goes as far as the newest run of one
+kind (`3<C-i>` after two Back steps does nothing, as Vim's does past its history). The trail is
+forgotten when a key is typed in between, when the user switches editors in Eclipse (checked after
+each activation: an entry that is neither the plug-in's nor seen at the last Back), and when a jump
+step's window is no longer current or has no newer jump: the keys then work as before.
 
 ### E3 Two editors on one file
 

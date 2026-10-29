@@ -133,6 +133,14 @@ public final class EditorAttachManager {
 
         @Override
         public void partActivated(IWorkbenchPartReference partRef) {
+            NeovimSession session;
+            synchronized (EditorAttachManager.this) {
+                session = followedSession;
+            }
+            if (session != null && partRef instanceof IEditorReference) {
+                // A tab click or F3 forgets the Ctrl-O steps Ctrl-I would undo (NavigationHistorySteps).
+                NavigationHistorySteps.afterSwitch(partRef.getPage(), NavigationHistorySteps.trailOf(session));
+            }
             maybeAutoAttach(partRef);
             ToggleButtonRefresh.request(); // the button is about the editor in front, Neovim or not
         }
@@ -454,6 +462,7 @@ public final class EditorAttachManager {
         Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
         EditorWindow mover;
         DocumentBuffer leftBehind;
+        boolean jumped;
         synchronized (this) {
             mover = attachedPart == null ? null : windows.get(attachedPart);
             leftBehind = attachedBuffer;
@@ -464,6 +473,7 @@ public final class EditorAttachManager {
             if (bufnr == session.getAttachedBufnr()) {
                 return; // Eclipse switched there itself in the meantime
             }
+            jumped = session.wasEnteredByJump();
             if (bufnr != session.getEnteredBufnr()) {
                 // Neovim has entered another buffer since, whose own follow-up is queued behind this
                 // one. :bufdo, :argdo and :cdo enter every buffer in turn; following each would flick
@@ -476,9 +486,9 @@ public final class EditorAttachManager {
         try {
             if (showing.isPresent()) {
                 IEditorPart target = showing.get().editor();
-                // Eclipse records the switch in its Back history; noted as the plug-in's, since
-                // Neovim's jump history has it already (NavigationHistorySteps).
-                NavigationHistorySteps.activateForNeovim(target.getSite().getPage(), target);
+                // Eclipse records the switch in its Back history; noted as the plug-in's, and as one
+                // for Back to step over when Neovim's jump history has it (NavigationHistorySteps).
+                NavigationHistorySteps.activateForNeovim(target.getSite().getPage(), target, jumped);
                 ITextEditor textEditor = textEditorOf(target);
                 // A multi-page editor may open on a form page: no text editor to follow into.
                 if (textEditor != null && documentOf(textEditor) == showing.get().document()) {

@@ -597,13 +597,21 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Tells Neovim that Eclipse's Back went nowhere for {@code steps} {@code Ctrl-O} steps (the
-     * start of its history), so {@code Ctrl-I} does not first undo steps that moved nothing
-     * ({@link LuaScripts#HISTORY_NOWHERE}).
+     * Tells Neovim that Eclipse's Back went nowhere for {@code steps} {@code Ctrl-O} steps from
+     * step id {@code first} on (the start of its history), so {@code Ctrl-I} does not first undo
+     * steps that moved nothing ({@link LuaScripts#HISTORY_NOWHERE}).
      */
-    public void historyBacksWentNowhereAsync(int steps) {
-        submit("Ctrl-O went nowhere", Level.FINE,
-                () -> await(api.execLua(LuaScripts.HISTORY_NOWHERE, List.of(String.valueOf(steps)))));
+    public void historyBacksWentNowhereAsync(long first, int steps) {
+        submit("Ctrl-O went nowhere", Level.FINE, () -> await(api.execLua(LuaScripts.HISTORY_NOWHERE,
+                List.of(String.valueOf(first), String.valueOf(steps)))));
+    }
+
+    /**
+     * Tells Neovim to forget its trail of {@code Ctrl-O} steps: the user switched editors in
+     * Eclipse, and the Back steps Eclipse remembered are gone ({@link LuaScripts#HISTORY_FORGET}).
+     */
+    public void historyForgetAsync() {
+        submit("forget the Ctrl-O trail", Level.FINE, () -> await(api.execLua(LuaScripts.HISTORY_FORGET, List.of())));
     }
 
     @Override
@@ -662,6 +670,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public int getEnteredBufnr() {
         return buffers.enteredBufnr();
+    }
+
+    /**
+     * Whether Neovim's move into {@link #getEnteredBufnr()} is in its window's jump history
+     * ({@code :b}, {@code Ctrl-O}, {@code :bufdo}; not {@code :keepjumps}). Eclipse's record of the
+     * editor switch that follows is then a repeat that Back may step over. Any thread.
+     */
+    public boolean wasEnteredByJump() {
+        return buffers.enteredByJump();
     }
 
     // ---- buffer and cursor access (blocking) ----
@@ -1225,8 +1242,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onBufferEnter(int bufnr, int winid) {
-            buffers.onEntered(bufnr, winid, NeovimSession.this::returnToAttachedBufferAsync);
+        public void onBufferEnter(int bufnr, int winid, boolean jumped) {
+            buffers.onEntered(bufnr, winid, jumped, NeovimSession.this::returnToAttachedBufferAsync);
         }
 
         @Override

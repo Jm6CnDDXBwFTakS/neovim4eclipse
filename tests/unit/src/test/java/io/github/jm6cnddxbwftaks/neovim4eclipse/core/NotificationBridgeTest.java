@@ -40,7 +40,7 @@ class NotificationBridgeTest {
             @Override public void onBufferLines(int bufnr, int first, int last, List<String> lines) {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
-            @Override public void onBufferEnter(int bufnr, int winid) { events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
+            @Override public void onBufferEnter(int bufnr, int winid, boolean jumped) { events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid) + (jumped ? " jump" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
@@ -69,7 +69,8 @@ class NotificationBridgeTest {
                 return bufnr == 7 ? DocumentWrite.Result.failed("read-only") : DocumentWrite.Result.saved("written");
             }
             @Override public void onIdeAction(IdeAction action) {
-                events.add("action:" + action.name() + ":" + action.count());
+                events.add("action:" + action.name() + ":" + action.count()
+                        + (action.step() == 0 ? "" : ":step " + action.step()));
             }
             @Override public void onHostCommand(HostCommand command) {
                 events.add("command:" + command.kind() + (command.force() ? "!" : "") + ":" + command.args());
@@ -105,7 +106,8 @@ class NotificationBridgeTest {
         notify("eclipse_action", "next_tab", 3);
         notify("eclipse_action", "definition");
         notify("eclipse_action");
-        assertEquals(List.of("action:next_tab:3", "action:definition:0"), events);
+        notify("eclipse_action", "history_back", 2, 7); // Back steps 7 and 8
+        assertEquals(List.of("action:next_tab:3", "action:definition:0", "action:history_back:2:step 7"), events);
     }
 
     /** {@code :Eclipse[!] name args}: Neovim's full name, the bang, the arguments as a list. */
@@ -158,7 +160,9 @@ class NotificationBridgeTest {
         notify("eclipse_cursor", 50, 2, 3, 40, 1001);
         notify("eclipse_buf_enter", 3, 1002L);
         notify("eclipse_buf_enter", 3, "x"); // not a window: unknown
-        assertEquals(List.of("top@3:40#1001", "cursor:50:2@3#1001", "enter:3#1002", "enter:3"), events);
+        notify("eclipse_buf_enter", 4, 1002L, true); // a move in the window's jump history
+        assertEquals(List.of("top@3:40#1001", "cursor:50:2@3#1001", "enter:3#1002", "enter:3", "enter:4#1002 jump"),
+                events);
     }
 
     /** The safety net of LuaScripts.WINDOWS: a window closed in Neovim by itself. */
