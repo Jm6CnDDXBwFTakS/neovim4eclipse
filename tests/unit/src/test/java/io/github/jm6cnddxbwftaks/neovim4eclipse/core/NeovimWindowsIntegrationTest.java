@@ -101,6 +101,21 @@ class NeovimWindowsIntegrationTest {
         }
     }
 
+    /**
+     * An editor opened from another has that editor's file as its alternate file, as
+     * {@code :tabedit b.txt} from a.txt gives in Vim: {@code :e #} and {@code Ctrl-^} go back.
+     */
+    @Test
+    void aNewEditorsAlternateFileIsTheFileOfTheEditorBefore(@TempDir Path dir) throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer(dir.resolve("a.txt").toString());
+            DocumentBuffer b = new DocumentBuffer(dir.resolve("b.txt").toString());
+            s.showWindow(a, new EditorWindow(), dir.toString());
+            s.showWindow(b, new EditorWindow(), dir.toString());
+            assertEquals(a.bufnr, number(s, "return vim.fn.bufnr('#')"), "the alternate in b.txt's window");
+        }
+    }
+
     /** Two editors on one file (E3): a cursor each, one text and one undo history. */
     @Test
     void twoEditorsOnOneFileKeepTheirOwnCursorsAndShareTheUndo() throws Exception {
