@@ -40,6 +40,7 @@ starts the numbers over, as a new Vim does.
 | X7 | Closing as in X5 fires | `BufUnload`, then `BufDelete` (from unlisting). Not `BufWipeout`. |
 | X8 | `:b 2` into the closed buffer | Neovim reads the file from disk (`BufReadPre`, `BufReadPost`, `BufEnter`, `BufWinEnter`), the cursor goes to `'"` (line 3), `'a` is there, `swapfile` stays off. |
 | X9 | `Ctrl-^` when the alternate file is the closed buffer | Neovim enters and loads it, as X8. |
+| X10 | The plug-in's first push of Eclipse's text (`LOAD_WITHOUT_UNDO`, all lines replaced) into the reloaded buffer | The marks move: `'a` 2 → 5, `'"` 3 → 6 (the one empty line is replaced, the lines below shift). Under `:lockmarks` they stay (2 and 3). |
 
 (X4 is observed, not documented by Neovim as far as I found. Uncertain why; X5 works around it.)
 
@@ -67,8 +68,8 @@ as today for the wipe).
 documents never share one. A closed document's buffer (`b:neovim4eclipse_file` set, and not a live
 document: unlisted, or not `acwrite`) is instead reused: the same options as a new one
 (`nofile`, `bufhidden=hide`, no swap file), `bufload` if it is not loaded (X8 may have loaded it from
-disk), listed again. Eclipse's text is pushed next, as for a new buffer. A live document's buffer of
-that name still gets the unnamed fallback.
+disk), listed again. Eclipse's text is pushed next, as for a new buffer, under `:lockmarks` (X10), so that the marks
+stay on their lines. A live document's buffer of that name still gets the unnamed fallback.
 
 ### 2.3 Neovim moves into a file without an editor: Eclipse opens it (way B)
 
@@ -121,7 +122,6 @@ autocommands ran twice. Then the reuse in 2.2 turns that buffer into a document 
 
 - **Q1** 2.3's limit: *(decided 2026-10-29)* general now: any workspace file Neovim moves into
   (the quickfix plan's way B), not only closed documents.
-- **Q2** Should the reopened editor's caret go to `'"` (X8 restores it in Neovim), or stay where
-  Eclipse opens a file (line 1, or Eclipse's own remembered place)? Proposed: Neovim's, since
-  Neovim is the one that remembered it; the attach would then take Neovim's cursor instead of
-  pushing Eclipse's caret.
+- **Q2** The reopened editor's caret *(decided 2026-10-29)*: Neovim's `'"`, where Vim puts the
+  cursor on `:e` of a buffer it kept (X3, X8), not where Eclipse opens a file. The attach of a
+  reused buffer takes Neovim's cursor instead of pushing Eclipse's caret.
