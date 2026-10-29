@@ -409,7 +409,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:w`, `:up[date]` | save the editor, with Vim's message (`"A.java" 12L, 340B written`); these are Neovim's own writes, see below |
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
-| `:clo[se]`, `:tabc[lose]` | close the editor, as `:q`: the editor is its Neovim window and tab (`:close!` discards changes) |
+| `:clo[se]`, `:tabc[lose]` | close the editor, as `:q`: the editor is its Neovim window and tab (`:close!` discards changes). `:tabclose` with a number (`:tabclose 2`, `:2tabclose`, `:tabclose +`) is refused: it would close another editor's window and leave that editor without it. In a floating window you entered (hover documentation), `:q`, `:close`, `Ctrl+W q` and `Ctrl+W c` close that window, as in Neovim |
 | `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes) |
 | `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). A range closes the editors of the buffers it covers (`:3,5bd`); `:%bd` closes all editors |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
@@ -420,7 +420,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
-| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message |
+| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message. So are the quickfix, location list and preview windows (`:copen`, `:lopen`, `:pedit`), which Eclipse cannot show either; the lists stay, so `:cnext`, `:cprevious` and `:cc` work |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
