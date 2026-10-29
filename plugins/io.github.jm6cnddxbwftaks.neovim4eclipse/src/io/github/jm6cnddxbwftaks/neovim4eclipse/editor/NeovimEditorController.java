@@ -192,7 +192,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         keyInterceptor.install(styledText); // an Esc that Eclipse took first (linked mode) still ends insert mode
         // A rename begun in normal mode and accepted with Enter ends the insert typed for it.
-        this.linkedEditWatch = new LinkedEditWatch(() -> documentOf(editor), keyInterceptor::leaveInsertMode);
+        this.linkedEditWatch = new LinkedEditWatch(() -> documentOf(editor), this::leaveInsertAtCaret);
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
@@ -742,6 +742,21 @@ public final class NeovimEditorController implements AutoCloseable {
     /** Re-applies the Ctrl-key preferences (see {@link EditorKeyContext#refresh()}). */
     void refreshKeyContext() {
         keyContext.refresh();
+    }
+
+    /**
+     * Ends insert mode with Neovim's cursor on the caret, for a rename that Enter accepted
+     * ({@link LinkedEditWatch}). Enter puts the caret back where the rename began, on the name's
+     * first letter. An Esc alone would then move the cursor one to the left, as Esc does in Vim
+     * (the insert position before the {@code n} of {@code name} becomes the character before it);
+     * so the cursor is put on the caret afterward, queued behind the Esc. UI thread.
+     */
+    private void leaveInsertAtCaret() {
+        int caretOffset = offsets.caretModelOffset();
+        if (keyInterceptor.leaveInsertMode()) {
+            int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), caretOffset);
+            session.setCursorAsync(lineCol[0], lineCol[1]);
+        }
     }
 
     /** Whether the last mode reported was insert or replace (for {@link #linkedEditWatch}). */
