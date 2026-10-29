@@ -1574,7 +1574,12 @@ final class LuaScripts {
      * columns from the editor (Q11). If the current entry had no column before and has one now, is in
      * the current buffer, and the cursor is still where the line-only jump put it (that line, its
      * first non-blank), the cursor moves on to the column: the jump that opened the file ends where
-     * the problem is. A cursor the user moved meanwhile is left alone.
+     * the problem is. A cursor the user moved meanwhile is left alone, and so is one in insert or
+     * visual mode (only normal mode moves).
+     *
+     * <p>An entry with neither a buffer nor a file (a marker on a folder or project) is text only:
+     * {@code :clist} shows it, {@code :cnext} steps over it. With only such entries a command does not
+     * jump (Vim's {@code :cfirst} would say {@code E42: No Errors}) and shows the count instead.
      *
      * <p><b>{@code window(type)}</b>, from the {@code WinNew} safety net of {@link #WINDOWS} after it
      * closed a {@code quickfix} or {@code loclist} window ({@code :copen}, {@code :cwindow},
@@ -1631,6 +1636,11 @@ final class LuaScripts {
               if not before or before.col ~= 0 or before.lnum == 0 then
                 return
               end
+              -- Normal mode only: in insert or visual mode the user is already doing something there
+              -- (moving the cursor would put typed text, or the selection's end, elsewhere).
+              if vim.api.nvim_get_mode().mode ~= 'n' then
+                return
+              end
               local after = entry(id)
               local buf = vim.api.nvim_get_current_buf()
               if not after or after.col == 0 or after.bufnr ~= buf or before.bufnr ~= buf then
@@ -1676,9 +1686,9 @@ final class LuaScripts {
                 }
                 if bufnr > 0 and vim.api.nvim_buf_is_valid(bufnr) then
                   item.bufnr = bufnr
-                else
+                elseif flat[i + 1] ~= '' then
                   item.filename = flat[i + 1]
-                end
+                end -- neither: a marker on a folder or project, text only (:cnext steps over it)
                 items[#items + 1] = item
               end
               local title = titles[kind]
@@ -1705,7 +1715,16 @@ final class LuaScripts {
               else
                 vim.fn.setqflist({}, ' ', { title = title, context = context, items = items })
               end
-              if jump == '1' and #items > 0 then
+              -- Jump only when there is somewhere to go: entries that are all text only (markers on a
+              -- folder or project) would make :cfirst say "E42: No Errors" about a list that has some.
+              local valid = false
+              for _, item in ipairs(items) do
+                if item.bufnr or item.filename then
+                  valid = true
+                  break
+                end
+              end
+              if jump == '1' and valid then
                 local ok, err = pcall(vim.cmd, 'cfirst') -- shows "(1 of 12): ..." as :make does
                 if not ok then
                   echo((tostring(err):gsub('^.-Vim%(%a+%):', '')), 'ErrorMsg')
