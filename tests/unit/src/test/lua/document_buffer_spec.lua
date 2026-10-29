@@ -259,6 +259,27 @@ t.test('a reused buffer gets the plug-in\'s autocommands once', function()
   t.eq(each, plugins_autocmds(buf))
 end)
 
+-- A plug-in's :edit! (reloading files after a git checkout, say) must not read the disk over
+-- Eclipse's text: the buffer is left empty and Eclipse is asked to load the document again. Here the
+-- file is in no project (PROJECT_FILES is not even loaded), as a file opened with File > Open File.
+t.test('a script\'s :edit! on a document asks Eclipse for its text, in a project or not', function()
+  t.setup()
+  local buf, name = t.document('Outside.txt', { 'unsaved in Eclipse' })
+  vim.fn.writefile({ 'disk' }, name)
+  t.forget()
+  vim.cmd('edit!')
+  t.eq({ { buf } }, t.sent('eclipse_reload'))
+  t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'the disk is not read')
+  t.eq('acwrite', vim.bo[buf].buftype)
+  -- Its editor closed, the buffer is a kept file's buffer again, which Neovim reads itself.
+  vim.cmd('enew')
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  t.forget()
+  vim.cmd('buffer ' .. buf)
+  t.eq({ 'disk' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  t.eq({}, t.sent('eclipse_reload'))
+end)
+
 t.test('closing a buffer that is gone does nothing', function()
   t.run('CLOSE_DOCUMENT_BUFFER', '999')
 end)

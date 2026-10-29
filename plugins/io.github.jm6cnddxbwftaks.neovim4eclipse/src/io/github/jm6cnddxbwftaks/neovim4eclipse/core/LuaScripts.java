@@ -1262,11 +1262,9 @@ final class LuaScripts {
      * {@code BufReadCmd} filled first (Neovim's {@code zip.vim} lists an archive's files, read-only)
      * is left to it: reading the raw bytes on top of it failed with E21.
      *
-     * <p><b>A document's reload.</b> A buffer with an editor ({@code 'buftype'} {@code acwrite}) is
-     * read again by {@code :edit!} from a script or a plug-in (a typed {@code :e!} goes to Eclipse,
-     * {@link #HOST_COMMANDS}). Its text is Eclipse's, with any unsaved changes, so the hook does not
-     * read the disk: it sends {@code eclipse_reload(buf)}, and Eclipse loads the document into the
-     * buffer again.
+     * <p><b>A document's buffer</b> ({@code 'buftype'} {@code acwrite}, an editor shows it) is left
+     * alone: {@link #DOCUMENT_BUFFER} gives every document's buffer, inside a project or not, a
+     * {@code BufReadCmd} of its own, which asks Eclipse for the text instead.
      *
      * <p>Functions: {@code set_folders(list)}; {@code file_of(buf)}, the buffer's file name when the
      * hook is on it, else {@code ""} (sent with {@code eclipse_buf_enter}, {@link #SETUP});
@@ -1311,8 +1309,7 @@ final class LuaScripts {
               local buf = ev.buf
               vim.bo[buf].swapfile = false -- first: a stale swap file would stop the read at E325
               if vim.bo[buf].buftype == 'acwrite' then
-                vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_reload', buf)
-                return
+                return -- a document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER)
               end
               local name = ev.match
               if vim.fn.filereadable(name) == 0 then
@@ -2341,6 +2338,20 @@ final class LuaScripts {
      * showing it, asking about changes as usual (decision D10 of the cleanup plan). When Eclipse
      * wipes a buffer itself (its last editor closed), no editor shows it any more and the notice is
      * ignored.
+     *
+     * <h2>Reloaded by Neovim</h2>
+     * A typed {@code :e!} goes to Eclipse, which reverts the editor ({@link #HOST_COMMANDS}). A
+     * script's or a plug-in's {@code :edit!} (one that reloads files after a {@code git checkout},
+     * say) runs inside Neovim: it unloads the buffer and reads the file from disk, over Eclipse's
+     * text and its unsaved changes, and the unload ends the buffer's line events
+     * ({@code nvim_buf_attach}), so later changes in Neovim would never reach the document. A
+     * buffer-local {@code BufReadCmd} replaces that read: it reads nothing and sends
+     * {@code eclipse_reload(buf)}; Eclipse then loads the document's text into the buffer again and
+     * attaches it again ({@link #RELOAD_DOCUMENT_BUFFER}, {@code NeovimSession.reloadDocumentAsync}).
+     * Every document's buffer has it, whether its file is inside a project or not (a file opened
+     * with <i>File, Open File...</i>). Example: {@code a.txt} has an unsaved {@code x}; after
+     * {@code :lua vim.cmd('edit!')} the buffer is briefly empty, then holds Eclipse's text, with the
+     * {@code x}, and typing in Neovim still changes the document.
      */
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
@@ -2500,6 +2511,16 @@ final class LuaScripts {
               desc = 'Eclipse closes the editor',
               callback = function(ev)
                 vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', ev.buf)
+              end,
+            })
+            -- Reloaded by Neovim (a script's or a plug-in's :edit!): nothing is read from disk, which
+            -- would replace Eclipse's text and its unsaved changes; Eclipse loads the document again.
+            vim.api.nvim_create_autocmd('BufReadCmd', {
+              buf = buf,
+              group = group,
+              desc = 'Eclipse loads the document again',
+              callback = function(ev)
+                vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_reload', ev.buf)
               end,
             })
             """;
