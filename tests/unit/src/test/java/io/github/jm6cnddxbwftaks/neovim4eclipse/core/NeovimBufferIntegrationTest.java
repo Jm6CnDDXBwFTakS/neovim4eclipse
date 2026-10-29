@@ -414,6 +414,15 @@ class NeovimBufferIntegrationTest {
                     return false;
                 }
             }, "Neovim to leave buffer b");
+            // And for the wipe, as for a above: it comes a moment after Neovim leaves b, and until
+            // then :buffer b still works (seen once on Windows).
+            waitFor(() -> {
+                try {
+                    return Boolean.FALSE.equals(s.lua("return vim.api.nvim_buf_is_valid(" + bBuf + ")"));
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "buffer b to be wiped");
             assertFalse(b.isOpenIn(s));
             assertThrows(Exception.class, () -> s.command("buffer " + bBuf));
         }
