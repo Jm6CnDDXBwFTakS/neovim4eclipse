@@ -20,12 +20,21 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   and share the text and undo history, as two Vim windows on one buffer. `Ctrl-O` into another
   file takes the window along, so the jump history stays one chain. See the README, "Known
   limitations".
+- A jump into a project's file that has no editor open (`gf`, `'A`, `:b 3` of a closed file,
+  `Ctrl-^`, a quickfix entry) opens the file's editor, with the caret where Neovim's cursor went, and
+  `Ctrl-O` comes back. Neovim does not read such a file itself, so your filetype plug-ins and
+  `FileType` autocommands (and a language server started from one) do not run for it, as for every
+  file Eclipse opens. Jumps to other files are still undone.
 - `Ctrl-^` (`Ctrl+Shift+6`, or `Ctrl+6`) edits the alternate file, toggling between two files'
   editors; it reached Neovim as `^` or not at all. `Ctrl-]` runs Open Declaration, as `gd` does.
   `Ctrl-\`, `Ctrl-_` and `Ctrl-@` reach Neovim too.
 
 ### Changed
 
+- Closing a file's last editor keeps its Neovim buffer, as Vim's `:bd` does: the buffer number
+  stays the same when the file is opened again (`:ls`, `:b 3`), and so do its marks; the caret goes
+  where you left it. `:ls!` lists closed files with `u`. Before, the buffer was wiped and the file
+  got a new number.
 - `:close`, `:tabclose` and, when Ctrl+W goes to Neovim, `Ctrl+W q` and `Ctrl+W c` close the
   editor as `:q` does (Eclipse asks about changes; `:close!` discards them). `:split`, `:vsplit`,
   `:new`, `:tabnew`, `:tabonly` and `Ctrl+W s` / `v` are refused with a message naming Eclipse's

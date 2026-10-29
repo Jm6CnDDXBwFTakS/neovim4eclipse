@@ -1,6 +1,6 @@
 # Design note: a closed file keeps its buffer number, as with Vim's `:bd`
 
-Status: **planned** (2026-10-29); steps 1 and 2 built, step 3 designed (Q3). Branch `feature/buffer-numbers` from `release/0.1.10`
+Status: **built** (2026-10-29), steps 1 to 4; see "As built" at the end. Branch `feature/buffer-numbers` from `release/0.1.10`
 at `7bbe802`. The experiments used Neovim 0.12.6 on Linux, headless (`nvim --clean -l`). Decisions
 made with the maintainer are marked *(decided)*.
 
@@ -68,6 +68,7 @@ line, with `'undolevels'` -1 and `'modified'` off.
 | X19 | `bufload()` of a project file in the real session | Its `BufEnter` comes from Neovim's autocommand window; Eclipse does not move. |
 | X20 | A script's `:edit!` on a document (not typed: a typed `:e!` goes to Eclipse) | Today Neovim reads the file from disk into the document's buffer, which then differs from Eclipse's document, and runs filetype detection. With the hook, the hook reads it: same divergence, no filetype. The hook should leave a live document's reload to Eclipse. |
 | X21 | Eclipse: finding the file | `findFilesForLocationURI` finds a file through a link to the project, and a file under a linked folder (links may be nested, at any depth) once per link. A file in a closed project is found but not accessible. A file made on disk since the last refresh is found but does not exist for Eclipse, and `IDE.openEditor` opens it **empty**: refresh it first. |
+| X23 | A file another `BufReadCmd` reads: a real `.zip` in a project, with Neovim's `zip.vim` | Both readers run, `zip.vim`'s first (defined at startup): it lists the archive and makes the buffer read-only, and the hook's `:read` on top fails with E21. The hook now leaves a buffer that is filled or read-only already to the other reader. |
 | X22 | Eclipse: which editor would open | `IDE.getEditorDescriptor`: `.dat`, `.zip`, `.jar`, `.pdf` (and `.java` without JDT) go to the system's external editor, `.png` and `.html` to the browser. Way B may open only an internal text editor; anything else is sent back as today. |
 
 ## 2. The plan, by part
@@ -190,3 +191,27 @@ plug-in's buffers never do. So Neovim never reads a project's file itself:
   swap-file question (X18c), and patterns failed on Windows (X18d), hence the `BufNew` form (X19b).
   Language servers then need no plug-in setting: none starts for a project's file, and the README's
   `vim.g.neovim4eclipse` check stays the way to skip them altogether.
+
+## As built
+
+Steps 1 and 2: `ff88662` (reuse, `:lockmarks`), `43039d1` (close unloads), `4f7b137` (the caret on
+`'"`). Step 3, as designed in 2.3 ("What the probes found"):
+
+- `LuaScripts.PROJECT_FILES` (module `neovim4eclipse.project_files`) and `SET_PROJECT_FOLDERS`;
+  `eclipse_buf_enter` carries a project file's name as its fourth value; `eclipse_reload` and
+  `RELOAD_DOCUMENT_BUFFER` for a script's `:edit!` on a document (`NeovimSession.reloadDocumentAsync`
+  attaches the buffer's line events again, since the unload ended them).
+- `editor/ProjectFolders` (the folders, sent at each Neovim's first attach and after workspace
+  changes), `editor/ProjectFileEditors` (find, refresh, check, open), and
+  `EditorAttachManager.followNeovimIntoFile`.
+- Found while building: X23 (a file another `BufReadCmd` reads).
+- Tests: `project_files_spec.lua` (the hook, links, folders coming and going, a closed document's
+  buffer, the reload, a stale swap file, encodings, `bufload()`, another reader),
+  `NotificationBridgeTest`, `ProjectFilesEndToEndTest` (`gf` and `Ctrl-O` back, `:b N` and `Ctrl-^`
+  into a closed file, a quickfix entry, a file made outside Eclipse, a `.zip` refused and `:help`
+  undone, a script's `:edit!`). Five of its six tests fail with the folders not sent; the sixth,
+  the refusal, checks that Eclipse was asked.
+
+Known limits: a linked single file (not folder) is read by Neovim as before; a link whose target
+changes in place is seen at the next project or link change; on Windows a folder literally named
+`$HOME` is expanded by Neovim's own `:edit` (X19b), with or without the plug-in.

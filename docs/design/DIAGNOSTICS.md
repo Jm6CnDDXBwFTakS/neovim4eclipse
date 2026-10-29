@@ -27,7 +27,7 @@ Phase 1, diagnostics in open documents:
 
 Phase 2, the quickfix list:
 
-- **`]q` / `[q`, `]Q` / `[Q`, `]<C-Q>` / `[<C-Q>`** (Neovim's default mappings) and **`:cn[ext]`, `:cp[revious]`, `:cN[ext]`, `:cc N`, `:cfir[st]`, `:cla[st]`, `:cnf[ile]`**: walk Neovim's current quickfix list, whatever filled it: Eclipse's problems or tasks, `:vimgrep`, or the user's own `setqflist()`. Neovim runs every one of them itself, typed, mapped or in a macro; an entry in a file that has no editor yet opens its editor, the way `:e file` does (section 5, way B).
+- **`]q` / `[q`, `]Q` / `[Q`, `]<C-Q>` / `[<C-Q>`** (Neovim's default mappings) and **`:cn[ext]`, `:cp[revious]`, `:cN[ext]`, `:cc N`, `:cfir[st]`, `:cla[st]`, `:cnf[ile]`**: walk Neovim's current quickfix list, whatever filled it: Eclipse's problems or tasks, `:vimgrep`, or the user's own `setqflist()`. Neovim runs every one of them itself, typed, mapped or in a macro; an entry in a file that has no editor yet opens its editor, the way `:e file` does (section 5, way B; built with docs/design/BUFFER_NUMBERS.md, 2.3).
 - **`:cl[ist]`**: the list, in the existing output popup (it is ordinary command output).
 - **`:copen` / `:cw[indow]`**: open Eclipse's Problems view, since Neovim's quickfix window cannot be shown (Q5): it is a split, and the windows plan refuses splits in an editor's tabpage. The Tasks view for `Eclipse tasks`, the output popup for other lists.
 - **`:Eproblems` / `:Etasks`** fill the quickfix list with the workspace's problems or tasks, and keep it current while it is the current list (Q4).

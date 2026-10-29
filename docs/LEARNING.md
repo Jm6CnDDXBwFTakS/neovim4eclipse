@@ -481,6 +481,13 @@ buffer itself, Neovim reports that write too, as a line event; since Neovim send
 reply to `nvim_buf_set_lines`, the session drops the events that arrive while it waits for that reply
 (`setDocumentBufferLines`), instead of applying its own change a second time.
 
+**Unload, wipe, keep.** Vim's `:bd` *unloads* a buffer (its text and undo history go) and unlists it,
+but keeps the buffer itself: its number, marks and last cursor position (`'"`). `:bw` *wipes* it,
+and the number is gone. The plug-in does what `:bd` does when a file's last editor closes, so the
+file's next editor gets buffer 3 back, not a new number (docs/design/BUFFER_NUMBERS.md).
+`nvim_buf_attach` ends when a buffer unloads: a buffer Neovim reloads by itself (`:edit!` from a
+script) is attached again (`NeovimSession.reloadDocumentAsync`).
+
 Neovim has no notion of a final newline: a buffer is a list of lines. `util/LineTextUtil` explains how
 the plug-in keeps an Eclipse file's final newline.
 
@@ -641,6 +648,35 @@ cursor into the view. From step 2 on it is `Ctrl-E`. The editor never scrolls by
 cannot disagree. When it does scroll by itself (the scroll bar, a search hit), the next paint sends
 its top line to Neovim, which drags its cursor the same way. Design: [VIEWPORT.md](design/VIEWPORT.md).
 
+### 3.2c `gf` onto a file that has no editor
+
+`a.txt` is open and says `see b.txt`; `b.txt` is in the same project, with no editor. The cursor is on
+`b.txt`, and the user types `gf`.
+
+1. Neovim makes a buffer for `b.txt`. Its `BufNew` reaches `LuaScripts.PROJECT_FILES`, which
+   resolves the file's path (`fs_realpath`) and finds it inside a project folder that
+   `editor/ProjectFolders` sent at the first attach. The buffer gets a buffer-local `BufReadCmd`.
+2. Neovim loads the buffer: that `BufReadCmd` reads it instead of Neovim (`:read ++edit` without
+   autocommands, `'swapfile'` off first). No filetype is detected, so no filetype plug-in and no
+   `FileType` autocommand of the user's runs: a language server started from one would be a second
+   one beside Eclipse's.
+3. `BufEnter` sends `eclipse_buf_enter` with the file's name as its fourth value
+   (`NotificationBridge`, `DocumentBuffers.onEntered`), and `EditorAttachManager.followNeovimIntoFile`
+   runs on the UI thread.
+4. `ProjectFileEditors.open` finds the workspace file (refreshing it, in case it was made outside
+   Eclipse), checks that Eclipse's editor for it is one of its own (a `.zip` would start another
+   program) and opens it without activating it. `NavigationHistorySteps.activateForNeovim` activates
+   it, so that Eclipse's Back history notes the switch as the plug-in's.
+5. The window that jumped travels into the new editor (`travel`), and the attach takes Neovim's
+   cursor (`attach(..., true)`). `CREATE_DOCUMENT_BUFFER` finds `b.txt`'s buffer by name and makes it
+   the document's buffer: same number. Eclipse's text is pushed into it.
+6. `Ctrl-O` in `b.txt` goes back to `a.txt`: the window's jump history has the jump, and the
+   window travels back the same way.
+
+Anything else Neovim enters (`:help`, a file outside the projects) is still undone. Design and the
+probes behind each step: [BUFFER_NUMBERS.md](design/BUFFER_NUMBERS.md), 1.1 and 2.3. Tests:
+`project_files_spec.lua`, `ProjectFilesEndToEndTest`.
+
 ### 3.3 Insert mode
 
 `i` goes to Neovim like any key; its `ModeChanged` notification switches the plug-in to "typing".
@@ -711,8 +747,9 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 A port is not the only way to keep Eclipse out of a class. When the class only *stores* Eclipse
 objects and compares them, never calls them, type parameters are enough. `core/EditorBuffers<D, E>`
 decides which editors share a document's buffer, which editor Eclipse activates when Neovim switches
-buffers itself (the first one opened, so the choice is repeatable), and when a buffer is wiped (when
-its last editor closes). In the plug-in it is an `EditorBuffers<IDocument, IEditorPart>`; in
+buffers itself (the first one opened, so the choice is repeatable), and when a buffer is given up
+(its last editor closes; the session then unloads it, as Vim's `:bd` does, and keeps it for the
+file's next editor). In the plug-in it is an `EditorBuffers<IDocument, IEditorPart>`; in
 `EditorBuffersTest` it is an `EditorBuffers<String, String>`:
 
 ```java
@@ -720,7 +757,7 @@ EditorBuffers<String, String> buffers = new EditorBuffers<>();
 DocumentBuffer a = buffers.add("A.java", "editor 1", () -> "/src/A.java");
 buffers.add("A.java", "editor 2", () -> "/src/A.java");      // same buffer, shared undo history
 assertEquals(List.of(), buffers.remove("editor 1"));          // editor 2 still shows A.java
-assertEquals(List.of(a), buffers.remove("editor 2"));         // last one closed: wipe it
+assertEquals(List.of(a), buffers.remove("editor 2"));         // last one closed: give it up
 ```
 
 When *not* to add one: glue code that only passes values through (an adapter, `KeyInterceptor`) has no

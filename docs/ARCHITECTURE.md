@@ -171,9 +171,23 @@ followed: its editor is activated and attached, keeping Neovim's cursor. When se
 that document, the first one opened is chosen. Commands such as `:bufdo`, `:argdo` and `:cdo` enter
 every buffer in turn; `DocumentBuffers` remembers the buffer entered last, and a queued follow-up for a
 buffer Neovim has left again is skipped, so Eclipse activates only the editor Vim ends in instead of
-flicking through all of them. A switch to any other
-buffer is undone (`returnToAttachedBufferAsync`). When a document's last editor closes, its buffer
-is wiped (`closeBufferAsync`).
+flicking through all of them. A switch to a project's file that has no editor (`gf`, `'A`, `:b 3`
+of a closed file, a quickfix entry) opens that file's editor (`editor/ProjectFileEditors`) and is
+followed the same way; a switch to any other buffer is undone (`returnToAttachedBufferAsync`). When
+a document's last editor closes, its buffer is unloaded and unlisted, as by Vim's `:bd`, not wiped
+(`closeBufferAsync`, `LuaScripts.CLOSE_DOCUMENT_BUFFER`), and the file's next editor gets the same
+buffer back, with its number and marks (`LuaScripts.CREATE_DOCUMENT_BUFFER`;
+docs/design/BUFFER_NUMBERS.md).
+
+**Project files Neovim reaches by itself (docs/design/BUFFER_NUMBERS.md, 2.3).** Neovim reading a
+file runs filetype detection and the user's `FileType` setup (a language server may start), which
+the plug-in's buffers never do. So it reads no file of an open project itself: `editor/ProjectFolders`
+sends the open projects' folders and linked folders (at the first attach, and again when projects
+or links come or go), and `LuaScripts.PROJECT_FILES` gives every buffer inside one, found by
+comparing resolved paths on `BufNew`, a buffer-local `BufReadCmd` that reads only the text (with
+`'swapfile'` off, so a stale swap file cannot stop it at E325). `eclipse_buf_enter` carries such a
+buffer's file as its fourth value, for Eclipse to open. A document's buffer reloaded by a script's
+`:edit!` is left empty and refilled from the document (`eclipse_reload`, `reloadDocumentAsync`).
 
 **A window per editor (docs/design/WINDOWS.md).** Each editor has its
 own Neovim window, alone in a hidden tabpage (`'showtabline'` 0), so that it keeps its own cursor,
@@ -196,7 +210,7 @@ from the editor attached before, or gets the home folder. Without a token (`show
 document is shown in the *home window*, the one Neovim starts with, which only tests use now. A
 window closed in Neovim by itself sends `eclipse_window_closed` (`WinClosed`) and is opened again
 at its editor's next show; closing an editor closes its window (`closeWindowAsync`) before its
-buffer may be wiped. Vim's window commands: `:close` and `:tabclose` are host commands that close
+buffer may be unloaded. Vim's window commands: `:close` and `:tabclose` are host commands that close
 the editor (`util/HostCommand`, `QUIT`); `LuaScripts.WINDOW_COMMANDS` refuses the split and tab
 commands through the host commands' `refuse` hook and maps the `Ctrl-W` keys; a `WinNew` safety
 net closes any other window that is not the plug-in's, floating or special, and the quickfix,
@@ -456,7 +470,7 @@ view to the controller, which shows it in the box. The box edits nothing:
   the `|` of a command that keeps it, such as `:let x = 1 | q`): `BufDelete` / `BufWipeout` on a document buffer and `QuitPre` send `eclipse_buffer_closed`, and
   `EditorAttachManager` closes the editor showing that buffer (asking about changes). They cannot stop
   Neovim: on its last window a quit still ends it (X7). Ignored while the session closes (its `:qa!`
-  fires `QuitPre` too) and for a buffer no editor shows (one Eclipse wiped itself).
+  fires `QuitPre` too) and for a buffer no editor shows (a closed file's kept buffer).
 - The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the attached editor
   (`NeovimSession.addHostCommandListener`), is turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked; `:wq other.txt` writes a copy instead,
