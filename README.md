@@ -38,7 +38,7 @@ edges, see [Known limitations](#known-limitations).
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
 | Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode, the mouse included (see [Mouse](#mouse)) |
 | File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:bd`, `:e file`, `:e!`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
-| `gd` and `Ctrl-]` (Open Declaration) and `K` (hover information), through the editor's own commands | Counts and the `g` prefix of those keys |
+| `gd` and `Ctrl-]` (Open Declaration), `K` (hover information), and Neovim's language keys `grn` (Rename), `gra` (Quick Fix), `grr` (References), `gri` (Open Implementation), `grt` (Open Declared Type), `gO` (Quick Outline), through the editor's own commands (see [docs/KEYBOARD.md](docs/KEYBOARD.md)) | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
 | Finding errors and warnings (compiler, builders, language servers), sent to Neovim as diagnostics (see [Problems](#problems-d-d)) | `]d` / `[d` / `]D` / `[D` between them, with counts, in macros and the jumplist |
@@ -699,7 +699,7 @@ The variables starting with `eclipse_` work in two directions:
 | Variable | Set by | Meaning |
 |----------|--------|---------|
 | `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
-| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `Ctrl-]`, `K`, `gt`, `gT` (not `ZZ`, `ZQ`; [docs/KEYBOARD.md](docs/KEYBOARD.md)) |
+| `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `Ctrl-]`, `K`, `grn`, `gra`, `grr`, `gri`, `grt`, `gO`, `gt`, `gT` (not `ZZ`, `ZQ`; [docs/KEYBOARD.md](docs/KEYBOARD.md)) |
 | `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
