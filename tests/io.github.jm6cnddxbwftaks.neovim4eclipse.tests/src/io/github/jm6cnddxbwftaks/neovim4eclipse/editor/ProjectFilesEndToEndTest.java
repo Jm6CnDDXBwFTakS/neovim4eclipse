@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
@@ -314,6 +315,28 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             expectText(outside, "Zunsaved\n");
         } finally {
             page().closeEditor(outside, false);
+        }
+    }
+
+    /**
+     * A project opened or closed while Neovim runs reaches it (ProjectFolders' listener schedules
+     * its job, which walks the workspace off the thread that made the change: here the UI thread).
+     */
+    @Test
+    void aProjectOpenedOrClosedLaterIsSeenByNeovim() throws Exception {
+        IProject other = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-other");
+        try {
+            other.create(null);
+            other.open(null);
+            String file = other.getLocation().append("o.txt").toOSString();
+            String inside = "return require('neovim4eclipse.project_files').inside(" + lua(file) + ")";
+            waitUntil("Neovim to know the opened project", TIMEOUT_MS,
+                    () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
+            other.close(null);
+            waitUntil("Neovim to forget the closed project", TIMEOUT_MS,
+                    () -> Boolean.FALSE.equals(SessionProbe.lua(session, inside)));
+        } finally {
+            other.delete(true, true, null);
         }
     }
 

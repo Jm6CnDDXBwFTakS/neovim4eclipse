@@ -21,6 +21,9 @@ import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
@@ -51,9 +54,23 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
  * place is not seen until one of those; the cost of watching every change for it would be a walk of
  * the whole workspace each time.
  *
- * <p>Finding the linked folders walks each project's resources (Eclipse's in-memory tree, no disk
- * access), off the UI thread: in a {@link Job} at the first attach, on the thread of the change
- * afterwards.
+ * <h2>One job sends them</h2>
+ * Finding the linked folders walks each project's resources (Eclipse's in-memory tree, no disk
+ * access). The walk runs in one {@link Job}, {@link #SENDER}, never on the thread that asked: a
+ * workspace change is announced on the thread that made it, often the UI thread (closing a project
+ * from the Project Explorer). Both the first attach and the listener only schedule that job, which
+ * gives two more things for free:
+ * <ul>
+ *   <li><b>Order.</b> A job runs one run at a time, and each run walks the workspace as it is then,
+ *       so a walk made before a change can never reach Neovim after the walk made after it (with a
+ *       job per request it could: the first attach's walk, made before an import, sent after the
+ *       import's walk, and Neovim would keep the older folders).</li>
+ *   <li><b>Bursts.</b> Scheduling a job that is already waiting does nothing, and scheduling one
+ *       that is running runs it once more afterwards. Importing 20 projects then gives a few walks,
+ *       not 20.</li>
+ * </ul>
+ * The cost: Neovim learns of a change some milliseconds later, so a {@code gf} in the same moment
+ * as an import may still be read by Neovim itself.
  */
 public final class ProjectFolders implements IResourceChangeListener {
 
@@ -61,7 +78,12 @@ public final class ProjectFolders implements IResourceChangeListener {
 
     /** The running session, or {@code null}: a listener must never start Neovim. */
     private final Supplier<NeovimSession> session;
-    /** The linked folders found by the last walk, by workspace path: their removal changes the folders. */
+    /** The one job that walks the workspace and sends the folders (see the class comment). */
+    private static final Sender SENDER = new Sender();
+    /**
+     * The linked folders found by the last walk, by workspace path: their removal changes the folders.
+     * Written by {@link #current} in {@link #SENDER}, read by the listener.
+     */
     private static volatile Set<IPath> linkedFolders = Set.of();
 
     private ProjectFolders(Supplier<NeovimSession> session) {
@@ -94,15 +116,37 @@ public final class ProjectFolders implements IResourceChangeListener {
         } catch (IllegalStateException e) {
             LOG.log(Level.FINE, "The workspace is already gone", e);
         }
+        SENDER.cancel(); // a run already started finishes; its session check makes it harmless
     }
 
-    /** Sends the folders to {@code neovim} in the background (a new Neovim's first attach). Any thread. */
+    /** Sends the folders to {@code neovim} in the background (see the class comment). Any thread. */
     static void sendTo(NeovimSession neovim) {
-        Job job = Job.create("Neovim: project folders", monitor -> {
-            send(neovim);
-        });
-        job.setSystem(true); // no progress shown: it takes milliseconds
-        job.schedule();
+        SENDER.sendTo(neovim);
+    }
+
+    /**
+     * The job of the class comment. It sends to the session it was last given: after a restart of
+     * Neovim the new one (the old one is no longer alive anyway).
+     */
+    private static final class Sender extends Job {
+
+        private volatile NeovimSession target;
+
+        Sender() {
+            super("Neovim: project folders");
+            setSystem(true); // no progress shown: it takes milliseconds
+        }
+
+        void sendTo(NeovimSession neovim) {
+            target = neovim;
+            schedule(); // waiting: nothing more; running: once more afterwards
+        }
+
+        @Override
+        protected IStatus run(IProgressMonitor monitor) {
+            send(target);
+            return Status.OK_STATUS;
+        }
     }
 
     private static void send(NeovimSession neovim) {
@@ -157,7 +201,7 @@ public final class ProjectFolders implements IResourceChangeListener {
             return;
         }
         if (changesFolders(delta)) {
-            send(neovim);
+            sendTo(neovim);
         }
     }
 
