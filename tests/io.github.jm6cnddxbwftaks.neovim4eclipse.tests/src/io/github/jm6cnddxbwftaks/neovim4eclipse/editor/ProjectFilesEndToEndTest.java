@@ -12,7 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 
+import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.ide.IDE;
@@ -240,6 +242,31 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
         assertFalse(String.valueOf(bufferOption("filetype")).equals("text"), "not read by Neovim");
         session.inputAsync("jiy<Esc>");
         expectText("xalpha\nybeta\ngamma\n");
+    }
+
+    /**
+     * The same for a file outside every project (<i>File, Open File...</i>), which Neovim's project
+     * folders do not cover: its buffer has the reload hook all the same (LuaScripts.DOCUMENT_BUFFER).
+     */
+    @Test
+    void aScriptsEditBangOnAFileOutsideTheWorkspaceReloadsEclipsesText() throws Exception {
+        Path dir = Files.createTempDirectory("outside");
+        Path file = dir.resolve("outside.txt");
+        Files.writeString(file, "disk\n", StandardCharsets.UTF_8);
+        ITextEditor outside = (ITextEditor) IDE.openEditorOnFileStore(page(), EFS.getLocalFileSystem().getStore(file.toUri()));
+        try {
+            waitForAttach(outside, "outside.txt");
+            IDocument doc = documentOf(outside);
+            doc.replace(0, doc.getLength(), "unsaved\n");
+            settle();
+            SessionProbe.lua(session, "vim.cmd('edit!') return 0");
+            waitUntil("the buffer to hold Eclipse's text again", TIMEOUT_MS,
+                    () -> "unsaved".equals(String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_get_current_line()"))));
+            session.inputAsync("ggiZ<Esc>");
+            expectText(outside, "Zunsaved\n");
+        } finally {
+            page().closeEditor(outside, false);
+        }
     }
 
     private static String lua(String s) {

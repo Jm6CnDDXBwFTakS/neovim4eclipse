@@ -80,6 +80,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A plug-in's or script's `:edit!` in Neovim (one that reloads files after a `git checkout`, say)
+  no longer replaces an open file's text, unsaved changes included, with the file on disk, and no
+  longer stops Neovim's changes from reaching the editor. Eclipse's text is loaded into Neovim
+  again. (A typed `:e!` already reverted the editor in Eclipse.)
 - `Ctrl-I` now comes back through the same places `Ctrl-O` went. After a few `:e #` between two
   files, `Ctrl-O` went back about nine times and `Ctrl-I` forward about three: Eclipse's Back
   repeated every editor switch Neovim's jumps had made, and the first jump forward into the other
