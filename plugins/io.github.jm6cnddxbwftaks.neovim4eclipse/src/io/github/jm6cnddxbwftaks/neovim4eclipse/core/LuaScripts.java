@@ -1183,10 +1183,33 @@ final class LuaScripts {
             """;
 
     /**
-     * Before a document's buffer is wiped (arguments: its number, and the buffer shown instead):
+     * Closes a document's buffer after its last editor closed (argument: its number), as Vim's
+     * {@code :bd} does: unloaded and unlisted, but kept, with its number, marks and last cursor
+     * position, so that the file's next editor gets the same buffer back (CREATE_DOCUMENT_BUFFER;
+     * docs/design/BUFFER_NUMBERS.md). Example: a.txt is buffer 1; closing its editor leaves
+     * {@code 1u} in {@code :ls!}, and opening it again gives buffer 1, not a new number.
+     *
+     * <p>In order: the plug-in's autocommands for the buffer go (the write hook and the safety net
+     * belong to a document with an editor); {@code 'buftype'} goes back to a normal file's, since
+     * Neovim drops the marks of an {@code acwrite} buffer when it unloads it (X4); then unload and
+     * unlist. {@code b:neovim4eclipse_file} stays. Nothing for a buffer that is gone.
+     */
+    static final String CLOSE_DOCUMENT_BUFFER = """
+            local buf = tonumber((select(1, ...)))
+            if not vim.api.nvim_buf_is_valid(buf) then
+              return
+            end
+            pcall(vim.api.nvim_clear_autocmds, { group = 'neovim4eclipse_document', buf = buf })
+            vim.bo[buf].buftype = ''
+            vim.api.nvim_buf_delete(buf, { force = true, unload = true }) -- force: unsaved changes live in Eclipse
+            vim.bo[buf].buflisted = false
+            """;
+
+    /**
+     * Before a document's buffer is closed (arguments: its number, and the buffer shown instead):
      * closes the editor windows that show it, quietly, and returns their ids; the home window shows
-     * the other buffer instead. Wiping a buffer shown in a window would make Neovim close that window
-     * or put some other buffer in it, by itself. See {@link #WINDOWS}.
+     * the other buffer instead. Unloading a buffer shown in a window would make Neovim close that
+     * window or put some other buffer in it, by itself. See {@link #WINDOWS}.
      */
     static final String RELEASE_BUFFER = """
             local buf, fallback = tonumber((select(1, ...))), tonumber((select(2, ...)))
@@ -2110,6 +2133,10 @@ final class LuaScripts {
     static final String DOCUMENT_BUFFER = """
             local buf = tonumber(select(1, ...))
             vim.bo[buf].buftype = 'acwrite'
+            -- The plug-in's autocommands for this buffer, in one group: CLOSE_DOCUMENT_BUFFER removes
+            -- them when the last editor closes, and a buffer reused for a new editor gets them once.
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_document', { clear = false })
+            vim.api.nvim_clear_autocmds({ group = group, buf = buf })
             -- The editor's file, as Neovim names it (links resolved). Writes are compared with it, not
             -- with the buffer's name, which :saveas and :file change.
             vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
@@ -2171,6 +2198,7 @@ final class LuaScripts {
 
             vim.api.nvim_create_autocmd('BufWriteCmd', {
               buf = buf, -- named "buffer" before Neovim 0.12.2
+              group = group,
               desc = 'Eclipse saves the document',
               callback = function(ev)
                 local file = vim.b[ev.buf].neovim4eclipse_file
@@ -2200,6 +2228,7 @@ final class LuaScripts {
             for event, kind in pairs({ FileWriteCmd = 'lines', FileAppendCmd = 'append' }) do
               vim.api.nvim_create_autocmd(event, {
                 buf = buf,
+                group = group,
                 desc = 'Eclipse writes the lines to another file',
                 callback = function(ev)
                   local target = vim.fn.fnamemodify(ev.match, ':p')
@@ -2218,12 +2247,14 @@ final class LuaScripts {
             local names_before = {}
             vim.api.nvim_create_autocmd('BufFilePre', {
               buf = buf,
+              group = group,
               callback = function(ev)
                 names_before[ev.buf] = vim.api.nvim_buf_get_name(ev.buf)
               end,
             })
             vim.api.nvim_create_autocmd('BufFilePost', {
               buf = buf,
+              group = group,
               desc = 'Eclipse keeps the buffer named after its file',
               callback = function(ev)
                 local b = ev.buf
@@ -2249,9 +2280,11 @@ final class LuaScripts {
               end,
             })
             -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its
-            -- editor too. Eclipse ignores it for a buffer no editor shows (one it wiped itself).
+            -- editor too. Eclipse ignores it for a buffer no editor shows. (When Eclipse closes the
+            -- last editor, CLOSE_DOCUMENT_BUFFER removes this autocommand first.)
             vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {
               buf = buf,
+              group = group,
               desc = 'Eclipse closes the editor',
               callback = function(ev)
                 vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', ev.buf)

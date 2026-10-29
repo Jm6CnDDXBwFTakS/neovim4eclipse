@@ -396,7 +396,7 @@ class NeovimWindowsIntegrationTest {
             s.showWindow(doc, b, "");
             s.showWindow(doc, a, "");
             s.closeBufferAsync(doc);
-            waitFor(() -> !doc.isOpenIn(s), "the buffer to be wiped");
+            waitFor(() -> !doc.isOpenIn(s), "the buffer to be closed");
             waitFor(() -> !a.isOpenIn(s) && !b.isOpenIn(s), "its windows to be forgotten");
             assertTrue(c.isOpenIn(s));
             assertEquals(2, number(s, "return #vim.api.nvim_list_tabpages()"), "the home tab and C's");

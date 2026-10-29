@@ -222,3 +222,43 @@ t.test('Neovim deleting or wiping a document buffer by itself tells Eclipse', fu
   vim.cmd.bwipeout(b) -- BufDelete, then BufWipeout: told twice, and Eclipse closes the editor once
   t.eq({ { a }, { b }, { b } }, t.sent('eclipse_buffer_closed'))
 end)
+
+-- CLOSE_DOCUMENT_BUFFER: the last editor closed, the buffer is kept as Vim's :bd keeps it
+-- (docs/design/BUFFER_NUMBERS.md): unloaded, unlisted, with its number and marks, for the file's next
+-- editor (CREATE_DOCUMENT_BUFFER reuses it).
+
+local function plugins_autocmds(buf)
+  return #vim.api.nvim_get_autocmds({ group = 'neovim4eclipse_document', buf = buf })
+end
+
+t.test('closing a document keeps its buffer as :bd does: number, marks and last position', function()
+  t.setup()
+  local buf, name = t.document('Kept.txt', { '1', '2', '3' })
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+  vim.api.nvim_buf_set_mark(buf, 'a', 2, 0, {})
+  vim.cmd('enew') -- the plug-in leaves the buffer first (RELEASE_BUFFER)
+  t.forget()
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  t.eq(true, vim.api.nvim_buf_is_valid(buf), 'kept')
+  t.eq(false, vim.api.nvim_buf_is_loaded(buf), 'unloaded')
+  t.eq(false, vim.bo[buf].buflisted, 'only :ls! shows it')
+  t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'))
+  t.eq(3, vim.api.nvim_buf_get_mark(buf, '"')[1])
+  t.eq(0, plugins_autocmds(buf), 'no write hook, no safety net')
+  t.eq({}, t.sent('eclipse_buffer_closed'), 'Eclipse closed it: nothing to tell')
+  local again = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq(buf, again, 'the next editor gets the same buffer')
+end)
+
+t.test('a reused buffer gets the plug-in\'s autocommands once', function()
+  t.setup()
+  local buf = t.document('Twice.txt', { 'x' })
+  local each = plugins_autocmds(buf)
+  t.ok(each > 0, 'the write hook and the safety net')
+  t.run('DOCUMENT_BUFFER', tostring(buf))
+  t.eq(each, plugins_autocmds(buf))
+end)
+
+t.test('closing a buffer that is gone does nothing', function()
+  t.run('CLOSE_DOCUMENT_BUFFER', '999')
+end)

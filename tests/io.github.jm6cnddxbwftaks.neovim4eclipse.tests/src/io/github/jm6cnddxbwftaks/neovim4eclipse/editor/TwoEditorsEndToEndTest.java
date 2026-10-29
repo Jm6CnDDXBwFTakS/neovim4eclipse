@@ -34,11 +34,18 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
         return (ITextEditor) second;
     }
 
-    /** How many of Neovim's buffers are test.txt's ({@code :ls!}, wiped buffers are gone). */
+    /** How many of Neovim's buffers are test.txt's ({@code :ls!}: closed ones too). */
     private int testTxtBuffers() {
         Object count = SessionProbe.lua(session, "return #vim.tbl_filter(function(b) "
                 + "return vim.api.nvim_buf_get_name(b):match('test%.txt$') ~= nil end, vim.api.nvim_list_bufs())");
         return ((Number) count).intValue();
+    }
+
+    /** test.txt's buffer number, and whether it is loaded: {@code "3 loaded"}, {@code "3 unloaded"}. */
+    private String testTxtBuffer() {
+        return String.valueOf(SessionProbe.lua(session, "for _, b in ipairs(vim.api.nvim_list_bufs()) do "
+                + "if vim.api.nvim_buf_get_name(b):match('test%.txt$') then "
+                + "return b .. (vim.api.nvim_buf_is_loaded(b) and ' loaded' or ' unloaded') end end return 'none'"));
     }
 
     private int currentWindow() {
@@ -88,30 +95,34 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Closing both editors wipes the buffer (gone from {@code :ls}); after reopening, {@code u}
-     * undoes nothing: the history starts fresh with the saved file.
+     * Closing both editors unloads the buffer, as Vim's {@code :bd} (gone from {@code :ls}, kept in
+     * {@code :ls!}); reopening gives the same buffer number back (docs/design/BUFFER_NUMBERS.md), and
+     * {@code u} undoes nothing: the history starts fresh with the saved file, as in Vim.
      */
     @Test
-    void closingTheLastEditorWipesTheBufferAndReopeningStartsAFreshHistory() throws Exception {
+    void closingTheLastEditorUnloadsTheBufferAndReopeningKeepsItsNumberWithAFreshHistory() throws Exception {
         type(widget, "ggdd");
         expectText("beta\ngamma\n");
         editor.doSave(null);
         ITextEditor second = openSecondEditor();
         ITextEditor other = openOtherFile(); // stays open, so a buffer and an attached editor remain
         assertEquals(1, testTxtBuffers());
+        String number = testTxtBuffer().split(" ")[0];
 
         page().closeEditor(second, false);
         page().closeEditor(editor, false);
         editor = null;
         settle();
-        waitUntil("test.txt's buffer to be wiped", TIMEOUT_MS, () -> testTxtBuffers() == 0,
-                () -> "; there are " + testTxtBuffers());
+        waitUntil("test.txt's buffer to be unloaded", TIMEOUT_MS, () -> testTxtBuffer().equals(number + " unloaded"),
+                () -> "; it is " + testTxtBuffer());
 
         IFile file = project.getFile("test.txt");
         editor = (ITextEditor) IDE.openEditor(page(), file, TEXT_EDITOR, true);
         widget = widgetOf(editor);
         document = documentOf(editor);
         waitForAttach(editor, "the reopened test.txt");
+        assertEquals(number + " loaded", testTxtBuffer(), "the same buffer, not a new number");
+        assertEquals(1, testTxtBuffers());
         type(widget, 'u');
         settle();
         expectText("beta\ngamma\n");
