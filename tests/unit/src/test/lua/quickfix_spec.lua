@@ -183,6 +183,34 @@ t.test('a cursor the user moved after the jump stays where it is', function()
   t.eq({ 3, 2 }, vim.api.nvim_win_get_cursor(0))
 end)
 
+t.test('the column fix-up leaves a cursor in insert or visual mode alone', function()
+  local f = start()
+  set('problems', '', 'command', true, { entry(f[1], 2, 0, 'E', 'x') })
+  local buf = vim.api.nvim_get_current_buf()
+  for _, keys in ipairs({ 'i', 'v' }) do
+    vim.api.nvim_win_set_cursor(0, { 2, 4 }) -- where the line-only jump put it (Esc after i moved it left)
+    local cursor = t.during(keys, function()
+      set('problems', '', 'update', false, { entry(f[1], 2, 10, 'E', 'x', buf) })
+      return vim.api.nvim_win_get_cursor(0)
+    end)
+    t.eq({ 2, 4 }, cursor, 'in mode ' .. keys)
+    set('problems', '', 'update', false, { entry(f[1], 2, 0, 'E', 'x') }) -- line only again, for the next mode
+  end
+end)
+
+t.test('markers on folders or projects are text only, and with nothing else there is no jump and no E42', function()
+  start()
+  local before = vim.api.nvim_get_current_buf()
+  set('problems', '', 'command', true, {
+    { '0', '', 'a', '0', '0', 'E', 'The project cannot be built' },
+    { '0', '', 'b', '0', '0', 'E', 'The project cannot be built' } })
+  local items = vim.fn.getqflist()
+  t.eq(2, #items)
+  t.eq({ 0, 0 }, { items[1].valid, items[1].bufnr })
+  t.eq(before, vim.api.nvim_get_current_buf())
+  t.eq('Eclipse problems: 2 (2 errors)', last_message(), 'the count, not E42')
+end)
+
 t.test(':copen on our list asks Eclipse for its view; on another list it shows :clist', function()
   local f = start()
   local home_buf = vim.api.nvim_create_buf(false, true)
