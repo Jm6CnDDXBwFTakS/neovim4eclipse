@@ -186,8 +186,13 @@ sends the open projects' folders and linked folders (at the first attach, and ag
 or links come or go), and `LuaScripts.PROJECT_FILES` gives every buffer inside one, found by
 comparing resolved paths on `BufNew`, a buffer-local `BufReadCmd` that reads only the text (with
 `'swapfile'` off, so a stale swap file cannot stop it at E325). `eclipse_buf_enter` carries such a
-buffer's file as its fourth value, for Eclipse to open. A document's buffer reloaded by a script's
-`:edit!` is left empty and refilled from the document (`eclipse_reload`, `reloadDocumentAsync`).
+buffer's file as its fourth value, for Eclipse to open; a background job finds and refreshes the
+workspace file (a refresh waits while a build runs), then the editor opens on the UI thread. The
+folders are walked and sent by one job, so the walks never run on the thread of a change and never
+overtake each other. Every document's buffer, in a project or not, has a `BufReadCmd` of its own
+(`LuaScripts.DOCUMENT_BUFFER`): a script's `:edit!` leaves it empty, and Eclipse refills it from the
+document and attaches it again (`eclipse_reload`, `reloadDocumentAsync`), instead of Neovim reading
+the file from disk over unsaved changes.
 
 **A window per editor (docs/design/WINDOWS.md).** Each editor has its
 own Neovim window, alone in a hidden tabpage (`'showtabline'` 0), so that it keeps its own cursor,

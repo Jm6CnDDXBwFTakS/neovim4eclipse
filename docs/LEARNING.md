@@ -661,11 +661,12 @@ its top line to Neovim, which drags its cursor the same way. Design: [VIEWPORT.m
    `FileType` autocommand of the user's runs: a language server started from one would be a second
    one beside Eclipse's.
 3. `BufEnter` sends `eclipse_buf_enter` with the file's name as its fourth value
-   (`NotificationBridge`, `DocumentBuffers.onEntered`), and `EditorAttachManager.followNeovimIntoFile`
-   runs on the UI thread.
-4. `ProjectFileEditors.open` finds the workspace file (refreshing it, in case it was made outside
-   Eclipse), checks that Eclipse's editor for it is one of its own (a `.zip` would start another
-   program) and opens it without activating it. `NavigationHistorySteps.activateForNeovim` activates
+   (`NotificationBridge`, `DocumentBuffers.onEntered`). A background job finds the workspace file
+   (`ProjectFileEditors.workspaceFile`), refreshing it in case it was made outside Eclipse: a
+   refresh waits while a build holds the workspace, which on the UI thread would freeze Eclipse.
+   Then `EditorAttachManager.followNeovimIntoFile` runs on the UI thread.
+4. `ProjectFileEditors.open` checks that Eclipse's editor for the file is one of its own (a `.zip`
+   would start another program) and opens it without activating it. `NavigationHistorySteps.activateForNeovim` activates
    it, so that Eclipse's Back history notes the switch as the plug-in's.
 5. The window that jumped travels into the new editor (`travel`), and the attach takes Neovim's
    cursor (`attach(..., true)`). `CREATE_DOCUMENT_BUFFER` finds `b.txt`'s buffer by name and makes it

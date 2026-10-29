@@ -212,6 +212,29 @@ Steps 1 and 2: `ff88662` (reuse, `:lockmarks`), `43039d1` (close unloads), `4f7b
   undone, a script's `:edit!`). Five of its six tests fail with the folders not sent; the sixth,
   the refusal, checks that Eclipse was asked.
 
+Review fixes (2026-10-29, `fix/review-buffer-numbers`), each probed first in a test Eclipse:
+
+- A script's `:edit!` on a document outside every project folder still read the disk and ended the
+  buffer's line events (probe: the buffer held the disk text, and `Z` typed in Neovim never reached
+  the document). The reload hook moved from `PROJECT_FILES` to `DOCUMENT_BUFFER`, so every
+  document's buffer has it; `PROJECT_FILES` now leaves `acwrite` buffers alone.
+- `ProjectFileEditors` refreshed a new file on the UI thread; with a job holding the workspace (a
+  build's rule), the UI froze for as long (probe: 3009 ms for a 3000 ms job). The lookup and refresh
+  now run in a job, and only the opening runs on the UI thread.
+- `ProjectFolders` walked the workspace on the thread of each change, and the first attach's job and
+  the listener could send out of order. One coalescing job (`Sender`) now does every walk (probe:
+  0.2 ms for 30 projects of 120 folders, so this is for order and the UI thread, not speed).
+- `LOAD_WITHOUT_UNDO` runs under `:lockmarks lua` instead of passing the lines through `g:`
+  (probe: 13 ms against 35 ms for 200,000 lines; NUL bytes worked either way).
+- The path-to-workspace-file lookup is `NewFiles.workspaceFileAt` in all three places.
+
+Probed and left as they are: nested projects (Eclipse lists the inner project's file first, so a
+Maven module's editor opens); a multi-page editor that opens on a form page (Neovim goes back until
+the source tab is chosen, then `Ctrl-O` returns through Eclipse's Back); junctions, 8.3 names, a
+lower-case drive letter and `/` on Windows (`bufexists` of the real path finds the same buffer, on
+Linux through a symbolic link too). Keys typed in the moment between a script's `:edit!` and
+Eclipse's reload (about 1 to 15 ms) are lost on both sides alike; the two still agree.
+
 Known limits: a linked single file (not folder) is read by Neovim as before; a link whose target
 changes in place is seen at the next project or link change; on Windows a folder literally named
 `$HOME` is expanded by Neovim's own `:edit` (X19b), with or without the plug-in.
