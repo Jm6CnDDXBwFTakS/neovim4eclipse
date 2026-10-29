@@ -382,8 +382,12 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * Closing a document keeps its buffer as Vim's {@code :bd} does: unloaded and unlisted, with its
+     * number (docs/design/BUFFER_NUMBERS.md). A closed attached buffer falls back to the home buffer.
+     */
     @Test
-    void closingADocumentWipesItsBufferAndAClosedAttachedBufferFallsBackToHome() throws Exception {
+    void closingADocumentUnloadsItsBufferAndAClosedAttachedBufferFallsBackToHome() throws Exception {
         try (NeovimSession s = start()) {
             DocumentBuffer a = new DocumentBuffer("");
             DocumentBuffer b = new DocumentBuffer("");
@@ -394,13 +398,7 @@ class NeovimBufferIntegrationTest {
 
             s.closeBufferAsync(a);
             waitFor(() -> !a.isOpenIn(s), "buffer a to close");
-            waitFor(() -> {
-                try {
-                    return Boolean.FALSE.equals(s.lua("return vim.api.nvim_buf_is_valid(" + aBuf + ")"));
-                } catch (Exception e) {
-                    return false;
-                }
-            }, "buffer a to be wiped");
+            waitFor(() -> unloadedButKept(s, aBuf), "buffer a to be unloaded, and kept");
             assertEquals(bBuf, s.getAttachedBufnr());
 
             s.closeBufferAsync(b);
@@ -414,17 +412,38 @@ class NeovimBufferIntegrationTest {
                     return false;
                 }
             }, "Neovim to leave buffer b");
-            // And for the wipe, as for a above: it comes a moment after Neovim leaves b, and until
-            // then :buffer b still works (seen once on Windows).
-            waitFor(() -> {
-                try {
-                    return Boolean.FALSE.equals(s.lua("return vim.api.nvim_buf_is_valid(" + bBuf + ")"));
-                } catch (Exception e) {
-                    return false;
-                }
-            }, "buffer b to be wiped");
+            // And for the unload, as for a above: it comes a moment after Neovim leaves b.
+            waitFor(() -> unloadedButKept(s, bBuf), "buffer b to be unloaded, and kept");
             assertFalse(b.isOpenIn(s));
-            assertThrows(Exception.class, () -> s.command("buffer " + bBuf));
+        }
+    }
+
+    /** A file's next document gets the buffer of its closed one: the same number, as after Vim's :bd. */
+    @Test
+    void aReopenedFileGetsItsBufferNumberBack() throws Exception {
+        try (NeovimSession s = start()) {
+            String name = System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/Reopened.txt";
+            DocumentBuffer first = new DocumentBuffer(name);
+            DocumentBuffer other = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/Other.txt");
+            s.showBuffer(first);
+            s.showBuffer(other);
+            int number = first.bufnr();
+            s.closeBufferAsync(first);
+            waitFor(() -> unloadedButKept(s, number), "the closed buffer to be unloaded");
+
+            DocumentBuffer again = new DocumentBuffer(name);
+            s.showBuffer(again);
+            assertEquals(number, again.bufnr(), "the buffer :bd kept, not a new one");
+        }
+    }
+
+    /** Whether buffer {@code bufnr} exists, unloaded and unlisted, as Vim's :bd leaves it. */
+    private static boolean unloadedButKept(NeovimSession s, int bufnr) {
+        try {
+            return Boolean.TRUE.equals(s.lua("return vim.api.nvim_buf_is_valid(" + bufnr + ")"
+                    + " and not vim.api.nvim_buf_is_loaded(" + bufnr + ") and not vim.bo[" + bufnr + "].buflisted"));
+        } catch (Exception e) {
+            return false;
         }
     }
 

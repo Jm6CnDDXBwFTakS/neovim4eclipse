@@ -397,7 +397,11 @@ final class DocumentBuffers {
         return Handle.buffer(bufnr.longValue());
     }
 
-    /** Wipes a document's buffer, with its undo history and marks (its last editor closed). */
+    /**
+     * Closes a document's buffer, its last editor closed: as Vim's {@code :bd}, unloaded and unlisted
+     * but kept, with its number and marks, for the file's next editor
+     * ({@link LuaScripts#CLOSE_DOCUMENT_BUFFER}). Its undo history goes, as in Vim.
+     */
     void close(DocumentBuffer buffer) throws Exception {
         if (!owns(buffer)) {
             return;
@@ -413,7 +417,7 @@ final class DocumentBuffers {
             attachedBufnr = bufnr(home);
             attachedDocument = null;
         }
-        // Leave the buffer first: wiping the window's buffer makes Neovim enter some other one,
+        // Leave the buffer first: unloading the window's buffer makes Neovim enter some other one,
         // which Eclipse would follow by activating that editor. Editor windows still showing it
         // are closed; the home window shows the attached buffer instead.
         Object closed = await(api.execLua(LuaScripts.RELEASE_BUFFER,
@@ -425,7 +429,7 @@ final class DocumentBuffers {
             }
         }
         returnToAttached();
-        await(api.bufDelete(doomed, true, false)); // force: unsaved changes live in Eclipse
+        await(api.execLua(LuaScripts.CLOSE_DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(doomed)))));
     }
 
     private static List<Integer> ids(Object answer) {
