@@ -37,8 +37,9 @@ final class LuaScripts {
      *       request (see {@link ClipboardRegisters}).</li>
      *   <li>The one argument is Eclipse's RPC channel number, which requests are sent to. It is kept
      *       in {@code g:neovim4eclipse_channel} for {@link #DOCUMENT_BUFFER}'s write hook.</li>
-     *   <li>Normal-mode mappings for {@code gd} (and {@code Ctrl-]}), {@code K}, {@code gt} and {@code gT} send
-     *       {@code eclipse_action} instead, so that the IDE does those (see {@link IdeAction}).</li>
+     *   <li>The mappings of {@code gd}, {@code K}, {@code gt} and {@code gT},
+     *       which send {@code eclipse_action} so that the IDE does those, are {@link #IDE_KEYS}, run
+     *       right after this script; {@code ZZ}, {@code ZQ} and the history keys below are here.</li>
      *   <li>{@code Ctrl-O} and {@code Ctrl-I} past the end of a window's jumps are Eclipse's Back and
      *       Forward; a trail of the {@code Ctrl-O} steps (module {@code neovim4eclipse.history},
      *       {@link #HISTORY_NOWHERE}) lets {@code Ctrl-I} undo the newest step first.</li>
@@ -150,25 +151,8 @@ final class LuaScripts {
               vim.g.loaded_clipboard_provider = nil
               vim.cmd('runtime autoload/provider/clipboard.vim')
             end
-            -- Keys only the IDE can carry out (see IdeAction). This runs after the user's init.lua,
-            -- so it wins over their own mappings of these keys; `vim.g.neovim4eclipse_ide_keys = 0` (or
-            -- false, v:false in Vim script) in init.lua keeps Neovim's meaning instead. vim.v.count
-            -- is the count typed before the key.
-            local ide_keys = vim.g.neovim4eclipse_ide_keys
-            if ide_keys ~= 0 and ide_keys ~= false then
-              local function ide(action, key, desc)
-                vim.keymap.set('n', key, function()
-                  vim.rpcnotify(0, 'eclipse_action', action, vim.v.count)
-                end, { desc = 'Eclipse: ' .. desc })
-              end
-              ide('definition', 'gd', 'Open Declaration')
-              -- Vim's tag jump: in Neovim with a language server it goes to the definition too
-              -- (its 'tagfunc'), and the plug-in has no tags file. Eclipse's falls back to gd.
-              ide('definition', '<C-]>', 'Open Declaration')
-              ide('hover', 'K', 'Show Tooltip Description')
-              ide('next_tab', 'gt', 'next editor tab')
-              ide('previous_tab', 'gT', 'previous editor tab')
-            end
+            -- Keys only the IDE can carry out (gd, K, gt): IDE_KEYS, run right after
+            -- this script, from the one table core/IdeKeys.
             -- Ctrl-O and Ctrl-I are Neovim's, until its jump history has nothing further that
             -- way: then they are Eclipse's Back and Forward (Alt+Left, Alt+Right), which also
             -- record editor switches made in Eclipse (a tab click, Ctrl+F6, F3). Each editor is a
@@ -1539,6 +1523,31 @@ final class LuaScripts {
               end
             end
             return false
+            """;
+
+    /**
+     * Maps the keys only the IDE can carry out ({@code gd}, {@code K}, {@code gt}; see {@link IdeAction}): each sends {@code eclipse_action} with its action and Vim's
+     * count ({@code v:count}, the count typed before the key). Arguments: four per key, lhs, modes,
+     * action, description, from the one table {@link IdeKeys} ({@code IdeKeys.toLuaArgs()}), which
+     * Eclipse's side reads too. Example: {@code "gd", "n", "definition", "Open Declaration"} maps
+     * {@code gd} in normal mode ({@code "nx"}: normal and visual), described {@code Eclipse: Open Declaration}.
+     *
+     * <p>Run right after {@link #SETUP}, so after the user's {@code init.lua}: it wins over their own
+     * mappings of these keys. {@code vim.g.neovim4eclipse_ide_keys = 0} (or {@code false},
+     * {@code v:false} in Vim script) in {@code init.lua} keeps Neovim's meaning of all of them instead.
+     */
+    static final String IDE_KEYS = """
+            local ide_keys = vim.g.neovim4eclipse_ide_keys
+            if ide_keys == 0 or ide_keys == false then
+              return
+            end
+            local args = { ... }
+            for i = 1, #args - 3, 4 do
+              local lhs, modes, action, desc = args[i], args[i + 1], args[i + 2], args[i + 3]
+              vim.keymap.set(vim.split(modes, ''), lhs, function()
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_action', action, vim.v.count)
+              end, { desc = 'Eclipse: ' .. desc })
+            end
             """;
 
     /**
