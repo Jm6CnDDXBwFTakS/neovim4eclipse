@@ -753,6 +753,7 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `DocumentBufferPort` | `sync/UnattachedDocumentSync` | `NeovimSession` |
 | `DiagnosticsPort` | `sync/DiagnosticsSync` | `NeovimSession` (a fake that records each list, in `DiagnosticsSyncTest`) |
 | `QuickfixPort` | `editor/QuickfixLists` | `NeovimSession` |
+| `IdeKeys.Editor` | `core/IdeKeys.pick` (which IDE command a key runs, and the fallbacks) | `editor/IdeActions.EclipseEditor` (`FakeEditor` in `IdeKeysTest`) |
 | `CursorPort` | `editor/CaretSync` | `NeovimSession` |
 | `CommandRunner.Neovim` | `core/CommandRunner` | adapter inside `NeovimSession` |
 | `KeyInput.Neovim` | `core/KeyInput` | adapter inside `NeovimSession` (`KeyInputTest` scripts it: "after `i` the mode is `i`") |
@@ -839,8 +840,8 @@ reading counts, prefixes and arguments (`fZ` is not `ZZ`). For a key that runs a
 order: the command bound to Eclipse's usual key, `Way.boundTo("M2+M3+R")`, so each editor's own
 runs; a command id, `Way.command(...)`; or a hyperlink detector, `Way.hyperlink(...)`). That is
 all: `LuaScripts.IDE_KEYS` maps every key of the table (inside the `neovim4eclipse_ide_keys`
-check), and `editor/IdeActions` chooses and runs from it (`choose` is testable without running
-anything). Check the command ids in a running Eclipse first: a temporary UI test that lists
+check), and `IdeKeys.pick` runs it over a small port (`IdeKeys.Editor`, implemented for Eclipse by
+`editor/IdeActions.EclipseEditor`), so the decision is unit-tested with a fake editor, no waiting. Check the command ids in a running Eclipse first: a temporary UI test that lists
 `ICommandService.getDefinedCommandIds()` with `isHandled()` and `IBindingService.getActiveBindingsFor`
 per editor shows them. A key the plug-in's own key contexts take (`Ctrl+O`) cannot be looked up by
 binding; use the command id. For a key with an action of its own (`ZZ`, `ZQ`), add a
