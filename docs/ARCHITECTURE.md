@@ -393,8 +393,9 @@ Search options set at session start: `hlsearch`, `incsearch`, `ignorecase`, `sma
 ## Status bar items
 
 `ModeStatusContribution` shows the parts selected by the `statusItem*` preferences (`util/StatusItem`),
-one label each: `editor/StatusBarLabels` owns the widgets and sizes them in characters of the bar's font
-under the cap (`util/StatusBarWidths`; why a cap: JFace cuts the rightmost items, the plug-in's, once
+one label each: `editor/StatusBarLabels` owns the widgets and sizes them to their content (the mode's
+widest text as drawn; the statusline in characters of the editor's fixed-width font, so Neovim's
+columns are exact) under the cap (`util/StatusBarWidths`; why a cap: JFace cuts the rightmost items, the plug-in's, once
 its message area is down to a third of the bar). Design and the mode table:
 [design/STATUS_BAR.md](design/STATUS_BAR.md).
 

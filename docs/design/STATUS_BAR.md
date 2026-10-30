@@ -49,13 +49,14 @@ The code is `util/ModeLabels`, the test `ModeLabelsTest`.
 | Hit-enter / `:confirm` | `r` / `r?` | the prompt | `-- HIT-ENTER --` / `-- CONFIRM --` | `HIT-ENTER` / `CONFIRM` | `-R-` (as Replace, by choice) / `-R?-` |
 | Shell command running | `!` | nothing | `-- SHELL --` | `SHELL` | `-!sh-` |
 | Terminal | `t` | `-- TERMINAL --` | `-- TERMINAL --` | `TERMINAL` | `-T-` |
-| Keys go to Eclipse | (the plug-in's) | | `-- ECLIPSE --` | `ECLIPSE` | `-E-` |
+| Keys go to Eclipse | (the plug-in's) | | `-- ECLIPSE --` | `ECLIPSE` | `-E-` *(decided)* |
 | Recording a macro | the mode + register | `recording @a` | `-- NORMAL --  recording @a` | `NORMAL  recording @a` | `-N- rec @a` |
 
 Before this change Virtual Replace showed `-- REPLACE --`, the Ctrl-O states `-- NORMAL --`, and the
 prompts and the shell the raw strings (`-- RM --`, `-- ! --`). Hit-enter and `:confirm` were not
 reached in a headless probe; with the plug-in's `ext_messages` Neovim may never show them. The
-`-T-` and `-E-` letters were not discussed; they are the obvious ones and easy to change.
+`-T-` letters were not discussed (a terminal never shows in an Eclipse editor); `-E-` was confirmed
+by the maintainer after the build.
 
 ## 3. Widths and the cap
 
@@ -70,19 +71,31 @@ area its 246, and the plug-in's labels were left 112.
 
 ### The rules (`util/StatusBarWidths`, `editor/StatusBarLabels`)
 
-- Mode: the longest text of the chosen style (Full 27 characters, `-- (select) VISUAL BLOCK --`;
-  Letters 7), so the labels after it keep their place as the mode changes; while a macro is recorded,
-  14 more (`  recording @a`; Letters 7). The label widens only then, rather than always keeping room.
-- Cmd: 10 characters, the size of Vim's `'showcmd'` area.
-- Statusline: the preference (default 60), down to 10 under the cap.
+- Mode: as wide as the widest text of the chosen style as the font draws it (`GC.textExtent` over
+  `ModeLabels.texts`), so the labels after it keep their place as the mode changes. Counting
+  characters of the average width was not enough: mode texts are nearly all capitals, wider than the
+  average, and the widest were cut (review, 2026-10-29). While a macro is recorded the texts carry
+  `  recording @a` (Letters ` rec @a`), so the label widens only then.
+- Cmd: 10 characters of the bar's bold font, the size of Vim's `'showcmd'` area.
+- Statusline: the preference (default 60) in characters of the editor's **fixed-width** font, down to
+  10 under the cap. Neovim fits the `'statusline'` to columns; in a fixed-width font columns are
+  exact, so `%=` puts the position at the label's right edge, as in Vim, and nothing is cut. (In the
+  bar's proportional font wide letters pushed the end out of the label.)
 - The cap: the smaller of the preference's share of the bar and what is free after the message area's
-  third and Eclipse's items. The statusline gives up width first; the mode and cmd keep theirs (when
-  even those do not fit, JFace cuts from the right, as above).
+  third and every other item. Other items are every child after JFace's own first three (message
+  area, cancel button, progress bar), whatever their widget type: Eclipse's heap status, for one, is
+  a `Composite`. The statusline gives up width first; the mode and cmd keep theirs (when even those do
+  not fit, JFace cuts from the right, as above).
 - Everything is fitted again when the bar is resized; the statusline's width in characters goes to
-  Neovim (`NeovimSession.setStatuslineColumns`, the first argument of `LuaScripts.STATE_SNAPSHOT`).
+  Neovim (`NeovimSession.setStatuslineColumns`, the first argument of `LuaScripts.STATE_SNAPSHOT`;
+  0, nothing evaluated, until a label has been laid out). The status is read again once the width has
+  stayed the same for 200 ms, so dragging a window's edge asks Neovim once. Each window has its own
+  bar: the editor that becomes active brings its window's width along (`ModeStatusContribution.addTo`).
+- While keys go to Eclipse only the mode label shows (`-- ECLIPSE --`); the command and statusline
+  mean nothing then.
 
 The statusline keeps Neovim's spacing (`StatusLineFormat.oneLine`), so `%=` puts the position at the
-right as in Vim. The bar's font is proportional, so the right edge is approximate.
+right as in Vim. The status bar preferences are read once and again when one changes, not per key.
 
 ## 4. As built
 

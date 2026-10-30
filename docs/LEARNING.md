@@ -837,8 +837,9 @@ answer.
 **Put something in Eclipse's status bar.** Add a `ContributionItem` to the window's
 `IStatusLineManager` (an editor reaches it through `getEditorSite().getActionBars()`) and create its
 widgets in `fill(Composite)`; Eclipse disposes them and calls `fill` again whenever it rebuilds the bar
-(`manager.update(true)`). Size them with `StatusLineLayoutData.widthHint`, in characters of the font
-(average width times characters), not fixed pixels. Leave Eclipse room: when the bar is too full it
+(`manager.update(true)`). Size them with `StatusLineLayoutData.widthHint` from the font, not fixed
+pixels: characters times the average width for free text, `GC.textExtent` of the widest text for a
+known set of texts (capitals are wider than the average). Leave Eclipse room: when the bar is too full it
 cuts the rightmost items first, after its message area is down to a third (`util/StatusBarWidths`).
 Example: `editor/ModeStatusContribution` with `editor/StatusBarLabels`; a new mode text goes in the
 one table of `util/ModeLabels` and its test.
