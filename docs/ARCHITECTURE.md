@@ -284,10 +284,11 @@ calls the quickfix module to show the Problems or Tasks view (`eclipse_show_view
 The same file reaches the plug-in in many spellings: `C:\WS\a.txt` and `c:/ws/A.TXT` on Windows,
 `/var/...` and `/private/var/...` on macOS (and any case there), a Windows junction or 8.3 short name,
 `..`. So paths are compared by one rule: absolute, links resolved (`realpath`; a file not there yet,
-its folder's), `/` separators, `.` and `..` resolved, lower case where file names ignore case
-(Windows, macOS). Neovim's side is `LuaScripts.PATHS` (module `neovim4eclipse.paths`, run first; used
-by `PROJECT_FILES`, `HOST_COMMANDS`, `DOCUMENT_BUFFER`, `LEAVE_FOLDER`, and the specs'
-`t.same_file`), Eclipse's `util/FilePaths` (`:wq name`, shortened names). Both take the platform as
+its nearest existing folder's, so a new folder under a link such as macOS's `/home` resolves too),
+`/` separators, `.` and `..` resolved, lower case where file names ignore case (Windows, macOS).
+Neovim's side is `LuaScripts.PATHS` (module `neovim4eclipse.paths`, run first; used by
+`PROJECT_FILES`, `HOST_COMMANDS`, `DOCUMENT_BUFFER`, `LEAVE_FOLDER`, and the specs' `t.same_file`),
+Eclipse's `util/FilePaths` (`:wq name`, shortened names). Both take the platform as
 a parameter and pass one table of cases, `tests/unit/src/test/resources/path-cases.tsv`
 (`paths_spec.lua`, `FilePathsTest`), so the Windows and macOS rules run on Linux and CI, and the two
 sides cannot disagree. A path's workspace file has one lookup, `NewFiles.workspaceFileAt` (as given,
