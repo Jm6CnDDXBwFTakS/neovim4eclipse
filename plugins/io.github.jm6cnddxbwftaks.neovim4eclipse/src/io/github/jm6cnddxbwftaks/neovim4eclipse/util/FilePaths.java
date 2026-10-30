@@ -29,8 +29,8 @@ import java.util.function.UnaryOperator;
  * <h2>The rule</h2>
  * {@link #canonical}: the path absolute, with {@code /} separators and {@code .} and {@code ..}
  * resolved, its links resolved ({@link Path#toRealPath}: symbolic links, junctions, 8.3 names; for a
- * file that does not exist yet, its folder resolved plus its name), and lower-cased where file names
- * ignore case (Windows, macOS). Two names are one file when their canonical forms are equal
+ * file that does not exist yet, its nearest existing folder resolved plus the rest), and lower-cased
+ * where file names ignore case (Windows, macOS). Two names are one file when their canonical forms are equal
  * ({@link #same}); a path is inside a folder when its form is the folder's or starts with it and a
  * {@code /} ({@link #inside}). Example on Windows: {@code C:\link\App\a.txt} and
  * {@code c:/ws/app/A.TXT}, with {@code C:\link} a junction to {@code C:\ws}, are both
@@ -81,17 +81,36 @@ public final class FilePaths {
         if (path == null || path.isEmpty()) {
             return "";
         }
-        String full = normalize(absolute(path, platform), platform.windows());
-        String real = platform.realPath().apply(full);
-        if (real == null) { // not there (yet): its folder resolved, plus its name
-            int slash = full.lastIndexOf('/');
-            String folder = slash <= rootLength(full, platform.windows()) ? full.substring(0, rootLength(full, platform.windows()))
-                    : full.substring(0, slash);
-            String folderReal = platform.realPath().apply(folder);
-            real = folderReal == null ? full : folderReal + "/" + full.substring(slash + 1);
-        }
-        real = normalize(real, platform.windows());
+        String real = linksResolved(normalize(absolute(path, platform), platform.windows()), platform);
         return platform.ignoreCase() ? real.toLowerCase(Locale.ROOT) : real;
+    }
+
+    /**
+     * Normalized absolute {@code full} with its links resolved: its real path, or for a path that does
+     * not exist (yet) its nearest existing folder's real path plus the rest of it, normalized. The
+     * nearest, not just the parent: on macOS {@code /home} is a link to
+     * {@code /System/Volumes/Data/home}, and with only the parent tried {@code /home/user} (parent
+     * {@code /home} exists) and {@code /home/user/notes.txt} (parent {@code /home/user} does not)
+     * would resolve differently, so the file would not be inside its own folder (found 2026-10-29,
+     * {@code EditPathTest} on macOS). {@code full} itself when nothing resolves.
+     */
+    private static String linksResolved(String full, Platform platform) {
+        int root = rootLength(full, platform.windows());
+        String folder = full;
+        String rest = "";
+        while (true) {
+            String real = platform.realPath().apply(folder);
+            if (real != null) {
+                return normalize(rest.isEmpty() ? real : real + "/" + rest, platform.windows());
+            }
+            int slash = folder.lastIndexOf('/');
+            if (folder.length() <= root || slash < 0) {
+                return full; // not even the root resolves (a fake platform, or a drive not there)
+            }
+            String name = folder.substring(slash + 1);
+            rest = rest.isEmpty() ? name : name + "/" + rest;
+            folder = slash < root ? folder.substring(0, root) : folder.substring(0, slash);
+        }
     }
 
     /** Whether {@code a} and {@code b} name one file under {@code platform}'s rule. */
@@ -112,18 +131,13 @@ public final class FilePaths {
     /**
      * {@code path} with its links resolved as the rule resolves them, in the system's own form (its
      * case kept), for a lookup that needs a real path rather than a comparison: {@link Path#toRealPath},
-     * or for a file not there yet its folder's real path plus its name, or {@code path} itself when
-     * neither exists. Example on macOS: {@code /var/folders/new.txt} gives
-     * {@code /private/var/folders/new.txt}.
+     * or for a file not there yet its nearest existing folder's real path plus the rest. Example on
+     * macOS: {@code /var/folders/newdir/new.txt} gives {@code /private/var/folders/newdir/new.txt}.
      */
     public static Path resolved(Path path) {
-        String real = realPath(path.toString());
-        if (real != null) {
-            return Path.of(real);
-        }
-        Path parent = path.getParent();
-        String parentReal = parent == null ? null : realPath(parent.toString());
-        return parentReal == null || path.getFileName() == null ? path : Path.of(parentReal).resolve(path.getFileName());
+        Platform here = Platform.current();
+        String full = normalize(absolute(path.toString(), here), here.windows());
+        return Path.of(linksResolved(full, here));
     }
 
     /**

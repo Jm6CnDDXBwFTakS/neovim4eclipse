@@ -1239,8 +1239,8 @@ final class LuaScripts {
      *
      * <p><b>The rule</b> ({@code canonical(path)}): absolute ({@code fnamemodify(':p')} for a relative
      * name), then resolved ({@code fs_realpath}: symbolic links, junctions, 8.3 names, macOS's NFD
-     * names; for a file that does not exist yet, its folder resolved plus its name), with {@code /}
-     * separators and {@code .} and {@code ..} resolved ({@code vim.fs.normalize}, environment
+     * names; for a file that does not exist yet, its nearest existing folder resolved plus the
+     * rest), with {@code /} separators and {@code .} and {@code ..} resolved ({@code vim.fs.normalize}, environment
      * variables not expanded: a folder may be named {@code $HOME}), and lower-cased where
      * {@code 'fileignorecase'} is on (Windows, macOS). Two paths name one file when their canonical
      * forms are equal ({@code same(a, b)}); {@code inside(path, folder)} when the path's is the
@@ -1279,11 +1279,23 @@ final class LuaScripts {
                   path = vim.fn.fnamemodify(path, ':p')
                 end
                 local full = vim.fs.normalize(path, opts)
-                local real = platform.realpath(full)
-                if not real then -- not there (yet): its folder resolved, plus its name
-                  local dir = platform.realpath(vim.fs.dirname(full))
-                  real = dir and (dir .. '/' .. vim.fs.basename(full)) or full
+                -- Not there (yet): its nearest existing folder resolved, plus the rest. The nearest,
+                -- not just the parent: on macOS /home is a link, and with only the parent tried
+                -- /home/user (parent /home exists) and /home/user/notes.txt (parent /home/user does
+                -- not) would resolve differently. Java's FilePaths.linksResolved walks the same way.
+                local folder, rest = full, nil
+                local real = platform.realpath(folder)
+                while not real do
+                  local up = vim.fs.dirname(folder)
+                  if up == folder or up == '.' then
+                    break -- not even the root resolves
+                  end
+                  local name = vim.fs.basename(folder)
+                  rest = rest and (name .. '/' .. rest) or name
+                  folder = up
+                  real = platform.realpath(folder)
                 end
+                real = real and (rest and (real .. '/' .. rest) or real) or full
                 real = vim.fs.normalize(real, opts)
                 return platform.ignorecase and real:lower() or real
               end

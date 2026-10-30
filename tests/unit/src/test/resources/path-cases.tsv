@@ -16,7 +16,7 @@
 #   windows  C:/link -> C:/ws            (a junction)
 #            C:/PROGRA~1 -> C:/Program Files   (an 8.3 short name)
 # and a path whose last name starts with "new" does not exist (realpath gives nothing for it, so its
-# folder is resolved instead, as for a file :w is about to create).
+# nearest existing folder is resolved instead, as for a file :w is about to create).
 #
 # op	platform	a	b	expected	why
 same	linux	/ws/a.txt	/ws/a.txt	yes	the same string
@@ -31,6 +31,8 @@ same	linux	/ws/$HOME/a.txt	/ws/$HOME/a.txt	yes	a folder named $HOME is not expan
 same	macos	/ws/Main.java	/ws/main.java	yes	APFS ignores case by default
 same	macos	/var/folders/a.txt	/private/var/folders/a.txt	yes	/var is a link
 same	macos	/var/folders/new.txt	/private/var/folders/new.txt	yes	a file that does not exist yet: its folder resolved
+same	linux	/lnk/newdir/new.txt	/ws/newdir/new.txt	yes	its folder does not exist either: the nearest existing one resolved
+same	windows	C:\link\newdir\new.txt	C:\ws\newdir\new.txt	yes	a new folder under a junction
 same	windows	C:\ws\a.txt	c:/WS/A.TXT	yes	separators, drive letter and case
 same	windows	C:\ws\x\..\a.txt	C:/ws/a.txt	yes	.. with backslashes
 same	windows	C:\link\a.txt	C:\ws\a.txt	yes	a junction
@@ -45,6 +47,7 @@ inside	linux	/lnk/app/A.java	/ws/app	yes	through a link
 inside	linux	/etc/hosts	/	yes	the root holds everything
 inside	macos	/ws/App/src	/ws/app	yes	case ignored
 inside	macos	/var/folders/x	/private/var	yes	through /var
+inside	macos	/var/newdir/new.txt	/var/newdir	yes	a new file in a new folder under a link (/home on macOS)
 inside	windows	C:\WS\App\src	c:/ws/app	yes	separators and case
 inside	windows	C:\link\app\src	C:\ws\app	yes	through a junction
 inside	windows	C:\ws\app2	C:\ws\app	no	a folder whose name starts the same
