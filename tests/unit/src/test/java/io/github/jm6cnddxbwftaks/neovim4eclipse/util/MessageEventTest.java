@@ -35,8 +35,20 @@ class MessageEventTest {
                 List.of("search_count", chunks("/a [1/1]"), true, false, false, 6, ""),
                 List.of("progress", chunks("written"), false, true, true, "bufwrite", "typed_cmd")));
 
-        assertEquals(List.of(new MessageEvent.Show("search_count", "/a [1/1]", true, false, "6", ""),
+        assertEquals(List.of(new MessageEvent.Show("search_count", "/a [1/1]", true, false, "6", "", false),
                 new MessageEvent.Show("progress", "written", false, true, "bufwrite", "typed_cmd")),
+                MessageEvent.fromRedraw(redraw));
+    }
+
+    /** {@code :vimgrep}'s progress line is not kept for {@code :messages} (history false); its match is. */
+    @Test
+    void theHistoryFlagIsRead() {
+        List<?> redraw = List.of(List.of("msg_show",
+                List.of("", chunks("src/Bar.java"), false, false, false, 1, "typed_cmd"),
+                List.of("quickfix", chunks("(1 of 2): class Bar {}"), false, true, false, 2, "typed_cmd")));
+
+        assertEquals(List.of(new MessageEvent.Show("", "src/Bar.java", false, false, "1", "typed_cmd", false),
+                new MessageEvent.Show("quickfix", "(1 of 2): class Bar {}", false, false, "2", "typed_cmd", true)),
                 MessageEvent.fromRedraw(redraw));
     }
 

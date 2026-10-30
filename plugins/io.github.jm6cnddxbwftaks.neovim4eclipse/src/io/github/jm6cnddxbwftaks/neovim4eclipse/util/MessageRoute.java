@@ -29,6 +29,16 @@ import java.util.Set;
  *   <li>Not shown: the echo of a search ({@code search_cmd}: Eclipse's box showed it) and of a
  *       shell command (the first line of {@code shell_cmd}: the popup's title is the command), and
  *       empty messages.</li>
+ *   <li>Not shown either: a passing note that Neovim's screen overwrites with the next message.
+ *       {@code :vimgrep /Bar/ src/**}{@code /*.java} sends its progress line, the file it is
+ *       searching ({@code src/Bar.java}, not kept for {@code :messages}, its kind left over from the
+ *       message before it: {@code ""}, {@code list_cmd} or {@code undo} were seen), then
+ *       {@code (1 of 2): class Bar {}} (kind {@code quickfix}). Neovim's own screen shows only the
+ *       second, but the events do not say so ({@code replace_last} is false), so the two would count
+ *       as two messages and open the popup, which the jump to the match's editor closes at once.
+ *       So a quickfix message drops the messages of its command that Neovim does not keep for
+ *       {@code :messages} (found 2026-10-30). The kind cannot tell the note apart, so an
+ *       {@code :echo} in the same command line ({@code :echo "x" | cnext}) goes too; errors stay.</li>
  * </ul>
  *
  * <h2>Updates</h2>
@@ -53,6 +63,8 @@ public final class MessageRoute {
     /** Kinds that are output to read: always the popup. (A listing, {@code list_cmd}, is not: see the class comment.) */
     private static final Set<String> OUTPUT_KINDS = Set.of("shell_cmd", "shell_out", "shell_err",
             "shell_ret", HISTORY_KIND);
+    /** The kind of a quickfix command's {@code (1 of 2): ...}, which overwrites a passing note before it. */
+    private static final String QUICKFIX_KIND = "quickfix";
     /** Kinds that only echo what was typed. */
     private static final Set<String> ECHO_KINDS = Set.of("search_cmd", "empty", "return_prompt");
 
@@ -71,13 +83,26 @@ public final class MessageRoute {
         final String kind;
         final String id;
         final String trigger;
+        /** Whether Neovim keeps it for {@code :messages}; a passing note is not. */
+        final boolean history;
         String text;
 
-        Message(String kind, String text, String id, String trigger) {
+        Message(String kind, String text, String id, String trigger, boolean history) {
             this.kind = kind;
             this.text = text;
             this.id = id;
             this.trigger = trigger;
+            this.history = history;
+        }
+
+        /**
+         * A message Neovim does not keep for {@code :messages}, such as {@code :vimgrep}'s progress
+         * line. Its kind says nothing: Neovim 0.12.6 sends that line with whatever kind the message
+         * before it had, even one of another command ({@code ""}, {@code list_cmd}, {@code undo} were
+         * seen), so only the flag counts. Errors are always kept, so they never count.
+         */
+        boolean isPassingNote() {
+            return !history;
         }
     }
 
@@ -116,13 +141,18 @@ public final class MessageRoute {
             if (show.replaceLast() && !messages.isEmpty()) {
                 messages.remove(messages.size() - 1);
             }
-            messages.add(new Message(show.kind(), text, show.id(), show.trigger()));
+            if (QUICKFIX_KIND.equals(show.kind())) {
+                // Not only the message just before: the note can come in an earlier redraw, with
+                // others (an empty one) in between.
+                messages.removeIf(Message::isPassingNote);
+            }
+            messages.add(new Message(show.kind(), text, show.id(), show.trigger(), show.history()));
         }
     }
 
     /** Adds {@code :messages}' list (typed, so the popup is titled with the command line). */
     public void add(MessageEvent.History history) {
-        messages.add(new Message(HISTORY_KIND, history.text(), "", "typed_cmd"));
+        messages.add(new Message(HISTORY_KIND, history.text(), "", "typed_cmd", true));
     }
 
     /** What to show for the messages collected since {@link #clear}. */

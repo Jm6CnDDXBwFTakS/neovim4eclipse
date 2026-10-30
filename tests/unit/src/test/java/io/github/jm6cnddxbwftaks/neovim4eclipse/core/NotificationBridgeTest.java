@@ -380,7 +380,7 @@ class NotificationBridgeTest {
                 List.of("cmdline_show", List.of(List.of(List.of(0, "ls", 0)), 2, ":", "", 0, 1)),
                 List.of("flush"));
         assertEquals(List.of("cmdline:ls",
-                "message:" + new MessageEvent.Show("list_cmd", "x", false, false, "1", "typed_cmd"),
+                "message:" + new MessageEvent.Show("list_cmd", "x", false, false, "1", "typed_cmd", false),
                 "message:" + new MessageEvent.Flush()), events);
     }
 

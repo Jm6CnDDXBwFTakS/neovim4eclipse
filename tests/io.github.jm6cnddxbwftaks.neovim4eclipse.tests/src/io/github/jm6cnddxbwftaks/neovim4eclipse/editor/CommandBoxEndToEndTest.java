@@ -331,6 +331,38 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         editor = null;
     }
 
+    /**
+     * {@code :vimgrep} into files without an editor or a buffer yet: its first match's editor opens,
+     * and {@code :cnext} opens the next one's. {@code :vimgrep} makes those buffers without
+     * {@code BufNew}, so before, no editor opened (found on macOS, any system). Its
+     * {@code (1 of 2): ...} shows in the opened editor's message line, as on Neovim's own screen; its
+     * progress line (the file it is searching, a message of its own) is not shown, so no output popup
+     * opens and closes again on the jump.
+     */
+    @Test
+    void vimgrepShowsItsFirstMatchInTheMessageLine() throws Exception {
+        project.getFolder("vg").create(true, true, null);
+        createFile("vg/bar.txt", "class Bar\n");
+        createFile("vg/foo.txt", "see Bar\n");
+
+        runInBox(widget, "vimgrep /Bar/ vg/*.txt");
+        waitUntil("bar.txt to open", TIMEOUT_MS, () -> activeEditorIs("bar.txt"),
+                () -> "; the message line shows " + messageText(editor));
+        ITextEditor bar = (ITextEditor) page().getActiveEditor();
+        waitUntil("the first match in its message line", TIMEOUT_MS,
+                () -> messageText(bar).equals("(1 of 2): class Bar"), () -> ": " + messageText(bar));
+        waitForAttach(bar, "bar.txt");
+
+        runInBox(widgetOf(bar), "cnext");
+        waitUntil("foo.txt to open", TIMEOUT_MS, () -> activeEditorIs("foo.txt"),
+                () -> "; the message line shows " + messageText(bar));
+        ITextEditor foo = (ITextEditor) page().getActiveEditor();
+        waitUntil("the second match in its message line", TIMEOUT_MS,
+                () -> messageText(foo).equals("(2 of 2): see Bar"), () -> ": " + messageText(foo));
+        page().closeAllEditors(false);
+        editor = null;
+    }
+
     // ---- Command names; :e! ----
 
     /** {@code :wal} is {@code :wall}, abbreviated: Eclipse saves every changed file. */
