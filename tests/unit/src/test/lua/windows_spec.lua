@@ -108,8 +108,8 @@ t.test("the folder is set once with :lcd; without one the window keeps the folde
   local other = vim.fn.fnamemodify(vim.fn.tempname(), ':p')
   vim.fn.mkdir(other, 'p')
   local with = open(buffer(1), dir)
-  t.eq({ vim.fs.normalize(vim.fn.resolve(dir)), 1 },
-    { vim.fs.normalize(vim.fn.resolve(cwd(with)[1])), cwd(with)[2] }, ':lcd in the new window')
+  t.same_file(dir, cwd(with)[1], ':lcd in the new window')
+  t.eq(1, cwd(with)[2], 'its own folder (:lcd)')
   vim.cmd.lcd(other)
   local without = open(buffer(1), '')
   t.eq(cwd(0), cwd(without), "the current window's :lcd, copied as Vim copies it")

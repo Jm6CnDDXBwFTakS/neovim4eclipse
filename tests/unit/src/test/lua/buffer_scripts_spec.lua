@@ -91,7 +91,7 @@ t.test('a document buffer is named, loaded, empty and not marked "not edited"', 
   local buf, named, reused = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
   t.eq(true, named)
   t.eq(false, reused, 'a new buffer')
-  t.eq(vim.fn.resolve(vim.fn.fnamemodify(name, ':p')), vim.fn.resolve(vim.api.nvim_buf_get_name(buf)))
+  t.same_file(name, vim.api.nvim_buf_get_name(buf))
   t.eq(true, vim.api.nvim_buf_is_loaded(buf))
   t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'the file was not read')
   t.eq(true, vim.bo[buf].buflisted)

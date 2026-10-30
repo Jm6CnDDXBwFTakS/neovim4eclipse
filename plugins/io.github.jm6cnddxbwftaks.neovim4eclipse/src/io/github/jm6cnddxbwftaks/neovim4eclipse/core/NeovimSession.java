@@ -228,6 +228,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Creates the home buffer, routes notifications here and installs the Lua hooks. */
     private static NeovimSession initialize(NeovimConnection connection, ClipboardPort clipboard) throws Exception {
         NeovimApi api = connection.api();
+        // First: the one rule for comparing file paths, which later scripts use (LuaScripts.PATHS).
+        await(api.execLua(LuaScripts.PATHS, List.of()));
 
         // Until a document is shown, Neovim shows an unlisted scratch buffer (also what tests edit).
         Handle homeBuffer = await(api.createBuf(false, true));

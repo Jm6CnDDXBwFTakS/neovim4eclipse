@@ -1,0 +1,50 @@
+# The one table of cases for comparing file paths, read by both rules that implement it:
+# Lua's neovim4eclipse.paths (core/LuaScripts.PATHS; paths_spec.lua) and Java's util/FilePaths
+# (FilePathsTest). Both must give the same answer for every line, on every platform rule, so the two
+# can never drift apart. Linux tests check the Windows and macOS rules too, with the fake links below.
+#
+# Columns, separated by tabs:
+#   op        same: do a and b name one file?  inside: is a the folder b or inside it?
+#   platform  linux (case kept, / only), macos (case ignored), windows (case ignored, \ and / alike)
+#   a, b      paths; \ is a separator only on windows
+#   expected  yes or no
+#   why       what the line shows
+#
+# Fake links, the same in both tests (a test's realpath replaces the longest matching start):
+#   linux    /lnk -> /ws
+#   macos    /var -> /private/var        (as on every Mac)
+#   windows  C:/link -> C:/ws            (a junction)
+#            C:/PROGRA~1 -> C:/Program Files   (an 8.3 short name)
+# and a path whose last name starts with "new" does not exist (realpath gives nothing for it, so its
+# folder is resolved instead, as for a file :w is about to create).
+#
+# op	platform	a	b	expected	why
+same	linux	/ws/a.txt	/ws/a.txt	yes	the same string
+same	linux	/ws/A.txt	/ws/a.txt	no	Linux keeps case
+same	linux	/ws/x/../a.txt	/ws/a.txt	yes	.. resolved
+same	linux	/ws/./a.txt	/ws/a.txt	yes	. resolved
+same	linux	/ws//a.txt	/ws/a.txt	yes	a doubled slash
+same	linux	/ws/a/	/ws/a	yes	a trailing slash
+same	linux	/lnk/a.txt	/ws/a.txt	yes	a symbolic link
+same	linux	/ws/a\b.txt	/ws/a/b.txt	no	\ is a file name character on Linux
+same	linux	/ws/$HOME/a.txt	/ws/$HOME/a.txt	yes	a folder named $HOME is not expanded
+same	macos	/ws/Main.java	/ws/main.java	yes	APFS ignores case by default
+same	macos	/var/folders/a.txt	/private/var/folders/a.txt	yes	/var is a link
+same	macos	/var/folders/new.txt	/private/var/folders/new.txt	yes	a file that does not exist yet: its folder resolved
+same	windows	C:\ws\a.txt	c:/WS/A.TXT	yes	separators, drive letter and case
+same	windows	C:\ws\x\..\a.txt	C:/ws/a.txt	yes	.. with backslashes
+same	windows	C:\link\a.txt	C:\ws\a.txt	yes	a junction
+same	windows	C:\PROGRA~1\a.txt	C:\Program Files\a.txt	yes	an 8.3 short name
+same	windows	C:\ws\a.txt	D:\ws\a.txt	no	another drive
+same	windows	//srv/share/a.txt	\\srv\share\a.txt	yes	a network share
+inside	linux	/ws/app/src/A.java	/ws/app	yes	a file inside
+inside	linux	/ws/app	/ws/app	yes	the folder itself
+inside	linux	/ws/app2/A.java	/ws/app	no	a folder whose name starts the same
+inside	linux	/ws/App/A.java	/ws/app	no	case kept
+inside	linux	/lnk/app/A.java	/ws/app	yes	through a link
+inside	linux	/etc/hosts	/	yes	the root holds everything
+inside	macos	/ws/App/src	/ws/app	yes	case ignored
+inside	macos	/var/folders/x	/private/var	yes	through /var
+inside	windows	C:\WS\App\src	c:/ws/app	yes	separators and case
+inside	windows	C:\link\app\src	C:\ws\app	yes	through a junction
+inside	windows	C:\ws\app2	C:\ws\app	no	a folder whose name starts the same
