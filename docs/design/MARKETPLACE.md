@@ -260,7 +260,7 @@ the limits before installing review and report fewer surprises.
   with its own profile, which adds the Java tools for a highlighted Java editor:
 
   ```bash
-  xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path=/usr/bin/nvim
+  xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path=/opt/nvim-linux-x86_64/bin/nvim
   cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/01-visual-mode.png docs/images/screenshot-visual-mode.png
   cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/02-command-line.png docs/images/screenshot-command-line.png
   cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/03-preferences.png docs/images/screenshot-preferences.png
@@ -268,6 +268,20 @@ the limits before installing review and report fewer surprises.
 
   Xvfb's `-screen` gives it room for the 1280×800 window in full color (its default is 640×480 at
   8 bits). They show Eclipse's default light theme on Linux/GTK, without a window title bar.
+
+  The preference page shows `-Dnvim.path` in its field and its *Found:* note, so use a Neovim
+  (`NeovimVersion.MINIMUM` or newer, or the note turns red) at a path that names no one: not one under
+  your home folder. Without write access to `/opt`, a private mount namespace shows your own Neovim
+  there for this one build, changing nothing on the system (Linux; used for the 2026-10-30 retake):
+
+  ```bash
+  NV=$(readlink -f ~/.local/share/neovim4eclipse-plugin/neovim/current)   # its top folder, e.g. nvim-linux-arm64_0.12.6
+  unshare -rm sh -c "mount -t tmpfs tmpfs /opt && mkdir /opt/nvim-linux-arm64 && mount --bind '$NV' /opt/nvim-linux-arm64 &&
+    exec unshare -U --map-user=$(id -u) --map-group=$(id -g) sh -c \"xvfb-run -a -s '-screen 0 1600x1000x24' ./mvnw verify -Pscreenshots -Dnvim.path=/opt/nvim-linux-arm64/bin/nvim\""
+  ```
+
+  The outer `unshare -rm` is root in a new user and mount namespace, which may mount; the inner one
+  maps you back to your own user id, so Maven finds `~/.m2` and writes files you own.
 - The README demo GIF, recorded by hand.
 
 ## Phase 3: account, submission, test
