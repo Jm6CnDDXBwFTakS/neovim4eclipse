@@ -16,6 +16,9 @@ local function start()
   t.run('QUICKFIX')
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, 'p')
+  -- Resolved, as PROJECT_FILES resolves buffer names (fs_realpath): on macOS the temporary folder
+  -- is under /var, a link to /private/var, and the buffers' names would not match the files' paths.
+  dir = vim.uv.fs_realpath(dir) or dir
   local files = {}
   for i = 1, 3 do
     files[i] = dir .. '/f' .. i .. '.txt'
