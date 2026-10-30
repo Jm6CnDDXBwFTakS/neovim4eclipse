@@ -305,12 +305,12 @@ class NotificationBridgeTest {
     /** The answer is {@code [error, message]}: the message for a save that worked, else the error. */
     @Test
     void writeRequestsAnswerWithTheErrorOrTheMessage() {
-        assertEquals(List.of("", "written"), request("eclipse_write", 3, " ++p"));
-        assertEquals(List.of("read-only", ""), request("eclipse_write", 7L, ""));
-        assertEquals(List.of("Eclipse could not save the file: workspace closed", ""), request("eclipse_write", 13));
-        assertEquals(List.of("Eclipse got a write request without a buffer number", ""), request("eclipse_write"));
-        assertEquals(List.of("", "written"), request("eclipse_write", 3, "", "copy", "/ws/p/other.txt"));
-        assertEquals(List.of("", "written"), request("eclipse_write", 3, "", "append", "/ws/p/log.txt", 5L, 10L, true));
+        assertEquals(List.of("", "written", ""), request("eclipse_write", 3, " ++p"));
+        assertEquals(List.of("read-only", "", ""), request("eclipse_write", 7L, ""));
+        assertEquals(List.of("Eclipse could not save the file: workspace closed", "", ""), request("eclipse_write", 13));
+        assertEquals(List.of("Eclipse got a write request without a buffer number", "", ""), request("eclipse_write"));
+        assertEquals(List.of("", "written", ""), request("eclipse_write", 3, "", "copy", "/ws/p/other.txt"));
+        assertEquals(List.of("", "written", ""), request("eclipse_write", 3, "", "append", "/ws/p/log.txt", 5L, 10L, true));
         // The file in the system's form: \ws\p\other.txt on Windows (DocumentWrite.Request.of).
         assertEquals(List.of("write@3 ++p OWN", "write@7 OWN", "write@13 OWN",
                 "write@3 COPY " + java.nio.file.Path.of("/ws/p/other.txt"),

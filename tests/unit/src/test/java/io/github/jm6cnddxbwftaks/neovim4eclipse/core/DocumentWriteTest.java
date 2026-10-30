@@ -52,9 +52,11 @@ class DocumentWriteTest {
     }
 
     @Test
-    void theAnswerIsErrorThenMessage() {
-        assertEquals(List.of("", "\"a.txt\" 1L, 2B written"), DocumentWrite.Result.saved("\"a.txt\" 1L, 2B written").toRpc());
-        assertEquals(List.of("E212: read-only", ""), DocumentWrite.Result.failed("E212: read-only").toRpc());
+    void theAnswerIsErrorThenMessageThenTheFileSavedAs() {
+        assertEquals(List.of("", "\"a.txt\" 1L, 2B written", ""), DocumentWrite.Result.saved("\"a.txt\" 1L, 2B written").toRpc());
+        assertEquals(List.of("E212: read-only", "", ""), DocumentWrite.Result.failed("E212: read-only").toRpc());
+        assertEquals(List.of("", "\"a.txt\" [New] 1L, 2B written", "/ws/p/a.txt"),
+                DocumentWrite.Result.savedAs("\"a.txt\" [New] 1L, 2B written", "/ws/p/a.txt").toRpc());
         assertTrue(DocumentWrite.Result.saved(null).ok());
         assertFalse(DocumentWrite.Result.failed("x").ok());
     }
