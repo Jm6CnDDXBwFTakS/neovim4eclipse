@@ -36,7 +36,7 @@ class StatusTrackerTest {
     }
 
     private static MessageEvent show(String kind, String text) {
-        return new MessageEvent.Show(kind, text, false, false, "", "typed_cmd");
+        return new MessageEvent.Show(kind, text, false, false, "", "typed_cmd", true);
     }
 
     private StatusInfo last() {
@@ -132,11 +132,11 @@ class StatusTrackerTest {
     @Test
     void growingOutputIsPassedAgainWholeAndOnlyWhenItChanged() {
         tracker.commandLine(":!make");
-        tracker.onMessageEvent(new MessageEvent.Show("shell_cmd", ":!make\r\n", false, false, "1", "typed_cmd"));
-        tracker.onMessageEvent(new MessageEvent.Show("shell_out", "cc a.c\n", false, true, "2", "typed_cmd"));
+        tracker.onMessageEvent(new MessageEvent.Show("shell_cmd", ":!make\r\n", false, false, "1", "typed_cmd", true));
+        tracker.onMessageEvent(new MessageEvent.Show("shell_out", "cc a.c\n", false, true, "2", "typed_cmd", true));
         tracker.onMessageEvent(FLUSH);
         tracker.onMessageEvent(FLUSH);
-        tracker.onMessageEvent(new MessageEvent.Show("shell_out", "cc b.c\n", false, true, "3", "typed_cmd"));
+        tracker.onMessageEvent(new MessageEvent.Show("shell_out", "cc b.c\n", false, true, "3", "typed_cmd", true));
         tracker.onMessageEvent(FLUSH);
 
         assertEquals(List.of(new CommandOutput(":!make", "cc a.c"), new CommandOutput(":!make", "cc a.c\ncc b.c")),

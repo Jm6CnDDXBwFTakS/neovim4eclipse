@@ -19,7 +19,7 @@ class MessageRouteTest {
     private final MessageRoute route = new MessageRoute();
 
     private void add(String kind, String text) {
-        route.add(new MessageEvent.Show(kind, text, false, false, "", "typed_cmd"));
+        route.add(new MessageEvent.Show(kind, text, false, false, "", "typed_cmd", true));
     }
 
     private static View line(String text, boolean error) {
@@ -69,16 +69,16 @@ class MessageRouteTest {
     @Test
     void replaceLastReplacesThePreviousMessage() {
         add("search_cmd", "/a1");
-        route.add(new MessageEvent.Show("search_count", "/a1          W [1/1]", true, false, "", ""));
+        route.add(new MessageEvent.Show("search_count", "/a1          W [1/1]", true, false, "", "", true));
         assertEquals(line("/a1          W [1/1]", false), route.view());
     }
 
     /** {@code :w} sends its message twice with id "bufwrite"; the second updates the first. */
     @Test
     void aMessageWithAKnownIdUpdatesThatMessage() {
-        route.add(new MessageEvent.Show("progress", "\"a.txt\" ", false, false, "bufwrite", "typed_cmd"));
+        route.add(new MessageEvent.Show("progress", "\"a.txt\" ", false, false, "bufwrite", "typed_cmd", true));
         route.add(new MessageEvent.Show("progress", "\"a.txt\" [New] 5L, 13B written", false, false, "bufwrite",
-                "typed_cmd"));
+                "typed_cmd", true));
         assertEquals(line("\"a.txt\" [New] 5L, 13B written", false), route.view());
     }
 
@@ -169,6 +169,39 @@ class MessageRouteTest {
         assertEquals(output("", "3 substitutions on 1 line\nE1: first\n(1 of 2): a"), route.view());
     }
 
+    /** {@code :vimgrep /Zzz/ vg/*.txt}: no match, so an error overwrites the progress line instead. */
+    @Test
+    void anErrorReplacesVimgrepsProgressLine() {
+        route.add(new MessageEvent.Show("", "vg/bar.txt", false, false, "1", "typed_cmd", false));
+        route.add(new MessageEvent.Show("emsg", "E480: No match: Zzz", false, false, "2", "typed_cmd", true));
+        assertEquals(line("E480: No match: Zzz", true), route.view());
+    }
+
+    /**
+     * {@code :grep Bar vg/*.txt} as Neovim 0.12.6 sends it: the shell command's echo (with a
+     * left-over kind), the tool's output, then the first match. Neovim shows the output, so it stays.
+     */
+    @Test
+    void aQuickfixMessageKeepsTheShellOutputBeforeIt() {
+        route.commandLine(":grep Bar vg/*.txt");
+        route.add(new MessageEvent.Show("", ":!grep -n Bar vg/*.txt 2>&1| tee /tmp/x\r\n", false, false, "1",
+                "typed_cmd", false));
+        route.add(new MessageEvent.Show("shell_out", "vg/bar.txt:1:class Bar\nvg/foo.txt:1:see Bar\n", false, false,
+                "2", "typed_cmd", false));
+        route.add(new MessageEvent.Show("quickfix", "(1 of 2): class Bar", false, false, "3", "typed_cmd", true));
+        assertEquals(output(":grep Bar vg/*.txt", ":!grep -n Bar vg/*.txt 2>&1| tee /tmp/x\n"
+                + "vg/bar.txt:1:class Bar\nvg/foo.txt:1:see Bar\n(1 of 2): class Bar"), route.view());
+    }
+
+    /** A listing of several lines is no passing note: {@code :clist | cfirst} shows both. */
+    @Test
+    void aQuickfixMessageKeepsAListingOfSeveralLines() {
+        route.add(new MessageEvent.Show("list_cmd", " 1 a.txt:1 x\n 2 b.txt:1 y", false, false, "1", "typed_cmd",
+                false));
+        route.add(new MessageEvent.Show("quickfix", "(1 of 2): x", false, false, "2", "typed_cmd", true));
+        assertEquals(output("", " 1 a.txt:1 x\n 2 b.txt:1 y\n(1 of 2): x"), route.view());
+    }
+
     @Test
     void severalMessagesGoToThePopupTogether() {
         add("emsg", "E1: first");
@@ -180,9 +213,9 @@ class MessageRouteTest {
     @Test
     void shellOutputIsAppendedAndTheCommandsEchoDropped() {
         route.commandLine(":!seq 1 2");
-        route.add(new MessageEvent.Show("shell_cmd", ":!seq 1 2\r\n", false, false, "1", "typed_cmd"));
-        route.add(new MessageEvent.Show("shell_out", "1\n", false, true, "2", "typed_cmd"));
-        route.add(new MessageEvent.Show("shell_out", "2\r\n", false, true, "3", "typed_cmd"));
+        route.add(new MessageEvent.Show("shell_cmd", ":!seq 1 2\r\n", false, false, "1", "typed_cmd", true));
+        route.add(new MessageEvent.Show("shell_out", "1\n", false, true, "2", "typed_cmd", true));
+        route.add(new MessageEvent.Show("shell_out", "2\r\n", false, true, "3", "typed_cmd", true));
         assertEquals(output(":!seq 1 2", "1\n2"), route.view());
     }
 
@@ -190,15 +223,15 @@ class MessageRouteTest {
     @Test
     void theRestOfTheShellCommandsMessageStays() {
         route.add(new MessageEvent.Show("shell_cmd", ":!ls\r\n[No write since last change]\n", false, false, "1",
-                "typed_cmd"));
-        route.add(new MessageEvent.Show("shell_out", "a.txt\n", false, true, "2", "typed_cmd"));
+                "typed_cmd", true));
+        route.add(new MessageEvent.Show("shell_out", "a.txt\n", false, true, "2", "typed_cmd", true));
         assertEquals("[No write since last change]\na.txt", route.view().output());
     }
 
     /** {@code :!true}: nothing printed, nothing shown. */
     @Test
     void aShellCommandWithoutOutputShowsNothing() {
-        route.add(new MessageEvent.Show("shell_cmd", ":!true\r\n", false, false, "1", "typed_cmd"));
+        route.add(new MessageEvent.Show("shell_cmd", ":!true\r\n", false, false, "1", "typed_cmd", true));
         assertEquals(View.NONE, route.view());
     }
 
@@ -213,7 +246,7 @@ class MessageRouteTest {
     @Test
     void outputNotFromATypedCommandHasNoTitle() {
         route.commandLine(":ls");
-        route.add(new MessageEvent.Show("echo", "a\nb", false, false, "", ""));
+        route.add(new MessageEvent.Show("echo", "a\nb", false, false, "", "", true));
         assertEquals(output("", "a\nb"), route.view());
     }
 

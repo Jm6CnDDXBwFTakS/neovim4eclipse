@@ -1346,10 +1346,12 @@ final class LuaScripts {
      * <p><b>Which buffers.</b> Eclipse sends the open projects' folders ({@link #SET_PROJECT_FOLDERS}).
      * Each new buffer ({@code BufNew}, also sent after a rename) whose file is inside one gets a
      * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. A buffer
-     * added to the list is checked too ({@code BufAdd}): {@code :vimgrep} makes the buffers of the
-     * files it matched while it searches, without {@code BufNew}, and its jump into one fires only
-     * {@code BufAdd} before the read (found 2026-10-30, on macOS: {@code :vimgrep} into closed
-     * files opened no editor; any system, for files without a buffer yet). The paths
+     * added to the list is checked too ({@code BufAdd}), unless {@code BufNew} checked it under the
+     * same name: {@code :vimgrep} makes the buffers of the files it matched while it searches,
+     * without {@code BufNew}, and its jump into one fires only {@code BufAdd} before the read (found
+     * 2026-10-30, on macOS: {@code :vimgrep} into closed files opened no editor; any system, for
+     * files without a buffer yet). Its first match is loaded by the search itself, so the hook
+     * cannot read it: {@code BufAdd} turns its {@code 'swapfile'} off instead. The paths
      * are compared by {@link #PATHS}'s rule (resolved: symbolic links, Windows junctions and 8.3
      * short names, macOS's NFD names; {@code /} separators; lower case where
      * {@code 'fileignorecase'} is on, Windows and macOS). Autocommand patterns were tried first and cannot match a
@@ -1381,6 +1383,7 @@ final class LuaScripts {
             local paths = require('neovim4eclipse.paths') -- the one rule for comparing paths (PATHS)
             local roots = {} -- the folders, as paths.canonical() gives them
             local hooked = {} -- buffer number -> true, for the buffers that have the read hook
+            local checked = {} -- buffer number -> the name check() last looked at
 
             function M.inside(path)
               if path == '' or #roots == 0 then
@@ -1446,7 +1449,9 @@ final class LuaScripts {
             end
 
             local function check(buf)
-              if M.inside(vim.api.nvim_buf_get_name(buf)) then
+              local name = vim.api.nvim_buf_get_name(buf)
+              checked[buf] = name
+              if M.inside(name) then
                 hook(buf)
               else
                 unhook(buf)
@@ -1467,13 +1472,26 @@ final class LuaScripts {
               return hooked[buf] and vim.api.nvim_buf_get_name(buf) or ''
             end
 
+            vim.api.nvim_create_autocmd('BufNew', { group = group, callback = function(ev)
+              check(ev.buf)
+            end })
             -- BufAdd too: :vimgrep makes the buffers of the files it matched while it searches, with
             -- no BufNew (Neovim 0.12.6), and the jump to one fires only BufAdd before reading it.
-            vim.api.nvim_create_autocmd({ 'BufNew', 'BufAdd' }, { group = group, callback = function(ev)
-              check(ev.buf)
+            -- Most buffers had BufNew just before: those are not resolved again (fs_realpath).
+            vim.api.nvim_create_autocmd('BufAdd', { group = group, callback = function(ev)
+              local buf = ev.buf
+              if checked[buf] ~= vim.api.nvim_buf_get_name(buf) then
+                check(buf)
+              end
+              -- :vimgrep's first match is loaded already, by its search, with a swap file; off,
+              -- as the hook's read would have done (turning it off deletes the file).
+              if hooked[buf] and vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buftype == '' then
+                vim.bo[buf].swapfile = false
+              end
             end })
             vim.api.nvim_create_autocmd('BufWipeout', { group = group, callback = function(ev)
               hooked[ev.buf] = nil
+              checked[ev.buf] = nil
             end })
             package.loaded['neovim4eclipse.project_files'] = M
             """;

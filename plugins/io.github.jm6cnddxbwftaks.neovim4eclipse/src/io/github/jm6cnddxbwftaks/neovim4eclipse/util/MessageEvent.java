@@ -49,11 +49,6 @@ public sealed interface MessageEvent {
      */
     record Show(String kind, String text, boolean replaceLast, boolean append, String id, String trigger,
             boolean history) implements MessageEvent {
-
-        /** A message kept for {@code :messages}, as most are; the tests' shorthand. */
-        public Show(String kind, String text, boolean replaceLast, boolean append, String id, String trigger) {
-            this(kind, text, replaceLast, append, id, trigger, true);
-        }
     }
 
     /** {@code msg_showcmd}: the pending command, {@code ""} when there is none. */

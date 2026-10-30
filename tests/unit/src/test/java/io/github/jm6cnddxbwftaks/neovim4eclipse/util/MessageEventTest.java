@@ -25,7 +25,7 @@ class MessageEventTest {
         List<?> redraw = List.of(List.of("msg_show",
                 List.of("emsg", chunks("E486: ", "Pattern not found: x"), false, true, false, 7, "typed_cmd")));
 
-        assertEquals(List.of(new MessageEvent.Show("emsg", "E486: Pattern not found: x", false, false, "7", "typed_cmd")),
+        assertEquals(List.of(new MessageEvent.Show("emsg", "E486: Pattern not found: x", false, false, "7", "typed_cmd", true)),
                 MessageEvent.fromRedraw(redraw));
     }
 
@@ -36,7 +36,7 @@ class MessageEventTest {
                 List.of("progress", chunks("written"), false, true, true, "bufwrite", "typed_cmd")));
 
         assertEquals(List.of(new MessageEvent.Show("search_count", "/a [1/1]", true, false, "6", "", false),
-                new MessageEvent.Show("progress", "written", false, true, "bufwrite", "typed_cmd")),
+                new MessageEvent.Show("progress", "written", false, true, "bufwrite", "typed_cmd", true)),
                 MessageEvent.fromRedraw(redraw));
     }
 
@@ -92,7 +92,7 @@ class MessageEventTest {
     void missingTrailingFieldsAreEmpty() {
         List<?> redraw = List.of(List.of("msg_show", Arrays.asList("echo", chunks("hi"), null)));
 
-        assertEquals(List.of(new MessageEvent.Show("echo", "hi", false, false, "", "")),
+        assertEquals(List.of(new MessageEvent.Show("echo", "hi", false, false, "", "", true)),
                 MessageEvent.fromRedraw(redraw));
     }
 }

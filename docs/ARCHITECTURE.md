@@ -187,8 +187,11 @@ file runs filetype detection and the user's `FileType` setup (a language server 
 the plug-in's buffers never do. So it reads no file of an open project itself: `editor/ProjectFolders`
 sends the open projects' folders and linked folders (at the first attach, and again when projects
 or links come or go), and `LuaScripts.PROJECT_FILES` gives every buffer inside one, found by
-comparing resolved paths on `BufNew`, a buffer-local `BufReadCmd` that reads only the text (with
-`'swapfile'` off, so a stale swap file cannot stop it at E325). `eclipse_buf_enter` carries such a
+comparing resolved paths on `BufNew` (and on `BufAdd` for a buffer `BufNew` did not check:
+`:vimgrep` makes its matches' buffers without it), a buffer-local `BufReadCmd` that reads only the
+text (with `'swapfile'` off, so a stale swap file cannot stop it at E325). The one exception is
+`:vimgrep`, which reads every file it searches itself, filetype detection included; its first match
+stays loaded from that read, so `BufAdd` only turns its swap file off. `eclipse_buf_enter` carries such a
 buffer's file as its fourth value, for Eclipse to open; a background job finds and refreshes the
 workspace file (a refresh waits while a build runs), then the editor opens on the UI thread. The
 folders are walked and sent by one job, so the walks never run on the thread of a change and never

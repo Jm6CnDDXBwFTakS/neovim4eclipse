@@ -345,22 +345,26 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         createFile("vg/bar.txt", "class Bar\n");
         createFile("vg/foo.txt", "see Bar\n");
 
-        runInBox(widget, "vimgrep /Bar/ vg/*.txt");
-        waitUntil("bar.txt to open", TIMEOUT_MS, () -> activeEditorIs("bar.txt"),
-                () -> "; the message line shows " + messageText(editor));
-        ITextEditor bar = (ITextEditor) page().getActiveEditor();
-        waitUntil("the first match in its message line", TIMEOUT_MS,
-                () -> messageText(bar).equals("(1 of 2): class Bar"), () -> ": " + messageText(bar));
-        waitForAttach(bar, "bar.txt");
+        try {
+            runInBox(widget, "vimgrep /Bar/ vg/*.txt");
+            waitUntil("bar.txt to open", TIMEOUT_MS, () -> activeEditorIs("bar.txt"),
+                    () -> "; the message line shows " + messageText(editor));
+            ITextEditor bar = (ITextEditor) page().getActiveEditor();
+            waitUntil("the first match in its message line", TIMEOUT_MS,
+                    () -> messageText(bar).equals("(1 of 2): class Bar"), () -> ": " + messageText(bar));
+            waitForAttach(bar, "bar.txt");
 
-        runInBox(widgetOf(bar), "cnext");
-        waitUntil("foo.txt to open", TIMEOUT_MS, () -> activeEditorIs("foo.txt"),
-                () -> "; the message line shows " + messageText(bar));
-        ITextEditor foo = (ITextEditor) page().getActiveEditor();
-        waitUntil("the second match in its message line", TIMEOUT_MS,
-                () -> messageText(foo).equals("(2 of 2): see Bar"), () -> ": " + messageText(foo));
-        page().closeAllEditors(false);
-        editor = null;
+            runInBox(widgetOf(bar), "cnext");
+            waitUntil("foo.txt to open", TIMEOUT_MS, () -> activeEditorIs("foo.txt"),
+                    () -> "; the message line shows " + messageText(bar));
+            ITextEditor foo = (ITextEditor) page().getActiveEditor();
+            waitUntil("the second match in its message line", TIMEOUT_MS,
+                    () -> messageText(foo).equals("(2 of 2): see Bar"), () -> ": " + messageText(foo));
+        } finally {
+            // Also after a failure: the editors the jumps opened would stay for the next tests.
+            page().closeAllEditors(false);
+            editor = null;
+        }
     }
 
     // ---- Command names; :e! ----

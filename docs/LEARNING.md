@@ -681,6 +681,8 @@ its top line to Neovim, which drags its cursor the same way. Design: [VIEWPORT.m
 1. Neovim makes a buffer for `b.txt`. Its `BufNew` reaches `LuaScripts.PROJECT_FILES`, which
    resolves the file's path (`fs_realpath`) and finds it inside a project folder that
    `editor/ProjectFolders` sent at the first attach. The buffer gets a buffer-local `BufReadCmd`.
+   (`:vimgrep` makes its matches' buffers without `BufNew`; for those, the `BufAdd` of the jump
+   into one does this step. A buffer `BufNew` checked is not resolved again on `BufAdd`.)
 2. Neovim loads the buffer: that `BufReadCmd` reads it instead of Neovim (`:read ++edit` without
    autocommands, `'swapfile'` off first). No filetype is detected, so no filetype plug-in and no
    `FileType` autocommand of the user's runs: a language server started from one would be a second
