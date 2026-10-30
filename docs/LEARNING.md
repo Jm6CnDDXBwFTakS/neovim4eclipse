@@ -248,6 +248,12 @@ again (`removeFilter`) when it is no longer needed.
   a note in a row of its own. The note's work (running `nvim --version`) happens on a background thread;
   `Display.asyncExec` brings the answer back to the UI thread, and a counter drops answers for text
   that has changed since.
+- Field editors can sit in a `Group` box (`NeovimPreferencePage`: *Neovim program* and *Workbench*):
+  create each one on the group instead of `getFieldEditorParent()`. The catch: a field editor sets a
+  fresh `GridLayout` on its parent (no margins), and the page adjusts columns only on its own parent,
+  so the page overrides `adjustGridLayout` to give each group its columns and margins back. A text
+  that changes height later (the note) calls `requestLayout()`, which lays out every ancestor, so the
+  group grows with it.
 - Code that must react to a change adds an `IPropertyChangeListener` to the store (`Activator.start`).
 - Preferences live in **scopes**, from the most specific: `InstanceScope` (the workspace; the
   preference store's), `ConfigurationScope` (the Eclipse installation's `configuration/` folder,

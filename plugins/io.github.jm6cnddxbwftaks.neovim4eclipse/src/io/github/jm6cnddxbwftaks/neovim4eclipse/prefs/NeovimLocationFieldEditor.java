@@ -45,9 +45,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
  *
  * <h2>How a field editor is extended</h2>
  * {@link StringButtonFieldEditor} already lays out label, text and button in the page's grid and
- * calls {@link #changePressed} for the button. This class adds three controls, each in a row of its
- * own: the note, the help, and an empty spacer that separates the field from the check boxes.
- * {@link #doFillIntoGrid} creates them after the others, spanning every column, and
+ * calls {@link #changePressed} for the button. This class adds two controls, each in a row of its
+ * own: the note and the help. (The page's group box, {@link NeovimPreferencePage}, sets them apart
+ * from the check boxes.) {@link #doFillIntoGrid} creates them after the others, spanning every column, and
  * {@link #adjustForNumColumns} keeps that span when the page adds wider fields.
  *
  * <h2>Why the note is computed off the UI thread</h2>
@@ -61,9 +61,6 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     /** Typing pause before the probe runs, so it does not start a process for every key. */
     private static final int DELAY_MS = 400;
 
-    /** Height of the empty row below the help, in dialog units (about half a line of text). */
-    private static final int SPACE_BELOW_DLUS = 6;
-
     /** Width at which the note and the help wrap, rather than widening the dialog. */
     private static final int WRAP_WIDTH = 400;
 
@@ -71,7 +68,6 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
 
     private Label note;
     private Link help;
-    private Label spacer;
     private ControlDecoration errorMark;
     /** Bumped on every change; a probe's answer is used only if it still matches. */
     private final AtomicInteger generation = new AtomicInteger();
@@ -97,13 +93,6 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         help.setLayoutData(fullRow(numColumns, WRAP_WIDTH));
         help.addSelectionListener(SelectionListener.widgetSelectedAdapter(
                 e -> openInBrowser(NeovimPreferencePage.FINDING_NEOVIM_URL)));
-
-        // An empty row under the help, so note and help read as part of this field rather than of
-        // the check boxes below. Dialog units (DLUs) scale with the font, as the rest of the page does.
-        spacer = new Label(parent, SWT.NONE);
-        GridData gap = fullRow(numColumns, SWT.DEFAULT);
-        gap.heightHint = convertVerticalDLUsToPixels(spacer, SPACE_BELOW_DLUS);
-        spacer.setLayoutData(gap);
         getTextControl().addModifyListener(e -> scheduleProbe());
     }
 
@@ -144,7 +133,6 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         if (note != null) {
             ((GridData) note.getLayoutData()).horizontalSpan = numColumns;
             ((GridData) help.getLayoutData()).horizontalSpan = numColumns;
-            ((GridData) spacer.getLayoutData()).horizontalSpan = numColumns;
         }
     }
 
@@ -196,7 +184,10 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         } else {
             errorMark.hide();
         }
-        note.getParent().layout(true, true);
+        // The note may now wrap to more or fewer lines. requestLayout lays out the note's parent and
+        // every ancestor, so the page's group box grows or shrinks with it; a layout of the parent
+        // alone would keep the group's old height and cut off the help below (seen 2026-10-30).
+        note.requestLayout();
     }
 
     /** The theme's error color: red in the light theme, a brighter red in the dark one. */

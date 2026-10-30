@@ -48,6 +48,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- *Preferences → Neovim* groups its settings in two boxes, *Neovim program* (the folder, which
+  Neovim it finds, and the help) and *Workbench* (the check boxes); *Preferences → Neovim → Status
+  Bar* spaces its rows further apart.
 - The status bar shows the mode, the pending command and the statusline as separate, left-aligned
   labels sized in characters, instead of one centered 420-pixel label.
 - Closing a file's last editor keeps its Neovim buffer, as Vim's `:bd` does: the buffer number
