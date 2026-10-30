@@ -7,9 +7,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -158,6 +160,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * work until it goes through. Input thread.
      */
     private boolean gridPending;
+    /**
+     * Work that needs Neovim to answer, held while Neovim waits for the rest of a command
+     * ({@link #whenAnswering}) and run after the input-thread work that ends the wait. Example: a
+     * marker changes while the user has typed {@code ]} of {@code ]d}; asking Neovim for the current
+     * quickfix list then would hold the input thread until {@link Rpc#TIMEOUT_SEC}, and the {@code d}
+     * queued behind it with it (found 2026-10-29: 5 s lost in a macOS UI test). Filled on the input
+     * thread; emptied there, or dropped by {@link #close}.
+     */
+    private final Queue<Held> held = new ConcurrentLinkedQueue<>();
+
+    /** Held work and its name for the log. */
+    private record Held(String what, InputThread.Task work) {
+    }
+
+    /**
+     * Answers promised to a caller ({@link #currentQuickfixAsync}) and not given yet. {@link #close}
+     * fails them: their work may be held, or queued and dropped with the input thread, and a caller
+     * waiting for one would otherwise wait for its own timeout.
+     */
+    private final Set<CompletableFuture<?>> unanswered = ConcurrentHashMap.newKeySet();
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
     private volatile Consumer<Integer> bufferClosedHandler;
     /** Loads a document's text into its buffer again; see {@link #setReloadHandler}. */
@@ -296,7 +318,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         closed = true;
 
         connection.requestQuit();
+        // First, so an answer fails as closed, not with the interrupt the shutdown sends its work.
+        for (CompletableFuture<?> answer : List.copyOf(unanswered)) {
+            answer.completeExceptionally(new IllegalStateException("Neovim is closed"));
+        }
         inputThread.shutdown();
+        held.clear();
         connection.close();
         LOG.info("NeovimSession closed");
     }
@@ -861,21 +888,24 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     public void setQuickfixAsync(QuickfixEntries.Kind kind, String arg, QuickfixEntries.Mode mode, boolean jump,
             List<QuickfixEntries.Entry> entries) {
         List<String> args = QuickfixEntries.toLuaArgs(kind, arg, mode, jump, entries);
-        submit(entries.size() + " entries for " + kind.title(), Level.FINE,
-                () -> await(api.execLua(LuaScripts.SET_QUICKFIX, args)));
+        String what = entries.size() + " entries for " + kind.title();
+        submit(what, Level.FINE, () -> whenAnswering(what,
+                () -> await(api.execLua(LuaScripts.SET_QUICKFIX, args))));
     }
 
     @Override
     public CompletableFuture<QuickfixEntries.Current> currentQuickfixAsync() {
         CompletableFuture<QuickfixEntries.Current> answer = new CompletableFuture<>();
-        boolean queued = submit("current quickfix list", Level.FINE, () -> {
+        unanswered.add(answer);
+        answer.whenComplete((current, error) -> unanswered.remove(answer));
+        boolean queued = submit("current quickfix list", Level.FINE, () -> whenAnswering("current quickfix list", () -> {
             try {
                 answer.complete(QuickfixEntries.Current.fromLua(await(api.execLua(LuaScripts.QUICKFIX_CURRENT, List.of()))));
             } catch (Exception e) {
                 answer.completeExceptionally(e);
                 throw e;
             }
-        });
+        }));
         if (!queued) {
             answer.completeExceptionally(new IllegalStateException("Neovim is closed"));
         }
@@ -1285,10 +1315,37 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 if (gridPending && !closed) {
                     resizeGrid(); // skipped while Neovim waited; this work may have ended the wait
                 }
+                if (!held.isEmpty() && !closed && !isBlocked()) {
+                    runHeld(); // the same for work held by whenAnswering
+                }
             } finally {
                 events.inputHandled();
             }
         });
+    }
+
+    /**
+     * Runs {@code work} now, or, while Neovim waits for the rest of a command (and would not answer),
+     * after the input-thread work that ends the wait. Input thread. Like {@link #resizeGrid}'s skip,
+     * for work that must not be lost.
+     */
+    private void whenAnswering(String what, InputThread.Task work) throws Exception {
+        if (isBlocked()) {
+            held.add(new Held(what, work));
+        } else {
+            work.run();
+        }
+    }
+
+    /** Runs the held work in order; a failure is logged and does not stop the rest. Input thread. */
+    private void runHeld() {
+        for (Held h = held.poll(); h != null; h = held.poll()) {
+            try {
+                h.work().run();
+            } catch (Exception e) {
+                LOG.log(Level.FINE, h.what() + " failed", e);
+            }
+        }
     }
 
     // ---- key input (see KeyInput) ----

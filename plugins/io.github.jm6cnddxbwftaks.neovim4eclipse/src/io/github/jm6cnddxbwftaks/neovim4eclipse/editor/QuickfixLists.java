@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -109,7 +110,11 @@ public final class QuickfixLists implements IResourceChangeListener {
 
     /** How long changes are collected before an update, in ms. */
     static final long UPDATE_DELAY_MS = 500;
-    /** How long an update waits for Neovim to say which list is current, in seconds. */
+    /**
+     * How long an update waits for Neovim to say which list is current, in seconds. The session
+     * holds the question while Neovim waits for the rest of a command (after {@code ]} of
+     * {@code ]d}); an update that waited this long is tried again later, not reported.
+     */
     private static final long CURRENT_TIMEOUT_SEC = 10;
 
     /** The one job of the class comment. */
@@ -282,8 +287,13 @@ public final class QuickfixLists implements IResourceChangeListener {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            } catch (Exception e) { // Neovim's error or timeout, a closed connection, no workspace
-                LOG.log(Level.WARNING, "Could not fill the quickfix list", e);
+            } catch (TimeoutException e) { // Neovim still in the middle of a command: try again later
+                update.set(true);
+                schedule(UPDATE_DELAY_MS);
+            } catch (Exception e) { // Neovim's error, a closed connection, no workspace
+                if (neovim.isAlive()) { // closing: nothing to fill
+                    LOG.log(Level.WARNING, "Could not fill the quickfix list", e);
+                }
             }
             return Status.OK_STATUS;
         }
