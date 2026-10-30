@@ -74,12 +74,24 @@ public final class EditPath {
      * {@code /etc/hosts}.
      */
     public static String shown(Path file, Path home, Path windowFolder) {
+        return shown(file, home, windowFolder, FilePaths.Platform.current());
+    }
+
+    /**
+     * {@link #shown(Path, Path, Path)} under {@code platform}'s rule for "inside" ({@link FilePaths}:
+     * case ignored on Windows and macOS, links resolved), so a window folder {@code /ws/App} still
+     * shortens {@code /ws/app/src/A.java} to {@code src/A.java} on macOS. The part shown keeps the
+     * file's own spelling, with the system's separators.
+     */
+    static String shown(Path file, Path home, Path windowFolder, FilePaths.Platform platform) {
         Path normal = file.normalize();
-        if (windowFolder != null && normal.startsWith(windowFolder.normalize()) && !normal.equals(windowFolder.normalize())) {
-            return windowFolder.normalize().relativize(normal).toString();
+        String below = windowFolder == null ? null : FilePaths.below(normal.toString(), windowFolder.toString(), platform);
+        if (below != null) {
+            return Path.of(below).toString();
         }
-        if (home != null && normal.startsWith(home.normalize()) && !normal.equals(home.normalize())) {
-            return "~" + java.io.File.separator + home.normalize().relativize(normal);
+        below = home == null ? null : FilePaths.below(normal.toString(), home.toString(), platform);
+        if (below != null) {
+            return "~" + java.io.File.separator + Path.of(below);
         }
         return normal.toString();
     }

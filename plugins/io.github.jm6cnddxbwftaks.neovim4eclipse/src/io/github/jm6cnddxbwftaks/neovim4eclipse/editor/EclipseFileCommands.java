@@ -30,6 +30,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
 /**
@@ -103,6 +104,13 @@ public final class EclipseFileCommands {
         if (target == null) {
             HostCommands.showError(editor, "Eclipse cannot tell where \"" + name + "\" goes: this file has no folder");
             return false;
+        }
+        // The editor's own file under another spelling (other case on Windows and macOS, a link, a
+        // junction): Vim's :wq of that name writes the buffer to its own file, a save, not a copy
+        // onto the file the editor shows (FilePaths, the one rule Neovim's side uses too).
+        Path own = EditorAttachManager.fileOf(editor.getEditorInput());
+        if (own != null && FilePaths.same(own, target)) {
+            return save(editor, createFolders, !onlyIfChanged);
         }
         if (!force && Files.exists(target)) {
             HostCommands.showError(editor, "E13: File exists (add ! to override)");
