@@ -3,53 +3,37 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
-import java.util.Set;
-
-/** Builds the text of the Eclipse status bar item from the parts Neovim reports. Pure Java. */
+/**
+ * Makes the texts Neovim reports fit a status bar label: one line, no stray whitespace. Pure Java.
+ * Each part has a label of its own ({@code editor/StatusBarLabels}), so nothing here joins them.
+ */
 public final class StatusLineFormat {
-
-    /** Between two parts. */
-    static final String SEPARATOR = "  ";
 
     private StatusLineFormat() {
     }
 
     /**
-     * Joins the enabled, non-empty parts in display order: mode, cmd, statusline.
-     * Free text is cleaned first (see {@link #cleanText}).
-     *
-     * @param items      what the user chose to show
-     * @param mode       mode text (already including {@code recording @x} if applicable)
-     * @param cmd        pending command text
-     * @param statusline text of Neovim's statusline
-     */
-    public static String compose(Set<StatusItem> items, String mode, String cmd, String statusline) {
-        StringBuilder sb = new StringBuilder();
-        append(sb, items.contains(StatusItem.MODE), mode);
-        append(sb, items.contains(StatusItem.CMD), cmd);
-        append(sb, items.contains(StatusItem.STATUSLINE), statusline);
-        return sb.toString();
-    }
-
-    private static void append(StringBuilder sb, boolean enabled, String text) {
-        String clean = enabled ? cleanText(text) : "";
-        if (clean.isEmpty()) {
-            return;
-        }
-        if (sb.length() > 0) {
-            sb.append(SEPARATOR);
-        }
-        sb.append(clean);
-    }
-
-    /**
-     * Makes Neovim text fit on one status bar line: line breaks and runs of whitespace (a
-     * statusline's {@code %=} expands to padding) become a single space, and the ends are trimmed.
+     * For short free text (the pending command): line breaks and runs of whitespace become a single
+     * space, and the ends are trimmed. Example: {@code "  2\nd "} gives {@code "2 d"}.
      */
     public static String cleanText(String text) {
         if (text == null) {
             return "";
         }
         return text.replaceAll("\\s+", " ").strip();
+    }
+
+    /**
+     * For Neovim's evaluated {@code 'statusline'}: one line, its spacing kept. Neovim fits it into the
+     * label's width ({@code maxwidth}), and {@code %=} pads the middle so the cursor position ends at
+     * the right, as in Vim; collapsing that padding would pull it left again. Line breaks and tabs
+     * become spaces and the end is trimmed. Example: {@code "a.txt      1,1   All  "} keeps its
+     * inner spaces and loses the last two.
+     */
+    public static String oneLine(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replaceAll("[\\r\\n\\t]", " ").stripTrailing();
     }
 }

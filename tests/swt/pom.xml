@@ -159,6 +159,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/FoldMirror.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ViewportFollower.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWheel.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusBarLabels.java</include>
           </includes>
         </configuration>
       </plugin>

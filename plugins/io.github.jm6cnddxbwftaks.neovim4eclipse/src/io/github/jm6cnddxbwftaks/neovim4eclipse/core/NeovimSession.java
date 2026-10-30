@@ -449,6 +449,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         status.setItems(items);
     }
 
+    /**
+     * The status bar's statusline label is {@code columns} characters wide: Neovim fits the
+     * {@code 'statusline'} into that many from the next key on ({@link LuaScripts#STATE_SNAPSHOT}).
+     */
+    public void setStatuslineColumns(int columns) {
+        status.setStatuslineColumns(columns);
+    }
+
     /** Re-reads mode, cursor and status bar parts from Neovim (e.g. after the preference changed). */
     public void refreshStatusAsync() {
         submit("refresh status", Level.FINE, this::syncModeAndCursorFromNeovim);
@@ -1653,9 +1661,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public Object stateSnapshot(boolean statusline, boolean folds) throws Exception {
+        public Object stateSnapshot(int statuslineWidth, boolean folds) throws Exception {
             // Short timeout: see STATE_TIMEOUT_MS.
-            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusline), flag(folds)))
+            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(String.valueOf(statuslineWidth), flag(folds)))
                     .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 

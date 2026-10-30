@@ -44,10 +44,12 @@ final class StateSync {
 
         /**
          * Runs {@link LuaScripts#STATE_SNAPSHOT} (with a short timeout) and returns its raw answer,
-         * read by {@link StateSnapshot}. The flags say whether to evaluate the statusline and
-         * whether to read the closed folds.
+         * read by {@link StateSnapshot}.
+         *
+         * @param statuslineWidth the statusline's width in columns, 0 for none (not evaluated)
+         * @param folds           whether to read the closed folds
          */
-        Object stateSnapshot(boolean statusline, boolean folds) throws Exception;
+        Object stateSnapshot(int statuslineWidth, boolean folds) throws Exception;
 
         /** The attached buffer's lines. */
         List<String> bufferLines() throws Exception;
@@ -213,7 +215,7 @@ final class StateSync {
         try {
             Set<StatusItem> items = status.items();
             boolean folds = foldsEnabled;
-            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE), folds);
+            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE) ? status.statuslineColumns() : 0, folds);
             // The mode in the answer, not one read before the request. Example: Eclipse runs :w, the
             // plug-in closes Neovim's command line with Esc and publishes. The mode read before was
             // "c"; Neovim's ModeChanged notice "n" can arrive while the request is out, and publishing

@@ -5,43 +5,14 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.EnumSet;
-
 import org.junit.jupiter.api.Test;
 
+/** {@link StatusLineFormat}: Neovim's texts made fit for one status bar label each. */
 class StatusLineFormatTest {
-
-    private static final EnumSet<StatusItem> ALL = EnumSet.allOf(StatusItem.class);
-
-    @Test
-    void allPartsAreJoinedInDisplayOrder() {
-        assertEquals("-- NORMAL --  2d  [No Name] 1,1",
-                StatusLineFormat.compose(ALL, "-- NORMAL --", "2d", "[No Name] 1,1"));
-    }
-
-    @Test
-    void onlyEnabledItemsAreShown() {
-        assertEquals("-- INSERT --", StatusLineFormat.compose(EnumSet.of(StatusItem.MODE), "-- INSERT --", "2d", "sl"));
-        assertEquals("2d  sl", StatusLineFormat.compose(EnumSet.of(StatusItem.CMD, StatusItem.STATUSLINE),
-                "-- INSERT --", "2d", "sl"));
-    }
-
-    @Test
-    void nothingEnabledGivesAnEmptyString() {
-        assertEquals("", StatusLineFormat.compose(EnumSet.noneOf(StatusItem.class), "-- NORMAL --", "2d", "s"));
-    }
-
-    @Test
-    void emptyPartsLeaveNoStraySeparators() {
-        assertEquals("-- NORMAL --  sl", StatusLineFormat.compose(ALL, "-- NORMAL --", null, "sl"));
-        assertEquals("-- NORMAL --", StatusLineFormat.compose(ALL, "-- NORMAL --", "", ""));
-        assertEquals("sl", StatusLineFormat.compose(ALL, "", "", "sl"));
-    }
 
     @Test
     void whitespaceRunsAndLineBreaksBecomeOneSpace() {
         assertEquals("a b c", StatusLineFormat.cleanText("  a   b\n\tc  "));
-        assertEquals("[No Name] [+] 1,1 All", StatusLineFormat.cleanText("[No Name] [+]                    1,1           All"));
         assertEquals("line one line two", StatusLineFormat.cleanText("line one\nline two"));
     }
 
@@ -51,8 +22,12 @@ class StatusLineFormatTest {
         assertEquals("", StatusLineFormat.cleanText("   \n "));
     }
 
+    /** Neovim fits the statusline to the label and pads its middle ({@code %=}): the padding stays. */
     @Test
-    void composeCleansFreeText() {
-        assertEquals("-- NORMAL --  1,1 All", StatusLineFormat.compose(ALL, "-- NORMAL --", "", "1,1\n   All"));
+    void theStatuslineKeepsItsSpacingOnOneLine() {
+        assertEquals("a.txt [+]        1,1   All", StatusLineFormat.oneLine("a.txt [+]        1,1   All  "));
+        assertEquals("one two", StatusLineFormat.oneLine("one\ntwo"));
+        assertEquals("a b", StatusLineFormat.oneLine("a\tb"));
+        assertEquals("", StatusLineFormat.oneLine(null));
     }
 }

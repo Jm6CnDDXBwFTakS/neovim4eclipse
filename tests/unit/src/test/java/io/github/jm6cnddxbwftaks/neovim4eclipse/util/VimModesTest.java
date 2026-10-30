@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,32 +56,5 @@ class VimModesTest {
         assertTrue(VimModes.isBlockVisual(BLOCK));
         assertFalse(VimModes.isBlockVisual("v"));
         assertFalse(VimModes.isBlockVisual(null));
-    }
-
-    @Test
-    void statusTextShowsTheRecordingRegister() {
-        assertEquals("-- NORMAL --  recording @a", VimModes.statusText("n", "a"));
-        assertEquals("-- INSERT --  recording @q", VimModes.statusText("i", "q"));
-        assertEquals("-- NORMAL --", VimModes.statusText("n", ""));
-        assertEquals("-- NORMAL --", VimModes.statusText("n", null));
-    }
-
-    @Test
-    void statusText() {
-        assertEquals("-- NORMAL --", VimModes.statusText("n"));
-        assertEquals("-- NORMAL --", VimModes.statusText(null));
-        assertEquals("-- NORMAL --", VimModes.statusText(""));
-        assertEquals("-- OPERATOR --", VimModes.statusText("no"));
-        assertEquals("-- OPERATOR --", VimModes.statusText("nov"));
-        assertEquals("-- INSERT --", VimModes.statusText("i"));
-        assertEquals("-- INSERT --", VimModes.statusText("ic"));
-        assertEquals("-- REPLACE --", VimModes.statusText("R"));
-        assertEquals("-- VISUAL --", VimModes.statusText("v"));
-        assertEquals("-- VISUAL LINE --", VimModes.statusText("V"));
-        assertEquals("-- VISUAL BLOCK --", VimModes.statusText(BLOCK));
-        assertEquals("-- SELECT --", VimModes.statusText("s"));
-        assertEquals("-- COMMAND --", VimModes.statusText("c"));
-        assertEquals("-- TERMINAL --", VimModes.statusText("t"));
-        assertEquals("-- ? --", VimModes.statusText("?"));
     }
 }
