@@ -164,6 +164,34 @@ t.test('a copy Eclipse saved as the file instead (an untitled editor) names the 
   t.eq({ buf, '', '' }, asked[2], 'a :w then saves the new file')
 end)
 
+-- If the buffer cannot take the name (a loaded buffer has it: E95), it keeps its name and its file,
+-- so a later :w is the editor's own save, never a save as under the untitled name. (A plain :w a.txt
+-- cannot get here, as Neovim refuses a name a loaded buffer has (E139) before asking; the answer
+-- here names another file to reach it.)
+t.test('a buffer that cannot take the saved-as name keeps its name, and :w still saves the editor', function()
+  t.setup()
+  local buf, name = t.document('Untitled 2', { 'hello' })
+  local taken = vim.fs.dirname(name) .. '/taken.txt'
+  local other = vim.fn.bufadd(taken)
+  vim.fn.bufload(other) -- loaded: a rename onto its name fails with E95
+  local asked = {}
+  t.answer('eclipse_write', function(b, cmdarg, kind, file)
+    asked[#asked + 1] = { b, kind, file }
+    if kind == 'copy' then
+      return { '', '', taken }
+    end
+    return { '', '' }
+  end)
+  -- The error fails the :write, as any error in the hook does (Eclipse did save the file).
+  local ok, err = pcall(vim.cmd.write, vim.fn.fnameescape(vim.fs.dirname(name) .. '/a.txt'))
+  t.eq(false, ok)
+  t.ok(tostring(err):find('Eclipse saved taken.txt, but Neovim could not name this buffer after it', 1, true), tostring(err))
+  t.eq(name, vim.api.nvim_buf_get_name(buf), 'the old name')
+  t.eq(name, vim.b[buf].neovim4eclipse_file, 'the old file: a later :w is the editor\'s own save')
+  vim.cmd.write()
+  t.eq({ buf, '', '' }, asked[2], 'a :w then saves the editor, no save as under the old name')
+end)
+
 t.test('a :saveas Eclipse refused puts the old name back, with Eclipse\'s error only', function()
   t.setup()
   local buf, name = t.document('A.txt', { 'a' })

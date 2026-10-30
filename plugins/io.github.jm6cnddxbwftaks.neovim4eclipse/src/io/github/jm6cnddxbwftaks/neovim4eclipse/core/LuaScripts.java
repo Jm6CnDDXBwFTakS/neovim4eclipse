@@ -2655,7 +2655,9 @@ final class LuaScripts {
      *       ({@code nvim_buf_set_name}), as Vim names a buffer without a file after the file it
      *       writes ({@code :help cpo-F}, which Neovim does not apply to an {@code acwrite} buffer).
      *       Renamed so, the buffer is {@code [Not edited]} until its next write, which works as
-     *       usual.</li>
+     *       usual. Eclipse alone decides copy or save as ({@code editor/OtherFileWrites.copyOrSaveAs});
+     *       the hook only follows the answer. Should the rename fail (a loaded buffer has the name),
+     *       the buffer keeps its name and file, so a later {@code :w} is the editor's own save.</li>
      *   <li>The buffer's new name after {@code :saveas new.txt}, which renames the buffer and then
      *       writes it: Eclipse saves the document as that file and moves the editor there (kind
      *       {@code "saveas"}); then {@code b:neovim4eclipse_file} is the new file. (Before, Eclipse
@@ -2830,13 +2832,25 @@ final class LuaScripts {
                   local ok, saved_as = ask(ev.buf, 'copy', target, 0, 0)
                   if ok and saved_as ~= '' then
                     -- An editor without a file of its own (an untitled one): Eclipse saved it as the
-                    -- file instead, and the editor shows that file now. Vim too names a buffer without
-                    -- a file after the file it writes (:help cpo-F), which Neovim does not do for an
-                    -- acwrite buffer. Renamed here, the buffer is "[Not edited]" until its next write.
-                    vim.b[ev.buf].neovim4eclipse_file = saved_as
+                    -- file instead (OtherFileWrites.copyOrSaveAs), and the editor shows that file now.
+                    -- Vim too names a buffer without a file after the file it writes (:help cpo-F),
+                    -- which Neovim does not do for an acwrite buffer. Renamed here, the buffer is
+                    -- "[Not edited]" until its next write. As in Vim, an unloaded buffer of that name
+                    -- (Neovim's alternate file, or the buffer kept from a closed editor of the file)
+                    -- is wiped by the rename; a loaded one makes it fail (E95).
                     saveas_tried[ev.buf] = true -- the BufFilePost check below then stays quiet
-                    vim.api.nvim_buf_set_name(ev.buf, saved_as)
-                    vim.bo[ev.buf].modified = false
+                    local renamed, rename_err = pcall(vim.api.nvim_buf_set_name, ev.buf, saved_as)
+                    if renamed then
+                      vim.b[ev.buf].neovim4eclipse_file = saved_as
+                      vim.bo[ev.buf].modified = false
+                    else
+                      -- The buffer keeps its name and its file, so a later :w is still the editor's
+                      -- own save (Eclipse saves the file the editor shows), never a save as under the
+                      -- old name.
+                      saveas_tried[ev.buf] = nil
+                      fail('Eclipse saved ' .. vim.fn.fnamemodify(saved_as, ':t')
+                        .. ', but Neovim could not name this buffer after it: ' .. tostring(rename_err))
+                    end
                   end
                   wipe_left_over(ev.buf, { ev.match, target, old })
                 end

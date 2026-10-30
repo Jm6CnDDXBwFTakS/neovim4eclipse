@@ -22,6 +22,7 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.ui.IEditorInput;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IReusableEditor;
 import org.eclipse.ui.ide.FileStoreEditorInput;
 import org.eclipse.ui.part.FileEditorInput;
@@ -40,9 +41,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}). {@code :saveas new.txt}
  * is Eclipse's Save As without its dialog: the editor moves to the new file ({@link #saveAs}). Neovim decides which
  * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already
- * refused an existing file without {@code !} (E13); only an untitled editor's copy becomes a save as,
- * decided in {@code EditorAttachManager} ({@code hasNoFile}), as Vim names a buffer without a file
- * after the file it writes.
+ * refused an existing file without {@code !} (E13). The one choice made here: a copy of an untitled
+ * editor is a save as ({@link #copyOrSaveAs}), as Vim names a buffer without a file after the file it
+ * writes; Neovim learns it from the answer.
  *
  * <p>How a copy is written, and why:
  * <ul>
@@ -116,6 +117,27 @@ final class OtherFileWrites {
         }
         return write(target, TextLines.of(document.get(), first, last), EclipseFileCommands.charsetOf(editor), true,
                 force, createFolders);
+    }
+
+    /**
+     * {@code :w target} and {@code :wq target} for an editor: a {@link #copy}, except for an editor
+     * without a file of its own (an untitled one, {@link EditorAttachManager#hasNoFile}), which is
+     * saved as {@code target} and then shows it ({@link #saveAs}), as Vim names a buffer without a
+     * file after the file it writes ({@code :help cpo-F}). Neovim learns which from the answer
+     * ({@link DocumentWrite.Result#savedAs}) and renames its buffer. The one place this is decided,
+     * for Neovim's {@code :w} and Eclipse's {@code :wq} alike.
+     *
+     * <p>An untitled document shown in two editors (Window › Editor › Clone) gets a copy, as before:
+     * {@link #saveAs} can move only one editor, and the other would be left on a document that no
+     * longer exists. Example: {@code :w notes.txt} in a cloned untitled editor writes
+     * {@code notes.txt}, and both editors stay untitled.
+     *
+     * @param part the workbench part showing {@code editor}; a page of a multi-page editor gets a copy
+     */
+    static DocumentWrite.Result copyOrSaveAs(ITextEditor editor, IEditorPart part, Path target, boolean createFolders) {
+        boolean saveAs = part == editor && EditorAttachManager.hasNoFile(editor.getEditorInput())
+                && !EditorAttachManager.getInstance().isShownInAnotherEditor(editor);
+        return saveAs ? saveAs(editor, target, createFolders) : copy(editor, target, createFolders);
     }
 
     /**

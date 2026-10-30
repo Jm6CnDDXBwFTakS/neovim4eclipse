@@ -518,7 +518,10 @@ and `:wq!` discards them. `:x other.txt` writes the copy only if the editor has 
 An untitled editor (*File → New → Untitled Text File*) has no file to keep, so there `:w a.txt`
 saves it as `a.txt` and the editor shows `a.txt` from then on, as Vim names a buffer without a file
 after the file it writes (`:help cpo-F`). `:wq a.txt` and `:x a.txt` do the same, then close the editor
-without asking about changes. Until its next write, `:file` (`Ctrl-G`) says `[Not edited]`.
+without asking about changes. Until its next write, `:file` (`Ctrl-G`) says `[Not edited]`. An
+untitled document open in two editors (*Window → Editor → Clone*) gets a copy instead, and both stay
+untitled. A file's revision from Git's history or a jar's entry is no untitled editor: `:w name` writes
+a copy there.
 
 `:saveas new.txt` is Eclipse's *File → Save As* without the dialog: the document is saved as `new.txt`
 and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was.
