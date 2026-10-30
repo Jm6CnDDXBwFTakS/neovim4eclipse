@@ -219,9 +219,21 @@ Eclipse status bar; changes apply immediately:
 | `cmd` | the pending command as Vim's `showcmd` shows it: `2d`, `"a`, `2f` | on |
 | `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
-The parts are joined in that order. `-- ECLIPSE --` is always shown while Neovim mode is off. Only the enabled
-parts are requested from Neovim. Messages and errors are not in
-the status bar: they appear in the editor (next section).
+Each part has a label of its own, in that order. Hovering one shows its whole text. `-- ECLIPSE --`
+shows while Neovim mode is off, even with `mode` turned off. Only the enabled parts are requested from
+Neovim.
+
+*Mode style* chooses how the mode reads: **Full** as Vim writes it (`-- INSERT --`, `-- VREPLACE --`,
+`-- (insert) --` after `Ctrl-O`), **Short** without the dashes (`INSERT`), or **Letters** (`-I-`,
+`-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip says what the letters mean. The full table is in
+[docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
+
+*Statusline width* (characters, default 60) is how wide the statusline is. Neovim fits your
+`'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the
+position to the right. *At most this share of the status bar* (default 40%) keeps room for Eclipse's
+own messages: in a narrow window the statusline gets narrower first.
+
+Messages and errors are not in the status bar: they appear in the editor (next section).
 
 ## Messages and errors
 
@@ -771,7 +783,8 @@ adds a brief flash to errors in the message line ([Messages and errors](#message
 `io.github.jm6cnddxbwftaks.neovim4eclipse/showWelcome=false` in the product's
 `plugin_customization.ini`.
 
-*Window → Preferences → Neovim → Status Bar*: which parts of the Vim status appear in the status bar.
+*Window → Preferences → Neovim → Status Bar*: which parts of the Vim status appear in the status bar,
+how the mode reads, and how wide the statusline may be (see [Status bar](#status-bar)).
 
 *Window → Preferences → Neovim → Ctrl Keys*: one check box per letter. Ticked `Ctrl+letter` keys go to
 Neovim in normal and visual mode; cleared ones keep their Eclipse shortcut. *Select All* and *Deselect

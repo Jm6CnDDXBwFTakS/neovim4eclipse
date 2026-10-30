@@ -14,6 +14,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
+- A *Mode style* for the status bar (*Preferences → Neovim → Status Bar*): Full (`-- INSERT --`),
+  Short (`INSERT`) or Letters (`-I-`, `-VR-`, `-(i)-`). Hovering a status bar part shows its whole
+  text, and for the short styles what it means.
+- *Statusline width* (in characters) and *At most this share of the status bar*: Neovim fits your
+  `'statusline'` into the width (`%<` shortens the file name, `%=` puts the position at the right),
+  and in a narrow window the statusline narrows first, leaving room for Eclipse's messages.
+
 - Neovim's language-server keys run Eclipse's commands: `grn` Rename, `gra` Quick Fix (also on a
   visual selection), `grr` References, `gri` Open Implementation, `grt` Open Declared Type, `gO`
   Quick Outline. Where an editor has no such command, the message line says so.
@@ -41,6 +48,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The status bar shows the mode, the pending command and the statusline as separate, left-aligned
+  labels sized in characters, instead of one centered 420-pixel label.
 - Closing a file's last editor keeps its Neovim buffer, as Vim's `:bd` does: the buffer number
   stays the same when the file is opened again (`:ls`, `:b 3`), and so do its marks; the caret goes
   where you left it. `:ls!` lists closed files with `u`. Before, the buffer was wiped and the file
@@ -92,6 +101,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- The status bar names Virtual Replace (`-- VREPLACE --`, was `-- REPLACE --`), one command after
+  `Ctrl-O` in Insert mode (`-- (insert) --`, was `-- NORMAL --`), Ex mode, the `-- more --` prompt
+  and a running shell command, which showed raw codes such as `-- RM --` and `-- ! --`.
 - File names are compared by one rule everywhere, on Windows and macOS too: in another case where
   the system ignores case, with `\` or `/`, through a link, a Windows junction or an 8.3 short
   name. So `:e` of an open file spelled another way goes to its editor, `:wq! name` of the editor's
