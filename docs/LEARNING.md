@@ -806,6 +806,14 @@ expose it on the feature's port (`DiagnosticsPort.problemsEnabled()`), so that o
 Treat `0` and `false` as off and anything else, unset included, as on. Test the script in a
 `*_spec.lua` and the read with `--cmd "let g:..."` in an integration test.
 
+**Compare two file paths.** Never with `equals` or `==`: on Windows one file is `C:\WS\a.txt` and
+`c:/ws/A.TXT`, on macOS `/var/x` and `/private/var/x` (and case does not count). Java: `FilePaths.same`
+or `FilePaths.inside` (this machine's rule), or with a `FilePaths.Platform` of your own in a test;
+Lua: `require('neovim4eclipse.paths').same` / `.inside`; a Lua spec: `t.same_file(expected, actual)`.
+A path's workspace file: `NewFiles.workspaceFileAt`. A case the rule must handle goes into
+`tests/unit/src/test/resources/path-cases.tsv`; `FilePathsTest` and `paths_spec.lua` both run it, on
+the Linux, macOS and Windows rules, with fake links.
+
 **Send something Eclipse knows about each open file to Neovim.** Follow `sync/DiagnosticsSync`
 (Eclipse's problems, for `]d`): one object per document with a buffer, created and closed in
 `EditorAttachManager` next to its `UnattachedDocumentSync`, started after the controller's attach so

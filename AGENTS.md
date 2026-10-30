@@ -52,6 +52,11 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 
 - No blocking Neovim RPC on the SWT UI thread; queue work through the session's `*Async` methods.
   The one bounded exception: `editor/ProjectFolderExit` waits at most 1 s before a project delete.
+- Compare file paths only through the one rule: `util/FilePaths` in Java, `neovim4eclipse.paths`
+  (`LuaScripts.PATHS`) in Lua, `t.same_file` in Lua specs; find a path's workspace file only with
+  `NewFiles.workspaceFileAt`. A new case goes into `tests/unit/src/test/resources/path-cases.tsv`,
+  which both rules must pass. Never `equals` or `==` on two paths: the same file is spelled
+  differently on Windows (`\` or `/`, any case) and macOS (case ignored, `/var` is `/private/var`).
 - Neovim columns are UTF-8 bytes, Eclipse columns UTF-16 chars; convert with `Utf8Columns` /
   `DocumentPositions`.
 - `StyledText` offsets are not document offsets when code is folded; convert with `WidgetOffsets`.

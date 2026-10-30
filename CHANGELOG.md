@@ -92,6 +92,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- File names are compared by one rule everywhere, on Windows and macOS too: in another case where
+  the system ignores case, with `\` or `/`, through a link, a Windows junction or an 8.3 short
+  name. So `:e` of an open file spelled another way goes to its editor, `:wq! name` of the editor's
+  own file under another spelling saves it instead of copying onto it, a shortened file name in a
+  message ignores the folder's case on macOS, and deleting a project moves a Neovim window out of
+  it when the window works there through a Windows junction.
 - A plug-in's or script's `:edit!` in Neovim (one that reloads files after a `git checkout`, say)
   no longer replaces an open file's text, unsaved changes included, with the file on disk, and no
   longer stops Neovim's changes from reaching the editor. The text, marks and cursor line stay as

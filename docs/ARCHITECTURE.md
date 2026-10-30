@@ -279,6 +279,22 @@ changes (marker deltas, a document's buffer coming or going, `DiagnosticsSync`'s
 calls the quickfix module to show the Problems or Tasks view (`eclipse_show_view`) or the list's
 `:clist`.
 
+### 8b. File paths: one rule on both sides
+
+The same file reaches the plug-in in many spellings: `C:\WS\a.txt` and `c:/ws/A.TXT` on Windows,
+`/var/...` and `/private/var/...` on macOS (and any case there), a Windows junction or 8.3 short name,
+`..`. So paths are compared by one rule: absolute, links resolved (`realpath`; a file not there yet,
+its folder's), `/` separators, `.` and `..` resolved, lower case where file names ignore case
+(Windows, macOS). Neovim's side is `LuaScripts.PATHS` (module `neovim4eclipse.paths`, run first; used
+by `PROJECT_FILES`, `HOST_COMMANDS`, `DOCUMENT_BUFFER`, `LEAVE_FOLDER`, and the specs'
+`t.same_file`), Eclipse's `util/FilePaths` (`:wq name`, shortened names). Both take the platform as
+a parameter and pass one table of cases, `tests/unit/src/test/resources/path-cases.tsv`
+(`paths_spec.lua`, `FilePathsTest`), so the Windows and macOS rules run on Linux and CI, and the two
+sides cannot disagree. A path's workspace file has one lookup, `NewFiles.workspaceFileAt` (as given,
+then with links resolved; Eclipse's own lookup resolves symbolic links and Windows case and short
+names, the retry covers junctions). Found the hard way: before this, four Lua copies and two Java
+lookups each had part of the rule, and each platform's fix landed in one of them.
+
 ### 9. Neovim's window is the editor's size and scroll position
 
 Each editor has its own Neovim window (section 6, "A window per editor"); "Neovim's window" here is
@@ -704,6 +720,7 @@ reason is gone.
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
+| File paths compared by one rule | `LuaScripts.PATHS` (module `neovim4eclipse.paths`), `util/FilePaths`, `NewFiles.workspaceFileAt` (the one workspace lookup) | `paths_spec.lua` and `FilePathsTest` (both run `tests/unit/src/test/resources/path-cases.tsv` on the Linux, macOS and Windows rules), `EditPathTest`, `t.same_file` in every spec, UI `FilePathsEndToEndTest` (`:e` and `:wq!` through a link) |
 | `gd`/`K`/`gr*`/`gO`/`gt`/`gT` handed to Eclipse | `core/IdeKeys` (the one table: keys, actions, how each command is found), `core/IdeAction`, `LuaScripts.IDE_KEYS` (the mappings, from the table), `IdeKeys.pick` (the one loop, over the port `IdeKeys.Editor`; `dryRun` for tests), `editor/IdeActions` (`EclipseEditor`, the port's Eclipse side), `editor/HyperlinkProbe` (links for `gd` and `grt`) | `IdeKeysTest`, `setup_spec.lua`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest`, `IdeKeysEndToEndTest`, `JavaEditorEndToEndTest` (heavyJava: Java's commands, `gri`, `grt`) |
 | `Ctrl-O`/`Ctrl-I` past Neovim's jumps: Back past the plug-in's own switches, Forward that retraces | `util/HistorySteps` (decisions), `editor/NavigationHistorySteps` (Eclipse glue), the trail of `Ctrl-O` steps in `LuaScripts.SETUP` | `HistoryStepsTest`, `setup_spec.lua`, `EditorEndToEndTest` |
 | Eclipse's problems as Neovim diagnostics (`]d`, `[d`) | `util/DiagnosticPositions` (offsets to lines and byte columns), `util/Diagnostic` (severity, Lua arguments), `sync/DiagnosticsSync` (annotation model to session, through `core/DiagnosticsPort`), `editor/ProblemAnnotations` (which annotations are problems), `LuaScripts.SET_DIAGNOSTICS` and `SETUP` (namespace, `on_jump` echo), `LuaScripts.PROBLEMS` (the opt-out `vim.g.neovim4eclipse_problems`, and the message `]d` gives then) | `DiagnosticPositionsTest`, `DiagnosticTest`, `tests/text` `DiagnosticsSyncTest` (real `AnnotationModel`: debounce, unchanged lists, close), `diagnostics_spec.lua` (real Neovim: `]d` with a count, Ctrl-O, the echo, the opt-out), `NeovimProblemsIntegrationTest` (the opt-out read at start), UI `DiagnosticsEndToEndTest` (a problem marker, `]d`, its message) |
