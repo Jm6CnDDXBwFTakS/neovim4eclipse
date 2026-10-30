@@ -82,8 +82,9 @@ class LuaScriptsTest {
 
     @Test
     void snapshotOnlyEvaluatesTheStatuslineAndReadsFoldsWhenRequested() {
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("want_statusline, want_folds = want_statusline == '1', want_folds == '1'"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_statusline then"));
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("statusline_width, want_folds = tonumber(statusline_width) or 0, want_folds == '1'"));
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if statusline_width > 0 then"));
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("{ maxwidth = statusline_width }"), "at the label's width");
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_folds and package.loaded['neovim4eclipse.folds'] then"));
     }
 

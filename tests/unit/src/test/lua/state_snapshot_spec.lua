@@ -48,3 +48,13 @@ t.test('the answer ends with the current buffer and window, to tell the attached
   t.eq(vim.api.nvim_get_current_win(), snap[WINID], 'docs/design/WINDOWS.md')
   t.eq(WINID, #snap, 'the last field')
 end)
+
+-- The first argument is the status bar's statusline width: Neovim fits the 'statusline' into it
+-- (%= pads the default format's middle to exactly that many columns), and 0 evaluates nothing.
+t.test('the statusline is evaluated at the status bar\'s width, or not at all', function()
+  local STATUSLINE = 9
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one' })
+  t.eq(30, vim.fn.strdisplaywidth(t.run('STATE_SNAPSHOT', '30')[STATUSLINE]), 'filled to 30 columns')
+  t.eq(12, vim.fn.strdisplaywidth(t.run('STATE_SNAPSHOT', '12')[STATUSLINE]), 'and cut to 12')
+  t.eq('', t.run('STATE_SNAPSHOT', '0')[STATUSLINE], 'not shown: not evaluated')
+end)

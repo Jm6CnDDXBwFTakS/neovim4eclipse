@@ -177,7 +177,12 @@ public final class NeovimEditorController implements AutoCloseable {
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
-        this.modeStatus = new ModeStatusContribution();
+        // The statusline label's width goes to Neovim, which fits the 'statusline' into it; read again
+        // at once, so a resized window shows the new fit without waiting for a key.
+        this.modeStatus = new ModeStatusContribution(columns -> {
+            session.setStatuslineColumns(columns);
+            session.refreshStatusAsync();
+        });
         this.cursorStyle = new CursorStyleController(styledText);
 
         // Prepend on the viewer so Neovim sees keys before the editor's own listeners: otherwise

@@ -58,8 +58,23 @@ final class StatusTracker {
     private final ListenerList<CommandOutput> outputListeners = new ListenerList<>("output", Level.FINE);
     private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
 
+    /**
+     * The statusline label's width in characters, the {@code maxwidth} Neovim evaluates the
+     * {@code 'statusline'} at; the status bar sets it as it lays out. Until then 60, the default of
+     * the preference <em>Statusline width</em> ({@code prefs/PreferenceConstants}).
+     */
+    private volatile int statuslineColumns = 60;
+
     Set<StatusItem> items() {
         return items;
+    }
+
+    int statuslineColumns() {
+        return statuslineColumns;
+    }
+
+    void setStatuslineColumns(int columns) {
+        statuslineColumns = Math.max(1, columns);
     }
 
     void setItems(Set<StatusItem> items) {

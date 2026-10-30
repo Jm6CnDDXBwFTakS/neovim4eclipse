@@ -3,8 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
-import java.util.Locale;
-
 /**
  * Predicates and labels for Neovim mode strings as returned by {@code nvim_get_mode()}.
  *
@@ -14,7 +12,8 @@ import java.util.Locale;
  * {@code i} insert (also {@code ic}, {@code ix}), {@code R} replace (also {@code Rc}, {@code Rx}, {@code Rv}),
  * {@code c} command-line, {@code t} terminal. See {@code :help mode()}.
  *
- * <p>All mode-string interpretation lives here so the rest of the plug-in never re-implements it.
+ * <p>All mode-string interpretation lives here so the rest of the plug-in never re-implements it;
+ * the status bar's texts for each mode are {@link ModeLabels}.
  */
 public final class VimModes {
 
@@ -55,39 +54,6 @@ public final class VimModes {
 
     public static boolean isBlockVisual(String mode) {
         return first(mode) == CTRL_V;
-    }
-
-    /** Text for the status line, in Vim's own {@code -- MODE --} style. */
-    public static String statusText(String mode) {
-        if (mode == null || mode.isEmpty()) {
-            return "-- NORMAL --";
-        }
-        return switch (first(mode)) {
-            case 'n' -> isOperatorPending(mode) ? "-- OPERATOR --" : "-- NORMAL --";
-            case 'i' -> "-- INSERT --";
-            case 'R' -> "-- REPLACE --";
-            case 'v' -> "-- VISUAL --";
-            case 'V' -> "-- VISUAL LINE --";
-            case CTRL_V -> "-- VISUAL BLOCK --";
-            case 's' -> "-- SELECT --";
-            case 'S' -> "-- SELECT LINE --";
-            case CTRL_S -> "-- SELECT BLOCK --";
-            case 'c' -> "-- COMMAND --";
-            case 't' -> "-- TERMINAL --";
-            default -> "-- " + mode.toUpperCase(Locale.ROOT) + " --";
-        };
-    }
-
-    /**
-     * Status line text including the macro being recorded, as Vim shows it:
-     * {@code -- NORMAL --  recording @a}.
-     *
-     * @param recordingRegister register being recorded into; {@code null} or "" when not recording
-     */
-    public static String statusText(String mode, String recordingRegister) {
-        String text = statusText(mode);
-        return recordingRegister == null || recordingRegister.isEmpty()
-                ? text : text + "  recording @" + recordingRegister;
     }
 
     private static char first(String mode) {

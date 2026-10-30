@@ -48,6 +48,36 @@ public final class PreferenceConstants {
     /** Off by default: it is long and mostly repeats what Eclipse already shows (file, position). */
     public static final boolean STATUS_ITEM_STATUSLINE_DEFAULT = false;
 
+    /**
+     * How the mode reads: {@code full} ({@code -- INSERT --}), {@code short} ({@code INSERT}) or
+     * {@code letters} ({@code -I-}); see {@code util/ModeLabels}.
+     */
+    public static final String STATUS_MODE_STYLE = "statusModeStyle";
+
+    public static final String STATUS_MODE_STYLE_DEFAULT = "full";
+
+    /**
+     * How wide the statusline part is, in characters of the status bar's font. Neovim fits its
+     * {@code 'statusline'} into that many columns ({@code %<} cuts, {@code %=} fills), so the
+     * statusline is never cut by Eclipse instead.
+     */
+    public static final String STATUS_STATUSLINE_WIDTH = "statusStatuslineWidth";
+
+    public static final int STATUS_STATUSLINE_WIDTH_DEFAULT = 60;
+    /** The range the preference page accepts. */
+    public static final int STATUS_STATUSLINE_WIDTH_MIN = 10;
+    public static final int STATUS_STATUSLINE_WIDTH_MAX = 300;
+
+    /**
+     * The most the plug-in's labels may take of the status bar's width, in percent, so Eclipse's own
+     * message area keeps room ({@code util/StatusBarWidths}).
+     */
+    public static final String STATUS_MAX_SHARE = "statusMaxShare";
+
+    public static final int STATUS_MAX_SHARE_DEFAULT = 40;
+    public static final int STATUS_MAX_SHARE_MIN = 10;
+    public static final int STATUS_MAX_SHARE_MAX = 90;
+
     // ---- Messages in the editor ----
 
     /**
@@ -95,8 +125,9 @@ public final class PreferenceConstants {
         return key != null && key.startsWith(CTRL_KEY_TO_NEOVIM_PREFIX);
     }
 
-    /** Whether the key is one of the three status item preferences. */
+    /** Whether the key is one of the status bar preferences: the three parts, the mode style, the widths. */
     public static boolean isStatusItemKey(String key) {
-        return STATUS_ITEM_MODE.equals(key) || STATUS_ITEM_CMD.equals(key) || STATUS_ITEM_STATUSLINE.equals(key);
+        return STATUS_ITEM_MODE.equals(key) || STATUS_ITEM_CMD.equals(key) || STATUS_ITEM_STATUSLINE.equals(key)
+                || STATUS_MODE_STYLE.equals(key) || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_SHARE.equals(key);
     }
 }

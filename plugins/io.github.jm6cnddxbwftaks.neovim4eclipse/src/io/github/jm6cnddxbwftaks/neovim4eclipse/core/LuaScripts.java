@@ -640,24 +640,25 @@ final class LuaScripts {
      * {@code j}, {@code l} from the start of {@code "abc"} and {@code "def"} gives
      * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (experiment X5).
      *
-     * <p>The first argument, {@code "1"} or {@code "0"}, says whether to evaluate the {@code 'statusline'}
-     * (a Vim-like default if the user has none), so that nothing is evaluated that the status bar
-     * does not show. The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
+     * <p>The first argument is the status bar's statusline width in columns, {@code "0"} when it shows
+     * no statusline (then nothing is evaluated). Neovim evaluates the {@code 'statusline'} (a Vim-like
+     * default if the user has none) at that width ({@code maxwidth}), so {@code %<} shortens and
+     * {@code %=} fills to the label's size. Example: {@code "60"} gives at most 60 columns. The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
      * the indexes of the outermost closed folds, from the fold module's {@code poll} (the per-key
      * trigger); with {@code "0"} it is an empty list that nothing reads. Messages and the pending command ({@code showcmd}) are not read here: Neovim
      * sends them as UI events ({@code ext_messages}; see {@code StatusTracker}).
      */
     static final String STATE_SNAPSHOT = """
-            local want_statusline, want_folds = ...
-            want_statusline, want_folds = want_statusline == '1', want_folds == '1'
+            local statusline_width, want_folds = ...
+            statusline_width, want_folds = tonumber(statusline_width) or 0, want_folds == '1'
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
             local statusline = ''
-            if want_statusline then
+            if statusline_width > 0 then
               local fmt = vim.o.statusline
               if fmt == nil or fmt == '' then fmt = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P' end
-              local ok, res = pcall(vim.api.nvim_eval_statusline, fmt, { maxwidth = 300 })
+              local ok, res = pcall(vim.api.nvim_eval_statusline, fmt, { maxwidth = statusline_width })
               if ok and type(res) == 'table' then statusline = res.str or '' end
             end
             local mode = vim.fn.mode()
