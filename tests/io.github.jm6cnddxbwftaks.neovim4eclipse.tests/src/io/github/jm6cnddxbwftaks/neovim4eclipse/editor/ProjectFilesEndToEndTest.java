@@ -214,16 +214,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
         open(createFile("a.txt", "see built/f.txt\n"));
         CountDownLatch holding = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Job build = Job.create("test: hold the workspace as a build does", monitor -> {
-            holding.countDown();
-            try {
-                release.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            return Status.OK_STATUS;
-        });
-        build.setRule(ResourcesPlugin.getWorkspace().getRoot()); // a build's rule (buildRule())
+        Job build = holdTheWorkspace(holding, release);
         try {
             build.schedule();
             holding.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -241,6 +232,72 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             build.join();
             closeAllBut(null);
         }
+    }
+
+    /**
+     * The same, but Neovim moves on before the job is done: {@code gf}, then {@code Ctrl-O} back
+     * while the file's lookup still waits. When the lookup ends, Neovim is no longer in the file, so
+     * its editor does not open ({@code EditorAttachManager.followNeovimIntoFile}: only the buffer
+     * Neovim is in now is followed). A later {@code gf} opens it as usual.
+     */
+    @Test
+    void aFileNeovimLeftDuringABuildIsNotOpenedAfterIt() throws Exception {
+        Path dir = Path.of(project.getLocation().toOSString(), "built");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("g.txt"), "from the build\n", StandardCharsets.UTF_8);
+        ITextEditor a = open(createFile("a.txt", "see built/g.txt\n"));
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Job build = holdTheWorkspace(holding, release);
+        try {
+            build.schedule();
+            holding.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            session.inputAsync("0fb");
+            settle();
+            session.inputAsync("gf");
+            settle();
+            assertFalse(session.getEnteredBufnr() == session.getAttachedBufnr(), "gf entered g.txt's buffer");
+            session.inputAsync("<C-o>");
+            settle();
+            assertEquals(session.getAttachedBufnr(), session.getEnteredBufnr(), "Ctrl-O went back to a.txt");
+            release.countDown();
+            build.join();
+            waitUntil("g.txt's lookup to end", TIMEOUT_MS, () -> !lookupRunning("g.txt"));
+            settle(); // the lookup's last step runs on the UI thread, queued as it ended
+            assertEquals(null, editorTitled("g.txt"), "Neovim had moved on: not opened");
+            assertEquals(a, page().getActiveEditor(), "a.txt stays the editor");
+
+            session.inputAsync("gf");
+            expectText(waitForFollowInto("g.txt"), "from the build\n");
+        } finally {
+            release.countDown();
+            build.join();
+            closeAllBut(null);
+        }
+    }
+
+    /**
+     * A job that holds the workspace as a build does ({@code buildRule()}: the root), from
+     * {@code holding} until {@code release}.
+     */
+    private static Job holdTheWorkspace(CountDownLatch holding, CountDownLatch release) {
+        Job build = Job.create("test: hold the workspace as a build does", monitor -> {
+            holding.countDown();
+            try {
+                release.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return Status.OK_STATUS;
+        });
+        build.setRule(ResourcesPlugin.getWorkspace().getRoot());
+        return build;
+    }
+
+    /** Whether the job that looks up {@code name}'s workspace file is still to run or running. */
+    private static boolean lookupRunning(String name) {
+        return Arrays.stream(Job.getJobManager().find(null))
+                .anyMatch(job -> job.getName().startsWith("Neovim: find ") && job.getName().endsWith(name));
     }
 
     /**
