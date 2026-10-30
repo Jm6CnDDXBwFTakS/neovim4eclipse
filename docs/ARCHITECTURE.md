@@ -392,12 +392,19 @@ Search options set at session start: `hlsearch`, `incsearch`, `ignorecase`, `sma
 
 ## Status bar items
 
-`ModeStatusContribution` shows the parts selected by the `statusItem*` preferences (`util/StatusItem`;
-composition and whitespace cleaning in the tested `util/StatusLineFormat`). Besides the mode:
+`ModeStatusContribution` shows the parts selected by the `statusItem*` preferences (`util/StatusItem`),
+one label each: `editor/StatusBarLabels` owns the widgets and sizes them in characters of the bar's font
+under the cap (`util/StatusBarWidths`; why a cap: JFace cuts the rightmost items, the plug-in's, once
+its message area is down to a third of the bar). Design and the mode table:
+[design/STATUS_BAR.md](design/STATUS_BAR.md).
 
+- **mode:** `util/ModeLabels`, one table of every Neovim mode string in three styles (Full
+  `-- VREPLACE --`, Short `VREPLACE`, Letters `-VR-`), with the tooltip that explains the letters.
 - **statusline:** from the per-key `STATE_SNAPSHOT` call, `nvim_eval_statusline(vim.o.statusline or a
-  Vim-like default)`, so a user's `%!` expressions and plugins such as lualine are honored. A flag says
-  whether to evaluate it at all.
+  Vim-like default, { maxwidth = <the label's columns> })`, so a user's `%!` expressions and plugins
+  such as lualine are honored, and Neovim fits the text to the label. Its first argument is that width
+  (0: not evaluated); the label reports it through `NeovimSession.setStatuslineColumns` whenever it is
+  fitted again.
 - **cmd:** pushed by Neovim as a `msg_showcmd` event (see below), also while Neovim is *blocked* waiting
   for a character, when no API call is possible: `2` then `f` arrives as `2f`.
 
@@ -544,7 +551,7 @@ Neovim records and plays macros natively; the plugin only has to make sure Neovi
 keys* and to keep the editor in step with playback.
 
 - **Recording state:** `STATE_SNAPSHOT` returns `reg_recording()`; `NeovimSession` fires a recording
-  listener on change and the controller shows `recording @a` in the status line (`VimModes.statusText`).
+  listener on change and the controller shows `recording @a` in the status line (`ModeLabels.text`).
 - **Insert while recording:** `isNeovimDrivenInsert()` is also set when `isRecording()`, so every key goes to
   Neovim and the recording is complete. (When *not* recording, Eclipse types and the text is replayed at Esc
   for `.`; replayed keys would also be recorded, but only exact keystrokes make a faithful macro.)
@@ -744,6 +751,7 @@ reason is gone.
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | A window per editor: which token holds which window, the travel swap | `core/EditorWindows`, `core/EditorWindow`; Neovim side `core/DocumentBuffers`, `LuaScripts.WINDOWS` | `EditorWindowsTest`, `windows_spec.lua`, `NeovimWindowsIntegrationTest` (needs nvim) |
 | Status bar parts, messages and output, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
+| The status bar's labels: mode texts, widths, the cap | `util/ModeLabels`, `util/StatusBarWidths`, `editor/StatusBarLabels`, `editor/ModeStatusContribution` | `ModeLabelsTest`, `StatusBarWidthsTest`, `tests/swt` `StatusBarLabelsTest`, `state_snapshot_spec.lua`, UI `StatusBarEndToEndTest` |
 | Message events from `redraw`; where each message goes | `util/MessageEvent`, `util/MessageRoute` | `MessageEventTest`, `MessageRouteTest`, `NeovimSessionIntegrationTest` (needs nvim) |
 | Messages and errors in the editor, error flash | `editor/MessageLine` (colors: `util/OverlayColors`) | `tests/swt` `MessageLineTest`, `OverlayColorsTest`, UI `MessageLineEndToEndTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |

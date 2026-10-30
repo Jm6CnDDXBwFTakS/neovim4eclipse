@@ -16,6 +16,7 @@ note the place to learn *why* the code is the way it is, which the code itself c
 | [VIEWPORT.md](VIEWPORT.md) | Neovim's window follows the editor's size and scroll position, so `H`, `L`, `Ctrl-D`, `zz` act on what is on screen | built (0.1.10) |
 | [WINDOWS.md](WINDOWS.md) | One Neovim window per Eclipse editor, each alone in a hidden tabpage: per-editor cursors, views, folds and jump history; `Ctrl-O` takes the window along | built (0.1.10) |
 | [BUFFER_NUMBERS.md](BUFFER_NUMBERS.md) | A closed file keeps its buffer number, marks and last position, as with Vim's `:bd`; Neovim moving into a file without an editor opens it (the quickfix plan's way B), and Neovim reads no project file itself | built (0.1.10) |
+| [STATUS_BAR.md](STATUS_BAR.md) | The status bar's three labels: mode styles (Full, Short, Letters), widths in characters, the cap, Neovim fitting the statusline; a per-editor status row probed for later | built (unreleased) |
 | [NEW_FILE.md](NEW_FILE.md) | `:e newfile` opens an empty editor that `:w` creates | implemented |
 | [TAB_COMPLETION.md](TAB_COMPLETION.md) | Tab completion in the `:` command line | superseded in 0.1.7: Tab is Neovim's own, in Neovim's command line |
 | [LOG_LEVEL.md](LOG_LEVEL.md) | One switch for the plug-in's log level, and why it is the only one | implemented |
