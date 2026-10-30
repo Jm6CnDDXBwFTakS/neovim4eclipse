@@ -215,17 +215,17 @@ Eclipse status bar; changes apply immediately:
 
 | Item | Shows | Default |
 |------|-------|---------|
-| `mode` | `-- INSERT --`, `-- VISUAL BLOCK --`, `recording @q` | on |
+| `mode` | `INSERT`, `VISUAL BLOCK`, `recording @q`, in the chosen *Mode style* | on |
 | `cmd` | the pending command as Vim's `showcmd` shows it: `2d`, `"a`, `2f` | on |
 | `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
-Each part has a label of its own, in that order. Hovering one shows its whole text. `-- ECLIPSE --`
-shows while Neovim mode is off, even with `mode` turned off. Only the enabled parts are requested from
+Each part has a label of its own, in that order. Hovering one shows its whole text. `ECLIPSE`
+(`-- ECLIPSE --` in Full, `-E-` in Letters) shows while Neovim mode is off, even with `mode` turned off. Only the enabled parts are requested from
 Neovim.
 
-*Mode style* chooses how the mode reads: **Full** as Vim writes it (`-- INSERT --`, `-- VREPLACE --`,
-`-- (insert) --` after `Ctrl-O`), **Short** without the dashes (`INSERT`), or **Letters** (`-I-`,
-`-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip says what the letters mean. The full table is in
+*Mode style* chooses how the mode reads: **Short** without Vim's dashes (`INSERT`, the default),
+**Full** as Vim writes it (`-- INSERT --`, `-- VREPLACE --`, `-- (insert) --` after `Ctrl-O`), or
+**Letters** (`-I-`, `-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip says what the letters mean. The full table is in
 [docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
 
 *Statusline width* (characters, default 60) is how wide the statusline is; it is drawn in the

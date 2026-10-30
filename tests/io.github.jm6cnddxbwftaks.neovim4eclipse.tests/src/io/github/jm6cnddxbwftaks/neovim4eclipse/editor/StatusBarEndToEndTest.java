@@ -44,17 +44,18 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
                 () -> "; it shows " + statusLineTexts(editor));
     }
 
+    /** Short by default ({@code NORMAL}), then each style as it is chosen, applied at once. */
     @Test
     void theModeInEachStyle() {
-        waitForLabel("-- NORMAL --");
+        waitForLabel("NORMAL");
         typeSlowly("i");
-        waitForLabel("-- INSERT --");
+        waitForLabel("INSERT");
         store().setValue(PreferenceConstants.STATUS_MODE_STYLE, "letters");
         waitForLabel("-I-");
-        store().setValue(PreferenceConstants.STATUS_MODE_STYLE, "short");
-        waitForLabel("INSERT");
+        store().setValue(PreferenceConstants.STATUS_MODE_STYLE, "full");
+        waitForLabel("-- INSERT --");
         UiTestSupport.escape(widget);
-        waitForLabel("NORMAL");
+        waitForLabel("-- NORMAL --");
     }
 
     /** Neovim fits its statusline into the label: at most the columns asked for, its end (the position) kept. */
@@ -75,12 +76,12 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
     @Test
     void eclipseShowsEvenWithTheModeOff() {
         store().setValue(PreferenceConstants.STATUS_ITEM_MODE, false);
-        waitUntil("no mode label", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("-- NORMAL --"),
+        waitUntil("no mode label", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("NORMAL"),
                 () -> "; it shows " + statusLineTexts(editor));
         EditorAttachManager.getInstance().getActiveController().setNeovimModeActive(false);
-        waitForLabel("-- ECLIPSE --");
+        waitForLabel("ECLIPSE"); // Short, the default
         EditorAttachManager.getInstance().getActiveController().setNeovimModeActive(true);
-        waitUntil("the indicator gone again", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("-- ECLIPSE --"),
+        waitUntil("the indicator gone again", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("ECLIPSE"),
                 () -> "; it shows " + statusLineTexts(editor));
     }
 }

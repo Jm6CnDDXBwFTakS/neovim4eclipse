@@ -19,7 +19,8 @@ for more room for the text, measured sensibly, and a choice of how the mode read
 - **A tooltip** on every label with its whole text, and for the short mode styles what they mean
   (`-VR- = VREPLACE`). *(decided)*
 - **A mode style**: Full (`-- INSERT --`), Short (`INSERT`) or Letters (`-I-`), the letters picked one
-  by one (section 2). *(decided)*
+  by one (section 2). *(decided)* Short is the default *(decided 2026-10-30)*: it reads at a glance and
+  takes less of the bar.
 - **Neovim fits the statusline**: it is evaluated at the label's width in columns (`maxwidth`), so `%<`
   shortens the file name and `%=` pads to the label, instead of Eclipse cutting the end. *(decided)*
 

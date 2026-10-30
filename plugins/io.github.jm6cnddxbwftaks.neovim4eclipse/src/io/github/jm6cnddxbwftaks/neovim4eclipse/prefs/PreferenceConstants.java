@@ -54,7 +54,12 @@ public final class PreferenceConstants {
      */
     public static final String STATUS_MODE_STYLE = "statusModeStyle";
 
-    public static final String STATUS_MODE_STYLE_DEFAULT = "full";
+    /**
+     * Short by default (the maintainer's choice, 2026-10-30): {@code INSERT} reads at a glance and
+     * takes less of the bar than {@code -- INSERT --}. Full keeps Vim's own wording for those who
+     * want it.
+     */
+    public static final String STATUS_MODE_STYLE_DEFAULT = "short";
 
     /**
      * How wide the statusline part is, in characters of the status bar's font. Neovim fits its
