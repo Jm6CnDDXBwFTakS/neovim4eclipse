@@ -65,11 +65,15 @@ class EditPathTest {
     @Test
     void aFolderInOtherCaseStillShortensTheNameWhereNamesIgnoreCase() {
         // macOS's rule (FilePaths): /ws/App and /ws/app are one folder; the part shown keeps its case.
-        FilePaths.Platform macos = new FilePaths.Platform(false, true, path -> path);
+        // The separators are this machine's, since the Paths are: on a Windows host /ws/app is
+        // \ws\app, which only a rule that knows \ reads as a path (found 2026-10-29).
+        boolean windows = FilePaths.Platform.current().windows();
+        FilePaths.Platform ignoresCase = new FilePaths.Platform(windows, true, path -> path);
         assertEquals(Path.of("src/A.java").toString(),
-                EditPath.shown(Path.of("/ws/app/src/A.java"), Path.of("/home/u"), Path.of("/ws/App"), macos));
-        FilePaths.Platform linux = new FilePaths.Platform(false, false, path -> path);
+                EditPath.shown(Path.of("/ws/app/src/A.java"), Path.of("/home/u"), Path.of("/ws/App"), ignoresCase));
+        FilePaths.Platform keepsCase = new FilePaths.Platform(windows, false, path -> path);
         assertEquals(Path.of("/ws/app/src/A.java").toString(),
-                EditPath.shown(Path.of("/ws/app/src/A.java"), Path.of("/home/u"), Path.of("/ws/App"), linux), "Linux keeps case");
+                EditPath.shown(Path.of("/ws/app/src/A.java"), Path.of("/home/u"), Path.of("/ws/App"), keepsCase),
+                "case kept (Linux)");
     }
 }

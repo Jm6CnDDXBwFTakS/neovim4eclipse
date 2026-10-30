@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,8 +27,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 
 /**
  * Names that reach a workspace file another way, here through a symbolic link to the project's folder
- * (on macOS {@code /var} is one; on Windows a junction or 8.3 short name does the same): {@code :e}
- * opens the workspace file itself, and {@code :wq!} of the editor's own file under that name saves it.
+ * (on macOS {@code /var} is one; on Windows a junction, made when a symbolic link may not be, or an
+ * 8.3 short name does the same): {@code :e} opens the workspace file itself, and {@code :wq!} of the
+ * editor's own file under that name saves it.
  * Both follow the one rule for paths ({@code util/FilePaths}, {@code NewFiles.workspaceFileAt});
  * its cases are {@code FilePathsTest} and {@code paths_spec.lua}.
  */
@@ -40,13 +42,38 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     void linkToTheProject() throws IOException {
         Path dir = Files.createTempDirectory("n4e-link");
         link = dir.resolve("proj");
+        Path target = Path.of(project.getLocation().toOSString());
         try {
-            Files.createSymbolicLink(link, Path.of(project.getLocation().toOSString()));
+            Files.createSymbolicLink(link, target);
         } catch (IOException | UnsupportedOperationException e) {
-            Files.delete(dir);
-            link = null;
+            if (!junction(link, target)) {
+                Files.delete(dir);
+                link = null;
+            }
         }
-        assumeTrue(link != null, "no right to make a symbolic link here (a Windows runner)");
+        assumeTrue(link != null, "could make neither a symbolic link nor a junction here");
+    }
+
+    /**
+     * Makes {@code link} a Windows junction to the folder {@code target}, for when Java may not make a
+     * symbolic link (that needs developer mode or admin rights; a junction needs none, and Java has no
+     * API for one). As Neovim's {@code fs_symlink(..., { junction = true })} does in the Lua specs.
+     * Example: {@code cmd /c mklink /J C:\Temp\n4e-link1\proj C:\ws\proj}. {@code false} off Windows
+     * or when it fails.
+     */
+    private static boolean junction(Path link, Path target) throws IOException {
+        if (!FilePaths.Platform.current().windows()) {
+            return false;
+        }
+        Process mklink = new ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString())
+                .redirectErrorStream(true).start();
+        try {
+            mklink.getInputStream().transferTo(OutputStream.nullOutputStream());
+            return mklink.waitFor() == 0 && Files.isDirectory(link);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     @AfterEach
@@ -67,7 +94,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * {@code :e} of a project file through the link opens the workspace file, not a file outside it.
      * A guard on Linux and macOS, where Eclipse's lookup resolves symbolic links itself (found
      * 2026-10-29: this passes without {@code NewFiles.workspaceFileAt}'s retry); the retry is for
-     * Windows junctions, which this test cannot make there without rights.
+     * Windows junctions, which this test makes there when it may not make a symbolic link.
      */
     @Test
     void eThroughALinkOpensTheWorkspaceFile() throws Exception {
