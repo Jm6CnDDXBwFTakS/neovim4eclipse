@@ -479,9 +479,7 @@ final class LuaScripts {
             -- and :e ++opt name, and :e of the current file (Neovim's would re-read the buffer).
             -- The name is read as :Eclipse reads it (expandcmd, fnamemodify ':p'); a # with no
             -- alternate file stays '#' and matches nothing, so Eclipse reports it.
-            local function canonical(name)
-              return vim.fs.normalize(vim.fn.resolve(name))
-            end
+            local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
             local function edits_an_open_document(p)
               if p.cmd ~= 'edit' or p.bang or #p.args ~= 1 or p.args[1]:sub(1, 1) == '+' then
                 return false
@@ -1226,6 +1224,94 @@ final class LuaScripts {
             """;
 
     /**
+     * Module {@code neovim4eclipse.paths}: the one rule for comparing file paths in Neovim, used by
+     * every script that compares them ({@link #PROJECT_FILES}, {@link #HOST_COMMANDS},
+     * {@link #DOCUMENT_BUFFER}, {@link #LEAVE_FOLDER}) and by the Lua tests ({@code t.same_file}).
+     * Java's {@code util/FilePaths} follows the same rule; both are checked against one table of
+     * cases ({@code tests/unit/src/test/resources/path-cases.tsv}). Run first, before any other script.
+     *
+     * <p><b>Why one rule.</b> The same file reaches Neovim in many spellings: Windows writes {@code \}
+     * or {@code /} and any case ({@code C:\WS\a.txt}, {@code c:/ws/A.TXT}); macOS ignores case and
+     * links {@code /var} to {@code /private/var}; a Windows junction or 8.3 short name
+     * ({@code C:\PROGRA~1}) points elsewhere; {@code ..} and doubled slashes. Neovim stores a buffer's
+     * name with links resolved, but a written name ({@code :w}) as typed. Each script once had its own
+     * comparison, and each platform's fix landed in one of them only.
+     *
+     * <p><b>The rule</b> ({@code canonical(path)}): absolute ({@code fnamemodify(':p')} for a relative
+     * name), then resolved ({@code fs_realpath}: symbolic links, junctions, 8.3 names, macOS's NFD
+     * names; for a file that does not exist yet, its folder resolved plus its name), with {@code /}
+     * separators and {@code .} and {@code ..} resolved ({@code vim.fs.normalize}, environment
+     * variables not expanded: a folder may be named {@code $HOME}), and lower-cased where
+     * {@code 'fileignorecase'} is on (Windows, macOS). Two paths name one file when their canonical
+     * forms are equal ({@code same(a, b)}); {@code inside(path, folder)} when the path's is the
+     * folder's or starts with it and a {@code /}. Example on Windows: {@code C:\link\App\a.txt} and
+     * {@code c:/ws/app/A.TXT}, with {@code C:\link} a junction to {@code C:\ws}, are both
+     * {@code c:/ws/app/a.txt}.
+     *
+     * <p><b>For tests, any platform anywhere.</b> {@code rules(platform)} gives the same three
+     * functions for a platform given as {@code { win32 = bool, ignorecase = bool, realpath = fn }},
+     * so the Windows and macOS rules are tested on Linux with a fake {@code realpath}; the module's
+     * own functions use this machine's ({@code current()}).
+     */
+    static final String PATHS = """
+            local M = {}
+
+            --- Whether `path` is absolute under the platform's rule (C:\\ or \\\\server on Windows).
+            local function absolute(path, win32)
+              if win32 then
+                return path:match('^%a:[/\\\\]') ~= nil or path:match('^[/\\\\][/\\\\]') ~= nil
+              end
+              return path:sub(1, 1) == '/'
+            end
+
+            function M.current()
+              return { win32 = vim.fn.has('win32') == 1, ignorecase = vim.o.fileignorecase, realpath = vim.uv.fs_realpath }
+            end
+
+            function M.rules(platform)
+              local R = {}
+              local opts = { win = platform.win32, expand_env = false }
+              function R.canonical(path)
+                if path == nil or path == '' then
+                  return ''
+                end
+                if not absolute(path, platform.win32) then
+                  path = vim.fn.fnamemodify(path, ':p')
+                end
+                local full = vim.fs.normalize(path, opts)
+                local real = platform.realpath(full)
+                if not real then -- not there (yet): its folder resolved, plus its name
+                  local dir = platform.realpath(vim.fs.dirname(full))
+                  real = dir and (dir .. '/' .. vim.fs.basename(full)) or full
+                end
+                real = vim.fs.normalize(real, opts)
+                return platform.ignorecase and real:lower() or real
+              end
+              function R.same(a, b)
+                return R.canonical(a) == R.canonical(b)
+              end
+              --- Whether canonical form `c` is the canonical folder `f` or inside it.
+              function R.within(c, f)
+                local prefix = f:sub(-1) == '/' and f or f .. '/' -- the root: / or C:/
+                return c == f or c:sub(1, #prefix) == prefix
+              end
+              function R.inside(path, folder)
+                return R.within(R.canonical(path), R.canonical(folder))
+              end
+              return R
+            end
+
+            -- This machine's rule, read as each call is made ('fileignorecase' may change).
+            for _, name in ipairs({ 'canonical', 'same', 'inside', 'within' }) do
+              M[name] = function(...)
+                local rule = M.rules(M.current())
+                return rule[name](...)
+              end
+            end
+            package.loaded['neovim4eclipse.paths'] = M
+            """;
+
+    /**
      * Module {@code neovim4eclipse.project_files}: Neovim never reads a file of an open Eclipse
      * project by itself (docs/design/BUFFER_NUMBERS.md, 2.3 and Q3).
      *
@@ -1241,9 +1327,9 @@ final class LuaScripts {
      * <p><b>Which buffers.</b> Eclipse sends the open projects' folders ({@link #SET_PROJECT_FOLDERS}).
      * Each new buffer ({@code BufNew}, also sent after a rename) whose file is inside one gets a
      * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. The paths
-     * are compared resolved ({@code fs_realpath}: symbolic links, Windows junctions and 8.3 short
-     * names, macOS's NFD names), with {@code /} separators and, where {@code 'fileignorecase'} is on
-     * (Windows, macOS), in lower case. Autocommand patterns were tried first and cannot match a
+     * are compared by {@link #PATHS}'s rule (resolved: symbolic links, Windows junctions and 8.3
+     * short names, macOS's NFD names; {@code /} separators; lower case where
+     * {@code 'fileignorecase'} is on, Windows and macOS). Autocommand patterns were tried first and cannot match a
      * junction, an 8.3 name or a folder named {@code $HOME} on Windows (BUFFER_NUMBERS.md, X18d).
      * Example: with project {@code /ws/app}, {@code gf} on {@code src/B.java} in {@code /ws/app/A.java}
      * is read by the hook; {@code /etc/hosts} and {@code /ws/app2/C.java} are read by Neovim.
@@ -1269,32 +1355,17 @@ final class LuaScripts {
     static final String PROJECT_FILES = """
             local M = {}
             local group = vim.api.nvim_create_augroup('neovim4eclipse_projects', { clear = true })
-            local roots = {} -- the folders, as canonical() gives them, each ending in '/'
+            local paths = require('neovim4eclipse.paths') -- the one rule for comparing paths (PATHS)
+            local roots = {} -- the folders, as paths.canonical() gives them
             local hooked = {} -- buffer number -> true, for the buffers that have the read hook
-
-            --- A path in one comparable form: resolved, with '/' separators, lower-cased where file
-            --- names ignore case. A file that does not exist (yet): its folder resolved, plus its name.
-            local function canonical(path)
-              local full = vim.fn.fnamemodify(path, ':p')
-              local real = vim.uv.fs_realpath(full)
-              if not real then
-                local dir = vim.uv.fs_realpath(vim.fn.fnamemodify(full, ':h'))
-                real = dir and (dir .. '/' .. vim.fn.fnamemodify(full, ':t')) or full
-              end
-              real = real:gsub('\\\\', '/')
-              if vim.o.fileignorecase then
-                real = real:lower()
-              end
-              return real
-            end
 
             function M.inside(path)
               if path == '' or #roots == 0 then
                 return false
               end
-              local c = canonical(path)
+              local c = paths.canonical(path)
               for _, root in ipairs(roots) do
-                if c:sub(1, #root) == root then
+                if paths.within(c, root) then
                   return true
                 end
               end
@@ -1362,7 +1433,7 @@ final class LuaScripts {
             function M.set_folders(folders)
               roots = {}
               for _, folder in ipairs(folders) do
-                roots[#roots + 1] = (canonical(folder):gsub('/+$', '')) .. '/'
+                roots[#roots + 1] = paths.canonical(folder)
               end
               for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                 check(buf)
@@ -2585,7 +2656,8 @@ final class LuaScripts {
      * refused for the editor's own file, which Eclipse saves only whole: {@code :5,10w!} would leave
      * only those lines on disk under an editor that has them all. Without such a hook Neovim refused
      * them itself (E140, with {@code !} E676).
-     * The names are compared after {@code resolve()} and {@code vim.fs.normalize}: Neovim resolves
+     * The names are compared by {@link #PATHS}'s rule (which also ignores case on Windows and macOS,
+     * so {@code :w notes.txt} in {@code Notes.txt} is a save there, not a copy): Neovim resolves
      * symbolic links in a buffer's name but not in the written name (on macOS {@code /var} is a link
      * to {@code /private/var}, so the buffer is {@code /private/var/.../A.txt} while {@code :update}
      * writes {@code /var/.../A.txt}), and on Windows it reports the written name with forward slashes
@@ -2656,11 +2728,10 @@ final class LuaScripts {
             local function fail(msg)
               vim.api.nvim_echo({ { msg } }, true, { err = true })
             end
-            -- Resolved: the buffer name has its links resolved, ev.match not (/private/var/x, /var/x on macOS).
-            -- Normalized: on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt, C:\\x\\a.txt).
-            local function canonical(name)
-              return vim.fs.normalize(vim.fn.resolve(name))
-            end
+            -- PATHS's rule: the buffer name has its links resolved, ev.match not (/private/var/x and
+            -- /var/x on macOS); on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt,
+            -- C:\\x\\a.txt); and on Windows and macOS a name in other case is the same file.
+            local canonical = require('neovim4eclipse.paths').canonical
             -- Whether `name` is the editor's file, or the buffer's name (renamed by :saveas or :file).
             local function own(b, name)
               local c = canonical(name)
@@ -2970,21 +3041,17 @@ final class LuaScripts {
      * ({@code chdir(dir, 'global')} acts as {@code :cd}). A folder outside is left alone when it
      * did not change: it may be gone already (a project deleted earlier), and {@code :lcd} to it
      * would fail with E344. {@code nvim_win_call} sets another window's folder without entering it.
-     * Paths are compared after {@code vim.fs.normalize} (forward slashes), and ignoring case on
-     * Windows, where {@code C:\Work\app} and {@code c:/work/app} are one folder. Example:
+     * Paths are compared by {@link #PATHS}'s rule: on Windows {@code C:\Work\app} and
+     * {@code c:/work/app} are one folder, and a folder reached through a link or junction is the
+     * folder it points to. Example:
      * the window works in {@code /ws/app/src}; leaving {@code /ws/app} moves it to {@code /ws}.
      */
     static final String LEAVE_FOLDER = """
             local folder = ...
-            local win32 = vim.fn.has('win32') == 1
-            local function key(path)
-              path = vim.fs.normalize(path)
-              return win32 and path:lower() or path
-            end
-            local inner = key(folder)
+            local paths = require('neovim4eclipse.paths') -- PATHS: case, links, separators
+            local inner = paths.canonical(folder)
             local function inside(dir)
-              dir = key(dir)
-              return dir == inner or vim.startswith(dir, inner .. '/')
+              return paths.within(paths.canonical(dir), inner)
             end
             local refuge = vim.fs.dirname(vim.fs.normalize(folder))
             local function kept(dir) return inside(dir) and refuge or dir end

@@ -16,9 +16,6 @@ local function start()
   t.run('QUICKFIX')
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, 'p')
-  -- Resolved, as PROJECT_FILES resolves buffer names (fs_realpath): on macOS the temporary folder
-  -- is under /var, a link to /private/var, and the buffers' names would not match the files' paths.
-  dir = vim.uv.fs_realpath(dir) or dir
   local files = {}
   for i = 1, 3 do
     files[i] = dir .. '/f' .. i .. '.txt'
@@ -45,13 +42,6 @@ end
 local function last_message()
   local lines = vim.split(vim.fn.execute('messages'), '\n', { trimempty = true })
   return lines[#lines] or ''
-end
-
---- A buffer's file name in one form, to compare with the files of start(): Neovim stores the name
---- in the system's form (on Windows with \ separators: C:\Users\...\0\f2.txt), the spec builds
---- the paths with /. vim.fs.normalize gives both with / (as document_buffer_spec compares names).
-local function name_of(buf)
-  return vim.fs.normalize(vim.api.nvim_buf_get_name(buf))
 end
 
 local function current()
@@ -102,7 +92,7 @@ t.test('a command makes the list, titled and marked as ours, and jumps to the fi
   t.eq('Eclipse problems', list.title)
   t.eq({ neovim4eclipse = 'problems', arg = '' }, list.context)
   t.eq(1, list.idx)
-  t.eq(vim.fs.normalize(f[2]), name_of(0), 'the first entry, as :make does')
+  t.same_file(f[2], vim.api.nvim_buf_get_name(0), 'the first entry, as :make does')
   t.eq({ 2, 4 }, vim.api.nvim_win_get_cursor(0), 'column 0: the first non-blank')
   t.eq('(1 of 2) error: bad', last_message(), "Neovim's own message for the entry")
   t.eq('f2.txt', vim.fn.getqflist()[1].module, ':clist shows the workspace path')
@@ -128,7 +118,7 @@ t.test('a buffer number that exists names the entry; one that does not falls bac
   set('problems', '', 'command', false, { entry(f[1], 2, 5, 'E', 'x', buf), entry(f[2], 1, 0, 'E', 'y', 999) })
   local items = vim.fn.getqflist()
   t.eq(buf, items[1].bufnr)
-  t.eq(vim.fs.normalize(f[2]), name_of(items[2].bufnr))
+  t.same_file(f[2], vim.api.nvim_buf_get_name(items[2].bufnr))
   t.eq(false, vim.bo[items[2].bufnr].buflisted, 'an unlisted buffer, as Neovim makes for any entry')
   t.ok(require('neovim4eclipse.project_files') ~= nil)
 end)
@@ -155,7 +145,7 @@ t.test('an update keeps the entry the user is on', function()
   vim.cmd('silent cc 2')
   set('problems', '', 'update', false, { entry(f[1], 1, 0, 'W', 'new'), a, b, c })
   t.eq(3, current().idx, 'still on b')
-  t.eq(vim.fs.normalize(f[2]), name_of(0), 'no jump')
+  t.same_file(f[2], vim.api.nvim_buf_get_name(0), 'no jump')
   set('problems', '', 'update', false, { a, c })
   t.eq(2, current().size, 'b fixed: gone from the list')
 end)

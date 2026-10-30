@@ -32,12 +32,12 @@ t.test('leaving a folder moves every working folder inside it to its parent, and
   vim.cmd.tabprevious()
 
   t.eq(3, t.run('LEAVE_FOLDER', root .. '/app'), 'global, tab page 2, window 2')
-  t.eq(root, cwd(-1, -1), 'the global folder')
-  t.eq(root, cwd(-1, 2), 'tab page 2\'s folder')
-  t.eq(root, cwd(), 'the current window\'s folder')
-  t.eq(other, cwd(1, 1), 'a window elsewhere keeps its folder')
+  t.same_file(root, cwd(-1, -1), 'the global folder')
+  t.same_file(root, cwd(-1, 2), 'tab page 2\'s folder')
+  t.same_file(root, cwd(), 'the current window\'s folder')
+  t.same_file(other, cwd(1, 1), 'a window elsewhere keeps its folder')
   t.eq(1, vim.fn.haslocaldir(1, 1), 'still its own (:lcd)')
-  t.eq(root, vim.fs.normalize(vim.uv.cwd()), 'the process\'s folder, the one Windows checks')
+  t.same_file(root, vim.uv.cwd(), 'the process\'s folder, the one Windows checks')
   t.eq(0, t.run('LEAVE_FOLDER', root .. '/app'), 'nothing left inside')
 end)
 
@@ -52,7 +52,7 @@ t.test('a window in a folder that is gone does not stop the leaving', function()
   vim.fn.delete(gone, 'd')
 
   t.eq(1, t.run('LEAVE_FOLDER', project), 'the global folder')
-  t.eq(root, vim.fs.normalize(vim.uv.cwd()))
+  t.same_file(root, vim.uv.cwd())
 end)
 
 t.test('on Windows the folder is matched ignoring case and slashes', function()
@@ -62,4 +62,17 @@ t.test('on Windows the folder is matched ignoring case and slashes', function()
   local project, root = folder('App')
   vim.cmd.cd(project)
   t.eq(1, t.run('LEAVE_FOLDER', (root .. '/app'):upper():gsub('/', '\\')))
+end)
+
+-- On Linux and macOS the system reports the working folder with links resolved (getcwd), so this
+-- passes without the plug-in resolving anything; on Windows a junction stays in the folder's name,
+-- and PATHS's rule resolves it. A guard here, the real case on Windows.
+t.test('a working folder reached through a link (a junction on Windows) is inside the folder left', function()
+  local _, root = folder('app', 'src')
+  local link = root .. '/link'
+  if not vim.uv.fs_symlink(root .. '/app', link, { dir = true, junction = true }) then
+    return -- no right to make one here (a Windows runner)
+  end
+  vim.cmd.cd(vim.fn.fnameescape(link .. '/src'))
+  t.eq(1, t.run('LEAVE_FOLDER', root .. '/app'), 'moved out, though its name does not start with the folder')
 end)

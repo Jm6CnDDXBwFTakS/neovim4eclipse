@@ -238,6 +238,26 @@ t.test(':e of a file another editor has open is Neovim\'s :edit, so :e # toggles
   t.eq({}, t.sent('eclipse_command'))
 end)
 
+t.test(':e of an open file in other case (where names ignore case) or through a link is that file', function()
+  start()
+  vim.o.fileignorecase = true -- as on Windows and macOS (PATHS reads it)
+  local a, a_name = t.document('a.txt')
+  t.document('b.txt')
+  t.forget()
+  t.type(':e ' .. vim.fn.fnameescape(vim.fs.dirname(a_name) .. '/A.TXT') .. '<CR>')
+  t.eq({}, t.sent('eclipse_command'), 'other case: not sent to Eclipse')
+  t.eq(a, vim.api.nvim_get_current_buf())
+  vim.o.fileignorecase = false
+  local link = vim.fn.tempname()
+  if vim.uv.fs_symlink(vim.fs.dirname(a_name), link, { dir = true, junction = true }) then
+    t.type(':e #<CR>')
+    t.forget()
+    t.type(':e ' .. vim.fn.fnameescape(link .. '/a.txt') .. '<CR>')
+    t.eq({}, t.sent('eclipse_command'), 'through a link (a junction on Windows): not sent to Eclipse')
+    t.eq(a, vim.api.nvim_get_current_buf())
+  end
+end)
+
 t.test('Eclipse still runs :e of a file without an editor, :e!, :e +cmd, :e ++opt and :e %', function()
   start()
   local _, a_name = t.document('a.txt')

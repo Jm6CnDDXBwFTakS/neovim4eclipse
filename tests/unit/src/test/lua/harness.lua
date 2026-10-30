@@ -29,6 +29,13 @@ The Java side of each case (what the plug-in does with a notification) is tested
 without Neovim (NotificationBridgeTest, HostCommandTest, DocumentWriteTest...). What only the
 real session can show stays in the integration tests.
 
+File names in checks
+--------------------
+Compare file names with t.same_file(expected, actual), never with t.eq: the same file is spelled
+differently on macOS (/var is a link to /private/var, and Neovim stores buffer names resolved) and
+on Windows (\ or /, any case). t.same_file uses the plug-in's own rule (LuaScripts.PATHS), so a
+spec that passes on Linux passes on the other two as well.
+
 How it is run
 -------------
 core/LuaScriptsInNeovimTest (JUnit, tagged "integration") writes the scripts' current text to a
@@ -67,9 +74,15 @@ A spec file gets the harness as its argument:
 local module_path, spec_path, wanted = arg[1], arg[2], arg[3]
 local generated = dofile(module_path) -- { scripts = { SETUP = '...', ... }, host_rules = '...', ide_keys = { ... } }
 
+-- The one rule for comparing file paths, run first as the session runs it (LuaScripts.PATHS): the
+-- scripts and t.same_file below use it.
+assert(load(generated.scripts.PATHS, '=LuaScripts.PATHS'))()
+
 local t = {
   --- HostCommand.rulesForNeovim(): HOST_COMMANDS's argument, as the session passes it.
   host_rules = generated.host_rules,
+  --- The folder of the spec being run, for files beside it (../resources/path-cases.tsv).
+  spec_dir = vim.fs.dirname(vim.fs.normalize(vim.fn.fnamemodify(spec_path, ':p'))),
   --- The channel number the scripts send to (any number: nothing is sent).
   channel = 7,
 }
@@ -189,6 +202,18 @@ function t.eq(expected, actual, what)
   if not vim.deep_equal(expected, actual) then
     error(('%s\n  expected: %s\n  actual:   %s'):format(what or 'not equal', vim.inspect(expected),
       vim.inspect(actual)), 2)
+  end
+end
+
+--- Fails unless `expected` and `actual` name the same file, by the plug-in's one rule for paths
+--- (neovim4eclipse.paths: separators, case where the system ignores it, links, .. resolved). Use it
+--- for every comparison of file names: a raw t.eq of two spellings of one file passes on Linux and
+--- fails on macOS (/var is /private/var) or Windows (\ or /), as quickfix_spec once did twice.
+function t.same_file(expected, actual, what)
+  local paths = require('neovim4eclipse.paths')
+  if not paths.same(expected, actual) then
+    error(('%s\n  expected: %s\n  actual:   %s\n  (canonical: %s and %s)'):format(what or 'not the same file',
+      vim.inspect(expected), vim.inspect(actual), paths.canonical(expected), paths.canonical(actual)), 2)
   end
 end
 

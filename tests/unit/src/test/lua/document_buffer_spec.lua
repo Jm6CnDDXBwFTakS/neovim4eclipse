@@ -91,7 +91,7 @@ t.test('a write under another name asks Eclipse for a copy and leaves the buffer
   t.type(':w ++p other.txt<CR>')
   t.eq({ { buf, ' ++p', 'copy', other } }, asked, 'the full name, resolved in the file\'s folder')
   t.eq(true, vim.bo[buf].modified, 'the editor\'s own changes are still unsaved, as in Vim')
-  t.eq(name, vim.api.nvim_buf_get_name(buf))
+  t.same_file(name, vim.api.nvim_buf_get_name(buf))
   t.eq(0, vim.fn.filereadable(other), 'Neovim never writes the file itself')
   -- Neovim keeps an empty buffer of the other name (Vim's alternate file); it would keep an editor
   -- opened on other.txt later from naming its buffer, so it goes once the command is over.
@@ -120,17 +120,15 @@ t.test(':saveas asks Eclipse to save as the new file, which becomes the buffer\'
   local new = vim.fs.dirname(name) .. '/B.txt'
   vim.cmd.saveas(vim.fn.fnameescape(new))
   t.eq({ { buf, '', 'saveas', new } }, asked)
-  -- Compared in one form: on Windows the buffer's name can come back with backslashes
-  -- (C:\Users\RUNNER~1\...\B.txt on GitHub's runner, whose user folder has an 8.3 short name)
-  -- while new has the forward slashes of vim.fs.dirname. The plug-in compares names the same way
-  -- (canonical() in LuaScripts.DOCUMENT_BUFFER).
-  local same = vim.fs.normalize
-  t.eq(same(new), same(vim.api.nvim_buf_get_name(buf)))
-  t.eq(same(new), same(vim.b[buf].neovim4eclipse_file), 'later writes compare with the new file')
+  -- t.same_file: on Windows the buffer's name can come back with backslashes (C:\Users\RUNNER~1\...
+  -- \B.txt on GitHub's runner, whose user folder has an 8.3 short name) while new has the forward
+  -- slashes of vim.fs.dirname; the plug-in compares names by the same rule (LuaScripts.PATHS).
+  t.same_file(new, vim.api.nvim_buf_get_name(buf))
+  t.same_file(new, vim.b[buf].neovim4eclipse_file, 'later writes compare with the new file')
   t.eq(false, vim.bo[buf].modified)
   t.ok(vim.fn.bufexists(name) == 1, 'Neovim keeps a buffer of the old name, as Vim does for :e #')
   t.wait_for('that buffer wiped', function() return vim.fn.bufexists(name) == 0 end)
-  t.eq(same(new), same(vim.api.nvim_buf_get_name(buf)), 'the scheduled check leaves the new name alone')
+  t.same_file(new, vim.api.nvim_buf_get_name(buf), 'the scheduled check leaves the new name alone')
   vim.cmd.write()
   t.eq({ buf, '' }, asked[2], 'a :w then saves the new file')
 end)
@@ -170,6 +168,19 @@ t.test('the same file named through a link or with other slashes is its own name
   assert(vim.uv.fs_symlink(vim.fs.dirname(name), link))
   vim.cmd.write(link .. '/A.txt') -- macOS: /var/... is /private/var/...
   t.eq({ { buf, '' } }, asked)
+end)
+
+t.test('where file names ignore case (Windows, macOS), the own file in other case is its own name', function()
+  t.setup()
+  -- Neovim itself already takes notes.TXT for the buffer's own file there (it compares names with
+  -- 'fileignorecase'), so this guards the outcome; the plug-in's own check agrees (PATHS), found
+  -- 2026-10-29 by weakening that rule: this case still passed.
+  vim.o.fileignorecase = true -- as on Windows and macOS
+  local asked = eclipse()
+  local buf, name = t.document('Notes.txt', { 'a' })
+  vim.cmd.write(vim.fn.fnameescape(vim.fs.dirname(name) .. '/notes.TXT'))
+  t.eq({ { buf, '' } }, asked, 'a save, not a copy onto the same file behind the editor')
+  vim.o.fileignorecase = false
 end)
 
 t.test('some lines to another file ask Eclipse for those lines', function()
