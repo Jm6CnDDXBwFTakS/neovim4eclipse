@@ -158,7 +158,7 @@ plug-in's buffers never do. So Neovim never reads a project's file itself:
 | Place | Today | With B |
 |---|---|---|
 | `wipe_left_over` (`DOCUMENT_BUFFER`) | wipes unloaded buffers named like a written file | already skips buffers with `b:neovim4eclipse_file`: unchanged |
-| `HOST_COMMANDS` `edits_an_open_document` | loaded document buffers only | unchanged: a closed one is not loaded (or, after X8, not listed) |
+| `HOST_COMMANDS` `open_document_edited` | loaded document buffers only | unchanged: a closed one is not loaded (or, after X8, not listed) |
 | `:bd 3` of a closed file's number | E516-like "no editor" message | the same: nothing to close |
 | `:ls` | closed files gone | closed files gone from `:ls`, shown by `:ls!` with `u`, as in Vim |
 | Tests that wait for a wipe | `NeovimBufferIntegrationTest` (buffers a and b), `NeovimWindowsIntegrationTest`, `TwoEditorsEndToEndTest` (`:ls!` count) | rewritten to Vim's rules: same number after reopening, `:b N` reopens |
