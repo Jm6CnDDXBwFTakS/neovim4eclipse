@@ -330,6 +330,18 @@ class NotificationBridgeTest {
         assertEquals(List.of("lines@1:2:3:[x, y]"), events);
     }
 
+    /**
+     * A nil changedtick marks an {@code 'inccommand'} preview of {@code :s}: the screen changed, not
+     * the buffer, and no event follows when the preview ends. Dropped, so Eclipse's document never
+     * takes a preview as an edit; the real change after Enter has its changedtick.
+     */
+    @Test
+    void bufferLinesEventOfAPreviewIsDropped() {
+        notify("nvim_buf_lines_event", 1, null, 0, 3, List.of("XlphX", "betX", "gXmmX"), false);
+        notify("nvim_buf_lines_event", 1, 6, 0, 3, List.of("XlphX", "betX", "gXmmX"), false);
+        assertEquals(List.of("lines@1:0:3:[XlphX, betX, gXmmX]"), events);
+    }
+
     @Test
     void bufferLinesEventWithEmptyLineDataIsADeletion() {
         notify("nvim_buf_lines_event", 1, 5, 2, 3, List.of(), false);

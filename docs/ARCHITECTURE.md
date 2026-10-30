@@ -39,7 +39,10 @@ In normal, visual and operator-pending mode every key goes to Neovim and is swal
 its buffer and Eclipse applies `nvim_buf_lines_event` as minimal edits (`LineRangeEdit`). Neovim
 reports whole lines, but the edit is trimmed to the characters that change: Eclipse features that
 track positions need that. In a linked rename (Alt+Shift+R), `ciw` on the name must arrive as
-"replace the name"; "replace the line" would end the rename.
+"replace the name"; "replace the line" would end the rename. An event without a changedtick is
+dropped (`NotificationBridge.onBufLines`): it is `'inccommand'`'s preview of `:s`, which changes the
+screen and not the buffer, and Neovim sends nothing when the preview ends, so applied it would stay
+in Eclipse's document after Esc.
 
 In **insert/replace mode Eclipse inserts the characters itself** (no flicker, content assist and IME
 keep working). On `Esc` the document is pushed to Neovim (`BufferSynchronizer.pushDocumentToNeovim`)

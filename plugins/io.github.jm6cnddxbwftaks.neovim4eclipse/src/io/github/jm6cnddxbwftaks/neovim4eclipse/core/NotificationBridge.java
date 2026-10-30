@@ -428,9 +428,21 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr, changedtick, firstline, lastline, linedata, more]}. */
+    /**
+     * Payload: {@code [bufnr, changedtick, firstline, lastline, linedata, more]}.
+     *
+     * <p>An event whose {@code changedtick} is nil is a <em>preview</em>, not a change: while you
+     * type {@code :%s/a/X/g}, Neovim's {@code 'inccommand'} (on by default) shows the substitution
+     * in the window, and the buffer itself stays as it was ({@code :help nvim_buf_lines_event}: "the
+     * screen lines (display) changed but not the buffer contents"). Neovim sends no event when the
+     * preview ends, by Esc or by the next preview replacing it, because the buffer never changed. So
+     * a preview applied to Eclipse's document would stay there: the editor dirty, an undo step
+     * recorded, and after Esc a document that differs from Neovim's buffer and that a save would
+     * write (found 2026-10-30). It is dropped; Enter makes the real change, which comes with its
+     * changedtick. Eclipse therefore shows no live preview of {@code :s}.
+     */
     private void onBufLines(List<?> args) {
-        if (args.size() < 5) {
+        if (args.size() < 5 || args.get(1) == null) {
             return;
         }
         Integer first = toInt(args.get(2));

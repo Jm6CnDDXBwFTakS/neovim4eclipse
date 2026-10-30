@@ -104,6 +104,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Typing a substitution in the `:` box (`:%s/a/X/g`) no longer changes the editor's text before
+  Enter. Neovim's live preview (`'inccommand'`) reached Eclipse's document as real edits, marking it
+  unsaved, and Esc left the previewed text there while Neovim's buffer went back, so a save could
+  write text you never accepted. The preview is no longer shown in the editor; Enter makes the change.
 - The status bar names Virtual Replace (`-- VREPLACE --`, was `-- REPLACE --`), one command after
   `Ctrl-O` in Insert mode (`-- (insert) --`, was `-- NORMAL --`), Ex mode, the `-- more --` prompt
   and a running shell command, which showed raw codes such as `-- RM --` and `-- ! --`.

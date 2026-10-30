@@ -456,7 +456,8 @@ was. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its 
 instead.
 
 While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back to where
-you were. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
+you were. A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's live
+preview of it (`'inccommand'`) is not shown in the editor. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
 Up and Down in the box browse the same history.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.
