@@ -38,7 +38,7 @@ public class StatusBarPreferencePage extends FieldEditorPreferencePage implement
     @Override
     protected void createFieldEditors() {
         addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_MODE,
-                "mode  (-- INSERT --, recording @q)", getFieldEditorParent()));
+                "mode  (INSERT, recording @q)", getFieldEditorParent()));
         addField(new RadioGroupFieldEditor(PreferenceConstants.STATUS_MODE_STYLE, "Mode style", 3,
                 new String[][] {
                         { "Full  (-- INSERT --)", ModeLabels.Style.FULL.key() },

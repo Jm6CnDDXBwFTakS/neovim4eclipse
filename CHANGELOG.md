@@ -14,8 +14,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
-- A *Mode style* for the status bar (*Preferences → Neovim → Status Bar*): Full (`-- INSERT --`),
-  Short (`INSERT`) or Letters (`-I-`, `-VR-`, `-(i)-`). Hovering a status bar part shows its whole
+- A *Mode style* for the status bar (*Preferences → Neovim → Status Bar*): Short (`INSERT`, the
+  default), Full as Vim writes it (`-- INSERT --`), or Letters (`-I-`, `-VR-`, `-(i)-`). Hovering a status bar part shows its whole
   text, and for the short styles what it means.
 - *Statusline width* (in characters) and *At most this share of the status bar*: Neovim fits your
   `'statusline'` into the width (`%<` shortens the file name, `%=` puts the position at the right),
