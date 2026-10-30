@@ -107,6 +107,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- `:vimgrep` into files with no editor opens their editors: its first match's, and the next one's
+  with `:cnext` and `]q`. Before, only files Neovim already had a buffer for opened (any system;
+  reported on macOS). Its `(1 of 2): ...` line now shows in the opened editor's message line,
+  instead of an output popup that closed at once (the line saying which file `:vimgrep` was
+  searching came with it).
 - `:w a.txt` in an untitled editor (*File → New → Untitled Text File*) saves it as `a.txt`, and the
   editor shows `a.txt` from then on, as Vim names a buffer without a file after the file it writes.
   Before, it wrote a copy and the editor stayed untitled and unsaved. `:wq a.txt` and `:x a.txt`

@@ -131,6 +131,44 @@ class MessageRouteTest {
                 + "Eclipse could not save a.txt: read-only"), route.view());
     }
 
+    /**
+     * {@code :vimgrep /Bar/ src/**}{@code /*.java}: its progress line (the file it is searching, not kept
+     * for {@code :messages}) and then the first match. Neovim's own screen shows only the match, so
+     * the message line does too, instead of the popup.
+     */
+    @Test
+    void aQuickfixMessageReplacesVimgrepsProgressLine() {
+        route.add(new MessageEvent.Show("", "src/Bar.java", false, false, "1", "typed_cmd", false));
+        assertEquals(line("src/Bar.java", false), route.view(), "shown while the search runs, as on Neovim's screen");
+        route.add(new MessageEvent.Show("empty", "", false, false, "2", "typed_cmd", false)); // between them
+        route.add(new MessageEvent.Show("quickfix", "(1 of 2): class Bar {}", false, false, "3", "typed_cmd", true));
+        assertEquals(line("(1 of 2): class Bar {}", false), route.view());
+    }
+
+    /**
+     * Neovim 0.12.6 sends the progress line with the kind of the message before it, even another
+     * command's ({@code list_cmd} and {@code undo} were seen in the plug-in's session): only "not kept
+     * for {@code :messages}" tells it apart. So an {@code :echo} in the same command line goes too.
+     */
+    @Test
+    void aQuickfixMessageReplacesTheProgressLineWhateverItsKind() {
+        for (String kind : new String[] { "list_cmd", "undo", "echo" }) {
+            route.clear();
+            route.add(new MessageEvent.Show(kind, "vg/bar.txt", false, false, "1", "typed_cmd", false));
+            route.add(new MessageEvent.Show("quickfix", "(1 of 2): class Bar", false, false, "2", "typed_cmd", true));
+            assertEquals(line("(1 of 2): class Bar", false), route.view(), kind);
+        }
+    }
+
+    /** Messages kept for {@code :messages} stay: a substitution's count, an error. */
+    @Test
+    void aQuickfixMessageKeepsTheMessagesKeptForMessages() {
+        route.add(new MessageEvent.Show("", "3 substitutions on 1 line", false, false, "1", "typed_cmd", true));
+        route.add(new MessageEvent.Show("emsg", "E1: first", false, false, "2", "typed_cmd", true));
+        route.add(new MessageEvent.Show("quickfix", "(1 of 2): a", false, false, "3", "typed_cmd", true));
+        assertEquals(output("", "3 substitutions on 1 line\nE1: first\n(1 of 2): a"), route.view());
+    }
+
     @Test
     void severalMessagesGoToThePopupTogether() {
         add("emsg", "E1: first");

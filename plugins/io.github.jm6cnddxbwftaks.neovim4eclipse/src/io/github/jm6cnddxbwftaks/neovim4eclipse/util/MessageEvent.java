@@ -44,9 +44,16 @@ public sealed interface MessageEvent {
      *                    "bufwrite"} for {@code :w}); numbers for messages that are never updated
      * @param trigger     {@code "typed_cmd"} when a command typed on the command line printed it,
      *                    {@code ""} otherwise (a timer, a mapping's {@code <Cmd>}, a macro)
+     * @param history     whether Neovim keeps the message for {@code :messages}; a passing note,
+     *                    such as {@code :vimgrep}'s progress line (the file being searched), is not
      */
-    record Show(String kind, String text, boolean replaceLast, boolean append, String id, String trigger)
-            implements MessageEvent {
+    record Show(String kind, String text, boolean replaceLast, boolean append, String id, String trigger,
+            boolean history) implements MessageEvent {
+
+        /** A message kept for {@code :messages}, as most are; the tests' shorthand. */
+        public Show(String kind, String text, boolean replaceLast, boolean append, String id, String trigger) {
+            this(kind, text, replaceLast, append, id, trigger, true);
+        }
     }
 
     /** {@code msg_showcmd}: the pending command, {@code ""} when there is none. */
@@ -101,7 +108,8 @@ public sealed interface MessageEvent {
             return null;
         }
         return new Show(string(args.get(0)), text(args.get(1)), flag(args, 2), flag(args, 4),
-                args.size() > 5 ? string(args.get(5)) : "", args.size() > 6 ? string(args.get(6)) : "");
+                args.size() > 5 ? string(args.get(5)) : "", args.size() > 6 ? string(args.get(6)) : "",
+                args.size() <= 3 || flag(args, 3)); // history; an older Neovim without it: kept
     }
 
     /** The entries' texts, one per line; an entry with {@code append} continues the line before. */
