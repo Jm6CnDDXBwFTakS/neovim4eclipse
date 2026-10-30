@@ -3,7 +3,8 @@
 
 -- LuaScripts.DOCUMENT_BUFFER: a document buffer is written only through Eclipse. 'buftype' acwrite
 -- runs its BufWriteCmd, which asks Eclipse (the eclipse_write request) and acts on the answer
--- { error, message }; and Neovim deleting the buffer by itself tells Eclipse (eclipse_buffer_closed).
+-- { error, message, saved_as } (saved_as may be left out); and Neovim deleting the buffer by itself
+-- tells Eclipse (eclipse_buffer_closed).
 -- Eclipse's side of the request is DocumentWriteTest; one round trip through the real session stays
 -- in NeovimBufferIntegrationTest (aTypedWriteAsksEclipseAndShowsTheWrittenMessage).
 
@@ -131,6 +132,36 @@ t.test(':saveas asks Eclipse to save as the new file, which becomes the buffer\'
   t.same_file(new, vim.api.nvim_buf_get_name(buf), 'the scheduled check leaves the new name alone')
   vim.cmd.write()
   t.eq({ buf, '' }, asked[2], 'a :w then saves the new file')
+end)
+
+-- An editor without a file of its own (File > New > Untitled Text File): Eclipse answers a copy
+-- request by saving the document as that file and says so (the answer's third item); the buffer
+-- then takes the file's name, as Vim names a buffer without a file after the file it writes
+-- (:help cpo-F). Eclipse's side: EditorAttachManager (Kind.COPY to SAVE_AS), CommandBoxEndToEndTest.
+t.test('a copy Eclipse saved as the file instead (an untitled editor) names the buffer after it', function()
+  t.setup()
+  local asked = {}
+  t.answer('eclipse_write', function(buf, cmdarg, kind, file)
+    asked[#asked + 1] = { buf, kind, file }
+    if kind == 'copy' then
+      return { '', '"a.txt" [New] 1L, 6B written', file }
+    end
+    return { '', '"a.txt" 1L, 6B written' }
+  end)
+  local buf, name = t.document('Untitled 1', { 'hello' })
+  vim.bo[buf].modified = true
+  local new = vim.fs.dirname(name) .. '/a.txt'
+  vim.cmd.lcd(vim.fn.fnameescape(vim.fs.dirname(name)))
+  t.type(':w a.txt<CR>')
+  t.eq({ { buf, 'copy', new } }, asked)
+  t.same_file(new, vim.api.nvim_buf_get_name(buf), 'the buffer is named after the file now')
+  t.same_file(new, vim.b[buf].neovim4eclipse_file, 'later writes compare with the new file')
+  t.eq(false, vim.bo[buf].modified)
+  t.wait_for('no buffer left of the old name', function() return vim.fn.bufexists(name) == 0 end)
+  t.same_file(new, vim.api.nvim_buf_get_name(buf), 'the scheduled check leaves the new name alone')
+  t.ok(not vim.fn.execute('messages'):find('file: Eclipse', 1, true), 'no :file message')
+  vim.cmd.write()
+  t.eq({ buf, '', '' }, asked[2], 'a :w then saves the new file')
 end)
 
 t.test('a :saveas Eclipse refused puts the old name back, with Eclipse\'s error only', function()

@@ -20,7 +20,6 @@ import java.util.function.Consumer;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
-import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.Clipboard;
@@ -29,12 +28,10 @@ import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
-import org.eclipse.ui.wizards.IWizardDescriptor;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
@@ -332,19 +329,6 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         waitUntil("root.txt to open by its absolute path", TIMEOUT_MS, () -> activeEditorIs("root.txt"));
         page().closeAllEditors(false);
         editor = null;
-    }
-
-    /** File › New › Untitled Text File, by running its wizard as the menu does. */
-    private ITextEditor openUntitledFile() throws Exception {
-        IWizardDescriptor descriptor = PlatformUI.getWorkbench().getNewWizardRegistry()
-                .findWizard("org.eclipse.ui.editors.wizards.UntitledTextFileWizard");
-        INewWizard wizard = (INewWizard) descriptor.createWizard();
-        wizard.init(PlatformUI.getWorkbench(), StructuredSelection.EMPTY);
-        assertTrue(wizard.performFinish());
-        ITextEditor untitled = (ITextEditor) page().getActiveEditor();
-        assertNull(untitled.getEditorInput().getAdapter(IFile.class), "an untitled file");
-        waitForAttach(untitled, "the untitled file");
-        return untitled;
     }
 
     // ---- Command names; :e! ----

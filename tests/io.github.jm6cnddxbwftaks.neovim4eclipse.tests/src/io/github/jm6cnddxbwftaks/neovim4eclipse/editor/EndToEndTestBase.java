@@ -6,6 +6,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.requireKeyboardFocus;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -21,6 +23,7 @@ import org.eclipse.jface.action.IContributionManager;
 import org.eclipse.jface.action.StatusLineManager;
 import org.eclipse.jface.action.SubContributionManager;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.custom.StyledText;
@@ -30,11 +33,13 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
+import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.wizards.IWizardDescriptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -255,6 +260,19 @@ abstract class EndToEndTestBase {
         ITextEditor opened = (ITextEditor) IDE.openEditor(editor.getSite().getPage(), file, TEXT_EDITOR, true);
         waitForAttach(opened, name);
         return opened;
+    }
+
+    /** File › New › Untitled Text File, by running its wizard as the menu does, and waits until Neovim is attached. */
+    ITextEditor openUntitledFile() throws Exception {
+        IWizardDescriptor descriptor = PlatformUI.getWorkbench().getNewWizardRegistry()
+                .findWizard("org.eclipse.ui.editors.wizards.UntitledTextFileWizard");
+        INewWizard wizard = (INewWizard) descriptor.createWizard();
+        wizard.init(PlatformUI.getWorkbench(), StructuredSelection.EMPTY);
+        assertTrue(wizard.performFinish());
+        ITextEditor untitled = (ITextEditor) page().getActiveEditor();
+        assertNull(untitled.getEditorInput().getAdapter(IFile.class), "an untitled file");
+        waitForAttach(untitled, "the untitled file");
+        return untitled;
     }
 
     /** Creates {@code name} in the test project, without opening it. */

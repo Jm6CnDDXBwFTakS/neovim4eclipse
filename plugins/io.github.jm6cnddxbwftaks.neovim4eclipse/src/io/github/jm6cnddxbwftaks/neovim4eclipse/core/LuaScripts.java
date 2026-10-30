@@ -2649,7 +2649,13 @@ final class LuaScripts {
      *   <li>Another file ({@code :w other.txt}, {@code :w! other.txt}): a copy, as in Vim (kind
      *       {@code "copy"}, with the full name). Eclipse writes the document's text there; the editor
      *       stays on its own file and keeps its unsaved changes, so {@code 'modified'} does not change.
-     *       Neovim itself refuses an existing file without {@code !} (E13), before the hook.</li>
+     *       Neovim itself refuses an existing file without {@code !} (E13), before the hook. An editor
+     *       without a file of its own (an untitled one) has nothing to keep: Eclipse saves it as
+     *       {@code other.txt} instead and answers with that file, and the buffer takes its name
+     *       ({@code nvim_buf_set_name}), as Vim names a buffer without a file after the file it
+     *       writes ({@code :help cpo-F}, which Neovim does not apply to an {@code acwrite} buffer).
+     *       Renamed so, the buffer is {@code [Not edited]} until its next write, which works as
+     *       usual.</li>
      *   <li>The buffer's new name after {@code :saveas new.txt}, which renames the buffer and then
      *       writes it: Eclipse saves the document as that file and moves the editor there (kind
      *       {@code "saveas"}); then {@code b:neovim4eclipse_file} is the new file. (Before, Eclipse
@@ -2778,19 +2784,22 @@ final class LuaScripts {
             -- 'append' write to the file `name` (lines first..last). Neovim waits for the answer:
             -- Eclipse writes on its UI thread (see EditorAttachManager). v:cmdarg has the write's
             -- ++opt arguments (" ++p" for :w ++p); v:cmdbang the !, which lets >> create a file.
+            -- Returns whether it was written, and the file the editor now shows when Eclipse saved
+            -- the document as another file (:saveas, or a 'copy' of an editor without a file), else ''.
             local function ask(b, kind, name, first, last)
               local answer = vim.rpcrequest(vim.g.neovim4eclipse_channel, 'eclipse_write', b, vim.v.cmdarg,
                 kind, name, first, last, vim.v.cmdbang == 1)
-              local err, written = answer[1], answer[2] -- { error, message }, each '' when none
+              -- { error, message, saved_as }, each '' when none
+              local err, written, saved_as = answer[1], answer[2], answer[3] or ''
               if err ~= '' then
                 fail(err)
-                return false
+                return false, ''
               end
               if written ~= '' then
                 -- Vim's own message after a write, which Neovim does not give for an acwrite buffer.
                 vim.api.nvim_echo({ { written } }, true, {})
               end
-              return true
+              return true, saved_as
             end
 
             -- Buffers whose :saveas asked Eclipse, so their rename is no :file (see BufFilePost below).
@@ -2817,8 +2826,19 @@ final class LuaScripts {
                   end
                 else
                   -- :w other.txt: the text to another file, as in Vim. The editor's changes stay unsaved.
-                  ask(ev.buf, 'copy', target, 0, 0)
-                  wipe_left_over(ev.buf, { ev.match, target })
+                  local old = vim.api.nvim_buf_get_name(ev.buf)
+                  local ok, saved_as = ask(ev.buf, 'copy', target, 0, 0)
+                  if ok and saved_as ~= '' then
+                    -- An editor without a file of its own (an untitled one): Eclipse saved it as the
+                    -- file instead, and the editor shows that file now. Vim too names a buffer without
+                    -- a file after the file it writes (:help cpo-F), which Neovim does not do for an
+                    -- acwrite buffer. Renamed here, the buffer is "[Not edited]" until its next write.
+                    vim.b[ev.buf].neovim4eclipse_file = saved_as
+                    saveas_tried[ev.buf] = true -- the BufFilePost check below then stays quiet
+                    vim.api.nvim_buf_set_name(ev.buf, saved_as)
+                    vim.bo[ev.buf].modified = false
+                  end
+                  wipe_left_over(ev.buf, { ev.match, target, old })
                 end
               end,
             })

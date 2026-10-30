@@ -19,10 +19,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
  * Writes to a file other than the editor's (the plan "writes under another name"): {@code :w name}
@@ -305,6 +308,57 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
 
         assertEquals("nested\n", fileText("wq-copy.txt"), "at the root, as :w puts it");
         assertFalse(project.getFile("src/wq-copy.txt").exists());
+    }
+
+    /**
+     * An untitled editor has no file of its own, so {@code :w a.txt} is a save as, not a copy: Vim
+     * names a buffer without a file after the file it writes ({@code :help cpo-F}). The editor
+     * becomes {@code a.txt} (in the folder of the editor before it, the project root), keeps its
+     * Neovim buffer, which takes the new name, and a later {@code :w} saves {@code a.txt}.
+     */
+    @Test
+    void writeWithANameSavesAnUntitledEditorAsThatFile() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        ITextEditor untitled = openUntitledFile();
+        StyledText untitledWidget = widgetOf(untitled);
+        int bufnr = session.getAttachedBufnr();
+        String untitledName = String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0)"));
+        runInBox(untitledWidget, "call setline(1, 'hello')");
+        expectText(untitled, "hello");
+
+        runInBox(untitledWidget, "w a.txt");
+        waitUntil("the editor on a.txt", TIMEOUT_MS, () -> "a.txt".equals(untitled.getTitle()),
+                () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+        assertEquals(project.getFile("a.txt"), untitled.getEditorInput().getAdapter(IFile.class), "a workspace-file editor");
+        assertEquals("hello", fileText("a.txt"));
+        assertFalse(untitled.isDirty());
+        waitForAttach(untitled, "a.txt");
+        assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
+        waitUntil("Neovim's buffer named a.txt, none left of the untitled name", TIMEOUT_MS,
+                () -> Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0):match('a%.txt$') ~= nil"
+                        + " and vim.fn.bufexists('" + untitledName.replace("'", "''") + "') == 0")));
+
+        runInBox(untitledWidget, "call setline(1, 'again')");
+        expectText(untitled, "again");
+        runInBox(untitledWidget, "w");
+        waitUntil("a later :w to save a.txt", TIMEOUT_MS, () -> "again".equals(fileText("a.txt")));
+        assertEquals(List.of(), dialogs);
+        page().closeEditor(untitled, false);
+    }
+
+    /** {@code :wq b.txt} in an untitled editor saves it as {@code b.txt}, then closes it without asking. */
+    @Test
+    void wqWithANameSavesAnUntitledEditorAsThatFileAndClosesWithoutAsking() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        ITextEditor untitled = openUntitledFile();
+        StyledText untitledWidget = widgetOf(untitled);
+        runInBox(untitledWidget, "call setline(1, 'hello')");
+        expectText(untitled, "hello");
+
+        runInBox(untitledWidget, "wq b.txt");
+        expectClosed(untitled);
+        assertEquals("hello", fileText("b.txt"));
+        assertEquals(List.of(), dialogs, "no question about the untitled document's changes");
     }
 
     @Test

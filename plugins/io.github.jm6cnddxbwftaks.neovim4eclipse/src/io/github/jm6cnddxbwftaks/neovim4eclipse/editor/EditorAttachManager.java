@@ -781,7 +781,13 @@ public final class EditorAttachManager {
                 return DocumentWrite.Result.failed(part.getTitle() + " has no text to write");
             }
             Path target = Path.of(request.target());
-            return switch (request.kind()) {
+            DocumentWrite.Kind kind = request.kind();
+            if (kind == DocumentWrite.Kind.COPY && part == text && hasNoFile(text.getEditorInput())) {
+                // :w a.txt in an untitled editor: Vim names a buffer without a file after the file
+                // it writes (:help cpo-F), so the editor becomes a.txt, as with :saveas a.txt.
+                kind = DocumentWrite.Kind.SAVE_AS;
+            }
+            return switch (kind) {
                 case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders());
                 case APPEND -> OtherFileWrites.append(text, target, request.first(), request.last(), request.force(),
                         request.createFolders());
@@ -948,6 +954,16 @@ public final class EditorAttachManager {
             return uriInput.getURI().toString(); // a remote or virtual file: no local path
         }
         return input.getName();
+    }
+
+    /**
+     * Whether an editor input has no file at all: an untitled document (File › New › Untitled Text
+     * File), not a remote or virtual file, which has a URI. Vim's {@code :w a.txt} gives such a
+     * buffer the name {@code a.txt} ({@code :help cpo-F}), so the plug-in saves it as that file.
+     */
+    static boolean hasNoFile(IEditorInput input) {
+        return input != null && fileOf(input) == null
+                && !(input instanceof IURIEditorInput uriInput && uriInput.getURI() != null);
     }
 
     /**

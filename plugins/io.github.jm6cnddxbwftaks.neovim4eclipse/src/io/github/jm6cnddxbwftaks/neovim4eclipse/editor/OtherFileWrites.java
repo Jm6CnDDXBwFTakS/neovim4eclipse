@@ -40,7 +40,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}). {@code :saveas new.txt}
  * is Eclipse's Save As without its dialog: the editor moves to the new file ({@link #saveAs}). Neovim decides which
  * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already
- * refused an existing file without {@code !} (E13).
+ * refused an existing file without {@code !} (E13); only an untitled editor's copy becomes a save as,
+ * decided in {@code EditorAttachManager} ({@code hasNoFile}), as Vim names a buffer without a file
+ * after the file it writes.
  *
  * <p>How a copy is written, and why:
  * <ul>
@@ -169,7 +171,8 @@ final class OtherFileWrites {
                 return DocumentWrite.Result.failed("Saved " + name + ", but another editor shows this document, so this "
                         + "one stays on " + editor.getTitle());
             }
-            return DocumentWrite.Result.saved(WrittenMessage.of(name, created, document.get(), EclipseFileCommands.charsetOf(editor)));
+            return DocumentWrite.Result.savedAs(WrittenMessage.of(name, created, document.get(),
+                    EclipseFileCommands.charsetOf(editor)), target.toString());
         } catch (Exception e) {
             LOG.log(Level.FINE, "Saving " + editor.getTitle() + " as " + target + " failed", e);
             return DocumentWrite.Result.failed("E212: Can't open file for writing: " + e.getMessage());

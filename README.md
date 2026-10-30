@@ -515,6 +515,11 @@ so `:5,10w!` and `:w >> %` are refused there. `:wq other.txt` writes the copy, t
 as Vim's `:w other.txt | q`: Eclipse asks about the editor's own unsaved changes (where Vim says E37),
 and `:wq!` discards them. `:x other.txt` writes the copy only if the editor has changes.
 
+An untitled editor (*File → New → Untitled Text File*) has no file to keep, so there `:w a.txt`
+saves it as `a.txt` and the editor shows `a.txt` from then on, as Vim names a buffer without a file
+after the file it writes (`:help cpo-F`). `:wq a.txt` and `:x a.txt` do the same, then close the editor
+without asking about changes. Until its next write, `:file` (`Ctrl-G`) says `[Not edited]`.
+
 `:saveas new.txt` is Eclipse's *File → Save As* without the dialog: the document is saved as `new.txt`
 and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was.
 Eclipse's save actions do not run in that save (a `:w` afterwards runs them).

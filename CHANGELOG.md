@@ -107,6 +107,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- `:w a.txt` in an untitled editor (*File → New → Untitled Text File*) saves it as `a.txt`, and the
+  editor shows `a.txt` from then on, as Vim names a buffer without a file after the file it writes.
+  Before, it wrote a copy and the editor stayed untitled and unsaved. `:wq a.txt` and `:x a.txt`
+  likewise, and then close without asking about the untitled document's changes.
 - Typing a substitution in the `:` box (`:%s/a/X/g`) no longer changes the editor's text before
   Enter. Neovim's live preview (`'inccommand'`) reached Eclipse's document as real edits, marking it
   unsaved, and Esc left the previewed text there while Neovim's buffer went back, so a save could

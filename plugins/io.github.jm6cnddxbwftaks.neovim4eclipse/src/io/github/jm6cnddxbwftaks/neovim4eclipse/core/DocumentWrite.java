@@ -29,7 +29,11 @@ public final class DocumentWrite {
     public enum Kind {
         /** The document to its own file: Eclipse saves the editor ({@code :w}, {@code :update}). */
         OWN,
-        /** The whole document to another file; the editor stays as it is ({@code :w other.txt}). */
+        /**
+         * The whole document to another file; the editor stays as it is ({@code :w other.txt}).
+         * Eclipse makes it a {@link #SAVE_AS} for an editor without a file (an untitled one), as Vim
+         * names a buffer without a file after the file it writes ({@code :help cpo-F}).
+         */
         COPY,
         /** Some lines to another file ({@code :5,10w part.txt}), which they replace. */
         LINES,
@@ -98,29 +102,43 @@ public final class DocumentWrite {
     }
 
     /** What Eclipse answers Neovim. */
-    public record Result(String error, String message) {
+    /**
+     * What Eclipse answers Neovim.
+     *
+     * @param savedAs the file the editor now shows when the document was saved as another file
+     *                ({@code :saveas new.txt}, or {@code :w new.txt} in an editor without a file of
+     *                its own, such as an untitled one); Neovim then names the buffer after it. ""
+     *                otherwise.
+     */
+    public record Result(String error, String message, String savedAs) {
         public Result {
             error = error == null ? "" : error;
             message = message == null ? "" : message;
+            savedAs = savedAs == null ? "" : savedAs;
         }
 
         /** Saved; {@code message} is shown, as Vim shows {@code "a.txt" 3L, 12B written}. */
         public static Result saved(String message) {
-            return new Result("", message);
+            return new Result("", message, "");
+        }
+
+        /** Saved as {@code file}, which the editor now shows; {@code message} as for {@link #saved}. */
+        public static Result savedAs(String message, String file) {
+            return new Result("", message, file);
         }
 
         /** Not saved; Neovim fails the write with {@code error}. */
         public static Result failed(String error) {
-            return new Result(error, "");
+            return new Result(error, "", "");
         }
 
         public boolean ok() {
             return error.isEmpty();
         }
 
-        /** As sent to Neovim: {@code [error, message]}, each "" when there is none. */
+        /** As sent to Neovim: {@code [error, message, savedAs]}, each "" when there is none. */
         List<String> toRpc() {
-            return List.of(error, message);
+            return List.of(error, message, savedAs);
         }
     }
 
