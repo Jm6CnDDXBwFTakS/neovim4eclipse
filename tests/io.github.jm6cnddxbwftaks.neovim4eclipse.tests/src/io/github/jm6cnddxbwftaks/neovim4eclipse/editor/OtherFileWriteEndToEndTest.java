@@ -19,7 +19,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.IStorage;
+import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.ui.IPersistableElement;
+import org.eclipse.ui.IStorageEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
@@ -359,6 +363,56 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         expectClosed(untitled);
         assertEquals("hello", fileText("b.txt"));
         assertEquals(List.of(), dialogs, "no question about the untitled document's changes");
+    }
+
+    /**
+     * An untitled document shown in two editors (Window › Editor › Clone) gets a copy: a save as could
+     * move only one editor. Before, the file was written and then an error said the editor could not
+     * move.
+     */
+    @Test
+    void writeWithANameCopiesAClonedUntitledDocument() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        ITextEditor untitled = openUntitledFile();
+        runInBox(widgetOf(untitled), "call setline(1, 'shared')");
+        expectText(untitled, "shared");
+        runCommand("org.eclipse.ui.window.newEditor"); // Window › Editor › Clone
+        ITextEditor clone = (ITextEditor) page().getActiveEditor();
+        waitForAttach(clone, "the clone");
+
+        runInBox(widgetOf(clone), "w shared.txt");
+        waitUntil("the copy written", TIMEOUT_MS, () -> project.getFile("shared.txt").exists());
+        assertEquals("shared", fileText("shared.txt"));
+        waitUntil("Vim's written message, no error", TIMEOUT_MS,
+                () -> messageText(clone).startsWith("\"shared.txt\" [New]"), () -> ": " + messageText(clone));
+        assertTrue(EditorAttachManager.hasNoFile(clone.getEditorInput()), "the clone stays untitled");
+        assertTrue(EditorAttachManager.hasNoFile(untitled.getEditorInput()), "the first editor too");
+        assertEquals(List.of(), dialogs);
+        page().closeEditor(clone, false);
+        page().closeEditor(untitled, false);
+    }
+
+    /**
+     * Only an untitled editor has no file: read-only contents from elsewhere (a revision in Git's
+     * history, an entry in a jar: {@link IStorageEditorInput}) have a name, and {@code :w name} there
+     * writes a copy; so do workspace files.
+     */
+    @Test
+    void onlyAnUntitledEditorCountsAsHavingNoFile() throws Exception {
+        ITextEditor untitled = openUntitledFile();
+        assertTrue(EditorAttachManager.hasNoFile(untitled.getEditorInput()), "untitled");
+        page().closeEditor(untitled, false);
+        assertFalse(EditorAttachManager.hasNoFile(editor.getEditorInput()), "a workspace file");
+        IStorageEditorInput revision = new IStorageEditorInput() {
+            @Override public IStorage getStorage() { return null; }
+            @Override public boolean exists() { return false; }
+            @Override public ImageDescriptor getImageDescriptor() { return null; }
+            @Override public String getName() { return "test.txt 1a2b3c4"; }
+            @Override public IPersistableElement getPersistable() { return null; }
+            @Override public String getToolTipText() { return getName(); }
+            @Override public <T> T getAdapter(Class<T> adapter) { return null; }
+        };
+        assertFalse(EditorAttachManager.hasNoFile(revision), "a revision from Git's history");
     }
 
     @Test

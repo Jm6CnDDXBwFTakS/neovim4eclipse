@@ -101,7 +101,6 @@ public final class DocumentWrite {
         }
     }
 
-    /** What Eclipse answers Neovim. */
     /**
      * What Eclipse answers Neovim.
      *

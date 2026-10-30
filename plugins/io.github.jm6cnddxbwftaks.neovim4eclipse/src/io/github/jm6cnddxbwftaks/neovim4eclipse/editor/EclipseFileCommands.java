@@ -88,7 +88,7 @@ public final class EclipseFileCommands {
      * Writes a copy of {@code editor}'s text to {@code name}, the {@code :w other.txt} part of
      * {@code :wq other.txt} ({@link OtherFileWrites#copy}), and shows Vim's message or the error. An
      * editor without a file (an untitled one) is saved as {@code name} instead, as Vim names such a
-     * buffer after the file it writes ({@link OtherFileWrites#saveAs}).
+     * buffer after the file it writes ({@link OtherFileWrites#copyOrSaveAs}).
      * Neovim's own {@code :w other.txt} checks for an existing file before Eclipse is asked; here the
      * command is Eclipse's, so this does it: E13 without {@code !}. UI thread.
      *
@@ -118,12 +118,9 @@ public final class EclipseFileCommands {
             HostCommands.showError(editor, "E13: File exists (add ! to override)");
             return false;
         }
-        // An untitled editor has no file to keep: Vim names such a buffer after the file it writes
-        // (:help cpo-F), so :wq a.txt saves the document as a.txt, and the close that follows has
-        // no unsaved changes to ask about. (The Neovim buffer goes with the closed editor.)
-        DocumentWrite.Result result = part == editor && EditorAttachManager.hasNoFile(editor.getEditorInput())
-                ? OtherFileWrites.saveAs(editor, target, createFolders)
-                : OtherFileWrites.copy(editor, target, createFolders);
+        // An untitled editor is saved as the file instead, so the close that follows has no unsaved
+        // changes to ask about (OtherFileWrites.copyOrSaveAs; the Neovim buffer goes with the editor).
+        DocumentWrite.Result result = OtherFileWrites.copyOrSaveAs(editor, part, target, createFolders);
         HostCommands.showMessage(editor, result.ok() ? result.message() : result.error(), !result.ok());
         return result.ok();
     }

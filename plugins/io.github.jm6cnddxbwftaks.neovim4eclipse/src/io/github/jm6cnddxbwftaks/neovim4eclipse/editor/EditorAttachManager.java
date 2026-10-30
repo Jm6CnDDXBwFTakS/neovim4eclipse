@@ -30,6 +30,7 @@ import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IPathEditorInput;
 import org.eclipse.ui.IReusableEditor;
+import org.eclipse.ui.IStorageEditorInput;
 import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.IWindowListener;
 import org.eclipse.ui.IWorkbench;
@@ -781,20 +782,15 @@ public final class EditorAttachManager {
                 return DocumentWrite.Result.failed(part.getTitle() + " has no text to write");
             }
             Path target = Path.of(request.target());
-            DocumentWrite.Kind kind = request.kind();
-            if (kind == DocumentWrite.Kind.COPY && part == text && hasNoFile(text.getEditorInput())) {
-                // :w a.txt in an untitled editor: Vim names a buffer without a file after the file
-                // it writes (:help cpo-F), so the editor becomes a.txt, as with :saveas a.txt.
-                kind = DocumentWrite.Kind.SAVE_AS;
-            }
-            return switch (kind) {
+            return switch (request.kind()) {
                 case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders());
                 case APPEND -> OtherFileWrites.append(text, target, request.first(), request.last(), request.force(),
                         request.createFolders());
                 case SAVE_AS -> part == text ? OtherFileWrites.saveAs(text, target, request.createFolders())
                         : DocumentWrite.Result.failed("Eclipse cannot save a page of " + part.getTitle()
                                 + " as another file; use File > Save As");
-                default -> OtherFileWrites.copy(text, target, request.createFolders());
+                // :w a.txt: a copy, or for an untitled editor a save as (OtherFileWrites.copyOrSaveAs)
+                default -> OtherFileWrites.copyOrSaveAs(text, part, target, request.createFolders());
             };
         }
         boolean createFolders = request.createFolders();
@@ -958,12 +954,23 @@ public final class EditorAttachManager {
 
     /**
      * Whether an editor input has no file at all: an untitled document (File › New › Untitled Text
-     * File), not a remote or virtual file, which has a URI. Vim's {@code :w a.txt} gives such a
-     * buffer the name {@code a.txt} ({@code :help cpo-F}), so the plug-in saves it as that file.
+     * File). Not a remote or virtual file, which has a URI, and not read-only contents from
+     * elsewhere ({@link IStorageEditorInput}: a file's revision in Git's history, an entry in a
+     * jar), which have a name and are written elsewhere only as copies. Vim's {@code :w a.txt} gives
+     * a buffer without a file the name {@code a.txt} ({@code :help cpo-F}), so the plug-in saves such
+     * a document as that file ({@link OtherFileWrites#copyOrSaveAs}).
      */
     static boolean hasNoFile(IEditorInput input) {
-        return input != null && fileOf(input) == null
+        return input != null && fileOf(input) == null && !(input instanceof IStorageEditorInput)
                 && !(input instanceof IURIEditorInput uriInput && uriInput.getURI() != null);
+    }
+
+    /** Whether another editor shows {@code editor}'s document too (Window › Editor › Clone). UI thread. */
+    boolean isShownInAnotherEditor(ITextEditor editor) {
+        IDocument document = documentOf(editor);
+        synchronized (this) {
+            return document != null && documents.isSharedWithAnotherEditor(document, editor);
+        }
     }
 
     /**
