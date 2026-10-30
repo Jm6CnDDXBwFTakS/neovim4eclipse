@@ -27,8 +27,10 @@ class LuaScriptsTest {
         // Some lines (:5,10w part.txt) and appends (:w >> log.txt) have hooks of their own.
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("FileWriteCmd = 'lines', FileAppendCmd = 'append'"));
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'eclipse_write'"));
-        // Both names are compared canonical: links resolved (macOS /var), slashes normalized (Windows / against \).
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.fs.normalize(vim.fn.resolve(name))"));
+        // Both names are compared by the one rule for paths (PATHS: links resolved, macOS /var;
+        // slashes, Windows / against \; case where names ignore it), not a copy of it.
+        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("require('neovim4eclipse.paths').canonical"));
+        assertFalse(LuaScripts.DOCUMENT_BUFFER.contains("vim.fn.resolve("), "no comparison of its own");
         // Writes are compared with the editor's file, kept when the buffer is made, not with the
         // buffer's name, which :saveas and :file change.
         assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
