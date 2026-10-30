@@ -469,8 +469,9 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, args)
             end, { nargs = '+', bang = true, bar = true, desc = 'Eclipse carries out an ex command (:Eclipse quit)' })
 
-            -- Whether :e name is for a file that another editor has open: then Neovim's own :edit
-            -- runs. It enters that document's buffer, and Eclipse follows into the file's editor
+            -- The buffer of the document another editor has open when :e name is for its file, else
+            -- nil: then Neovim runs :buffer of it (not the :edit as typed; see below). It enters that
+            -- document's buffer, and Eclipse follows into the file's editor
             -- with the window, as for :b and Ctrl-^ (docs/design/WINDOWS.md, E2): the window's jump
             -- history and alternate file go along, so Ctrl-O goes back and :e # toggles between
             -- the two editors, as in one Vim window. Example: Nested.txt and root.txt open, :e
@@ -479,14 +480,18 @@ final class LuaScripts {
             -- and :e ++opt name, and :e of the current file (Neovim's would re-read the buffer).
             -- The name is read as :Eclipse reads it (expandcmd, fnamemodify ':p'); a # with no
             -- alternate file stays '#' and matches nothing, so Eclipse reports it.
+            -- :buffer, not :edit: the one rule (PATHS) found the buffer, so Neovim must not match the
+            -- name again its own way. It would not always agree: on Windows a junction to a file not
+            -- on disk yet gives a new buffer, since Neovim matches such a name as written (found
+            -- 2026-10-29). :buffer is a jump and sets the alternate file as :edit does.
             local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
-            local function edits_an_open_document(p)
+            local function open_document_edited(p)
               if p.cmd ~= 'edit' or p.bang or #p.args ~= 1 or p.args[1]:sub(1, 1) == '+' then
-                return false
+                return nil
               end
               local ok, expanded = pcall(vim.fn.expandcmd, p.args[1])
               if not ok or expanded == '' then
-                return false
+                return nil
               end
               local target = canonical(vim.fn.fnamemodify(expanded, ':p'))
               local current = vim.api.nvim_get_current_buf()
@@ -494,10 +499,10 @@ final class LuaScripts {
                 local file = vim.b[b].neovim4eclipse_file -- a document's buffer (DOCUMENT_BUFFER)
                 -- Loaded only: entering a buffer Neovim has not read would run its read instead.
                 if b ~= current and file and vim.api.nvim_buf_is_loaded(b) and canonical(file) == target then
-                  return true
+                  return b
                 end
               end
-              return false
+              return nil
             end
 
             -- The :Eclipse form of one parsed command (p, from nvim_parse_cmd; what follows a | is
@@ -511,8 +516,9 @@ final class LuaScripts {
               if left_to_neovim(p.cmd) then
                 return nil -- :q in a floating window: Neovim closes that window
               end
-              if edits_an_open_document(p) then
-                return nil -- :e of a file another editor has open: Neovim's :edit (see above)
+              local open = open_document_edited(p)
+              if open then
+                return 'buffer ' .. open -- :e of a file another editor has open: Neovim enters it (see above)
               end
               local rule = rules[p.cmd]
               if not rule then
