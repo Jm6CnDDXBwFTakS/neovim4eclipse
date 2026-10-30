@@ -30,8 +30,13 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
                 PreferenceConstants.STATUS_ITEM_STATUSLINE, PreferenceConstants.STATUS_STATUSLINE_WIDTH }) {
             store().setToDefault(key);
         }
-        EditorAttachManager.getInstance().getActiveController().setNeovimModeActive(true);
-        settle();
+        // No controller when the test failed with the editor gone: the preferences are restored
+        // anyway, and the test's own failure is the one reported.
+        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
+        if (controller != null) {
+            controller.setNeovimModeActive(true);
+            settle();
+        }
     }
 
     private void waitForLabel(String text) {

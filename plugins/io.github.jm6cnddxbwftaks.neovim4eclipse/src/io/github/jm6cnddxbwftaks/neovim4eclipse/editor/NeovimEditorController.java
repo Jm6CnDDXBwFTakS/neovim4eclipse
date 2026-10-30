@@ -103,6 +103,10 @@ public final class NeovimEditorController implements AutoCloseable {
     /** The message last handed to {@link #messageLine}, so that other status changes do not show it again. */
     private String shownMessage = "";
     private final ModeStatusContribution modeStatus;
+    /** How long the statusline's width must stay the same before Neovim is asked again; see {@link #onStatuslineColumns}. */
+    private static final int STATUSLINE_SETTLE_MS = 200;
+    /** Reads the status again after the statusline's width settled. */
+    private final Runnable statuslineSettled = this::refreshStatusIfOpen;
     private final CursorStyleController cursorStyle;
     /** Neovim's visual selection shown in the widget (native selection or blockwise overlay). */
     private final VisualSelectionView selectionView;
@@ -177,12 +181,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
-        // The statusline label's width goes to Neovim, which fits the 'statusline' into it; read again
-        // at once, so a resized window shows the new fit without waiting for a key.
-        this.modeStatus = new ModeStatusContribution(columns -> {
-            session.setStatuslineColumns(columns);
-            session.refreshStatusAsync();
-        });
+        this.modeStatus = new ModeStatusContribution(this::onStatuslineColumns);
         this.cursorStyle = new CursorStyleController(styledText);
 
         // Prepend on the viewer so Neovim sees keys before the editor's own listeners: otherwise
@@ -714,6 +713,27 @@ public final class NeovimEditorController implements AutoCloseable {
     void refreshStatusLine() {
         modeStatus.refreshNow();
         session.refreshStatusAsync();
+    }
+
+    /**
+     * The status bar's statusline label is {@code columns} characters wide: Neovim fits the
+     * {@code 'statusline'} into that many from now on, and the status is read again once the width
+     * has settled, so a resized window shows the new fit without waiting for a key. Settled: no
+     * change for {@link #STATUSLINE_SETTLE_MS}, so dragging a window's edge (a new width at almost
+     * every step) asks Neovim once, not forty times. UI thread.
+     */
+    private void onStatuslineColumns(int columns) {
+        session.setStatuslineColumns(columns);
+        Display display = styledText.getDisplay();
+        display.timerExec(-1, statuslineSettled); // a newer width restarts the wait
+        display.timerExec(STATUSLINE_SETTLE_MS, statuslineSettled);
+    }
+
+    /** {@link #statuslineSettled}: reads the status again, unless the editor closed meanwhile. */
+    private void refreshStatusIfOpen() {
+        if (!closed) {
+            session.refreshStatusAsync();
+        }
     }
 
     /** Shows (or clears) {@code recording @a} in the status line; called when a macro recording starts or stops. */
