@@ -5,19 +5,25 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.core.commands.IExecutionListener;
 import org.eclipse.core.commands.NotHandledException;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
+import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.junit.jupiter.api.Test;
 
@@ -31,19 +37,20 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeKeys;
  */
 class IdeKeysEndToEndTest extends EndToEndTestBase {
 
-    private IdeActions.Choice choice(String action) {
+    private IdeKeys.Choice choice(String action) {
         return IdeActions.choose(action, editor, editor.getAdapter(ITextViewer.class), widget.getCaretOffset());
     }
 
-    private static IdeActions.Choice message(String text) {
-        return new IdeActions.Choice(IdeActions.Choice.Kind.MESSAGE, text);
+    private static IdeKeys.Choice message(String text) {
+        return new IdeKeys.Choice(IdeKeys.Choice.Kind.MESSAGE, text);
     }
 
-    /** The two command ids the table holds as strings are the platform's. */
+    /** The command ids the table holds as strings are the platform's. */
     @Test
     void theSharedCommandIdsAreThePlatforms() {
         assertEquals(ITextEditorActionDefinitionIds.QUICK_ASSIST, IdeKeys.QUICK_ASSIST);
         assertEquals(ITextEditorActionDefinitionIds.SHOW_INFORMATION, IdeKeys.SHOW_INFORMATION);
+        assertEquals(ITextEditorActionDefinitionIds.OPEN_HYPERLINK, IdeKeys.OPEN_HYPERLINK);
     }
 
     /**
@@ -52,9 +59,9 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
      */
     @Test
     void aTextFileHasHoverAndQuickFixAndNeovimsGd() {
-        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.COMMAND, IdeKeys.SHOW_INFORMATION), choice(IdeAction.HOVER));
-        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.COMMAND, IdeKeys.QUICK_ASSIST), choice(IdeAction.QUICK_FIX));
-        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.NEOVIM, "gd"), choice(IdeAction.DEFINITION));
+        assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.SHOW_INFORMATION), choice(IdeAction.HOVER));
+        assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.QUICK_ASSIST), choice(IdeAction.QUICK_FIX));
+        assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.NEOVIM, "gd"), choice(IdeAction.DEFINITION));
         assertEquals(message("grn: Rename is not available in this editor"), choice(IdeAction.RENAME));
         assertEquals(message("grr: References is not available in this editor"), choice(IdeAction.REFERENCES));
         assertEquals(message("gri: Open Implementation is not available in this editor"), choice(IdeAction.IMPLEMENTATION));
@@ -101,6 +108,7 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         };
         commands.addExecutionListener(listener);
         Shell window = editor.getSite().getShell();
+        Set<Shell> before = Set.of(window.getDisplay().getShells());
         try {
             typeSlowly("gg0vegra");
             waitUntil("Quick Fix to run", TIMEOUT_MS, () -> !selections.isEmpty());
@@ -108,13 +116,61 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         } finally {
             commands.removeExecutionListener(listener);
             for (Shell shell : window.getDisplay().getShells()) { // Quick Fix's popup, if it opened one
-                if (shell != window && !shell.isDisposed() && shell.isVisible()) {
+                if (!before.contains(shell) && !shell.isDisposed()) {
                     shell.close();
                 }
             }
             page().activate(editor);
             session.inputAsync("<Esc>");
             settle();
+        }
+    }
+
+    /** A command that fails while running says so in the message line, with the key and its label. */
+    @Test
+    void aCommandThatFailsWhileRunningSaysSo() {
+        IdeActions.EclipseEditor failing = new IdeActions.EclipseEditor(editor, editor.getAdapter(ITextViewer.class),
+                widget.getCaretOffset(), IdeAction.REFERENCES, IdeKeys.COMMANDS.get(IdeAction.REFERENCES));
+        assertTrue(failing.execute(TestFailingHandler.COMMAND), "it ran (and failed): no next way");
+        waitUntil("the message", TIMEOUT_MS, () -> "grr: References failed: boom".equals(messageText(editor)),
+                () -> "; the message line shows \"" + messageText(editor) + "\"");
+    }
+
+    /** A link that throws when opened says so in the message line, and counts as opened. */
+    @Test
+    void aLinkThatFailsToOpenSaysSo() throws Exception {
+        ITextEditor links = openFile("links.txt", TestHyperlinkDetector.FAILING + "\n");
+        IdeActions.EclipseEditor failing = new IdeActions.EclipseEditor(links, links.getAdapter(ITextViewer.class), 1,
+                IdeAction.TYPE_DEFINITION, IdeKeys.COMMANDS.get(IdeAction.TYPE_DEFINITION));
+        assertTrue(failing.linkAt(TestHyperlinkDetector.ID));
+        assertTrue(failing.openLink(TestHyperlinkDetector.ID), "found, and failed: no next way");
+        waitUntil("the message", TIMEOUT_MS,
+                () -> "grt: Open Declared Type failed: cannot open FAILME".equals(messageText(links)),
+                () -> "; the message line shows \"" + messageText(links) + "\"");
+        page().closeEditor(links, false);
+    }
+
+    /**
+     * The text page of a multi-page editor (here {@link TestMultiPageEditor}, like the POM editor)
+     * finds the text editor's commands, as a plain Text Editor does. (Checked 2026-10-29: asking the
+     * outer editor's context gives the same answer, since Eclipse looks the handler up from the
+     * active part's innermost context either way; so this guards the result, not which context
+     * {@code runsHere} asks.)
+     */
+    @Test
+    void theTextPageOfAMultiPageEditorFindsItsOwnCommands() throws Exception {
+        IFile file = createFile("pom.mpage", "<project/>\n");
+        IEditorPart multiPage = IDE.openEditor(page(), file, true);
+        assertTrue(multiPage instanceof TestMultiPageEditor, "opened in " + multiPage);
+        ITextEditor sourcePage = EditorAttachManager.textEditorOf(multiPage);
+        waitForAttach(sourcePage, "the Source page");
+        try {
+            assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.SHOW_INFORMATION),
+                    IdeActions.choose(IdeAction.HOVER, sourcePage, sourcePage.getAdapter(ITextViewer.class), 0));
+            assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.QUICK_ASSIST),
+                    IdeActions.choose(IdeAction.QUICK_FIX, sourcePage, sourcePage.getAdapter(ITextViewer.class), 0));
+        } finally {
+            page().closeEditor(multiPage, false);
         }
     }
 }

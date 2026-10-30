@@ -18,7 +18,6 @@ import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
-import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeKeys;
@@ -32,7 +31,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
  * <p><b>Commands, not code.</b> "Open Declaration" or "Rename" is different in every kind of editor
  * (Java, C, an LSP editor), so the plug-in does not implement it: it runs the editor's own Eclipse
  * <em>command</em>. Which one, and how it is found, is the one table {@link IdeKeys#COMMANDS}, which
- * this class only interprets ({@link #pick}), the same way for every key:
+ * {@link IdeKeys#pick} goes through the same way for every key; this class is its Eclipse side
+ * ({@link EclipseEditor}):
  * <ul>
  *   <li>{@code gd}: the command bound to F3 (Open Declaration in the Java editor); Neovim's own
  *       {@code gd} where there is none or it cannot run here (the plain Text Editor). The Generic
@@ -87,13 +87,10 @@ final class IdeActions {
         }
     }
 
-    /**
-     * Runs {@code command}: the first of its ways that finds something and runs it; else Neovim's own
-     * keys, or the message {@code grn: Rename is not available in this editor}.
-     */
+    /** Runs {@code command} in {@code editor} ({@link IdeKeys#pick}); then Neovim's own keys, or the message. */
     private static void runCommand(String action, IdeKeys.Command command, ITextEditor editor, ITextViewer viewer,
             int caret, Consumer<String> neovimNormal) {
-        Choice choice = pick(action, command, editor, viewer, caret, true);
+        IdeKeys.Choice choice = IdeKeys.pick(action, command, new EclipseEditor(editor, viewer, caret, action, command));
         LOG.fine(() -> IdeKeys.keyOf(action).orElse(action) + ": " + choice);
         switch (choice.kind()) {
             case COMMAND, LINK -> { } // already run
@@ -103,117 +100,115 @@ final class IdeActions {
     }
 
     /**
-     * What an action does in an editor right now: run a command ({@code value} its id), open a link
-     * ({@code value} the detector's id), run Neovim's own keys, or show a message.
-     */
-    record Choice(Kind kind, String value) {
-        enum Kind { COMMAND, LINK, NEOVIM, MESSAGE }
-    }
-
-    /**
      * What the action {@code action} of {@link IdeKeys#COMMANDS} would do here, without running
-     * anything; for tests.
+     * anything ({@link IdeKeys#dryRun}); for tests.
      *
      * @throws IllegalArgumentException for an action Eclipse does not run as a command ({@code next_tab})
      */
-    static Choice choose(String action, ITextEditor editor, ITextViewer viewer, int caret) {
+    static IdeKeys.Choice choose(String action, ITextEditor editor, ITextViewer viewer, int caret) {
         IdeKeys.Command command = IdeKeys.COMMANDS.get(action);
         if (command == null) {
             throw new IllegalArgumentException(action + " is no action of IdeKeys.COMMANDS");
         }
-        return pick(action, command, editor, viewer, caret, false);
+        return IdeKeys.pick(action, command, IdeKeys.dryRun(new EclipseEditor(editor, viewer, caret, action, command)));
     }
 
     /**
-     * Goes through {@code command}'s ways in order (see {@link IdeKeys}) and returns the first that
-     * finds something to run here, running it when {@code run} is set; else Neovim's own keys, or the
-     * message. With {@code run}, a way whose command turns out not to run after all (Eclipse says it
-     * is not handled or not enabled when it is executed) passes to the next, so {@code gd} still ends
-     * in Neovim's {@code gd}. One loop for choosing and running, so the two never disagree, and a link
-     * is detected once: {@link HyperlinkProbe#open} detects and opens. UI thread.
+     * The Eclipse side of {@link IdeKeys.Editor}: one editor, its viewer and caret, for one action (whose
+     * key and label go into a failure's message). Thin glue: the decisions are {@link IdeKeys#pick}'s.
+     * UI thread.
+     *
+     * @param viewer the editor's text viewer, or {@code null} (then no link is found)
      */
-    private static Choice pick(String action, IdeKeys.Command command, ITextEditor editor, ITextViewer viewer,
-            int caret, boolean run) {
-        String key = IdeKeys.keyOf(action).orElse(action);
-        for (IdeKeys.Way way : command.ways()) {
-            switch (way.kind()) {
-                case BOUND_TO, COMMAND -> {
-                    String id = way.kind() == IdeKeys.Way.Kind.COMMAND ? way.value() : commandBoundTo(way.value());
-                    // Open Hyperlink (the Generic Editor's F3) counts only with a link under the caret.
-                    boolean noLinkHere = ITextEditorActionDefinitionIds.OPEN_HYPERLINK.equals(id)
-                            && (viewer == null || !HyperlinkProbe.isAt(editor, viewer, caret));
-                    if (id != null && !noLinkHere && runsHere(editor, id) && (!run || execute(editor, id, key))) {
-                        return new Choice(Choice.Kind.COMMAND, id);
-                    }
-                }
-                case HYPERLINK -> {
-                    boolean found = viewer != null && (run ? HyperlinkProbe.open(editor, viewer, caret, way.value())
-                            : HyperlinkProbe.isAt(editor, viewer, caret, way.value()));
-                    if (found) {
-                        return new Choice(Choice.Kind.LINK, way.value());
-                    }
-                }
+    record EclipseEditor(ITextEditor editor, ITextViewer viewer, int caret, String action, IdeKeys.Command command)
+            implements IdeKeys.Editor {
+
+        private String key() {
+            return IdeKeys.keyOf(action).orElse(action);
+        }
+
+        /** Shows a failure the way Vim shows an error: {@code grt: Open Declared Type failed: ...}. */
+        private void showFailure(Exception e) {
+            String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            HostCommands.showError(editor, key() + ": " + command.label() + " failed: " + why);
+        }
+
+        @Override
+        public String commandBoundTo(String eclipseKey) {
+            try {
+                return KeyBindings.commandIdFor(eclipseKey);
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "Key binding lookup for " + eclipseKey + " failed", e);
+                return null;
             }
         }
-        if (!command.neovimKeys().isEmpty()) {
-            return new Choice(Choice.Kind.NEOVIM, command.neovimKeys());
-        }
-        return new Choice(Choice.Kind.MESSAGE, key + ": " + command.label() + " is not available in this editor");
-    }
 
-    /**
-     * Whether command {@code id} exists in this Eclipse and can run in {@code editor} now, asked of
-     * the editor's own Eclipse 4 context: {@link EHandlerService#canExecute} finds the handler the way
-     * running the command through the editor's site does, so the answer is that of the run (a page of
-     * a multi-page editor, or a handler only that editor's site activates, included). A command bound
-     * to a key may still not run here: another plug-in can bind the key for every text editor while
-     * only its own editors handle it; a command of JDT does not exist without Java tooling.
-     */
-    private static boolean runsHere(ITextEditor editor, String id) {
-        ICommandService commands = editor.getSite().getService(ICommandService.class);
-        IEclipseContext context = editor.getSite().getService(IEclipseContext.class);
-        EHandlerService handlers = context == null ? null : context.get(EHandlerService.class);
-        Command command = commands == null ? null : commands.getCommand(id);
-        if (handlers == null || command == null || !command.isDefined()) {
-            return false;
+        /**
+         * Asked of the editor's own Eclipse 4 context: {@link EHandlerService#canExecute} finds the
+         * handler the way running the command through the editor's site does, so the answer is that of
+         * the run (a multi-page editor's text page included; there the outer editor's context was found to
+         * give the same answer, 2026-10-29, as Eclipse looks up the active part's innermost handler). A
+         * command bound to a key may still not run here: another plug-in can bind the key for every
+         * text editor while only its own editors handle it; a command of JDT does not exist without
+         * Java tooling.
+         */
+        @Override
+        public boolean runsHere(String id) {
+            ICommandService commands = editor.getSite().getService(ICommandService.class);
+            IEclipseContext context = editor.getSite().getService(IEclipseContext.class);
+            EHandlerService handlers = context == null ? null : context.get(EHandlerService.class);
+            Command eclipseCommand = commands == null ? null : commands.getCommand(id);
+            if (handlers == null || eclipseCommand == null || !eclipseCommand.isDefined()) {
+                return false;
+            }
+            try {
+                return handlers.canExecute(new ParameterizedCommand(eclipseCommand, null));
+            } catch (RuntimeException e) {
+                LOG.log(Level.FINE, "Could not ask whether " + id + " can run", e);
+                return false;
+            }
         }
-        try {
-            return handlers.canExecute(new ParameterizedCommand(command, null));
-        } catch (RuntimeException e) {
-            LOG.log(Level.FINE, "Could not ask whether " + id + " can run", e);
-            return false;
-        }
-    }
 
-    /** The id of the command the workbench would run for {@code key} right now, or {@code null}. */
-    private static String commandBoundTo(String key) {
-        try {
-            return KeyBindings.commandIdFor(key);
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "Key binding lookup for " + key + " failed", e);
-            return null;
+        /**
+         * Through the editor's handler service, so that the editor's own handler (Java's Open
+         * Declaration) runs. A command that fails while running is shown in the message line
+         * ({@code grr: References failed: ...}) and counts as run.
+         */
+        @Override
+        public boolean execute(String id) {
+            try {
+                editor.getSite().getService(IHandlerService.class).executeCommand(id, null);
+                return true;
+            } catch (NotDefinedException | NotHandledException | NotEnabledException e) {
+                LOG.fine(() -> key() + ": " + id + " is not available here: " + e.getMessage());
+                return false;
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, key() + ": running " + id + " failed", e);
+                showFailure(e);
+                return true;
+            }
         }
-    }
 
-    /**
-     * Executes a command through the editor's handler service, so that the editor's own handler
-     * (for example Java's Open Declaration) is the one that runs.
-     *
-     * @return {@code false} if it did not run after all (not defined, handled or enabled when
-     *         executed): the caller then tries its next way; {@code true} if it ran, or failed while
-     *         running (logged)
-     */
-    private static boolean execute(ITextEditor editor, String commandId, String vimKey) {
-        try {
-            IHandlerService handlers = editor.getSite().getService(IHandlerService.class);
-            handlers.executeCommand(commandId, null);
-            return true;
-        } catch (NotDefinedException | NotHandledException | NotEnabledException e) {
-            LOG.fine(() -> vimKey + ": " + commandId + " is not available here: " + e.getMessage());
-            return false;
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, vimKey + ": running " + commandId + " failed", e);
-            return true;
+        @Override
+        public boolean anyLinkAt() {
+            return viewer != null && HyperlinkProbe.isAt(editor, viewer, caret);
+        }
+
+        @Override
+        public boolean linkAt(String detectorId) {
+            return viewer != null && HyperlinkProbe.isAt(editor, viewer, caret, detectorId);
+        }
+
+        /** A link that fails to open (JDT cannot open the type) is shown in the message line and counts as opened. */
+        @Override
+        public boolean openLink(String detectorId) {
+            try {
+                return viewer != null && HyperlinkProbe.open(editor, viewer, caret, detectorId);
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, key() + ": opening the link of " + detectorId + " failed", e);
+                showFailure(e);
+                return true;
+            }
         }
     }
 }
