@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.List;
 import java.util.Set;
@@ -16,8 +17,10 @@ import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.core.commands.IExecutionListener;
 import org.eclipse.core.commands.NotHandledException;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewer;
+import org.eclipse.jface.text.source.ISourceViewer;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
@@ -45,6 +48,23 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         return new IdeKeys.Choice(IdeKeys.Choice.Kind.MESSAGE, text);
     }
 
+    /**
+     * Whether the text editor offers Quick Fix, by Eclipse's own test (its Quick Fix action is enabled
+     * only when the viewer can do it). It depends on the runtime: found 2026-10-29, a text editor can
+     * with the Java tools (-Pall) and cannot without them (-Pui, CI), most likely because the default
+     * spelling engine, whose proposals are a text file's quick fixes, comes with {@code org.eclipse.jdt.ui}.
+     */
+    private static boolean quickFixOffered(ITextEditor in) {
+        ITextOperationTarget target = in.getAdapter(ITextOperationTarget.class);
+        return target != null && target.canDoOperation(ISourceViewer.QUICK_ASSIST);
+    }
+
+    /** What {@code gra} must find in {@code in}: Quick Fix where Eclipse offers it, else the message. */
+    private static IdeKeys.Choice quickFixIn(ITextEditor in) {
+        return quickFixOffered(in) ? new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.QUICK_ASSIST)
+                : message("gra: Quick Fix is not available in this editor");
+    }
+
     /** The command ids the table holds as strings are the platform's. */
     @Test
     void theSharedCommandIdsAreThePlatforms() {
@@ -54,13 +74,14 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A text file: hover and Quick Fix are the text editor's own; Open Declaration is Neovim's
-     * {@code gd}; the others say they are not available.
+     * A text file: hover is the text editor's own, and Quick Fix where the runtime gives it one
+     * ({@link #quickFixOffered}); Open Declaration is Neovim's {@code gd}; the others say they are
+     * not available.
      */
     @Test
     void aTextFileHasHoverAndQuickFixAndNeovimsGd() {
         assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.SHOW_INFORMATION), choice(IdeAction.HOVER));
-        assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.QUICK_ASSIST), choice(IdeAction.QUICK_FIX));
+        assertEquals(quickFixIn(editor), choice(IdeAction.QUICK_FIX));
         assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.NEOVIM, "gd"), choice(IdeAction.DEFINITION));
         assertEquals(message("grn: Rename is not available in this editor"), choice(IdeAction.RENAME));
         assertEquals(message("grr: References is not available in this editor"), choice(IdeAction.REFERENCES));
@@ -80,10 +101,12 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
     /**
      * Visual {@code gra} runs Quick Fix with Neovim's visual selection as the editor's selection, so a
      * Quick Assist works on the selected text (Extract Local Variable, in Java). Seen from the
-     * command's execution: the editor's selection when Quick Fix starts.
+     * command's execution: the editor's selection when Quick Fix starts. Only where the text editor
+     * offers Quick Fix ({@link #quickFixOffered}: with the Java tools, -Pall).
      */
     @Test
     void visualGraRunsQuickFixOnTheSelection() {
+        assumeTrue(quickFixOffered(editor), "the text editor offers no Quick Fix in this runtime (no Java tools)");
         ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
         List<String> selections = new CopyOnWriteArrayList<>();
         IExecutionListener listener = new IExecutionListener() {
@@ -167,7 +190,7 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         try {
             assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.SHOW_INFORMATION),
                     IdeActions.choose(IdeAction.HOVER, sourcePage, sourcePage.getAdapter(ITextViewer.class), 0));
-            assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.QUICK_ASSIST),
+            assertEquals(quickFixIn(sourcePage),
                     IdeActions.choose(IdeAction.QUICK_FIX, sourcePage, sourcePage.getAdapter(ITextViewer.class), 0));
         } finally {
             page().closeEditor(multiPage, false);
