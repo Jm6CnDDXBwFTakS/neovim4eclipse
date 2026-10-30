@@ -58,10 +58,13 @@ end)
 -- jump into one fires only BufAdd before the read (Neovim 0.12.6). Found on macOS 2026-10-30: the
 -- buffers had no hook, and Eclipse opened no editor. What the hook cannot prevent: to search a file,
 -- :vimgrep loads it itself, filetype detection included, so the matched buffers keep a filetype; and
--- the first match stays loaded from that search. A later jump (:cnext) is read by the hook. Both go
--- to Eclipse to open their editors.
+-- the first match stays loaded from that search, with a swap file, which BufAdd turns off. A later
+-- jump (:cnext) is read by the hook. Both go to Eclipse to open their editors.
 t.test(':vimgrep and :cnext into project files: Eclipse gets each file; :cnext reads by the hook', function()
   local root = project()
+  vim.o.updatecount = 200 -- nvim -l starts with swap files off (0), a normal Neovim with 200
+  vim.o.directory = vim.fn.tempname() .. '//'
+  vim.fn.mkdir(vim.o.directory, 'p')
   vim.cmd.edit(vim.fn.fnameescape(file(root, 'src', 'A.java')))
   vim.cmd.lcd(vim.fn.fnameescape(root))
   vim.cmd.bwipeout() -- start with no buffer of either file, as after a fresh start
@@ -69,6 +72,8 @@ t.test(':vimgrep and :cnext into project files: Eclipse gets each file; :cnext r
   vim.cmd('silent vimgrep /B/ src/*.java')
   local a = vim.api.nvim_get_current_buf()
   t.same_file(file(root, 'src', 'A.java'), vim.api.nvim_buf_get_name(a))
+  t.eq(false, vim.bo[a].swapfile, 'the first match, loaded by the search: no swap file')
+  t.eq({}, vim.fn.glob(vim.o.directory .. '*', true, true), 'the search\'s swap file is gone')
   local entered = t.sent('eclipse_buf_enter')
   t.eq(vim.api.nvim_buf_get_name(a), entered[#entered][4], 'the first match\'s file, for Eclipse to open its editor')
 
@@ -79,6 +84,23 @@ t.test(':vimgrep and :cnext into project files: Eclipse gets each file; :cnext r
   t.eq({}, seen, ':cnext: read by the hook, no BufReadPre, BufReadPost or FileType')
   entered = t.sent('eclipse_buf_enter')
   t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4], 'its file, for Eclipse to open its editor')
+end)
+
+-- BufAdd checks a buffer only when BufNew did not, under the same name: resolving a path
+-- (fs_realpath) is most of the hook's cost (docs/design/DIAGNOSTICS.md, Q-E1).
+t.test(':badd resolves the new buffer\'s path once, not again on BufAdd', function()
+  local root = project()
+  local paths = require('neovim4eclipse.paths')
+  local canonical, calls = paths.canonical, 0
+  paths.canonical = function(...)
+    calls = calls + 1
+    return canonical(...)
+  end
+  local ok, err = pcall(vim.cmd.badd, vim.fn.fnameescape(file(root, 'src', 'B.java')))
+  paths.canonical = canonical
+  assert(ok, err)
+  t.eq(1, calls)
+  t.ok(require('neovim4eclipse.project_files').file_of(vim.fn.bufnr(file(root, 'src', 'B.java'))) ~= '', 'hooked')
 end)
 
 t.test('a file outside the projects, and one in a folder whose name starts the same, are Neovim\'s to read', function()

@@ -31,14 +31,19 @@ import java.util.Set;
  *       empty messages.</li>
  *   <li>Not shown either: a passing note that Neovim's screen overwrites with the next message.
  *       {@code :vimgrep /Bar/ src/**}{@code /*.java} sends its progress line, the file it is
- *       searching ({@code src/Bar.java}, not kept for {@code :messages}, its kind left over from the
- *       message before it: {@code ""}, {@code list_cmd} or {@code undo} were seen), then
- *       {@code (1 of 2): class Bar {}} (kind {@code quickfix}). Neovim's own screen shows only the
- *       second, but the events do not say so ({@code replace_last} is false), so the two would count
- *       as two messages and open the popup, which the jump to the match's editor closes at once.
- *       So a quickfix message drops the messages of its command that Neovim does not keep for
- *       {@code :messages} (found 2026-10-30). The kind cannot tell the note apart, so an
- *       {@code :echo} in the same command line ({@code :echo "x" | cnext}) goes too; errors stay.</li>
+ *       searching ({@code src/Bar.java}), then {@code (1 of 2): class Bar {}} (kind
+ *       {@code quickfix}), or {@code E480: No match: Bar} when nothing matched. Neovim's own screen
+ *       shows only the second, but the events do not say so ({@code replace_last} is false), so the
+ *       two would count as two messages and open the popup: one the jump to the match's editor
+ *       closes at once, or one that stays with the error. The note's kind says nothing either:
+ *       Neovim 0.12.6 sends it with the kind of the message before it, even another command's
+ *       ({@code ""}, {@code list_cmd}, {@code undo} were seen). What marks it: one line, not kept
+ *       for {@code :messages} ({@code history} false), not shell output, and right before a
+ *       quickfix message or an error. So such a message drops the notes just before it (found
+ *       2026-10-30). Shell output stays ({@code :make} and {@code :grep} print the tool's output
+ *       before their {@code (1 of 5): ...}, and Neovim shows both), and so does anything kept for
+ *       {@code :messages}; a one-line {@code :echo} or listing right before the quickfix message
+ *       or error goes ({@code :echo "x" | cnext}), since nothing tells it apart from the note.</li>
  * </ul>
  *
  * <h2>Updates</h2>
@@ -63,7 +68,7 @@ public final class MessageRoute {
     /** Kinds that are output to read: always the popup. (A listing, {@code list_cmd}, is not: see the class comment.) */
     private static final Set<String> OUTPUT_KINDS = Set.of("shell_cmd", "shell_out", "shell_err",
             "shell_ret", HISTORY_KIND);
-    /** The kind of a quickfix command's {@code (1 of 2): ...}, which overwrites a passing note before it. */
+    /** The kind of a quickfix command's {@code (1 of 2): ...}, which overwrites the passing notes before it, as an error does. */
     private static final String QUICKFIX_KIND = "quickfix";
     /** Kinds that only echo what was typed. */
     private static final Set<String> ECHO_KINDS = Set.of("search_cmd", "empty", "return_prompt");
@@ -95,14 +100,9 @@ public final class MessageRoute {
             this.history = history;
         }
 
-        /**
-         * A message Neovim does not keep for {@code :messages}, such as {@code :vimgrep}'s progress
-         * line. Its kind says nothing: Neovim 0.12.6 sends that line with whatever kind the message
-         * before it had, even one of another command ({@code ""}, {@code list_cmd}, {@code undo} were
-         * seen), so only the flag counts. Errors are always kept, so they never count.
-         */
+        /** A passing note, which a quickfix message or an error overwrites: see the class comment. */
         boolean isPassingNote() {
-            return !history;
+            return !history && !OUTPUT_KINDS.contains(kind) && !text.strip().contains("\n");
         }
     }
 
@@ -141,13 +141,32 @@ public final class MessageRoute {
             if (show.replaceLast() && !messages.isEmpty()) {
                 messages.remove(messages.size() - 1);
             }
-            if (QUICKFIX_KIND.equals(show.kind())) {
-                // Not only the message just before: the note can come in an earlier redraw, with
-                // others (an empty one) in between.
-                messages.removeIf(Message::isPassingNote);
+            if (QUICKFIX_KIND.equals(show.kind()) || ERROR_KINDS.contains(show.kind())) {
+                dropPassingNotesAtTheEnd();
             }
             messages.add(new Message(show.kind(), text, show.id(), show.trigger(), show.history()));
         }
+    }
+
+    /**
+     * Drops the passing notes at the end of the list, walking back past the messages that are not
+     * shown anyway (an {@code empty} one came between {@code :vimgrep}'s note and its match), and
+     * stopping at the first other message: shell output or a message kept for {@code :messages}.
+     */
+    private void dropPassingNotesAtTheEnd() {
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message m = messages.get(i);
+            if (m.isPassingNote()) {
+                messages.remove(i);
+            } else if (!isHidden(m)) {
+                return;
+            }
+        }
+    }
+
+    /** Not shown: the echo of what was typed, or an empty message. */
+    private static boolean isHidden(Message m) {
+        return ECHO_KINDS.contains(m.kind) || m.text.isBlank();
     }
 
     /** Adds {@code :messages}' list (typed, so the popup is titled with the command line). */
@@ -159,7 +178,7 @@ public final class MessageRoute {
     public View view() {
         List<Message> shown = new ArrayList<>();
         for (Message m : messages) {
-            if (!ECHO_KINDS.contains(m.kind) && !m.text.isBlank()) {
+            if (!isHidden(m)) {
                 shown.add(m);
             }
         }
