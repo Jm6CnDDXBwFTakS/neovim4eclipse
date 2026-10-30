@@ -40,13 +40,15 @@ public interface QuickfixPort {
 
     /**
      * Fills or updates a list ({@link LuaScripts#SET_QUICKFIX}; see {@link QuickfixEntries#toLuaArgs}),
-     * on the input thread, after every key queued before. Returns at once.
+     * on the input thread, after every key queued before; while Neovim waits for the rest of a
+     * command ({@code ]} of {@code ]d}), after the key that ends it. Returns at once.
      */
     void setQuickfixAsync(Kind kind, String arg, Mode mode, boolean jump, List<Entry> entries);
 
     /**
      * The current list when it is one of Eclipse's, else {@code null}, answered on the input thread
-     * after every key queued before. The future fails when Neovim fails or is closed. Neovim has no
+     * after every key queued before (and, as for {@link #setQuickfixAsync}, after the key that ends
+     * a command Neovim waits for). The future fails when Neovim fails or is closed. Neovim has no
      * event for a change of the current list ({@code :colder}), so an update asks this first.
      */
     CompletableFuture<Current> currentQuickfixAsync();
