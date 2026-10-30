@@ -60,10 +60,10 @@ final class StatusTracker {
 
     /**
      * The statusline label's width in characters, the {@code maxwidth} Neovim evaluates the
-     * {@code 'statusline'} at; the status bar sets it as it lays out. Until then 60, the default of
-     * the preference <em>Statusline width</em> ({@code prefs/PreferenceConstants}).
+     * {@code 'statusline'} at; the status bar sets it as it lays out its label. 0 until then: no
+     * label, nothing to evaluate.
      */
-    private volatile int statuslineColumns = 60;
+    private volatile int statuslineColumns;
 
     Set<StatusItem> items() {
         return items;

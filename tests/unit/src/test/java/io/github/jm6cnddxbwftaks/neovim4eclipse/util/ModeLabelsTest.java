@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -100,14 +101,15 @@ class ModeLabelsTest {
         assertEquals("(INSERT) = (insert)", ModeLabels.tooltip(ModeLabels.of("niI"), "", Style.SHORT));
     }
 
-    /** The label is as wide as the longest text of its style, so it keeps its size; recording adds to it. */
+    /** The label is as wide as the widest of these, so it keeps its size; recording widens it. */
     @Test
-    void theLongestTextPerStyle() {
-        assertEquals("-- (select) VISUAL BLOCK --".length(), ModeLabels.longest(Style.FULL));
-        assertEquals("(SELECT) VISUAL BLOCK".length(), ModeLabels.longest(Style.SHORT));
-        assertEquals("-(s)VB-".length(), ModeLabels.longest(Style.LETTERS));
-        assertEquals("  recording @a".length(), ModeLabels.recordingLength(Style.FULL));
-        assertEquals(" rec @a".length(), ModeLabels.recordingLength(Style.LETTERS));
+    void everyTextTheLabelMayShow() {
+        assertTrue(ModeLabels.texts(Style.FULL, false).containsAll(List.of("-- NORMAL --", "-- (select) VISUAL BLOCK --",
+                "-- ECLIPSE --", "-- SHELL --")));
+        assertTrue(ModeLabels.texts(Style.LETTERS, false).containsAll(List.of("-N-", "-(s)VB-", "-E-", "-!sh-")));
+        assertTrue(ModeLabels.texts(Style.LETTERS, true).contains("-(s)VB- rec @a"));
+        assertTrue(ModeLabels.texts(Style.SHORT, true).contains("(SELECT) VISUAL BLOCK  recording @a"));
+        assertEquals(ModeLabels.texts(Style.FULL, false).size(), ModeLabels.texts(Style.FULL, true).size(), "one text per state");
     }
 
     @Test

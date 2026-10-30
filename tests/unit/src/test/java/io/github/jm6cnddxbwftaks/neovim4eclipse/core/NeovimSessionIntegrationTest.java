@@ -161,6 +161,7 @@ class NeovimSessionIntegrationTest {
     void statusInfoReportsPendingCommandMessageAndStatusline() throws Exception {
         try (NeovimSession s = start()) {
             s.setStatusItems(java.util.EnumSet.allOf(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem.class));
+            s.setStatuslineColumns(60); // as the status bar does once its statusline label is laid out
             s.setBufferLines(List.of("one", "two"));
             List<StatusInfo> seen = new CopyOnWriteArrayList<>();
             s.addStatusListener(seen::add);

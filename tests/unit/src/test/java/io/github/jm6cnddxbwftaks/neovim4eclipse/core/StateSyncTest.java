@@ -209,7 +209,7 @@ class StateSyncTest {
 
     /**
      * The statusline is evaluated only when the status bar shows it, at the label's width in
-     * characters (60 until the status bar says).
+     * characters; not before the status bar has said how wide that is.
      */
     @Test
     void theStatuslineIsRequestedOnlyWhenShownAtTheLabelsWidth() {
@@ -219,7 +219,7 @@ class StateSyncTest {
 
         status.setItems(Set.of(StatusItem.STATUSLINE));
         state.publishState();
-        assertEquals(List.of(60, false), nvim.snapshotFlags);
+        assertEquals(List.of(0, false), nvim.snapshotFlags, "no label laid out yet");
 
         status.setStatuslineColumns(42);
         state.publishState();

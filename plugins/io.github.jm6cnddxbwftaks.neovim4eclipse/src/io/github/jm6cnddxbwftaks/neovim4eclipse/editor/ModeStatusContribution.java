@@ -10,7 +10,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.jface.action.ContributionItem;
+import org.eclipse.jface.action.IContributionItem;
+import org.eclipse.jface.action.IContributionManager;
 import org.eclipse.jface.action.IStatusLineManager;
+import org.eclipse.jface.action.SubContributionItem;
+import org.eclipse.jface.action.SubContributionManager;
+import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
@@ -40,8 +45,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLineFormat;
  * class decides what the labels say; {@link StatusBarLabels} owns the widgets and their widths.
  *
  * <p>Which labels exist changes in two ways: a preference (a part turned on or off), and the
- * {@code -- ECLIPSE --} indicator, which shows even when the mode part is off because it says
- * where keys go. Either rebuilds the bar ({@link #refresh}); every other change only sets texts.
+ * {@code -- ECLIPSE --} indicator, which shows alone (Neovim's command and statusline mean nothing
+ * while keys go to Eclipse), even when the mode part is off, because it says where keys go. Either
+ * rebuilds the bar ({@link #refresh}); every other change only sets texts.
+ *
+ * <p>The preferences are read once and again only when one changes ({@link #refreshNow}), not with
+ * every key. All state is used on the UI thread; the setters hand it over with {@code asyncExec}.
  */
 public final class ModeStatusContribution extends ContributionItem {
 
@@ -58,6 +67,14 @@ public final class ModeStatusContribution extends ContributionItem {
     private IStatusLineManager manager;
     private StatusBarLabels labels;
     private Font boldFont;
+    /** The parts the user chose (preferences, read by {@link #readPreferences}). UI thread. */
+    private Set<StatusItem> chosen = StatusItem.defaults();
+    /** The mode style (preference). UI thread. */
+    private ModeLabels.Style style = ModeLabels.Style.FULL;
+    /** The statusline's width in characters (preference). UI thread. */
+    private int statuslineChars = PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT;
+    /** The most of the bar the labels may take, in percent (preference). UI thread. */
+    private int maxShare = PreferenceConstants.STATUS_MAX_SHARE_DEFAULT;
     /** Neovim's mode string ({@code nvim_get_mode().mode}); "" before Neovim said. */
     private String mode = "";
     /** Keys go to Eclipse: the mode label says {@code -- ECLIPSE --}. */
@@ -71,6 +88,7 @@ public final class ModeStatusContribution extends ContributionItem {
     public ModeStatusContribution(IntConsumer statuslineColumns) {
         super(ID);
         this.statuslineColumns = statuslineColumns;
+        readPreferences();
     }
 
     /**
@@ -90,9 +108,34 @@ public final class ModeStatusContribution extends ContributionItem {
                 statusLine.add(this);
                 statusLine.update(true);
             }
+            // Each window has its own status bar, of its own width, and one Neovim serves them all:
+            // the editor becoming active brings its window's statusline width along. Example: a wide
+            // and a narrow window; switching editors between them switches the statusline's columns.
+            ModeStatusContribution shown = shownIn(statusLine);
+            int columns = shown == null || shown.labels == null ? -1 : shown.labels.statuslineColumns();
+            if (columns > 0) {
+                statuslineColumns.accept(columns);
+            }
         } catch (Exception e) {
             LOG.log(Level.FINE, "Could not install mode status line", e);
         }
+    }
+
+    /**
+     * The item of this id in {@code statusLine}'s window, whichever editor put it there: an editor's
+     * manager is a {@link SubContributionManager} that adds items to the window's own manager wrapped
+     * in a {@link SubContributionItem}.
+     */
+    private static ModeStatusContribution shownIn(IStatusLineManager statusLine) {
+        IContributionManager window = statusLine;
+        while (window instanceof SubContributionManager sub) {
+            window = sub.getParent();
+        }
+        IContributionItem item = window.find(ID);
+        if (item instanceof SubContributionItem wrapper) {
+            item = wrapper.getInnerItem();
+        }
+        return item instanceof ModeStatusContribution contribution ? contribution : null;
     }
 
     /** Removes the item with this id from the status line of the editor's window. */
@@ -119,7 +162,8 @@ public final class ModeStatusContribution extends ContributionItem {
             }
             boldFont = new Font(parent.getDisplay(), fds);
         }
-        labels = new StatusBarLabels(parent, partsShown(), boldFont, widths(), statuslineColumns);
+        labels = new StatusBarLabels(parent, partsShown(), boldFont, JFaceResources.getTextFont(), widths(),
+                statuslineColumns);
         showTexts();
     }
 
@@ -150,68 +194,70 @@ public final class ModeStatusContribution extends ContributionItem {
         refresh();
     }
 
-    /** Redraws with the current preferences (which parts, mode style, widths). */
+    /** A status bar preference changed: reads them again and redraws. */
     public void refreshNow() {
-        refresh();
+        Display.getDefault().asyncExec(() -> {
+            readPreferences();
+            apply();
+        });
     }
 
-    /** The parts the user chose, plus the mode while it says {@code -- ECLIPSE --}. */
-    private Set<StatusItem> partsShown() {
+    /** Reads the status bar preferences into fields (defaults when the plug-in is not running). */
+    private void readPreferences() {
         Activator activator = Activator.getDefault();
-        Set<StatusItem> parts = EnumSet.noneOf(StatusItem.class);
-        parts.addAll(activator == null ? StatusItem.defaults() : activator.getStatusItems());
-        if (eclipse) {
-            parts.add(StatusItem.MODE);
+        if (activator == null) {
+            return;
         }
+        chosen = activator.getStatusItems();
+        style = ModeLabels.Style.of(activator.getPreferenceStore().getString(PreferenceConstants.STATUS_MODE_STYLE));
+        statuslineChars = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH);
+        maxShare = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_SHARE);
+    }
+
+    /** The parts the user chose; only the mode while it says {@code -- ECLIPSE --}. */
+    private Set<StatusItem> partsShown() {
+        if (eclipse) {
+            return EnumSet.of(StatusItem.MODE);
+        }
+        Set<StatusItem> parts = EnumSet.noneOf(StatusItem.class);
+        parts.addAll(chosen);
         return parts;
     }
 
-    private static ModeLabels.Style style() {
-        Activator activator = Activator.getDefault();
-        return activator == null ? ModeLabels.Style.FULL
-                : ModeLabels.Style.of(activator.getPreferenceStore().getString(PreferenceConstants.STATUS_MODE_STYLE));
-    }
-
     /**
-     * The labels' sizes: the mode as wide as the style's longest text, plus room for
+     * The labels' sizes: the mode as wide as the widest text of the style, with room for
      * {@code recording @a} only while recording (the label widens then, rather than always).
      */
     private StatusBarLabels.Widths widths() {
-        Activator activator = Activator.getDefault();
-        int statusline = activator == null ? PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT
-                : activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH);
-        int share = activator == null ? PreferenceConstants.STATUS_MAX_SHARE_DEFAULT
-                : activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_SHARE);
-        ModeLabels.Style style = style();
-        int mode = ModeLabels.longest(style) + (eclipse || recording.isEmpty() ? 0 : ModeLabels.recordingLength(style));
-        return new StatusBarLabels.Widths(mode, CMD_CHARS, statusline, share);
+        return new StatusBarLabels.Widths(ModeLabels.texts(style, !eclipse && !recording.isEmpty()), CMD_CHARS,
+                statuslineChars, maxShare);
+    }
+
+    /** Applies the state on the UI thread; callers are on any thread. */
+    private void refresh() {
+        Display.getDefault().asyncExec(this::apply);
     }
 
     /**
-     * Applies the state on the UI thread: rebuilds the bar when the set of labels changed, else fits
-     * them to the preferences and sets their texts. Callers are on any thread.
+     * Rebuilds the bar when the set of labels changed, else fits them and sets their texts. UI thread.
      */
-    private void refresh() {
-        Display display = Display.getDefault();
-        display.asyncExec(() -> {
-            if (labels == null || labels.isDisposed()) {
-                return; // not filled yet, or being refilled: fill() shows the state
+    private void apply() {
+        if (labels == null || labels.isDisposed()) {
+            return; // not filled yet, or being refilled: fill() shows the state
+        }
+        if (!labels.parts().equals(partsShown())) {
+            if (manager != null) {
+                manager.markDirty();
+                manager.update(true); // disposes the labels and calls fill() again
             }
-            if (!labels.parts().equals(partsShown())) {
-                if (manager != null) {
-                    manager.markDirty();
-                    manager.update(true); // disposes the labels and calls fill() again
-                }
-                return;
-            }
-            labels.setWidths(widths());
-            showTexts();
-        });
+            return;
+        }
+        labels.setWidths(widths());
+        showTexts();
     }
 
     /** Sets the three labels' texts, tooltips and the mode's color. UI thread. */
     private void showTexts() {
-        ModeLabels.Style style = style();
         ModeLabels.Label label = eclipse ? ModeLabels.ECLIPSE : ModeLabels.of(mode);
         String register = eclipse ? "" : recording;
         labels.show(StatusItem.MODE, ModeLabels.text(label, register, style), ModeLabels.tooltip(label, register, style),

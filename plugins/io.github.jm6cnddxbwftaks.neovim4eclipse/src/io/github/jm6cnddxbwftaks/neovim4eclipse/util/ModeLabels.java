@@ -108,7 +108,7 @@ public final class ModeLabels {
     /** Neovim's terminal; Eclipse editors never show one, but the mode exists. */
     private static final Label TERMINAL = new Label("TERMINAL", "-T-");
 
-    /** Every label, for {@link #longest}. */
+    /** Every label, for {@link #texts}. */
     private static final List<Label> ALL = List.of(ECLIPSE, NORMAL, OPERATOR, CTRL_O_INSERT, CTRL_O_REPLACE,
             CTRL_O_VREPLACE, INSERT, REPLACE, VREPLACE, VISUAL, VISUAL_LINE, VISUAL_BLOCK, SELECT_VISUAL,
             SELECT_VISUAL_LINE, SELECT_VISUAL_BLOCK, SELECT, SELECT_LINE, SELECT_BLOCK, COMMAND, EX, MORE,
@@ -179,24 +179,13 @@ public final class ModeLabels {
     }
 
     /**
-     * The longest text any state has in {@code style}, in characters: the mode label is this wide, so
-     * it keeps its size (and the labels after it their places) as the mode changes. Full:
-     * {@code -- (select) VISUAL BLOCK --}, 27. While a macro is recorded, {@link #recordingLength} more.
+     * Every text the mode label may show in {@code style}, each with {@code recording @a} after it
+     * while {@code recording}: the label is as wide as the widest of them as its font draws them
+     * ({@code editor/StatusBarLabels}), so it keeps its size (and the labels after it their places) as
+     * the mode changes, and widens for a recording only while one runs. Example, Full:
+     * {@code -- NORMAL --}, {@code -- OPERATOR --}, ... {@code -- (select) VISUAL BLOCK --}.
      */
-    public static int longest(Style style) {
-        int most = 0;
-        for (Label label : ALL) {
-            most = Math.max(most, label.text(style).length());
-        }
-        return most;
-    }
-
-    /**
-     * How many characters {@link #text} adds while recording into a one-letter register:
-     * {@code "  recording @a"} (14), Letters {@code " rec @a"} (7). The label widens by this much only
-     * while recording, rather than always keeping room for it.
-     */
-    public static int recordingLength(Style style) {
-        return text(NORMAL, "a", style).length() - NORMAL.text(style).length();
+    public static List<String> texts(Style style, boolean recording) {
+        return ALL.stream().map(label -> text(label, recording ? "a" : "", style)).toList();
     }
 }
