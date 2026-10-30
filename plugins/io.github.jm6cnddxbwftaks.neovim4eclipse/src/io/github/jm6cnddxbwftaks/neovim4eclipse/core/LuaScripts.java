@@ -1345,7 +1345,11 @@ final class LuaScripts {
      *
      * <p><b>Which buffers.</b> Eclipse sends the open projects' folders ({@link #SET_PROJECT_FOLDERS}).
      * Each new buffer ({@code BufNew}, also sent after a rename) whose file is inside one gets a
-     * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. The paths
+     * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. A buffer
+     * added to the list is checked too ({@code BufAdd}): {@code :vimgrep} makes the buffers of the
+     * files it matched while it searches, without {@code BufNew}, and its jump into one fires only
+     * {@code BufAdd} before the read (found 2026-10-30, on macOS: {@code :vimgrep} into closed
+     * files opened no editor; any system, for files without a buffer yet). The paths
      * are compared by {@link #PATHS}'s rule (resolved: symbolic links, Windows junctions and 8.3
      * short names, macOS's NFD names; {@code /} separators; lower case where
      * {@code 'fileignorecase'} is on, Windows and macOS). Autocommand patterns were tried first and cannot match a
@@ -1463,7 +1467,9 @@ final class LuaScripts {
               return hooked[buf] and vim.api.nvim_buf_get_name(buf) or ''
             end
 
-            vim.api.nvim_create_autocmd('BufNew', { group = group, callback = function(ev)
+            -- BufAdd too: :vimgrep makes the buffers of the files it matched while it searches, with
+            -- no BufNew (Neovim 0.12.6), and the jump to one fires only BufAdd before reading it.
+            vim.api.nvim_create_autocmd({ 'BufNew', 'BufAdd' }, { group = group, callback = function(ev)
               check(ev.buf)
             end })
             vim.api.nvim_create_autocmd('BufWipeout', { group = group, callback = function(ev)
