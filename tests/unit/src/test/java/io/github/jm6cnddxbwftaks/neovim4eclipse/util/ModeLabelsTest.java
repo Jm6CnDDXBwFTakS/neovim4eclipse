@@ -93,12 +93,15 @@ class ModeLabelsTest {
         assertEquals("-I-", ModeLabels.text(insert, null, Style.LETTERS));
     }
 
+    /** Letters spell out the name; Short shows Vim's own wording, never the name twice ({@code NORMAL = NORMAL}). */
     @Test
     void theTooltipSaysWhatShortTextMeans() {
         assertEquals("-- VREPLACE --", ModeLabels.tooltip(ModeLabels.of("Rv"), "", Style.FULL));
         assertEquals("-VR- = VREPLACE", ModeLabels.tooltip(ModeLabels.of("Rv"), "", Style.LETTERS));
         assertEquals("-I- rec @q = INSERT, recording @q", ModeLabels.tooltip(ModeLabels.of("i"), "q", Style.LETTERS));
-        assertEquals("(INSERT) = (insert)", ModeLabels.tooltip(ModeLabels.of("niI"), "", Style.SHORT));
+        assertEquals("-- (insert) --", ModeLabels.tooltip(ModeLabels.of("niI"), "", Style.SHORT));
+        assertEquals("-- NORMAL --", ModeLabels.tooltip(ModeLabels.of("n"), "", Style.SHORT));
+        assertEquals("-- INSERT --  recording @q", ModeLabels.tooltip(ModeLabels.of("i"), "q", Style.SHORT));
     }
 
     /** The label is as wide as the widest of these, so it keeps its size; recording widens it. */

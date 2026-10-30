@@ -165,17 +165,23 @@ public final class ModeLabels {
     }
 
     /**
-     * The mode label's tooltip: what the label says in words. Full shows it all already, so its tooltip
-     * repeats the text; Short and Letters add Vim's name: {@code -VR- = VREPLACE},
-     * {@code -I- rec @q = INSERT, recording @q}.
+     * The mode label's tooltip: what the label says in words.
+     * <ul>
+     *   <li>Full shows it all already, so its tooltip repeats the text: {@code -- VREPLACE --}.</li>
+     *   <li>Short is Vim's name without the dashes, so the tooltip is Vim's own wording (Full):
+     *       {@code -- (insert) --} for {@code (INSERT)}. Adding the name, as for Letters, would only
+     *       repeat it ({@code NORMAL = NORMAL}).</li>
+     *   <li>Letters adds Vim's name: {@code -VR- = VREPLACE}, {@code -I- rec @q = INSERT, recording @q}.</li>
+     * </ul>
      */
     public static String tooltip(Label label, String register, Style style) {
-        String shown = text(label, register, style);
-        if (style == Style.FULL) {
-            return shown;
-        }
-        String recording = register == null || register.isEmpty() ? "" : ", recording @" + register;
-        return shown + " = " + label.name() + recording;
+        return switch (style) {
+            case FULL, SHORT -> text(label, register, Style.FULL);
+            case LETTERS -> {
+                String recording = register == null || register.isEmpty() ? "" : ", recording @" + register;
+                yield text(label, register, style) + " = " + label.name() + recording;
+            }
+        };
     }
 
     /**

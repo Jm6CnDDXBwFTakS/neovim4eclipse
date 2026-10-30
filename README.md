@@ -225,7 +225,7 @@ Neovim.
 
 *Mode style* chooses how the mode reads: **Short** without Vim's dashes (`INSERT`, the default),
 **Full** as Vim writes it (`-- INSERT --`, `-- VREPLACE --`, `-- (insert) --` after `Ctrl-O`), or
-**Letters** (`-I-`, `-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip says what the letters mean. The full table is in
+**Letters** (`-I-`, `-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip gives Vim's own wording for Short and says what the letters mean. The full table is in
 [docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
 
 *Statusline width* (characters, default 60) is how wide the statusline is; it is drawn in the

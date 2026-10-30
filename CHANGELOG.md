@@ -48,6 +48,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The status bar's mode reads `INSERT`, `NORMAL`, `VISUAL LINE` by default, without Vim's dashes
+  (the *Short* mode style); hovering it shows Vim's wording (`-- INSERT --`). Choose *Full* in
+  *Preferences → Neovim → Status Bar* to keep `-- INSERT --`.
 - *Preferences → Neovim* groups its settings in two boxes, *Neovim program* (the folder, which
   Neovim it finds, and the help) and *Workbench* (the check boxes); *Preferences → Neovim → Status
   Bar* spaces its rows further apart.
