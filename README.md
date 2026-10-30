@@ -228,8 +228,8 @@ Neovim.
 `-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip says what the letters mean. The full table is in
 [docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
 
-*Statusline width* (characters, default 60) is how wide the statusline is. Neovim fits your
-`'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the
+*Statusline width* (characters, default 60) is how wide the statusline is; it is drawn in the
+editor's fixed-width font, as in Vim. Neovim fits your `'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the
 position to the right. *At most this share of the status bar* (default 40%) keeps room for Eclipse's
 own messages: in a narrow window the statusline gets narrower first.
 
