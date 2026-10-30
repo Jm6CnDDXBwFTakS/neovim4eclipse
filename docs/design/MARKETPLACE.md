@@ -276,8 +276,9 @@ the limits before installing review and report fewer surprises.
 
   ```bash
   NV=$(readlink -f ~/.local/share/neovim4eclipse-plugin/neovim/current)   # its top folder, e.g. nvim-linux-arm64_0.12.6
-  unshare -rm sh -c "mount -t tmpfs tmpfs /opt && mkdir /opt/nvim-linux-arm64 && mount --bind '$NV' /opt/nvim-linux-arm64 &&
-    exec unshare -U --map-user=$(id -u) --map-group=$(id -g) sh -c \"xvfb-run -a -s '-screen 0 1600x1000x24' ./mvnw verify -Pscreenshots -Dnvim.path=/opt/nvim-linux-arm64/bin/nvim\""
+  DIR=/opt/$(basename "$NV" | sed 's/_.*//')   # the release's own name for this machine: nvim-linux-arm64 or nvim-linux-x86_64
+  unshare -rm sh -c "mount -t tmpfs tmpfs /opt && mkdir $DIR && mount --bind '$NV' $DIR &&
+    exec unshare -U --map-user=$(id -u) --map-group=$(id -g) sh -c \"xvfb-run -a -s '-screen 0 1600x1000x24' ./mvnw verify -Pscreenshots -Dnvim.path=$DIR/bin/nvim\""
   ```
 
   The outer `unshare -rm` is root in a new user and mount namespace, which may mount; the inner one

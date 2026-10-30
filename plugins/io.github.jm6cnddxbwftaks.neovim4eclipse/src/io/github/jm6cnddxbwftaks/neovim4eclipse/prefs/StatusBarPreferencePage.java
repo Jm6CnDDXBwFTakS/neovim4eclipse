@@ -60,24 +60,15 @@ public class StatusBarPreferencePage extends FieldEditorPreferencePage implement
     }
 
     /**
-     * Space between the rows, in dialog units (DLUs): a DLU follows the dialog font, so the gap grows
-     * with a larger font or a high-resolution screen, as the rest of the dialog does. A vertical DLU
-     * is an eighth of the font's height: 4 DLUs came out as 10 pixels with Linux's default dialog
-     * font (screenshots, 2026-10-30). SWT's own default is a fixed 5 pixels, which left the check
-     * boxes, the radio group and the number fields crowded together.
-     */
-    private static final int ROW_SPACING_DLUS = 4;
-
-    /**
      * {@link FieldEditorPreferencePage} lays its editors out in a {@link GridLayout} on
      * {@link #getFieldEditorParent()} and sets its columns here, after every editor was added; the
-     * row gap is set at the same place, on the same layout.
+     * row gap ({@link PageLayout#ROW_SPACING_DLUS}) is set at the same place, on the same layout.
      */
     @Override
     protected void adjustGridLayout() {
         super.adjustGridLayout();
         if (getFieldEditorParent().getLayout() instanceof GridLayout layout) {
-            layout.verticalSpacing = convertVerticalDLUsToPixels(ROW_SPACING_DLUS);
+            layout.verticalSpacing = convertVerticalDLUsToPixels(PageLayout.ROW_SPACING_DLUS);
         }
     }
 }

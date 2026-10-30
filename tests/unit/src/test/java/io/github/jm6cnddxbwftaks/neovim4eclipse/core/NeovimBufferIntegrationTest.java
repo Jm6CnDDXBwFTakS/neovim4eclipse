@@ -128,7 +128,8 @@ class NeovimBufferIntegrationTest {
     }
 
     /**
-     * Typing {@code :%s/a/X/g} shows Neovim's {@code 'inccommand'} preview, which Neovim sends as line
+     * Typing {@code :%s/a/X/g} shows Neovim's {@code 'inccommand'} preview ({@code nosplit}, the default,
+     * set by the test itself), which Neovim sends as line
      * events without a changedtick and never takes back. None reaches the document's listeners: not
      * while typing, not after Esc (the buffer is back as it was). After Enter the real change does.
      */
@@ -138,7 +139,7 @@ class NeovimBufferIntegrationTest {
             DocumentBuffer doc = new DocumentBuffer("");
             s.showBuffer(doc);
             s.setBufferLines(List.of("alpha", "beta", "gamma"));
-            assertEquals("nosplit", s.lua("return vim.o.inccommand"), "Neovim's default, which previews");
+            s.lua("vim.o.inccommand = 'nosplit'"); // Neovim's default, set here so the test does not depend on it
             List<BufferChange> changes = new CopyOnWriteArrayList<>();
             s.addBufferChangeListener(changes::add);
 

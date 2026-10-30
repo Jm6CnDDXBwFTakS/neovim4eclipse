@@ -16,8 +16,8 @@ for more room for the text, measured sensibly, and a choice of how the mode read
   items measure theirs; the statusline's width is a preference (default 60), the others follow from
   their content. *(decided)*
 - **A cap**: the labels together take at most a share of the bar (preference, default 40%). *(decided)*
-- **A tooltip** on every label with its whole text, and for the short mode styles what they mean
-  (`-VR- = VREPLACE`). *(decided)*
+- **A tooltip** on every label with its whole text; for Short, Vim's own wording (`-- INSERT --`), for
+  Letters what they mean (`-VR- = VREPLACE`). *(decided)*
 - **A mode style**: Full (`-- INSERT --`), Short (`INSERT`) or Letters (`-I-`), the letters picked one
   by one (section 2). *(decided)* Short is the default *(decided 2026-10-30)*: it reads at a glance and
   takes less of the bar.

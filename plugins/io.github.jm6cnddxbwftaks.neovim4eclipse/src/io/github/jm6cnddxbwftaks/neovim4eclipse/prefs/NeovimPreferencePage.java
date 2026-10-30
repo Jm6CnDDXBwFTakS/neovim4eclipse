@@ -44,12 +44,6 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
     public static final String NEOVIM_FIELD_HELP = "Leave blank to search the default folders, or enter a folder "
             + "that holds Neovim, or a direct path to an nvim executable. <a>How Neovim for Eclipse finds Neovim</a>";
 
-    /** Space between rows inside a group, in dialog units, as on {@link StatusBarPreferencePage}. */
-    private static final int ROW_SPACING_DLUS = 4;
-
-    /** Space between the two groups, in dialog units: a little more than between rows. */
-    private static final int GROUP_SPACING_DLUS = 6;
-
     private Group program;
     private Group workbench;
 
@@ -122,18 +116,26 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
     @Override
     protected void adjustGridLayout() {
         super.adjustGridLayout();
-        GridLayout page = (GridLayout) getFieldEditorParent().getLayout();
+        if (!(getFieldEditorParent().getLayout() instanceof GridLayout page)) {
+            return; // not FieldEditorPreferencePage's grid: leave the page as Eclipse laid it out
+        }
         int columns = page.numColumns;
         page.numColumns = 1;
-        page.verticalSpacing = convertVerticalDLUsToPixels(GROUP_SPACING_DLUS);
+        page.verticalSpacing = convertVerticalDLUsToPixels(PageLayout.GROUP_SPACING_DLUS);
         GridLayout usual = new GridLayout(); // SWT's default margins
         for (Group group : new Group[] { program, workbench }) {
-            GridLayout layout = (GridLayout) group.getLayout();
-            layout.numColumns = columns;
-            layout.marginWidth = usual.marginWidth;
-            layout.marginHeight = usual.marginHeight;
-            layout.verticalSpacing = convertVerticalDLUsToPixels(ROW_SPACING_DLUS);
+            if (group.getLayout() instanceof GridLayout layout) {
+                layout.numColumns = columns;
+                layout.marginWidth = usual.marginWidth;
+                layout.marginHeight = usual.marginHeight;
+                layout.verticalSpacing = convertVerticalDLUsToPixels(PageLayout.ROW_SPACING_DLUS);
+            }
         }
+    }
+
+    /** The two group boxes, top first; for tests. */
+    Group[] groups() {
+        return new Group[] { program, workbench };
     }
 
     @Override
