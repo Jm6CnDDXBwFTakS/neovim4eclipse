@@ -128,6 +128,37 @@ class NeovimBufferIntegrationTest {
     }
 
     /**
+     * Typing {@code :%s/a/X/g} shows Neovim's {@code 'inccommand'} preview, which Neovim sends as line
+     * events without a changedtick and never takes back. None reaches the document's listeners: not
+     * while typing, not after Esc (the buffer is back as it was). After Enter the real change does.
+     */
+    @Test
+    void aSubstitutePreviewIsNotAChange() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            s.showBuffer(doc);
+            s.setBufferLines(List.of("alpha", "beta", "gamma"));
+            assertEquals("nosplit", s.lua("return vim.o.inccommand"), "Neovim's default, which previews");
+            List<BufferChange> changes = new CopyOnWriteArrayList<>();
+            s.addBufferChangeListener(changes::add);
+
+            s.input(":%s/a/X/g");
+            NeovimBarrier.pass(s); // the preview's events would have arrived by now
+            s.input("<BS><BS>");   // a second preview, :%s/a/X
+            NeovimBarrier.pass(s);
+            assertEquals(List.of(), changes, "no change while previewing");
+
+            s.input("<Esc>");
+            NeovimBarrier.pass(s);
+            assertEquals(List.of(), changes, "none after Esc either");
+            assertEquals(List.of("alpha", "beta", "gamma"), s.getBufferLines());
+
+            s.input(":%s/a/X/g<CR>");
+            waitFor(() -> changes.stream().anyMatch(c -> c.newLines().contains("XlphX")), "the substitution itself");
+        }
+    }
+
+    /**
      * A change Neovim makes to a document's buffer clears its "in sync" stamp
      * (DocumentBuffer.syncedStamp), so the next attach pushes the document again; Eclipse's own write
      * does not.
