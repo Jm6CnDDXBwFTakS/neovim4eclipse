@@ -7,6 +7,7 @@ import org.eclipse.jface.preference.BooleanFieldEditor;
 import org.eclipse.jface.preference.FieldEditorPreferencePage;
 import org.eclipse.jface.preference.IntegerFieldEditor;
 import org.eclipse.jface.preference.RadioGroupFieldEditor;
+import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
 
@@ -56,5 +57,27 @@ public class StatusBarPreferencePage extends FieldEditorPreferencePage implement
                 "At most this share of the status bar (%):", getFieldEditorParent());
         share.setValidRange(PreferenceConstants.STATUS_MAX_SHARE_MIN, PreferenceConstants.STATUS_MAX_SHARE_MAX);
         addField(share);
+    }
+
+    /**
+     * Space between the rows, in dialog units (DLUs): a DLU follows the dialog font, so the gap grows
+     * with a larger font or a high-resolution screen, as the rest of the dialog does. A vertical DLU
+     * is an eighth of the font's height: 4 DLUs came out as 10 pixels with Linux's default dialog
+     * font (screenshots, 2026-10-30). SWT's own default is a fixed 5 pixels, which left the check
+     * boxes, the radio group and the number fields crowded together.
+     */
+    private static final int ROW_SPACING_DLUS = 4;
+
+    /**
+     * {@link FieldEditorPreferencePage} lays its editors out in a {@link GridLayout} on
+     * {@link #getFieldEditorParent()} and sets its columns here, after every editor was added; the
+     * row gap is set at the same place, on the same layout.
+     */
+    @Override
+    protected void adjustGridLayout() {
+        super.adjustGridLayout();
+        if (getFieldEditorParent().getLayout() instanceof GridLayout layout) {
+            layout.verticalSpacing = convertVerticalDLUsToPixels(ROW_SPACING_DLUS);
+        }
     }
 }
