@@ -54,6 +54,33 @@ t.test('gf into a project file: read without filetype, undo step or swap file; i
   t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4], 'the file, for Eclipse to open its editor')
 end)
 
+-- :vimgrep makes the buffers of the files it matched while it searches, without BufNew, and its
+-- jump into one fires only BufAdd before the read (Neovim 0.12.6). Found on macOS 2026-10-30: the
+-- buffers had no hook, and Eclipse opened no editor. What the hook cannot prevent: to search a file,
+-- :vimgrep loads it itself, filetype detection included, so the matched buffers keep a filetype; and
+-- the first match stays loaded from that search. A later jump (:cnext) is read by the hook. Both go
+-- to Eclipse to open their editors.
+t.test(':vimgrep and :cnext into project files: Eclipse gets each file; :cnext reads by the hook', function()
+  local root = project()
+  vim.cmd.edit(vim.fn.fnameescape(file(root, 'src', 'A.java')))
+  vim.cmd.lcd(vim.fn.fnameescape(root))
+  vim.cmd.bwipeout() -- start with no buffer of either file, as after a fresh start
+  t.forget()
+  vim.cmd('silent vimgrep /B/ src/*.java')
+  local a = vim.api.nvim_get_current_buf()
+  t.same_file(file(root, 'src', 'A.java'), vim.api.nvim_buf_get_name(a))
+  local entered = t.sent('eclipse_buf_enter')
+  t.eq(vim.api.nvim_buf_get_name(a), entered[#entered][4], 'the first match\'s file, for Eclipse to open its editor')
+
+  local seen = reads()
+  vim.cmd('silent cnext')
+  local b = vim.api.nvim_get_current_buf()
+  t.same_file(file(root, 'src', 'B.java'), vim.api.nvim_buf_get_name(b))
+  t.eq({}, seen, ':cnext: read by the hook, no BufReadPre, BufReadPost or FileType')
+  entered = t.sent('eclipse_buf_enter')
+  t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4], 'its file, for Eclipse to open its editor')
+end)
+
 t.test('a file outside the projects, and one in a folder whose name starts the same, are Neovim\'s to read', function()
   local root = project()
   local sibling = root .. '2'

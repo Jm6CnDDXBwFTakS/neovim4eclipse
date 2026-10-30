@@ -573,7 +573,10 @@ your filetype plugins (and language servers they may start) do not run in the em
 holds for a project's file Neovim reaches by itself too (`gf`, `'A`, a quickfix entry): the plug-in
 reads it for Neovim, without filetype detection, and Eclipse opens its editor. A file outside the
 open projects is read by Neovim as usual, and gets its filetype
-([docs/design/BUFFER_NUMBERS.md](docs/design/BUFFER_NUMBERS.md)).
+([docs/design/BUFFER_NUMBERS.md](docs/design/BUFFER_NUMBERS.md)). One exception: to search files,
+`:vimgrep` reads them itself, filetype detection included, so the files it matched get their
+filetype (and a language server started from `FileType` may attach to its first match) before
+Eclipse opens their editors.
 
 ## Macros (`q`)
 
