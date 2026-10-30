@@ -109,6 +109,8 @@ public final class IdeKeys {
     public static final String QUICK_ASSIST = "org.eclipse.jdt.ui.edit.text.java.correction.assist.proposals";
     /** Show Tooltip Description (F2): {@code ITextEditorActionDefinitionIds.SHOW_INFORMATION}. */
     public static final String SHOW_INFORMATION = "org.eclipse.ui.edit.text.showInformation";
+    /** Open Hyperlink, the Generic Editor's F3: {@code ITextEditorActionDefinitionIds.OPEN_HYPERLINK}. */
+    public static final String OPEN_HYPERLINK = "org.eclipse.ui.edit.text.open.hyperlink";
 
     /**
      * The actions carried out by an Eclipse command, by {@link IdeAction} name. The tab, history and
@@ -174,5 +176,124 @@ public final class IdeKeys {
             args.add(key.description());
         }
         return args;
+    }
+
+    // ---- choosing and running: the one loop, over a port ----------------------------------------
+
+    /**
+     * What {@link #pick} needs from the editor an action runs in: the port between the decision (here,
+     * pure, unit-tested with a fake) and Eclipse ({@code editor/IdeActions}, which implements it).
+     * UI thread in Eclipse.
+     */
+    public interface Editor {
+
+        /** The id of the command Eclipse key {@code eclipseKey} runs in this editor now, or {@code null}. */
+        String commandBoundTo(String eclipseKey);
+
+        /** Whether command {@code id} exists and can run in this editor now. */
+        boolean runsHere(String id);
+
+        /**
+         * Runs command {@code id}. {@code false} when it did not run after all (Eclipse says it is not
+         * handled or not enabled now): the next way is tried. {@code true} when it ran, or failed
+         * while running (the editor shows that failure itself).
+         */
+        boolean execute(String id);
+
+        /** Whether the Generic Editor's detectors find a link at the caret (for {@link #OPEN_HYPERLINK}). */
+        boolean anyLinkAt();
+
+        /** Whether the hyperlink detector {@code detectorId} finds a link at the caret. */
+        boolean linkAt(String detectorId);
+
+        /** Opens the first link the detector {@code detectorId} finds at the caret; whether there was one. */
+        boolean openLink(String detectorId);
+    }
+
+    /**
+     * What an action did, or would do, in an editor: run a command ({@code value} its id), open a link
+     * ({@code value} the detector's id), run Neovim's own keys, or show a message.
+     */
+    public record Choice(Kind kind, String value) {
+
+        /** See {@link Choice}. */
+        public enum Kind { COMMAND, LINK, NEOVIM, MESSAGE }
+    }
+
+    /**
+     * Goes through {@code command}'s ways in order, running the first that finds something here; else
+     * Neovim's own keys ({@code gd}), or the message {@code grn: Rename is not available in this
+     * editor}. A command that {@link Editor#runsHere} but then does not run ({@link Editor#execute}
+     * says {@code false}: its handler was disabled meanwhile) passes to the next way, so {@code gd}
+     * still ends in Neovim's {@code gd}. Open Hyperlink (the Generic Editor's F3) counts only with a
+     * link at the caret. The caller does the {@code NEOVIM} and {@code MESSAGE} choices; a
+     * {@code COMMAND} or {@code LINK} choice has run.
+     *
+     * <p>Example, {@code gd} in the plain Text Editor: F3 runs no command there, so the answer is
+     * {@code NEOVIM "gd"}. In the Java editor, F3's Open Declaration runs: {@code COMMAND} with its id.
+     *
+     * @param action the {@link IdeAction} name, for the key in the message
+     */
+    public static Choice pick(String action, Command command, Editor editor) {
+        for (Way way : command.ways()) {
+            switch (way.kind()) {
+                case BOUND_TO, COMMAND -> {
+                    String id = way.kind() == Way.Kind.COMMAND ? way.value() : editor.commandBoundTo(way.value());
+                    boolean noLinkHere = OPEN_HYPERLINK.equals(id) && !editor.anyLinkAt();
+                    if (id != null && !noLinkHere && editor.runsHere(id) && editor.execute(id)) {
+                        return new Choice(Choice.Kind.COMMAND, id);
+                    }
+                }
+                case HYPERLINK -> {
+                    if (editor.openLink(way.value())) {
+                        return new Choice(Choice.Kind.LINK, way.value());
+                    }
+                }
+            }
+        }
+        if (!command.neovimKeys().isEmpty()) {
+            return new Choice(Choice.Kind.NEOVIM, command.neovimKeys());
+        }
+        return new Choice(Choice.Kind.MESSAGE,
+                keyOf(action).orElse(action) + ": " + command.label() + " is not available in this editor");
+    }
+
+    /**
+     * {@code editor} as {@link #pick} sees it when nothing may run: a command that runs here counts as
+     * run, a link found counts as opened. {@code pick(action, command, dryRun(editor))} tells what an
+     * action would do, for tests, through the same loop as the real run.
+     */
+    public static Editor dryRun(Editor editor) {
+        return new Editor() {
+            @Override
+            public String commandBoundTo(String eclipseKey) {
+                return editor.commandBoundTo(eclipseKey);
+            }
+
+            @Override
+            public boolean runsHere(String id) {
+                return editor.runsHere(id);
+            }
+
+            @Override
+            public boolean execute(String id) {
+                return true;
+            }
+
+            @Override
+            public boolean anyLinkAt() {
+                return editor.anyLinkAt();
+            }
+
+            @Override
+            public boolean linkAt(String detectorId) {
+                return editor.linkAt(detectorId);
+            }
+
+            @Override
+            public boolean openLink(String detectorId) {
+                return editor.linkAt(detectorId);
+            }
+        };
     }
 }

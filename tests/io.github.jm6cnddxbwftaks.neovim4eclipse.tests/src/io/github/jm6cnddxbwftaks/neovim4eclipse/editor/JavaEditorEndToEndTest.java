@@ -866,14 +866,14 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
             """;
 
     /** What an IDE key would run with the caret at {@code offset}, without running it. */
-    private IdeActions.Choice choiceAt(String action, int offset) {
+    private IdeKeys.Choice choiceAt(String action, int offset) {
         caretTo(offset);
         return IdeActions.choose(action, javaEditor, javaEditor.getAdapter(org.eclipse.jface.text.ITextViewer.class),
                 offset);
     }
 
-    private static IdeActions.Choice command(String id) {
-        return new IdeActions.Choice(IdeActions.Choice.Kind.COMMAND, id);
+    private static IdeKeys.Choice command(String id) {
+        return new IdeKeys.Choice(IdeKeys.Choice.Kind.COMMAND, id);
     }
 
     /**
@@ -894,10 +894,10 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         assertEquals(command("org.eclipse.jdt.ui.edit.text.java.open.implementation"),
                 choiceAt(IdeAction.IMPLEMENTATION, call));
         assertEquals(command("org.eclipse.jdt.ui.edit.text.java.show.outline"), choiceAt(IdeAction.OUTLINE, call));
-        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.LINK,
+        assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.LINK,
                 "org.eclipse.jdt.internal.ui.javaeditor.JavaElementHyperlinkDeclaredTypeDetector"),
                 choiceAt(IdeAction.TYPE_DEFINITION, javaText().indexOf("s.length")));
-        assertEquals(new IdeActions.Choice(IdeActions.Choice.Kind.MESSAGE,
+        assertEquals(new IdeKeys.Choice(IdeKeys.Choice.Kind.MESSAGE,
                 "grt: Open Declared Type is not available in this editor"),
                 choiceAt(IdeAction.TYPE_DEFINITION, javaText().indexOf("class A")));
     }

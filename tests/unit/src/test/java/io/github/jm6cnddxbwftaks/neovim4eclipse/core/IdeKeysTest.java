@@ -98,4 +98,146 @@ class IdeKeysTest {
         int gra = args.indexOf("gra");
         assertEquals(List.of("gra", "nx", "quick_fix", "Quick Fix"), args.subList(gra, gra + 4));
     }
+
+    // ---- pick: the one loop, with a fake editor (no Eclipse, no waiting) ----
+
+    /**
+     * An editor whose answers the test sets: which command each Eclipse key runs, which commands can
+     * run, which of those then fail to run (disabled between the check and the run), and which
+     * detectors find a link. Records what ran.
+     */
+    private static final class FakeEditor implements IdeKeys.Editor {
+        final java.util.Map<String, String> bound = new java.util.HashMap<>();
+        final Set<String> runnable = new HashSet<>();
+        final Set<String> failOnRun = new HashSet<>();
+        final Set<String> links = new HashSet<>();
+        boolean anyLink;
+        final List<String> ran = new java.util.ArrayList<>();
+
+        @Override
+        public String commandBoundTo(String eclipseKey) {
+            return bound.get(eclipseKey);
+        }
+
+        @Override
+        public boolean runsHere(String id) {
+            return runnable.contains(id);
+        }
+
+        @Override
+        public boolean execute(String id) {
+            if (failOnRun.contains(id)) {
+                return false;
+            }
+            ran.add(id);
+            return true;
+        }
+
+        @Override
+        public boolean anyLinkAt() {
+            return anyLink;
+        }
+
+        @Override
+        public boolean linkAt(String detectorId) {
+            return links.contains(detectorId);
+        }
+
+        @Override
+        public boolean openLink(String detectorId) {
+            if (links.contains(detectorId)) {
+                ran.add("link " + detectorId);
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private static IdeKeys.Choice pick(String action, IdeKeys.Editor editor) {
+        return IdeKeys.pick(action, IdeKeys.COMMANDS.get(action), editor);
+    }
+
+    private static IdeKeys.Choice choice(IdeKeys.Choice.Kind kind, String value) {
+        return new IdeKeys.Choice(kind, value);
+    }
+
+    @Test
+    void theCommandBoundToTheKeyRuns() {
+        FakeEditor java = new FakeEditor();
+        java.bound.put("F3", "jdt.open");
+        java.runnable.add("jdt.open");
+        assertEquals(choice(IdeKeys.Choice.Kind.COMMAND, "jdt.open"), pick(IdeAction.DEFINITION, java));
+        assertEquals(List.of("jdt.open"), java.ran);
+    }
+
+    @Test
+    void gdIsNeovimsWhereNoCommandRuns() {
+        FakeEditor text = new FakeEditor(); // F3 bound to nothing
+        assertEquals(choice(IdeKeys.Choice.Kind.NEOVIM, "gd"), pick(IdeAction.DEFINITION, text));
+        FakeEditor other = new FakeEditor(); // bound, but another plug-in's command, not handled here
+        other.bound.put("F3", "other.open");
+        assertEquals(choice(IdeKeys.Choice.Kind.NEOVIM, "gd"), pick(IdeAction.DEFINITION, other));
+        assertEquals(List.of(), other.ran);
+    }
+
+    @Test
+    void aCommandThatFailsToRunAfterTheCheckPassesToTheFallback() {
+        // runsHere said yes, then execute said no (its handler was disabled meanwhile): gd is Neovim's,
+        // grn says it is not available, as when the check had said no.
+        FakeEditor java = new FakeEditor();
+        java.bound.put("F3", "jdt.open");
+        java.bound.put("M2+M3+R", "jdt.rename");
+        java.runnable.addAll(Set.of("jdt.open", "jdt.rename"));
+        java.failOnRun.addAll(Set.of("jdt.open", "jdt.rename"));
+        assertEquals(choice(IdeKeys.Choice.Kind.NEOVIM, "gd"), pick(IdeAction.DEFINITION, java));
+        assertEquals(choice(IdeKeys.Choice.Kind.MESSAGE, "grn: Rename is not available in this editor"),
+                pick(IdeAction.RENAME, java));
+        assertEquals(List.of(), java.ran);
+    }
+
+    @Test
+    void aCommandThatFailsToRunPassesToTheNextWay() {
+        IdeKeys.Command twoWays = new IdeKeys.Command("Open Declaration",
+                List.of(IdeKeys.Way.command("first"), IdeKeys.Way.command("second")), "gd");
+        FakeEditor editor = new FakeEditor();
+        editor.runnable.addAll(Set.of("first", "second"));
+        editor.failOnRun.add("first");
+        assertEquals(choice(IdeKeys.Choice.Kind.COMMAND, "second"), IdeKeys.pick(IdeAction.DEFINITION, twoWays, editor));
+        assertEquals(List.of("second"), editor.ran);
+    }
+
+    @Test
+    void openHyperlinkCountsOnlyWithALinkAtTheCaret() {
+        // The Generic Editor binds F3 to Open Hyperlink: a Language Server file's definition, or nothing.
+        FakeEditor generic = new FakeEditor();
+        generic.bound.put("F3", IdeKeys.OPEN_HYPERLINK);
+        generic.runnable.add(IdeKeys.OPEN_HYPERLINK);
+        assertEquals(choice(IdeKeys.Choice.Kind.NEOVIM, "gd"), pick(IdeAction.DEFINITION, generic), "a plain .txt word");
+        generic.anyLink = true;
+        assertEquals(choice(IdeKeys.Choice.Kind.COMMAND, IdeKeys.OPEN_HYPERLINK), pick(IdeAction.DEFINITION, generic));
+    }
+
+    @Test
+    void grtOpensTheDetectorsLinkElseSaysSo() {
+        String detector = IdeKeys.COMMANDS.get(IdeAction.TYPE_DEFINITION).ways().get(0).value();
+        FakeEditor java = new FakeEditor();
+        assertEquals(choice(IdeKeys.Choice.Kind.MESSAGE, "grt: Open Declared Type is not available in this editor"),
+                pick(IdeAction.TYPE_DEFINITION, java), "no link: a keyword");
+        java.links.add(detector);
+        assertEquals(choice(IdeKeys.Choice.Kind.LINK, detector), pick(IdeAction.TYPE_DEFINITION, java));
+        assertEquals(List.of("link " + detector), java.ran);
+    }
+
+    @Test
+    void aDryRunRunsNothingAndAnswersAsTheRunWould() {
+        FakeEditor java = new FakeEditor();
+        java.bound.put("M2+M3+R", "jdt.rename");
+        java.runnable.add("jdt.rename");
+        String detector = IdeKeys.COMMANDS.get(IdeAction.TYPE_DEFINITION).ways().get(0).value();
+        java.links.add(detector);
+        IdeKeys.Editor dry = IdeKeys.dryRun(java);
+        assertEquals(choice(IdeKeys.Choice.Kind.COMMAND, "jdt.rename"), pick(IdeAction.RENAME, dry));
+        assertEquals(choice(IdeKeys.Choice.Kind.LINK, detector), pick(IdeAction.TYPE_DEFINITION, dry));
+        assertEquals(List.of(), java.ran, "nothing ran, nothing opened");
+    }
 }
