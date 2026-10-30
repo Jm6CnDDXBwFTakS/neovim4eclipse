@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -113,17 +112,7 @@ final class ProjectFileEditors {
         } catch (InvalidPathException e) {
             return null;
         }
-        IFile found = existing(path);
-        if (found == null) {
-            try {
-                Path real = path.toRealPath();
-                if (!real.equals(path)) {
-                    found = existing(real);
-                }
-            } catch (IOException e) {
-                LOG.log(Level.FINE, "No real path for " + name, e);
-            }
-        }
+        IFile found = existing(path); // links resolved by the one lookup, NewFiles.workspaceFileAt
         if (found == null) {
             LOG.fine(() -> "Not a file of an open project: " + name);
         }

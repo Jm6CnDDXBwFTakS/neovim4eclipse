@@ -38,6 +38,7 @@ import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.IDocumentProviderExtension;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
 /**
@@ -97,8 +98,29 @@ final class NewFiles {
      *
      * <p>Needed because a new file's editor is opened by location (see the class comment), so its
      * input does not adapt to {@code IFile}; this finds the project it belongs to anyway.
+     *
+     * <p><b>The one lookup of a path's workspace file</b>, for every caller ({@code :e}, a file
+     * Neovim moved into, a new file's project): the path as given first, then with its links resolved
+     * ({@link FilePaths#resolved}, {@link java.nio.file.Path#toRealPath}). Eclipse's own lookup
+     * already canonicalizes the location ({@code File.getCanonicalPath}: symbolic links on Linux and
+     * macOS, case and 8.3 short names on Windows; checked 2026-10-29, a link on Linux needs no retry),
+     * but that leaves out Windows junctions, which {@code toRealPath} resolves. Example: with
+     * {@code C:\work} a junction to {@code C:\ws}, {@code C:\work\proj\A.java} gives
+     * {@code /proj/A.java}. Case needs nothing here: Eclipse's local file system ignores it on Windows
+     * and macOS itself.
      */
     static IFile workspaceFileAt(Path path) {
+        IFile file = inOpenProject(path);
+        if (file == null) {
+            Path real = FilePaths.resolved(path);
+            if (!real.equals(path)) {
+                file = inOpenProject(real);
+            }
+        }
+        return file;
+    }
+
+    private static IFile inOpenProject(Path path) {
         for (IFile file : ResourcesPlugin.getWorkspace().getRoot().findFilesForLocationURI(path.toUri())) {
             if (file.getProject().isAccessible()) {
                 return file;

@@ -61,4 +61,15 @@ class EditPathTest {
         assertEquals(outside.toString(), EditPath.shown(outside, HOME, PROJECT));
         assertEquals(PROJECT.resolve("x").toString(), EditPath.shown(PROJECT.resolve("x"), HOME, null), "no folder: in full");
     }
+
+    @Test
+    void aFolderInOtherCaseStillShortensTheNameWhereNamesIgnoreCase() {
+        // macOS's rule (FilePaths): /ws/App and /ws/app are one folder; the part shown keeps its case.
+        FilePaths.Platform macos = new FilePaths.Platform(false, true, path -> path);
+        assertEquals(Path.of("src/A.java").toString(),
+                EditPath.shown(Path.of("/ws/app/src/A.java"), Path.of("/home/u"), Path.of("/ws/App"), macos));
+        FilePaths.Platform linux = new FilePaths.Platform(false, false, path -> path);
+        assertEquals(Path.of("/ws/app/src/A.java").toString(),
+                EditPath.shown(Path.of("/ws/app/src/A.java"), Path.of("/home/u"), Path.of("/ws/App"), linux), "Linux keeps case");
+    }
 }
