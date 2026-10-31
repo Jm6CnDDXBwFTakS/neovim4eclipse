@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -460,6 +462,100 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
             	}
             }
             """;
+
+    /**
+     * A language server that does nothing, written in Lua inside Neovim, enabled for Java as a
+     * user's config would enable jdtls: it answers only {@code initialize} and {@code shutdown},
+     * which is all Neovim needs to count it as attached. The same as the manual tests' init.lua.
+     * Also records every {@code FileType} event in {@code _G.n4e_test_filetypes}.
+     */
+    private static final String TINY_SERVER = """
+            local function tiny_server(dispatchers)
+              local closing, next_id = false, 0
+              return {
+                request = function(method, _, callback)
+                  next_id = next_id + 1
+                  if method == 'initialize' then
+                    callback(nil, { capabilities = {}, serverInfo = { name = 'n4e_tiny' } })
+                  elseif method == 'shutdown' then
+                    callback(nil, nil)
+                  end
+                  return true, next_id
+                end,
+                notify = function(method)
+                  if method == 'exit' then dispatchers.on_exit(0, 15) end
+                  return true
+                end,
+                is_closing = function() return closing end,
+                terminate = function() closing = true end,
+              }
+            end
+            vim.lsp.config('n4e_tiny', { cmd = tiny_server, filetypes = { 'java' } })
+            vim.lsp.enable('n4e_tiny')
+            _G.n4e_test_filetypes = {}
+            vim.api.nvim_create_augroup('n4e_test_filetypes', { clear = true })
+            vim.api.nvim_create_autocmd('FileType', { group = 'n4e_test_filetypes', callback = function(ev)
+              table.insert(_G.n4e_test_filetypes, vim.fn.fnamemodify(ev.file, ':t'))
+            end })
+            return 0""";
+
+    /** Undoes {@link #TINY_SERVER}: one Neovim serves every test. */
+    private static final String NO_TINY_SERVER = """
+            vim.lsp.enable('n4e_tiny', false)
+            for _, client in ipairs(vim.lsp.get_clients({ name = 'n4e_tiny' })) do client:stop(true) end
+            pcall(vim.api.nvim_del_augroup_by_name, 'n4e_test_filetypes')
+            if _G.n4e_test_control then pcall(vim.api.nvim_buf_delete, _G.n4e_test_control, { force = true }) end
+            _G.n4e_test_control = nil
+            return 0""";
+
+    /**
+     * {@code gf} from one Java file onto another that has no editor opens it in Eclipse's Java
+     * editor, and Neovim never reads it itself: no {@code FileType} event, so the language server
+     * enabled for Java does not attach, and no indent script is set (Eclipse indents). That is why
+     * the plug-in reads project files for Neovim: a user's jdtls would otherwise start a second Java
+     * server inside Eclipse. The control: the same server attaches to a Java file outside the
+     * projects, which Neovim reads itself. The manual test "gf between Java files, with a language
+     * server in your config".
+     */
+    @Test
+    void gfOntoAJavaFileOpensTheJavaEditorWithNoLanguageServer() throws Exception {
+        createFile("src/p/Bar.java", "package p;\nclass Bar {}\n");
+        Path outside = Files.createTempDirectory("n4e-java").resolve("Control.java");
+        ITextEditor bar = null;
+        SessionProbe.lua(session, TINY_SERVER);
+        try {
+            SessionProbe.lua(session, """
+                    local buf = vim.fn.bufadd(FILE)
+                    vim.fn.bufload(buf)
+                    _G.n4e_test_control = buf
+                    vim.bo[buf].filetype = 'java'
+                    return 0""".replace("FILE", "'" + outside.toString().replace("\\", "\\\\").replace("'", "\\'") + "'"));
+            waitUntil("the server attached to a Java file Neovim read itself", TIMEOUT_MS, () -> ((Number) SessionProbe.lua(session,
+                    "return #vim.lsp.get_clients({ bufnr = _G.n4e_test_control, name = 'n4e_tiny' })")).intValue() == 1);
+            openJava("Foo.java", "package p;\n// see Bar.java\nclass Foo {}\n");
+
+            session.inputAsync("2G0fBgf");
+
+            waitUntil("Bar.java's editor", TIMEOUT_MS, () -> page().getActiveEditor() != null
+                    && "Bar.java".equals(page().getActiveEditor().getTitle()));
+            bar = (ITextEditor) page().getActiveEditor();
+            assertEquals(JAVA_EDITOR, bar.getSite().getId(), "Eclipse's Java editor");
+            waitForAttach(bar, "Bar.java");
+            assertEquals(0, ((Number) SessionProbe.lua(session, "return #vim.lsp.get_clients({ bufnr = 0 })")).intValue(),
+                    "no language server on Bar.java");
+            assertEquals("", SessionProbe.lua(session, "return vim.bo.filetype"));
+            assertEquals("", SessionProbe.lua(session, "return vim.bo.indentexpr"), "Eclipse indents, not Vim's Java script");
+            assertFalse(String.valueOf(SessionProbe.lua(session, "return table.concat(_G.n4e_test_filetypes, ',')"))
+                    .contains("Bar.java"), "no FileType event for Bar.java");
+        } finally {
+            if (bar != null) {
+                page().closeEditor(bar, false);
+            }
+            SessionProbe.lua(session, NO_TINY_SERVER);
+            Files.deleteIfExists(outside);
+            Files.deleteIfExists(outside.getParent());
+        }
+    }
 
     /** {@code gd} on a call is Open Declaration (F3): the caret goes to the method's declaration. */
     @Test
