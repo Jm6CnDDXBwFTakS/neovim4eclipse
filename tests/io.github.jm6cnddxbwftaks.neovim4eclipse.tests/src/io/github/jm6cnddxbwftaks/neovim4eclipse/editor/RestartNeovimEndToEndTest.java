@@ -107,6 +107,11 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
      * The editor does not scroll. The new Neovim's buffer reported its cursor on line 1 before the
      * cursor was placed at the caret; the caret went there and back, and Eclipse left the caret's
      * line at the bottom of the editor (DocumentPush, "The caret stays put meanwhile").
+     *
+     * <p>The old Neovim must agree on the view before the restart: the caret's move makes it jump to
+     * line 151 and centre it (top line 140, Eclipse's 139), and the editor's scroll then makes it 141.
+     * Waiting for the UI alone sometimes left the first answer applied last, so the editor was at 139
+     * before the restart, which kept it there (found 2026-10-31: about 1 run in 40 on two cores).
      */
     @Test
     void aRestartLeavesTheCaretAndTheScrollPositionAlone() {
@@ -117,8 +122,15 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
         document.set(text.toString());
         settle();
         widget.setCaretOffset(widget.getOffsetAtLine(150));
+        waitUntil("the old Neovim's cursor on the caret's line", TIMEOUT_MS,
+                () -> "151".equals(eval(session, "line('.')")));
+        UiTestSupport.settle(session, TIMEOUT_MS); // its jump's top line applied before the scroll below
         widget.setTopIndex(140);
-        settle();
+        waitUntil("the old Neovim and the editor at the same top line", TIMEOUT_MS,
+                () -> widget.getTopIndex() == 140 && "141".equals(eval(session, "line('w0')")),
+                () -> "; the editor's " + widget.getTopIndex() + ", Neovim's " + eval(session, "line('w0')"));
+        UiTestSupport.settle(session, TIMEOUT_MS);
+        assertEquals(140, widget.getTopIndex(), "the view before the restart");
         List<Integer> caretLines = new java.util.concurrent.CopyOnWriteArrayList<>();
         widget.addCaretListener(e -> caretLines.add(widget.getLineAtOffset(e.caretOffset)));
 
