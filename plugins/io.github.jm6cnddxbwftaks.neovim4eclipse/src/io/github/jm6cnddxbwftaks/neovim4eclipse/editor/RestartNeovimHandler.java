@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.List;
+
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.jface.dialogs.MessageDialog;
@@ -10,6 +12,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 
 /**
  * Command "Neovim: Restart Neovim" (<em>Neovim → Restart Neovim...</em>, or Quick Access): asks
@@ -41,25 +44,23 @@ public final class RestartNeovimHandler extends AbstractHandler {
     static final String TITLE = "Restart Neovim";
 
     /**
-     * The question. Example of what it guards: {@code :set list} typed an hour ago, or the undo
-     * history of a long edit, which the new Neovim does not have.
+     * The question, laid out by {@link HeadedMessageDialog} as the welcome is: what is lost and what
+     * is kept, each a headed point. Example of what it guards: {@code :set list} typed an hour ago,
+     * or the undo history of a long edit, which the new Neovim does not have.
      */
-    static final String QUESTION = """
-            Stop Neovim and start a new one?
-
-            Lost: the undo history, and anything set by hand since Neovim started \
-            (:set, :map, :let) that your init.lua does not set.
-
-            Kept: the text of every editor, unsaved changes included. Registers, marks \
-            and history come back from Neovim's ShaDa file, as after quitting Neovim \
-            in a terminal.
-
-            Use it after changing your init.lua.""";
+    static final HeadedMessage QUESTION = new HeadedMessage(
+            "Stop Neovim and start a new one?\nThis also reloads your init.lua.",
+            List.of(new HeadedMessage.Point("Lost", "The undo history, and anything set by hand since Neovim "
+                    + "started (:set, :map, :let) that your init.lua does not set."),
+                    new HeadedMessage.Point("Kept", "The text of every editor, unsaved changes included. "
+                            + "Registers, marks and history come back from Neovim's ShaDa file, as after "
+                            + "quitting Neovim in a terminal.")),
+            ""); // no closing line: the reload is said first, under the question
 
     @Override
     public Object execute(ExecutionEvent event) {
         Shell shell = HandlerUtil.getActiveShell(event);
-        MessageDialog dialog = new MessageDialog(shell, TITLE, null, QUESTION, MessageDialog.QUESTION,
+        MessageDialog dialog = new HeadedMessageDialog(shell, TITLE, MessageDialog.QUESTION, QUESTION,
                 1, "&Restart", "Cancel"); // Cancel is the default button: Enter does not lose state
         if (dialog.open() == 0) {
             Activator.getDefault().restartNeovim();

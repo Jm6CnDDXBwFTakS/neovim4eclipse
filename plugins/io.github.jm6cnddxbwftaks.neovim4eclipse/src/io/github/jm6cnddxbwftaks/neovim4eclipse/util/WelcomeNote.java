@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import java.util.List;
+
 /**
  * Decides whether to greet the user when Neovim first starts in an editor, and what to say: the
  * part of {@code editor/WelcomeNotice} that needs no Eclipse, so that it is unit-tested. The
@@ -52,6 +54,14 @@ public final class WelcomeNote {
      */
     public static final String DEFAULT_TOGGLE_SEQUENCE = "M1+M2+M";
 
+    /**
+     * Menu paths as the notes write them: the parts joined by {@code ›} with no-break spaces around
+     * it, so a wrapping line never splits a path ("Preferences ›" at a line's end, "Neovim" on the
+     * next, as the update note did on Linux).
+     */
+    static final String MENU_PATH_PREFERENCES = "Preferences\u00A0\u203A\u00A0Neovim";
+    static final String MENU_PATH_WELCOME = "Neovim\u00A0\u203A\u00A0Welcome";
+
     /** The README, opened by the welcome's Documentation button. */
     public static final String DOCUMENTATION_URL = "https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#readme";
 
@@ -94,30 +104,36 @@ public final class WelcomeNote {
     }
 
     /**
-     * The welcome text. For example, with the default key binding on Linux:
-     *
-     * <pre>
-     * Neovim now handles the keys in this editor: a real Neovim edits the file you see, ...
-     *
-     * - Turn it off and on with Ctrl+Shift+M, the Neovim toolbar button or Quick Access (Ctrl+3) ...
-     * </pre>
+     * The welcome's parts, which {@code editor/HeadedMessageDialog} lays out. For example, with the default key binding on Linux, the first point is
+     * "Enable, Disable" with "Ctrl+Shift+M, the Neovim toolbar button, or Quick Access ...".
      *
      * @param toggleKey the toggle command's key binding as Eclipse formats it ({@code "Ctrl+Shift+M"},
      *                  on macOS {@code "⇧⌘M"}), or {@code null} / empty if the user removed it
      */
-    public static String welcomeMessage(String toggleKey) {
+    public static HeadedMessage welcome(String toggleKey) {
+        String ways = "the Neovim toolbar button, or Quick Access (search \"Toggle Neovim\")";
         String toggle = toggleKey == null || toggleKey.isBlank()
-                ? "the Neovim toolbar button or Quick Access (search \"Toggle Neovim\")"
-                : toggleKey + ", the Neovim toolbar button or Quick Access (search \"Toggle Neovim\")";
-        return "Neovim now handles the keys in this editor: a real Neovim, with your own init.lua, "
-                + "edits the file you see. Eclipse still owns files, content assist and its own commands.\n\n"
-                + "- Turn it off and on with " + toggle + ". Off, the editor uses Eclipse's own keys.\n"
-                + "- gd and K use Eclipse's Open Declaration and hover; :w, :q, :e and gt act on Eclipse's "
-                + "editors; the \"+ register is the system clipboard.\n"
-                + "- Preferences > Neovim: the path to nvim, the toolbar button and menu, and on Ctrl Keys, "
-                + "which Ctrl+letter keys go to Neovim and which stay Eclipse's.\n\n"
-                + "The Neovim menu's Welcome entry shows this again. Documentation and known limitations "
-                + "are on the project page.";
+                ? Character.toUpperCase(ways.charAt(0)) + ways.substring(1)
+                : toggleKey + ", " + ways;
+        return new HeadedMessage(
+                "Neovim now handles the keys in this editor: a real Neovim, with your own init.lua, edits "
+                        + "the file you see. Eclipse still owns files, content assist and its own commands.",
+                List.of(new HeadedMessage.Point("Enable, Disable",
+                        toggle + ". Off, the editor uses Eclipse's own keys."),
+                        new HeadedMessage.Point("Eclipse Actions",
+                                "gd and K use Eclipse's Open Declaration and hover. :w, :q, :e and gt act on "
+                                        + "Eclipse's editors. The \"+ register is the system clipboard."),
+                        new HeadedMessage.Point("Settings",
+                                MENU_PATH_PREFERENCES + ": where nvim is, the toolbar button and the menu, the "
+                                        + "status bar. On Ctrl Keys: which Ctrl+letter keys go to Neovim and "
+                                        + "which stay Eclipse's.")),
+                MENU_PATH_WELCOME + " shows this again. Documentation and known limitations are on the "
+                        + "project page.");
+    }
+
+    /** The welcome as one text ({@link HeadedMessage#plain()}). */
+    public static String welcomeMessage(String toggleKey) {
+        return welcome(toggleKey).plain();
     }
 
     /**
@@ -129,7 +145,7 @@ public final class WelcomeNote {
     public static String updatedMessage(String runningVersion) {
         return "Neovim for Eclipse was updated to " + releaseVersion(runningVersion) + ".\n\n"
                 + "The change log lists what is new and what behaves differently. "
-                + "This note appears once for each new minor version; turn it off on Preferences > Neovim.";
+                + "This note appears once for each new minor version; turn it off on " + MENU_PATH_PREFERENCES + ".";
     }
 
     /** {@code "0.2.0"} for {@code "0.2.0.v20261101-1200"}; the input itself if it has fewer parts. */

@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote.Kind;
@@ -79,16 +81,26 @@ class WelcomeNoteTest {
         String message = WelcomeNote.welcomeMessage("Ctrl+Shift+M");
         assertTrue(message.contains("Ctrl+Shift+M, the Neovim toolbar button"), message);
         assertTrue(message.contains("init.lua"), message);
-        assertTrue(message.contains("Preferences > Neovim"), message);
+        assertTrue(message.contains("Preferences\u00A0\u203A\u00A0Neovim"), message);
         assertTrue(message.contains("Ctrl Keys"), message);
         assertTrue(message.contains("Welcome"), message);
+    }
+
+    @Test
+    void theWelcomeIsAnIntroThreeHeadedPointsAndAClosingLine() {
+        HeadedMessage welcome = WelcomeNote.welcome("Ctrl+Shift+M");
+        assertEquals(List.of("Enable, Disable", "Eclipse Actions", "Settings"),
+                welcome.points().stream().map(HeadedMessage.Point::heading).toList());
+        assertTrue(welcome.intro().startsWith("Neovim now handles the keys"), welcome.intro());
+        assertTrue(welcome.footer().contains("Welcome shows this again"), welcome.footer());
+        assertEquals(welcome.plain(), WelcomeNote.welcomeMessage("Ctrl+Shift+M"));
     }
 
     @Test
     void withoutAKeyBindingTheWelcomeLeavesItOut() {
         for (String none : new String[] { null, "", " " }) {
             String message = WelcomeNote.welcomeMessage(none);
-            assertTrue(message.contains("Turn it off and on with the Neovim toolbar button"), message);
+            assertTrue(message.contains("Enable, Disable: The Neovim toolbar button"), message);
             assertFalse(message.contains("null"), message);
         }
     }
@@ -98,6 +110,7 @@ class WelcomeNoteTest {
         String message = WelcomeNote.updatedMessage("0.2.0.v20261101-1200");
         assertTrue(message.startsWith("Neovim for Eclipse was updated to 0.2.0."), message);
         assertFalse(message.contains("v2026"), message);
+        assertTrue(message.contains("Preferences\u00A0\u203A\u00A0Neovim"), "one unbreakable path: " + message);
     }
 
     @Test

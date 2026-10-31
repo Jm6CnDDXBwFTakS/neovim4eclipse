@@ -21,6 +21,7 @@ import org.osgi.service.prefs.BackingStoreException;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 
 /**
@@ -103,7 +104,7 @@ final class WelcomeNotice {
                         }
                     });
         }
-        return new ActingDialog(shell, WelcomeNote.welcomeMessage(toggleKey()),
+        return new WelcomeDialog(shell, WelcomeNote.welcome(toggleKey()),
                 new String[] { "Open Preferences", "Documentation", "Close" }, button -> {
                     if (button == WELCOME_PREFERENCES) {
                         // After the dialog closes, so the preferences are not stacked on top of it.
@@ -206,6 +207,24 @@ final class WelcomeNotice {
          */
         ActingDialog(Shell shell, String message, String[] buttons, ButtonAction action) {
             super(shell, WelcomeNote.TITLE, null, message, MessageDialog.INFORMATION, buttons.length - 1, buttons);
+            this.action = action;
+        }
+
+        @Override
+        protected void buttonPressed(int buttonId) {
+            super.buttonPressed(buttonId); // sets the return code and closes
+            action.pressed(buttonId);
+        }
+    }
+
+    /** The welcome: a {@link HeadedMessageDialog} that runs an action for the pressed button, as {@link ActingDialog}. */
+    private static final class WelcomeDialog extends HeadedMessageDialog {
+
+        private final ButtonAction action;
+
+        /** Close, the last button, is the default (see {@link ActingDialog}). */
+        WelcomeDialog(Shell shell, HeadedMessage message, String[] buttons, ButtonAction action) {
+            super(shell, WelcomeNote.TITLE, MessageDialog.INFORMATION, message, buttons.length - 1, buttons);
             this.action = action;
         }
 

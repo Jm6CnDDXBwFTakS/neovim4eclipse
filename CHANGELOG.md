@@ -48,6 +48,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The welcome dialog is laid out: a short opening, then *Enable, Disable*, *Eclipse Actions* and
+  *Settings*, each a bold heading with its text beside it, then where to find it again. Before, it
+  was one block of text whose dashed points wrapped back under their dashes. *Restart Neovim*'s
+  question is laid out the same way (*Lost*, *Kept*) and says first that it reloads your
+  `init.lua`. Menu paths (*Preferences › Neovim*) no longer break across lines in the welcome or
+  in the update note.
 - The *Neovim* menu's underlined letter is V (*Neo<u>v</u>im*, `Alt+V` on Linux and Windows), not
   N: N is *Navigate*'s, and with two menus on N, `Alt+N` only moved between them.
 - The status bar's mode reads `INSERT`, `NORMAL`, `VISUAL LINE` by default, without Vim's dashes
