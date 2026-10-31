@@ -348,7 +348,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         try {
             runInBox(widget, "vimgrep /Bar/ vg/*.txt");
             waitUntil("bar.txt to open", TIMEOUT_MS, () -> activeEditorIs("bar.txt"),
-                    () -> "; the message line shows " + messageText(editor));
+                    () -> "; the message line shows " + messageText(editor) + "; " + whereNeovimIs());
             ITextEditor bar = (ITextEditor) page().getActiveEditor();
             waitUntil("the first match in its message line", TIMEOUT_MS,
                     () -> messageText(bar).equals("(1 of 2): class Bar"), () -> ": " + messageText(bar));
@@ -356,7 +356,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
 
             runInBox(widgetOf(bar), "cnext");
             waitUntil("foo.txt to open", TIMEOUT_MS, () -> activeEditorIs("foo.txt"),
-                    () -> "; the message line shows " + messageText(bar));
+                    () -> "; the message line shows " + messageText(bar) + "; " + whereNeovimIs());
             ITextEditor foo = (ITextEditor) page().getActiveEditor();
             waitUntil("the second match in its message line", TIMEOUT_MS,
                     () -> messageText(foo).equals("(2 of 2): see Bar"), () -> ": " + messageText(foo));
@@ -364,6 +364,28 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
             // Also after a failure: the editors the jumps opened would stay for the next tests.
             page().closeAllEditors(false);
             editor = null;
+        }
+    }
+
+    /**
+     * What a failed jump into a project file needs to be understood (a test that timed out on
+     * Windows): the buffer Neovim is in, whether the plug-in's read hook knows its file
+     * ({@code file_of}: empty means Eclipse was never told to open it), the buffers and the last
+     * messages, and the buffers the session saw entered and attached.
+     */
+    private String whereNeovimIs() {
+        try {
+            Object neovim = SessionProbe.lua(session, """
+                    local b = vim.api.nvim_get_current_buf()
+                    return string.format('Neovim in buffer %d %q (file_of %q, loaded %s, buftype %q), quickfix %d'
+                        .. ' entries; :ls! %s; :messages %s', b, vim.api.nvim_buf_get_name(b),
+                        require('neovim4eclipse.project_files').file_of(b), tostring(vim.api.nvim_buf_is_loaded(b)),
+                        vim.bo[b].buftype, #vim.fn.getqflist(), vim.fn.execute('ls!'), vim.fn.execute('messages'):sub(-400))
+                    """);
+            return neovim + "; session: entered " + session.getEnteredBufnr() + ", attached "
+                    + session.getAttachedBufnr();
+        } catch (AssertionError e) {
+            return "Neovim did not answer: " + e.getCause();
         }
     }
 

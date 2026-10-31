@@ -191,7 +191,9 @@ comparing resolved paths on `BufNew` (and on `BufAdd` for a buffer `BufNew` did 
 `:vimgrep` makes its matches' buffers without it), a buffer-local `BufReadCmd` that reads only the
 text (with `'swapfile'` off, so a stale swap file cannot stop it at E325). The one exception is
 `:vimgrep`, which reads every file it searches itself, filetype detection included; its first match
-stays loaded from that read, so `BufAdd` only turns its swap file off. `eclipse_buf_enter` carries such a
+stays loaded from that read. The search makes no swap files (`QuickFixCmdPre` turns the global
+`'swapfile'` off until `QuickFixCmdPost`): where one could not be made (E303), Neovim stopped at a
+prompt for every file searched. `eclipse_buf_enter` carries such a
 buffer's file as its fourth value, for Eclipse to open; a background job finds and refreshes the
 workspace file (a refresh waits while a build runs), then the editor opens on the UI thread. The
 folders are walked and sent by one job, so the walks never run on the thread of a change and never

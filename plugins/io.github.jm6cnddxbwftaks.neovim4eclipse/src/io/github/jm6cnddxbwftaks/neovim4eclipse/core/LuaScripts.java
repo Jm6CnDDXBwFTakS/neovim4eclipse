@@ -1351,7 +1351,19 @@ final class LuaScripts {
      * without {@code BufNew}, and its jump into one fires only {@code BufAdd} before the read (found
      * 2026-10-30, on macOS: {@code :vimgrep} into closed files opened no editor; any system, for
      * files without a buffer yet). Its first match is loaded by the search itself, so the hook
-     * cannot read it: {@code BufAdd} turns its {@code 'swapfile'} off instead. The paths
+     * cannot read it.
+     *
+     * <p><b>{@code :vimgrep}'s search, without swap files.</b> To search a file, {@code :vimgrep}
+     * loads it into a buffer of its own, made with the global {@code 'swapfile'} and given a swap
+     * file before any autocommand runs. Where the swap file cannot be made (E303: on Windows, the
+     * UI tests' long paths), Neovim stops at a prompt for every file it searches (mode {@code r?})
+     * and the search goes on only after a key: inside Eclipse it looked stuck, the list empty
+     * (found 2026-10-30, Windows). So {@code QuickFixCmdPre} turns the global {@code 'swapfile'}
+     * off for {@code :vimgrep}, {@code :lvimgrep} and their {@code add} forms, and
+     * {@code QuickFixCmdPost} turns it back (a scheduled callback too, in case the command ends
+     * early). The searched buffers are thrown away, except the first match, which then has no swap
+     * file either: right for a project file (as the hook's read does it), and for a file outside
+     * the projects the same as {@code :noswapfile}. The paths
      * are compared by {@link #PATHS}'s rule (resolved: symbolic links, Windows junctions and 8.3
      * short names, macOS's NFD names; {@code /} separators; lower case where
      * {@code 'fileignorecase'} is on, Windows and macOS). Autocommand patterns were tried first and cannot match a
@@ -1483,12 +1495,39 @@ final class LuaScripts {
               if checked[buf] ~= vim.api.nvim_buf_get_name(buf) then
                 check(buf)
               end
-              -- :vimgrep's first match is loaded already, by its search, with a swap file; off,
-              -- as the hook's read would have done (turning it off deletes the file).
-              if hooked[buf] and vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buftype == '' then
-                vim.bo[buf].swapfile = false
-              end
             end })
+
+            -- :vimgrep's search without swap files (see the Java comment): its buffers take the
+            -- global 'swapfile' and get the file before any autocommand runs, and where it cannot
+            -- be made (E303) Neovim stops at a prompt for each file searched.
+            local vimgreps = { 'vimgrep', 'vimgrepadd', 'lvimgrep', 'lvimgrepadd' }
+            local swapfile_before = nil -- the global 'swapfile' while a :vimgrep runs, else nil
+            local aside = nil -- a scratch buffer to set the global value from
+            -- Setting the global value acts on the current buffer too: turned on, it makes that
+            -- buffer's swap file at once (an empty unnamed buffer got one named after the folder).
+            -- Set from a scratch buffer, which never has one, nothing else changes.
+            local function set_global_swapfile(value)
+              if not (aside and vim.api.nvim_buf_is_valid(aside)) then
+                aside = vim.api.nvim_create_buf(false, true)
+              end
+              vim.api.nvim_buf_call(aside, function()
+                vim.go.swapfile = value
+              end)
+            end
+            local function restore_swapfile()
+              if swapfile_before ~= nil then
+                set_global_swapfile(swapfile_before)
+                swapfile_before = nil
+              end
+            end
+            vim.api.nvim_create_autocmd('QuickFixCmdPre', { group = group, pattern = vimgreps, callback = function()
+              if swapfile_before == nil then
+                swapfile_before = vim.go.swapfile
+              end
+              set_global_swapfile(false)
+              vim.schedule(restore_swapfile) -- also when the command ends without QuickFixCmdPost
+            end })
+            vim.api.nvim_create_autocmd('QuickFixCmdPost', { group = group, pattern = vimgreps, callback = restore_swapfile })
             vim.api.nvim_create_autocmd('BufWipeout', { group = group, callback = function(ev)
               hooked[ev.buf] = nil
               checked[ev.buf] = nil
