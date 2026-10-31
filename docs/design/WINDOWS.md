@@ -66,9 +66,9 @@ Phase 2, the Eclipse glue:
   before its buffer may be wiped. `followNeovimInto` queues the travel (`travelWindowAsync`) before
   the attach; an editor jumped into that has no window yet simply takes the one that jumped
   (`EditorWindows.transfer`), and the editor it left gets a new one at its next show. The folder is
-  set once when the window opens; an untitled document's window keeps the folder Neovim copies from
-  the current window (the editor attached before), or gets the home folder when the current window
-  is the home window. A folder that does not exist yet (a new file in a missing folder, written
+  set once when the window opens; an untitled document's window gets the selected project's root
+  (section 3), or keeps the folder Neovim copies from the current window (the editor attached
+  before), or gets the home folder when the current window is the home window. A folder that does not exist yet (a new file in a missing folder, written
   with `:w ++p`) is skipped: `:lcd` to it failed the open, and with it the attach
   (`NewFileEndToEndTest`).
 - **`2dd7b1c`.** `:close` and `:tabclose` are host commands (`QUIT`). `LuaScripts.WINDOW_COMMANDS`
@@ -108,7 +108,7 @@ Phase 2, the Eclipse glue:
 | `:split`, `:vsplit`, `:new`, `:tabnew`, `:tabonly` | Refused with a message naming Eclipse's split editor and *Window → Editor → Clone* | A second Neovim window would be invisible and take the keys; `:tabonly` would delete every other editor's window (E4). Mapping them onto Eclipse (Toggle Split Editor, Clone, an untitled editor) is a later note. |
 | Two editors on one file | A window each, one shared buffer | Neovim's model, and Eclipse's agrees on every point: shared text, undo and marks; cursor, column memory, scroll position, folds, window options and jump history per editor. Rejected: one shared window (the editors fight over one cursor) and a buffer per editor (separate undo and marks). |
 | What travels on `Ctrl-O` | The whole window | Location list and jump history included; the two editors swap windows (E2). |
-| Untitled documents' folder | The folder of the editor attached before, else the home folder | See section 3. |
+| Untitled documents' folder | The selected project's root, else the folder of the editor attached before, else the home folder | See section 3. |
 
 Confirmed besides the rows above: windows created without entering them and their jump history
 cleared (E7); the travel swap with autocommands off; Neovim's top lines ignored while an attach
@@ -286,12 +286,18 @@ though a `:lcd` there applies to the target. `'autochdir'` works in such a windo
 - **`'autochdir'` honored.** When the user's `init.lua` sets it, the plug-in skips its own `:lcd`,
   and Neovim moves each window to its file's folder. The default stays the project root, which suits
   `:!mvn test`, `:make` and `:e pom.xml`; the file's folder suits `:e Util.java` for a sibling.
-- **Untitled documents** (*File → New → Untitled Text File*) belong to no project. Their window
-  keeps the folder of the editor attached just before (Neovim copies it, as a new Vim window
-  inherits it); with no editor before it, the user's home folder. Example: working in
-  `app/src/Main.java`, open an untitled document: `:pwd` there shows `app`, and `:w notes.txt`
-  writes `app/notes.txt`. Rejected: always the home folder (never near the code), the workspace
-  folder (rarely meant), refusing relative names (an error for `:w notes.txt`).
+- **Untitled documents** (*File → New → Untitled Text File*) belong to no project: their editor
+  input has no file, and the wizard ignores the selection it is given. Their window works in the
+  root of the project selected in the Project Explorer or Package Explorer
+  (`editor/SelectedProject`), which is the project right-clicked to make the document; with none
+  selected, it keeps the folder of the editor attached just before (Neovim copies it, as a new Vim
+  window inherits it), and with no editor before it, the user's home folder. Example: working in
+  `app/src/Main.java`, right-click project `lib` and make an untitled document: `:pwd` shows `lib`,
+  and `:w notes.txt` writes `lib/notes.txt`; made from *File → New* with nothing selected, `:pwd`
+  shows `app`. The selection was added 2026-10-31, after `:w c.txt` in a document made from
+  `mtplugin`'s context menu wrote `mt/c.txt`. Rejected: always the home folder (never near the
+  code), the workspace folder (rarely meant), refusing relative names (an error for
+  `:w notes.txt`).
 
 This unblocks the parked branch `feature/neovim-file-names` (`589dd98`, `368dbd6`), which makes
 `:e name`, `:wq name` and `:x name` absolute against `getcwd(0)` as Neovim's own `:w name` is; it

@@ -451,8 +451,9 @@ box lists the candidates, with the selected one highlighted. File names complete
 project folder (the editor's Neovim window works there, `:lcd`), and `:e` opens what Tab completes:
 a relative name is relative to that folder, as in Neovim. The folder is set once, when the editor's window
 opens, so a `:lcd` you type stays with that editor. An untitled document (*File → New → Untitled
-Text File*) gets the folder of the editor that was active before it, or your home folder if none
-was. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its file's folder
+Text File*) gets the root of the project selected in the Project Explorer or Package Explorer (the
+one you right-clicked to make it), so `:w notes.txt` saves it there; with none selected, the folder
+of the editor that was active before it, or your home folder if none was. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its file's folder
 instead.
 
 While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back to where

@@ -573,9 +573,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * @param window the editor's window token; {@code null} shows the buffer in the home window,
      *               as {@link #showBuffer} does
      * @param folder the window's folder ({@code :lcd}), set once when it is opened: normally the
-     *               editor's project; {@code null} or "" (an untitled document) takes the folder of
-     *               the editor attached before, as a Vim window inherits it, or the home folder if
-     *               none was. Ignored when {@code 'autochdir'} is set.
+     *               editor's project (for an untitled document, the selected project's);
+     *               {@code null} or "" (an untitled document with no project selected) takes the
+     *               folder of the editor attached before, as a Vim window inherits it, or the home
+     *               folder if none was. Ignored when {@code 'autochdir'} is set.
      */
     public void showWindow(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         buffers.show(buffer, window, folder);

@@ -469,11 +469,16 @@ public final class NeovimEditorController implements AutoCloseable {
      * project's root, or at the file's folder for a file outside any project (decision D5 of the
      * cleanup plan). A relative {@code :e}, {@code :w}, {@code :wq} or {@code :x} name is relative
      * to it, as in Neovim ({@code util/EditPath}).
-     * {@code null} for an untitled document: its window takes the folder of the editor attached
-     * before it, or the home folder ({@link NeovimSession#showWindow}).
+     * For an untitled document, the root of the project selected in the project tree
+     * ({@link SelectedProject}: the one right-clicked for <i>New → Untitled Text File</i>); with
+     * none, {@code null}: its window takes the folder of the editor attached before it, or the home
+     * folder ({@link NeovimSession#showWindow}).
      */
     private static String windowFolder(ITextEditor editor) {
         Path folder = EclipseFileCommands.windowFolder(editor);
+        if (folder == null) {
+            folder = SelectedProject.root(editor.getSite().getWorkbenchWindow());
+        }
         return folder == null ? null : folder.toString();
     }
 
