@@ -417,7 +417,7 @@ send the `wheel count=… detail=…` lines from the Error Log with your system 
   one you see. A change of one of them shows a message once per Neovim session and is set back;
   your value applies again when wrap is off. Eclipse measures pixels and Neovim cells, so a line can
   still wrap one word apart now and then.
-- **To keep Neovim's own fixed screen** (120 × 40, as before 0.1.10): `vim.g.neovim4eclipse_viewport = 0`
+- **To keep Neovim's own fixed screen** (120 × 40, as before 0.2.0): `vim.g.neovim4eclipse_viewport = 0`
   in `init.lua`. The setting is read once when Neovim starts (*Neovim → Restart Neovim...*).
 - Lines made taller by code minings (the Java editor's reference counts) are not measured: there
   `L` can land a line or two below the editor's last line.
