@@ -16,17 +16,22 @@ import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IFileEditorInput;
+import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 
 /**
@@ -168,6 +173,89 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             Files.deleteIfExists(ext);
             Files.deleteIfExists(real);
         }
+    }
+
+    /**
+     * A project whose location Eclipse records through a link, reached by both spellings: {@code gf}
+     * onto the link's spelling opens the file's editor, and {@code :e} by the real path then finds
+     * that same editor and that same Neovim buffer, not a second of either. The manual test "A
+     * workspace or project under a link" did this by hand. Common in practice: on macOS every folder
+     * under {@code /tmp} or {@code /var} is really under {@code /private}; on Windows a profile folder
+     * may be a junction.
+     * Example: project {@code e2e-via} at {@code /tmp/n4e-viaN/p}, a link to {@code /tmp/n4e-realN};
+     * {@code gf} onto {@code /tmp/n4e-viaN/p/b.txt}, then {@code :e /tmp/n4e-realN/b.txt}.
+     */
+    @Test
+    void aProjectUnderALinkHasOneEditorAndOneBufferForBothPaths() throws Exception {
+        Path real = Files.createTempDirectory("n4e-real");
+        Path via = Files.createTempDirectory("n4e-via").resolve("p");
+        Path a = real.resolve("a.txt");
+        Path b = real.resolve("b.txt");
+        IProject linked = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-via");
+        try {
+            assumeTrue(makeLink(via, real), "could make neither a symbolic link nor a junction here");
+            Files.writeString(a, via.resolve("b.txt") + "\n", StandardCharsets.UTF_8); // the link's spelling, for gf
+            Files.writeString(b, "bee\n", StandardCharsets.UTF_8);
+            IProjectDescription description = ResourcesPlugin.getWorkspace().newProjectDescription(linked.getName());
+            description.setLocation(IPath.fromOSString(via.toString()));
+            linked.create(description, null);
+            linked.open(null);
+            IFile bFile = linked.getFile("b.txt");
+            String inside = "return require('neovim4eclipse.project_files').inside(" + lua(b.toString()) + ")";
+            waitUntil("Neovim to know the project under the link", TIMEOUT_MS,
+                    () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
+            ITextEditor aEditor = (ITextEditor) IDE.openEditor(page(), linked.getFile("a.txt"), TEXT_EDITOR, true);
+            waitForAttach(aEditor, "a.txt of the project under the link");
+
+            session.inputAsync("gg0gf");
+            waitForActive(bFile, "b.txt's editor, by the link's spelling");
+
+            session.inputAsync(":e " + b.toString().replace("\\", "\\\\") + "<CR>");
+            UiTestSupport.settle(session, TIMEOUT_MS);
+            waitForActive(bFile, "b.txt's editor still, by the real path");
+            assertEquals(1, List.of(page().getEditorReferences()).stream()
+                    .filter(r -> r.getTitle().equals("b.txt")).count(), "one editor on the file");
+            assertEquals(1, ((Number) SessionProbe.lua(session, """
+                    local want, n = vim.uv.fs_realpath(FILE), 0
+                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                      local name = vim.api.nvim_buf_get_name(buf)
+                      if name ~= '' and vim.uv.fs_realpath(name) == want then n = n + 1 end
+                    end
+                    return n""".replace("FILE", lua(b.toString())))).intValue(), "one Neovim buffer for the file");
+        } finally {
+            closeOtherEditors();
+            // Wipe the closed files' buffers, as the base class does for its own project's: one Neovim
+            // serves every test.
+            SessionProbe.lua(session, """
+                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                      local name = vim.uv.fs_realpath(vim.api.nvim_buf_get_name(buf))
+                      if name and (name == vim.uv.fs_realpath(A) or name == vim.uv.fs_realpath(B)) then
+                        pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                      end
+                    end
+                    return 0""".replace("A", lua(a.toString())).replace("B", lua(b.toString())));
+            if (linked.exists()) {
+                linked.delete(false, true, null); // keeps the files; deleted below
+            }
+            session.leaveFolder(via.toString(), TestWait.duration());
+            Files.deleteIfExists(via);
+            Files.deleteIfExists(via.getParent());
+            leaveAndDelete(real, a, b, real.resolve(".project"));
+        }
+    }
+
+    /** Waits until the active editor is the one on {@code file}. */
+    private static void waitForActive(IFile file, String what) {
+        waitUntil(what, TIMEOUT_MS, () -> {
+            IEditorPart active = page().getActiveEditor();
+            return active != null && active.getEditorInput() instanceof IFileEditorInput input
+                    && input.getFile().equals(file);
+        }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
+    }
+
+    /** {@code s} as a Lua string literal. */
+    private static String lua(String s) {
+        return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'";
     }
 
     /**
