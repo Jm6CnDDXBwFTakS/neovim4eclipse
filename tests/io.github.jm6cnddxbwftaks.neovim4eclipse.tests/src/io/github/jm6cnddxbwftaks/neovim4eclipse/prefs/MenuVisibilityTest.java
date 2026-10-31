@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -66,14 +67,14 @@ class MenuVisibilityTest {
     @Test
     void theMenuOpensWithAltVALetterNoOtherMenuUses() {
         waitUntil("the Neovim menu is shown", this::neovimMenuShown);
-        Menu bar = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
+        Menu bar = menuBar();
+        MenuItem neovim = neovimMenuItem(bar);
+        assertNotNull(neovim, "the Neovim menu in the bar");
+        assertEquals('v', mnemonic(neovim.getText()), "the Neovim menu's text: " + neovim.getText());
         List<String> others = new ArrayList<>();
         for (MenuItem item : bar.getItems()) {
-            String text = item.getText();
-            if ("Neovim".equals(text.replace("&", ""))) {
-                assertEquals('v', mnemonic(text), "the Neovim menu's text: " + text);
-            } else {
-                others.add(text);
+            if (item != neovim) {
+                others.add(item.getText());
             }
         }
         for (String text : others) {
@@ -81,11 +82,6 @@ class MenuVisibilityTest {
         }
     }
 
-    /**
-     * The mnemonic of a menu's text, in lower case: the character after the first single {@code &}
-     * ({@code &&} is a literal ampersand). Example: {@code "Se&arch"} gives {@code 'a'}; no
-     * mnemonic gives {@code 0}.
-     */
     /**
      * Each entry of the Neovim menu has its own underlined letter, so {@code Alt+V} then a letter
      * runs it: v Neovim Mode, A Attach, R Restart, W Welcome, n Preferences (as Eclipse's own
@@ -95,27 +91,45 @@ class MenuVisibilityTest {
     @Test
     void eachEntryOfTheMenuHasItsOwnLetter() {
         waitUntil("the Neovim menu is shown", this::neovimMenuShown);
-        Menu bar = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
-        Menu neovim = null;
-        for (MenuItem item : bar.getItems()) {
-            if ("Neovim".equals(item.getText().replace("&", ""))) {
-                neovim = item.getMenu();
-            }
-        }
-        assertTrue(neovim != null, "the Neovim menu in the bar");
+        MenuItem item = neovimMenuItem(menuBar());
+        assertNotNull(item, "the Neovim menu in the bar");
+        Menu neovim = item.getMenu();
         neovim.notifyListeners(SWT.Show, new Event()); // fills the menu, as opening it does
         Map<String, Character> letters = new LinkedHashMap<>();
-        for (MenuItem item : neovim.getItems()) {
-            if ((item.getStyle() & SWT.SEPARATOR) == 0) {
-                String label = item.getText().split("\t")[0]; // a key binding follows a tab
-                letters.put(label.replace("&", ""), mnemonic(label));
+        try {
+            for (MenuItem entry : neovim.getItems()) {
+                if ((entry.getStyle() & SWT.SEPARATOR) == 0) {
+                    String label = entry.getText().split("\t")[0]; // a key binding follows a tab
+                    letters.put(label.replace("&", ""), mnemonic(label));
+                }
             }
+        } finally {
+            neovim.notifyListeners(SWT.Hide, new Event()); // closed again, also after a failure
         }
-        neovim.notifyListeners(SWT.Hide, new Event());
         assertEquals(Map.of("Neovim Mode", 'v', "Attach Neovim", 'a', "Restart Neovim...", 'r',
                 "Welcome...", 'w', "Preferences...", 'n'), letters);
     }
 
+    /** The active workbench window's menu bar. */
+    private static Menu menuBar() {
+        return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
+    }
+
+    /** The bar's Neovim menu, found by its text without the mnemonic mark, or {@code null}. */
+    private static MenuItem neovimMenuItem(Menu bar) {
+        for (MenuItem item : bar.getItems()) {
+            if ("Neovim".equals(item.getText().replace("&", ""))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The mnemonic of a menu's text, in lower case: the character after the first single {@code &}
+     * ({@code &&} is a literal ampersand). Example: {@code "Se&arch"} gives {@code 'a'}; no
+     * mnemonic gives {@code 0}.
+     */
     private static char mnemonic(String text) {
         for (int i = 0; i < text.length() - 1; i++) {
             if (text.charAt(i) == '&') {
