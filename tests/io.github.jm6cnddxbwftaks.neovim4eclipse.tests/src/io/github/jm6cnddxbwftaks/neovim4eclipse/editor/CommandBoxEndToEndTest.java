@@ -368,6 +368,60 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A {@code :vimgrep} with no match shows only Vim's error, {@code E480: No match: nosuchword}: no
+     * output popup, and no line naming the file it searched (that progress line is a message of its
+     * own, which the plug-in leaves out). The manual test "A :vimgrep list through files with no
+     * editor", its last step.
+     */
+    @Test
+    void vimgrepWithNoMatchShowsOnlyE480() throws Exception {
+        project.getFolder("vg").create(true, true, null);
+        createFile("vg/bar.txt", "class Bar\n");
+
+        runInBox(widget, "vimgrep /nosuchword/ vg/*.txt");
+
+        waitUntil("E480 in the message line", TIMEOUT_MS,
+                () -> messageText(editor).equals("E480: No match: nosuchword"), () -> ": " + messageText(editor));
+        settle();
+        assertNull(outputPopupIn(widget), "no output popup");
+        assertSame(editor, page().getActiveEditor(), "no editor opened");
+    }
+
+    /**
+     * {@code :%s} typed in the box changes the document only on Enter. While it is typed, Neovim's
+     * {@code 'inccommand'} previews the substitution in its buffer and reports the preview as buffer
+     * events without a {@code changedtick}; the plug-in drops those (NotificationBridge), so the
+     * editor keeps its text and stays clean, also after Esc. Before, the preview reached Eclipse as
+     * real edits and stayed after Esc, for a save to write. After Enter the text changes, and
+     * {@code u} takes it back in one step. The manual test "A substitution changes the text only on
+     * Enter".
+     */
+    @Test
+    void aSubstitutionChangesTheDocumentOnlyOnEnter() throws Exception {
+        assertEquals("nosplit", SessionProbe.lua(session, "return vim.o.inccommand"), "Neovim previews :s as it is typed");
+        Text box = openBox(widget, "%s/a/A/g");
+        settle(); // the preview's buffer events reached the session, had they been applied
+        expectText("alpha\nbeta\ngamma\n");
+        assertFalse(editor.isDirty(), "no change while the command is typed");
+
+        Event esc = new Event();
+        esc.keyCode = SWT.ESC;
+        esc.character = SWT.ESC;
+        esc.doit = true;
+        box.notifyListeners(SWT.KeyDown, esc);
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        settle();
+        expectText("alpha\nbeta\ngamma\n");
+        assertFalse(editor.isDirty(), "no change after Esc");
+
+        runInBox(widget, "%s/a/A/g");
+        expectText("AlphA\nbetA\ngAmmA\n");
+        assertTrue(editor.isDirty(), "changed on Enter");
+        type(widget, "u");
+        expectText("alpha\nbeta\ngamma\n");
+    }
+
+    /**
      * What a failed jump into a project file needs to be understood (a test that timed out on
      * Windows): the buffer Neovim is in, whether the plug-in's read hook knows its file
      * ({@code file_of}: empty means Eclipse was never told to open it), the buffers and the last

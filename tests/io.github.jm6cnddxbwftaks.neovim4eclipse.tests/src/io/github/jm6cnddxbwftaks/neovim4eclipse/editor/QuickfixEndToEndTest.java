@@ -257,6 +257,37 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * {@code :copen} with the tasks list current shows the Tasks view, not the Problems view
+     * ({@code QuickfixLists}: the view follows the list's kind). The manual test ":copen and :lopen";
+     * a list of Neovim's own ({@code :vimgrep}) shows {@code :clist} instead, checked in
+     * quickfix_spec.lua.
+     */
+    @Test
+    void copenAfterEtasksShowsTheTasksView() throws Exception {
+        marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "JM6 shown", 0, 1);
+        SessionProbe.lua(session, "vim.g.neovim4eclipse_task_tags = 'JM6' return 0");
+        session.inputAsync(":Etasks<CR>");
+        waitForTexts(List.of("JM6 shown"));
+        IViewPart before = page().findView(IPageLayout.ID_TASK_LIST);
+        if (before != null) {
+            page().hideView(before);
+        }
+        try {
+            session.inputAsync(":copen<CR>");
+            waitUntil("the Tasks view", TIMEOUT_MS, () -> {
+                IViewPart view = page().findView(IPageLayout.ID_TASK_LIST);
+                return view != null && page().isPartVisible(view);
+            });
+        } finally {
+            IViewPart view = page().findView(IPageLayout.ID_TASK_LIST);
+            if (view != null) {
+                page().hideView(view);
+            }
+            page().activate(editor);
+        }
+    }
+
     /** {@code :Etasks} lists the tasks whose tag is in {@code vim.g.neovim4eclipse_task_tags}. */
     @Test
     void etasksListsTheTasksWithTheUsersTags() throws Exception {
