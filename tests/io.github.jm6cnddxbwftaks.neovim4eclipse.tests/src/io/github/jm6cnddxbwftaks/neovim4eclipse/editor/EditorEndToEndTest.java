@@ -15,9 +15,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.ILogListener;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
@@ -333,6 +339,78 @@ class EditorEndToEndTest extends EndToEndTestBase {
             assertEquals(reversed(back), pressAndRecord("<C-i>", 3, this::activeEditor));
         } finally {
             closeAllBut(page, editor);
+        }
+    }
+
+    /**
+     * The other side of {@link #ctrlOStepsOverAPlaceWhoseFileIsGone}: an editor still open on a new
+     * file not written yet ({@code :e new.txt}, nothing on disk) is a place {@code Ctrl-O} goes back
+     * to, and it stays open, as Vim keeps a {@code [New]} buffer.
+     */
+    @Test
+    void ctrlOBackToANewFileNotWrittenYetKeepsItsEditor() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        try {
+            runInBox(widget, "e new.txt");
+            waitUntil("new.txt's editor", TIMEOUT_MS, () -> page.getActiveEditor() != null
+                    && "new.txt".equals(page.getActiveEditor().getTitle()));
+            ITextEditor created = (ITextEditor) page.getActiveEditor();
+            waitForAttach(created, "new.txt");
+            page.activate(editor); // a tab click: Eclipse's switch, no Neovim jump
+            waitForAttach(editor, "test.txt");
+
+            session.inputAsync("<C-o>");
+
+            waitForAttach(created, "new.txt again, after Ctrl-O");
+            assertEquals(created, page.findEditor(created.getEditorInput()), "still open");
+        } finally {
+            closeAllBut(page, editor);
+        }
+    }
+
+    /**
+     * {@code Ctrl-O} back to a file deleted since (its project deleted): Eclipse's history keeps the
+     * place, and its Back opens an error page in a new tab for it ("Unable to create part").
+     * {@code Ctrl-O} closes that page and goes on (where depends on the history older tests left; in
+     * a fresh Eclipse it stays in test.txt).
+     * Eclipse's own Back ({@code Alt+Left}) still shows the page: Eclipse's behavior. Found
+     * 2026-10-31 by a macOS run, where a deleted test project left such a place for a later
+     * {@code Ctrl-O}.
+     */
+    @Test
+    void ctrlOStepsOverAPlaceWhoseFileIsGone() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        IProject gone = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-gone");
+        List<String> logged = new CopyOnWriteArrayList<>();
+        ILogListener log = (status, plugin) -> logged.add(status.getMessage()
+                + (status.getException() == null ? "" : " " + status.getException().getMessage()));
+        try {
+            gone.create(null);
+            gone.open(null);
+            IFile file = gone.getFile("g.txt");
+            file.create(new ByteArrayInputStream("gone\n".getBytes(StandardCharsets.UTF_8)), true, null);
+            ITextEditor g = (ITextEditor) IDE.openEditor(page, file, TEXT_EDITOR, true);
+            waitForAttach(g, "g.txt");
+            page.activate(editor);
+            waitForAttach(editor, "test.txt");
+            gone.delete(true, true, null); // g.txt's editor closes with its file
+            waitUntil("g.txt's editor closed", TIMEOUT_MS, () -> page.findEditor(g.getEditorInput()) == null);
+
+            Platform.addLogListener(log);
+            session.inputAsync("<C-o>");
+
+            // Eclipse's Back went to the place: it logs that it could not open the file there...
+            waitUntil("Back to g.txt's place", TIMEOUT_MS, () -> logged.stream().anyMatch(m -> m.contains("e2e-gone/g.txt")));
+            settle();
+            // ...and the error page it opened for it is closed again.
+            assertEquals(List.of(), Arrays.stream(page.getEditorReferences()).map(IEditorReference::getTitle)
+                    .filter("g.txt"::equals).toList(), "no tab for the deleted file");
+        } finally {
+            Platform.removeLogListener(log);
+            closeAllBut(page, editor);
+            if (gone.exists()) {
+                gone.delete(true, true, null);
+            }
         }
     }
 

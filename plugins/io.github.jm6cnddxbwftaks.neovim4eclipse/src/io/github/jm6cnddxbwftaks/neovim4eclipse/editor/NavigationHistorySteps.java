@@ -4,20 +4,27 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.lang.ref.WeakReference;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.core.commands.NotEnabledException;
 import org.eclipse.core.commands.NotHandledException;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.INavigationHistory;
 import org.eclipse.ui.INavigationLocation;
 import org.eclipse.ui.IWorkbenchCommandConstants;
@@ -174,8 +181,15 @@ final class NavigationHistorySteps {
         // other.txt, :e #, Ctrl-O: the jump back to test.txt is Neovim's, and Back's first entry
         // is the tab click, test.txt again, with the same caret. Each round goes back at least one
         // entry, so this ends; at the history's start the step went nowhere.
-        while (run(page, IWorkbenchCommandConstants.NAVIGATE_BACKWARD_HISTORY, n, "Ctrl-O")
-                && start != null && start.sameAs(placeOf(page.getActiveEditor()))) {
+        // A place whose file is gone (closeIfGone) is no step either: closed, and Back goes on.
+        while (true) {
+            Set<IEditorPart> open = openEditors(page);
+            if (!run(page, IWorkbenchCommandConstants.NAVIGATE_BACKWARD_HISTORY, n, "Ctrl-O")) {
+                break;
+            }
+            if (!closeIfGone(page, open) && (start == null || !start.sameAs(placeOf(page.getActiveEditor())))) {
+                break;
+            }
             n = steps.backSteps(entries(history), history.getCurrentLocation());
             if (n == 0) {
                 break;
@@ -199,16 +213,80 @@ final class NavigationHistorySteps {
             INavigationHistory history = page.getNavigationHistory();
             HistorySteps<INavigationLocation, Place> steps = steps(page);
             if (oldest <= 0) {
-                run(page, IWorkbenchCommandConstants.NAVIGATE_FORWARD_HISTORY,
-                        steps.plainForwardSteps(entries(history), history.getCurrentLocation(), count), "Ctrl-I");
+                forwardPastGone(page, steps.plainForwardSteps(entries(history), history.getCurrentLocation(), count));
                 return;
             }
             switch (steps.forward(oldest, entries(history), history.getCurrentLocation())) {
-                case HistorySteps.Steps<Place> s -> run(page, IWorkbenchCommandConstants.NAVIGATE_FORWARD_HISTORY,
-                        s.steps(), "Ctrl-I");
+                case HistorySteps.Steps<Place> s -> forwardPastGone(page, s.steps());
                 case HistorySteps.Restore<Place> r -> restore(page, r.state(), steps);
             }
         });
+    }
+
+    /** Forward {@code steps} entries, then one more for each place whose file is gone ({@link #closeIfGone}). */
+    private static void forwardPastGone(IWorkbenchPage page, int steps) {
+        int next = steps;
+        while (true) {
+            Set<IEditorPart> open = openEditors(page);
+            if (!run(page, IWorkbenchCommandConstants.NAVIGATE_FORWARD_HISTORY, next, "Ctrl-I")
+                    || !closeIfGone(page, open)) {
+                return;
+            }
+            next = 1; // stepped over a gone place: one more
+        }
+    }
+
+    /**
+     * Closes the active editor if Back or Forward just opened it ({@code openBefore} did not have
+     * it) on a file that no longer exists, with nothing typed in it. Eclipse's history keeps the entries of closed editors, also after their file is
+     * deleted (its project deleted, say); going back to one, Eclipse cannot open the file and shows
+     * an error page in a new editor tab instead ("Unable to create part", in the Error Log too).
+     * Eclipse's own Back does the same. {@code Ctrl-O} and {@code Ctrl-I} step over such a place
+     * instead, as there is nothing to show there. Never an editor that was open already: one on a
+     * new file not written yet ({@code :e new.txt}) is a place to go back to, as in Vim. Only a
+     * local file, a workspace one or one outside ({@link #isGone}), so an editor whose input exists
+     * in another way (a compare editor, say) is never closed. Eclipse's error message is still logged: its
+     * history has no public way to tell such an entry before going to it (a closed editor's entry
+     * gives no input), nor to remove one.
+     *
+     * @return whether it closed one
+     */
+    private static boolean closeIfGone(IWorkbenchPage page, Set<IEditorPart> openBefore) {
+        IEditorPart active = page.getActiveEditor();
+        if (active == null || openBefore.contains(active) || active.isDirty() || !isGone(active.getEditorInput())) {
+            return false;
+        }
+        LOG.fine(() -> "Ctrl-O/Ctrl-I: " + active.getEditorInput().getName() + " is gone; its place is stepped over");
+        page.closeEditor(active, false);
+        return true;
+    }
+
+    /**
+     * Whether {@code input} is a local file that is not there: a workspace file (its project
+     * deleted, say) or a file outside the workspace. Anything else (a compare, a class file in a
+     * jar) is not, whatever its {@code exists()} says.
+     */
+    private static boolean isGone(IEditorInput input) {
+        IFile file = input.getAdapter(IFile.class);
+        if (file != null) {
+            return !file.exists();
+        }
+        if (input instanceof IURIEditorInput uri && uri.getURI() != null && "file".equals(uri.getURI().getScheme())) {
+            return !Files.exists(Path.of(uri.getURI()));
+        }
+        return false;
+    }
+
+    /** The editors open now, restored or not loaded yet ({@code null}s left out). */
+    private static Set<IEditorPart> openEditors(IWorkbenchPage page) {
+        Set<IEditorPart> open = new HashSet<>();
+        for (IEditorReference ref : page.getEditorReferences()) {
+            IEditorPart part = ref.getEditor(false);
+            if (part != null) {
+                open.add(part);
+            }
+        }
+        return open;
     }
 
     /**

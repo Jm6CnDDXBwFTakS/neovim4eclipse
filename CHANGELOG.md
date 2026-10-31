@@ -120,6 +120,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- `Ctrl-O` and `Ctrl-I` step over a place whose file was deleted since (its project deleted, say),
+  instead of opening an error page in a new tab ("Unable to create part"), as Eclipse's own Back
+  does there. Eclipse still writes its error to the Error Log.
 - Opening a file right after an editor was closed or minimized no longer leaves it out of Neovim
   (`Could not switch Neovim to the document's buffer`, `E36: Not enough room` in the error log).
   The closing editor measured no rows, and Neovim's screen became too small to open the next
