@@ -18,13 +18,18 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IStorage;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.ui.IPageLayout;
 import org.eclipse.ui.IPersistableElement;
 import org.eclipse.ui.IStorageEditorInput;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.part.ISetSelectionTarget;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -350,6 +355,44 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         waitUntil("a later :w to save a.txt", TIMEOUT_MS, () -> "again".equals(fileText("a.txt")));
         assertEquals(List.of(), dialogs);
         page().closeEditor(untitled, false);
+    }
+
+    /**
+     * An untitled editor opened from a project's context menu (<i>New → Untitled Text File</i>, with
+     * that project selected in the Project Explorer) works in that project's root, so
+     * {@code :w c.txt} writes {@code c.txt} there, not beside the editor that was active before (found
+     * 2026-10-31: right-click {@code mtplugin} while {@code mt/a.txt} is open; {@code c.txt} went to
+     * {@code mt}). {@link SelectedProject}.
+     */
+    @Test
+    void anUntitledEditorWorksInTheProjectSelectedInTheProjectExplorer() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        IProject other = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-selected");
+        other.create(null);
+        other.open(null);
+        ISetSelectionTarget explorer = (ISetSelectionTarget) page().showView(IPageLayout.ID_PROJECT_EXPLORER);
+        try {
+            settle(); // the tree shows the new project once its resource change is handled
+            explorer.selectReveal(new StructuredSelection(other));
+            assertEquals(new StructuredSelection(other), page().getSelection(IPageLayout.ID_PROJECT_EXPLORER),
+                    "the project selected, as a right-click selects it");
+            ITextEditor untitled = openUntitledFile();
+            StyledText untitledWidget = widgetOf(untitled);
+            runInBox(untitledWidget, "call setline(1, 'selected')");
+            expectText(untitled, "selected");
+
+            runInBox(untitledWidget, "w c.txt");
+            waitUntil("the editor on c.txt", TIMEOUT_MS, () -> "c.txt".equals(untitled.getTitle()),
+                    () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+            assertEquals(other.getFile("c.txt"), untitled.getEditorInput().getAdapter(IFile.class),
+                    "in the selected project");
+            assertFalse(project.getFile("c.txt").exists(), "not beside the editor before it");
+            assertEquals(List.of(), dialogs);
+        } finally {
+            explorer.selectReveal(StructuredSelection.EMPTY); // the next tests' untitled editors: as before
+            page().closeAllEditors(false); // before the delete: an editor on a deleted file asks
+            other.delete(true, true, null);
+        }
     }
 
     /** {@code :wq b.txt} in an untitled editor saves it as {@code b.txt}, then closes it without asking. */

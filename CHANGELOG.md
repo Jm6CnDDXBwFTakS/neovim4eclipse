@@ -74,7 +74,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   click goes back to the editor before. Your own `init.lua` mapping of either key is kept.
 - The folder Neovim works in (`:lcd`) is set once per editor, when its window opens, instead of on
   every editor switch, so a `:lcd` you type stays with that editor. An untitled document gets the
-  folder of the editor active before it, or your home folder; `'autochdir'` is honored.
+  root of the project selected in the Project Explorer or Package Explorer (right-click a project,
+  *New → Untitled Text File*, and `:w c.txt` saves it there), else the folder of the editor active
+  before it, or your home folder; `'autochdir'` is honored.
 
 - Neovim's `'showtabline'` is 0, set after your config: each editor is getting a Neovim window
   of its own, in a hidden tabpage, and a tab line would take a row from the editor. See the README,
