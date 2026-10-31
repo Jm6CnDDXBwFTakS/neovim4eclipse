@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 import org.eclipse.jface.preference.IPreferenceStore;
@@ -17,6 +19,7 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.Shell;
@@ -83,6 +86,36 @@ class MenuVisibilityTest {
      * ({@code &&} is a literal ampersand). Example: {@code "Se&arch"} gives {@code 'a'}; no
      * mnemonic gives {@code 0}.
      */
+    /**
+     * Each entry of the Neovim menu has its own underlined letter, so {@code Alt+V} then a letter
+     * runs it: v Neovim Mode, A Attach, R Restart, W Welcome, n Preferences (as Eclipse's own
+     * Window > Preferences). The entries are made when the menu opens, so the test opens it as
+     * SWT would ({@code SWT.Show}).
+     */
+    @Test
+    void eachEntryOfTheMenuHasItsOwnLetter() {
+        waitUntil("the Neovim menu is shown", this::neovimMenuShown);
+        Menu bar = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
+        Menu neovim = null;
+        for (MenuItem item : bar.getItems()) {
+            if ("Neovim".equals(item.getText().replace("&", ""))) {
+                neovim = item.getMenu();
+            }
+        }
+        assertTrue(neovim != null, "the Neovim menu in the bar");
+        neovim.notifyListeners(SWT.Show, new Event()); // fills the menu, as opening it does
+        Map<String, Character> letters = new LinkedHashMap<>();
+        for (MenuItem item : neovim.getItems()) {
+            if ((item.getStyle() & SWT.SEPARATOR) == 0) {
+                String label = item.getText().split("\t")[0]; // a key binding follows a tab
+                letters.put(label.replace("&", ""), mnemonic(label));
+            }
+        }
+        neovim.notifyListeners(SWT.Hide, new Event());
+        assertEquals(Map.of("Neovim Mode", 'v', "Attach Neovim", 'a', "Restart Neovim...", 'r',
+                "Welcome...", 'w', "Preferences...", 'n'), letters);
+    }
+
     private static char mnemonic(String text) {
         for (int i = 0; i < text.length() - 1; i++) {
             if (text.charAt(i) == '&') {

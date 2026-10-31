@@ -470,31 +470,41 @@
                      value="true">
                </test>
             </visibleWhen>
+            <!-- Each entry's underlined letter (mnemonic), for the keyboard: Alt+V opens the menu,
+                 then the letter picks the entry (Linux and Windows; macOS menus have none). A letter
+                 is matched in the label case-sensitively: "v" underlines the v of "Neovim", "V"
+                 would underline nothing. Unique within this menu only. Preferences takes "n", as
+                 Eclipse's own Window > Preferences does (Prefere_n_ces). -->
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
                   label="Neovim Mode"
+                  mnemonic="v"
                   style="toggle">
             </command>
             <separator name="session" visible="true"/>
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.attach"
                   label="Attach Neovim"
+                  mnemonic="A"
                   style="push">
             </command>
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart"
                   label="Restart Neovim..."
+                  mnemonic="R"
                   style="push">
             </command>
             <separator name="prefs" visible="true"/>
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome"
                   label="Welcome..."
+                  mnemonic="W"
                   style="push">
             </command>
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences"
                   label="Preferences..."
+                  mnemonic="n"
                   style="push">
             </command>
          </menu>
