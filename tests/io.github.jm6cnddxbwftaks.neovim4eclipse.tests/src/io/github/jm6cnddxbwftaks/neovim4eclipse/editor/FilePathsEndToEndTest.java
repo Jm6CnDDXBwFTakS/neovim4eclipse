@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IFileEditorInput;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 
 /**
@@ -42,16 +46,21 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     void linkToTheProject() throws IOException {
         Path dir = Files.createTempDirectory("n4e-link");
         link = dir.resolve("proj");
-        Path target = Path.of(project.getLocation().toOSString());
-        try {
-            Files.createSymbolicLink(link, target);
-        } catch (IOException | UnsupportedOperationException e) {
-            if (!junction(link, target)) {
-                Files.delete(dir);
-                link = null;
-            }
+        if (!makeLink(link, Path.of(project.getLocation().toOSString()))) {
+            Files.delete(dir);
+            link = null;
         }
         assumeTrue(link != null, "could make neither a symbolic link nor a junction here");
+    }
+
+    /** Makes {@code link} a symbolic link to {@code target}, else a junction; whether either worked. */
+    private static boolean makeLink(Path link, Path target) throws IOException {
+        try {
+            Files.createSymbolicLink(link, target);
+            return true;
+        } catch (IOException | UnsupportedOperationException e) {
+            return junction(link, target);
+        }
     }
 
     /**
@@ -78,15 +87,20 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void removeTheLink() throws IOException {
+        closeOtherEditors();
+        if (link != null) {
+            Files.deleteIfExists(link);
+            Files.deleteIfExists(link.getParent());
+        }
+    }
+
+    /** Closes every editor but the base class's. */
+    private void closeOtherEditors() {
         for (IEditorReference ref : page().getEditorReferences()) {
             IEditorPart part = ref.getEditor(false);
             if (part != null && part != editor) {
                 page().closeEditor(part, false);
             }
-        }
-        if (link != null) {
-            Files.deleteIfExists(link);
-            Files.deleteIfExists(link.getParent());
         }
     }
 
@@ -109,6 +123,51 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
         assertEquals(1, List.of(page().getEditorReferences()).stream()
                 .filter(r -> r.getTitle().equals("other.txt")).count(), "one editor on the file");
+    }
+
+    /**
+     * A linked folder (<i>New → Folder → Link to alternate location</i>) whose target was given
+     * through a link, reached by its real path: {@code :e} opens the workspace file in the linked
+     * folder. The lookup resolves the path, which is real already, so it needs the folder's recorded
+     * spelling compared by the one rule ({@code NewFiles.workspaceFileAt}, its last step). Found
+     * 2026-10-31 on Windows, where {@code ~\src} was a junction to the profile's {@code src}: the
+     * link was made through the junction, {@code gf} gave the real path, and no editor opened.
+     * Example: {@code e2e/ext} linked to {@code /tmp/n4e-viaN/via}, a link to
+     * {@code /tmp/n4e-realN}; {@code :e /tmp/n4e-realN/ext.txt} opens {@code /e2e/ext/ext.txt}.
+     */
+    @Test
+    void eByTheRealPathOpensAFileInAFolderLinkedThroughALink() throws Exception {
+        Path real = Files.createTempDirectory("n4e-real");
+        Path ext = real.resolve("ext.txt");
+        Files.writeString(ext, "outside\n", StandardCharsets.UTF_8);
+        Path via = Files.createTempDirectory("n4e-via").resolve("via");
+        IFolder folder = project.getFolder("ext");
+        try {
+            assumeTrue(makeLink(via, real), "could make neither a symbolic link nor a junction here");
+            folder.createLink(IPath.fromOSString(via.toString()), IResource.NONE, null);
+            IFile linked = folder.getFile("ext.txt");
+            String inside = "return require('neovim4eclipse.project_files').inside('"
+                    + ext.toString().replace("\\", "\\\\") + "')";
+            waitUntil("Neovim to know the linked folder", TIMEOUT_MS,
+                    () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
+
+            session.inputAsync(":e " + ext.toString().replace("\\", "\\\\") + "<CR>");
+
+            waitUntil("ext.txt's editor, on the linked workspace file", TIMEOUT_MS, () -> {
+                IEditorPart active = page().getActiveEditor();
+                return active != null && active.getEditorInput() instanceof IFileEditorInput input
+                        && input.getFile().equals(linked);
+            }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
+        } finally {
+            closeOtherEditors();
+            if (folder.exists()) {
+                folder.delete(true, null);
+            }
+            Files.deleteIfExists(via);
+            Files.deleteIfExists(via.getParent());
+            Files.deleteIfExists(ext);
+            Files.deleteIfExists(real);
+        }
     }
 
     /**

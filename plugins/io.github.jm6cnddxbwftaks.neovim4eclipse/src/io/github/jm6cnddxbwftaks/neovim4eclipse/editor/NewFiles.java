@@ -108,6 +108,21 @@ final class NewFiles {
      * {@code C:\work} a junction to {@code C:\ws}, {@code C:\work\proj\A.java} gives
      * {@code /proj/A.java}. Case needs nothing here: Eclipse's local file system ignores it on Windows
      * and macOS itself.
+     *
+     * <p><b>The other way round</b>: a project or linked folder whose location Eclipse recorded
+     * through a junction, reached by the real path. Resolving the path cannot help (it is real
+     * already); the recorded location is the one to resolve. So, last, each folder Neovim was told
+     * about ({@link ProjectFolders#locations}) is compared by the one rule ({@link FilePaths#below}),
+     * and a match is looked up again under the folder's recorded spelling ({@link #throughAFolder}).
+     * Example: {@code mt/ext} linked to {@code C:\Users\me\home\src\outside}, with
+     * {@code C:\Users\me\home\src} a junction to {@code C:\Users\me\src} (the user's
+     * {@code ~/src} when {@code HOME} is {@code C:\Users\me\home}): {@code gf} onto
+     * {@code C:\Users\me\src\outside\ext.txt} gives {@code /mt/ext/ext.txt}. Before (found
+     * 2026-10-31, Windows, with a link made by {@code IFolder.createLink}), no workspace file was
+     * found, no editor opened, and Neovim read the file itself, though it counted the folder as the
+     * project's. The same link made with <i>New → Folder</i> was found by Eclipse's lookup anyway,
+     * for a reason not known (same JDK, whose {@code getCanonicalPath} resolves the junction); this
+     * step makes the answer not depend on how the link was made.
      */
     static IFile workspaceFileAt(Path path) {
         IFile file = inOpenProject(path);
@@ -117,7 +132,27 @@ final class NewFiles {
                 file = inOpenProject(real);
             }
         }
-        return file;
+        return file != null ? file : throughAFolder(path);
+    }
+
+    /**
+     * The workspace file at {@code path} found under the recorded spelling of the project or linked
+     * folder it is in by the one rule, or {@code null} (see {@link #workspaceFileAt}). Example:
+     * folder {@code C:\work\ext} (a junction's path) and {@code path}
+     * {@code C:\ws\ext\a.txt} (its target's): looked up as {@code C:\work\ext\a.txt}.
+     */
+    private static IFile throughAFolder(Path path) {
+        FilePaths.Platform here = FilePaths.Platform.current();
+        for (String folder : ProjectFolders.locations()) {
+            String below = FilePaths.below(path.toString(), folder, here);
+            if (below != null) {
+                IFile file = inOpenProject(Path.of(folder).resolve(below));
+                if (file != null) {
+                    return file;
+                }
+            }
+        }
+        return null;
     }
 
     private static IFile inOpenProject(Path path) {

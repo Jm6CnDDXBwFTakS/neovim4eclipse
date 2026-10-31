@@ -85,6 +85,12 @@ public final class ProjectFolders implements IResourceChangeListener {
      * Written by {@link #current} in {@link #SENDER}, read by the listener.
      */
     private static volatile Set<IPath> linkedFolders = Set.of();
+    /**
+     * The folders the last walk sent, as Eclipse records them: each open project's location and each
+     * linked folder's target, spelled as the user gave it. Written by {@link #current}, read by
+     * {@link #locations}.
+     */
+    private static volatile List<String> lastFolders = List.of();
 
     private ProjectFolders(Supplier<NeovimSession> session) {
         this.session = session;
@@ -190,7 +196,18 @@ public final class ProjectFolders implements IResourceChangeListener {
             }
         }
         linkedFolders = Set.copyOf(linked);
+        lastFolders = List.copyOf(folders);
         return new ArrayList<>(folders);
+    }
+
+    /**
+     * The folders Neovim was last told about ({@link #current}), as Eclipse records them, for the
+     * lookup of a path's workspace file through a link ({@code NewFiles.workspaceFileAt}). Empty
+     * before the first walk. Any thread. Example: project {@code app} at {@code /ws/app}, with
+     * {@code app/ext} linked to {@code /data/ext}, gives {@code [/ws/app, /data/ext]}.
+     */
+    static List<String> locations() {
+        return lastFolders;
     }
 
     @Override

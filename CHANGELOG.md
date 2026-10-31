@@ -117,6 +117,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- On Windows, a file in a linked folder (or a project) whose location goes through a junction is
+  found by its real path too (`gf`, `:e`), however Eclipse recorded the location. Found with a
+  link made in code: `gf` onto the file's real path opened no editor, and Neovim read the file
+  itself. A link made with *New → Folder* was found already.
 - `:vimgrep` into files with no editor opens their editors: its first match's, and the next one's
   with `:cnext` and `]q`. Before, only files Neovim already had a buffer for opened (any system;
   reported on macOS). Its `(1 of 2): ...` line now shows in the opened editor's message line,
