@@ -205,8 +205,18 @@ final class ViewportFollower {
         }
     }
 
-    /** Measures the text area and sends its size if it changed. */
+    /**
+     * Measures the text area and sends its size if it changed. Not while the area has no room at all
+     * (0 pixels wide or high): an editor that is closing, or whose part is minimized, shows nothing,
+     * and Neovim's screen, which every editor shares, keeps its size. Before, such an editor sent
+     * 1 × 1 cells, and Neovim, shrunk to that, then refused a tab for the next editor's window (E36,
+     * found 2026-10-31 on macOS: closing an editor right before another opened).
+     */
     private void update() {
+        Rectangle area = text.getClientArea();
+        if (area.width <= 0 || area.height <= 0) {
+            return;
+        }
         Font font = text.getFont();
         if (font != measuredFont) {
             measuredFont = font;

@@ -218,6 +218,23 @@ class ViewportFollowerTest {
         assertArrayEquals(new int[] { 1, 1 }, ViewportFollower.cells(text, charWidth), "never below one cell");
     }
 
+    /**
+     * A text area with no room (the editor closing, or its part minimized) sends no size: Neovim's
+     * screen keeps the size it has, and a later window still has room (E36 before). Back at its
+     * size, nothing changed, so nothing is sent then either.
+     */
+    @Test
+    void anEditorWithNoRoomSendsNoSize() {
+        follower.start();
+        sent.clear();
+        text.setBounds(0, 0, 0, 0);
+        paint();
+        assertEquals(List.of(), sent, "no size for an area of 0 × 0");
+        shell.layout(true, true);
+        paint();
+        assertEquals(List.of(), sent, "the same size as before: nothing new");
+    }
+
     @Test
     void afterCloseNothingIsSent() {
         follower.start();
