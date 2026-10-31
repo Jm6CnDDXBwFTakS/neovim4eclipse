@@ -777,7 +777,7 @@ narrowly as it can, and it is listed here.
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
 expanded): where Neovim is (blank to search, its folder, or the program; see
 [Finding Neovim](#finding-neovim)), whether to show the toolbar toggle, and
-whether to show the *Neovim* menu in the menu bar. With the menu hidden, its entries stay reachable:
+whether to show the *Neovim* menu in the menu bar (`Alt+V` opens it on Linux and Windows). With the menu hidden, its entries stay reachable:
 the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
 through *Window → Preferences*.
 Changing the executable restarts Neovim and re-attaches the active editor.

@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -27,8 +28,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
- * The "Show Neovim menu in the menu bar" preference: the page offers it, and changing it adds or
- * removes the Neovim menu while Eclipse runs (through {@code visibleWhen} in {@code plugin.xml}).
+ * The Neovim menu in the menu bar: its mnemonic, and the "Show Neovim menu in the menu bar"
+ * preference, which the page offers and which adds or removes the menu while Eclipse runs (through
+ * {@code visibleWhen} in {@code plugin.xml}).
  */
 class MenuVisibilityTest {
 
@@ -50,6 +52,47 @@ class MenuVisibilityTest {
 
         store.setValue(PreferenceConstants.SHOW_MENU, true);
         waitUntil("the Neovim menu is back", this::neovimMenuShown);
+    }
+
+    /**
+     * A menu's mnemonic is the letter after {@code &} in its text, underlined; Alt with it opens the
+     * menu (Linux, Windows; macOS has none). With two menus on one letter, that key only moves
+     * between them, so the Neovim menu takes V ({@code Neo&vim}), which no other menu of the bar
+     * uses. Before, it took N, which is Navigate's.
+     */
+    @Test
+    void theMenuOpensWithAltVALetterNoOtherMenuUses() {
+        waitUntil("the Neovim menu is shown", this::neovimMenuShown);
+        Menu bar = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
+        List<String> others = new ArrayList<>();
+        for (MenuItem item : bar.getItems()) {
+            String text = item.getText();
+            if ("Neovim".equals(text.replace("&", ""))) {
+                assertEquals('v', mnemonic(text), "the Neovim menu's text: " + text);
+            } else {
+                others.add(text);
+            }
+        }
+        for (String text : others) {
+            assertTrue(mnemonic(text) != 'v', "another menu uses V: " + text + "; the bar: " + others);
+        }
+    }
+
+    /**
+     * The mnemonic of a menu's text, in lower case: the character after the first single {@code &}
+     * ({@code &&} is a literal ampersand). Example: {@code "Se&arch"} gives {@code 'a'}; no
+     * mnemonic gives {@code 0}.
+     */
+    private static char mnemonic(String text) {
+        for (int i = 0; i < text.length() - 1; i++) {
+            if (text.charAt(i) == '&') {
+                if (text.charAt(i + 1) != '&') {
+                    return Character.toLowerCase(text.charAt(i + 1));
+                }
+                i++; // skip the second & of "&&"
+            }
+        }
+        return 0;
     }
 
     @Test

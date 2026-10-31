@@ -48,6 +48,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The *Neovim* menu's underlined letter is V (*Neo<u>v</u>im*, `Alt+V` on Linux and Windows), not
+  N: N is *Navigate*'s, and with two menus on N, `Alt+N` only moved between them.
 - The status bar's mode reads `INSERT`, `NORMAL`, `VISUAL LINE` by default, without Vim's dashes
   (the *Short* mode style); hovering it shows Vim's wording (`-- INSERT --`). Choose *Full* in
   *Preferences → Neovim → Status Bar* to keep `-- INSERT --`.

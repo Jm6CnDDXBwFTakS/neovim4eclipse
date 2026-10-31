@@ -453,8 +453,16 @@
          <!-- The order: the mode (used most), then what acts on the running Neovim, then the
               dialogs, Preferences last as in Eclipse's Window menu. Attach is here for an editor
               that did not attach by itself; Detach is not (Neovim Mode off already gives the keys
-              back to Eclipse), its command stays reachable through Quick Access (Ctrl+3). -->
-         <menu id="io.github.jm6cnddxbwftaks.neovim4eclipse.menu" label="Neovim" mnemonic="N">
+              back to Eclipse), its command stays reachable through Quick Access (Ctrl+3).
+              The mnemonic (the underlined letter: Alt+V opens the menu on Linux and Windows) is
+              V, as in Neo_v_im. N is Navigate's in every Eclipse, and with two menus on one
+              letter, Alt+N only moves between them. No top-level menu of Eclipse's packages
+              uses V (File F, Edit E, Source S, Refactor t, Navigate N, Search a, Project P,
+              Run R, Window W, Help H); MenuVisibilityTest checks the bar the tests run with.
+              Lower case on purpose: Eclipse puts the & before the first place the letter occurs
+              in the label, matching case, so mnemonic="V" finds nothing in "Neovim" and the
+              menu silently gets no mnemonic at all. -->
+         <menu id="io.github.jm6cnddxbwftaks.neovim4eclipse.menu" label="Neovim" mnemonic="v">
             <!-- The "Show Neovim menu in the menu bar" preference (NeovimPropertyTester). -->
             <visibleWhen checkEnabled="false">
                <test
