@@ -48,13 +48,25 @@ public record ViewportSize(int columns, int rows) {
     }
 
     /**
+     * The fewest text rows Neovim's window is given, whatever the editor's height: two. With one,
+     * Neovim cannot open another window: each editor's window is opened in a tabpage of its own
+     * ({@code LuaScripts.WINDOWS}), and {@code nvim_open_tabpage} fails with {@code E36: Not enough
+     * room} when the new window would get a single row beside its status line (checked on Neovim
+     * 0.12.6; {@code windows_spec.lua}). Example: an editor being closed, or minimized, measures
+     * 0 rows, which gave a screen of 2 rows (1 of text, 1 status line); the next editor opened
+     * found no room for its window, and its document was not shown in Neovim.
+     */
+    static final int MIN_TEXT_ROWS = 2;
+
+    /**
      * The grid for an editor of {@code editorColumns} × {@code editorRows} cells. A tiny or
-     * collapsed editor (0 rows while its part is minimized) still gets at least one cell of text, so
-     * Neovim always has a window to put the cursor in.
+     * collapsed editor (0 rows while its part is minimized, or while it is closed) still gets at
+     * least one column and {@link #MIN_TEXT_ROWS} rows of text, so Neovim always has a window to put
+     * the cursor in, and room to open the next editor's window.
      */
     public static ViewportSize forEditor(int editorColumns, int editorRows, Overhead overhead) {
         return new ViewportSize(Math.max(1, editorColumns) + overhead.columns(),
-                Math.max(1, editorRows) + overhead.rows());
+                Math.max(MIN_TEXT_ROWS, editorRows) + overhead.rows());
     }
 
     @Override

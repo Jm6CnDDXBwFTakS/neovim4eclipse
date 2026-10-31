@@ -65,6 +65,32 @@ t.test('a window is opened in its own tab without entering it, so Eclipse sees n
   t.eq({}, t.sent('eclipse_cursor'))
 end)
 
+--- Makes Neovim's screen as small as the editor's `rows` of text need, as the session's resize
+--- does: the rows, the status line (laststatus=2, Neovim's default) and the command line. No tab
+--- line (WINDOWS hides it). Counted from the options, not measured with winheight(): in this
+--- harness (nvim -l) Neovim does not lay out its current tab again for new 'lines', though a new
+--- tabpage gets the new size.
+local function screen_for(rows)
+  vim.o.laststatus = 2
+  vim.o.lines = rows + 1 + vim.o.cmdheight
+end
+
+-- Why ViewportSize.MIN_TEXT_ROWS is 2: a closed or minimized editor measures 0 rows, and on a
+-- screen with one text row the next editor's window could not be opened (E36), so its document
+-- was not shown in Neovim. If Neovim ever opens it on one row, the floor could go back to 1.
+t.test('a window opens on the smallest screen the plug-in sends (two text rows), not on one', function()
+  start()
+  screen_for(2)
+  local win = open(buffer(3))
+  t.eq(2, #vim.api.nvim_list_tabpages(), 'opened')
+  t.ok(vim.api.nvim_win_is_valid(win))
+
+  screen_for(1)
+  local ok, err = pcall(open, buffer(3))
+  t.eq(false, ok, 'one text row leaves no room')
+  t.ok(tostring(err):find('E36', 1, true), 'E36: Not enough room, not ' .. tostring(err))
+end)
+
 t.test("a new window's jump history starts empty instead of copying the current window's", function()
   start()
   local a = buffer(30)

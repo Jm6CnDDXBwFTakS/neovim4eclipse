@@ -117,6 +117,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Opening a file right after an editor was closed or minimized no longer leaves it out of Neovim
+  (`Could not switch Neovim to the document's buffer`, `E36: Not enough room` in the error log).
+  The closing editor measured no rows, and Neovim's screen became too small to open the next
+  editor's window; Neovim now keeps at least two rows of text. Found by a UI test on macOS.
 - On Windows, a file in a linked folder (or a project) whose location goes through a junction is
   found by its real path too (`gf`, `:e`), however Eclipse recorded the location. Found with a
   link made in code: `gf` onto the file's real path opened no editor, and Neovim read the file

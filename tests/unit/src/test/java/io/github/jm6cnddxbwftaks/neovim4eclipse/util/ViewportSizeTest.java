@@ -19,10 +19,19 @@ class ViewportSizeTest {
         assertEquals(new ViewportSize(100, 40), ViewportSize.forEditor(100, 40, ViewportSize.Overhead.NONE));
     }
 
+    /**
+     * One column and two rows of text at least: with one row, Neovim could not open the next
+     * editor's window (E36, see {@link ViewportSize#MIN_TEXT_ROWS}). Example: an editor being closed
+     * measures 0 × 0; with the default status line the grid is 5 × 3, not 5 × 2.
+     */
     @Test
-    void aCollapsedEditorStillGetsOneCellOfText() {
-        assertEquals(new ViewportSize(5, 2), ViewportSize.forEditor(0, 0, new ViewportSize.Overhead(1, 4)));
-        assertEquals(new ViewportSize(1, 1), ViewportSize.forEditor(-3, -1, ViewportSize.Overhead.NONE));
+    void aCollapsedEditorStillGetsOneColumnAndTwoRowsOfText() {
+        assertEquals(new ViewportSize(5, 3), ViewportSize.forEditor(0, 0, new ViewportSize.Overhead(1, 4)));
+        assertEquals(new ViewportSize(1, 2), ViewportSize.forEditor(-3, -1, ViewportSize.Overhead.NONE));
+        assertEquals(new ViewportSize(100, 3), ViewportSize.forEditor(100, 1, new ViewportSize.Overhead(1, 0)),
+                "a one-line editor too");
+        assertEquals(new ViewportSize(100, 3), ViewportSize.forEditor(100, 2, new ViewportSize.Overhead(1, 0)),
+                "two lines are kept as they are");
     }
 
     @Test
