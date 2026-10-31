@@ -485,9 +485,30 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             if (link.exists()) {
                 link.delete(true, null);
             }
+            // Neovim read ext.txt itself in step 7: a buffer of its own, which would stay listed and,
+            // once the file is deleted, modified (E211), stopping a later test's :bufdo in it.
+            wipeBuffersUnder(outside);
             Files.deleteIfExists(ext);
             Files.deleteIfExists(outside);
         }
+    }
+
+    /**
+     * Wipes Neovim's buffers of the files under {@code folder}, a folder outside the test project:
+     * the base class wipes only its own project's, and one Neovim serves every test. A buffer left
+     * listed would be entered by a later test's {@code :bufdo}.
+     */
+    private void wipeBuffersUnder(Path folder) {
+        SessionProbe.lua(session, """
+                local paths = require('neovim4eclipse.paths')
+                local rules = paths.rules(paths.current())
+                for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                  local name = vim.api.nvim_buf_get_name(buf)
+                  if name ~= '' and rules.inside(name, FOLDER) then
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                  end
+                end
+                return 0""".replace("FOLDER", lua(folder.toString())));
     }
 
     private static String lua(String s) {
