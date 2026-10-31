@@ -58,8 +58,8 @@ end)
 -- jump into one fires only BufAdd before the read (Neovim 0.12.6). Found on macOS 2026-10-30: the
 -- buffers had no hook, and Eclipse opened no editor. What the hook cannot prevent: to search a file,
 -- :vimgrep loads it itself, filetype detection included, so the matched buffers keep a filetype; and
--- the first match stays loaded from that search, with a swap file, which BufAdd turns off. A later
--- jump (:cnext) is read by the hook. Both go to Eclipse to open their editors.
+-- the first match stays loaded from that search (without a swap file: the search makes none). A
+-- later jump (:cnext) is read by the hook. Both go to Eclipse to open their editors.
 t.test(':vimgrep and :cnext into project files: Eclipse gets each file; :cnext reads by the hook', function()
   local root = project()
   vim.o.updatecount = 200 -- nvim -l starts with swap files off (0), a normal Neovim with 200
@@ -84,6 +84,26 @@ t.test(':vimgrep and :cnext into project files: Eclipse gets each file; :cnext r
   t.eq({}, seen, ':cnext: read by the hook, no BufReadPre, BufReadPost or FileType')
   entered = t.sent('eclipse_buf_enter')
   t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4], 'its file, for Eclipse to open its editor')
+end)
+
+-- Where no swap file can be made (E303; on Windows, the UI tests' long paths), :vimgrep stopped at a
+-- prompt for each file it searched (found 2026-10-30). Its search now makes none, so it runs through;
+-- here, from Lua, E303 would be an error. A regular file as 'directory' cannot hold swap files on
+-- any system.
+t.test(':vimgrep runs through where no swap file can be made, and \'swapfile\' comes back', function()
+  local root = project()
+  vim.o.updatecount = 200 -- nvim -l starts with swap files off (0), a normal Neovim with 200
+  local not_a_folder = vim.fn.tempname()
+  vim.fn.writefile({}, not_a_folder)
+  vim.o.directory = not_a_folder .. '//'
+  vim.o.swapfile = true
+  vim.cmd.lcd(vim.fn.fnameescape(root))
+  vim.cmd('silent vimgrep /B/ src/*.java')
+  t.eq(2, #vim.fn.getqflist(), 'both matches')
+  t.eq('n', vim.api.nvim_get_mode().mode, 'no prompt')
+  t.same_file(file(root, 'src', 'A.java'), vim.api.nvim_buf_get_name(0))
+  t.eq(false, vim.bo.swapfile, 'the first match has none')
+  t.eq(true, vim.go.swapfile, 'the global value is back')
 end)
 
 -- BufAdd checks a buffer only when BufNew did not, under the same name: resolving a path
