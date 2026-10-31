@@ -10,11 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 
 import org.eclipse.core.filebuffers.FileBuffers;
 import org.eclipse.core.filebuffers.LocationKind;
@@ -225,6 +227,29 @@ class NewFileEndToEndTest extends EndToEndTestBase {
 
         waitUntil("the editor to close", TIMEOUT_MS, () -> target.isDisposed());
         assertFalse(project.getFile("gone.txt").exists());
+    }
+
+    /**
+     * Where file names ignore case (macOS, Windows), a window folder spelled in another case still
+     * gives short names in messages: after {@code :lcd} to the project's folder in upper case,
+     * {@code :e new.txt} says {@code "new.txt" [New]}, not the full path. Neovim shortens a name
+     * only when it starts with the window's folder, so the folder and the name must agree by the
+     * file system's rule. Skipped where names keep case (Linux), as the file system tells. The
+     * manual test "Short file names in messages".
+     */
+    @Test
+    void aNewFilesMessageNamesItShortAfterLcdInAnotherCase() {
+        Path folder = Path.of(project.getLocation().toOSString());
+        Path upper = folder.resolveSibling(folder.getFileName().toString().toUpperCase(Locale.ROOT));
+        assumeTrue(!upper.toString().equals(folder.toString()) && Files.isDirectory(upper),
+                "file names keep their case here");
+        runInBox(widget, "lcd " + upper.toString().replace(" ", "\\ "));
+
+        runInBox(widget, "e new.txt");
+
+        ITextEditor opened = activeEditorNamed("new.txt");
+        expectMessage(opened, "\"new.txt\" [New]");
+        closeAll();
     }
 
     @Test

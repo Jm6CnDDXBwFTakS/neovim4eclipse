@@ -5,6 +5,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
@@ -26,6 +28,7 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IFileEditorInput;
+import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
@@ -236,7 +239,16 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             IEditorPart active = page().getActiveEditor();
             return active != null && active.getEditorInput() instanceof IFileEditorInput input
                     && input.getFile().equals(file);
-        }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
+        }, () -> "; active: " + describe(page().getActiveEditor()));
+    }
+
+    /** The editor's input, with its location when it is a file outside the workspace. */
+    private static String describe(IEditorPart part) {
+        if (part == null) {
+            return "none";
+        }
+        return part.getEditorInput() instanceof IURIEditorInput uri && !(part.getEditorInput() instanceof IFileEditorInput)
+                ? "a file outside the workspace, " + uri.getURI() : String.valueOf(part.getEditorInput());
     }
 
     /**
@@ -285,17 +297,18 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
 
     /**
      * Asserts one editor titled {@code title} and one Neovim buffer for {@code file}: the buffers are
-     * counted by resolved path ({@code fs_realpath}), so a second buffer under another spelling of the
-     * same file counts too.
+     * counted by the one rule for paths ({@code neovim4eclipse.paths}: links, case where the system
+     * ignores it, separators), so a second buffer under another spelling of the same file counts too.
      */
     private void assertOneEditorAndOneBuffer(String title, Path file, String spelling) {
         assertEquals(1, List.of(page().getEditorReferences()).stream()
                 .filter(r -> r.getTitle().equals(title)).count(), "one editor on the file, " + spelling);
         assertEquals(1, ((Number) SessionProbe.lua(session, """
-                local want, n = vim.uv.fs_realpath(FILE), 0
+                local paths = require('neovim4eclipse.paths')
+                local rules, n = paths.rules(paths.current()), 0
                 for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                   local name = vim.api.nvim_buf_get_name(buf)
-                  if name ~= '' and vim.uv.fs_realpath(name) == want then n = n + 1 end
+                  if name ~= '' and rules.same(name, FILE) then n = n + 1 end
                 end
                 return n""".replace("FILE", lua(file.toString())))).intValue(),
                 () -> "one Neovim buffer for the file, " + spelling + "; " + SessionProbe.lua(session, """
@@ -314,14 +327,18 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     private void wipeBuffers(Path... files) {
         StringBuilder wanted = new StringBuilder();
         for (Path file : files) {
-            wanted.append("[vim.uv.fs_realpath(").append(lua(file.toString())).append(") or ''] = true, ");
+            wanted.append(lua(file.toString())).append(", ");
         }
         SessionProbe.lua(session, """
-                local wanted = { WANTED }
+                local paths = require('neovim4eclipse.paths')
+                local rules = paths.rules(paths.current())
                 for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-                  local name = vim.uv.fs_realpath(vim.api.nvim_buf_get_name(buf))
-                  if name and wanted[name] then
-                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                  local name = vim.api.nvim_buf_get_name(buf)
+                  for _, file in ipairs({ WANTED }) do
+                    if name ~= '' and rules.same(name, file) then
+                      pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                      break
+                    end
                   end
                 end
                 return 0""".replace("WANTED", wanted));
@@ -438,6 +455,132 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             } else {
                 leaveAndDelete(dir, c);
             }
+        }
+    }
+
+    /**
+     * Where file names ignore case (macOS, Windows), another case of an open file's name reaches its
+     * editor: {@code :e B.TXT} goes to b.txt's editor, with no second editor or buffer, and after a
+     * change {@code :wq! B.TXT} saves the editor and closes it, as {@code :wq} would (a copy onto its
+     * own file would leave it unsaved). Skipped where names keep case (Linux), as the file system
+     * tells. The manual tests "An open file spelled another way" and ":wq! under another spelling of
+     * the editor's own file".
+     */
+    @Test
+    void anotherCaseOfAnOpenFilesNameReachesItsEditorWhereNamesIgnoreCase() throws Exception {
+        ITextEditor b = openFile("b.txt", "one\n");
+        IFile bFile = ((IFileEditorInput) b.getEditorInput()).getFile();
+        Path real = Path.of(bFile.getLocation().toOSString());
+        assumeTrue(Files.exists(real.resolveSibling("B.TXT")), "file names keep their case here");
+        page().activate(editor);
+        waitForAttach(editor, "test.txt");
+
+        session.inputAsync(":e B.TXT<CR>");
+
+        waitForActiveAndAttached(bFile, "b.txt's editor, by B.TXT");
+        assertOneEditorAndOneBuffer("b.txt", real, "as B.TXT");
+
+        typeSlowly(widgetOf(b), "Atwo");
+        UiTestSupport.escape(widgetOf(b));
+        settle();
+        session.inputAsync(":wq! B.TXT<CR>");
+
+        waitUntil("the editor closed", TIMEOUT_MS, () -> page().findEditor(b.getEditorInput()) == null);
+        assertEquals("onetwo\n", Files.readString(real, StandardCharsets.UTF_8));
+    }
+
+    /**
+     * A new file under folders that do not exist yet, in a project whose location goes through a
+     * link: {@code :e new/deep/c.txt} opens an empty editor, and {@code :w ++p} makes the folders
+     * and the file, which the editor then shows as the project's file (one file on disk, reached by
+     * both paths). The manual test "A name under folders that do not exist yet".
+     * Example: project at {@code /tmp/n4e-viaN/p}, a link to {@code /tmp/n4e-realN}; the file is
+     * written at {@code /tmp/n4e-realN/new/deep/c.txt}.
+     */
+    @Test
+    void aNewFileUnderMissingFoldersInAProjectUnderALink() throws Exception {
+        Path real = Files.createTempDirectory("n4e-real");
+        Path via = Files.createTempDirectory("n4e-via").resolve("p");
+        Path a = real.resolve("a.txt");
+        Path c = real.resolve("new").resolve("deep").resolve("c.txt");
+        IProject linked = null;
+        try {
+            assumeTrue(makeLink(via, real), "could make neither a symbolic link nor a junction here");
+            Files.writeString(a, "a\n", StandardCharsets.UTF_8);
+            linked = projectAt("e2e-via-new", via, a);
+            ITextEditor aEditor = (ITextEditor) IDE.openEditor(page(), linked.getFile("a.txt"), TEXT_EDITOR, true);
+            waitForAttach(aEditor, "a.txt of the project under the link");
+
+            session.inputAsync(":e new/deep/c.txt<CR>");
+
+            // A file not there yet opens by its location, and its first write makes it the
+            // workspace file's editor (NewFiles): the project is found then, through the link.
+            waitUntil("the new c.txt's editor", TIMEOUT_MS, () -> page().getActiveEditor() != null
+                    && "c.txt".equals(page().getActiveEditor().getTitle()), () -> "; active: " + describe(page().getActiveEditor()));
+            ITextEditor cEditor = (ITextEditor) page().getActiveEditor();
+            waitForAttach(cEditor, "the new c.txt");
+            assertEquals("", documentOf(cEditor).get(), "a new, empty editor");
+            typeSlowly(widgetOf(cEditor), "isea");
+            UiTestSupport.escape(widgetOf(cEditor));
+            settle();
+            session.inputAsync(":w ++p<CR>");
+
+            IFile cFile = linked.getFile("new/deep/c.txt");
+            waitForActive(cFile, "c.txt's editor on the project's file, after the write");
+            assertEquals("sea", Files.readString(c, StandardCharsets.UTF_8));
+            assertTrue(cFile.exists(), "the workspace knows the file, in the project");
+            assertFalse(((ITextEditor) page().getActiveEditor()).isDirty(), "saved");
+        } finally {
+            if (linked != null) {
+                removeProject(linked, real, c, c.getParent(), c.getParent().getParent(), a);
+            } else {
+                Files.deleteIfExists(real);
+            }
+            session.leaveFolder(via.toString(), TestWait.duration());
+            Files.deleteIfExists(via);
+            Files.deleteIfExists(via.getParent());
+        }
+    }
+
+    /**
+     * Deleting a project whose location is a junction, contents and all, while one of its files is
+     * open (Windows): Neovim's window works in the project's folder, and Windows deletes no folder a
+     * process works in, so Neovim first leaves it ({@code ProjectFolderExit}), recognizing the
+     * folder through the junction. The delete then finishes, and Neovim goes on in the other
+     * editors. Windows only (junctions are Windows'; the Lua side, links included, is
+     * folders_spec.lua). The manual test "Deleting a project reached through a junction".
+     */
+    @Test
+    void aProjectReachedThroughAJunctionIsDeletedWithItsFileOpen() throws Exception {
+        assumeTrue(FilePaths.Platform.current().windows(), "a Windows junction");
+        Path real = Files.createTempDirectory("n4e-real");
+        Path via = Files.createTempDirectory("n4e-via").resolve("p");
+        Path d = real.resolve("d.txt");
+        Files.writeString(d, "dee\n", StandardCharsets.UTF_8);
+        IProject linked = null;
+        try {
+            assumeTrue(junction(via, real), "could not make a junction");
+            linked = projectAt("e2e-junction", via, d);
+            ITextEditor dEditor = (ITextEditor) IDE.openEditor(page(), linked.getFile("d.txt"), TEXT_EDITOR, true);
+            waitForAttach(dEditor, "d.txt through the junction");
+
+            linked.delete(true, true, null); // contents too: through the junction, real's files
+
+            assertFalse(linked.exists(), "the project is gone");
+            assertFalse(Files.exists(d), "its file deleted");
+            waitUntil("test.txt active again", TIMEOUT_MS, () -> page().getActiveEditor() == editor);
+            waitForAttach(editor, "test.txt after the delete");
+            assertTrue(session.isAlive(), "Neovim goes on");
+        } finally {
+            closeOtherEditors();
+            wipeBuffers(d);
+            if (linked != null && linked.exists()) {
+                linked.delete(false, true, null);
+            }
+            session.leaveFolder(via.toString(), TestWait.duration());
+            Files.deleteIfExists(via);
+            Files.deleteIfExists(via.getParent());
+            leaveAndDelete(real, d, real.resolve(".project"));
         }
     }
 
