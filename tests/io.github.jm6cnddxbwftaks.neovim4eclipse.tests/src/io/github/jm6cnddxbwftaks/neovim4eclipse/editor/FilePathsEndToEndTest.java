@@ -12,6 +12,8 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
@@ -38,8 +40,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
  * Names that reach a workspace file another way, here through a symbolic link to the project's folder
  * (on macOS {@code /var} is one; on Windows a junction, made when a symbolic link may not be, or an
  * 8.3 short name does the same): {@code :e} opens the workspace file itself, and {@code :wq!} of the
- * editor's own file under that name saves it.
- * Both follow the one rule for paths ({@code util/FilePaths}, {@code NewFiles.workspaceFileAt});
+ * editor's own file under that name saves it. Also folder names with a space and a non-ASCII letter,
+ * and Windows' other spellings of one file (lower-case drive, {@code /}, 8.3 short name).
+ * All follow the one rule for paths ({@code util/FilePaths}, {@code NewFiles.workspaceFileAt});
  * its cases are {@code FilePathsTest} and {@code paths_spec.lua}.
  */
 class FilePathsEndToEndTest extends EndToEndTestBase {
@@ -213,27 +216,10 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             session.inputAsync(":e " + b.toString().replace("\\", "\\\\") + "<CR>");
             UiTestSupport.settle(session, TIMEOUT_MS);
             waitForActive(bFile, "b.txt's editor still, by the real path");
-            assertEquals(1, List.of(page().getEditorReferences()).stream()
-                    .filter(r -> r.getTitle().equals("b.txt")).count(), "one editor on the file");
-            assertEquals(1, ((Number) SessionProbe.lua(session, """
-                    local want, n = vim.uv.fs_realpath(FILE), 0
-                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-                      local name = vim.api.nvim_buf_get_name(buf)
-                      if name ~= '' and vim.uv.fs_realpath(name) == want then n = n + 1 end
-                    end
-                    return n""".replace("FILE", lua(b.toString())))).intValue(), "one Neovim buffer for the file");
+            assertOneEditorAndOneBuffer("b.txt", b, "by the real path");
         } finally {
             closeOtherEditors();
-            // Wipe the closed files' buffers, as the base class does for its own project's: one Neovim
-            // serves every test.
-            SessionProbe.lua(session, """
-                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-                      local name = vim.uv.fs_realpath(vim.api.nvim_buf_get_name(buf))
-                      if name and (name == vim.uv.fs_realpath(A) or name == vim.uv.fs_realpath(B)) then
-                        pcall(vim.api.nvim_buf_delete, buf, { force = true })
-                      end
-                    end
-                    return 0""".replace("A", lua(a.toString())).replace("B", lua(b.toString())));
+            wipeBuffers(a, b);
             if (linked.exists()) {
                 linked.delete(false, true, null); // keeps the files; deleted below
             }
@@ -253,9 +239,206 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
     }
 
+    /**
+     * Waits until the active editor is the one on {@code file} and Neovim has attached to it. An editor
+     * that {@code :e} opened gets its Neovim buffer only on that attach, a moment after it is active.
+     */
+    private void waitForActiveAndAttached(IFile file, String what) {
+        waitForActive(file, what);
+        waitForAttach((ITextEditor) page().getActiveEditor(), what);
+    }
+
+    /**
+     * {@code file}'s 8.3 short name, as {@code dir /x} shows it, or {@code null} where the volume
+     * makes none. Asked of {@code cmd}'s {@code %~sI}, with the path passed in an environment variable
+     * so that a non-ASCII letter reaches {@code cmd} intact; Java has no API for it, and Neovim's
+     * {@code fnamemodify(name, ':8')} gave the name back unchanged (Neovim 0.12.6, 2026-10-31).
+     * Example: {@code C:\Users\me\AppData\Local\Temp\n4e path ü1\c.txt} gives
+     * {@code C:\Users\me\AppData\Local\Temp\N4EPAT~1\c.txt}.
+     */
+    private static String shortName(Path file) throws IOException, InterruptedException {
+        // Separate arguments with no spaces, so Java quotes none of them and cmd sees ("%N4E_PATH%").
+        ProcessBuilder builder = new ProcessBuilder("cmd", "/c", "for", "%I", "in", "(\"%N4E_PATH%\")", "do", "@echo", "%~sI");
+        builder.environment().put("N4E_PATH", file.toString());
+        Process cmd = builder.redirectErrorStream(true).start();
+        String out = new String(cmd.getInputStream().readAllBytes(), StandardCharsets.US_ASCII).strip();
+        if (cmd.waitFor() != 0 || out.equals(file.toString()) || !out.chars().allMatch(ch -> ch > 32 && ch < 127 || ch == ' ')) {
+            return null; // none, or a long name cmd could not print in ASCII
+        }
+        Path shortPath = Path.of(out);
+        return Files.exists(shortPath) && Files.isSameFile(shortPath, file) ? out : null;
+    }
+
     /** {@code s} as a Lua string literal. */
     private static String lua(String s) {
         return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'";
+    }
+
+    /**
+     * {@code path} as typed after {@code :e}: each {@code \} doubled, as the other tests here do, and
+     * each space escaped, since {@code :e} reads a space as the end of the name.
+     * Example: {@code C:\Temp\n4e path ü1\c.txt} is typed {@code C:\\Temp\\n4e\ path\ ü1\\c.txt}.
+     */
+    private static String typed(String path) {
+        return path.replace("\\", "\\\\").replace(" ", "\\ ");
+    }
+
+    /**
+     * Asserts one editor titled {@code title} and one Neovim buffer for {@code file}: the buffers are
+     * counted by resolved path ({@code fs_realpath}), so a second buffer under another spelling of the
+     * same file counts too.
+     */
+    private void assertOneEditorAndOneBuffer(String title, Path file, String spelling) {
+        assertEquals(1, List.of(page().getEditorReferences()).stream()
+                .filter(r -> r.getTitle().equals(title)).count(), "one editor on the file, " + spelling);
+        assertEquals(1, ((Number) SessionProbe.lua(session, """
+                local want, n = vim.uv.fs_realpath(FILE), 0
+                for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                  local name = vim.api.nvim_buf_get_name(buf)
+                  if name ~= '' and vim.uv.fs_realpath(name) == want then n = n + 1 end
+                end
+                return n""".replace("FILE", lua(file.toString())))).intValue(),
+                () -> "one Neovim buffer for the file, " + spelling + "; " + SessionProbe.lua(session, """
+                        local out = { 'want ' .. tostring(vim.uv.fs_realpath(FILE)) .. ' (' .. FILE .. ')' }
+                        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                          local name = vim.api.nvim_buf_get_name(buf)
+                          out[#out + 1] = buf .. ' ' .. name .. ' -> ' .. tostring(vim.uv.fs_realpath(name))
+                        end
+                        return table.concat(out, '; ')""".replace("FILE", lua(file.toString()))));
+    }
+
+    /**
+     * Wipes the buffers of {@code files} (closed editors' files), as the base class does for its own
+     * project's: one Neovim serves every test.
+     */
+    private void wipeBuffers(Path... files) {
+        StringBuilder wanted = new StringBuilder();
+        for (Path file : files) {
+            wanted.append("[vim.uv.fs_realpath(").append(lua(file.toString())).append(") or ''] = true, ");
+        }
+        SessionProbe.lua(session, """
+                local wanted = { WANTED }
+                for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                  local name = vim.uv.fs_realpath(vim.api.nvim_buf_get_name(buf))
+                  if name and wanted[name] then
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                  end
+                end
+                return 0""".replace("WANTED", wanted));
+    }
+
+    /**
+     * A project at {@code dir}, outside the workspace folder ({@code File → New → Project}, with
+     * <i>Use default location</i> off), opened, once Neovim knows it, so that {@code :e} into it is
+     * sent to Eclipse.
+     */
+    private IProject projectAt(String name, Path dir, Path someFile) throws Exception {
+        IProject created = ResourcesPlugin.getWorkspace().getRoot().getProject(name);
+        IProjectDescription description = ResourcesPlugin.getWorkspace().newProjectDescription(name);
+        description.setLocation(IPath.fromOSString(dir.toString()));
+        created.create(description, null);
+        created.open(null);
+        String inside = "return require('neovim4eclipse.project_files').inside(" + lua(someFile.toString()) + ")";
+        waitUntil("Neovim to know the project " + name, TIMEOUT_MS,
+                () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
+        return created;
+    }
+
+    /** Undoes {@link #projectAt}: closes the editors, wipes the buffers, deletes project and files. */
+    private void removeProject(IProject created, Path dir, Path... files) throws Exception {
+        closeOtherEditors();
+        wipeBuffers(files);
+        if (created.exists()) {
+            created.delete(false, true, null); // keeps the files; deleted below
+        }
+        Path[] contents = Arrays.copyOf(files, files.length + 1);
+        contents[files.length] = dir.resolve(".project");
+        leaveAndDelete(dir, contents);
+    }
+
+    /**
+     * A project in a folder whose name has a space and a non-ASCII letter: {@code :e} of a file's full
+     * path opens its workspace editor, once, with one Neovim buffer. The manual test "Windows path
+     * spellings" did this by hand; it runs on every system, since each spells such names its own way:
+     * on macOS APFS and HFS+ may give back {@code ü} decomposed (u and a combining mark, NFD) where
+     * Java and Neovim spelled it composed (NFC).
+     * Example: project {@code e2e-spelled} at {@code C:\Users\me\AppData\Local\Temp\n4e path ü123};
+     * {@code :e C:\...\n4e path ü123\c.txt}.
+     */
+    @Test
+    void aFolderNameWithASpaceAndANonAsciiLetterOpensTheWorkspaceFile() throws Exception {
+        Path dir = Files.createTempDirectory("n4e path \u00fc");
+        Path c = dir.resolve("c.txt");
+        Files.writeString(c, "sea\n", StandardCharsets.UTF_8);
+        IProject spelled = null;
+        try {
+            spelled = projectAt("e2e-spelled", dir, c);
+            IFile cFile = spelled.getFile("c.txt");
+
+            session.inputAsync(":e " + typed(c.toString()) + "<CR>");
+
+            waitForActiveAndAttached(cFile, "c.txt's editor, on the workspace file");
+            assertOneEditorAndOneBuffer("c.txt", c, "by its full path");
+        } finally {
+            if (spelled != null) {
+                removeProject(spelled, dir, c);
+            } else {
+                leaveAndDelete(dir, c);
+            }
+        }
+    }
+
+    /**
+     * The other ways Windows spells one file, each reaching the same editor and the same Neovim
+     * buffer: the path as given, its drive letter in lower case, {@code /} for {@code \}, and its 8.3
+     * short name ({@code dir /x} shows them). Before each, the base class's editor is made active, so
+     * every spelling must find the file's editor again rather than leave it active. Windows only
+     * (skipped elsewhere, by assumption: the fragment imports no {@code junit.jupiter.api.condition}
+     * for {@code @EnabledOnOs}). Where the volume makes no 8.3 names, that spelling is left out with a
+     * note on standard output. The rule these follow has its cases in {@code path-cases.tsv}; this
+     * test runs them on a real disk and through Eclipse's lookup ({@code NewFiles.workspaceFileAt}).
+     * Example spellings: {@code C:\Users\me\...\n4e path ü123\c.txt}, {@code c:\Users\...},
+     * {@code C:/Users/me/...}, {@code C:\Users\me\AppData\Local\Temp\N4EPAT~1\c.txt}.
+     */
+    @Test
+    void eachWindowsSpellingOfAFileFindsItsOneEditorAndBuffer() throws Exception {
+        assumeTrue(FilePaths.Platform.current().windows(), "Windows spellings");
+        Path dir = Files.createTempDirectory("n4e path \u00fc");
+        Path c = dir.resolve("c.txt");
+        Files.writeString(c, "sea\n", StandardCharsets.UTF_8);
+        IProject spelled = null;
+        try {
+            spelled = projectAt("e2e-spelled-win", dir, c);
+            IFile cFile = spelled.getFile("c.txt");
+            String given = c.toString();
+            assertEquals(true, given.matches("^[A-Z]:\\\\.*"), "a path with an upper-case drive: " + given);
+            String shortName = shortName(c);
+            List<String[]> spellings = new ArrayList<>(List.of(
+                    new String[] { "as given", given },
+                    new String[] { "lower-case drive", Character.toLowerCase(given.charAt(0)) + given.substring(1) },
+                    new String[] { "/ separators", given.replace('\\', '/') }));
+            if (shortName == null) {
+                System.out.println("FilePathsEndToEndTest: no 8.3 short name for " + given + ", that spelling left out");
+            } else {
+                spellings.add(new String[] { "8.3 short name", shortName });
+            }
+
+            for (String[] spelling : spellings) {
+                page().activate(editor);
+                waitForAttach(editor, "the base editor, before the " + spelling[0] + " spelling");
+
+                session.inputAsync(":e " + typed(spelling[1]) + "<CR>");
+
+                waitForActiveAndAttached(cFile, "c.txt's editor, " + spelling[0] + ": " + spelling[1]);
+                assertOneEditorAndOneBuffer("c.txt", c, spelling[0] + ": " + spelling[1]);
+            }
+        } finally {
+            if (spelled != null) {
+                removeProject(spelled, dir, c);
+            } else {
+                leaveAndDelete(dir, c);
+            }
+        }
     }
 
     /**
