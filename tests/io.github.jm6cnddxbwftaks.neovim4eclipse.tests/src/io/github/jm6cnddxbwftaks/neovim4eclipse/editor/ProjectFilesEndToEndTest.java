@@ -6,11 +6,14 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -18,6 +21,7 @@ import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
@@ -26,6 +30,7 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.IFileEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
@@ -393,6 +398,13 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
         expectText("abalpha\nbeta\ngamma\n");
         assertEquals("abalpha", String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]")));
+
+        // The insert is still one insert for Neovim: u takes it back in one step, and . repeats it
+        // (I, then "ab") on the next line, as after any insert.
+        session.inputAsync("u");
+        expectText("alpha\nbeta\ngamma\n");
+        session.inputAsync("j.");
+        expectText("alpha\nabbeta\ngamma\n");
     }
 
     /**
@@ -490,6 +502,138 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             wipeBuffersUnder(outside);
             Files.deleteIfExists(ext);
             Files.deleteIfExists(outside);
+        }
+    }
+
+    /**
+     * Eclipse's own Back (Alt+Left, Cmd+[ on macOS) after {@code gf} goes back to the file {@code gf}
+     * left, as {@code Ctrl-O} does: the plug-in activates the opened editor in a way Eclipse's
+     * navigation history records ({@code NavigationHistorySteps}). The manual test "gf onto a text
+     * file, then back".
+     */
+    @Test
+    void gfThenEclipsesBackGoesToTheFileGfLeft() throws Exception {
+        createFile("b.txt", "one\ntwo\n");
+        ITextEditor a = open(createFile("a.txt", "see b.txt\n"));
+        try {
+            session.inputAsync("0fb");
+            settle();
+            session.inputAsync("gf");
+            waitForFollowInto("b.txt");
+
+            runCommand("org.eclipse.ui.navigate.backwardHistory"); // Alt+Left, Cmd+[
+
+            waitForAttach(a, "a.txt after Eclipse's Back");
+            assertEquals(a, page().getActiveEditor());
+        } finally {
+            closeAllBut(null);
+        }
+    }
+
+    /**
+     * A global mark into a closed file: {@code 'A} from another editor reopens the file's editor with
+     * the caret on the mark's line. A closed file keeps its buffer, and the buffer keeps its marks
+     * (docs/design/BUFFER_NUMBERS.md). The manual test "A global mark into a closed file".
+     */
+    @Test
+    void aGlobalMarkIntoAClosedFileReopensItOnTheMarksLine() throws Exception {
+        ITextEditor a = open(createFile("a.txt", "a\n"));
+        ITextEditor b = open(createFile("b.txt", "b1\nb2\nb3\n"));
+        try {
+            session.inputAsync("2GmA");
+            settle();
+            page().closeEditor(b, false);
+            waitForAttach(a, "a.txt, b.txt closed");
+
+            session.inputAsync("'A");
+
+            ITextEditor reopened = waitForFollowInto("b.txt");
+            assertEquals(2, cursorLine(), "on the mark's line");
+            waitUntil("the caret on line 2", TIMEOUT_MS,
+                    () -> widgetOf(reopened).getLineAtOffset(widgetOf(reopened).getCaretOffset()) == 1);
+        } finally {
+            // Global marks outlive the test: Neovim keeps them in its ShaDa file.
+            SessionProbe.lua(session, "vim.cmd('delmarks A') return 0");
+            closeAllBut(null);
+        }
+    }
+
+    /**
+     * A script's {@code :edit!} on a file with an unsaved change keeps the change (Eclipse's text, not
+     * the file on disk), leaves the editor dirty, and keeps a mark on its line: the plug-in reads the
+     * document back into the buffer instead of the file. The manual test "A plug-in's :edit! on an
+     * open file". Example: line 1 changed to {@code xalpha} and {@code 'a} set on line 2; after
+     * {@code :edit!} line 1 still reads {@code xalpha} and {@code 'a} is still on line 2.
+     */
+    @Test
+    void aScriptsEditBangKeepsTheUnsavedChangeAndTheMarks() {
+        session.inputAsync("ggix<Esc>2Gma3G");
+        expectText("xalpha\nbeta\ngamma\n");
+        settle();
+        assertTrue(editor.isDirty(), "an unsaved change");
+
+        SessionProbe.lua(session, "vim.cmd('edit!') return 0");
+        settle();
+
+        assertEquals("xalpha", SessionProbe.lua(session, "return vim.fn.getline(1)"), "Eclipse's text, not the file's");
+        assertTrue(editor.isDirty(), "still unsaved");
+        assertEquals(2, ((Number) SessionProbe.lua(session, "return vim.fn.line(\"'a\")")).intValue(), "'a on its line");
+        assertEquals(3, cursorLine(), "the cursor on its line");
+    }
+
+    /**
+     * Several existing projects imported at once (<i>File → Import → Existing Projects into
+     * Workspace</i> makes them in one workspace operation): Neovim learns every one's folder, and
+     * {@code gf} onto a file of the last opens its editor. One walk, or a few, sends them all
+     * ({@code ProjectFolders}, "Bursts"). The manual test "Closing, opening and importing projects";
+     * closing and opening are {@link #aProjectOpenedOrClosedLaterIsSeenByNeovim}.
+     * Example: {@code e2e-imp1} to {@code e2e-imp3} at {@code /tmp/n4e-importsN/imp1} and so on;
+     * {@code gf} onto {@code /tmp/n4e-importsN/imp3/i.txt}.
+     */
+    @Test
+    void severalProjectsImportedAtOnceAreAllSeenByNeovim() throws Exception {
+        Path root = Files.createTempDirectory("n4e-imports");
+        List<String> names = List.of("imp1", "imp2", "imp3");
+        List<IProject> imported = new ArrayList<>();
+        Path target = root.resolve("imp3").resolve("i.txt");
+        try {
+            for (String name : names) {
+                Files.createDirectories(root.resolve(name));
+                Files.writeString(root.resolve(name).resolve("i.txt"), "imported " + name + "\n", StandardCharsets.UTF_8);
+            }
+            open(createFile("a.txt", target + "\n"));
+            ResourcesPlugin.getWorkspace().run(monitor -> {
+                for (String name : names) {
+                    IProject made = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-" + name);
+                    IProjectDescription description = ResourcesPlugin.getWorkspace().newProjectDescription(made.getName());
+                    description.setLocation(IPath.fromOSString(root.resolve(name).toString()));
+                    made.create(description, monitor);
+                    made.open(monitor);
+                    imported.add(made);
+                }
+            }, null);
+            for (String name : names) {
+                String inside = "return require('neovim4eclipse.project_files').inside("
+                        + lua(root.resolve(name).resolve("i.txt").toString()) + ")";
+                waitUntil("Neovim to know " + name, TIMEOUT_MS, () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
+            }
+
+            session.inputAsync("gg0gf");
+
+            ITextEditor opened = waitForFollowInto("i.txt");
+            expectText(opened, "imported imp3\n");
+            assertEquals(imported.get(2).getFile("i.txt"), ((IFileEditorInput) opened.getEditorInput()).getFile());
+            assertEquals("", filetypesSeen(), "Neovim did not read it itself");
+        } finally {
+            closeAllBut(null);
+            wipeBuffersUnder(root);
+            for (IProject made : imported) {
+                made.delete(false, true, null); // keeps the files; deleted below
+            }
+            for (String name : names) {
+                leaveAndDelete(root.resolve(name), root.resolve(name).resolve("i.txt"), root.resolve(name).resolve(".project"));
+            }
+            leaveAndDelete(root);
         }
     }
 

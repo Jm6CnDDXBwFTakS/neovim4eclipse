@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import org.eclipse.core.resources.IFile;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IFileEditorInput;
+import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +77,38 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
                 () -> "alpha".equals(eval(fresh, "getline(1)")),
                 () -> "; line 1 is " + eval(fresh, "getline(1)"));
         assertEquals("alpha\nbeta\ngamma\n", document.get(), "Eclipse's text is kept");
+    }
+
+    /**
+     * The new Neovim learns the project folders at its first attach, as the first one did, so
+     * {@code gf} onto a closed project file opens its editor instead of Neovim reading the file
+     * itself (with its filetype, and the user's language servers). The manual test "After Restart
+     * Neovim". Example: test.txt's first line is {@code alpha}, and the project has a file named
+     * {@code alpha}; {@code gf} there opens that file's editor.
+     */
+    @Test
+    void aRestartedNeovimKnowsTheProjectFolders() throws Exception {
+        IFile alpha = createFile("alpha", "named on line 1\n");
+        String path = alpha.getLocation().toOSString().replace("'", "''");
+        try {
+            Activator.getDefault().restartNeovim();
+            NeovimSession fresh = Activator.getDefault().currentSession();
+            attachedTo(editor, "test.txt in the new Neovim");
+            waitUntil("the new Neovim to know the project", TIMEOUT_MS, () -> "1".equals(eval(fresh,
+                    "luaeval(\"require('neovim4eclipse.project_files').inside(_A) and 1 or 0\", '" + path + "')")));
+
+            fresh.inputAsync("gg0gf");
+
+            waitUntil("alpha's editor", TIMEOUT_MS, () -> page().getActiveEditor() != null
+                    && page().getActiveEditor().getEditorInput() instanceof IFileEditorInput input
+                    && input.getFile().equals(alpha));
+            attachedTo((ITextEditor) page().getActiveEditor(), "alpha, opened by the new Neovim");
+        } finally {
+            IEditorPart opened = page().findEditor(new FileEditorInput(alpha));
+            if (opened != null) {
+                page().closeEditor(opened, false);
+            }
+        }
     }
 
     /**
