@@ -326,7 +326,9 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         ITextEditor untitled = openUntitledFile();
         StyledText untitledWidget = widgetOf(untitled);
         int bufnr = session.getAttachedBufnr();
-        String untitledName = String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0)"));
+        // Kept in Neovim, not spliced into later Lua as text: on Windows the name has backslashes,
+        // which a quoted Lua string would read as escapes (C:\Users: "invalid escape sequence").
+        SessionProbe.lua(session, "_G.neovim4eclipse_test_untitled = vim.api.nvim_buf_get_name(0)");
         runInBox(untitledWidget, "call setline(1, 'hello')");
         expectText(untitled, "hello");
 
@@ -340,7 +342,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
         waitUntil("Neovim's buffer named a.txt, none left of the untitled name", TIMEOUT_MS,
                 () -> Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0):match('a%.txt$') ~= nil"
-                        + " and vim.fn.bufexists('" + untitledName.replace("'", "''") + "') == 0")));
+                        + " and vim.fn.bufexists(_G.neovim4eclipse_test_untitled) == 0")));
 
         runInBox(untitledWidget, "call setline(1, 'again')");
         expectText(untitled, "again");
