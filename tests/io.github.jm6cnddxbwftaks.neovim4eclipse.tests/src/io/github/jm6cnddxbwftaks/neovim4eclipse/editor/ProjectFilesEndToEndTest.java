@@ -485,6 +485,8 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             if (link.exists()) {
                 link.delete(true, null);
             }
+            Files.deleteIfExists(ext);
+            Files.deleteIfExists(outside);
         }
     }
 
