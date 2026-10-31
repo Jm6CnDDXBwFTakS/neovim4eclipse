@@ -16,8 +16,11 @@ import java.util.concurrent.TimeUnit;
 
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.text.IDocument;
@@ -437,6 +440,51 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
                     () -> Boolean.FALSE.equals(SessionProbe.lua(session, inside)));
         } finally {
             other.delete(true, true, null);
+        }
+    }
+
+    /**
+     * A linked folder made while Neovim runs (<i>New → Folder → Link to alternate location</i>):
+     * its files are the project's from then on, so {@code gf} onto one by its real path opens its
+     * editor and Neovim never reads it. Once the link is removed, the file is outside every project
+     * again: Neovim reads it itself (a {@code FileType} event) and no editor opens. The manual test
+     * "A linked folder, added while running" does the same by hand.
+     */
+    @Test
+    void aLinkedFolderMadeAndRemovedWhileRunningIsSeenByNeovim() throws Exception {
+        Path outside = Files.createTempDirectory("linked");
+        Path ext = outside.resolve("ext.txt");
+        Files.writeString(ext, "outside text\n", StandardCharsets.UTF_8);
+        String inside = "return require('neovim4eclipse.project_files').inside(" + lua(ext.toString()) + ")";
+        IFolder link = project.getFolder("ext");
+        ITextEditor a = open(createFile("a.txt", ext + "\n"));
+        try {
+            link.createLink(IPath.fromOSString(outside.toString()), IResource.NONE, null);
+            waitUntil("Neovim to know the linked folder", TIMEOUT_MS,
+                    () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
+            session.inputAsync("gg0gf");
+            ITextEditor opened = waitForFollowInto("ext.txt");
+            expectText(opened, "outside text\n");
+            assertEquals("", bufferOption("filetype"), "Neovim did not read it: no filetype");
+            assertEquals("acwrite", bufferOption("buftype"), "a document's buffer now");
+            assertEquals("", filetypesSeen(), "no FileType event while linked");
+
+            page().closeEditor(opened, false);
+            link.delete(true, null);
+            waitUntil("Neovim to forget the removed link", TIMEOUT_MS,
+                    () -> Boolean.FALSE.equals(SessionProbe.lua(session, inside)));
+            page().activate(a);
+            waitForAttach(a, "a.txt again");
+            session.inputAsync("gg0gf");
+            waitUntil("Neovim to read ext.txt itself", TIMEOUT_MS, () -> filetypesSeen().contains("ext.txt="),
+                    () -> "; seen: " + filetypesSeen());
+            settle();
+            assertEquals(null, editorTitled("ext.txt"), "no editor for a file outside the projects");
+        } finally {
+            closeAllBut(null);
+            if (link.exists()) {
+                link.delete(true, null);
+            }
         }
     }
 
