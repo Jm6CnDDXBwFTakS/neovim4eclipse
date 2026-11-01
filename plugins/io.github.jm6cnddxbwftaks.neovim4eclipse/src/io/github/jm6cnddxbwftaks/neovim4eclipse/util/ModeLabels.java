@@ -134,7 +134,7 @@ public final class ModeLabels {
             case 's' -> SELECT;
             case 'S' -> SELECT_LINE;
             case VimModes.CTRL_S -> SELECT_BLOCK;
-            case 'c' -> mode.startsWith("cv") ? EX : COMMAND; // c, cr; cv, cvr
+            case 'c' -> VimModes.isExMode(mode) ? EX : COMMAND; // c, cr; cv, cvr
             case 'r' -> mode.equals("rm") ? MORE : mode.equals("r?") ? CONFIRM : HIT_ENTER;
             case '!' -> SHELL;
             case 't' -> TERMINAL;

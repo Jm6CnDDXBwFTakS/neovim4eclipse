@@ -63,6 +63,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * focus) abandons the line in Neovim ({@code <C-c>}), as before; not after Enter, when the command
  * itself may move the focus ({@link #submitted}).
  *
+ * <h2>Ex mode</h2>
+ * In Ex mode ({@code gQ}) Neovim ignores {@code <C-c>}: the line and the mode stay. Abandoning it
+ * there closed the box over a line Neovim still had open, and every view of it was ignored, so the
+ * user typed blind. So in Ex mode the box stays open when another control takes the focus, and a
+ * click in the editor keeps the focus in the box. Such a click must not reach Neovim either
+ * ({@code NeovimEditorController.neovimHandlesMouse}): Neovim takes it as a click on its command line
+ * and moves the line's cursor to the start, so {@code ec}, a click and {@code ho 1} ran
+ * {@code :ho 1ec} (E476). Example: {@code gQ}, {@code echo}, a click in the editor: the box still
+ * shows {@code :echo} and has the focus; {@code  1}, Enter prints 1.
+ *
  * <h2>Eclipse's shortcuts</h2>
  * Eclipse runs its key bindings before any widget sees the key, and the box is part of the editor,
  * so without help {@code Ctrl+V} would run the editor's Paste and {@code Ctrl+W} would close the
@@ -112,6 +122,13 @@ final class CommandLineBox {
 
         /** Pastes {@code text} into Neovim's line (a paste, an input method's committed text). */
         void paste(String text);
+
+        /**
+         * Whether Neovim's line can be abandoned with {@code <C-c>}: not in Ex mode ({@code gQ}),
+         * where Neovim ignores {@code <C-c>} and keeps both the line and the mode (checked with
+         * Neovim 0.12.6). Only {@code :vi} leaves Ex mode.
+         */
+        boolean cancellable();
     }
 
     /** Gap between the box and the candidate list or output popup above it. */
@@ -159,6 +176,8 @@ final class CommandLineBox {
      * and that must keep the line.
      */
     private final Listener abandonOnFocusElsewhere = this::onFocusAnywhere;
+    /** Display filter while the box is open: in Ex mode, a click in the editor stays with the box. */
+    private final Listener keepClicksInExMode = this::onEditorClick;
     private final FocusListener focusChange = new FocusListener() {
         @Override
         public void focusGained(FocusEvent e) {
@@ -297,6 +316,8 @@ final class CommandLineBox {
         messageLine.makeRoomBelow(roomBelowOutput());
         box.setFocus();
         display.addFilter(SWT.FocusIn, abandonOnFocusElsewhere);
+        display.addFilter(SWT.MouseDown, keepClicksInExMode);
+        display.addFilter(SWT.MouseDoubleClick, keepClicksInExMode);
         stateListener.run();
     }
 
@@ -356,8 +377,29 @@ final class CommandLineBox {
 
     /** See {@link #abandonOnFocusElsewhere}. */
     private void onFocusAnywhere(Event event) {
-        if (isOpen() && !submitted && event.widget instanceof Control control && !isInBox(control)) {
+        if (!isOpen() || submitted || !(event.widget instanceof Control control) || isInBox(control)) {
+            return;
+        }
+        if (commands.cancellable()) {
             abandon();
+        } else if (control == host) {
+            // Ex mode: the line stays open. Back in the editor (a tab click), the box takes the
+            // focus again; after the focus event, which a focus change inside it would confuse.
+            display.asyncExec(this::focusBox);
+        }
+    }
+
+    /** See {@link #keepClicksInExMode}: the click is swallowed and the box keeps the focus. */
+    private void onEditorClick(Event event) {
+        if (isOpen() && event.widget == host && !commands.cancellable()) {
+            event.type = SWT.None; // no other listener or filter sees it: the editor's caret stays
+            focusBox();
+        }
+    }
+
+    private void focusBox() {
+        if (isOpen() && !box.isFocusControl()) {
+            box.setFocus();
         }
     }
 
@@ -502,6 +544,8 @@ final class CommandLineBox {
             return;
         }
         display.removeFilter(SWT.FocusIn, abandonOnFocusElsewhere);
+        display.removeFilter(SWT.MouseDown, keepClicksInExMode);
+        display.removeFilter(SWT.MouseDoubleClick, keepClicksInExMode);
         output.close(false); // output kept for this command line goes with it
         messageLine.makeRoomBelow(0); // a message shown meanwhile moves down to the bottom edge
         if (listFrame != null) {

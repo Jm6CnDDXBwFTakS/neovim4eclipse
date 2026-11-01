@@ -47,6 +47,13 @@ class CommandLineBoxTest {
     /** Records what the box sends, e.g. {@code "type a"}, {@code "paste text"}. */
     private static final class FakeCommands implements CommandLineBox.Commands {
         final List<String> calls = new ArrayList<>();
+        /** False plays Neovim in Ex mode ({@code gQ}), where {@code <C-c>} does nothing. */
+        boolean cancellable = true;
+
+        @Override
+        public boolean cancellable() {
+            return cancellable;
+        }
 
         @Override
         public void type(String keys) {
@@ -349,6 +356,44 @@ class CommandLineBoxTest {
         host.notifyListeners(SWT.FocusIn, new Event());
         waitUntil("the box to close", () -> !commandLine.isOpen());
         assertEquals(List.of("type <CR>", "type x", "type <C-c>"), commands.calls);
+    }
+
+    /**
+     * Ex mode ({@code gQ}): Neovim ignores {@code <C-c>}, so a click away must not abandon the line.
+     * Before, the box closed and ignored Neovim's line, which stayed open: the user typed blind.
+     */
+    @Test
+    void inExModeAnotherControlTakingTheFocusKeepsTheLine() {
+        commands.cancellable = false;
+        Text box = show(line(":abc", 4));
+        // What the editor taking the focus delivers (moving the real focus is unreliable under a virtual display).
+        host.notifyListeners(SWT.FocusIn, new Event());
+        assertTrue(commandLine.isOpen());
+        assertEquals(List.of(), commands.calls, "no <C-c>");
+        commandLine.show(line(":abcd", 5)); // Neovim's line still shows
+        assertEquals(":abcd", box.getText());
+        KeyboardFocus.require(box, TIMEOUT_MS); // back in the editor, the box has the keys again
+    }
+
+    /**
+     * Ex mode: a click in the editor stays with the box, which keeps the focus; the editor sees no
+     * press, so neither its caret nor Neovim's line moves (Neovim took a click as one on its line).
+     */
+    @Test
+    void inExModeAClickInTheEditorKeepsTheFocusInTheBox() {
+        commands.cancellable = false;
+        Text box = show(line(":abc", 4));
+        host.setCaretOffset(0);
+        Event click = new Event();
+        click.button = 1;
+        click.x = 50;
+        click.y = 5;
+        host.notifyListeners(SWT.MouseDown, click);
+        assertEquals(SWT.None, click.type, "swallowed");
+        assertTrue(commandLine.isOpen());
+        KeyboardFocus.require(box, TIMEOUT_MS);
+        assertEquals(0, host.getCaretOffset());
+        assertEquals(List.of(), commands.calls);
     }
 
     /**

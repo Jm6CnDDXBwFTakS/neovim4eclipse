@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
  * The {@code :} box ({@link CommandLineBox}) the whole way: {@code :} typed in the editor opens it,
@@ -107,6 +108,43 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         enter.character = SWT.CR;
         enter.doit = true;
         box.notifyListeners(SWT.KeyDown, enter);
+    }
+
+    /**
+     * Ex mode ({@code gQ}): a click in the editor keeps the box, its line and the focus, and does not
+     * reach Neovim's line. Before, the click sent {@code <C-c>}, which Neovim ignores in Ex mode, and
+     * closed the box over the line Neovim kept: the user typed blind. Sent to Neovim, the click also
+     * moved the line's cursor to its start ({@code :ho 1ec}). {@code :vi} leaves Ex mode.
+     */
+    @Test
+    void aClickInTheEditorKeepsExModesLine() {
+        type(widget, "gQ");
+        try {
+            Text box = boxReading(":");
+            box.insert("echo");
+            boxReading(":echo");
+
+            Event click = new Event();
+            click.button = 1;
+            click.x = 5;
+            click.y = 5;
+            widget.notifyListeners(SWT.MouseDown, click);
+            settle();
+            box = boxReading(":echo"); // still open, with the focus
+
+            box.insert(" 1");
+            boxReading(":echo 1");
+            pressEnter(box);
+            waitUntil("the command run", TIMEOUT_MS,
+                    () -> "echo 1".equals(SessionProbe.lua(session, "return vim.fn.histget(':', -1)")),
+                    () -> "; last command " + SessionProbe.lua(session, "return vim.fn.histget(':', -1)"));
+            assertEquals("cv", session.getMode(), "still in Ex mode");
+        } finally {
+            if (VimModes.isExMode(session.getMode())) {
+                session.inputAsync("<C-u>vi<CR>");
+            }
+            waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        }
     }
 
     /** {@code nnoremap ; :}: the key goes to Neovim, which opens its command line, and the box takes it over. */

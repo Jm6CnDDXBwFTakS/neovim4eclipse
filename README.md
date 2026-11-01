@@ -437,7 +437,9 @@ in it goes to Neovim, so it behaves exactly like Neovim's command line: Enter ru
 Backspace on the empty line cancels, Up/Down browse Neovim's history (the same as in a terminal,
 kept between sessions), `Ctrl-R` inserts a register, and your command-line mappings and
 abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. Clicking elsewhere in Eclipse
-cancels the line; switching to another application or input method keeps it. In the box the `Ctrl`
+cancels the line; switching to another application or input method keeps it. In Ex mode (`gQ`),
+where Vim cannot cancel a line, a click keeps it too, and a click in the editor leaves the keys in the
+box; `:vi` leaves Ex mode. In the box the `Ctrl`
 letters ticked in the preferences (see "Ctrl keys") go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-N`),
 except `Ctrl-V`, which pastes, and `Ctrl-C` with text selected, which copies (on macOS, Cmd-V and Cmd-C
 do that, and `Ctrl-V` is Neovim's). Shift+Insert pastes too, and text from an input method (IME) goes

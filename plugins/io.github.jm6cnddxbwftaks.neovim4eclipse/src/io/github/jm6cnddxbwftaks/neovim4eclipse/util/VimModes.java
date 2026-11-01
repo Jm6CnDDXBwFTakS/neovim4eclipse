@@ -42,6 +42,14 @@ public final class VimModes {
         return first(mode) == 'c';
     }
 
+    /**
+     * Ex mode ({@code gQ}: {@code cv}, {@code cvr}), where Neovim reads one command line after
+     * another until {@code :vi}, and ignores {@code <C-c>}.
+     */
+    public static boolean isExMode(String mode) {
+        return mode != null && mode.startsWith("cv");
+    }
+
     /** Modes that show a thin caret: typing modes and the command line. */
     public static boolean usesThinCaret(String mode) {
         return isTyping(mode) || isCmdline(mode);

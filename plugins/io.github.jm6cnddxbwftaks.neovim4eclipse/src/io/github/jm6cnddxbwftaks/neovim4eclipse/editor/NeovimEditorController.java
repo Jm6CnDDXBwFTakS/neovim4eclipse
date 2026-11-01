@@ -630,10 +630,12 @@ public final class NeovimEditorController implements AutoCloseable {
 
     /**
      * Whether a left click goes to Neovim's mouse ({@link NeovimMouse}): in Neovim mode, except in
-     * insert and replace mode, where Eclipse types and so places the caret itself.
+     * insert and replace mode, where Eclipse types and so places the caret itself, and in Ex mode,
+     * where Neovim would take it as a click on its command line ({@link CommandLineBox}, "Ex mode").
      */
     private boolean neovimHandlesMouse() {
-        return !closed && neovimModeActive && !VimModes.isTyping(session.getMode());
+        String mode = session.getMode();
+        return !closed && neovimModeActive && !VimModes.isTyping(mode) && !VimModes.isExMode(mode);
     }
 
     /** Whether the {@code :} box has the keyboard focus (the Vim Ctrl keys then go to its line). */
@@ -945,6 +947,11 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void paste(String text) {
             session.pasteAsync(text);
+        }
+
+        @Override
+        public boolean cancellable() {
+            return !VimModes.isExMode(session.getMode());
         }
     }
 

@@ -121,6 +121,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- In Ex mode (`gQ`), a click in the editor no longer hides the `:` box while Neovim keeps the line
+  open, which left you typing blind. The box stays, with the focus, and the click no longer moves
+  the line's cursor to its start (`echo`, a click, then ` 1` ran `:ho 1ec`).
 - A jump into a file whose editor has several pages (`:cnext` into `plugin.xml`, which the plug-in
   manifest editor opens on the form page it showed last, such as *Extensions*) now turns the editor
   to the file's text page, and Neovim follows in. Before, Eclipse showed the form page and Neovim

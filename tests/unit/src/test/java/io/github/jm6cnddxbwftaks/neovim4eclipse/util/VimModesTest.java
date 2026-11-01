@@ -23,6 +23,16 @@ class VimModesTest {
         assertFalse(VimModes.isVisual(""));
     }
 
+    /** Ex mode ({@code gQ}) is {@code cv} and {@code cvr}; a plain command line is not. */
+    @Test
+    void exMode() {
+        assertTrue(VimModes.isExMode("cv"));
+        assertTrue(VimModes.isExMode("cvr"));
+        for (String m : new String[] { "c", "cr", "n", "", null }) {
+            assertFalse(VimModes.isExMode(m), String.valueOf(m));
+        }
+    }
+
     @Test
     void operatorPendingBlockwiseIsNotVisual() {
         // Regression: "no<C-v>" contains Ctrl-V but is operator-pending, not visual.
