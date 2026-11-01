@@ -52,6 +52,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- `Esc` in insert mode is about 5 to 9 ms faster (measured on Linux): the editor switches its `Ctrl`
+  key bindings back on in one batch instead of one at a time.
 - The welcome dialog is laid out: a short opening, then *Enable, Disable*, *Eclipse Actions* and
   *Settings*, each a bold heading with its text beside it, then where to find it again. Before, it
   was one block of text whose dashed points wrapped back under their dashes. *Restart Neovim*'s
