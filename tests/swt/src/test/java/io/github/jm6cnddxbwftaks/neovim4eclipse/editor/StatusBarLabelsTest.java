@@ -154,6 +154,11 @@ class StatusBarLabelsTest {
     /**
      * Another item in the bar (Eclipse's heap status is a {@code Composite}) takes space too: what is
      * free shrinks by its width, so JFace does not have to cut the plug-in's labels.
+     *
+     * <p>The item is 800 px of a 1500 px bar, where about 1000 px are free (JFace keeps a third for
+     * its message area): too wide for the labels to keep their room on any platform's fonts. A 400 px
+     * item stopped forcing a shrink when the mode's texts got short (2026-11-01, seen on Windows): the
+     * labels then fit beside it.
      */
     @Test
     void otherItemsInTheBarAreCounted() {
@@ -166,11 +171,11 @@ class StatusBarLabelsTest {
         }
         Composite heapStatus = new Composite(bar, SWT.NONE);
         StatusLineLayoutData data = new StatusLineLayoutData();
-        data.widthHint = 400;
+        data.widthHint = 800;
         heapStatus.setLayoutData(data);
         create(EnumSet.allOf(StatusItem.class), widths(60, 90));
         assertTrue(width(StatusItem.STATUSLINE) < alone,
-                "the 400 px item left the statusline less room: " + width(StatusItem.STATUSLINE) + " < " + alone);
+                "the 800 px item left the statusline less room: " + width(StatusItem.STATUSLINE) + " < " + alone);
     }
 
     @Test
