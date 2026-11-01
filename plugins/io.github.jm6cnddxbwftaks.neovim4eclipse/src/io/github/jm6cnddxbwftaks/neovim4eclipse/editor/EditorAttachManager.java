@@ -93,6 +93,12 @@ public final class EditorAttachManager {
     /** UI thread only. Multi-page editors already given a page-change listener. */
     private final Set<MultiPageEditorPart> watchedMultiPageEditors =
             Collections.newSetFromMap(new WeakHashMap<>());
+    /**
+     * UI thread only. {@code true} while the plug-in turns a multi-page editor to its text page for
+     * Neovim ({@link #showTextPageForNeovim}): the page-change listener then attaches nothing, since
+     * the caller attaches after moving Neovim's window into the editor.
+     */
+    private boolean showingTextPageForNeovim;
     /** Guarded by {@code this}. The Neovim buffer of every document opened while attached, with its editors. */
     private final EditorBuffers<IDocument, IEditorPart> documents = new EditorBuffers<>();
     /**
@@ -317,6 +323,10 @@ public final class EditorAttachManager {
     }
 
     private void onPageChanged(MultiPageEditorPart multiPage) {
+        if (showingTextPageForNeovim) {
+            ToggleButtonRefresh.request();
+            return; // the caller attaches, after Neovim's window travelled here
+        }
         try {
             if (textEditorOf(multiPage) == null) {
                 if (isAttachedTo(multiPage)) {
@@ -498,6 +508,7 @@ public final class EditorAttachManager {
         try {
             if (showing.isPresent()) {
                 IEditorPart target = showing.get().editor();
+                showTextPageForNeovim(target, TextPages.inputOf(showing.get().document()));
                 // Eclipse records the switch in its Back history; noted as the plug-in's, and as one
                 // for Back to step over when Neovim's jump history has it (NavigationHistorySteps).
                 NavigationHistorySteps.activateForNeovim(target.getSite().getPage(), target, jumped);
@@ -582,6 +593,7 @@ public final class EditorAttachManager {
             }
             IEditorPart opened = page == null || target == null ? null : ProjectFileEditors.open(page, target);
             if (opened != null) {
+                showTextPageForNeovim(opened, TextPages.inputOf(target));
                 NavigationHistorySteps.activateForNeovim(page, opened, jumped);
                 if (textEditorOf(opened) != null) {
                     travel(session, mover, opened, leftBehind);
@@ -596,6 +608,21 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not open " + file + " for Neovim", e);
         }
         session.returnToAttachedBufferAsync();
+    }
+
+    /**
+     * Turns {@code editor}, when it is a multi-page editor, to its text page for {@code input}
+     * before Neovim follows into it ({@link TextPages}). Without it, Neovim moving into a file the
+     * editor shows on a form page (the manifest editor opens {@code plugin.xml} on the page it
+     * showed last) would be sent back, and the next keys go to the form. UI thread.
+     */
+    private void showTextPageForNeovim(IEditorPart editor, IEditorInput input) {
+        showingTextPageForNeovim = true;
+        try {
+            TextPages.show(editor, input);
+        } finally {
+            showingTextPageForNeovim = false;
+        }
     }
 
     /**

@@ -188,6 +188,58 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A quickfix entry in a file whose multi-page editor opens on a form page (the plug-in manifest
+     * editor opens {@code plugin.xml} on the page it showed last; here {@link TestMultiPageEditor}
+     * opens {@code overview*} files on its Overview page): the editor turns to its text page, so
+     * Neovim follows in, on the entry's line, and keeps the keys for the next {@code :cnext}
+     * ({@code TextPages}). The manual test "Walking the workspace's problems".
+     */
+    @Test
+    void aQuickfixEntryInAMultiPageEditorOpensItOnItsTextPage() throws Exception {
+        IFile d = createFile("overview-d.mpage", "d1\nd2\nd3\n");
+        open(createFile("a.txt", "a\n"));
+        try {
+            SessionProbe.lua(session, "vim.fn.setqflist({ { filename = " + lua(d.getLocation().toOSString())
+                    + ", lnum = 2, text = 'here' } }) return 0");
+            session.inputAsync(":cc 1<CR>");
+            ITextEditor source = waitForFollowInto("overview-d.mpage");
+            IEditorPart multiPage = page().getActiveEditor();
+            assertTrue(multiPage instanceof TestMultiPageEditor, "opened in " + multiPage);
+            assertEquals(source, EditorAttachManager.textEditorOf(multiPage), "on its Source page");
+            assertEquals(2, cursorLine());
+        } finally {
+            closeAllBut(null);
+        }
+    }
+
+    /**
+     * {@code :b} into a file whose multi-page editor is open on a form page, since the user clicked
+     * that tab: the editor turns back to the file's text page, and Neovim follows in.
+     */
+    @Test
+    void bIntoAMultiPageEditorOnAFormPageTurnsToItsTextPage() throws Exception {
+        IFile e = createFile("e.mpage", "e1\ne2\n");
+        ITextEditor a = open(createFile("a.txt", "a\n"));
+        IEditorPart multiPage = IDE.openEditor(page(), e, true);
+        try {
+            ITextEditor source = EditorAttachManager.textEditorOf(multiPage);
+            waitForAttach(source, "e.mpage");
+            int number = bufnr();
+            ((TestMultiPageEditor) multiPage).showOverview();
+            page().activate(a);
+            waitForAttach(a, "a.txt");
+
+            session.inputAsync(":b " + number + "<CR>");
+            waitForFollowInto("e.mpage");
+            assertEquals(multiPage, page().getActiveEditor());
+            assertEquals(source, EditorAttachManager.textEditorOf(multiPage), "back on its Source page");
+            assertEquals(number, bufnr());
+        } finally {
+            closeAllBut(null);
+        }
+    }
+
+    /**
      * A file made on disk after Eclipse's last refresh (here in a folder Eclipse does not know
      * either) opens with its text, not empty.
      */

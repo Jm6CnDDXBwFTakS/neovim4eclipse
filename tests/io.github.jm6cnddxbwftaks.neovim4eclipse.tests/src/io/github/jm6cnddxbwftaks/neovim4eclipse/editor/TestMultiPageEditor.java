@@ -16,6 +16,9 @@ import org.eclipse.ui.part.MultiPageEditorPart;
  * page without text (Overview). Registered for {@code *.mpage} files in {@code fragment.xml}, so
  * only the UI tests open it. The editor tab is this part, while the plug-in drives the text page
  * inside it ({@code EditorAttachManager.textEditorOf}); tab commands must use the tab.
+ *
+ * <p>A file whose name starts with {@code overview} opens on the Overview page, as the plug-in
+ * manifest editor opens {@code plugin.xml} on the form page it showed last.
  */
 public class TestMultiPageEditor extends MultiPageEditorPart {
 
@@ -33,6 +36,9 @@ public class TestMultiPageEditor extends MultiPageEditorPart {
         new Label(overview, SWT.NONE).setText("A page without text");
         setPageText(addPage(overview), "Overview");
         setPartName(getEditorInput().getName());
+        if (getEditorInput().getName().startsWith("overview")) {
+            setActivePage(1); // createPartControl selects page 0 only when no page is selected yet
+        }
     }
 
     /** Shows the Overview page, as a click on its tab would ({@code setActivePage} is protected). */

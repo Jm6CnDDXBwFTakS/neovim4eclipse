@@ -309,7 +309,8 @@ commands fill it with what Eclipse knows about the whole workspace:
 
 Then Neovim's own quickfix commands walk it, typed, mapped or in a macro: `]q` / `[q` (next /
 previous), `]Q` / `[Q` (last / first), `:cnext`, `:cprevious`, `:cc 3`, `:cnfile`, `:clist`,
-`:colder`. An entry in a file without an editor opens its editor. Example: errors in `A.java`
+`:colder`. An entry in a file without an editor opens its editor; an editor with several pages
+(the plug-in manifest editor of `plugin.xml`) turns to the file's text page. Example: errors in `A.java`
 (open) and `B.java` (closed): `:Eproblems` goes to `A.java`'s error and shows
 `(1 of 2) error: Type mismatch: ...`; `]q` opens `B.java` on its error's line.
 

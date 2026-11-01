@@ -120,6 +120,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A jump into a file whose editor has several pages (`:cnext` into `plugin.xml`, which the plug-in
+  manifest editor opens on the form page it showed last, such as *Extensions*) now turns the editor
+  to the file's text page, and Neovim follows in. Before, Eclipse showed the form page and Neovim
+  went back, so the next keys (`:cnext`) went to the form.
 - `Ctrl-O` and `Ctrl-I` step over a place whose file was deleted since (its project deleted, say),
   instead of opening an error page in a new tab ("Unable to create part"), as Eclipse's own Back
   does there. Eclipse still writes its error to the Error Log.
