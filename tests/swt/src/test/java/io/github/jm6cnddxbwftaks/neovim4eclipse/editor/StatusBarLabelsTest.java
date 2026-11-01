@@ -38,7 +38,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 class StatusBarLabelsTest {
 
     /** Mode texts as the Full style has them, the widest last (capitals, wider than average). */
-    private static final List<String> MODE_TEXTS = List.of("-- NORMAL --", "-- INSERT --", "-- (select) VISUAL BLOCK --");
+    private static final List<String> MODE_TEXTS = List.of("NORMAL", "INSERT", "(S) V-BLOCK");
 
     private Shell shell;
     private Composite bar;

@@ -45,7 +45,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLineFormat;
  * class decides what the labels say; {@link StatusBarLabels} owns the widgets and their widths.
  *
  * <p>Which labels exist changes in two ways: a preference (a part turned on or off), and the
- * {@code -- ECLIPSE --} indicator, which shows alone (Neovim's command and statusline mean nothing
+ * {@code ECLIPSE} indicator, which shows alone (Neovim's command and statusline mean nothing
  * while keys go to Eclipse), even when the mode part is off, because it says where keys go. Either
  * rebuilds the bar ({@link #refresh}); every other change only sets texts.
  *
@@ -69,15 +69,13 @@ public final class ModeStatusContribution extends ContributionItem {
     private Font boldFont;
     /** The parts the user chose (preferences, read by {@link #readPreferences}). UI thread. */
     private Set<StatusItem> chosen = StatusItem.defaults();
-    /** The mode style (preference). UI thread. */
-    private ModeLabels.Style style = ModeLabels.Style.FULL;
     /** The statusline's width in characters (preference). UI thread. */
     private int statuslineChars = PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT;
     /** The most of the bar the labels may take, in percent (preference). UI thread. */
     private int maxShare = PreferenceConstants.STATUS_MAX_SHARE_DEFAULT;
     /** Neovim's mode string ({@code nvim_get_mode().mode}); "" before Neovim said. */
     private String mode = "";
-    /** Keys go to Eclipse: the mode label says {@code -- ECLIPSE --}. */
+    /** Keys go to Eclipse: the mode label says {@code ECLIPSE}. */
     private boolean eclipse;
     /** Register being recorded into ("" when not recording); shown after the mode, as Vim does. */
     private String recording = "";
@@ -209,12 +207,11 @@ public final class ModeStatusContribution extends ContributionItem {
             return;
         }
         chosen = activator.getStatusItems();
-        style = ModeLabels.Style.of(activator.getPreferenceStore().getString(PreferenceConstants.STATUS_MODE_STYLE));
         statuslineChars = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH);
         maxShare = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_SHARE);
     }
 
-    /** The parts the user chose; only the mode while it says {@code -- ECLIPSE --}. */
+    /** The parts the user chose; only the mode while it says {@code ECLIPSE}. */
     private Set<StatusItem> partsShown() {
         if (eclipse) {
             return EnumSet.of(StatusItem.MODE);
@@ -225,11 +222,11 @@ public final class ModeStatusContribution extends ContributionItem {
     }
 
     /**
-     * The labels' sizes: the mode as wide as the widest text of the style, with room for
-     * {@code recording @a} only while recording (the label widens then, rather than always).
+     * The labels' sizes: the mode as wide as its widest text, with room for
+     * {@code rec @a} only while recording (the label widens then, rather than always).
      */
     private StatusBarLabels.Widths widths() {
-        return new StatusBarLabels.Widths(ModeLabels.texts(style, !eclipse && !recording.isEmpty()), CMD_CHARS,
+        return new StatusBarLabels.Widths(ModeLabels.texts(!eclipse && !recording.isEmpty()), CMD_CHARS,
                 statuslineChars, maxShare);
     }
 
@@ -260,7 +257,7 @@ public final class ModeStatusContribution extends ContributionItem {
     private void showTexts() {
         ModeLabels.Label label = eclipse ? ModeLabels.ECLIPSE : ModeLabels.of(mode);
         String register = eclipse ? "" : recording;
-        labels.show(StatusItem.MODE, ModeLabels.text(label, register, style), ModeLabels.tooltip(label, register, style),
+        labels.show(StatusItem.MODE, ModeLabels.text(label, register), ModeLabels.tooltip(label, register),
                 Display.getDefault().getSystemColor(foregroundColorId(label, register)));
         String cmd = StatusLineFormat.cleanText(info.cmd());
         labels.show(StatusItem.CMD, cmd, cmd.isEmpty() ? null : "Pending command: " + cmd, null);
@@ -276,20 +273,13 @@ public final class ModeStatusContribution extends ContributionItem {
         if (register != null && !register.isEmpty()) {
             return SWT.COLOR_DARK_RED;
         }
-        String name = label.name();
-        if (label == ModeLabels.ECLIPSE) {
-            return SWT.COLOR_DARK_GRAY;
-        }
-        if (name.contains("VISUAL")) {
-            return SWT.COLOR_DARK_YELLOW; // (select) VISUAL too
-        }
-        if (name.contains("INSERT") || name.contains("REPLACE") || name.startsWith("(")) {
-            return SWT.COLOR_DARK_GREEN; // (insert), (replace), (vreplace): Insert resumes after one command
-        }
-        if (name.equals("COMMAND") || name.equals("OPERATOR") || name.equals("EX")) {
-            return SWT.COLOR_DARK_BLUE;
-        }
-        return SWT.COLOR_WIDGET_FOREGROUND;
+        return switch (label.group()) {
+            case ECLIPSE -> SWT.COLOR_DARK_GRAY;
+            case VISUAL -> SWT.COLOR_DARK_YELLOW; // (S) V-BLOCK too
+            case INSERT -> SWT.COLOR_DARK_GREEN; // (INSERT) too: Insert resumes after one command
+            case PENDING -> SWT.COLOR_DARK_BLUE; // O-PENDING, COMMAND, EX
+            case OTHER -> SWT.COLOR_WIDGET_FOREGROUND;
+        };
     }
 
     @Override

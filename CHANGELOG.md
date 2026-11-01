@@ -14,9 +14,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
-- A *Mode style* for the status bar (*Preferences → Neovim → Status Bar*): Short (`INSERT`, the
-  default), Full as Vim writes it (`-- INSERT --`), or Letters (`-I-`, `-VR-`, `-(i)-`). Hovering a status bar part shows its whole
-  text, and for the short styles what it means.
+- Hovering a status bar part shows its whole text; the mode's shows Vim's own wording
+  (`-- VISUAL BLOCK --`, `-- INSERT --  recording @q`).
 - *Statusline width* (in characters) and *At most this share of the status bar*: Neovim fits your
   `'statusline'` into the width (`%<` shortens the file name, `%=` puts the position at the right),
   and in a narrow window the statusline narrows first, leaving room for Eclipse's messages.
@@ -59,9 +58,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   in the update note.
 - The *Neovim* menu's underlined letter is V (*Neo<u>v</u>im*, `Alt+V` on Linux and Windows), not
   N: N is *Navigate*'s, and with two menus on N, `Alt+N` only moved between them.
-- The status bar's mode reads `INSERT`, `NORMAL`, `VISUAL LINE` by default, without Vim's dashes
-  (the *Short* mode style); hovering it shows Vim's wording (`-- INSERT --`). Choose *Full* in
-  *Preferences → Neovim → Status Bar* to keep `-- INSERT --`.
+- The status bar's mode reads as lualine and most Neovim statuslines name it: `NORMAL`, `INSERT`,
+  `VISUAL`, `V-LINE`, `V-BLOCK`, `S-LINE`, `O-PENDING`, `V-REPLACE`, not Vim's `-- INSERT --`. After
+  `Ctrl-O` it says where you go back to, as Vim does: `(INSERT)` in Insert mode, `(S) V-BLOCK` in
+  Select mode. A recording shows as `INSERT rec @q`. The label takes less of the bar: at most 11
+  characters, 18 while recording.
 - *Preferences → Neovim* groups its settings in two boxes, *Neovim program* (the folder, which
   Neovim it finds, and the help) and *Workbench* (the check boxes); *Preferences → Neovim → Status
   Bar* spaces its rows further apart.
@@ -152,9 +153,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Enter. Neovim's live preview (`'inccommand'`) reached Eclipse's document as real edits, marking it
   unsaved, and Esc left the previewed text there while Neovim's buffer went back, so a save could
   write text you never accepted. The preview is no longer shown in the editor; Enter makes the change.
-- The status bar names Virtual Replace (`-- VREPLACE --`, was `-- REPLACE --`), one command after
-  `Ctrl-O` in Insert mode (`-- (insert) --`, was `-- NORMAL --`), Ex mode, the `-- more --` prompt
-  and a running shell command, which showed raw codes such as `-- RM --` and `-- ! --`.
+- The status bar names Virtual Replace (`V-REPLACE`, was `-- REPLACE --`), one command after
+  `Ctrl-O` in Insert mode (`(INSERT)`, was `-- NORMAL --`), Ex mode and the `-- More --` prompt, which
+  showed raw codes such as `-- RM --`.
 - File names are compared by one rule everywhere, on Windows and macOS too: in another case where
   the system ignores case, with `\` or `/`, through a link, a Windows junction or an 8.3 short
   name. So `:e` of an open file spelled another way goes to its editor, `:wq! name` of the editor's

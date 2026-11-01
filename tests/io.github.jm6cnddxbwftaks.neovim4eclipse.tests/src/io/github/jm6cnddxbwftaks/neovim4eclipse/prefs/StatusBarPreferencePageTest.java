@@ -27,8 +27,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The Status Bar page refuses numbers out of their range, and the page stays invalid (Eclipse
- * disables OK and Apply) until they are fixed; Restore Defaults selects the Short mode style and
- * the default width. The manual tests "Preferences apply at once" and "The preference pages".
+ * disables OK and Apply) until they are fixed; Restore Defaults brings back the default width.
+ * The page has no mode style to choose: the mode has one set of names (util/ModeLabels). The manual tests "Preferences apply at once" and "The preference pages".
  *
  * <p>The page is never applied, so nothing reaches the preference store: the field editors keep
  * their values until OK or Apply ({@link org.eclipse.jface.preference.FieldEditorPreferencePage}),
@@ -79,31 +79,18 @@ class StatusBarPreferencePageTest {
         assertTrue(page.isValid(), "fixed again");
     }
 
-    /** Restore Defaults, pressed as a person would, after choosing Full and another width. */
+    /** Restore Defaults, pressed as a person would, after another width; no mode style is offered. */
     @Test
-    void restoreDefaultsSelectsShortAndTheDefaultWidth() {
-        Button full = radio("Full");
-        Button shortStyle = radio("Short");
-        shortStyle.setSelection(false);
-        full.setSelection(true);
-        full.notifyListeners(SWT.Selection, new Event()); // as a click: the field editor takes the value
+    void restoreDefaultsBringsBackTheDefaultWidth() {
+        assertTrue(all(page.getControl(), Button.class, b -> (b.getStyle() & SWT.RADIO) != 0).isEmpty(),
+                "no mode style to choose");
         Text width = all(page.getControl(), Text.class, t -> true).get(0);
         enter(width, "120");
 
         press(button("Defaults"));
 
-        assertTrue(radio("Short").getSelection(), "Short is the default style");
-        assertFalse(radio("Full").getSelection());
         assertEquals(String.valueOf(PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT), width.getText());
         assertTrue(page.isValid());
-    }
-
-    /** The mode style's radio button whose label starts with {@code label}. */
-    private Button radio(String label) {
-        List<Button> found = all(page.getControl(), Button.class,
-                b -> (b.getStyle() & SWT.RADIO) != 0 && b.getText().startsWith(label));
-        assertEquals(1, found.size(), "one radio button " + label);
-        return found.get(0);
     }
 
     /**

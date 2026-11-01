@@ -740,7 +740,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
     }
 
-    /** Shows (or clears) {@code recording @a} in the status line; called when a macro recording starts or stops. */
+    /** Shows (or clears) {@code rec @a} after the mode in the status bar; called when a macro recording starts or stops. */
     private void onRecordingChanged(String register) {
         modeStatus.setRecording(register);
     }

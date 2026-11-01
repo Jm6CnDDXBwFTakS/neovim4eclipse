@@ -14,8 +14,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 
 /**
- * The status bar in a real window (docs/design/STATUS_BAR.md): the mode in the chosen style, a label
- * per part, Neovim's statusline fitted to its label, and {@code -- ECLIPSE --} when keys go to
+ * The status bar in a real window (docs/design/STATUS_BAR.md): the mode's name, a label
+ * per part, Neovim's statusline fitted to its label, and {@code ECLIPSE} when keys go to
  * Eclipse. The texts are {@code ModeLabelsTest}; the widths {@code StatusBarLabelsTest}.
  */
 class StatusBarEndToEndTest extends EndToEndTestBase {
@@ -26,7 +26,7 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void restorePreferences() {
-        for (String key : new String[] { PreferenceConstants.STATUS_MODE_STYLE, PreferenceConstants.STATUS_ITEM_MODE,
+        for (String key : new String[] { PreferenceConstants.STATUS_ITEM_MODE,
                 PreferenceConstants.STATUS_ITEM_STATUSLINE, PreferenceConstants.STATUS_STATUSLINE_WIDTH }) {
             store().setToDefault(key);
         }
@@ -44,18 +44,27 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
                 () -> "; it shows " + statusLineTexts(editor));
     }
 
-    /** Short by default ({@code NORMAL}), then each style as it is chosen, applied at once. */
+    /**
+     * The mode's names ({@code NORMAL}, {@code INSERT}, {@code V-LINE}), and a recording after them
+     * in lower case ({@code NORMAL rec @a}); the tooltip keeps Vim's wording.
+     */
     @Test
-    void theModeInEachStyle() {
+    void theModeAndARecording() {
         waitForLabel("NORMAL");
         typeSlowly("i");
         waitForLabel("INSERT");
-        store().setValue(PreferenceConstants.STATUS_MODE_STYLE, "letters");
-        waitForLabel("-I-");
-        store().setValue(PreferenceConstants.STATUS_MODE_STYLE, "full");
-        waitForLabel("-- INSERT --");
         UiTestSupport.escape(widget);
-        waitForLabel("-- NORMAL --");
+        waitForLabel("NORMAL");
+        typeSlowly("V");
+        waitForLabel("V-LINE");
+        UiTestSupport.escape(widget);
+        typeSlowly("qa");
+        try {
+            waitForLabel("NORMAL rec @a");
+        } finally {
+            typeSlowly("q");
+        }
+        waitForLabel("NORMAL");
     }
 
     /** Neovim fits its statusline into the label: at most the columns asked for, its end (the position) kept. */
@@ -79,7 +88,7 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
         waitUntil("no mode label", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("NORMAL"),
                 () -> "; it shows " + statusLineTexts(editor));
         EditorAttachManager.getInstance().getActiveController().setNeovimModeActive(false);
-        waitForLabel("ECLIPSE"); // Short, the default
+        waitForLabel("ECLIPSE");
         EditorAttachManager.getInstance().getActiveController().setNeovimModeActive(true);
         waitUntil("the indicator gone again", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("ECLIPSE"),
                 () -> "; it shows " + statusLineTexts(editor));

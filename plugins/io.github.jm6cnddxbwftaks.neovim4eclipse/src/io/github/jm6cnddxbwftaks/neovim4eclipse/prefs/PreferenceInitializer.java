@@ -29,7 +29,6 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_CMD, PreferenceConstants.STATUS_ITEM_CMD_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE,
                 PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT);
-        defaults.put(PreferenceConstants.STATUS_MODE_STYLE, PreferenceConstants.STATUS_MODE_STYLE_DEFAULT);
         defaults.putInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH, PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT);
         defaults.putInt(PreferenceConstants.STATUS_MAX_SHARE, PreferenceConstants.STATUS_MAX_SHARE_DEFAULT);
         defaults.putBoolean(PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.FLASH_ON_ERROR_DEFAULT);

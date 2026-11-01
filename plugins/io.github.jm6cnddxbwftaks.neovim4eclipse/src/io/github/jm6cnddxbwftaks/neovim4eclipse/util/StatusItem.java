@@ -14,7 +14,7 @@ import java.util.Set;
  */
 public enum StatusItem {
 
-    /** The mode, e.g. {@code -- INSERT --}, with {@code recording @q} while a macro is recorded. */
+    /** The mode, e.g. {@code INSERT}, with {@code rec @q} while a macro is recorded. */
     MODE("mode"),
     /** The pending command as Vim's {@code showcmd} shows it, e.g. {@code 2d} or {@code "a}. */
     CMD("cmd"),

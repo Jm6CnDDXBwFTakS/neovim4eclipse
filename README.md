@@ -215,18 +215,20 @@ Eclipse status bar; changes apply immediately:
 
 | Item | Shows | Default |
 |------|-------|---------|
-| `mode` | `INSERT`, `VISUAL BLOCK`, `recording @q`, in the chosen *Mode style* | on |
+| `mode` | `INSERT`, `V-BLOCK`, `INSERT rec @q` while a macro records | on |
 | `cmd` | the pending command as Vim's `showcmd` shows it: `2d`, `"a`, `2f` | on |
 | `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
 Each part has a label of its own, in that order. Hovering one shows its whole text. `ECLIPSE`
-(`-- ECLIPSE --` in Full, `-E-` in Letters) shows while Neovim mode is off, even with `mode` turned off. Only the enabled parts are requested from
+shows while Neovim mode is off, even with `mode` turned off. Only the enabled parts are requested from
 Neovim.
 
-*Mode style* chooses how the mode reads: **Short** without Vim's dashes (`INSERT`, the default),
-**Full** as Vim writes it (`-- INSERT --`, `-- VREPLACE --`, `-- (insert) --` after `Ctrl-O`), or
-**Letters** (`-I-`, `-VR-`, `-(i)-`; recording `-I- rec @q`). The tooltip gives Vim's own wording for Short and says what the letters mean. The full table is in
-[docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
+The mode uses the names of lualine and most Neovim statuslines: `NORMAL`, `INSERT`, `VISUAL`,
+`V-LINE`, `V-BLOCK`, `SELECT`, `S-LINE`, `S-BLOCK`, `O-PENDING` (after `d`), `REPLACE`, `V-REPLACE`
+(`gR`), `COMMAND`, `EX`. Parentheses say where one command after `Ctrl-O` goes back to, as in Vim:
+`(INSERT)` is Normal mode for one command, then Insert again; `(S) V-BLOCK` is Visual block for one
+command, then Select block again. Hovering the mode shows Vim's own wording (`-- VISUAL BLOCK --`).
+The full table is in [docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
 
 *Statusline width* (characters, default 60) is how wide the statusline is; it is drawn in the
 editor's fixed-width font, as in Vim. Neovim fits your `'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the

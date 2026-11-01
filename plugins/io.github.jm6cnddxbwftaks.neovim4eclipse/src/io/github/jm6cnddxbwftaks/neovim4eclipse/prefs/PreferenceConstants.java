@@ -36,7 +36,7 @@ public final class PreferenceConstants {
 
     // ---- Which parts of the Vim status information the Eclipse status bar shows ----
 
-    /** Show the mode ({@code -- INSERT --}, {@code recording @q}). */
+    /** Show the mode ({@code INSERT}, {@code INSERT rec @q}). */
     public static final String STATUS_ITEM_MODE = "statusItemMode";
     /** Show the pending command ({@code showcmd}, e.g. {@code 2d}). */
     public static final String STATUS_ITEM_CMD = "statusItemCmd";
@@ -47,19 +47,6 @@ public final class PreferenceConstants {
     public static final boolean STATUS_ITEM_CMD_DEFAULT = true;
     /** Off by default: it is long and mostly repeats what Eclipse already shows (file, position). */
     public static final boolean STATUS_ITEM_STATUSLINE_DEFAULT = false;
-
-    /**
-     * How the mode reads: {@code full} ({@code -- INSERT --}), {@code short} ({@code INSERT}) or
-     * {@code letters} ({@code -I-}); see {@code util/ModeLabels}.
-     */
-    public static final String STATUS_MODE_STYLE = "statusModeStyle";
-
-    /**
-     * Short by default: {@code INSERT} reads at a glance and
-     * takes less of the bar than {@code -- INSERT --}. Full keeps Vim's own wording for those who
-     * want it.
-     */
-    public static final String STATUS_MODE_STYLE_DEFAULT = "short";
 
     /**
      * How wide the statusline part is, in characters of the status bar's font. Neovim fits its
@@ -130,9 +117,9 @@ public final class PreferenceConstants {
         return key != null && key.startsWith(CTRL_KEY_TO_NEOVIM_PREFIX);
     }
 
-    /** Whether the key is one of the status bar preferences: the three parts, the mode style, the widths. */
+    /** Whether the key is one of the status bar preferences: the three parts, the widths. */
     public static boolean isStatusItemKey(String key) {
         return STATUS_ITEM_MODE.equals(key) || STATUS_ITEM_CMD.equals(key) || STATUS_ITEM_STATUSLINE.equals(key)
-                || STATUS_MODE_STYLE.equals(key) || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_SHARE.equals(key);
+                || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_SHARE.equals(key);
     }
 }
