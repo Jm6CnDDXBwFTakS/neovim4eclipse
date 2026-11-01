@@ -14,6 +14,7 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -33,15 +34,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
  * A width in pixels means fewer characters with a larger font or on a high-resolution screen, so
  * the widths follow the fonts:
  * <ul>
- *   <li>Mode: the widest of the style's texts as the font draws them ({@code GC.textExtent}). Mode
+ *   <li>Mode: the widest of its texts as the font draws them ({@code GC.textExtent}). Mode
  *       texts are nearly all capitals, wider than the font's average character, so counting
- *       characters would cut the longest ones ("-- (select) VIS...").</li>
+ *       characters would cut the longest ones ("(S) V-BLO...").</li>
  *   <li>Cmd: characters of the font's average width, as Eclipse's own status items
  *       ({@code StatusLineContributionItem}).</li>
- *   <li>Statusline: characters of a fixed-width font (the editor's), because Neovim fits the
- *       {@code 'statusline'} to a number of <em>columns</em>: in a fixed-width font 60 columns are
- *       exactly 60 characters wide, so {@code %=} puts the position at the label's right edge and
- *       nothing is cut. In the bar's proportional font, wide letters would push the end out.</li>
+ *   <li>Statusline: characters of a fixed-width font (the editor's family at the bar's size,
+ *       {@link #statuslineFontData}), because Neovim fits the {@code 'statusline'} to a number of
+ *       <em>columns</em>: in a fixed-width font 60 columns are exactly 60 characters wide, so
+ *       {@code %=} puts the position at the label's right edge and nothing is cut. In the bar's
+ *       proportional font, wide letters would push the end out.</li>
  * </ul>
  *
  * <p>The bar's width changes with the window, and with it the cap, so the labels are fitted again on
@@ -254,6 +256,29 @@ final class StatusBarLabels {
             width += child.computeSize(hint, SWT.DEFAULT).x + GAP;
         }
         return width + labels.size() * GAP;
+    }
+
+    /**
+     * The statusline label's font: the editor's fixed-width family ({@code textFont}, Eclipse's
+     * <em>Text Font</em>) at the status bar's size ({@code barFont}), so it fits the bar's height like
+     * the other labels and does not follow the editor's text size. Only the family matters here: the
+     * fixed width is what keeps Neovim's columns exact. Example: Monospace 14 in the editor and
+     * Sans 10 in the bar give Monospace 10.
+     *
+     * @return {@code textFont}'s data with {@code barFont}'s height; {@code textFont} unchanged when
+     *         either is empty
+     */
+    static FontData[] statuslineFontData(FontData[] textFont, FontData[] barFont) {
+        if (textFont == null || textFont.length == 0 || barFont == null || barFont.length == 0) {
+            return textFont;
+        }
+        // Whole points: FontData's API has no fractional size (a 10.5 point bar gives 10).
+        int height = barFont[0].getHeight();
+        FontData[] sized = new FontData[textFont.length];
+        for (int i = 0; i < textFont.length; i++) {
+            sized[i] = new FontData(textFont[i].getName(), height, textFont[i].getStyle());
+        }
+        return sized;
     }
 
     /** The widest of {@code texts} in {@code label}'s font, in pixels. */

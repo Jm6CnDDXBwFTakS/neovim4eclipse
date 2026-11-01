@@ -18,7 +18,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   (`-- VISUAL BLOCK --`, `-- INSERT --  recording @q`).
 - *Statusline width* (in characters) and *At most this share of the status bar*: Neovim fits your
   `'statusline'` into the width (`%<` shortens the file name, `%=` puts the position at the right),
-  and in a narrow window the statusline narrows first, leaving room for Eclipse's messages.
+  and in a narrow window the statusline narrows first, leaving room for Eclipse's messages. The
+  statusline is drawn in the editor's fixed-width font at the status bar's size, so its columns line
+  up whatever the editor's text size.
 
 - Neovim's language-server keys run Eclipse's commands: `grn` Rename, `gra` Quick Fix (also on a
   visual selection), `grr` References, `gri` Open Implementation, `grt` Open Declared Type, `gO`

@@ -231,7 +231,7 @@ command, then Select block again. Hovering the mode shows Vim's own wording (`--
 The full table is in [docs/design/STATUS_BAR.md](docs/design/STATUS_BAR.md).
 
 *Statusline width* (characters, default 60) is how wide the statusline is; it is drawn in the
-editor's fixed-width font, as in Vim. Neovim fits your `'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the
+editor's fixed-width font, as in Vim, at the status bar's size (it does not follow the editor's text size). Neovim fits your `'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the
 position to the right. *At most this share of the status bar* (default 40%) keeps room for Eclipse's
 own messages: in a narrow window the statusline gets narrower first.
 

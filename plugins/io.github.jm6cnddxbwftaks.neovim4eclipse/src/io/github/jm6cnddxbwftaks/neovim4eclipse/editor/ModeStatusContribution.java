@@ -67,6 +67,8 @@ public final class ModeStatusContribution extends ContributionItem {
     private IStatusLineManager manager;
     private StatusBarLabels labels;
     private Font boldFont;
+    /** The statusline's font: the editor's fixed-width family at the bar's size (StatusBarLabels). */
+    private Font statuslineFont;
     /** The parts the user chose (preferences, read by {@link #readPreferences}). UI thread. */
     private Set<StatusItem> chosen = StatusItem.defaults();
     /** The statusline's width in characters (preference). UI thread. */
@@ -160,8 +162,12 @@ public final class ModeStatusContribution extends ContributionItem {
             }
             boldFont = new Font(parent.getDisplay(), fds);
         }
-        labels = new StatusBarLabels(parent, partsShown(), boldFont, JFaceResources.getTextFont(), widths(),
-                statuslineColumns);
+        if (statuslineFont == null && parent.getFont() != null) {
+            statuslineFont = new Font(parent.getDisplay(), StatusBarLabels.statuslineFontData(
+                    JFaceResources.getTextFont().getFontData(), parent.getFont().getFontData()));
+        }
+        labels = new StatusBarLabels(parent, partsShown(), boldFont,
+                statuslineFont != null ? statuslineFont : JFaceResources.getTextFont(), widths(), statuslineColumns);
         showTexts();
     }
 
@@ -287,6 +293,10 @@ public final class ModeStatusContribution extends ContributionItem {
         if (boldFont != null && !boldFont.isDisposed()) {
             boldFont.dispose();
             boldFont = null;
+        }
+        if (statuslineFont != null && !statuslineFont.isDisposed()) {
+            statuslineFont.dispose();
+            statuslineFont = null;
         }
         labels = null;
         super.dispose();

@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import org.eclipse.jface.action.StatusLineManager;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
@@ -176,6 +178,22 @@ class StatusBarLabelsTest {
         create(EnumSet.allOf(StatusItem.class), widths(60, 90));
         assertTrue(width(StatusItem.STATUSLINE) < alone,
                 "the 800 px item left the statusline less room: " + width(StatusItem.STATUSLINE) + " < " + alone);
+    }
+
+    /**
+     * The statusline's font is the editor's fixed-width family at the bar's size: it fits the bar
+     * like the other labels and does not follow the editor's text size.
+     */
+    @Test
+    void theStatuslineFontIsTheEditorsFamilyAtTheBarsSize() {
+        FontData[] text = { new FontData("Monospace", 14, SWT.NORMAL) };
+        FontData[] barFont = { new FontData("Sans", 9, SWT.BOLD) };
+        FontData[] sized = StatusBarLabels.statuslineFontData(text, barFont);
+        assertEquals(1, sized.length);
+        assertEquals("Monospace", sized[0].getName());
+        assertEquals(9, sized[0].getHeight());
+        assertEquals(SWT.NORMAL, sized[0].getStyle(), "the editor's style, not the bar's bold");
+        assertSame(text, StatusBarLabels.statuslineFontData(text, new FontData[0]), "no bar font: the editor's");
     }
 
     @Test
