@@ -65,8 +65,10 @@ class NeovimQuickfixIntegrationTest {
         CompletableFuture<QuickfixEntries.Current> answer;
         try (NeovimSession s = start()) {
             s.inputAsync("r");
-            answer = s.currentQuickfixAsync(); // held, or still queued: either way unanswered at close
+            answer = s.currentQuickfixAsync(); // held, queued or being sent: unanswered at close
         }
+        // Before, on one core, a question being sent as Neovim quit failed with the closed connection's
+        // error instead: close asked Neovim to quit before it failed the open answers.
         ExecutionException e = assertThrows(ExecutionException.class, () -> answer.get(TestWait.millis(), TimeUnit.MILLISECONDS));
         assertEquals(IllegalStateException.class, e.getCause().getClass(), "Neovim is closed: " + e.getCause());
     }

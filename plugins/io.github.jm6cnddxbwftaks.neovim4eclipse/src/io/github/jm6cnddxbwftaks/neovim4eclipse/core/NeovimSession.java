@@ -176,8 +176,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Answers promised to a caller ({@link #currentQuickfixAsync}) and not given yet. {@link #close}
-     * fails them: their work may be held, or queued and dropped with the input thread, and a caller
-     * waiting for one would otherwise wait for its own timeout.
+     * fails them, before it asks Neovim to quit: their work may be held, queued and dropped with the
+     * input thread, or being sent, and a caller waiting for one would otherwise wait for its own
+     * timeout.
      */
     private final Set<CompletableFuture<?>> unanswered = ConcurrentHashMap.newKeySet();
     /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
@@ -317,11 +318,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
         closed = true;
 
-        connection.requestQuit();
-        // First, so an answer fails as closed, not with the interrupt the shutdown sends its work.
+        // First, before Neovim is asked to quit, so every answer still open fails the same way: as
+        // closed. Asked later, a question the input thread is sending just then fails first, with
+        // the closed connection's error (seen on a one-core machine), or with the interrupt the
+        // shutdown sends its work. Failing a future twice keeps the first failure.
         for (CompletableFuture<?> answer : List.copyOf(unanswered)) {
             answer.completeExceptionally(new IllegalStateException("Neovim is closed"));
         }
+        connection.requestQuit();
         inputThread.shutdown();
         held.clear();
         connection.close();
