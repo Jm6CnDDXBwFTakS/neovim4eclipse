@@ -58,7 +58,7 @@ class NvimProbeTest {
 
     @Test
     void nothingFoundByTheDefaultSearchSuggestsTheDefaultNeovimFolder() {
-        Note expected = problem("No Neovim found in the default folders. Extract a Neovim release archive into "
+        Note expected = problem("No Neovim found in the default folders. Get Neovim " + MIN + " installs it into "
                 + DEDICATED);
         assertEquals(expected, NvimProbe.note("", null, null, 0, DEDICATED));
         assertEquals(expected, NvimProbe.note("  ", null, null, 0, DEDICATED));

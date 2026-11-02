@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -69,30 +70,39 @@ public final class StartFailureReport {
      * Executable: nvim
      * Error: Cannot run program "nvim": error=2, No such file or directory
      *
-     * Install Neovim 0.12.6 or newer. The simplest way: extract the release archive from ... into
-     * ~/.local/share/neovim4eclipse-plugin/neovim and leave the Neovim preference blank, which searches
-     * that folder first, then PATH, then the usual install folders. Or extract it anywhere and enter its
-     * folder on the Neovim preference page (Window > Preferences > Neovim).
+     * Install Neovim 0.12.6 or newer. The simplest way: Get Neovim 0.12.6 downloads it from github.com,
+     * or installs the release archive from a file, into ~/.local/share/neovim4eclipse-plugin/neovim; leave
+     * the Neovim preference blank, which uses it first, then PATH, then the usual install folders. Or
+     * extract a release archive from ... anywhere and enter its folder on the Neovim preference page
+     * (Window > Preferences > Neovim).
      * Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH or ...
      * </pre>
+     *
+     * If the plug-in's folder holds entries it no longer uses, a last paragraph names them
+     * ({@link NvimProbe#unusedLine}).
      *
      * With an old Neovim the error line says so: {@code Error: Neovim 0.12.4 is too old: Neovim for
      * Eclipse needs 0.12.6 or newer.}
      *
      * @param executable the executable that was run, as {@link NvimExecutable#resolve} found it
      * @param error      why the start failed; its innermost cause is shown ({@link #rootMessage})
+     * @param unused     entries of the plug-in's Neovim folder it no longer uses
+     *                   ({@link PluginNeovim#unusedEntries}); may be empty
      */
-    public static String message(String executable, Throwable error) {
+    public static String message(String executable, Throwable error, List<String> unused) {
+        String unusedLine = NvimProbe.unusedLine(unused, NvimExecutable.dedicatedFolder());
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"
-                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer. The simplest way: extract the release "
-                + "archive from " + RELEASES_URL + " into " + NvimExecutable.dedicatedFolder()
-                + " and leave the Neovim preference blank, which searches that folder first, then PATH, then "
-                + "the usual install folders. Or extract it anywhere and enter its folder on the Neovim "
-                + "preference page (" + PREFERENCES_PATH + ").\n"
+                + "Install Neovim " + NeovimVersion.MINIMUM + " or newer. The simplest way: Get Neovim "
+                + NeovimVersion.MINIMUM + " downloads it from github.com, or installs the release archive from a "
+                + "file, into " + NvimExecutable.dedicatedFolder() + "; leave the Neovim preference blank, which "
+                + "uses it first, then PATH, then the usual install folders. Or extract a release archive from "
+                + RELEASES_URL + " anywhere and enter its folder on the Neovim preference page ("
+                + PREFERENCES_PATH + ").\n"
                 + "Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH "
-                + "or environment variables.";
+                + "or environment variables."
+                + (unusedLine == null ? "" : "\n\n" + unusedLine);
     }
 
     /**

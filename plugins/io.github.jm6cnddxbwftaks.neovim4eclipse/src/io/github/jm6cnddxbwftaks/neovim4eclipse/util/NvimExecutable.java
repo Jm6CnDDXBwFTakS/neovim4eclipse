@@ -24,9 +24,10 @@ import java.util.function.Function;
  *
  * <h2>What the preference may hold</h2>
  * <ul>
- *   <li><b>Blank</b> (the default): the plug-in's own Neovim folder {@link #dedicatedFolder}
- *       ({@code ~/.local/share/neovim4eclipse-plugin/neovim}), then {@code nvim} on {@code PATH}, then the usual install
- *       folders ({@link #searchFolders}). The dedicated folder comes first so that an older Neovim
+ *   <li><b>Blank</b> (the default): the plug-in's own Neovim ({@link PluginNeovim}:
+ *       {@code ~/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim} on Linux arm64, which
+ *       <i>Get Neovim</i> installs), then {@code nvim} on {@code PATH}, then the usual install
+ *       folders ({@link #searchFolders}). The plug-in's own comes first so that an older Neovim
  *       from the system's package manager, on {@code PATH}, cannot shadow the one installed for
  *       Eclipse (the plug-in raises its minimum Neovim readily; docs/UPGRADING.md).</li>
  *   <li><b>A folder</b>: a folder that holds Neovim, at its top ({@code bin/nvim}, as in
@@ -35,7 +36,7 @@ import java.util.function.Function;
  *       rules.</li>
  *   <li><b>A program</b>: an absolute path to {@code nvim}, used as it is.</li>
  * </ul>
- * A leading {@code ~} stands for the home folder: {@code ~/.local/share/neovim4eclipse-plugin/neovim}.
+ * A leading {@code ~} stands for the home folder: {@code ~/opt/nvim-linux-x86_64}.
  * Anything else, such as a command name ({@code nvim}) or a relative path ({@code bin/nvim}), is
  * refused when Neovim starts ({@link NeovimNotFoundException}): a value names one Neovim, and only
  * a blank preference searches, {@code PATH} included. Releases before 0.1.6 took a command name and
@@ -91,7 +92,7 @@ public final class NvimExecutable {
 
     /** {@link #resolve(String)}, also saying how many Neovims the program was chosen from. */
     public static Resolved find(String configured) {
-        return find(configured, System.getenv("PATH"), PlatformUtil.isWindows(), dedicatedFolder(),
+        return find(configured, System.getenv("PATH"), PlatformUtil.isWindows(), PluginNeovim.searchHomes(),
                 searchFolders(), InstalledVersions::of);
     }
 
@@ -100,17 +101,17 @@ public final class NvimExecutable {
      *
      * @param pathEnv       value of the {@code PATH} variable; may be {@code null}
      * @param windows       whether Windows rules apply ({@code nvim.exe}, {@code ;} separators, suffixes)
-     * @param dedicated     the plug-in's own Neovim folder, searched first for a blank preference; may
-     *                      be {@code null}
+     * @param pluginHomes   the plug-in's own Neovim folders ({@link PluginNeovim#searchHomes()}), the
+     *                      first that holds a working install is used for a blank preference
      * @param searchFolders the usual install folders, checked in order, without searching inside
      *                      them, when a blank preference finds nothing before
      * @param versionOf     a program's version, or {@code null} if it does not run as Neovim
      */
-    static Resolved find(String configured, String pathEnv, boolean windows, Path dedicated,
+    static Resolved find(String configured, String pathEnv, boolean windows, List<Path> pluginHomes,
             List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
         String program = windows ? "nvim.exe" : "nvim";
         if (configured == null || configured.isBlank()) {
-            return searchDefaultFolders(program, pathEnv, windows, dedicated, searchFolders, versionOf);
+            return searchDefaultFolders(program, pathEnv, windows, pluginHomes, searchFolders, versionOf);
         }
         String name = expandHome(configured.strip());
         File file = new File(name);
@@ -131,21 +132,24 @@ public final class NvimExecutable {
     }
 
     /**
-     * A blank preference: the dedicated folder (searched), then {@code program} on {@code PATH}, then
-     * the usual install folders (checked, not searched).
+     * A blank preference: the plug-in's own Neovim (strictly {@code <home>/bin/nvim} with its runtime,
+     * see {@link PluginNeovim}; one that does not run is passed over), then {@code program} on
+     * {@code PATH}, then the usual install folders (checked, not searched).
      */
-    private static Resolved searchDefaultFolders(String program, String pathEnv, boolean windows, Path dedicated,
-            List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
-        Found found = dedicated == null ? null : findInFolder(dedicated, program, windows, true, versionOf);
-        if (found != null) {
-            return resolved(found);
+    private static Resolved searchDefaultFolders(String program, String pathEnv, boolean windows,
+            List<Path> pluginHomes, List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
+        for (Path home : pluginHomes) {
+            Path own = PluginNeovim.program(home, windows).toAbsolutePath();
+            if (PluginNeovim.isInstall(home, windows) && versionOf.apply(own) != null) {
+                return new Resolved(own.toString(), 1);
+            }
         }
         Path onPath = locate(program, pathEnv, windows);
         if (onPath != null) {
             return new Resolved(onPath.toString(), 1);
         }
         for (Path dir : searchFolders) {
-            found = findInFolder(dir, program, windows, false, versionOf);
+            Found found = findInFolder(dir, program, windows, false, versionOf);
             if (found != null) {
                 return resolved(found);
             }
@@ -164,7 +168,7 @@ public final class NvimExecutable {
      *       or a {@code bin} folder itself (or Scoop's {@code shims}). On Windows also with
      *       {@code .exe}, {@code .cmd} and {@code .bat}.</li>
      *   <li>With {@code search}: every install below the folder ({@link #installsIn}), e.g.
-     *       {@code ~/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-x86_64/bin/nvim} or, after Windows
+     *       {@code ~/opt/nvim-linux-x86_64/bin/nvim} for the folder {@code ~/opt} or, after Windows
      *       Explorer's "Extract All", {@code nvim-win64\nvim-win64\bin\nvim.exe}.</li>
      * </ul>
      * All of them compete: each is asked its version ({@code nvim --version}), one that does not
@@ -338,10 +342,10 @@ public final class NvimExecutable {
     }
 
     /**
-     * The folder meant for a Neovim used by this plug-in alone ({@link PluginFolders#neovimFolder()}):
+     * The folder of the plug-in's own Neovim ({@link PluginFolders#neovimFolder()}):
      * {@code ~/.local/share/neovim4eclipse-plugin/neovim}, or under {@code $XDG_DATA_HOME} when that is
-     * set. Extract a release archive there (its top folder may stay, see {@link #findInFolder}) and
-     * leave the preference blank.
+     * set. Its install is in the platform's folder inside it ({@link PluginNeovim}), which
+     * <i>Get Neovim</i> fills; a blank preference uses it first.
      */
     public static Path dedicatedFolder() {
         return PluginFolders.neovimFolder();

@@ -9,6 +9,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.PlatformUI;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 
 /**
@@ -61,7 +62,8 @@ final class StartFailureNotice {
         Shell shell = PlatformUI.isWorkbenchRunning() && PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null
                 ? PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell()
                 : null;
-        String message = StartFailureReport.message(NvimExecutable.resolve(configured), error);
+        String message = StartFailureReport.message(NvimExecutable.resolve(configured), error,
+                PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()));
         MessageDialog dialog = new MessageDialog(shell, StartFailureReport.TITLE, null, message, MessageDialog.ERROR,
                 0, "Open Preferences", "Close");
         if (dialog.open() == 0) {

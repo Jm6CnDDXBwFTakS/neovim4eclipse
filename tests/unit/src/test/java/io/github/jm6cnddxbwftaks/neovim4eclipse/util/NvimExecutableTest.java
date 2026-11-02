@@ -35,12 +35,12 @@ class NvimExecutableTest {
     }
 
     private static String resolve(String configured, String pathEnv, boolean windows, List<Path> searchFolders) {
-        return resolve(configured, pathEnv, windows, null, searchFolders);
+        return resolve(configured, pathEnv, windows, List.of(), searchFolders);
     }
 
-    private static String resolve(String configured, String pathEnv, boolean windows, Path dedicated,
+    private static String resolve(String configured, String pathEnv, boolean windows, List<Path> pluginHomes,
             List<Path> searchFolders) {
-        return NvimExecutable.find(configured, pathEnv, windows, dedicated, searchFolders, ANY_FILE_RUNS).command();
+        return NvimExecutable.find(configured, pathEnv, windows, pluginHomes, searchFolders, ANY_FILE_RUNS).command();
     }
 
     /** Git Bash's SHELL would give Neovim on Windows bash with cmd.exe's flags; see prepareEnvironment. */
@@ -522,7 +522,7 @@ class NvimExecutableTest {
         Path works = file("homebrew/bin/nvim");
         Function<Path, NeovimVersion> versionOf = p -> p.equals(works.toAbsolutePath()) ? new NeovimVersion(0, 12, 6)
                 : null;
-        assertEquals(works.toAbsolutePath().toString(), NvimExecutable.find("", "", false, null,
+        assertEquals(works.toAbsolutePath().toString(), NvimExecutable.find("", "", false, List.of(),
                 List.of(tmp.resolve("broken"), tmp.resolve("homebrew")), versionOf).command());
     }
 
@@ -536,44 +536,73 @@ class NvimExecutableTest {
         assertFalse(dirs.contains(Path.of("/snap")), "not snap: " + dirs);
     }
 
-    // ---- blank preference: the dedicated folder first ----
+    // ---- blank preference: the plug-in's own Neovim first (neovim/<code>/, see PluginNeovim) ----
 
     @Test
-    void blankUsesTheDedicatedFolderBeforePath() throws IOException {
-        Path dedicated = file("opt/neovim/bin/nvim");
+    void blankUsesThePluginsNeovimBeforePath() throws IOException {
+        Path own = install("neovim/la", "nvim");
         Path onPath = file("path/nvim");
-        assertEquals(dedicated.toAbsolutePath().toString(), resolve("", onPath.getParent().toString(),
-                false, tmp.resolve("opt/neovim"), List.of()));
+        assertEquals(own.toAbsolutePath().toString(), resolve("", onPath.getParent().toString(),
+                false, List.of(tmp.resolve("neovim/la")), List.of()));
     }
 
     @Test
-    void blankSearchesInsideTheDedicatedFolder() throws IOException {
-        Path exe = install("opt/neovim/nvim-win64/nvim-win64", "nvim.exe");
+    void blankOnWindowsUsesThePluginsNvimExe() throws IOException {
+        Path own = install("neovim/wa", "nvim.exe");
         Path onPath = file("path/nvim.exe");
-        assertEquals(real(exe).toString(), resolve("", onPath.getParent().toString(), true,
-                tmp.resolve("opt/neovim"), List.of()));
+        assertEquals(own.toAbsolutePath().toString(), resolve("", onPath.getParent().toString(), true,
+                List.of(tmp.resolve("neovim/wa")), List.of()));
     }
 
     @Test
-    void blankFallsBackToPathWhenTheDedicatedNeovimDoesNotRun() throws IOException {
-        file("opt/neovim/bin/nvim");
+    void theFirstPluginHomeWithAnInstallWins() throws IOException {
+        Path arm = install("neovim/ma", "nvim");
+        install("neovim/mx", "nvim");
+        assertEquals(arm.toAbsolutePath().toString(), resolve("", "", false,
+                List.of(tmp.resolve("neovim/ma"), tmp.resolve("neovim/mx")), List.of()));
+    }
+
+    /** Strict: an archive extracted into neovim/ as it is (the layout before 0.2.1) is not searched. */
+    @Test
+    void anythingElseInThePluginsFolderIsNotSearched() throws IOException {
+        install("neovim/nvim-linux-arm64_0.12.6", "nvim");
+        file("neovim/la/nvim"); // no bin/ and no runtime: not an install
         Path onPath = pathDirectory("onpath"); // relative: an absolute Windows path has a ':' (see pathDirectory)
         try {
             Path exe = Files.createFile(onPath.resolve("nvim"));
-            assertEquals(exe.toAbsolutePath().toString(), NvimExecutable.find("", onPath.toString(), false,
-                    tmp.resolve("opt/neovim"), List.of(), p -> null).command());
+            assertEquals(exe.toAbsolutePath().toString(), resolve("", onPath.toString(), false,
+                    List.of(tmp.resolve("neovim/la")), List.of()));
         } finally {
             deleteTree(onPath);
         }
     }
 
     @Test
-    void blankFallsBackToPathWhenTheDedicatedFolderIsEmpty() throws IOException {
+    void aPluginNeovimWithoutItsRuntimeDoesNotCount() throws IOException {
+        file("neovim/la/bin/nvim");
+        assertEquals("nvim", resolve("", "", false, List.of(tmp.resolve("neovim/la")), List.of()));
+    }
+
+    @Test
+    void blankFallsBackToPathWhenThePluginsNeovimDoesNotRun() throws IOException {
+        install("neovim/la", "nvim");
+        Path onPath = pathDirectory("onpath");
+        try {
+            Path exe = Files.createFile(onPath.resolve("nvim"));
+            assertEquals(exe.toAbsolutePath().toString(), NvimExecutable.find("", onPath.toString(), false,
+                    List.of(tmp.resolve("neovim/la")), List.of(), p -> null).command());
+        } finally {
+            deleteTree(onPath);
+        }
+    }
+
+    @Test
+    void blankFallsBackToPathWhenThePluginHasNoNeovim() throws IOException {
         Path onPath = pathDirectory("onpath");
         try {
             Path exe = Files.createFile(onPath.resolve("nvim"));
             assertEquals(exe.toAbsolutePath().toString(), resolve(null, onPath.toString(), false,
-                    tmp.resolve("opt/neovim"), List.of()));
+                    List.of(tmp.resolve("neovim/la")), List.of()));
         } finally {
             deleteTree(onPath);
         }
@@ -583,13 +612,13 @@ class NvimExecutableTest {
     void blankThenSearchesTheUsualFolders() throws IOException {
         Path exe = file("homebrew/bin/nvim");
         assertEquals(exe.toAbsolutePath().toString(), resolve("  ", "", false,
-                tmp.resolve("opt/neovim"), List.of(tmp.resolve("homebrew"))));
+                List.of(tmp.resolve("neovim/la")), List.of(tmp.resolve("homebrew"))));
     }
 
     @Test
-    void anExplicitNameDoesNotUseTheDedicatedFolder() throws IOException {
-        file("opt/neovim/bin/nvim");
-        assertEquals("nvim", resolve("nvim", "", false, tmp.resolve("opt/neovim"), List.of()));
+    void anExplicitNameDoesNotUseThePluginsNeovim() throws IOException {
+        install("neovim/la", "nvim");
+        assertEquals("nvim", resolve("nvim", "", false, List.of(tmp.resolve("neovim/la")), List.of()));
     }
 
     @Test

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,7 @@ class StartFailureReportTest {
     void theMessageNamesTheExecutableAndTheInnermostCause() {
         Exception error = new IllegalStateException("could not start the session",
                 new IOException("Cannot run program \"nvim\": error=2, No such file or directory"));
-        String message = StartFailureReport.message("/usr/bin/nvim", error);
+        String message = StartFailureReport.message("/usr/bin/nvim", error, List.of());
         assertTrue(message.startsWith("Neovim for Eclipse could not start Neovim"), message);
         assertTrue(message.contains("\nExecutable: /usr/bin/nvim\n"), message);
         assertTrue(message.contains("\nError: Cannot run program \"nvim\": error=2, No such file or directory\n"),
@@ -67,6 +68,16 @@ class StartFailureReportTest {
         assertTrue(message.contains(NvimExecutable.dedicatedFolder().toString()), message);
         assertTrue(message.contains("Install Neovim " + NeovimVersion.MINIMUM + " or newer"), message);
         assertTrue(message.contains(StartFailureReport.RELEASES_URL), message);
+        assertTrue(message.contains("Get Neovim " + NeovimVersion.MINIMUM), message);
+        assertFalse(message.contains("No longer used"), message);
+    }
+
+    @Test
+    void theMessageNamesWhatThePluginsFolderNoLongerUses() {
+        String message = StartFailureReport.message("nvim", new IOException("x"),
+                List.of("current", "nvim-linux-arm64_0.12.6"));
+        assertTrue(message.endsWith("\n\nNo longer used, you can delete them: current, nvim-linux-arm64_0.12.6 in "
+                + NvimExecutable.dedicatedFolder()), message);
     }
 
     @Test

@@ -11,15 +11,22 @@ import java.util.List;
  * Says which Neovim a preference value finds, for the note under the field on the preference page:
  *
  * <pre>
- *   Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim
- *   Found: Neovim 0.13.0 (newest of 2 in this folder), /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-0.13.0/bin/nvim
+ *   Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
+ *   Found: Neovim 0.13.0 (newest of 2 in this folder), /home/you/opt/nvim-0.13.0/bin/nvim
  *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
  *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
- *   No Neovim found in the default folders. Extract a Neovim release archive into /home/you/.local/share/neovim4eclipse-plugin/neovim
+ *   No Neovim found in the default folders. Get Neovim 0.12.6 installs it into /home/you/.local/share/neovim4eclipse-plugin/neovim
  *   No Neovim found at /opt/nvim. Clear the field to search the default folders, or enter a value as described.
  * </pre>
  *
  * <p>"As described" points at the page's description, which says what the field takes.
+ *
+ * <p>If the plug-in's folder holds anything it no longer uses ({@link PluginNeovim#unusedEntries}),
+ * such as an archive extracted there by hand before 0.2.1, a second line says so ({@link #unusedLine}):
+ *
+ * <pre>
+ *   No longer used, you can delete them: nvim-linux-arm64_0.12.6, current in /home/you/.local/share/neovim4eclipse-plugin/neovim
+ * </pre>
  *
  * <p>The version comes first and the path last: the version is what you look for, and a long path
  * then cannot push it out of view. No full stop follows the path, which would read as part of it.
@@ -53,11 +60,25 @@ public final class NvimProbe {
     public static Note describe(String configured) {
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Path program = NvimExecutable.locate(resolved.command());
-        if (program == null) {
-            return note(configured, null, null, 0, NvimExecutable.dedicatedFolder());
+        Path folder = NvimExecutable.dedicatedFolder();
+        Note note = program == null ? note(configured, null, null, 0, folder)
+                : note(configured, program, InstalledVersions.of(program), resolved.among(), folder);
+        String unused = unusedLine(PluginNeovim.unusedEntries(folder), folder);
+        return unused == null ? note : new Note(note.text() + "\n" + unused, note.problem());
+    }
+
+    /**
+     * The line about entries of the plug-in's Neovim folder that are no longer used, or {@code null}
+     * if there are none.
+     *
+     * @param unused the entries' names ({@link PluginNeovim#unusedEntries})
+     * @param folder the plug-in's Neovim folder
+     */
+    public static String unusedLine(List<String> unused, Path folder) {
+        if (unused.isEmpty()) {
+            return null;
         }
-        return note(configured, program, InstalledVersions.of(program), resolved.among(),
-                NvimExecutable.dedicatedFolder());
+        return "No longer used, you can delete them: " + String.join(", ", unused) + " in " + folder;
     }
 
     /**
@@ -72,8 +93,8 @@ public final class NvimProbe {
     static Note note(String configured, Path program, NeovimVersion version, int among, Path dedicated) {
         if (program == null) {
             if (configured == null || configured.isBlank()) {
-                return problem("No Neovim found in the default folders. Extract a Neovim release archive into "
-                        + dedicated);
+                return problem("No Neovim found in the default folders. Get Neovim " + NeovimVersion.MINIMUM
+                        + " installs it into " + dedicated);
             }
             return problem("No Neovim found at " + configured.strip()
                     + ". Clear the field to search the default folders, or enter a value as described.");
