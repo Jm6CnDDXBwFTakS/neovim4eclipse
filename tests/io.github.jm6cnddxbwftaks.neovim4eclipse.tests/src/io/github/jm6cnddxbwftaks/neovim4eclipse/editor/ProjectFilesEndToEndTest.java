@@ -30,6 +30,7 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.IEditorRegistry;
 import org.eclipse.ui.IFileEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -365,10 +366,16 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
      * opened, and Neovim goes back, as before; {@code :help} is still undone too. The zip's buffer is
      * a project file's (Neovim sent its name to Eclipse), so what keeps the system's program from
      * starting is {@link ProjectFileEditors}' check, not the file being unknown.
+     *
+     * <p>Which program Eclipse picks for a {@code .zip} depends on the machine: with a program
+     * registered for it (a desktop's archive manager) the system's, with none (GitHub's Linux
+     * runner) Eclipse's own text editor, which would open it inside the IDE. So the test names the
+     * system's program for this file itself ({@link IDE#setDefaultEditor}, a property of the file
+     * that {@code IDE.getEditorDescriptor} reads first).
      */
     @Test
     void aFileEclipseWouldOpenOutsideTheIdeIsNotOpenedAndHelpIsStillUndone() throws Exception {
-        createFile("x.zip", "PK\u0003\u0004");
+        IDE.setDefaultEditor(createFile("x.zip", "PK\u0003\u0004"), IEditorRegistry.SYSTEM_EXTERNAL_EDITOR_ID);
         ITextEditor a = open(createFile("a.txt", "see x.zip\n"));
         try {
             session.inputAsync("0fx");
