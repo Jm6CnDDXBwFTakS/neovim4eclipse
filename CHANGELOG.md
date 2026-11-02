@@ -127,6 +127,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- The `:Eproblems` and `:Etasks` lists stay current when Neovim is briefly too busy to answer
+  (more than 5 s): the update asks again, up to three times, and only then writes a warning to the
+  Error Log. Before, it gave up at once with "Could not fill the quickfix list", and the list stayed
+  out of date until the next problem changed.
 - In Ex mode (`gQ`), a click in the editor no longer hides the `:` box while Neovim keeps the line
   open, which left you typing blind. The box stays, with the focus, and the click no longer moves
   the line's cursor to its start (`echo`, a click, then ` 1` ran `:ho 1ec`).

@@ -48,8 +48,15 @@ public interface QuickfixPort {
     /**
      * The current list when it is one of Eclipse's, else {@code null}, answered on the input thread
      * after every key queued before (and, as for {@link #setQuickfixAsync}, after the key that ends
-     * a command Neovim waits for). The future fails when Neovim fails or is closed. Neovim has no
-     * event for a change of the current list ({@code :colder}), so an update asks this first.
+     * a command Neovim waits for). Neovim has no event for a change of the current list
+     * ({@code :colder}), so an update asks this first.
+     *
+     * <p>The future fails with the failure itself as the cause of {@code get()}'s
+     * {@code ExecutionException}: {@code IllegalStateException} when the session is closed,
+     * {@code core/rpc/NeovimErrorException} when Neovim reports an error,
+     * {@code core/rpc/NeovimConnectionClosedException} when Neovim exited, and
+     * {@code TimeoutException} when Neovim did not answer within {@code Rpc.TIMEOUT_SEC}.
+     * {@link QuickfixEntries#onFailedUpdate} says which of them are worth asking again.
      */
     CompletableFuture<Current> currentQuickfixAsync();
 }

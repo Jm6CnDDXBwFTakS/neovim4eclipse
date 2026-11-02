@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +19,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries.Entry;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries.Kind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries.TaskTags;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries.UpdateRetry;
 
 class QuickfixEntriesTest {
 
@@ -158,5 +161,35 @@ class QuickfixEntriesTest {
         assertNull(Kind.of("Problems"));
         assertEquals("Eclipse problems", Kind.PROBLEMS.title());
         assertEquals("Eclipse tasks", Kind.TASKS.title());
+    }
+
+    // ---- a failed update: ask again or report ----
+
+    /** The update's own 10 s ran out: the question is held while Neovim waits for a key. Normal. */
+    @Test
+    void aQuestionNotAnsweredYetIsAskedAgainWithNoLimit() {
+        assertEquals(UpdateRetry.HELD, QuickfixEntries.onFailedUpdate(new TimeoutException(), 0));
+        assertEquals(UpdateRetry.HELD, QuickfixEntries.onFailedUpdate(new TimeoutException(), 100),
+                "a held question never counts toward the limit");
+    }
+
+    /** Neovim got the question and did not answer in 5 s: asked again BUSY_RETRIES times, then reported. */
+    @Test
+    void aBusyNeovimIsAskedAgainAFewTimesThenReported() {
+        ExecutionException busy = new ExecutionException(new TimeoutException());
+        assertEquals(UpdateRetry.BUSY, QuickfixEntries.onFailedUpdate(busy, 0));
+        assertEquals(UpdateRetry.BUSY, QuickfixEntries.onFailedUpdate(busy, QuickfixEntries.BUSY_RETRIES - 1));
+        assertEquals(UpdateRetry.GIVE_UP, QuickfixEntries.onFailedUpdate(busy, QuickfixEntries.BUSY_RETRIES));
+    }
+
+    /** Neovim's error, Neovim gone, the session closed, a failure of Eclipse's: reported, not asked again. */
+    @Test
+    void otherFailuresAreReported() {
+        assertEquals(UpdateRetry.REPORT, QuickfixEntries.onFailedUpdate(
+                new ExecutionException(new IllegalStateException("Neovim is closed")), 0));
+        assertEquals(UpdateRetry.REPORT, QuickfixEntries.onFailedUpdate(new IllegalStateException("no workspace"), 0));
+        // Before the fix, a timeout reached the update wrapped twice; only one wrapper counts as busy.
+        assertEquals(UpdateRetry.REPORT, QuickfixEntries.onFailedUpdate(
+                new ExecutionException(new ExecutionException(new TimeoutException())), 0));
     }
 }

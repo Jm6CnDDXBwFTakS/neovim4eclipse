@@ -8,8 +8,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -113,7 +113,9 @@ public final class QuickfixLists implements IResourceChangeListener {
     /**
      * How long an update waits for Neovim to say which list is current, in seconds. The session
      * holds the question while Neovim waits for the rest of a command (after {@code ]} of
-     * {@code ]d}); an update that waited this long is tried again later, not reported.
+     * {@code ]d}); an update that waited this long is tried again later, not reported. One that
+     * Neovim got but did not answer in time is tried again a few times, then reported
+     * ({@link QuickfixEntries#onFailedUpdate}).
      */
     private static final long CURRENT_TIMEOUT_SEC = 10;
 
@@ -235,6 +237,11 @@ public final class QuickfixLists implements IResourceChangeListener {
          * Neovim's input thread (about 150 ms for 9,000 entries), where it holds up keys.
          */
         private Sent lastSent;
+        /**
+         * How many updates in a row found Neovim too busy to answer ({@link QuickfixEntries.UpdateRetry#BUSY}).
+         * Job thread only; back to 0 after a run that got its answer, or that gave up.
+         */
+        private int busyInARow;
 
         Runner() {
             super("Neovim: quickfix list");
@@ -285,17 +292,45 @@ public final class QuickfixLists implements IResourceChangeListener {
                         lastSent = send(neovim, current.kind(), current.arg(), Mode.UPDATE, false, lastSent);
                     }
                 }
+                busyInARow = 0;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            } catch (TimeoutException e) { // Neovim still in the middle of a command: try again later
-                update.set(true);
-                schedule(UPDATE_DELAY_MS);
-            } catch (Exception e) { // Neovim's error, a closed connection, no workspace
-                if (neovim.isAlive()) { // closing: nothing to fill
-                    LOG.log(Level.WARNING, "Could not fill the quickfix list", e);
-                }
+            } catch (Exception e) { // a timeout, Neovim's error, a closed connection, no workspace
+                failed(neovim, e);
             }
             return Status.OK_STATUS;
+        }
+
+        /** Asks again later or reports the failure, as {@link QuickfixEntries#onFailedUpdate} decides. Job thread. */
+        private void failed(NeovimSession neovim, Exception e) {
+            switch (QuickfixEntries.onFailedUpdate(e, busyInARow)) {
+                case HELD -> askAgainLater(); // Neovim still in the middle of a command
+                case BUSY -> {
+                    busyInARow++;
+                    LOG.fine(() -> "Neovim did not say which quickfix list is current in time (" + busyInARow
+                            + " in a row); asking again");
+                    askAgainLater();
+                }
+                case GIVE_UP -> {
+                    busyInARow = 0;
+                    if (neovim.isAlive()) {
+                        LOG.warning("Neovim did not say which quickfix list is current, " + (QuickfixEntries.BUSY_RETRIES + 1)
+                                + " times in a row; the list is updated again at the next change");
+                    }
+                }
+                case REPORT -> {
+                    busyInARow = 0;
+                    if (neovim.isAlive()) { // closing: nothing to fill
+                        LOG.log(Level.WARNING, "Could not fill the quickfix list",
+                                e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e);
+                    }
+                }
+            }
+        }
+
+        private void askAgainLater() {
+            update.set(true);
+            schedule(UPDATE_DELAY_MS);
         }
     }
 

@@ -4,8 +4,10 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.List;
@@ -16,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
@@ -71,5 +74,23 @@ class NeovimQuickfixIntegrationTest {
         // error instead: close asked Neovim to quit before it failed the open answers.
         ExecutionException e = assertThrows(ExecutionException.class, () -> answer.get(TestWait.millis(), TimeUnit.MILLISECONDS));
         assertEquals(IllegalStateException.class, e.getCause().getClass(), "Neovim is closed: " + e.getCause());
+    }
+
+    /**
+     * Neovim's error reaches the caller as the cause, with no wrapper in between. Before, the session
+     * handed on the ExecutionException its own wait had thrown, and get() wrapped that in another:
+     * the cause was an ExecutionException. commandAsync waits until Neovim ran the command, so the
+     * question after it always finds the broken function.
+     */
+    @Test
+    void neovimsErrorIsTheCauseOfTheFailedQuestion() throws Exception {
+        try (NeovimSession s = start()) {
+            s.commandAsync("lua require('neovim4eclipse.quickfix').current = function() error('no list today') end");
+            CompletableFuture<QuickfixEntries.Current> answer = s.currentQuickfixAsync();
+            ExecutionException e = assertThrows(ExecutionException.class,
+                    () -> answer.get(TestWait.millis(), TimeUnit.MILLISECONDS));
+            assertInstanceOf(NeovimErrorException.class, e.getCause(), "Neovim's own error: " + e.getCause());
+            assertTrue(e.getCause().getMessage().contains("no list today"), e.getCause().getMessage());
+        }
     }
 }

@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -915,7 +916,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             try {
                 answer.complete(QuickfixEntries.Current.fromLua(await(api.execLua(LuaScripts.QUICKFIX_CURRENT, List.of()))));
             } catch (Exception e) {
-                answer.completeExceptionally(e);
+                // await reports Neovim's failure inside an ExecutionException, and answer.get() wraps
+                // what it is given in one more: hand on the failure itself, or the caller finds a
+                // wrapper where it looks for the cause (ExecutionException, then ExecutionException).
+                answer.completeExceptionally(e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e);
                 throw e;
             }
         }));

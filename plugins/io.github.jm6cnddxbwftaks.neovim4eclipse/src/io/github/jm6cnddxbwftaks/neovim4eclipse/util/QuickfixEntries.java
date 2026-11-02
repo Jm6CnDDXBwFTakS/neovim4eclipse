@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic.Severity;
 
@@ -280,6 +282,52 @@ public final class QuickfixEntries {
             Object arg = list.size() > 1 ? list.get(1) : "";
             return new Current(kind, arg instanceof String text ? text : "");
         }
+    }
+
+    /**
+     * How many times in a row an update asks again after Neovim got the question and did not answer
+     * in time ({@link UpdateRetry#BUSY}), before it stops and reports it ({@link UpdateRetry#GIVE_UP}).
+     */
+    public static final int BUSY_RETRIES = 3;
+
+    /**
+     * What an update of the list does when asking Neovim which list is current failed
+     * ({@code editor/QuickfixLists}); {@link #onFailedUpdate} decides.
+     *
+     * <p>Two timeouts can end the question, and they mean different things. The update's own wait
+     * ({@code CURRENT_TIMEOUT_SEC}, 10 s) runs out while the question is not answered yet: the session
+     * holds it while Neovim waits for the rest of a command (the user typed {@code ]} of {@code ]d}
+     * and not the next key), which is normal and costs nothing. The session's wait for Neovim's
+     * answer ({@code Rpc.TIMEOUT_SEC}, 5 s) runs out when Neovim got the question and stayed busy:
+     * that held the session's input thread, and the user's keys with it, so asking again has a limit.
+     */
+    public enum UpdateRetry {
+        /** Not answered yet (held or queued): ask again later, with no limit and no report. */
+        HELD,
+        /** Neovim did not answer in time: ask again later, at most {@link #BUSY_RETRIES} times in a row. */
+        BUSY,
+        /** Neovim stayed busy {@link #BUSY_RETRIES} times in a row: report it and stop asking; the next change asks again. */
+        GIVE_UP,
+        /** Any other failure (Neovim's error, Neovim exited, the session closed): report it, do not ask again. */
+        REPORT
+    }
+
+    /**
+     * What to do after asking for the current list failed.
+     *
+     * @param failure    what the update's {@code get()} threw: a {@code TimeoutException} of its own
+     *                   wait, or an {@code ExecutionException} whose cause is the question's failure
+     * @param busyBefore how many {@link UpdateRetry#BUSY} came just before this one, with no answer
+     *                   between them
+     */
+    public static UpdateRetry onFailedUpdate(Throwable failure, int busyBefore) {
+        if (failure instanceof TimeoutException) {
+            return UpdateRetry.HELD;
+        }
+        if (failure instanceof ExecutionException && failure.getCause() instanceof TimeoutException) {
+            return busyBefore < BUSY_RETRIES ? UpdateRetry.BUSY : UpdateRetry.GIVE_UP;
+        }
+        return UpdateRetry.REPORT;
     }
 
     /** How many arguments one entry takes in {@link #toLuaArgs}. */
