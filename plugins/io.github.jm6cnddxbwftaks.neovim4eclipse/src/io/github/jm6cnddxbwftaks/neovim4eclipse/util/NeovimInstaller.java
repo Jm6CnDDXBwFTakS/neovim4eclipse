@@ -179,11 +179,11 @@ public final class NeovimInstaller {
                             + "); this Eclipse needs " + expected.asset() + ", for " + expected.platform().describe()
                             + ".");
         }
-        throw new NeovimInstallException(NeovimInstallException.Reason.WRONG_ARCHIVE,
-                archive.getFileName() + " is not the Neovim " + release.version() + " archive for "
-                        + expected.platform().describe() + " (another version, or damaged).\n"
-                        + "Expected " + expected.asset() + ": " + expected.size() + " bytes, SHA-256 " + expected.sha256()
-                        + "\nThis file: " + size + " bytes, SHA-256 " + sha);
+        throw new NeovimInstallException(archive.getFileName() + " is not the Neovim " + release.version()
+                + " archive for " + expected.platform().describe() + " (another version, or damaged).\n"
+                + "Expected " + expected.asset() + ": " + expected.size() + " bytes, SHA-256 " + expected.sha256()
+                + "\nThis file: " + size + " bytes, SHA-256 " + sha,
+                new NeovimInstallException.Found(archive.getFileName().toString(), size, sha));
     }
 
     /** The file's SHA-256 as 64 lower-case hex digits. */

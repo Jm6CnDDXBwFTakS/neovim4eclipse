@@ -110,6 +110,8 @@ class NeovimInstallerTest {
         assertEquals(NeovimInstallException.Reason.WRONG_ARCHIVE, e.reason());
         assertTrue(e.getMessage().contains(release.forPlatform(LA).orElseThrow().sha256()), e.getMessage());
         assertTrue(e.getMessage().contains(sha(other)), e.getMessage());
+        assertEquals(new NeovimInstallException.Found("other.tar.gz", Files.size(other), sha(other)),
+                e.found().orElseThrow(), "for the failure dialog's fields");
         assertFalse(Files.exists(folder.resolve("la")));
     }
 

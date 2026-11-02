@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,7 +26,9 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.IHandlerService;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstallProgress;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstalledVersions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimDownload;
@@ -44,9 +47,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  *
  * <h2>Flow</h2>
  * <ol>
- *   <li>{@link #open} shows the confirmation ({@link GetNeovimDialog}): where it goes, what is
- *       downloaded from where, the pinned SHA-256 with <em>Copy</em>, links to the GitHub release and
- *       VirusTotal. Buttons: <em>Download</em> (default), <em>Install from File…</em>, Cancel.</li>
+ *   <li>{@link #open} shows the confirmation: where it goes, what is downloaded from where, the
+ *       pinned SHA-256 with <em>Copy</em>, links to the GitHub release and VirusTotal. Buttons:
+ *       <em>Download</em> (default), <em>Install from File…</em>, Cancel.</li>
  *   <li>A background {@link Job} (status bar, Progress view, cancellable) downloads the archive
  *       ({@code util/NeovimDownload}, through Eclipse's proxy settings, {@link EclipseProxies}) or
  *       takes the chosen file, and installs it ({@code util/NeovimInstaller}). Nothing of this runs
@@ -56,7 +59,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  *       Without a running Neovim the active editor attaches at once. The failure dialog offers
  *       <em>Retry</em>, <em>Install from File…</em> and the release page.</li>
  * </ol>
- * The platform is the real processor's ({@code util/ProcessorProbe}), as known when the dialog opens;
+ * Every dialog is a {@link HeadedMessageDialog}, the layout the welcome and the Restart Neovim
+ * question have; the words, links and values are {@code util/GetNeovimText}'s, where the unit tests
+ * read them. The platform is the real processor's ({@code util/ProcessorProbe}), as known when the dialog opens;
  * the dialog names it, and the Job installs exactly what the dialog showed.
  */
 public final class GetNeovim {
@@ -97,18 +102,14 @@ public final class GetNeovim {
         Optional<NeovimPlatform> platform = ProcessorProbe.known();
         Optional<NeovimRelease.Archive> archive = platform.flatMap(release::forPlatform);
         if (archive.isEmpty()) {
-            MessageDialog.openInformation(shell, GetNeovimText.TITLE, "Neovim publishes no release archive for "
-                    + System.getProperty("os.name") + " on " + System.getProperty("os.arch") + ". Install Neovim "
-                    + release.version() + " or newer from your system's packages, and enter its path on the "
-                    + "Neovim preference page if it is not on PATH.");
+            show(shell, MessageDialog.INFORMATION, GetNeovimText.noArchive(release.version(),
+                    System.getProperty("os.name"), System.getProperty("os.arch")), List.of("Close"));
             return;
         }
         NeovimRelease.Archive a = archive.get();
         Path home = PluginNeovim.home(PluginFolders.neovimFolder(), a.platform());
-        GetNeovimDialog dialog = new GetNeovimDialog(shell, GetNeovimText.TITLE,
-                GetNeovimText.confirm(a, release.version(), home), a.sha256(), links(release, a.sha256()),
-                List.of("&Download", "Install from &File...", "Cancel"), 0);
-        switch (dialog.open()) {
+        switch (show(shell, MessageDialog.QUESTION, GetNeovimText.confirm(release, a, home),
+                GetNeovimText.CONFIRM_BUTTONS)) {
             case 0 -> start(shell, release, a, Source.DOWNLOAD, null);
             case 1 -> chooseFile(shell, release, a);
             default -> {
@@ -117,10 +118,22 @@ public final class GetNeovim {
         }
     }
 
-    private static List<GetNeovimDialog.DialogLink> links(NeovimRelease release, String sha256) {
-        return List.of(new GetNeovimDialog.DialogLink("GitHub release page (lists each archive's SHA-256)",
-                release.releasePage()),
-                new GetNeovimDialog.DialogLink("VirusTotal report for this SHA-256", GetNeovimText.virusTotal(sha256)));
+    /**
+     * Shows one of Get Neovim's dialogs, its first button the default, and returns the index of the
+     * button pressed ({@link HeadedMessageDialog#CLOSED} for Esc). Links open in Eclipse's external
+     * browser, so they follow the user's choice in General &gt; Web Browser.
+     */
+    private static int show(Shell shell, int kind, HeadedMessage message, List<String> buttons) {
+        return new HeadedMessageDialog(shell, GetNeovimText.TITLE, kind, message, 0, buttons.toArray(String[]::new))
+                .openLinksWith(GetNeovim::openInBrowser).open();
+    }
+
+    private static void openInBrowser(URI url) {
+        try {
+            PlatformUI.getWorkbench().getBrowserSupport().getExternalBrowser().openURL(url.toURL());
+        } catch (Exception e) { // PartInitException (no browser), or a malformed URL (a bug)
+            LOG.log(Level.WARNING, "Could not open " + url, e);
+        }
     }
 
     /** The file chooser for <i>Install from File…</i>, then the install. */
@@ -218,12 +231,8 @@ public final class GetNeovim {
             buttons.add("&Restart Neovim...");
         }
         buttons.add("Close");
-        GetNeovimDialog note = new GetNeovimDialog(liveShell(shell), GetNeovimText.TITLE,
-                GetNeovimText.done(release.version(), result.program(), waits, otherInUse), result.sha256(),
-                List.of(new GetNeovimDialog.DialogLink("VirusTotal report for this SHA-256",
-                        GetNeovimText.virusTotal(result.sha256()))),
-                buttons, 0);
-        int pressed = note.open();
+        int pressed = show(liveShell(shell), MessageDialog.INFORMATION,
+                GetNeovimText.done(release.version(), result.program(), result.sha256(), waits, otherInUse), buttons);
         String choice = pressed >= 0 && pressed < buttons.size() ? buttons.get(pressed) : "Close";
         if (choice.startsWith("&Use")) {
             // The Activator restarts Neovim on this change, and attaches the active editor.
@@ -238,12 +247,8 @@ public final class GetNeovim {
     /** The failure dialog. UI thread. */
     private static void failed(Shell shell, NeovimRelease release, NeovimRelease.Archive archive, Source source,
             Path file, NeovimInstallException e) {
-        GetNeovimDialog dialog = new GetNeovimDialog(liveShell(shell), GetNeovimText.TITLE,
-                "Neovim was not installed.\n\n" + e.getMessage(), null,
-                List.of(new GetNeovimDialog.DialogLink("GitHub release page, to download the archive in a browser",
-                        release.releasePage())),
-                List.of("&Retry", "Install from &File...", "Close"), 0);
-        switch (dialog.open()) {
+        switch (show(liveShell(shell), MessageDialog.ERROR,
+                GetNeovimText.failed(e, release, archive), GetNeovimText.FAILED_BUTTONS)) {
             case 0 -> start(liveShell(shell), release, archive, source, file);
             case 1 -> chooseFile(liveShell(shell), release, archive);
             default -> {
