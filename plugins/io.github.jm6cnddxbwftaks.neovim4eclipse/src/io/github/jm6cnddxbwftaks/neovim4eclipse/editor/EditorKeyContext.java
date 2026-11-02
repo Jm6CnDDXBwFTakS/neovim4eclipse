@@ -16,8 +16,8 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.contexts.IContextService;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyContextRule;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
  * Decides, for one attached editor, when the Vim key-binding contexts are active.
@@ -27,12 +27,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * command in contexts of its own ({@link #KEY_CONTEXT_ID} and one child context per Ctrl letter,
  * see {@link VimKeyContexts}); while a context is active its binding wins over Eclipse's.
  *
- * <p><b>The rule.</b> The contexts are active exactly while Neovim owns the keys and either Neovim
- * is not in insert mode and this editor's text widget has keyboard focus, or the editor's {@code :}
- * box has it (so that {@code <C-r>}, {@code <C-u>}, {@code <C-n>} reach Neovim's command line, see
- * {@link CommandLineBox}). In insert mode, in Eclipse mode,
- * on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own shortcuts (paste,
- * content assist, other views) are untouched there. Activation is workbench-wide (the standard,
+ * <p><b>The rule</b> ({@link KeyContextRule}, unit-tested). The contexts are active exactly while
+ * Neovim owns the keys and either this editor's text widget has keyboard focus and Neovim reads the
+ * keys (any mode but insert, or an insert Neovim drives: after a block-visual {@code I}, or while
+ * recording), or the editor's {@code :} box has the focus (so that {@code <C-r>}, {@code <C-u>},
+ * {@code <C-n>} reach Neovim's command line, see {@link CommandLineBox}). In an insert Eclipse types,
+ * in Eclipse mode, on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own
+ * shortcuts (paste, content assist, other views) are untouched there. A driven insert can begin
+ * without a mode change (a key typed before Eclipse could take over), so the editor calls
+ * {@link #update()} after each key too. Activation is workbench-wide (the standard,
  * well-trodden path); the focus check keeps it from leaking into other parts.
  *
  * <p>UI thread only, except {@link #updateFromAnyThread}.
@@ -55,6 +58,8 @@ final class EditorKeyContext {
     private final BooleanSupplier neovimOwnsKeys;
     /** Whether the editor's {@code :} box has the keyboard focus. */
     private final BooleanSupplier commandLineFocused;
+    /** Whether Neovim, not Eclipse, receives the keys of the current insert. */
+    private final BooleanSupplier neovimDrivenInsert;
     private final VimKeyContexts contexts = new VimKeyContexts();
     private boolean disposed;
 
@@ -71,11 +76,12 @@ final class EditorKeyContext {
     };
 
     EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys,
-            BooleanSupplier commandLineFocused) {
+            BooleanSupplier commandLineFocused, BooleanSupplier neovimDrivenInsert) {
         this.widget = widget;
         this.mode = mode;
         this.neovimOwnsKeys = neovimOwnsKeys;
         this.commandLineFocused = commandLineFocused;
+        this.neovimDrivenInsert = neovimDrivenInsert;
         widget.addFocusListener(focusListener);
     }
 
@@ -86,9 +92,9 @@ final class EditorKeyContext {
 
     /** Applies the rule for {@code nvimMode}. UI thread. */
     void update(String nvimMode) {
-        boolean editorKeys = !VimModes.isTyping(nvimMode) && !widget.isDisposed() && widget.isFocusControl();
-        boolean wanted = !disposed && neovimOwnsKeys.getAsBoolean()
-                && (editorKeys || commandLineFocused.getAsBoolean());
+        boolean wanted = !disposed && KeyContextRule.wanted(nvimMode, neovimDrivenInsert.getAsBoolean(),
+                !widget.isDisposed() && widget.isFocusControl(), neovimOwnsKeys.getAsBoolean(),
+                commandLineFocused.getAsBoolean());
         try {
             IContextService service = contextService();
             if (service == null) {

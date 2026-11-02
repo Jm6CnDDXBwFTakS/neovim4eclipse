@@ -43,6 +43,8 @@ public final class KeyInterceptor implements VerifyKeyListener {
     private volatile boolean enabled = true;
     /** Set when {@link #verifyKey} saw an Esc; read and cleared by {@link #afterKeyDown} for the same key press. UI thread. */
     private boolean escapeVerified;
+    /** Run after each routed key; see {@link #setAfterKey}. */
+    private Runnable afterKey = () -> { };
     private final Listener afterKeyDown = this::afterKeyDown;
 
     public KeyInterceptor(NeovimSession session) {
@@ -64,6 +66,11 @@ public final class KeyInterceptor implements VerifyKeyListener {
         router.setCtrlKeyFilter(toNeovim);
     }
 
+    /** Runs after each key this interceptor routed (the editor re-checks its key contexts). */
+    public void setAfterKey(Runnable afterKey) {
+        this.afterKey = afterKey;
+    }
+
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
@@ -79,6 +86,7 @@ public final class KeyInterceptor implements VerifyKeyListener {
         if (nvimKey != null && router.route(nvimKey)) {
             event.doit = false;
         }
+        afterKey.run();
     }
 
     /**

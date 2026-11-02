@@ -33,6 +33,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   or rename its folder to the code. The preference page and the notice name what is no longer used.
 - CI tests exactly the archive *Get Neovim* installs, and checks its SHA-256.
 
+### Fixed
+
+- In an insert Neovim drives (after `Ctrl+V` then `I`, `A` or `c`, or while recording a macro), a
+  `Ctrl` key Eclipse binds, such as `Ctrl+O` (Quick Outline) in the Java editor, now reaches Neovim
+  as the other keys do.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

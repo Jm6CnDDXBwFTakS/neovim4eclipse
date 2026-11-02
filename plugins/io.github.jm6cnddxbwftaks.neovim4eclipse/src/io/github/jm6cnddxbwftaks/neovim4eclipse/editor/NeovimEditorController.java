@@ -199,7 +199,9 @@ public final class NeovimEditorController implements AutoCloseable {
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
-                this::commandLineHasFocus);
+                this::commandLineHasFocus, session::isNeovimDrivenInsert);
+        // A key can make the insert Neovim-driven without a mode change (KeyRouter): look again after each.
+        keyInterceptor.setAfterKey(keyContext::update);
         this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
         this.commandLine = new CommandLineBox(styledText, new SessionCommands(session), messageLine,
                 this::onCommandLineStateChanged);

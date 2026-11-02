@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BooleanSupplier;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -48,11 +49,14 @@ import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * Real editor, real Neovim: types keys into the editor widget of test.txt and checks the document.
@@ -910,6 +914,34 @@ class EditorEndToEndTest extends EndToEndTestBase {
         typeSlowly("ggvjol");
         type(widget, 'd');
         expectText("aeta\ngamma\n");
+    }
+
+    /**
+     * The Vim key contexts follow who reads the keys: off in an insert Eclipse types (so Eclipse's
+     * own Ctrl shortcuts work), on in one Neovim drives (block-visual {@code I}), so that a Ctrl key
+     * Eclipse binds, such as the Java editor's Ctrl+O, reaches Neovim (KeyContextRule).
+     */
+    @Test
+    void theKeyContextsStayOnInAnInsertNeovimDrives() {
+        IContextService contexts = PlatformUI.getWorkbench().getService(IContextService.class);
+        BooleanSupplier on = () -> contexts.getActiveContextIds().contains(VimCtrlKeys.NORMAL_CONTEXT_ID);
+        waitUntil("contexts on in normal mode", TIMEOUT_MS, on);
+
+        type(widget, "gg");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        waitUntil("contexts off while Eclipse types", TIMEOUT_MS, () -> !on.getAsBoolean());
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+
+        session.inputAsync("<C-v>");
+        waitUntil("visual block mode", TIMEOUT_MS, () -> "\u0016".equals(session.getMode()));
+        typeSlowly("j");
+        type(widget, 'I');
+        waitUntil("an insert Neovim drives", TIMEOUT_MS, session::isNeovimDrivenInsert);
+        waitUntil("contexts on while Neovim drives the insert", TIMEOUT_MS, on);
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
     }
 
     /**
