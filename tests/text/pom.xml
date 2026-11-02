@@ -112,9 +112,9 @@
           <!-- The classes under test, listed one by one in editor/ (the package also holds SWT code);
                util/ and core/ because they use them. -->
           <includes>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/**</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/sync/**</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**/*.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/**/*.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/sync/**/*.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CaretSync.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/EditorCaret.java</include>

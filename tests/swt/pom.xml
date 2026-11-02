@@ -140,7 +140,7 @@
                and core/ classes they use (core/ClipboardPort: the interface ClipboardBridge implements;
                core/MouseInput: what NeovimMouse sends; core/UiExecutor: how FoldMirror coalesces its sends). -->
           <includes>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**/*.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/ClipboardPort.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/MouseInput.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/UiExecutor.java</include>
