@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /** The Ctrl Keys page: its buttons, Restore Defaults, and what Apply stores. */
@@ -47,6 +48,7 @@ class CtrlKeysPreferencePageTest {
         shell.dispose();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             store.setToDefault(PreferenceConstants.ctrlKeyToNeovim(letter));
+            store.setToDefault(PreferenceConstants.ctrlKeyInInsert(letter));
         }
     }
 
@@ -73,36 +75,46 @@ class CtrlKeysPreferencePageTest {
     }
 
     @Test
-    void thereIsOneCheckBoxPerLetter() {
-        assertEquals(26, buttons(SWT.CHECK).size());
+    void thereAreTwoCheckBoxesPerLetter() {
+        assertEquals(52, buttons(SWT.CHECK).size());
     }
 
     @Test
-    void defaultsLeaveSWAndZToEclipse() {
-        press("Select All");
+    void eachRowSaysWhatTheKeyDoesInBothModes() {
+        List<String> texts = buttons(SWT.CHECK).stream().map(Button::getText).toList();
+        assertTrue(texts.contains("window commands") && texts.contains("delete the word before"), texts.toString());
+    }
+
+    @Test
+    void defaultsFollowThePlatform() {
+        press("Select All Normal");
+        press("Select All Insert");
         page.performDefaults();
         page.performOk();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             assertEquals(VimCtrlKeys.toNeovimByDefault(letter), store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)),
-                    "letter " + letter);
+                    "normal " + letter);
+            assertEquals(VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()),
+                    store.getBoolean(PreferenceConstants.ctrlKeyInInsert(letter)), "insert " + letter);
         }
     }
 
     @Test
-    void deselectAllThenApplyGivesEveryLetterToEclipse() {
-        press("Deselect All");
-        assertTrue(buttons(SWT.CHECK).stream().noneMatch(Button::getSelection));
+    void deselectAllNormalLeavesTheInsertColumn() {
+        press("Deselect All Normal");
         page.performOk();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)), "letter " + letter);
+            assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)), "normal " + letter);
         }
+        assertEquals(VimCtrlKeys.inInsertByDefault('w', PlatformUtil.isMac()), Activator.getDefault().isCtrlKeyInInsert('w'));
     }
 
     @Test
-    void selectAllThenApplyGivesEveryLetterToNeovim() {
-        press("Select All");
+    void selectAllInsertThenApplyGivesEveryInsertLetterToNeovim() {
+        press("Select All Insert");
         page.performOk();
-        assertTrue(store.getBoolean(PreferenceConstants.ctrlKeyToNeovim('s')));
-        assertTrue(Activator.getDefault().isCtrlKeyToNeovim('w'));
+        assertTrue(Activator.getDefault().isCtrlKeyInInsert('v'));
+        assertTrue(Activator.getDefault().isCtrlKeyInInsert('s'));
+        assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyToNeovim('s')), "the Normal column is untouched");
     }
 }

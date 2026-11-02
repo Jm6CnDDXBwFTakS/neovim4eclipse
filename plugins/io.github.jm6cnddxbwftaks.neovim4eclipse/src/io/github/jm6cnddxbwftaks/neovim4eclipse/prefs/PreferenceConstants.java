@@ -113,9 +113,20 @@ public final class PreferenceConstants {
         return CTRL_KEY_TO_NEOVIM_PREFIX + Character.toLowerCase(letter);
     }
 
-    /** Whether the key is one of the per-letter Ctrl-key preferences. */
+    /**
+     * Prefix of the per-letter insert-mode preferences: {@code ctrlKeyInInsert.w} is {@code true} when
+     * Ctrl+W goes to Neovim in an insert Eclipse types (docs/design/INSERT_CTRL_KEYS.md).
+     */
+    public static final String CTRL_KEY_IN_INSERT_PREFIX = "ctrlKeyInInsert.";
+
+    /** Preference key for one letter in insert mode: {@code true} sends it to Neovim there. */
+    public static String ctrlKeyInInsert(char letter) {
+        return CTRL_KEY_IN_INSERT_PREFIX + Character.toLowerCase(letter);
+    }
+
+    /** Whether the key is one of the per-letter Ctrl-key preferences, normal or insert. */
     public static boolean isCtrlKeyKey(String key) {
-        return key != null && key.startsWith(CTRL_KEY_TO_NEOVIM_PREFIX);
+        return key != null && (key.startsWith(CTRL_KEY_TO_NEOVIM_PREFIX) || key.startsWith(CTRL_KEY_IN_INSERT_PREFIX));
     }
 
     /** Whether the key is one of the status bar preferences: the three parts, the widths. */

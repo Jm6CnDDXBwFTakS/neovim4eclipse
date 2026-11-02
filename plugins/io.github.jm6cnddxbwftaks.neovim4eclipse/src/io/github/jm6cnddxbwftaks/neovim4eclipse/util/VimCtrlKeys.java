@@ -88,6 +88,55 @@ public final class VimCtrlKeys {
         "suspend",                        // z
     };
 
+    /**
+     * What each key does in Vim's insert mode, indexed like {@link #LETTERS}; shown in the
+     * preferences. {@code Ctrl-N}, {@code Ctrl-P} and {@code Ctrl-X} run Eclipse's completion
+     * instead of Neovim's popup, which the plug-in does not draw (docs/design/INSERT_CTRL_KEYS.md).
+     */
+    private static final String[] INSERT_MEANINGS = {
+        "insert the last inserted text",  // a
+        "unused in insert mode",          // b
+        "leave insert mode, like Esc",    // c
+        "unindent the line",              // d
+        "insert the character below",     // e
+        "unused in insert mode",          // f
+        "undo break, cursor (u, j, k)",   // g
+        "delete the character before",    // h
+        "insert a Tab",                   // i
+        "new line",                       // j
+        "enter a digraph",                // k
+        "unused in insert mode",          // l
+        "new line",                       // m
+        "Word Completion (Eclipse)",      // n
+        "one normal-mode command",        // o
+        "Word Completion (Eclipse)",      // p
+        "insert the next key literally",  // q
+        "insert a register",              // r
+        "unused in insert mode",          // s
+        "indent the line",                // t
+        "delete back to where insert began", // u
+        "insert the next key literally",  // v
+        "delete the word before",         // w
+        "Ctrl-X Ctrl-O: content assist (Eclipse)", // x
+        "insert the character above",     // y
+        "unused in insert mode",          // z
+    };
+
+    /**
+     * Letters that go to Neovim in insert mode by default on Windows and Linux: delete word, delete
+     * to the insert's start, insert a register, one normal command, indent, unindent. The others
+     * keep Eclipse's shortcuts there, which people use while typing (Ctrl+A select all, Ctrl+C copy,
+     * Ctrl+V paste, Ctrl+X cut, Ctrl+Z undo, Ctrl+S save, Ctrl+F find).
+     */
+    public static final String INSERT_BY_DEFAULT = "wurotd";
+
+    /**
+     * On macOS, Eclipse's own shortcuts use Cmd, so every letter with a Vim insert meaning goes to
+     * Neovim by default, Ctrl+A, Ctrl+E and Ctrl+K included, although macOS text
+     * fields use them for line start, line end and delete to line end.
+     */
+    public static final String INSERT_BY_DEFAULT_MAC = "acdeghijkmnopqrtuvwxy";
+
     private VimCtrlKeys() {
     }
 
@@ -106,13 +155,27 @@ public final class VimCtrlKeys {
         return ECLIPSE_BY_DEFAULT.indexOf(Character.toLowerCase(letter)) < 0;
     }
 
-    /** What the key does in Vim, for example {@code "redo"} for {@code 'r'}. */
+    /** Whether the letter goes to Neovim in insert mode when the user has not chosen otherwise. */
+    public static boolean inInsertByDefault(char letter, boolean mac) {
+        return (mac ? INSERT_BY_DEFAULT_MAC : INSERT_BY_DEFAULT).indexOf(Character.toLowerCase(letter)) >= 0;
+    }
+
+    /** What the key does in Vim's normal mode, for example {@code "redo"} for {@code 'r'}. */
     public static String vimMeaning(char letter) {
+        return VIM_MEANINGS[index(letter)];
+    }
+
+    /** What the key does in Vim's insert mode, for example {@code "delete the word before"} for {@code 'w'}. */
+    public static String insertMeaning(char letter) {
+        return INSERT_MEANINGS[index(letter)];
+    }
+
+    private static int index(char letter) {
         int index = LETTERS.indexOf(Character.toLowerCase(letter));
         if (index < 0) {
             throw new IllegalArgumentException("not a Ctrl-key letter: " + letter);
         }
-        return VIM_MEANINGS[index];
+        return index;
     }
 
     /**

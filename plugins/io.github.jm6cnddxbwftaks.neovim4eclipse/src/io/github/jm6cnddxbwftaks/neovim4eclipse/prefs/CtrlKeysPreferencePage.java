@@ -13,6 +13,7 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Group;
+import org.eclipse.swt.widgets.Label;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
 
@@ -20,8 +21,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
- * Window > Preferences > Neovim > Ctrl Keys: one check box per letter, ticked when
- * {@code Ctrl+letter} goes to Neovim and cleared when Eclipse keeps it.
+ * Window > Preferences > Neovim > Ctrl Keys: one row per letter, with two check boxes, each with
+ * Vim's meaning beside it: <em>Normal</em> (normal and visual mode, an insert Neovim drives, the
+ * {@code :} box) and <em>Insert</em> (an insert Eclipse types). A ticked box sends
+ * {@code Ctrl+letter} to Neovim there; a cleared one leaves Eclipse's shortcut. Example row:
+ *
+ * <pre>
+ *   Ctrl+W   [ ] window commands        [x] delete the word before
+ * </pre>
  *
  * <h2>How a preference page works</h2>
  * {@code plugin.xml} registers this class under the extension point
@@ -43,15 +50,24 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  */
 public class CtrlKeysPreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
 
-    private static final int COLUMNS = 2;
+    /**
+     * One column of 26 rows, about 500 px wide: two halves side by side were 950 px, wider than the
+     * Preferences dialog's page area, which then grew sideways. The page scrolls
+     * up and down instead, the usual direction.
+     */
+    private static final int HALVES = 1;
 
-    /** One check box per letter of {@link VimCtrlKeys#LETTERS}, in the same order. */
-    private final Button[] boxes = new Button[VimCtrlKeys.LETTERS.length()];
+    /** Widgets per row and half: the key's name, the Normal box, the Insert box. */
+    private static final int CELLS = 3;
+
+    /** One Normal and one Insert check box per letter of {@link VimCtrlKeys#LETTERS}, in the same order. */
+    private final Button[] normal = new Button[VimCtrlKeys.LETTERS.length()];
+    private final Button[] insert = new Button[VimCtrlKeys.LETTERS.length()];
 
     public CtrlKeysPreferencePage() {
-        setDescription("Ticked Ctrl keys go to Neovim while it owns normal and visual mode; cleared ones "
-                + "keep their Eclipse shortcut.\nIn insert mode all Ctrl keys stay with Eclipse. By default "
-                + "Ctrl+S (save), Ctrl+W (close) and Ctrl+Z (undo) stay with Eclipse too.");
+        setDescription("A ticked box sends the Ctrl key to Neovim; a cleared one keeps Eclipse's shortcut.\n"
+                + "Normal: normal and visual mode, an insert Neovim drives, and the : box. Insert: while Eclipse "
+                + "types in insert mode;\nNeovim then gets the typed text first, so its key acts on it.");
     }
 
     @Override
@@ -66,37 +82,58 @@ public class CtrlKeysPreferencePage extends PreferencePage implements IWorkbench
 
         Group keys = new Group(page, SWT.NONE);
         keys.setText("Send to Neovim");
-        keys.setLayout(new GridLayout(COLUMNS, true));
+        GridLayout grid = new GridLayout(HALVES * CELLS, false);
+        grid.horizontalSpacing = 12;
+        keys.setLayout(grid);
         keys.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
-        // Column-major order, so the letters read A, B, C ... down the first column.
-        int rows = (boxes.length + COLUMNS - 1) / COLUMNS;
+        for (int half = 0; half < HALVES; half++) {
+            header(keys, "");
+            header(keys, "Normal");
+            header(keys, "Insert");
+        }
+        // Column-major order, so the letters read A, B, C ... down each half.
+        int rows = (normal.length + HALVES - 1) / HALVES;
         for (int row = 0; row < rows; row++) {
-            for (int column = 0; column < COLUMNS; column++) {
-                int index = column * rows + row;
-                if (index < boxes.length) {
-                    boxes[index] = createBox(keys, VimCtrlKeys.LETTERS.charAt(index));
+            for (int half = 0; half < HALVES; half++) {
+                int index = half * rows + row;
+                if (index < normal.length) {
+                    char letter = VimCtrlKeys.LETTERS.charAt(index);
+                    Label name = new Label(keys, SWT.NONE);
+                    name.setText("Ctrl+" + Character.toUpperCase(letter));
+                    normal[index] = box(keys, VimCtrlKeys.vimMeaning(letter));
+                    insert[index] = box(keys, VimCtrlKeys.insertMeaning(letter));
                 } else {
-                    new Composite(keys, SWT.NONE); // empty cell
+                    for (int cell = 0; cell < CELLS; cell++) {
+                        new Label(keys, SWT.NONE); // empty cell
+                    }
                 }
             }
         }
 
         Composite buttons = new Composite(page, SWT.NONE);
         buttons.setLayout(new RowLayout());
-        createButton(buttons, "Select All", true);
-        createButton(buttons, "Deselect All", false);
+        createButton(buttons, "Select All Normal", normal, true);
+        createButton(buttons, "Deselect All Normal", normal, false);
+        createButton(buttons, "Select All Insert", insert, true);
+        createButton(buttons, "Deselect All Insert", insert, false);
 
         load(false);
         return page;
     }
 
-    private static Button createBox(Composite parent, char letter) {
+    private static void header(Composite parent, String text) {
+        Label label = new Label(parent, SWT.NONE);
+        label.setText(text);
+        label.setFont(org.eclipse.jface.resource.JFaceResources.getBannerFont());
+    }
+
+    private static Button box(Composite parent, String meaning) {
         Button box = new Button(parent, SWT.CHECK);
-        box.setText("Ctrl+" + Character.toUpperCase(letter) + "   " + VimCtrlKeys.vimMeaning(letter));
+        box.setText(meaning);
         return box;
     }
 
-    private void createButton(Composite parent, String label, boolean checked) {
+    private static void createButton(Composite parent, String label, Button[] boxes, boolean checked) {
         Button button = new Button(parent, SWT.PUSH);
         button.setText(label);
         button.addListener(SWT.Selection, event -> {
@@ -109,9 +146,12 @@ public class CtrlKeysPreferencePage extends PreferencePage implements IWorkbench
     /** Fills the check boxes from the store: the saved values, or the defaults. */
     private void load(boolean defaults) {
         IPreferenceStore store = getPreferenceStore();
-        for (int i = 0; i < boxes.length; i++) {
-            String key = PreferenceConstants.ctrlKeyToNeovim(VimCtrlKeys.LETTERS.charAt(i));
-            boxes[i].setSelection(defaults ? store.getDefaultBoolean(key) : store.getBoolean(key));
+        for (int i = 0; i < normal.length; i++) {
+            char letter = VimCtrlKeys.LETTERS.charAt(i);
+            String n = PreferenceConstants.ctrlKeyToNeovim(letter);
+            String in = PreferenceConstants.ctrlKeyInInsert(letter);
+            normal[i].setSelection(defaults ? store.getDefaultBoolean(n) : store.getBoolean(n));
+            insert[i].setSelection(defaults ? store.getDefaultBoolean(in) : store.getBoolean(in));
         }
     }
 
@@ -124,8 +164,10 @@ public class CtrlKeysPreferencePage extends PreferencePage implements IWorkbench
     @Override
     public boolean performOk() {
         IPreferenceStore store = getPreferenceStore();
-        for (int i = 0; i < boxes.length; i++) {
-            store.setValue(PreferenceConstants.ctrlKeyToNeovim(VimCtrlKeys.LETTERS.charAt(i)), boxes[i].getSelection());
+        for (int i = 0; i < normal.length; i++) {
+            char letter = VimCtrlKeys.LETTERS.charAt(i);
+            store.setValue(PreferenceConstants.ctrlKeyToNeovim(letter), normal[i].getSelection());
+            store.setValue(PreferenceConstants.ctrlKeyInInsert(letter), insert[i].getSelection());
         }
         return true;
     }

@@ -53,7 +53,26 @@ class VimCtrlKeysTest {
         for (char c = 'a'; c <= 'z'; c++) {
             assertTrue(VimCtrlKeys.LETTERS.indexOf(c) >= 0, "letter " + c);
             assertFalse(VimCtrlKeys.vimMeaning(c).isBlank(), "meaning of " + c);
+            assertFalse(VimCtrlKeys.insertMeaning(c).isBlank(), "insert meaning of " + c);
         }
+    }
+
+    /** Windows and Linux: W U R O T D; everything else keeps Eclipse's shortcut while typing. */
+    @Test
+    void insertDefaultsOnWindowsAndLinux() {
+        for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
+            assertEquals("wurotd".indexOf(letter) >= 0, VimCtrlKeys.inInsertByDefault(letter, false), "letter " + letter);
+        }
+    }
+
+    /** macOS: every letter with a Vim insert meaning, A, E and K included; the unused ones stay. */
+    @Test
+    void insertDefaultsOnMacOs() {
+        for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
+            boolean unused = VimCtrlKeys.insertMeaning(letter).startsWith("unused");
+            assertEquals(!unused, VimCtrlKeys.inInsertByDefault(letter, true), "letter " + letter);
+        }
+        assertTrue(VimCtrlKeys.inInsertByDefault('a', true) && VimCtrlKeys.inInsertByDefault('k', true));
     }
 
     @Test

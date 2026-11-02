@@ -162,6 +162,11 @@ public class Activator extends AbstractUIPlugin {
         return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter));
     }
 
+    /** Whether {@code Ctrl+letter} goes to Neovim in an insert Eclipse types, as chosen in the preferences. */
+    public boolean isCtrlKeyInInsert(char letter) {
+        return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyInInsert(letter));
+    }
+
     /** A status item preference changed: tell the session what to fetch and redraw the status bar. */
     private void applyStatusItems() {
         NeovimSession current;

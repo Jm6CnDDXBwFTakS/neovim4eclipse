@@ -8,6 +8,7 @@ import org.eclipse.core.runtime.preferences.DefaultScope;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -37,6 +38,8 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         defaults.putBoolean(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
+            defaults.putBoolean(PreferenceConstants.ctrlKeyInInsert(letter),
+                    VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()));
         }
     }
 }
