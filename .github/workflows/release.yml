@@ -7,8 +7,9 @@
 # in the POMs, MANIFEST.MF and feature.xml (inside the runner only; nothing is committed back).
 #
 # Five jobs, each starting only when the one before succeeded:
-#   1. version: checks that the tagged commit is on main and that CHANGELOG.md has a section for
-#               the version, and reads the version from the tag.
+#   1. version: checks that the tagged commit is on main, that CHANGELOG.md has a section for
+#               the version, and that the six Neovim archives Get Neovim installs still match the
+#               plug-in's data file; reads the version from the tag.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
 #               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
 #               neovim4eclipse-<version>.zip as an artifact of this run. The build is unsigned and
@@ -64,6 +65,19 @@ jobs:
       # than after the whole build. The output is thrown away; publish reads the notes again.
       - name: Check that CHANGELOG.md has a section for ${{ steps.tag.outputs.version }}
         run: releng/release-notes.sh "${{ steps.tag.outputs.version }}" > /dev/null
+      # Get Neovim installs only an archive whose SHA-256 equals the one pinned in
+      # util/neovim-downloads.properties. CI downloads three of the six archives (and checks them);
+      # this downloads all six and compares each with the file and with GitHub's published digest,
+      # so a release never ships a pin that no longer matches (about 70 MB, once per release).
+      # Nothing is written. See releng/UpdateNeovimDownloads.java and docs/design/DOWNLOAD_NEOVIM.md.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+      - name: Check the pinned Neovim archives
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # GitHub's API, with this run's rate limit
+        run: java releng/UpdateNeovimDownloads.java --check
 
   build:
     name: Build

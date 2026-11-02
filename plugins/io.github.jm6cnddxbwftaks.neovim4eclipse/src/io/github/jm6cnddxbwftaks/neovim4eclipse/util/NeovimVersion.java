@@ -24,7 +24,8 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * <p>{@link #MINIMUM} is the single source of truth for the supported version: CI runs exactly that
- * Neovim ({@code NVIM_VERSION} in {@code .github/workflows/build.yml}), and the docs name it;
+ * Neovim (the release in {@code neovim-downloads.properties}, which <i>Get Neovim</i> installs and
+ * {@code releng/install-neovim.sh} downloads for CI), and the docs name it;
  * {@code VersionConsistencyTest} checks both. A pre-release ({@code 0.13.0-dev}) counts as its
  * numbers, so a nightly build newer than the minimum is accepted.
  *

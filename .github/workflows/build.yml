@@ -41,11 +41,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # The oldest supported Neovim, util/NeovimVersion.MINIMUM: CI tests exactly that version.
-  # VersionConsistencyTest checks they agree. To change it, see docs/UPGRADING.md.
-  NVIM_VERSION: v0.12.6
-
 jobs:
   build:
     name: Build, unit and UI tests
@@ -66,18 +61,21 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
-      # Ubuntu's packaged Neovim is too old, so use the official release tarball.
-      - name: Install Neovim ${{ env.NVIM_VERSION }}
+      # Ubuntu's packaged Neovim is too old, so use the official release archive: exactly the one
+      # Get Neovim installs (util/neovim-downloads.properties, util/NeovimVersion.MINIMUM), its
+      # SHA-256 checked. The script prints the program's path, kept in NVIM for the next steps.
+      - name: Install Neovim
+        # The assignment on its own line, so a failed check fails the step (set -e does not see a
+        # failure inside an echo's arguments).
         run: |
-          curl -fsSL -o nvim.tar.gz \
-            "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-x86_64.tar.gz"
-          tar -xzf nvim.tar.gz -C "$RUNNER_TEMP"
+          nvim=$(releng/install-neovim.sh lx "$RUNNER_TEMP")
+          echo "NVIM=$nvim" >> "$GITHUB_ENV"
       # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
       # test"); -Pui adds the UI tests, which are off by default because they open a window. They
       # need an X display: xvfb-run provides a virtual one.
       - run: >
           xvfb-run -a ./mvnw -B -ntp verify -Pui
-          -Dnvim.path=$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim
+          -Dnvim.path=$NVIM
       - uses: actions/upload-artifact@v7
         with:
           # archive: false (upload-artifact v7+) uploads the single file as it is, instead of
@@ -96,16 +94,16 @@ jobs:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven
-      # Ubuntu's packaged Neovim is too old, so use the official release tarball.
-      - name: Install Neovim ${{ env.NVIM_VERSION }}
+      # As in the build job: the archive Get Neovim installs, its SHA-256 checked.
+      - name: Install Neovim
+        # The assignment on its own line, so a failed check fails the step (set -e does not see a
+        # failure inside an echo's arguments).
         run: |
-          curl -fsSL -o nvim.tar.gz \
-            "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-x86_64.tar.gz"
-          tar -xzf nvim.tar.gz -C "$RUNNER_TEMP"
-          "$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim" --version | head -1
+          nvim=$(releng/install-neovim.sh lx "$RUNNER_TEMP")
+          echo "NVIM=$nvim" >> "$GITHUB_ENV"
       - run: >
           ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration
-          -Dnvim.path=$RUNNER_TEMP/nvim-linux-x86_64/bin/nvim
+          -Dnvim.path=$NVIM
 
   # The two jobs above run on Linux only; this one runs the same tests on the other two systems
   # the plug-in (and its Marketplace listing) supports, because the parts that differ per OS are
@@ -117,7 +115,7 @@ jobs:
   # OS; only the Linux job uploads the ZIP). No xvfb-run: Windows and macOS runners have a real
   # desktop session. On macOS the test POMs add -XstartOnFirstThread themselves (Cocoa runs the
   # UI only on the first thread). Runner images: windows-latest is x86_64, macos-latest is
-  # Apple silicon (arm64), so the Neovim downloads below are those two.
+  # Apple silicon (arm64), so the Neovim platform codes below are wx and ma.
   platforms:
     name: All tests on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -130,12 +128,10 @@ jobs:
         include:
           - name: Windows
             os: windows-latest
-            nvim-archive: nvim-win64.zip
-            nvim: nvim-win64/bin/nvim.exe
+            nvim-code: wx
           - name: macOS
             os: macos-latest
-            nvim-archive: nvim-macos-arm64.tar.gz
-            nvim: nvim-macos-arm64/bin/nvim
+            nvim-code: ma
     defaults:
       run:
         # Git Bash on Windows, so ./mvnw and the steps below are the same script on every OS.
@@ -154,25 +150,16 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
-      - name: Install Neovim ${{ env.NVIM_VERSION }}
+      # As in the build job: the archive Get Neovim installs on this platform, its SHA-256 checked.
+      - name: Install Neovim
         env:
-          ARCHIVE: ${{ matrix.nvim-archive }}
-          NVIM: ${{ matrix.nvim }}
+          CODE: ${{ matrix.nvim-code }}
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/$ARCHIVE" \
-            "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/${ARCHIVE}"
-          case "$ARCHIVE" in
-            *.zip) unzip -q "$RUNNER_TEMP/$ARCHIVE" -d "$RUNNER_TEMP" ;;
-            *)     tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP" ;;
-          esac
-          "$RUNNER_TEMP/$NVIM" --version | head -1
+          nvim=$(releng/install-neovim.sh "$CODE" "$RUNNER_TEMP")
+          echo "NVIM=$nvim" >> "$GITHUB_ENV"
       # The same as the Linux build job: compile, unit, text-model, SWT and UI tests, feature, ZIP.
       - name: Build, unit and UI tests
-        env:
-          NVIM: ${{ matrix.nvim }}
-        run: ./mvnw -B -ntp verify -Pui "-Dnvim.path=$RUNNER_TEMP/$NVIM"
+        run: ./mvnw -B -ntp verify -Pui "-Dnvim.path=$NVIM"
       # The same as the Linux integration job.
       - name: Integration tests (real Neovim)
-        env:
-          NVIM: ${{ matrix.nvim }}
-        run: ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration "-Dnvim.path=$RUNNER_TEMP/$NVIM"
+        run: ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration "-Dnvim.path=$NVIM"

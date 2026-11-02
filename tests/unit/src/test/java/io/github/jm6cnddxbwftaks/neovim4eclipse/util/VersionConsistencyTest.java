@@ -86,8 +86,6 @@ class VersionConsistencyTest {
             "README.md", "CONTRIBUTING.md",
             "features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml",
             "releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml");
-    /** {@code NVIM_VERSION: v0.12.6} in a workflow: the version is the group. */
-    private static final Pattern NVIM_VERSION_ENV = Pattern.compile("(?m)^\\s*NVIM_VERSION:\\s*v(\\S+)\\s*$");
 
     // ---- Java ----
 
@@ -148,13 +146,19 @@ class VersionConsistencyTest {
 
     // ---- Neovim ----
 
-    /** CI tests exactly the oldest supported Neovim, so the minimum is never an untested claim. */
+    /**
+     * CI tests exactly the oldest supported Neovim, so the minimum is never an untested claim. Every
+     * CI job installs Neovim through {@code releng/install-neovim.sh}, which takes the version from
+     * {@code neovim-downloads.properties}; {@link #getNeovimInstallsTheMinimumNeovim} ties that to
+     * {@link NeovimVersion#MINIMUM}. A download of its own in a workflow would bypass both.
+     */
     @Test
-    void ciTestsTheMinimumNeovim() throws Exception {
-        Matcher m = NVIM_VERSION_ENV.matcher(read(".github/workflows/build.yml"));
-        assertTrue(m.find(), ".github/workflows/build.yml: NVIM_VERSION: v<version> not found");
-        assertEquals(NeovimVersion.MINIMUM.toString(), m.group(1),
-                "build.yml's NVIM_VERSION differs from NeovimVersion.MINIMUM");
+    void ciInstallsNeovimFromTheDataFile() throws Exception {
+        String build = read(".github/workflows/build.yml");
+        assertFalse(build.contains("releases/download"),
+                "build.yml downloads Neovim itself: use releng/install-neovim.sh <code> <folder>");
+        assertEquals(3, build.split("releng/install-neovim.sh", -1).length - 1,
+                "build.yml: the build, integration and platforms jobs each install Neovim with releng/install-neovim.sh");
     }
 
     /**

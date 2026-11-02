@@ -8,7 +8,8 @@
 #   - maven: the <properties> in the root pom.xml (libraries, Tycho, Maven plug-ins, JUnit).
 #   - github-actions: the uses: lines in .github/workflows/.
 # What it does not cover (update by hand, see docs/UPGRADING.md): the JDK (.java-version), the
-# Eclipse release (eclipse-repo.url, a p2 site Dependabot cannot read), Neovim (NVIM_VERSION) and
+# Eclipse release (eclipse-repo.url, a p2 site Dependabot cannot read), Neovim (NeovimVersion.MINIMUM and
+# util/neovim-downloads.properties) and
 # the Maven wrapper (ignored below, with the reason).
 #
 # Each pull request still runs the Build workflow, so a broken update shows up as a red check.
