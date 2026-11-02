@@ -133,15 +133,23 @@ public final class NvimExecutable {
 
     /**
      * A blank preference: the plug-in's own Neovim (strictly {@code <home>/bin/nvim} with its runtime,
-     * see {@link PluginNeovim}; one that does not run is passed over), then {@code program} on
-     * {@code PATH}, then the usual install folders (checked, not searched).
+     * see {@link PluginNeovim}; one that does not run, or is older than {@link NeovimVersion#MINIMUM},
+     * is passed over), then {@code program} on {@code PATH}, then the usual install folders (checked,
+     * not searched).
+     *
+     * <p>Why an old plug-in copy is passed over: after an update of the plug-in raises the minimum,
+     * {@code neovim/<code>/} still holds the old release until <i>Get Neovim</i> replaces it. Picking it
+     * would only lead to a refused start, while a newer Neovim on {@code PATH} could run. The preference note and the notice name the old copy ({@link PluginNeovim#outdated}).
      */
     private static Resolved searchDefaultFolders(String program, String pathEnv, boolean windows,
             List<Path> pluginHomes, List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
         for (Path home : pluginHomes) {
             Path own = PluginNeovim.program(home, windows).toAbsolutePath();
-            if (PluginNeovim.isInstall(home, windows) && versionOf.apply(own) != null) {
-                return new Resolved(own.toString(), 1);
+            if (PluginNeovim.isInstall(home, windows)) {
+                NeovimVersion version = versionOf.apply(own);
+                if (version != null && version.isSupported()) {
+                    return new Resolved(own.toString(), 1);
+                }
             }
         }
         Path onPath = locate(program, pathEnv, windows);

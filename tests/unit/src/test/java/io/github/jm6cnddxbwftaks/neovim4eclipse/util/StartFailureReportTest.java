@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
@@ -58,7 +60,7 @@ class StartFailureReportTest {
     void theMessageNamesTheExecutableAndTheInnermostCause() {
         Exception error = new IllegalStateException("could not start the session",
                 new IOException("Cannot run program \"nvim\": error=2, No such file or directory"));
-        String message = StartFailureReport.message("/usr/bin/nvim", error, List.of());
+        String message = StartFailureReport.message("/usr/bin/nvim", error, List.of(), Optional.empty());
         assertTrue(message.startsWith("Neovim for Eclipse could not start Neovim"), message);
         assertTrue(message.contains("\nExecutable: /usr/bin/nvim\n"), message);
         assertTrue(message.contains("\nError: Cannot run program \"nvim\": error=2, No such file or directory\n"),
@@ -75,7 +77,7 @@ class StartFailureReportTest {
     @Test
     void theMessageNamesWhatThePluginsFolderNoLongerUses() {
         String message = StartFailureReport.message("nvim", new IOException("x"),
-                List.of("current", "nvim-linux-arm64_0.12.6"));
+                List.of("current", "nvim-linux-arm64_0.12.6"), Optional.empty());
         assertTrue(message.endsWith("\n\nNo longer used, you can delete them: current, nvim-linux-arm64_0.12.6 in "
                 + NvimExecutable.dedicatedFolder()), message);
     }
@@ -95,5 +97,15 @@ class StartFailureReportTest {
     void aCauseWithoutAMessageIsNamedByItsClass() {
         Throwable error = new RuntimeException("waiting for Neovim", new TimeoutException());
         assertEquals("TimeoutException", StartFailureReport.rootMessage(error));
+    }
+
+    /** After an update raised the minimum, the plug-in's own old copy is named first, with its fix. */
+    @Test
+    void theMessageNamesAnOutdatedPluginNeovim() {
+        Path old = Path.of("/n/la/bin/nvim");
+        String message = StartFailureReport.message("/usr/bin/nvim", new IOException("x"), List.of(),
+                Optional.of(new PluginNeovim.Outdated(old, new NeovimVersion(0, 11, 0))));
+        assertTrue(message.contains("\n\nThe plug-in's Neovim 0.11.0 is too old: Get Neovim " + NeovimVersion.MINIMUM
+                + " replaces it (" + old + ").\nInstall Neovim"), message);
     }
 }

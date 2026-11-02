@@ -3,13 +3,17 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.Optional;
+
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.PlatformUI;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.GetNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstalledVersions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 
@@ -63,8 +67,12 @@ final class StartFailureNotice {
         Shell shell = PlatformUI.isWorkbenchRunning() && PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null
                 ? PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell()
                 : null;
+        // nvim --version of the plug-in's own copy: cached (InstalledVersions), as for resolve above.
+        Optional<PluginNeovim.Outdated> outdated = configured == null || configured.isBlank()
+                ? PluginNeovim.outdated(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), InstalledVersions::of)
+                : Optional.empty();
         String message = StartFailureReport.message(NvimExecutable.resolve(configured), error,
-                PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()));
+                PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()), outdated);
         // Get Neovim is the default: for a missing or too old Neovim it is the simplest fix.
         MessageDialog dialog = new MessageDialog(shell, StartFailureReport.TITLE, null, message, MessageDialog.ERROR,
                 0, GetNeovim.label(), "Open Preferences", "Close");

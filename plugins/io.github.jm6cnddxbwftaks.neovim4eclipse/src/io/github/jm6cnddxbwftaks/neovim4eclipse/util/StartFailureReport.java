@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Decides when to tell the user that Neovim could not be started, and what to say: the part of
@@ -89,12 +90,17 @@ public final class StartFailureReport {
      * @param error      why the start failed; its innermost cause is shown ({@link #rootMessage})
      * @param unused     entries of the plug-in's Neovim folder it no longer uses
      *                   ({@link PluginNeovim#unusedEntries}); may be empty
+     * @param outdated   the plug-in's own Neovim if it is older than the minimum
+     *                   ({@link PluginNeovim#outdated}), named first in the advice; may be empty
      */
-    public static String message(String executable, Throwable error, List<String> unused) {
+    public static String message(String executable, Throwable error, List<String> unused,
+            Optional<PluginNeovim.Outdated> outdated) {
         String unusedLine = NvimProbe.unusedLine(unused, NvimExecutable.dedicatedFolder());
+        String outdatedLine = outdated.map(o -> NvimProbe.outdatedLine(o) + ".\n").orElse("");
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"
+                + outdatedLine
                 + "Install Neovim " + NeovimVersion.MINIMUM + " or newer. The simplest way: Get Neovim "
                 + NeovimVersion.MINIMUM + " downloads it from github.com, or installs the release archive from a "
                 + "file, into " + NvimExecutable.dedicatedFolder() + "; leave the Neovim preference blank, which "

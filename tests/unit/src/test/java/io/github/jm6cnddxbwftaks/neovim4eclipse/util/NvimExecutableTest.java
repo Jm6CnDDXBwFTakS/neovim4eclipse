@@ -577,6 +577,24 @@ class NvimExecutableTest {
         }
     }
 
+    /** After an update raised the minimum, the old plug-in copy is passed over for a newer one on PATH. */
+    @Test
+    void aPluginNeovimOlderThanTheMinimumIsPassedOver() throws IOException {
+        Path old = install("neovim/la", "nvim");
+        Path onPath = pathDirectory("onpath");
+        try {
+            Path exe = Files.createFile(onPath.resolve("nvim"));
+            Function<Path, NeovimVersion> versions = p -> p.equals(old.toAbsolutePath()) ? new NeovimVersion(0, 11, 0)
+                    : NeovimVersion.MINIMUM;
+            assertEquals(exe.toAbsolutePath().toString(), NvimExecutable.find("", onPath.toString(), false,
+                    List.of(tmp.resolve("neovim/la")), List.of(), versions).command());
+            assertEquals(new NeovimVersion(0, 11, 0), PluginNeovim.outdated(List.of(tmp.resolve("neovim/la")), false,
+                    versions).orElseThrow().version());
+        } finally {
+            deleteTree(onPath);
+        }
+    }
+
     @Test
     void aPluginNeovimWithoutItsRuntimeDoesNotCount() throws IOException {
         file("neovim/la/bin/nvim");

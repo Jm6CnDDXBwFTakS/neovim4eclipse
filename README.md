@@ -866,7 +866,10 @@ Neovim, or one too old), the note is in the theme's error color and the field ge
      x86_64, `a` arm64): `lx`, `la`, `mx`, `ma`, `wx`, `wa`. The processor is the machine's real one,
      also when Eclipse itself runs emulated (an x86_64 Eclipse on Apple silicon uses `ma`). Anything
      else in the folder, such as an archive extracted there before 0.2.1, is no longer used; the
-     preference page and the notice say so, and you can delete it.
+     preference page and the notice say so, and you can delete it. A plug-in Neovim older than the
+     minimum, left from before an update of the plug-in raised it, is passed over too (a newer `nvim`
+     on `PATH` is used meanwhile); the preference page and the notice say that *Get Neovim* replaces
+     it.
   2. `nvim` on `PATH`.
   3. The usual install folders, each checked for `bin/nvim` or `nvim` directly inside it (not
      searched further down, since folders such as `/usr/local` can be large):

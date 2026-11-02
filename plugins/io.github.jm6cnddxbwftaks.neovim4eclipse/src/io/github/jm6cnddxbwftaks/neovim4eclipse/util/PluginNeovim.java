@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * The plug-in's own Neovim: where it lives and what counts as one.
@@ -67,6 +68,35 @@ public final class PluginNeovim {
     public static boolean isInstall(Path home, boolean windows) {
         return Files.isRegularFile(program(home, windows))
                 && Files.isDirectory(home.resolve("share").resolve("nvim").resolve("runtime"));
+    }
+
+    /**
+     * The plug-in's own Neovim that is installed but older than {@link NeovimVersion#MINIMUM}.
+     *
+     * @param program where it is
+     * @param version what it reports
+     */
+    public record Outdated(Path program, NeovimVersion version) {
+    }
+
+    /**
+     * The first of {@code homes} that holds an install older than {@link NeovimVersion#MINIMUM}: left
+     * from before an update of the plug-in raised the minimum. The search passes over it
+     * ({@link NvimExecutable}); the preference note and the "Neovim not started" notice say that
+     * <i>Get Neovim</i> replaces it. Runs {@code nvim --version} ({@code versionOf}).
+     */
+    public static Optional<Outdated> outdated(List<Path> homes, boolean windows,
+            Function<Path, NeovimVersion> versionOf) {
+        for (Path home : homes) {
+            if (isInstall(home, windows)) {
+                Path program = program(home, windows).toAbsolutePath();
+                NeovimVersion version = versionOf.apply(program);
+                if (version != null && !version.isSupported()) {
+                    return Optional.of(new Outdated(program, version));
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     /** {@link #searchHomes(Path, Optional, Optional)} for this machine's plug-in folder. */

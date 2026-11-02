@@ -21,6 +21,13 @@ import java.util.List;
  *
  * <p>"As described" points at the page's description, which says what the field takes.
  *
+ * <p>With a blank preference, a plug-in Neovim older than the minimum (left from before an update of
+ * the plug-in raised it) gets a line of its own ({@link #outdatedLine}):
+ *
+ * <pre>
+ *   The plug-in's Neovim 0.12.6 is too old: Get Neovim 0.13.0 replaces it (/home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim)
+ * </pre>
+ *
  * <p>If the plug-in's folder holds anything it no longer uses ({@link PluginNeovim#unusedEntries}),
  * such as an archive extracted there by hand before 0.2.1, a second line says so ({@link #unusedLine}):
  *
@@ -63,8 +70,25 @@ public final class NvimProbe {
         Path folder = NvimExecutable.dedicatedFolder();
         Note note = program == null ? note(configured, null, null, 0, folder)
                 : note(configured, program, InstalledVersions.of(program), resolved.among(), folder);
+        StringBuilder text = new StringBuilder(note.text());
+        if (configured == null || configured.isBlank()) {
+            PluginNeovim.outdated(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), InstalledVersions::of)
+                    .ifPresent(old -> text.append('\n').append(outdatedLine(old)));
+        }
         String unused = unusedLine(PluginNeovim.unusedEntries(folder), folder);
-        return unused == null ? note : new Note(note.text() + "\n" + unused, note.problem());
+        if (unused != null) {
+            text.append('\n').append(unused);
+        }
+        return new Note(text.toString(), note.problem());
+    }
+
+    /**
+     * The line about the plug-in's own Neovim when it is older than the minimum. Example:
+     * {@code The plug-in's Neovim 0.12.6 is too old: Get Neovim 0.13.0 replaces it (/home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim)}
+     */
+    public static String outdatedLine(PluginNeovim.Outdated old) {
+        return "The plug-in's Neovim " + old.version() + " is too old: Get Neovim " + NeovimVersion.MINIMUM
+                + " replaces it (" + old.program() + ")";
     }
 
     /**
