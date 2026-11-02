@@ -26,7 +26,9 @@ import java.util.function.Function;
  * <h2>Steps</h2>
  * <ol>
  *   <li><b>Lock</b> {@code neovim/.install.lock}, so two Eclipses (or two clicks) never install at
- *       once.</li>
+ *       once. The empty file stays after the install on purpose: the lock is the operating system's
+ *       lock on the open file, not the file's presence, and deleting it could let a second Eclipse
+ *       lock a new file while the first still holds the old one.</li>
  *   <li><b>Check</b> the archive's size and SHA-256 against the pinned entry for this platform
  *       ({@link NeovimRelease}). Only that exact archive is accepted. If its hash belongs to another
  *       platform's entry, the message names the archive this machine needs.</li>
