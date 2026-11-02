@@ -173,7 +173,12 @@ local function editing_main_in_a_project()
   start()
   local app = vim.fn.tempname() .. '/app'
   vim.fn.mkdir(app .. '/src', 'p')
-  app = vim.fn.resolve(app) -- getcwd() resolves links (macOS: /var is /private/var)
+  -- The folder's one true spelling, as Eclipse gives a project's: links resolved (macOS: /var is
+  -- /private/var) and, on Windows, short 8.3 names expanded. GitHub's Windows runner has its temp
+  -- folder under C:/Users/RUNNER~1 (the user is runneradmin); with that spelling in :lcd, Neovim
+  -- sent `:e ./notes.txt` as .../runneradmin/... but `:e notes.txt` as .../RUNNER~1/..., the same
+  -- file spelled two ways. vim.fn.resolve keeps 8.3 names; the system's realpath does not.
+  app = vim.fs.normalize(assert(vim.uv.fs_realpath(app)))
   vim.cmd.lcd(vim.fn.fnameescape(app))
   vim.cmd.file(vim.fn.fnameescape(app .. '/src/Main.java'))
   return app
