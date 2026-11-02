@@ -56,23 +56,10 @@ To use the plug-in in your own Eclipse, without building it.
 - Eclipse IDE **2024-12 (4.34) or newer**, any package (Java, C/C++, Committers, ...), running on
   Java 21 or newer (the Eclipse packages bring their own Java 21+).
 - **Neovim 0.12.6 or newer**: `nvim --version` in a terminal should print it. The plug-in follows
-  new Neovim releases closely, so a system package is often too old. A Neovim of its own is fine:
-  extract the release archive from [Neovim's releases](https://github.com/neovim/neovim/releases)
-  into `~/.local/share/neovim4eclipse-plugin/neovim` (Windows:
-  `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`; with `XDG_DATA_HOME` set,
-  `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`), no install needed: the plug-in looks there first.
-  Eclipse sees only the environment variables of whatever started it, so one set in your shell's
-  startup file does not count when Eclipse starts from the Dock or the Start menu; the preference
-  page shows the folder it uses. Or extract it anywhere and choose that folder in
-  *Window → Preferences → Neovim*, which shows the Neovim it finds and its version. Archives may sit
-  a few folders down (as Windows Explorer's *Extract All* leaves them), and several versions side
-  by side in one folder are fine; the newest is used. An older Neovim is refused
-  with a message that names both versions.
-
-  ```bash
-  mkdir -p ~/.local/share/neovim4eclipse-plugin/neovim
-  tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/share/neovim4eclipse-plugin/neovim
-  ```
+  new Neovim releases closely, so a system package is often too old. Then let the plug-in install
+  one of its own: **Get Neovim 0.12.6…**, offered in the "Neovim not started" notice, on
+  *Window → Preferences → Neovim* and in the *Neovim* menu. See [Get Neovim](#get-neovim). An
+  older Neovim is refused with a message that names both versions.
 
 **Steps**
 
@@ -130,9 +117,9 @@ are needed to [install](#install) it.
 - **JDK 21 or newer** for the build. Maven itself is not needed: `./mvnw` (Windows: `mvnw.cmd`) downloads
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
 - Eclipse IDE with PDE, **2024-12 (4.34) or newer** (the supported minimum; the build targets it), running on Java 21+, with a **JDK 21** registered for the JavaSE-21 execution environment
-- **Neovim 0.12.6+** in `~/.local/share/neovim4eclipse-plugin/neovim`, reachable from the Eclipse
-  process (`nvim --version`),
-  or its folder set in *Window → Preferences → Neovim*
+- **Neovim 0.12.6+**: the plug-in's own (*Get Neovim*, in
+  `~/.local/share/neovim4eclipse-plugin/neovim/<code>`), on the Eclipse process's `PATH`
+  (`nvim --version`), or its folder set in *Window → Preferences → Neovim*
 
 > Eclipse started from a desktop launcher may not inherit your shell `PATH`. Start it from a
 > terminal, or set Neovim's folder in the preferences.
@@ -811,24 +798,75 @@ Neovim in normal and visual mode; cleared ones keep their Eclipse shortcut. *Sel
 All* set every box; *Restore Defaults* ticks all but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`. Changes apply
 immediately. [docs/KEYBOARD.md](docs/KEYBOARD.md) explains those three defaults and which keys go where.
 
+### Get Neovim
+
+**Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder,
+`~/.local/share/neovim4eclipse-plugin/neovim/<code>` (see [Finding Neovim](#finding-neovim) for the
+folder and the code). It is offered in the "Neovim not started" notice, under the field on
+*Window → Preferences → Neovim*, and in the *Neovim* menu while the plug-in has no current Neovim of
+its own. A dialog first says where it goes and what it downloads, and offers two ways:
+
+- **Download**: from Neovim's GitHub release, which redirects to
+  `release-assets.githubusercontent.com`; about 10 to 13 MB. The download goes through Eclipse's
+  own proxy settings (*Window → Preferences → General → Network Connections*), as Eclipse's updates
+  do.
+- **Install from File…**: the same archive, already downloaded, for example in a browser where
+  Eclipse cannot download (no internet, a blocked host, a proxy that wants a password). Only the
+  archive for this platform is accepted, which the dialog names (`nvim-linux-arm64.tar.gz`); the
+  file is only read, never moved or deleted.
+
+Either way the plug-in checks the archive's SHA-256 against the one pinned in the plug-in (the
+dialog shows it, with *Copy*, and links to the GitHub release page and the VirusTotal report for
+that hash), unpacks it, checks that it runs and reports the right version, and only then puts it in
+place. Nothing changes if any step fails. Without a running Neovim the active editor attaches at
+once; otherwise the note offers *Restart Neovim*, and a Neovim running from the same folder is
+replaced when it restarts. If the preference names another Neovim, *Use the Download* clears it.
+
+**A proxy that asks for a password**: Java does not send a proxy password through an HTTPS
+connection unless Eclipse starts with this line in `eclipse.ini`, after `-vmargs` (Eclipse's own
+updates need the same):
+
+```text
+-Djdk.http.auth.tunneling.disabledSchemes=
+```
+
+Then enter the user and password under *Network Connections*. Or use *Install from File…*.
+
+**By hand**, without the plug-in's help: extract the archive and rename its folder to the code, so
+that `neovim/<code>/bin/nvim` exists; or extract it anywhere and choose that folder in the
+preference. On macOS an archive downloaded with a browser is quarantined, and macOS then refuses to
+run Neovim; remove the flag after extracting (files the plug-in unpacks have none):
+
+```bash
+xattr -dr com.apple.quarantine ~/.local/share/neovim4eclipse-plugin/neovim/ma
+```
+
+Uninstalling the plug-in leaves this folder (about 40 MB per platform); delete it by hand.
+
 ### Finding Neovim
 
 The *Neovim folder or program* field on *Window → Preferences → Neovim* takes one of three things,
 and the note under it shows which Neovim that finds, for example
-`Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-x86_64/bin/nvim`.
+`Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim`.
 When Neovim would not start with what the field finds (nothing found, a program that is not
 Neovim, or one too old), the note is in the theme's error color and the field gets an error mark.
 
 - **Blank** (the default) searches the default folders, in this order:
-  1. **The default Neovim folder**. This is intended for a Neovim install dedicated to the plug-in,
-     to avoid conflicts with other Neovim installations, if needed. It is searched as a "folder that
-     holds Neovim", described below. The first of these whose variable is set (to an absolute path)
-     is used:
+  1. **The plug-in's own Neovim**, the one *Get Neovim* installs, so that an older Neovim elsewhere
+     cannot get in its way: `<code>/bin/nvim` in the plug-in's Neovim folder, where `<code>` names
+     the platform (below). Only that exact place counts. The folder is the first of these whose
+     variable is set (to an absolute path):
      - Linux and macOS: `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`, then
        `$HOME/.local/share/neovim4eclipse-plugin/neovim`.
      - Windows: `%XDG_DATA_HOME%\neovim4eclipse-plugin\neovim`, then
        `%HOME%\.local\share\neovim4eclipse-plugin\neovim`, then
        `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`.
+
+     The code is the system's letter (`l` Linux, `m` macOS, `w` Windows) and the processor's (`x`
+     x86_64, `a` arm64): `lx`, `la`, `mx`, `ma`, `wx`, `wa`. The processor is the machine's real one,
+     also when Eclipse itself runs emulated (an x86_64 Eclipse on Apple silicon uses `ma`). Anything
+     else in the folder, such as an archive extracted there before 0.2.1, is no longer used; the
+     preference page and the notice say so, and you can delete it.
   2. `nvim` on `PATH`.
   3. The usual install folders, each checked for `bin/nvim` or `nvim` directly inside it (not
      searched further down, since folders such as `/usr/local` can be large):

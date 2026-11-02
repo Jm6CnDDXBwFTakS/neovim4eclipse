@@ -321,7 +321,7 @@ class NvimExecutableTest {
 
     @Test
     void anArchiveExtractedAsItIsIsFoundInsideTheFolder() throws IOException {
-        // tar -xzf nvim-linux-x86_64.tar.gz -C ~/.local/share/neovim4eclipse-plugin/neovim keeps the archive's top folder.
+        // tar -xzf nvim-linux-x86_64.tar.gz -C ~/opt keeps the archive's top folder; the preference names ~/opt.
         Path exe = install("neovim/nvim-linux-x86_64", "nvim");
         assertEquals(real(exe).toString(), resolveNowhere(tmp.resolve("neovim").toString(), false));
     }

@@ -12,6 +12,26 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder, from the
+  "Neovim not started" notice (the default button), the Neovim preference page, or the *Neovim* menu
+  (while the plug-in has no current Neovim of its own). It downloads the official release archive
+  from GitHub, through Eclipse's proxy settings, or installs one you already have (*Install from
+  File…*, for when Eclipse cannot download). Either way the archive must match the SHA-256 pinned in
+  the plug-in, which the dialog shows with links to the GitHub release and VirusTotal; then it is
+  unpacked, test-run and put in place. No `xattr` step is needed on macOS. See the README, "Get
+  Neovim".
+
+### Changed
+
+- The plug-in's own Neovim now lives in one folder per platform,
+  `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (`lx`, `la`, `mx`, `ma`, `wx`, `wa`), and a blank
+  preference uses only that exact place there. A Neovim extracted into
+  `~/.local/share/neovim4eclipse-plugin/neovim` by hand before is no longer found: use *Get Neovim*,
+  or rename its folder to the code. The preference page and the notice name what is no longer used.
+- CI tests exactly the archive *Get Neovim* installs, and checks its SHA-256.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

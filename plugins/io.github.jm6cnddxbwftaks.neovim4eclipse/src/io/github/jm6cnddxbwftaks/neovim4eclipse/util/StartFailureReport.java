@@ -32,8 +32,9 @@ public final class StartFailureReport {
     public static final String TITLE = "Neovim not started";
 
     /**
-     * Where Neovim's release archives are. The plug-in expects a Neovim of its own if the system's
-     * is older than {@link NeovimVersion#MINIMUM}: an archive extracted anywhere works, no install.
+     * Where Neovim's release archives are, for an install by hand. Get Neovim installs the plug-in's
+     * own if the system's is older than {@link NeovimVersion#MINIMUM}; an archive extracted anywhere
+     * works too.
      */
     public static final String RELEASES_URL = "https://github.com/neovim/neovim/releases";
 
