@@ -20,6 +20,11 @@
             description="Stop the embedded Neovim and start a new one (after changing init.lua, or when it is stuck)">
       </command>
       <command
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.getNeovim"
+            name="Neovim: Get Neovim"
+            description="Download the Neovim release the plug-in needs, or install its archive from a file, after checking its SHA-256">
+      </command>
+      <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences"
             name="Neovim: Preferences"
             description="Open the Neovim preferences with their sub-pages expanded">
@@ -331,6 +336,10 @@
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart">
       </handler>
       <handler
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.GetNeovimHandler"
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.getNeovim">
+      </handler>
+      <handler
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.OpenPreferencesHandler"
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.openPreferences">
       </handler>
@@ -493,6 +502,22 @@
                   label="Restart Neovim..."
                   mnemonic="R"
                   style="push">
+            </command>
+            <!-- Only while the plug-in's own Neovim for this machine is missing or older than the
+                 release it installs (prefs/GetNeovimOffer); the preference page and the "Neovim not
+                 started" notice always offer it. The label has no version: plugin.xml cannot read the
+                 data file, and the dialog names it. -->
+            <command
+                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.getNeovim"
+                  label="Get Neovim..."
+                  mnemonic="G"
+                  style="push">
+               <visibleWhen checkEnabled="false">
+                  <test
+                        property="io.github.jm6cnddxbwftaks.neovim4eclipse.offerGetNeovim"
+                        value="true">
+                  </test>
+               </visibleWhen>
             </command>
             <separator name="prefs" visible="true"/>
             <command
@@ -1136,7 +1161,7 @@
       <propertyTester
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.propertyTester"
             namespace="io.github.jm6cnddxbwftaks.neovim4eclipse"
-            properties="showToolbar,showMenu"
+            properties="showToolbar,showMenu,offerGetNeovim"
             type="java.lang.Object"
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.NeovimPropertyTester">
       </propertyTester>

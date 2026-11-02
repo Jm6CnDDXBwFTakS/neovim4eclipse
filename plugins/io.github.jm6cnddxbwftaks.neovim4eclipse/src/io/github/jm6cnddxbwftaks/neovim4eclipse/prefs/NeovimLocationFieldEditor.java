@@ -21,6 +21,7 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Label;
@@ -33,8 +34,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 /**
  * The "Neovim folder or program" field: a text field, a <em>Browse...</em> button that picks a
  * folder, a note underneath saying which Neovim the current text finds, for example
- * {@code Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/bin/nvim}, and
- * the help: what the field takes, with a link to the README section on where Neovim is searched.
+ * {@code Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim}, the
+ * <em>Get Neovim 0.12.6...</em> button ({@link GetNeovim}), and the help: what the field takes, with
+ * a link to the README section on where Neovim is searched.
  *
  * <p>The note comes first because it answers what was typed and changes with it; the help, which
  * does not change, follows. A note that reports a problem (Neovim would not start:
@@ -46,7 +48,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
  * <h2>How a field editor is extended</h2>
  * {@link StringButtonFieldEditor} already lays out label, text and button in the page's grid and
  * calls {@link #changePressed} for the button. This class adds two controls, each in a row of its
- * own: the note and the help. (The page's group box, {@link NeovimPreferencePage}, sets them apart
+ * own: the note, the Get Neovim button and the help. (The page's group box, {@link NeovimPreferencePage}, sets them apart
  * from the check boxes.) {@link #doFillIntoGrid} creates them after the others, spanning every column, and
  * {@link #adjustForNumColumns} keeps that span when the page adds wider fields.
  *
@@ -67,6 +69,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     private static final Logger LOG = Logger.getLogger(NeovimLocationFieldEditor.class.getName());
 
     private Label note;
+    private Button getNeovim;
     private Link help;
     private ControlDecoration errorMark;
     /** Bumped on every change; a probe's answer is used only if it still matches. */
@@ -87,6 +90,21 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
 
         note = new Label(parent, SWT.WRAP);
         note.setLayoutData(fullRow(numColumns, WRAP_WIDTH));
+
+        // Always here, also for a reinstall; after an install the note probes again.
+        getNeovim = new Button(parent, SWT.PUSH);
+        getNeovim.setText(GetNeovim.label());
+        getNeovim.setToolTipText("Download the Neovim release the plug-in needs, or install its archive from a "
+                + "file, into " + NvimExecutable.dedicatedFolder());
+        getNeovim.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false, numColumns, 1));
+        getNeovim.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(getShell())));
+        Runnable afterInstall = () -> {
+            if (!note.isDisposed()) {
+                scheduleProbe();
+            }
+        };
+        GetNeovim.addListener(afterInstall);
+        getNeovim.addDisposeListener(e -> GetNeovim.removeListener(afterInstall));
 
         help = new Link(parent, SWT.NONE);
         help.setText(NeovimPreferencePage.NEOVIM_FIELD_HELP);
@@ -132,6 +150,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         super.adjustForNumColumns(numColumns);
         if (note != null) {
             ((GridData) note.getLayoutData()).horizontalSpan = numColumns;
+            ((GridData) getNeovim.getLayoutData()).horizontalSpan = numColumns;
             ((GridData) help.getLayoutData()).horizontalSpan = numColumns;
         }
     }

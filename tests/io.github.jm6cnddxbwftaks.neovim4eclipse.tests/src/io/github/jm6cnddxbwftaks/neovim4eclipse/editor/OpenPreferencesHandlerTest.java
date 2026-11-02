@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.NeovimPreferencePage;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimVersion;
 
 /**
  * The Neovim menu's Preferences dialog: the main page's fields (they once ended up in a second,
@@ -71,6 +72,11 @@ class OpenPreferencesHandlerTest {
                 .filter(l -> l.getText().startsWith("Neovim folder or program")).findFirst().orElse(null);
         assertNotNull(label, "no 'Neovim folder or program' label");
         assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
+        // Get Neovim is always offered on the page, with the version it installs (GetNeovim).
+        Button getNeovim = find(page, Button.class).stream()
+                .filter(b -> b.getText().equals("Get Neovim " + NeovimVersion.MINIMUM + "...")).findFirst().orElse(null);
+        assertNotNull(getNeovim, "no Get Neovim button");
+        assertTrue(getNeovim.isEnabled() && getNeovim.isVisible(), "Get Neovim button usable");
         // The note under the field names what the field finds (NvimProbe), after a short delay.
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> find(page, Label.class)
                 .stream().anyMatch(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found")));

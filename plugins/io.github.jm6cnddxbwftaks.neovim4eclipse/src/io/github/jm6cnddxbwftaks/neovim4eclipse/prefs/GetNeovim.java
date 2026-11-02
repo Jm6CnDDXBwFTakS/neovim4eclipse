@@ -1,0 +1,319 @@
+// SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+// SPDX-License-Identifier: EPL-2.0
+
+package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.SubMonitor;
+import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.FileDialog;
+import org.eclipse.swt.widgets.Shell;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.handlers.IHandlerService;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstallProgress;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstalledVersions;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimDownload;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstallException;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimPlatform;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
+
+/**
+ * <i>Get Neovim</i>: the one entry, on the preference page, in the "Neovim not started" notice and
+ * in the Neovim menu, that installs the plug-in's own Neovim (docs/design/DOWNLOAD_NEOVIM.md).
+ *
+ * <h2>Flow</h2>
+ * <ol>
+ *   <li>{@link #open} shows the confirmation ({@link GetNeovimDialog}): where it goes, what is
+ *       downloaded from where, the pinned SHA-256 with <em>Copy</em>, links to the GitHub release and
+ *       VirusTotal. Buttons: <em>Download</em> (default), <em>Install from File…</em>, Cancel.</li>
+ *   <li>A background {@link Job} (status bar, Progress view, cancellable) downloads the archive
+ *       ({@code util/NeovimDownload}, through Eclipse's proxy settings, {@link EclipseProxies}) or
+ *       takes the chosen file, and installs it ({@code util/NeovimInstaller}). Nothing of this runs
+ *       on the UI thread.</li>
+ *   <li>The done note says where Neovim went and offers what is still needed: <em>Use the
+ *       Download</em> when the preference names another Neovim, <em>Restart Neovim</em> when one runs.
+ *       Without a running Neovim the active editor attaches at once. The failure dialog offers
+ *       <em>Retry</em>, <em>Install from File…</em> and the release page.</li>
+ * </ol>
+ * The platform is the real processor's ({@code util/ProcessorProbe}), as known when the dialog opens;
+ * the dialog names it, and the Job installs exactly what the dialog showed.
+ */
+public final class GetNeovim {
+
+    private static final Logger LOG = Logger.getLogger(GetNeovim.class.getName());
+
+    /** Told after every successful install, on the UI thread: the preference page's note, the menu. */
+    private static final List<Runnable> LISTENERS = new CopyOnWriteArrayList<>();
+
+    /** The Restart Neovim command, run through Eclipse so it asks its own question first. */
+    private static final String RESTART_COMMAND = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart";
+
+    private GetNeovim() {
+    }
+
+    /** Runs {@code listener} on the UI thread after each successful install. */
+    public static void addListener(Runnable listener) {
+        LISTENERS.add(listener);
+    }
+
+    public static void removeListener(Runnable listener) {
+        LISTENERS.remove(listener);
+    }
+
+    /** {@code Get Neovim 0.12.6…}, the label of every entry. */
+    public static String label() {
+        return GetNeovimText.label(NeovimRelease.bundled()) + "...";
+    }
+
+    /** What the user chose. */
+    private enum Source {
+        DOWNLOAD, FILE
+    }
+
+    /** Shows the confirmation and, if confirmed, starts the install. UI thread. */
+    public static void open(Shell shell) {
+        NeovimRelease release = NeovimRelease.bundled();
+        Optional<NeovimPlatform> platform = ProcessorProbe.known();
+        Optional<NeovimRelease.Archive> archive = platform.flatMap(release::forPlatform);
+        if (archive.isEmpty()) {
+            MessageDialog.openInformation(shell, GetNeovimText.TITLE, "Neovim publishes no release archive for "
+                    + System.getProperty("os.name") + " on " + System.getProperty("os.arch") + ". Install Neovim "
+                    + release.version() + " or newer from your system's packages, and enter its path on the "
+                    + "Neovim preference page if it is not on PATH.");
+            return;
+        }
+        NeovimRelease.Archive a = archive.get();
+        Path home = PluginNeovim.home(PluginFolders.neovimFolder(), a.platform());
+        GetNeovimDialog dialog = new GetNeovimDialog(shell, GetNeovimText.TITLE,
+                GetNeovimText.confirm(a, release.version(), home), a.sha256(), links(release, a.sha256()),
+                List.of("&Download", "Install from &File...", "Cancel"), 0);
+        switch (dialog.open()) {
+            case 0 -> start(shell, release, a, Source.DOWNLOAD, null);
+            case 1 -> chooseFile(shell, release, a);
+            default -> {
+                // cancelled
+            }
+        }
+    }
+
+    private static List<GetNeovimDialog.DialogLink> links(NeovimRelease release, String sha256) {
+        return List.of(new GetNeovimDialog.DialogLink("GitHub release page (lists each archive's SHA-256)",
+                release.releasePage()),
+                new GetNeovimDialog.DialogLink("VirusTotal report for this SHA-256", GetNeovimText.virusTotal(sha256)));
+    }
+
+    /** The file chooser for <i>Install from File…</i>, then the install. */
+    private static void chooseFile(Shell shell, NeovimRelease release, NeovimRelease.Archive archive) {
+        FileDialog files = new FileDialog(shell, SWT.OPEN);
+        files.setText("Install " + archive.asset());
+        String pattern = archive.kind() == NeovimRelease.Kind.ZIP ? "*.zip" : "*.tar.gz";
+        files.setFilterNames(new String[] { archive.asset(), "All files" });
+        files.setFilterExtensions(new String[] { pattern, "*" });
+        files.setFileName(archive.asset());
+        Path downloads = Path.of(System.getProperty("user.home", ""), "Downloads");
+        if (Files.isDirectory(downloads)) {
+            files.setFilterPath(downloads.toString());
+        }
+        String chosen = files.open();
+        if (chosen != null) {
+            start(shell, release, archive, Source.FILE, Path.of(chosen));
+        }
+    }
+
+    /** Starts the Job. UI thread. */
+    private static void start(Shell shell, NeovimRelease release, NeovimRelease.Archive archive, Source source,
+            Path file) {
+        String configured = Activator.getDefault().getNvimExecutable();
+        boolean running = Activator.getDefault().currentSession() != null;
+        Job job = Job.create((source == Source.DOWNLOAD ? "Downloading Neovim " : "Installing Neovim ")
+                + release.version(), monitor -> {
+                    run(shell, release, archive, source, file, configured, running, monitor);
+                    // Our own dialogs report the outcome; an error status would add Eclipse's own pop-up.
+                    return Status.OK_STATUS;
+                });
+        job.setUser(true); // a progress dialog first, which the user can send to the background
+        job.schedule();
+    }
+
+    /** The Job's work, off the UI thread. */
+    private static void run(Shell shell, NeovimRelease release, NeovimRelease.Archive archive, Source source,
+            Path file, String configured, boolean running, IProgressMonitor monitor) {
+        Path folder = PluginFolders.neovimFolder();
+        Path home = PluginNeovim.home(folder, archive.platform());
+        // Which Neovim the preference finds now (it may run nvim --version, hence here): whether a
+        // running Neovim comes from the folder being replaced, and whether the download will be used.
+        Path current = NvimExecutable.locate(NvimExecutable.resolve(configured));
+        boolean fromHome = current != null && current.toAbsolutePath().startsWith(home.toAbsolutePath());
+        InstallProgress progress = new MonitorProgress(monitor);
+        try {
+            NeovimInstaller.Result result;
+            if (source == Source.DOWNLOAD) {
+                Path downloaded = NeovimDownload.download(archive,
+                        NeovimDownload.client(EclipseProxies.selector(), EclipseProxies.authenticator()), folder,
+                        progress);
+                try {
+                    result = NeovimInstaller.install(downloaded, release, archive.platform(), folder,
+                            running && fromHome, InstalledVersions::of, progress);
+                } finally {
+                    Files.deleteIfExists(downloaded);
+                }
+            } else {
+                result = NeovimInstaller.install(file, release, archive.platform(), folder, running && fromHome,
+                        InstalledVersions::of, progress);
+            }
+            boolean otherInUse = !configured.isBlank() && !fromHome;
+            asyncExec(() -> done(shell, release, result, running, otherInUse));
+        } catch (NeovimInstallException e) {
+            if (e.reason() != NeovimInstallException.Reason.CANCELLED) {
+                asyncExec(() -> failed(shell, release, archive, source, file, e));
+            }
+        } catch (Exception e) { // a bug, or an I/O error deleting the temporary file
+            LOG.log(Level.WARNING, "Get Neovim failed", e);
+            asyncExec(() -> failed(shell, release, archive, source, file, new NeovimInstallException(
+                    NeovimInstallException.Reason.FILES, String.valueOf(e.getMessage()), e)));
+        } finally {
+            monitor.done();
+        }
+    }
+
+    private static void asyncExec(Runnable r) {
+        Display display = PlatformUI.isWorkbenchRunning() ? PlatformUI.getWorkbench().getDisplay() : null;
+        if (display != null && !display.isDisposed()) {
+            display.asyncExec(r);
+        }
+    }
+
+    /** The done note, and what follows from it. UI thread. */
+    private static void done(Shell shell, NeovimRelease release, NeovimInstaller.Result result, boolean running,
+            boolean otherInUse) {
+        GetNeovimOffer.recheck();
+        LISTENERS.forEach(Runnable::run);
+        boolean waits = result.outcome() == NeovimInstaller.Outcome.WAITS_FOR_RESTART;
+        List<String> buttons = new ArrayList<>();
+        if (otherInUse) {
+            buttons.add("&Use the Download");
+        }
+        if (running) {
+            buttons.add("&Restart Neovim...");
+        }
+        buttons.add("Close");
+        GetNeovimDialog note = new GetNeovimDialog(liveShell(shell), GetNeovimText.TITLE,
+                GetNeovimText.done(release.version(), result.program(), waits, otherInUse), result.sha256(),
+                List.of(new GetNeovimDialog.DialogLink("VirusTotal report for this SHA-256",
+                        GetNeovimText.virusTotal(result.sha256()))),
+                buttons, 0);
+        int pressed = note.open();
+        String choice = pressed >= 0 && pressed < buttons.size() ? buttons.get(pressed) : "Close";
+        if (choice.startsWith("&Use")) {
+            // The Activator restarts Neovim on this change, and attaches the active editor.
+            Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, "");
+        } else if (choice.startsWith("&Restart")) {
+            restart();
+        } else if (!running && !otherInUse) {
+            Activator.getDefault().restartNeovim(); // nothing runs: attach the active editor now
+        }
+    }
+
+    /** The failure dialog. UI thread. */
+    private static void failed(Shell shell, NeovimRelease release, NeovimRelease.Archive archive, Source source,
+            Path file, NeovimInstallException e) {
+        GetNeovimDialog dialog = new GetNeovimDialog(liveShell(shell), GetNeovimText.TITLE,
+                "Neovim was not installed.\n\n" + e.getMessage(), null,
+                List.of(new GetNeovimDialog.DialogLink("GitHub release page, to download the archive in a browser",
+                        release.releasePage())),
+                List.of("&Retry", "Install from &File...", "Close"), 0);
+        switch (dialog.open()) {
+            case 0 -> start(liveShell(shell), release, archive, source, file);
+            case 1 -> chooseFile(liveShell(shell), release, archive);
+            default -> {
+                // closed
+            }
+        }
+    }
+
+    private static void restart() {
+        try {
+            IHandlerService handlers = PlatformUI.getWorkbench().getService(IHandlerService.class);
+            handlers.executeCommand(RESTART_COMMAND, null);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Could not run Restart Neovim", e);
+        }
+    }
+
+    /** {@code shell} if it is still open (the preference dialog may have closed meanwhile), else the workbench's. */
+    private static Shell liveShell(Shell shell) {
+        if (shell != null && !shell.isDisposed()) {
+            return shell;
+        }
+        var window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+        return window == null ? null : window.getShell();
+    }
+
+    /**
+     * The Job's progress monitor as the install steps' {@link InstallProgress}. Each step (download,
+     * check, unpack, test run) gets an equal share of the bar, filled by bytes where the step knows
+     * its size; {@link SubMonitor} keeps the shares apart.
+     */
+    private static final class MonitorProgress implements InstallProgress {
+        private static final int TICKS = 1000;
+        private static final int STEPS = 4;
+        private final SubMonitor root;
+        private SubMonitor current;
+        private long total = -1;
+        private long done;
+        private int ticks;
+
+        MonitorProgress(IProgressMonitor monitor) {
+            root = SubMonitor.convert(monitor, STEPS * TICKS);
+        }
+
+        @Override
+        public void step(String name, long total) {
+            root.subTask(name);
+            current = root.newChild(TICKS);
+            current.setWorkRemaining(TICKS);
+            this.total = total;
+            this.done = 0;
+            this.ticks = 0;
+        }
+
+        @Override
+        public void worked(long amount) {
+            if (current == null || total <= 0) {
+                return;
+            }
+            done += amount;
+            int now = (int) Math.min(TICKS, done * TICKS / total);
+            if (now > ticks) {
+                current.worked(now - ticks);
+                ticks = now;
+            }
+        }
+
+        @Override
+        public boolean cancelled() {
+            return root.isCanceled();
+        }
+    }
+}

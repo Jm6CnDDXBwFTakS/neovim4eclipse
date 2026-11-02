@@ -28,6 +28,9 @@ public class NeovimPropertyTester extends PropertyTester {
         if ("showMenu".equals(property)) {
             return matches(ContributionVisibility.isShowMenu(), expectedValue);
         }
+        if ("offerGetNeovim".equals(property)) {
+            return matches(GetNeovimOffer.offered(), expectedValue);
+        }
         return false;
     }
 

@@ -8,13 +8,14 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.PlatformUI;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.GetNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 
 /**
- * Tells the user, once, that Neovim could not be started, and offers to open the preference page
- * where its path is set.
+ * Tells the user, once, that Neovim could not be started, and offers <i>Get Neovim</i> (the default
+ * button, {@link GetNeovim}) or the preference page where its path is set.
  *
  * <p>Attaching is attempted every time a text editor is activated, so without a guard a missing
  * {@code nvim} would raise a dialog on every editor switch. The notice is shown once per configured
@@ -64,10 +65,15 @@ final class StartFailureNotice {
                 : null;
         String message = StartFailureReport.message(NvimExecutable.resolve(configured), error,
                 PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()));
+        // Get Neovim is the default: for a missing or too old Neovim it is the simplest fix.
         MessageDialog dialog = new MessageDialog(shell, StartFailureReport.TITLE, null, message, MessageDialog.ERROR,
-                0, "Open Preferences", "Close");
-        if (dialog.open() == 0) {
-            OpenPreferencesHandler.open(shell);
+                0, GetNeovim.label(), "Open Preferences", "Close");
+        switch (dialog.open()) {
+            case 0 -> GetNeovim.open(shell);
+            case 1 -> OpenPreferencesHandler.open(shell);
+            default -> {
+                // closed
+            }
         }
     }
 }

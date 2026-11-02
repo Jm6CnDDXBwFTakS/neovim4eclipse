@@ -106,6 +106,12 @@ class MenuVisibilityTest {
         } finally {
             neovim.notifyListeners(SWT.Hide, new Event()); // closed again, also after a failure
         }
+        // Get Neovim shows only while the plug-in's own Neovim is missing or old (GetNeovimOffer),
+        // which depends on the machine's data folder: checked when it is there, not required.
+        Character getNeovim = letters.remove("Get Neovim...");
+        if (getNeovim != null) {
+            assertEquals('g', getNeovim, "Get Neovim's letter");
+        }
         assertEquals(Map.of("Neovim Mode", 'v', "Attach Neovim", 'a', "Restart Neovim...", 'r',
                 "Welcome...", 'w', "Preferences...", 'n'), letters);
     }

@@ -23,6 +23,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.QuickfixLists;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ContributionVisibility;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
@@ -175,6 +177,9 @@ public class Activator extends AbstractUIPlugin {
     /** Returns the live session, starting {@code nvim} on first use or after it died. */
     public synchronized NeovimSession getOrCreateSession() throws Exception {
         if (session == null || !session.isAlive()) {
+            // A Neovim that Get Neovim installed while the old one ran waits in neovim/<code>.new;
+            // nothing runs from the plug-in's folder now, so it can take its place (NeovimInstaller).
+            NeovimInstaller.finishPending(PluginFolders.neovimFolder());
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
