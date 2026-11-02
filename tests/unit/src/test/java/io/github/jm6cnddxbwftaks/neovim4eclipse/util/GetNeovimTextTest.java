@@ -35,7 +35,7 @@ class GetNeovimTextTest {
         Path program = Path.of("/n/la/bin/nvim");
         String plain = GetNeovimText.done(RELEASE.version(), program, false, false);
         assertEquals("Neovim " + RELEASE.version() + " is installed:\n" + program
-                + "\n\nThe archive matched this SHA-256:", plain);
+                + "\n\nThe archive matched the SHA-256 pinned in the plug-in.", plain);
         assertTrue(GetNeovimText.done(RELEASE.version(), program, true, false).contains("Restart Neovim to finish"));
         String other = GetNeovimText.done(RELEASE.version(), program, false, true);
         assertTrue(other.contains("Use the Download clears it"), other);

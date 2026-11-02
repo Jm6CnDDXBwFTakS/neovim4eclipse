@@ -62,7 +62,7 @@ public final class GetNeovimText {
             s.append("\n\nThe Neovim preference names another Neovim. Use the Download clears it, so that the "
                     + "plug-in uses this one.");
         }
-        s.append("\n\nThe archive matched this SHA-256:");
+        s.append("\n\nThe archive matched the SHA-256 pinned in the plug-in.");
         return s.toString();
     }
 
