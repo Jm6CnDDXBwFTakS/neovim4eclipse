@@ -47,6 +47,9 @@ public final class PluginNeovim {
     /** Suffix of the folder the previous install moves to during the swap, then deleted. */
     public static final String OLD = ".old";
 
+    /** Start of a download's temporary file in {@code neovim/} ({@link NeovimDownload}). */
+    public static final String DOWNLOAD_PREFIX = ".download-";
+
     private PluginNeovim() {
     }
 
@@ -102,7 +105,7 @@ public final class PluginNeovim {
 
     /**
      * What else is in {@code folder}: everything but the platform folders, their {@code .new} and
-     * {@code .old} folders and the lock file, sorted by name. Example:
+     * {@code .old} folders, the lock file and download leftovers, sorted by name. Example:
      * {@code [current, nvim-linux-arm64_0.12.6]} after an earlier hand install. Empty if the folder
      * does not exist or cannot be read.
      */
@@ -118,7 +121,7 @@ public final class PluginNeovim {
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(folder)) {
             for (Path entry : entries) {
                 String name = String.valueOf(entry.getFileName());
-                if (!known.contains(name)) {
+                if (!known.contains(name) && !name.startsWith(DOWNLOAD_PREFIX)) {
                     unused.add(name);
                 }
             }
