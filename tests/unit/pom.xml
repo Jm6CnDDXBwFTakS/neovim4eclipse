@@ -79,6 +79,26 @@
               </sources>
             </configuration>
           </execution>
+          <!-- Data files the util/ classes read from beside themselves, such as
+               neovim-downloads.properties (NeovimRelease). add-source above brings only .java files
+               along; in the plug-in, Tycho and PDE copy non-Java files from src/ into the bundle. -->
+          <execution>
+            <id>add-plugin-resources</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>add-resource</goal>
+            </goals>
+            <configuration>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src</directory>
+                  <includes>
+                    <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/*.properties</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -86,8 +106,8 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <includes>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/**</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**/*.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/**/*.java</include>
           </includes>
         </configuration>
       </plugin>

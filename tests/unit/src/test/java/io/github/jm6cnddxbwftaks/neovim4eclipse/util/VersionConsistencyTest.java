@@ -157,6 +157,17 @@ class VersionConsistencyTest {
                 "build.yml's NVIM_VERSION differs from NeovimVersion.MINIMUM");
     }
 
+    /**
+     * The archives <i>Get Neovim</i> installs hold the minimum Neovim: after raising
+     * {@link NeovimVersion#MINIMUM}, run {@code java releng/UpdateNeovimDownloads.java <version>}.
+     */
+    @Test
+    void getNeovimInstallsTheMinimumNeovim() {
+        assertEquals(NeovimVersion.MINIMUM, NeovimRelease.bundled().version(),
+                "neovim-downloads.properties holds another Neovim than NeovimVersion.MINIMUM: run "
+                        + "java releng/UpdateNeovimDownloads.java " + NeovimVersion.MINIMUM);
+    }
+
     @Test
     void docsNameTheMinimumNeovim() throws Exception {
         String expected = NeovimVersion.MINIMUM.toString();
