@@ -12,6 +12,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 
 /**

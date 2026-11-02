@@ -6,7 +6,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,5 +48,19 @@ class HeadedMessageTest {
         points.add(new HeadedMessage.Point("B", "b"));
         assertEquals(1, message.points().size(), "a copy, not the caller's list");
         assertThrows(UnsupportedOperationException.class, () -> message.points().add(new HeadedMessage.Point("C", "c")));
+    }
+
+    @Test
+    void aPointsValueAndLinksShowInItsPlainLine() {
+        HeadedMessage.Point point = new HeadedMessage.Point("SHA-256", "Checked.").withCopy("abc")
+                .withLinks(new HeadedMessage.Link("Page", URI.create("https://example.org/")))
+                .withLinks(new HeadedMessage.Link("Report", URI.create("https://example.org/r")));
+        HeadedMessage message = new HeadedMessage("Q?", List.of(point, new HeadedMessage.Point("Folder", "")
+                .withCopy("/a")), "");
+        assertEquals("Q?\n\nSHA-256: Checked. abc (Page, Report)\nFolder: /a", message.plain());
+        assertEquals(2, point.links().size(), "withLinks adds to the links there are");
+        assertFalse(new HeadedMessage.Point("A", "a").hasCopy());
+        assertEquals(point, message.point("SHA-256").orElseThrow());
+        assertTrue(message.point("None").isEmpty());
     }
 }

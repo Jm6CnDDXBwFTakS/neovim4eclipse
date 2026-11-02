@@ -9,7 +9,8 @@
  *   (this package)  OSGi/plug-in entry points: Activator, EarlyStartup
  *   editor          Eclipse glue: which editor is attached, keys, caret, status bar, command line
  *   sync            keeps an Eclipse document and its Neovim buffer in step
- *   prefs           Window &gt; Preferences &gt; Neovim
+ *   prefs           Window &gt; Preferences &gt; Neovim, and Get Neovim
+ *   dialogs         the plug-in's laid-out dialog, shared by editor and prefs (SWT and JFace only)
  *   core            the Neovim process and msgpack-rpc session      (no Eclipse imports)
  *   util            pure logic: key notation, columns, diffs, parsing (no Eclipse imports)
  * </pre>

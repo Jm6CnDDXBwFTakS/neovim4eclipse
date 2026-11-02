@@ -104,7 +104,7 @@ public final class WelcomeNote {
     }
 
     /**
-     * The welcome's parts, which {@code editor/HeadedMessageDialog} lays out. For example, with the default key binding on Linux, the first point is
+     * The welcome's parts, which {@code dialogs/HeadedMessageDialog} lays out. For example, with the default key binding on Linux, the first point is
      * "Enable, Disable" with "Ctrl+Shift+M, the Neovim toolbar button, or Quick Access ...".
      *
      * @param toggleKey the toggle command's key binding as Eclipse formats it ({@code "Ctrl+Shift+M"},

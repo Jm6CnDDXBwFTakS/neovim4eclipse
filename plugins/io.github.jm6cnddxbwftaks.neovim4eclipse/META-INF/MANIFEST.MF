@@ -29,6 +29,7 @@ Automatic-Module-Name: io.github.jm6cnddxbwftaks.neovim4eclipse
 Export-Package: io.github.jm6cnddxbwftaks.neovim4eclipse;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
  io.github.jm6cnddxbwftaks.neovim4eclipse.core;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
  io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
+ io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
  io.github.jm6cnddxbwftaks.neovim4eclipse.editor;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
  io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
  io.github.jm6cnddxbwftaks.neovim4eclipse.sync;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",

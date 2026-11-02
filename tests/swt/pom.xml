@@ -141,6 +141,7 @@
                core/MouseInput: what NeovimMouse sends; core/UiExecutor: how FoldMirror coalesces its sends). -->
           <includes>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/**/*.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/dialogs/**/*.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/ClipboardPort.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/MouseInput.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/core/UiExecutor.java</include>
@@ -208,6 +209,7 @@
               <dataFile>${jacoco.dataFile}</dataFile>
               <includes>
                 <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/**</include>
+                <include>io/github/jm6cnddxbwftaks/neovim4eclipse/dialogs/**</include>
               </includes>
             </configuration>
           </execution>
