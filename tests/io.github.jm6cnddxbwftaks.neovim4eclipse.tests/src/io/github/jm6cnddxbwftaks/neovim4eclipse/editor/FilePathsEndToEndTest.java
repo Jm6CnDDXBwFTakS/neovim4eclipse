@@ -139,6 +139,27 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * The same with Windows' own association, nothing set in Eclipse: Eclipse's lookup for
+     * {@code build.bat} finds the system's program for it (cmd.exe, which runs the script), and
+     * {@code :e build.bat} opens it in an editor inside Eclipse instead. Windows only.
+     */
+    @Test
+    void eOfABatchFileOpensItInsideEclipseNotWithCmd() throws Exception {
+        assumeTrue(FilePaths.Platform.current().windows(), "Windows' association for .bat");
+        IFile script = createFile("build.bat", "@echo hi\r\n");
+        assertEquals(IEditorRegistry.SYSTEM_EXTERNAL_EDITOR_ID, IDE.getEditorDescriptor(script, true, false).getId(),
+                "Eclipse itself would run the system's program on it");
+
+        session.inputAsync(":e build.bat<CR>");
+
+        waitUntil("build.bat in an editor inside Eclipse", TIMEOUT_MS, () -> {
+            IEditorPart active = page().getActiveEditor();
+            return active != null && active.getEditorInput() instanceof IFileEditorInput input
+                    && input.getFile().equals(script) && EditorAttachManager.textEditorOf(active) != null;
+        }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
+    }
+
+    /**
      * {@code :e logo.svg} opens the Text Editor, as Vim shows the file: Eclipse's own choice is its
      * Web Browser editor (bound to the image content type, which includes {@code svg}), which runs a
      * cloned repository's SVG script (file-by-file security review of 0.2.1).
