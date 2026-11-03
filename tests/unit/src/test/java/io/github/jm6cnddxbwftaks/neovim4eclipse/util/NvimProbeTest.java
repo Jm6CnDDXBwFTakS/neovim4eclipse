@@ -87,7 +87,7 @@ class NvimProbeTest {
     void aNamedProgramThatIsOldOrNotNeovimIsAProblem() {
         assertEquals(new Note("Found: Neovim " + OLD + " (too old: Neovim for Eclipse needs " + MIN + " or newer), "
                 + PROGRAM, true), note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), OLD));
-        assertEquals(new Note("Found: no Neovim version (it did not answer --version), " + PROGRAM, true),
+        assertEquals(new Note("Not a working Neovim (no answer to --version): " + PROGRAM, true),
                 note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), null));
     }
 

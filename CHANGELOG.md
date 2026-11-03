@@ -76,6 +76,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- The preference note for a program that does not answer `--version` reads `Not a working Neovim
+  (no answer to --version): <path>`; it began with "Found:" although nothing usable was found.
 - A `&` in a file name shows in Neovim's message line, the status bar and the startup error
   notice: `R&D.txt` showed as `RD.txt`, with the `D` underlined.
 - A file of more than about 33,000 lines opens in Neovim mode: it stayed empty in Neovim, and

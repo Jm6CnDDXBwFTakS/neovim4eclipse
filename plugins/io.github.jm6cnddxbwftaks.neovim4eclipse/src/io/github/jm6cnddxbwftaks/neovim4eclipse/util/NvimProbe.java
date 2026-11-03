@@ -17,7 +17,7 @@ import java.util.Optional;
  *   Found: Neovim 0.13.0, /usr/bin/nvim. Not the dedicated Neovim: not checked by the plug-in, and unsupported. Clear the field to use the dedicated one.
  *   Program: /usr/bin/nvim. Not the dedicated Neovim: not checked by the plug-in, and unsupported. Its version shows after Apply.
  *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
- *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
+ *   Not a working Neovim (no answer to --version): /usr/local/bin/nvim
  *   /opt/nvim is a folder: enter the Neovim program inside it, such as /opt/nvim/bin/nvim
  *   No Neovim program at /opt/nvim/bin/nvim. Clear the field to use the dedicated Neovim.
  * </pre>
@@ -155,7 +155,8 @@ public final class NvimProbe {
                             + "and unsupported. Its version shows after Apply.", false);
                 }
                 if (version == null) {
-                    yield problem("Found: no Neovim version (it did not answer --version), " + program);
+                    // Not "Found:": nothing usable was found (a script, another program, a broken copy).
+                    yield problem("Not a working Neovim (no answer to --version): " + program);
                 }
                 if (!version.isSupported()) {
                     yield problem("Found: Neovim " + version + " (too old: Neovim for Eclipse needs "
