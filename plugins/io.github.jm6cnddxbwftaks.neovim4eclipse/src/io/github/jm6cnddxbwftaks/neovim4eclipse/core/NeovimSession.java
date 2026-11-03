@@ -871,6 +871,38 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * See {@link BufferPort#setBufferRegion}. Reads only that part of Neovim's buffer
+     * ({@code nvim_buf_get_lines} with a negative end: {@code -1} is past the last line, so
+     * {@code -1 - unchangedAtEnd} leaves the last {@code unchangedAtEnd} lines out) and replaces the
+     * lines that differ, as {@link #setBufferLines} does for the whole buffer: nothing when they are
+     * equal, so a push after a faithful re-typing adds no undo step. Strict indexes: a part outside
+     * the buffer is an error, and the caller pushes the whole document.
+     */
+    @Override
+    public boolean setBufferRegion(int first, int unchangedAtEnd, List<String> lines) throws Exception {
+        DocumentBuffer document = buffers.attachedDocument();
+        Handle handle = buffers.attached();
+        if (handle == null || (document != null && !document.loaded)) {
+            return false; // the first push loads the file (setBufferLines)
+        }
+        List<String> current;
+        try {
+            current = await(api.bufGetLines(handle, first, -1 - unchangedAtEnd, true));
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "lines " + first + " to end-" + unchangedAtEnd + " are not in the buffer", e);
+            return false;
+        }
+        LineDiff.Change change = LineDiff.between(current, lines);
+        if (change != null) {
+            await(api.bufSetLines(handle, first + change.start(), first + change.end(), true, change.replacement()));
+            if (document != null) {
+                applyModified(document);
+            }
+        }
+        return true;
+    }
+
+    /**
      * Eclipse's dirty flag for {@code buffer}'s document changed (UI thread, from the editor's dirty
      * property): Neovim's {@code 'modified'} follows it ({@link LuaScripts#SET_MODIFIED}). Every push of
      * Eclipse's text sets it again, since writing lines marks a buffer modified. Any thread.

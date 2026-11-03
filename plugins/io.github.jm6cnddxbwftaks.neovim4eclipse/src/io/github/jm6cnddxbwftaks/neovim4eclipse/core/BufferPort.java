@@ -23,6 +23,19 @@ public interface BufferPort {
     void setBufferLines(List<String> lines) throws Exception;
 
     /**
+     * Makes part of the attached buffer equal to {@code lines}: its lines from {@code first} up to,
+     * not including, its last {@code unchangedAtEnd} lines, which stay as they are. Only the lines
+     * that differ inside that part are written. For a push of just the lines typed in insert mode
+     * ({@code util/ChangedLines}). Blocking RPC: input thread, as {@link #setBufferLines}.
+     *
+     * @return {@code false} if the buffer cannot be written this way (its first push, or the part is
+     *         not inside it): the caller then pushes the whole document
+     */
+    default boolean setBufferRegion(int first, int unchangedAtEnd, List<String> lines) throws Exception {
+        return false;
+    }
+
+    /**
      * Runs {@code work} on the input thread, after every key and command queued before it.
      *
      * @param what short description for the log, should {@code work} fail

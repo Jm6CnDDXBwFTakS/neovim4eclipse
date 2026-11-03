@@ -17,11 +17,13 @@ import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentExtension4;
 import org.eclipse.jface.text.IDocumentListener;
+import org.eclipse.jface.text.IRegion;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferChange;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit.Edit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineTextUtil;
@@ -96,12 +98,36 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
     };
 
+    /**
+     * The lines that may differ from Neovim's buffer since a push last made it equal
+     * ({@link #pushChangedLinesToNeovim}). Every change counts, Neovim's applied ones too. UI thread.
+     */
+    private final ChangedLines changedLines = new ChangedLines();
+    private final IDocumentListener changedLinesListener = new IDocumentListener() {
+        @Override
+        public void documentAboutToBeChanged(DocumentEvent event) {
+            try {
+                int offset = event.getOffset();
+                changedLines.record(document.getLineOfOffset(offset),
+                        document.getLineOfOffset(offset + event.getLength()), document.getNumberOfLines());
+            } catch (BadLocationException e) {
+                changedLines.forget(); // cannot tell where: the next push writes everything
+            }
+        }
+
+        @Override
+        public void documentChanged(DocumentEvent event) {
+            // the lines before the change are what count
+        }
+    };
+
     /** @param ui the UI thread, where the document is changed ({@code SwtUiExecutor} in the editor) */
     public BufferSynchronizer(IDocument document, BufferPort session, UiExecutor ui) {
         this.document = document;
         this.session = session;
         this.ui = ui;
         this.undoSteps = new UndoSteps(document);
+        document.addDocumentListener(changedLinesListener);
     }
 
     public void setCaretRestorer(Runnable caretRestorer) {
@@ -202,7 +228,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * Makes the Neovim buffer equal to the Eclipse document, changing only the lines that differ.
      * Blocking RPC: not for the UI thread.
      *
-     * <p>The document's text is read on the UI thread ({@link #documentLinesOnUi()}), the buffer
+     * <p>The document's text is read on the UI thread ({@link #onUi}), the buffer
      * written here. A JFace document is not thread-safe: read from this thread while the UI thread
      * edits it (linked mode, a formatter, save actions), it could return torn text or throw.
      */
@@ -212,7 +238,10 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             return;
         }
         try {
-            List<String> lines = documentLinesOnUi();
+            List<String> lines = onUi(() -> {
+                changedLines.clear(); // read in the same step as the lines: no edit falls between
+                return FinalNewlines.linesToPush(document);
+            });
             if (lines == null) {
                 return; // the UI is gone or the editor closed meanwhile
             }
@@ -220,20 +249,86 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             neovimBehind = false;
             LOG.fine(() -> "Pushed " + lines.size() + " lines to Neovim");
         } catch (Exception e) {
+            onUi(() -> {
+                changedLines.forget();
+                return null;
+            });
             LOG.log(Level.SEVERE, "Failed to push document to Neovim", e);
         }
     }
 
     /**
-     * A snapshot of the document's lines, taken on the UI thread, between two of its events, so never
-     * in the middle of an edit. Waits for the UI thread when called from another one; the UI thread
-     * never waits for the session's threads, so this cannot deadlock.
-     *
-     * @return the lines, or {@code null} if there is no UI any more or the synchronizer was closed
+     * Makes the Neovim buffer equal to the document by writing only the lines changed since the
+     * last push ({@link ChangedLines}): at {@code Esc} and at a sync point, the lines typed in insert
+     * mode, not the whole document. Example: one line typed into a file of 100k lines reads and
+     * writes that line, where {@link #pushDocumentToNeovim} reads Neovim's whole buffer (19 ms) to
+     * find it. The whole document is pushed when the change may reach the last line (its final line
+     * break), when nothing is known yet, or when Neovim's buffer cannot be written in part.
+     * Blocking RPC: not for the UI thread.
      */
-    private List<String> documentLinesOnUi() {
-        return onUi(() -> FinalNewlines.linesToPush(document));
+    public void pushChangedLinesToNeovim() {
+        if (closed) {
+            return;
+        }
+        try {
+            RegionPush push = onUi(() -> {
+                ChangedLines.Region region = changedLines.region(document.getNumberOfLines(), endsWithLineBreak()
+                        && FinalNewlines.of(document));
+                if (region == null) {
+                    return null;
+                }
+                changedLines.clear();
+                return new RegionPush(region, region.isEmpty() ? List.of() : linesOf(region.first(), region.end()));
+            });
+            if (push == null) {
+                pushDocumentToNeovim(); // the whole document, or the UI is gone (then it does nothing)
+                return;
+            }
+            if (!push.region().isEmpty() && !session.setBufferRegion(push.region().first(),
+                    push.region().unchangedAtEnd(), push.lines())) {
+                pushDocumentToNeovim();
+                return;
+            }
+            neovimBehind = false;
+            LOG.fine(() -> "Pushed lines " + push.region() + " to Neovim");
+        } catch (Exception e) {
+            onUi(() -> {
+                changedLines.forget();
+                return null;
+            });
+            LOG.log(Level.SEVERE, "Failed to push the changed lines to Neovim", e);
+        }
     }
+
+    /** Whether the document's last character is a line break ({@code \n} or {@code \r}); cheap, unlike {@code get()}. UI thread. */
+    private boolean endsWithLineBreak() {
+        int length = document.getLength();
+        try {
+            char last = length == 0 ? 0 : document.getChar(length - 1);
+            return last == '\n' || last == '\r';
+        } catch (BadLocationException e) {
+            return false;
+        }
+    }
+
+    /** What {@link #pushChangedLinesToNeovim} writes: the region and the document's lines in it. */
+    private record RegionPush(ChangedLines.Region region, List<String> lines) {
+    }
+
+    /** The document's lines {@code first .. end - 1}, without their line delimiters. UI thread. */
+    private List<String> linesOf(int first, int end) {
+        List<String> lines = new ArrayList<>(end - first);
+        try {
+            for (int line = first; line < end; line++) {
+                IRegion info = document.getLineInformation(line);
+                lines.add(document.get(info.getOffset(), info.getLength()));
+            }
+        } catch (BadLocationException e) {
+            throw new IllegalStateException("line out of the document", e);
+        }
+        return lines;
+    }
+
 
     /**
      * {@code read}'s result, read on the UI thread, where the document changes, so between two of
@@ -270,7 +365,16 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
     // ---- Neovim to Eclipse ----
 
     private void onNeovimBufferChange(BufferChange change) {
-        if (closed || !listening) {
+        if (closed) {
+            return;
+        }
+        if (!listening) {
+            // A Neovim change the document does not get: lines may differ anywhere. Posted, not
+            // waited for: while not listening, the UI thread may itself wait for a push (see
+            // stopRemoteListening), and waiting for it here would deadlock.
+            if (ui.isAvailable()) {
+                ui.asyncExec(changedLines::forget);
+            }
             return;
         }
         runOnUi(() -> applyChange(change));
@@ -278,6 +382,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
 
     private void applyChange(BufferChange change) {
         if (!listening) {
+            changedLines.forget(); // as above
             return;
         }
         applyingRemote.set(true);
@@ -285,6 +390,9 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         try {
             boolean fullBuffer = change.lastLine() < 0;
             boolean newline = FinalNewlines.of(document);
+            if (fullBuffer && neovimBehind) {
+                changedLines.forget(); // Neovim's whole buffer is not applied: the next push writes everything
+            }
             Edit edit = fullBuffer && neovimBehind ? null
                     : fullBuffer ? fullBufferEdit(document, change.newLines(), newline)
                     : rangeEdit(document, change, newline);
@@ -293,6 +401,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
         } catch (Exception e) {
+            changedLines.forget(); // the document lacks Neovim's change, wherever it was
             LOG.log(Level.WARNING, "Error applying Neovim change " + change, e);
         } finally {
             applyingRemote.set(false);
@@ -418,6 +527,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         session.removeBufferChangeListener(bufferChangeListener);
         session.removeInputHandledListener(inputHandledListener);
         document.removeDocumentListener(localChangeListener);
+        document.removeDocumentListener(changedLinesListener);
         closeUndoStepSoon();
     }
 }

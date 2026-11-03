@@ -853,6 +853,24 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    // ---- a push of part of the buffer (INSERT_CTRL_KEYS.md, phase F) ----
+
+    /** Lines 1 .. end-1 replaced: the last line stays, counted from the end; outside the buffer: refused. */
+    @Test
+    void aPartOfTheBufferIsWrittenCountedFromBothEnds() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("a", "b", "c"));
+            assertTrue(s.setBufferRegion(1, 1, List.of("B", "x")));
+            assertEquals(List.of("a", "B", "x", "c"), s.getBufferLines());
+            assertTrue(s.setBufferRegion(0, 0, List.of("a", "B", "x", "c")), "equal: nothing written");
+            assertEquals(List.of("a", "B", "x", "c"), s.getBufferLines());
+            assertTrue(s.setBufferRegion(2, 1, List.of()), "a line deleted");
+            assertEquals(List.of("a", "B", "c"), s.getBufferLines());
+            assertFalse(s.setBufferRegion(9, 0, List.of("z")), "not inside the buffer");
+            assertEquals(List.of("a", "B", "c"), s.getBufferLines());
+        }
+    }
+
     // ---- the user's insert mappings and abbreviations are kept (INSERT_CTRL_KEYS.md, phase E) ----
 
     /**

@@ -219,9 +219,10 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
         keyInterceptor.setCompletion(this::runCompletion);
+        // At Esc and at a sync point, only the lines typed since Neovim's buffer last equaled the document.
         session.setLeaveInsertPush(() -> {
             try {
-                synchronizer.pushDocumentToNeovim();
+                synchronizer.pushChangedLinesToNeovim();
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "push on leave insert failed", e);
             }

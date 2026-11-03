@@ -47,6 +47,20 @@ class BufferSynchronizerTest {
             duringPush.run();
         }
 
+        /** Each partial push, as "first|unchangedAtEnd|lines". */
+        final List<String> regions = new ArrayList<>();
+        /** Whether a partial push is accepted (false: as a buffer not loaded yet). */
+        boolean regionsAccepted = true;
+
+        @Override
+        public boolean setBufferRegion(int first, int unchangedAtEnd, List<String> lines) {
+            if (!regionsAccepted) {
+                return false;
+            }
+            regions.add(first + "|" + unchangedAtEnd + "|" + lines);
+            return true;
+        }
+
         @Override
         public void runAsync(String what, Runnable work) {
             queued.add(work);
@@ -131,6 +145,77 @@ class BufferSynchronizerTest {
     @AfterEach
     void close() {
         sync.close();
+    }
+
+    // ---- the push of the changed lines only (INSERT_CTRL_KEYS.md, phase F) ----
+
+    @Test
+    void theFirstChangedLinesPushWritesTheWholeDocument() {
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of(List.of("alpha", "beta")), neovim.pushed, "nothing is known yet");
+        assertEquals(List.of(), neovim.regions);
+    }
+
+    /** One line typed in: only that line goes; Neovim's last line ("beta") stays as it is. */
+    @Test
+    void aChangedLinesPushWritesOnlyTheTypedLines() throws Exception {
+        document.set("alpha\nbeta\ngamma\n");
+        sync.pushDocumentToNeovim();
+        document.replace(8, 0, "XY"); // "beXYta"
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of("1|1|[beXYta]"), neovim.regions);
+        assertEquals(1, neovim.pushed.size(), "only the full push before");
+    }
+
+    @Test
+    void enterTypedPushesBothLinesItMade() throws Exception {
+        document.set("alpha\nbeta\ngamma\n");
+        sync.pushDocumentToNeovim();
+        document.replace(8, 0, "\n"); // "be" / "ta"
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of("1|1|[be, ta]"), neovim.regions);
+    }
+
+    @Test
+    void nothingChangedPushesNothing() {
+        sync.pushDocumentToNeovim();
+        sync.pushChangedLinesToNeovim();
+        assertEquals(1, neovim.pushed.size());
+        assertEquals(List.of(), neovim.regions);
+    }
+
+    /** The last line may have gained or lost a final line break: the whole document. */
+    @Test
+    void aChangeOfTheLastLinePushesTheWholeDocument() throws Exception {
+        document.set("alpha\nbeta");
+        sync.pushDocumentToNeovim();
+        document.replace(document.getLength(), 0, "!");
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of(List.of("alpha", "beta"), List.of("alpha", "beta!")), neovim.pushed);
+        assertEquals(List.of(), neovim.regions);
+    }
+
+    /** A buffer that cannot be written in part (its first push, say) gets the whole document. */
+    @Test
+    void aRefusedPartialPushFallsBackToTheWholeDocument() throws Exception {
+        document.set("alpha\nbeta\ngamma\n");
+        sync.pushDocumentToNeovim();
+        neovim.regionsAccepted = false;
+        document.replace(0, 0, "X");
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of("Xalpha", "beta", "gamma"), neovim.pushed.get(neovim.pushed.size() - 1));
+    }
+
+    /** After a partial push, the next one starts from there: only what changed since. */
+    @Test
+    void eachPartialPushStartsOver() throws Exception {
+        document.set("alpha\nbeta\ngamma\n");
+        sync.pushDocumentToNeovim();
+        document.replace(0, 0, "X");
+        sync.pushChangedLinesToNeovim();
+        document.replace(document.getLineOffset(2), 0, "Y");
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of("0|2|[Xalpha]", "2|0|[Ygamma]"), neovim.regions);
     }
 
     @Test
