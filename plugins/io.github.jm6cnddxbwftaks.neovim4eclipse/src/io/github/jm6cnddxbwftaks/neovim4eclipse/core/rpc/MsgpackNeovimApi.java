@@ -52,6 +52,11 @@ public final class MsgpackNeovimApi implements NeovimApi {
     }
 
     @Override
+    public CompletableFuture<Void> feedText(String text) {
+        return call(MsgpackNeovimApi::nothing, "nvim_feedkeys", text, "n", true);
+    }
+
+    @Override
     public CompletableFuture<Void> setClientInfo(String name, Map<String, Object> version, String type,
             Map<String, Object> methods, Map<String, Object> attributes) {
         return call(MsgpackNeovimApi::nothing, "nvim_set_client_info", name, version, type, methods, attributes);

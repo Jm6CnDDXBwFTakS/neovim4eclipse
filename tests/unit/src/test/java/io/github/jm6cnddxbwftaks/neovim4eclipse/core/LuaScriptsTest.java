@@ -102,10 +102,11 @@ class LuaScriptsTest {
         assertFalse(LuaScripts.SETUP.contains("showcmdloc"));
     }
 
+    /** The user's insert mappings stay: the re-typing applies none (nvim_feedkeys 'n'), so nothing clears them. */
     @Test
-    void insertModeMappingsAndAbbreviationsAreClearedSoReplayedTextIsNotHijacked() {
-        assertTrue(LuaScripts.SETUP.contains("imapclear"));
-        assertTrue(LuaScripts.SETUP.contains("iabclear"));
+    void insertModeMappingsAndAbbreviationsAreKept() {
+        assertFalse(LuaScripts.SETUP.contains("imapclear"));
+        assertFalse(LuaScripts.SETUP.contains("iabclear"));
     }
 
     @Test

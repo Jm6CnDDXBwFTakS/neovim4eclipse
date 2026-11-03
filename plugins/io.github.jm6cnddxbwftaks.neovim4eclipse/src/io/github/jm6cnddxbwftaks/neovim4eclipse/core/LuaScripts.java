@@ -64,11 +64,9 @@ final class LuaScripts {
             vim.opt.magic = true
             vim.opt.showcmd = true
             vim.opt.showmode = false
-            -- Insert-mode text is typed by Eclipse, so the user's insert-mode mappings and abbreviations
-            -- never applied. They must not hijack the text that is re-typed into Neovim at Esc (so that
-            -- "." can repeat it), e.g. a `jk` -> <Esc> mapping would end the insert in the middle.
-            vim.cmd('imapclear')
-            vim.cmd('iabclear')
+            -- The user's insert-mode mappings and abbreviations stay: the text Eclipse typed is
+            -- re-typed into Neovim with nvim_feedkeys(text, 'n'), which applies none of them, so a
+            -- `jk` -> <Esc> mapping cannot end that re-typing half way (docs/design/INSERT_CTRL_KEYS.md, E).
             vim.api.nvim_create_autocmd('ModeChanged', {
               callback = function()
                 vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode)

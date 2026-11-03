@@ -853,6 +853,61 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    // ---- the user's insert mappings and abbreviations are kept (INSERT_CTRL_KEYS.md, phase E) ----
+
+    /**
+     * The re-typing at Esc applies none of the user's insert mappings or abbreviations: Eclipse
+     * typed " teh jk", and that is what Neovim gets, although {@code jk} is mapped to Esc and
+     * {@code teh} is an abbreviation. They are kept for the keys Neovim reads itself.
+     */
+    @Test
+    void theReTypingAtEscAppliesNoInsertMappingOrAbbreviation() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("one", "two"));
+            keys(s, ":inoremap jk <lt>Esc><CR>", ":iabbrev teh the<CR>");
+            keys(s, "g", "g", "A");
+            finishEclipseInsert(s, "one\ntwo\n", "one teh jk\ntwo\n", 3, 10, List.of("one teh jk", "two"));
+            assertEquals("n", s.getMode());
+            keys(s, "j", ".");
+            assertEquals(List.of("one teh jk", "two teh jk"), s.getBufferLines(), "dot repeats the text as typed");
+
+            keys(s, "o", "teh ", "<Esc>"); // keys Neovim reads itself: the abbreviation applies
+            assertEquals("the ", s.getBufferLines().get(2));
+        }
+    }
+
+    /**
+     * A sync point with real Neovim: " foo" typed by Eclipse, then Ctrl-U. The re-typed text is
+     * this insert's, so Ctrl-U deletes just it; the user's own mapping of Ctrl-U applies to the key.
+     */
+    @Test
+    void aSyncPointKeyGoesThroughTheUsersMappingAfterTheTypedText() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("one", "two"));
+            keys(s, ":inoremap <lt>C-u> <lt>C-u>U<CR>");
+            keys(s, "g", "g", "A");
+            List<String> document = List.of("one foo", "two");
+            s.setLeaveInsertPush(() -> {
+                try {
+                    s.setBufferLines(document);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            CountDownLatch handled = new CountDownLatch(1);
+            Runnable listener = handled::countDown;
+            s.addInputHandledListener(listener);
+            try {
+                s.syncInsertThenInputAsync(InsertReplay.syncPoint("one\ntwo\n", "one foo\ntwo\n", 3, 7), "<C-u>");
+                assertTrue(handled.await(WAIT_MS, TimeUnit.MILLISECONDS), "the sync point was handled");
+            } finally {
+                s.removeInputHandledListener(listener);
+            }
+            assertEquals(List.of("oneU", "two"), s.getBufferLines());
+            assertTrue(s.isTypingMode(), "the insert goes on");
+        }
+    }
+
     // ---- blockwise visual ----
 
     private static void keys(NeovimSession s, String... keys) throws Exception {

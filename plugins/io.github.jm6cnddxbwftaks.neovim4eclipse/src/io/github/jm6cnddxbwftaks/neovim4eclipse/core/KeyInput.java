@@ -65,6 +65,13 @@ final class KeyInput {
         void type(String keys) throws Exception;
 
         /**
+         * Types raw {@code text} with no mapping or abbreviation applied
+         * ({@code nvim_feedkeys(text, 'n')}): the re-typing of what Eclipse typed, which the user's
+         * insert mappings must not change.
+         */
+        void typeText(String text) throws Exception;
+
+        /**
          * Returns once Neovim has consumed all pending input. Any cheap request does that, because
          * Neovim answers requests only when idle ({@code nvim_get_mode} does not: it is answered out
          * of band, even while keys are pending).
@@ -360,14 +367,17 @@ final class KeyInput {
     }
 
     /**
-     * Types the plan's text at its base position into Neovim's open insert.
-     * {@link Neovim#awaitKeysConsumed()} follows every chunk, so the keys are processed before the
-     * next step and Neovim's input buffer does not overflow.
+     * Types the plan's text at its base position into Neovim's open insert, with no mapping or
+     * abbreviation applied ({@link Neovim#typeText}), so the user's own insert mappings can stay
+     * (docs/design/INSERT_CTRL_KEYS.md, phase E). Example: with {@code inoremap jk <Esc>}, Eclipse's
+     * typed {@code jk} is re-typed as two letters and does not end the insert half way.
+     * {@link Neovim#awaitKeysConsumed()} follows every chunk, so the text is processed before the
+     * next step.
      */
     private void typeAtBase(InsertReplay.Plan plan) throws Exception {
         nvim.setCursor(plan.baseLine1Based(), plan.baseCol0Based());
-        for (String chunk : plan.keyChunks()) {
-            nvim.type(chunk);
+        for (String chunk : plan.textChunks()) {
+            nvim.typeText(chunk);
             nvim.awaitKeysConsumed();
         }
     }

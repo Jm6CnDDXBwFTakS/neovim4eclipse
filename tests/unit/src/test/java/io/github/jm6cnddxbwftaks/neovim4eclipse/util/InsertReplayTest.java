@@ -88,50 +88,44 @@ class InsertReplayTest {
         assertNull(InsertReplay.insertedText(null, "a", 0));
     }
 
-    // ---- toKeyChunks ----
+    // ---- toTextChunks: raw text for nvim_feedkeys ----
 
     @Test
     void plainTextPassesThrough() {
-        assertEquals(List.of("hello world"), InsertReplay.toKeyChunks("hello world"));
+        assertEquals(List.of("hello world"), InsertReplay.toTextChunks("hello world"));
     }
 
+    /** nvim_feedkeys takes raw text: no key notation, so text that looks like a key stays text. */
     @Test
-    void specialCharactersBecomeKeyNotation() {
-        assertEquals(List.of("a<lt>b<CR>c<Tab>d"), InsertReplay.toKeyChunks("a<b\nc\td"));
-        assertEquals(List.of("<lt>Esc>"), InsertReplay.toKeyChunks("<Esc>"), "text that looks like a key stays text");
+    void specialCharactersStayAsTheyAre() {
+        assertEquals(List.of("a<b\rc\td"), InsertReplay.toTextChunks("a<b\nc\td"));
+        assertEquals(List.of("<Esc>"), InsertReplay.toTextChunks("<Esc>"));
     }
 
     @Test
     void allLineBreakStylesBecomeOneEnter() {
-        assertEquals(List.of("a<CR>b<CR>c<CR>d"), InsertReplay.toKeyChunks("a\r\nb\nc\rd"));
+        assertEquals(List.of("a\rb\rc\rd"), InsertReplay.toTextChunks("a\r\nb\nc\rd"));
     }
 
+    /** Typed, they would be insert-mode commands: \u0017 is Ctrl-W. */
     @Test
     void otherControlCharactersAreDropped() {
-        assertEquals(List.of("ab"), InsertReplay.toKeyChunks("a\u0001\u0007b\u007F"));
-        assertEquals(List.of(), InsertReplay.toKeyChunks("\u0001"));
+        assertEquals(List.of("ab"), InsertReplay.toTextChunks("a\u0001\u0017b\u007F"));
+        assertEquals(List.of(), InsertReplay.toTextChunks("\u0001"));
     }
 
     @Test
     void unicodeIsKept() {
-        assertEquals(List.of("é日\uD83D\uDE00"), InsertReplay.toKeyChunks("é日\uD83D\uDE00"));
+        assertEquals(List.of("é日\uD83D\uDE00"), InsertReplay.toTextChunks("é日\uD83D\uDE00"));
     }
 
     @Test
     void longTextIsSplitIntoSmallChunksWithoutLosingAnything() {
         String text = "x".repeat(InsertReplay.CHUNK_CHARS * 2 + 5);
-        List<String> chunks = InsertReplay.toKeyChunks(text);
+        List<String> chunks = InsertReplay.toTextChunks(text);
         assertEquals(3, chunks.size());
         assertEquals(text, String.join("", chunks));
         assertEquals(InsertReplay.CHUNK_CHARS, chunks.get(0).length());
-    }
-
-    @Test
-    void aKeyNotationTokenIsNeverSplitAcrossChunks() {
-        String text = "<".repeat(InsertReplay.CHUNK_CHARS + 3);
-        for (String chunk : InsertReplay.toKeyChunks(text)) {
-            assertEquals(0, chunk.length() % 4, "each '<' becomes the 4-character token <lt>");
-        }
     }
 
     // ---- cursorAfterEsc ----
@@ -181,7 +175,7 @@ class InsertReplayTest {
     void theExampleFromTheRequest() {
         // "Aadd something to end of line<Esc>" typed on line 1 of "one\ntwo\n"
         Plan plan = InsertReplay.plan("one\ntwo\n", "one add\ntwo\n", 3, 7);
-        assertEquals(List.of(" add"), plan.keyChunks());
+        assertEquals(List.of(" add"), plan.textChunks());
         assertEquals(1, plan.baseLine1Based());
         assertEquals(3, plan.baseCol0Based());
         assertEquals(1, plan.finalLine1Based());
@@ -191,7 +185,7 @@ class InsertReplayTest {
     @Test
     void planForAMultiLineInsertion() {
         Plan plan = InsertReplay.plan("ab", "a1\n2b", 1, 4);
-        assertEquals(List.of("1<CR>2"), plan.keyChunks());
+        assertEquals(List.of("1\r2"), plan.textChunks());
         assertEquals(1, plan.baseLine1Based());
         assertEquals(1, plan.baseCol0Based());
         assertEquals(2, plan.finalLine1Based());
@@ -209,7 +203,7 @@ class InsertReplayTest {
     @Test
     void planDoesNotMutateItsInputsAndChunksAreImmutableEnough() {
         Plan plan = InsertReplay.plan("a", "ab", 1, 2);
-        assertTrue(plan.keyChunks().size() == 1);
+        assertTrue(plan.textChunks().size() == 1);
     }
 
     // ---- sync points (a Ctrl key Neovim handles while Eclipse types) ----
@@ -220,7 +214,7 @@ class InsertReplayTest {
         String before = "x \nend";
         String after = "x foo bar\nend";
         InsertReplay.SyncPoint sync = InsertReplay.syncPoint(before, after, 2, 9);
-        assertEquals(List.of("foo bar"), sync.typed().keyChunks());
+        assertEquals(List.of("foo bar"), sync.typed().textChunks());
         assertEquals(List.of(1, 2), List.of(sync.typed().baseLine1Based(), sync.typed().baseCol0Based()));
         assertEquals(List.of(1, 9), List.of(sync.caretLine1Based(), sync.caretCol0Based()), "not one left, as at Esc");
         assertEquals(List.of(1, 9), List.of(sync.typed().finalLine1Based(), sync.typed().finalCol0Based()));

@@ -602,9 +602,10 @@ text into Neovim's insert mode so Neovim records it for `.`, then makes Eclipse'
 This applies when the insert was a plain insertion at one spot. It is **not** recorded (the text stays
 correct, but `.` repeats only the command without the text) when you delete text before the insertion
 point, edit in two places in one insert, or paste more than 1000 characters. Counts (`3Afoo`) and Replace
-mode (`R`) are also not repeated by Neovim in this mode. Insert-mode mappings and abbreviations from your
-`init.lua` are cleared in the embedded Neovim (Eclipse never applied them anyway), so that they cannot
-hijack the re-typed text.
+mode (`R`) are also not repeated by Neovim in this mode. Your insert-mode mappings and abbreviations
+are kept: the re-typing applies none of them (a `jk` mapped to `Esc` cannot end it half way), and they
+work wherever Neovim reads the keys itself, as in a block-visual `I` or for the `Ctrl` keys ticked for
+insert mode. While Eclipse types, they do not apply: Eclipse inserts what you type.
 
 ## Clipboard
 

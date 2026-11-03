@@ -41,6 +41,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `~/.local/share/neovim4eclipse-plugin/neovim` by hand before is no longer found: use *Get Neovim*,
   or rename its folder to the code. The preference page and the notice name what is no longer used.
 - CI tests exactly the archive *Get Neovim* installs, and checks its SHA-256.
+- Your insert-mode mappings and abbreviations are no longer cleared in the embedded Neovim. They
+  apply where Neovim reads the keys itself (a block-visual `I`, while recording, the `Ctrl` keys
+  ticked for insert mode); the text Eclipse typed is handed to Neovim without them, so a `jk`
+  mapped to `Esc` cannot cut it short.
 
 ### Fixed
 

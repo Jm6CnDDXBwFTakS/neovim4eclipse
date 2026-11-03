@@ -62,6 +62,15 @@ class KeyInputTest {
         }
 
         @Override
+        public void typeText(String text) throws Exception {
+            try {
+                type(text); // the same, recorded as "feed": raw text, with no mapping applied
+            } finally {
+                calls.set(calls.size() - 1, "feed " + text);
+            }
+        }
+
+        @Override
         public void awaitKeysConsumed() {
             calls.add("keysConsumed");
         }
@@ -231,7 +240,7 @@ class KeyInputTest {
 
         keys.leaveInsertMode(plan);
 
-        assertEquals(List.of("setCursor 1:0", "type abc", "keysConsumed", "type <Esc>", "keysConsumed",
+        assertEquals(List.of("setCursor 1:0", "feed abc", "keysConsumed", "type <Esc>", "keysConsumed",
                 "push document", "setCursor 1:2", "snapshot"), nvim.calls);
         assertEquals(List.of("mode n"), heard, "the replayed text's line event is not applied twice");
     }
@@ -255,7 +264,7 @@ class KeyInputTest {
         keys.setLeaveInsertView(() -> nvim.calls.add("view"));
 
         keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2));
-        assertEquals(List.of("setCursor 1:0", "type abc", "keysConsumed", "type <Esc>", "keysConsumed",
+        assertEquals(List.of("setCursor 1:0", "feed abc", "keysConsumed", "type <Esc>", "keysConsumed",
                 "push document", "setCursor 1:2", "keysConsumed", "view", "snapshot"), nvim.calls,
                 "after the replay's cursor: a dragged cursor is not moved back");
 
@@ -279,7 +288,7 @@ class KeyInputTest {
 
             keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2));
 
-            assertEquals(List.of("setCursor 1:0", "type abc", "push document", "type <Esc>", "snapshot"),
+            assertEquals(List.of("setCursor 1:0", "feed abc", "push document", "type <Esc>", "snapshot"),
                     nvim.calls);
             state.dispatchBufferChange(0, 1, List.of("later"));
             assertEquals(List.of("mode n", "buffer [later]"), heard);
@@ -306,7 +315,7 @@ class KeyInputTest {
 
         keys.syncInsertThenInput(new InsertReplay.SyncPoint(typed, 1, 9), "<C-w>");
 
-        assertEquals(List.of("setCursor 1:2", "type foo bar", "keysConsumed", "push document", "setCursor 1:9",
+        assertEquals(List.of("setCursor 1:2", "feed foo bar", "keysConsumed", "push document", "setCursor 1:9",
                 "keysConsumed", "view", "type <C-w>", "keysConsumed", "snapshot", "bufferLines"), nvim.calls);
         assertFalse(nvim.calls.contains("type <Esc>"), "the insert goes on");
         assertFalse(heard.contains("buffer [event for foo bar]"), "not applied twice");

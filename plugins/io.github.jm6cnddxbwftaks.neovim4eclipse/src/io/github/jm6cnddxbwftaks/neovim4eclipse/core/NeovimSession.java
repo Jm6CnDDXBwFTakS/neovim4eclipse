@@ -1711,6 +1711,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
+        public void typeText(String text) throws Exception {
+            await(api.feedText(text));
+        }
+
+        @Override
         public void awaitKeysConsumed() throws Exception {
             await(api.execLua("return 0", List.of()));
         }
