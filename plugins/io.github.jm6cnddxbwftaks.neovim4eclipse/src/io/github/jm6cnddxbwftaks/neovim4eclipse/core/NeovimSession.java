@@ -390,9 +390,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Makes the rest of the current insert driven by Neovim: every key goes to Neovim until insert
-     * mode ends. Used when a key arrives before Eclipse may type ({@link #isEclipseTypingReady()}):
-     * once one key of an insert went to Neovim, Eclipse must not type the following ones itself, or
+     * Makes the current insert driven by Neovim for now: every key goes to Neovim until Neovim has
+     * them all, then Eclipse types again ({@code KeyInput#handBackToEclipse}). Used when a key
+     * arrives before Eclipse may type ({@link #isEclipseTypingReady()}): once a key of an insert
+     * went to Neovim, Eclipse must not type the following ones itself while it is on its way, or
      * Neovim's update for the earlier key could overwrite them. Any thread.
      */
     public void driveInsertFromNeovim() {

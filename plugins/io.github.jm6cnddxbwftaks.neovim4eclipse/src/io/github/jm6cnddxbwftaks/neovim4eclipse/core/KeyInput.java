@@ -100,20 +100,29 @@ final class KeyInput {
     private final Duration macroTimeout;
 
     /**
-     * True while insert mode was entered from blockwise visual ({@code I}, {@code A}, {@code c}, ...)
-     * or while recording a macro. Vim repeats the text typed on the first line onto every line of the
-     * block when Esc is pressed, and a macro must contain every typed key; both only work if Neovim
-     * itself sees the typing. So in these cases the editor forwards keys to Neovim instead of
-     * inserting them itself (see {@code KeyInterceptor}).
+     * True while Neovim, not Eclipse, types the current insert: the editor forwards every key to
+     * Neovim instead of inserting it itself (see {@code KeyInterceptor}). For the whole insert when
+     * {@link #neovimOwnsInsert}; for a while in the other cases ({@link #handBackPending}).
      */
     private volatile boolean neovimDrivenInsert;
     /**
-     * Set when a sync point's key left Neovim waiting for another ({@code Ctrl-R}, {@code Ctrl-V},
-     * {@code Ctrl-K}, ...), which made the insert Neovim-driven: once Neovim has that key and is in
-     * plain insert mode again, typing goes back to Eclipse ({@link #handBackToEclipse}). Example:
-     * {@code Ctrl-R a} inserts register {@code a}, then Eclipse types again, with content assist.
-     * Only such an insert is handed back: a block-visual {@code I} or a recording stays Neovim's to
-     * the end. Cleared when the insert ends.
+     * True while insert mode was entered from blockwise visual ({@code I}, {@code A}, {@code c}, ...)
+     * or while recording a macro. Vim repeats the text typed on the first line onto every line of the
+     * block when Esc is pressed, and a macro must contain every typed key; both only work if Neovim
+     * itself sees the typing, to the end of the insert. Cleared when the insert ends.
+     */
+    private volatile boolean neovimOwnsInsert;
+    /**
+     * Set when an insert Eclipse types became Neovim-driven for a moment, so that typing goes back to
+     * Eclipse once Neovim is in plain insert mode again ({@link #handBackToEclipse}):
+     * <ul>
+     *   <li>a sync point's key left Neovim waiting for another ({@code Ctrl-R}, {@code Ctrl-V},
+     *       {@code Ctrl-K}, ...): {@code Ctrl-R a} inserts register {@code a}, then Eclipse types;</li>
+     *   <li>a key was typed within the millisecond before Eclipse had Neovim's text, at the start of
+     *       an insert or after a sync point ({@link #driveFromNeovim}): it goes to Neovim, then
+     *       Eclipse types the next.</li>
+     * </ul>
+     * Never for an insert Neovim owns ({@link #neovimOwnsInsert}). Cleared when the insert ends.
      */
     private volatile boolean handBackPending;
     /**
@@ -162,15 +171,20 @@ final class KeyInput {
         return neovimDrivenInsert;
     }
 
-    /** Makes the current insert Neovim-driven (see {@link NeovimSession#driveInsertFromNeovim()}). */
+    /**
+     * Makes the current insert Neovim-driven until Neovim has the keys typed meanwhile (see
+     * {@link NeovimSession#driveInsertFromNeovim()} and {@link #handBackPending}). Any thread.
+     */
     void driveFromNeovim() {
         neovimDrivenInsert = true;
+        handBackPending = true;
     }
 
     /** Called with every mode change: leaving insert mode ends a Neovim-driven insert. */
     void onModeChanged(String mode) {
         if (!VimModes.isTyping(mode)) {
             neovimDrivenInsert = false;
+            neovimOwnsInsert = false;
             handBackPending = false;
         }
     }
@@ -284,8 +298,14 @@ final class KeyInput {
         ModeTransition transition = ModeTransition.after(modeBefore, state.mode(), neovimDrivenInsert,
                 !status.recordingRegister().isEmpty(), keys);
         switch (transition) {
-            case ENTER_NEOVIM_INSERT -> neovimDrivenInsert = true;
-            case LEAVE_NEOVIM_INSERT -> neovimDrivenInsert = false;
+            case ENTER_NEOVIM_INSERT -> {
+                neovimDrivenInsert = true;
+                neovimOwnsInsert = true; // to the end: never handed back, even if a gap key asked for it
+            }
+            case LEAVE_NEOVIM_INSERT -> {
+                neovimDrivenInsert = false;
+                neovimOwnsInsert = false;
+            }
             // ENTER_INSERT leaves the flag alone, never clears it: the key listener may already have
             // made this insert Neovim-driven (a key typed before the sync below reached the editor).
             case ENTER_INSERT, TEXT_CHANGED, NONE -> { }
@@ -294,16 +314,23 @@ final class KeyInput {
             state.syncBuffer();
         }
         state.publishState();
-        if (handBackPending && neovimDrivenInsert && state.isTypingMode()) {
+        if (mayHandBack()) {
             handBackToEclipse();
         }
     }
 
+    /** Whether the insert Neovim drives now may go back to Eclipse ({@link #handBackPending}). */
+    private boolean mayHandBack() {
+        return handBackPending && neovimDrivenInsert && !neovimOwnsInsert && state.isTypingMode()
+                && status.recordingRegister().isEmpty();
+    }
+
     /**
-     * Gives the rest of an insert back to Eclipse once Neovim has the key it waited for after a
-     * sync point (docs/design/INSERT_CTRL_KEYS.md, phase D). Example: Eclipse typed {@code foo},
-     * the user pressed {@code Ctrl-R} (Neovim drives, since it waits for a register name), then
-     * {@code a}: Neovim inserts register {@code a} and is in plain insert mode again. The same
+     * Gives the rest of an insert back to Eclipse once Neovim has the keys it was given meanwhile
+     * (docs/design/INSERT_CTRL_KEYS.md, phase D). Example: Eclipse typed {@code foo}, the user
+     * pressed {@code Ctrl-R} (Neovim drives, since it waits for a register name), then {@code a}:
+     * Neovim inserts register {@code a} and is in plain insert mode again. Or a letter typed in the
+     * millisecond after {@code Ctrl-W}, before Eclipse had Neovim's text, went to Neovim. The same
      * handshake as at the start of an insert follows: a full sync, and once the editor has applied
      * it, Eclipse types. {@code .} still repeats the whole insert, since Neovim's insert never ended.
      *
@@ -320,7 +347,7 @@ final class KeyInput {
         }
         state.syncBuffer(() -> {
             // On the UI thread, where keys are routed: nothing can be queued during this check.
-            if (!handBackPending || !neovimDrivenInsert || keysQueued.get() != taken) {
+            if (!mayHandBack() || keysQueued.get() != taken) {
                 return false;
             }
             handBackPending = false;
@@ -410,6 +437,7 @@ final class KeyInput {
             view.run();
         }
         neovimDrivenInsert = false;
+        neovimOwnsInsert = false;
         handBackPending = false;
     }
 

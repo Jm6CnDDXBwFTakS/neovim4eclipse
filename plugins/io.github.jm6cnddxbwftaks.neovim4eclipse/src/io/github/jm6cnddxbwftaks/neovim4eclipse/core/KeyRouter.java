@@ -169,9 +169,10 @@ public final class KeyRouter {
         ctrlXPending = false; // it chooses only the very next key
         if (neovim.isTypingMode() && !neovim.isNeovimDrivenInsert() && !neovim.isEclipseTypingReady()) {
             // Insert mode has begun but the editor has not yet received Neovim's text for it (a fast
-            // typist, or a test): Eclipse typing now could be overwritten. Let Neovim type the rest of
-            // this insert instead, in order with this key. This also covers a fast qaihello<Esc>q:
-            // the insert starts before Eclipse could take over, so Neovim types it and records it.
+            // typist, or a test): Eclipse typing now could be overwritten. Let Neovim type this key
+            // instead, in order, and the ones after it until Neovim has them all; then Eclipse types
+            // again (KeyInput.handBackToEclipse). A fast qaihello<Esc>q stays Neovim's to the end:
+            // the insert is recorded, so Neovim types it and records it.
             neovim.driveInsertFromNeovim();
         }
 

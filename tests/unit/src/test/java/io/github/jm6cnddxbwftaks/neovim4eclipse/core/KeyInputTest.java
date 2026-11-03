@@ -425,15 +425,48 @@ class KeyInputTest {
         assertFalse(keys.isNeovimDrivenInsert());
     }
 
-    /** A block-visual I or a recording: Neovim drives to the end, nothing is handed back. */
+    /** A letter typed in the millisecond before Eclipse had Neovim's text went to Neovim; then Eclipse types again. */
     @Test
-    void anInsertNeovimDrivesFromTheStartIsNotHandedBack() throws Exception {
+    void aKeyTypedBeforeEclipseMayTypeIsHandedBackOnceNeovimHasIt() throws Exception {
         nvim.mode = new Mode("i", false);
-        state.readMode(); // already in that insert
+        state.readMode(); // in an insert Eclipse types
+        keys.driveFromNeovim(); // the key router: a key came before the insert's sync was applied
+        nvim.calls.clear();
+
+        queue("x");
+
+        assertTrue(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        lastChange().afterApply().run();
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertTrue(state.isEclipseTypingReady());
+    }
+
+    /** A block-visual I: Neovim types to the end (Esc repeats the text on every line), even after a gap key. */
+    @Test
+    void anInsertFromBlockwiseVisualIsNotHandedBack() throws Exception {
+        nvim.mode = new Mode("\u0016", false);
+        state.readMode();
+        nvim.after.put("I", new Mode("i", false));
+        queue("I");
+        keys.driveFromNeovim(); // a gap key as well
+        nvim.calls.clear();
+
+        queue("x");
+
+        assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /** While recording, the macro must hold every typed key: Neovim types to the end. */
+    @Test
+    void anInsertWhileRecordingIsNotHandedBack() throws Exception {
+        recording = "q";
+        nvim.mode = new Mode("i", false);
+        state.syncModeAndCursor(); // the snapshot reports the recording
         keys.driveFromNeovim();
         nvim.calls.clear();
 
-        queue("a");
+        queue("x");
 
         assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
         assertTrue(keys.isNeovimDrivenInsert());
