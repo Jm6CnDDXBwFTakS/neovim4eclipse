@@ -37,7 +37,7 @@ class NvimProbeTest {
     }
 
     private static Note note(NvimExecutable.Resolved r, NeovimVersion version) {
-        return NvimProbe.note(r, version, Optional.empty(), DEDICATED, MIN);
+        return NvimProbe.note(r, version, true, Optional.empty(), DEDICATED, MIN);
     }
 
     /** The verified dedicated Neovim: "checked", and the page offers only a reinstall. */
@@ -55,7 +55,7 @@ class NvimProbeTest {
 
     @Test
     void anUnverifiedDedicatedNeovimSaysGetNeovimReplacesIt() {
-        Note n = NvimProbe.note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null,
+        Note n = NvimProbe.note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null, true,
                 Optional.of(new PluginNeovim.Unverified(OWN)), DEDICATED, MIN);
         assertEquals(new Note("The dedicated Neovim's files differ from Neovim " + MIN + "'s release (an older one, "
                 + "or damaged): Get Neovim replaces it (" + OWN + ")", true), n);
@@ -69,6 +69,18 @@ class NvimProbeTest {
                 + "by the plug-in, and unsupported. Clear the field to use the dedicated one.", false), n);
         assertFalse(note(resolved(OWN, NvimExecutable.Kind.PROGRAM), MIN).current(),
                 "the dedicated program named in the field is not checked either");
+    }
+
+    /**
+     * While its path is being typed, a program is not run (a half-typed path may name another
+     * user's file): the note names it and says its version shows after Apply.
+     */
+    @Test
+    void aProgramBeingTypedIsNotRunAndTheNoteSaysWhen() {
+        Note n = NvimProbe.note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), null, false, Optional.empty(),
+                DEDICATED, MIN);
+        assertEquals(new Note("Program: " + PROGRAM + ". Not the dedicated Neovim: not checked by the plug-in, "
+                + "and unsupported. Its version shows after Apply.", false), n);
     }
 
     @Test

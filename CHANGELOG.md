@@ -126,6 +126,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   guards future ones.
 - Get Neovim runs `reg.exe` (Windows) and `sysctl` (macOS) by their full paths, so a program of that
   name in the folder Eclipse was started from cannot run instead.
+- Typing a path into the *Neovim program* field no longer runs the file it names to ask its
+  version, which a pause at a half-typed path such as `/tmp/nvim` did. The version is asked once
+  the program is chosen: picked with *Browse…*, or saved with *Apply*.
 - The note under *Neovim folder or program* shows paths as plain text, so a folder named with
   `<a>…</a>` no longer shows as a link. *Reinstall…* is now a link of its own under the note.
 

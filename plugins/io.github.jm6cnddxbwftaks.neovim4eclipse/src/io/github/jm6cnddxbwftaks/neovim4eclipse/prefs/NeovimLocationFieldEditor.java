@@ -66,8 +66,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  * {@link #adjustForNumColumns} keeps that span when the page adds wider fields.
  *
  * <h2>Why the note is computed off the UI thread</h2>
- * The note runs {@code nvim --version} ({@link NvimProbe#describe}), which can take a moment and
- * could hang on a broken program. Typing restarts a short delay; when it ends, the probe runs on a
+ * The note may run {@code nvim --version} ({@link NvimProbe#describe}), which can take a moment and
+ * could hang on a broken program. It does so only for a program chosen on purpose (loaded as saved,
+ * picked with Browse, or saved with Apply), never for text being typed: a half-typed path may name
+ * another user's file ({@link #runNextProbe}). Typing restarts a short delay; when it ends, the probe runs on a
  * background thread and its answer is shown only if no newer text was typed meanwhile
  * ({@link #generation}), so a slow answer never overwrites a newer one.
  */
@@ -96,6 +98,12 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     private ControlDecoration errorMark;
     /** Bumped on every change; a probe's answer is used only if it still matches. */
     private final AtomicInteger generation = new AtomicInteger();
+    /**
+     * Whether the next change of the text may run the program it names for its version: true for
+     * a value loaded as saved or picked with Browse, false for typing (see
+     * {@link NvimProbe#describe}). Each change uses it once.
+     */
+    private boolean runNextProbe;
 
     NeovimLocationFieldEditor(String name, String labelText, Composite parent) {
         super(name, labelText, parent);
@@ -129,7 +137,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         getNeovim.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(getShell())));
         Runnable afterInstall = () -> {
             if (!note.isDisposed()) {
-                scheduleProbe();
+                scheduleProbe(true);
             }
         };
         GetNeovim.addListener(afterInstall);
@@ -140,7 +148,11 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         help.setLayoutData(fullRow(numColumns, WRAP_WIDTH));
         help.addSelectionListener(SelectionListener.widgetSelectedAdapter(
                 e -> ExternalBrowser.open(NeovimPreferencePage.FINDING_NEOVIM_URL)));
-        getTextControl().addModifyListener(e -> scheduleProbe());
+        getTextControl().addModifyListener(e -> {
+            boolean run = runNextProbe;
+            runNextProbe = false;
+            scheduleProbe(run);
+        });
     }
 
     /**
@@ -198,7 +210,30 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         if (start != null) {
             dialog.setFilterPath(start.toString());
         }
-        return dialog.open(); // null when cancelled: the text stays as it is
+        String picked = dialog.open(); // null when cancelled: the text stays as it is
+        if (picked != null && picked.equals(getTextControl().getText())) {
+            scheduleProbe(true); // the same program: no change follows, so ask its version here
+            return null;
+        }
+        runNextProbe = picked != null; // a program picked on purpose: its version may be asked
+        return picked;
+    }
+
+    /** The saved value: a program you chose before, so the note may ask its version. */
+    @Override
+    protected void doLoad() {
+        runNextProbe = true;
+        super.doLoad();
+        runNextProbe = false; // in case the text did not change
+    }
+
+    /** Apply or OK: the program is chosen now, and the note shows its version. */
+    @Override
+    protected void doStore() {
+        super.doStore();
+        if (note != null && !note.isDisposed()) {
+            scheduleProbe(true);
+        }
     }
 
     /** The folder to open the dialog in: the field's folder (or the program's), else the plug-in's own. */
@@ -267,7 +302,8 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         return color != null ? color : note.getDisplay().getSystemColor(SWT.COLOR_RED);
     }
 
-    private void scheduleProbe() {
+    /** @param run whether the program the text names may be run for its version ({@link NvimProbe#describe}) */
+    private void scheduleProbe(boolean run) {
         int mine = generation.incrementAndGet();
         show(new NvimProbe.Note("Looking for Neovim...", false));
         String text = getTextControl().getText();
@@ -275,7 +311,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
             if (mine != generation.get() || note.isDisposed()) {
                 return; // typed again meanwhile
             }
-            CompletableFuture.supplyAsync(() -> NvimProbe.describe(text)).thenAccept(result -> {
+            CompletableFuture.supplyAsync(() -> NvimProbe.describe(text, run)).thenAccept(result -> {
                 if (note.isDisposed()) {
                     return;
                 }

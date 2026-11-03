@@ -15,6 +15,7 @@ import java.util.Optional;
  *   No dedicated Neovim yet. Get Neovim 0.12.6 installs it into /home/you/.local/share/neovim4eclipse-plugin/neovim
  *   The dedicated Neovim's files differ from Neovim 0.12.6's release (an older one, or damaged): Get Neovim replaces it (/home/you/.../neovim/la/bin/nvim)
  *   Found: Neovim 0.13.0, /usr/bin/nvim. Not the dedicated Neovim: not checked by the plug-in, and unsupported. Clear the field to use the dedicated one.
+ *   Program: /usr/bin/nvim. Not the dedicated Neovim: not checked by the plug-in, and unsupported. Its version shows after Apply.
  *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
  *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
  *   /opt/nvim is a folder: enter the Neovim program inside it, such as /opt/nvim/bin/nvim
@@ -44,9 +45,9 @@ import java.util.Optional;
  * then cannot push it out of view. No full stop follows a path that ends a line, which would read
  * as part of it.
  *
- * <p>{@link #describe} hashes the dedicated Neovim the first time (about 0.2 s) and runs a named
- * program's {@code --version} ({@link InstalledVersions}), which may hang on a broken one, so the
- * caller runs it off the UI thread. {@link #note} only builds the note, and is what the unit tests
+ * <p>{@link #describe} hashes the dedicated Neovim the first time (about 0.2 s) and, once the
+ * program is chosen, runs a named program's {@code --version} ({@link InstalledVersions}), which
+ * may hang on a broken one, so the caller runs it off the UI thread. {@link #note} only builds the note, and is what the unit tests
  * check.
  */
 public final class NvimProbe {
@@ -77,19 +78,26 @@ public final class NvimProbe {
 
     /**
      * Resolves {@code configured} as starting a session would ({@link NvimExecutable#find}), asks a
-     * named program for its version, and describes the result.
+     * named program for its version if {@code run}, and describes the result.
+     *
+     * <p>{@code run} is false while the text is being typed: asking means running the file, and a
+     * pause at {@code /tmp/nvim} while typing {@code /tmp/nvim-0.12/bin/nvim} would run whatever
+     * another user of the machine put at {@code /tmp/nvim} (file-by-file security review of 0.2.1).
+     * The page asks once the program is chosen: picked with Browse, saved with Apply or OK, or
+     * loaded as saved.
      *
      * @param configured the preference value as typed (not yet saved)
+     * @param run        whether a named program may be run for its version
      */
-    public static Note describe(String configured) {
+    public static Note describe(String configured, boolean run) {
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Path folder = NvimExecutable.dedicatedFolder();
-        NeovimVersion version = resolved.kind() == NvimExecutable.Kind.PROGRAM
-                ? InstalledVersions.of(Path.of(resolved.command())) : null;
+        boolean ask = run && resolved.kind() == NvimExecutable.Kind.PROGRAM;
+        NeovimVersion version = ask ? InstalledVersions.of(Path.of(resolved.command())) : null;
         Optional<PluginNeovim.Unverified> unverified = resolved.kind() == NvimExecutable.Kind.NO_DEDICATED
                 ? PluginNeovim.unverified(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), NeovimRelease.bundled())
                 : Optional.empty();
-        Note note = note(resolved, version, unverified, folder, NeovimRelease.bundled().version());
+        Note note = note(resolved, version, run, unverified, folder, NeovimRelease.bundled().version());
         String unused = unusedLines(PluginNeovim.unusedEntries(folder), folder);
         return unused == null ? note : new Note(note.text() + "\n" + unused, note.problem(), note.current());
     }
@@ -127,12 +135,14 @@ public final class NvimProbe {
      *
      * @param resolved   what the value names ({@link NvimExecutable#find})
      * @param version    a named program's version ({@link NvimExecutable.Kind#PROGRAM}), or
-     *                   {@code null} if it did not run as Neovim or is not asked
+     *                   {@code null} if it did not run as Neovim or was not run
+     * @param ran        whether the program was run for its version (else the note says it will
+     *                   be, after Apply)
      * @param unverified a dedicated Neovim that fails the check, for a blank value that found none
      * @param dedicated  the plug-in's Neovim folder: where Get Neovim installs
      * @param offered    the version Get Neovim installs ({@link NeovimRelease#version})
      */
-    static Note note(NvimExecutable.Resolved resolved, NeovimVersion version,
+    static Note note(NvimExecutable.Resolved resolved, NeovimVersion version, boolean ran,
             Optional<PluginNeovim.Unverified> unverified, Path dedicated, NeovimVersion offered) {
         String program = resolved.command();
         return switch (resolved.kind()) {
@@ -140,6 +150,10 @@ public final class NvimProbe {
             case NO_DEDICATED -> problem(unverified.map(u -> unverifiedLine(u, offered))
                     .orElse("No dedicated Neovim yet. Get Neovim " + offered + " installs it into " + dedicated));
             case PROGRAM -> {
+                if (!ran) {
+                    yield new Note("Program: " + program + ". Not the dedicated Neovim: not checked by the plug-in, "
+                            + "and unsupported. Its version shows after Apply.", false);
+                }
                 if (version == null) {
                     yield problem("Found: no Neovim version (it did not answer --version), " + program);
                 }

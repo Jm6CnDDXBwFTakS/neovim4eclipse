@@ -4,8 +4,13 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
@@ -81,6 +86,30 @@ class NeovimPreferencePageTest {
             Rectangle link = help.getBounds();
             return link.height > 0 && link.y + link.height <= group.y + group.height;
         });
+    }
+
+    /**
+     * Typing a program's path does not run it, since a half-typed path may name another user's
+     * file (a pause at {@code /tmp/nvim} while typing {@code /tmp/nvim-0.12/bin/nvim}): the note
+     * names it and says its version shows after Apply (file-by-file security review of 0.2.1).
+     * The program here is a script that leaves a mark when run.
+     */
+    @Test
+    void aTypedProgramIsNotRun() throws Exception {
+        assumeFalse(System.getProperty("os.name").startsWith("Windows"), "a shell script as the program");
+        Path dir = Files.createTempDirectory("neovim4eclipse-typed");
+        Path mark = dir.resolve("ran");
+        Path program = dir.resolve("nvim");
+        Files.writeString(program, "#!/bin/sh\ntouch '" + mark + "'\n");
+        Files.setPosixFilePermissions(program, PosixFilePermissions.fromString("rwx------"));
+        Group group = page.groups()[0];
+        Text field = find(group, Text.class);
+        Label note = find(group, Label.class, label -> label.getText().startsWith("Found: ")
+                || label.getText().startsWith("No ") || label.getText().startsWith("Looking for"));
+        field.setText(program.toString());
+        waitUntil("the note to name the program", () -> note.getText().startsWith("Program: " + program));
+        assertTrue(note.getText().contains(". Its version shows after Apply."), note.getText());
+        assertFalse(Files.exists(mark), "the program did not run");
     }
 
     /**
