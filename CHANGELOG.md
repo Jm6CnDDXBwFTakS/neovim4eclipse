@@ -100,6 +100,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   - a file named with a backslash before a backtick (Linux, macOS) ran a shell command when its
     name was completed into `:e`, `:wq` or `:x`, and the command's output became part of the file
     `:wq` wrote; the name is now read once, as Neovim's own `:edit` reads it.
+- An R Markdown (`.Rmd`) file Neovim highlights itself (one outside the open projects) can no
+  longer run a shell command from a crafted chunk header: the plug-in turns off
+  `g:rmd_dynamic_fenced_languages`, unless your config sets it. The bug is Neovim 0.12.6's (Vim
+  advisory GHSA-x2w5-pj55-7hpc); no Neovim release has the fix yet.
+- Neovim no longer loads Lua modules from the project's folder: a config's `require` of a module
+  it does not have could have run a cloned repository's file of that name.
 - `:e` of an existing file opens it in an editor inside Eclipse, never with the system's program
   for its type: on Windows, `:e build.bat` could run the script.
 - The update site checks every release's signatures each time it is rebuilt, and holds only signed

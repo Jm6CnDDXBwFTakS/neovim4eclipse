@@ -276,3 +276,37 @@ t.test('BufEnter says whether the move is in the jump history', function()
   t.eq({ { b, win, true, '' }, { c, win, false, '' } }, t.sent('eclipse_buf_enter'), ':b is a jump, :keepjumps b not')
   t.eq(true, a > 0)
 end)
+
+-- File-by-file security review of 0.2.1: Neovim 0.12.6's R Markdown syntax ran a crafted chunk
+-- header's backticks in a shell (Vim advisory GHSA-x2w5-pj55-7hpc). SETUP turns the chunk language
+-- guessing off, unless the user's config set it.
+t.test('an Rmd file with a crafted chunk header runs nothing; a config\'s own choice stays', function()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  local mark = dir .. '/MARK'
+  local file = dir .. '/t.Rmd'
+  -- {r, an overlong NUL (C0 80) the syntax file's pattern takes as the end, then backticks
+  vim.fn.writefile({ '```{r' .. string.char(0xC0, 0x80) .. '`touch ' .. mark .. '`}', 'x', '```' }, file)
+  t.setup()
+  t.eq(false, vim.g.rmd_dynamic_fenced_languages)
+  vim.cmd('syntax on')
+  vim.cmd.edit(vim.fn.fnameescape(file))
+  t.eq('rmd', vim.bo.filetype)
+  t.eq(0, vim.fn.filereadable(mark), 'the backticks did not run')
+
+  vim.g.rmd_dynamic_fenced_languages = 1
+  t.setup()
+  t.eq(1, vim.g.rmd_dynamic_fenced_languages, 'set by the config: kept')
+end)
+
+t.test('Lua modules are not loaded from the working folder (a project\'s)', function()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  vim.fn.writefile({ 'vim.g.loaded_from_folder = true', 'return {}' }, dir .. '/n4e_probe_module.lua')
+  vim.fn.chdir(dir)
+  t.setup()
+  t.ok(not package.path:find('^%./') and not package.path:find(';%./'), 'no ./ in package.path')
+  t.ok(not package.cpath:find('^%./') and not package.cpath:find(';%./'), 'no ./ in package.cpath')
+  t.eq(false, (pcall(require, 'n4e_probe_module')))
+  t.eq(nil, vim.g.loaded_from_folder)
+end)

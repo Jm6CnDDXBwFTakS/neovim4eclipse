@@ -48,6 +48,21 @@ final class LuaScripts {
      *       echoes the first line of the problem {@code ]d} lands on.</li>
      *   <li>The command-line window ({@code q:}) is closed as soon as it opens, with a message:
      *       Eclipse cannot show a second window.</li>
+     *   <li>Two guards against files a cloned repository brings (file-by-file security review of
+     *       0.2.1), both kept when your config already decided:
+     *       <ul>
+     *         <li>{@code g:rmd_dynamic_fenced_languages} is off. Neovim 0.12.6's R Markdown syntax
+     *             file runs a backtick part of a crafted chunk header in a shell (Vim advisory
+     *             GHSA-x2w5-pj55-7hpc, fixed in Vim 9.2.1178; no stable Neovim has the fix yet).
+     *             Neovim highlights only files it reads itself (not files of open projects), and
+     *             Eclipse shows none of its highlighting; the setting only stops Neovim guessing
+     *             each chunk's language from the file. Drop this once the pinned Neovim has the
+     *             fix (docs/UPGRADING.md).</li>
+     *         <li>{@code package.path} and {@code package.cpath} lose their {@code ./} entries.
+     *             Neovim's folder is the project's ({@code :lcd}), so a {@code require} of a module
+     *             not on the runtimepath (a config's {@code pcall(require, 'optional')}) would load
+     *             {@code ./optional.lua} from the cloned repository.</li>
+     *       </ul></li>
      * </ul>
      */
     static final String SETUP = """
@@ -56,6 +71,23 @@ final class LuaScripts {
             -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
             local chan = tonumber(select(1, ...))
             vim.g.neovim4eclipse_channel = chan
+            -- Guards against files of a cloned repository (see the javadoc): no R Markdown chunk
+            -- language guessing, which runs a crafted header's backticks in Neovim 0.12.6, and no
+            -- Lua modules from the working folder (the project's).
+            if vim.g.rmd_dynamic_fenced_languages == nil then
+              vim.g.rmd_dynamic_fenced_languages = false
+            end
+            local function without_working_folder(path)
+              local kept = {}
+              for entry in path:gmatch('[^;]+') do
+                if not entry:match('^%.[/' .. string.char(92) .. ']') then -- ./?.lua; with a backslash on Windows
+                  kept[#kept + 1] = entry
+                end
+              end
+              return table.concat(kept, ';')
+            end
+            package.path = without_working_folder(package.path)
+            package.cpath = without_working_folder(package.cpath)
             vim.opt.hlsearch = true
             vim.opt.incsearch = true
             vim.opt.ignorecase = true
