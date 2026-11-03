@@ -23,6 +23,9 @@ import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.content.IContentType;
+import org.eclipse.core.runtime.content.IContentTypeManager;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorDescriptor;
@@ -241,7 +244,7 @@ final class NewFiles {
      */
     static String editorIdFor(String fileName) {
         try {
-            return internalOr(IDE.getEditorDescriptor(fileName, true, false));
+            return internalOr(IDE.getEditorDescriptor(fileName, true, false), fileName);
         } catch (Exception e) {
             LOG.log(Level.FINE, "No editor descriptor for " + fileName, e);
         }
@@ -249,13 +252,34 @@ final class NewFiles {
     }
 
     /**
-     * {@code descriptor}'s ID if it is an editor inside Eclipse, else the Text Editor's: an external
-     * editor (the system's program for the file) or an in-place one (an OLE document on Windows)
-     * would run something outside Eclipse on the file.
+     * The editor a file Neovim opens ({@code :e}, {@code gf}, a quickfix jump) gets:
+     * {@code descriptor}'s, if it is an editor inside Eclipse for text, else the Text Editor, which
+     * shows the file as Vim would. Not:
+     * <ul>
+     *   <li>an external editor (the system's program for the file) or an in-place one (an OLE
+     *       document on Windows): they run something outside Eclipse on the file (0.2.1 security
+     *       review: on Windows, {@code :e build.bat} ran the script);</li>
+     *   <li>an editor inside Eclipse for a file whose content type is not text. Example: Eclipse's
+     *       Web Browser editor is bound to the image content type, which includes {@code svg}, so
+     *       {@code :e logo.svg} rendered a cloned repository's SVG and ran its script (file-by-file
+     *       security review of 0.2.1). A file with no content type is text, as Eclipse's own
+     *       default editor treats it.</li>
+     * </ul>
+     *
+     * @param fileName the file's name, for its content type ({@code logo.svg})
      */
-    static String internalOr(IEditorDescriptor descriptor) {
-        return descriptor != null && descriptor.isInternal() && !descriptor.isOpenExternal()
-                && !descriptor.isOpenInPlace() ? descriptor.getId() : TEXT_EDITOR;
+    static String internalOr(IEditorDescriptor descriptor, String fileName) {
+        boolean inside = descriptor != null && descriptor.isInternal() && !descriptor.isOpenExternal()
+                && !descriptor.isOpenInPlace();
+        return inside && isText(fileName) ? descriptor.getId() : TEXT_EDITOR;
+    }
+
+    /** Whether {@code fileName}'s content type is text, or it has none (see {@link #internalOr}). */
+    static boolean isText(String fileName) {
+        IContentTypeManager types = Platform.getContentTypeManager();
+        IContentType type = types.findContentTypeFor(fileName);
+        IContentType text = types.getContentType(IContentTypeManager.CT_TEXT);
+        return type == null || text == null || type.isKindOf(text);
     }
 
     /**

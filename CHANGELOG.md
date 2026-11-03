@@ -111,7 +111,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Neovim no longer loads Lua modules from the project's folder: a config's `require` of a module
   it does not have could have run a cloned repository's file of that name.
 - `:e` of an existing file opens it in an editor inside Eclipse, never with the system's program
-  for its type: on Windows, `:e build.bat` could run the script.
+  for its type: on Windows, `:e build.bat` could run the script. Nor in an editor that is not for
+  text: `:e logo.svg`, `gf` to it or a quickfix jump opened Eclipse's Web Browser editor, which ran
+  the SVG's script; such files now open in the Text Editor, as Vim shows them.
 - The update site checks every release's signatures each time it is rebuilt, and holds only signed
   releases (0.1.4 and later), so Eclipse never asks to trust unsigned content from it.
 - A key that took long to process is no longer written to Eclipse's Error Log, where it could have

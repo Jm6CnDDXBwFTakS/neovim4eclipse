@@ -79,7 +79,10 @@ final class ProjectFileEditors {
         }
         IEditorPart opened;
         try {
-            opened = IDE.openEditor(page, target, editor.getId(), false);
+            // An editor inside Eclipse for a content type that is not text opens the Text Editor
+            // instead (NewFiles.internalOr): decided before opening, since opening an SVG in the
+            // Web Browser editor runs its script, even if the editor is closed right after.
+            opened = IDE.openEditor(page, target, NewFiles.internalOr(editor, target.getName()), false);
         } catch (PartInitException e) {
             LOG.log(Level.WARNING, "Could not open " + target.getFullPath() + " for Neovim", e);
             return null;

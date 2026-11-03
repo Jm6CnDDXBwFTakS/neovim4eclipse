@@ -386,15 +386,16 @@ public final class EclipseFileCommands {
      * program for a file type it has no editor for, and opening it runs that program on the file:
      * on Windows {@code :e build.bat} of a cloned repository's script would run it (0.2.1 security
      * review). So the editor is the file's own internal editor (its "Open With" choice, its content
-     * type, its name), or the Text Editor when that is external or in-place, as gf and quickfix
-     * jumps already did ({@code ProjectFileEditors}) and a new file does ({@link NewFiles#editorIdFor}).
+     * type, its name), or the Text Editor when that is external or in-place, or not for text (an
+     * {@code svg}'s Web Browser editor would run its script), as gf and quickfix jumps do
+     * ({@code ProjectFileEditors}) and a new file does ({@link NewFiles#internalOr}).
      */
     private static void open(IWorkbenchPage page, Path file) {
         try {
             IFile candidate = NewFiles.workspaceFileAt(file);
             if (candidate != null && candidate.isAccessible()) {
-                IDE.openEditor(page, candidate, NewFiles.internalOr(IDE.getEditorDescriptor(candidate, true, false)),
-                        true);
+                IDE.openEditor(page, candidate, NewFiles.internalOr(IDE.getEditorDescriptor(candidate, true, false),
+                        candidate.getName()), true);
                 return;
             }
             page.openEditor(new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri())),

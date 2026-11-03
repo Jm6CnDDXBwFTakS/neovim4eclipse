@@ -139,6 +139,26 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code :e logo.svg} opens the Text Editor, as Vim shows the file: Eclipse's own choice is its
+     * Web Browser editor (bound to the image content type, which includes {@code svg}), which runs a
+     * cloned repository's SVG script (file-by-file security review of 0.2.1).
+     */
+    @Test
+    void eOfAnSvgOpensItAsTextNotInTheWebBrowser() throws Exception {
+        IFile svg = createFile("logo.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>1</script></svg>\n");
+        assertEquals("org.eclipse.ui.browser.editor", IDE.getEditorDescriptor(svg, true, false).getId(),
+                "Eclipse itself would open it in the Web Browser editor");
+
+        session.inputAsync(":e logo.svg<CR>");
+
+        waitUntil("logo.svg in the Text Editor", TIMEOUT_MS, () -> {
+            IEditorPart active = page().getActiveEditor();
+            return active != null && active.getEditorInput() instanceof IFileEditorInput input
+                    && input.getFile().equals(svg) && "org.eclipse.ui.DefaultTextEditor".equals(active.getSite().getId());
+        }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getSite().getId()));
+    }
+
+    /**
      * {@code :e} of a project file through the link opens the workspace file, not a file outside it.
      * A guard on Linux and macOS, where Eclipse's lookup resolves symbolic links itself (found
      * 2026-10-29: this passes without {@code NewFiles.workspaceFileAt}'s retry); the retry is for
