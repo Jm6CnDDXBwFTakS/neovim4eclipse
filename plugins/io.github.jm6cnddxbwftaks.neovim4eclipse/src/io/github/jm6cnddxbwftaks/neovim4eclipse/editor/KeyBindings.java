@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import org.eclipse.core.commands.ParameterizedCommand;
 import org.eclipse.jface.bindings.Binding;
 import org.eclipse.jface.bindings.keys.KeySequence;
 import org.eclipse.jface.bindings.keys.ParseException;
@@ -32,12 +33,21 @@ final class KeyBindings {
      * @throws ParseException        if {@code keySequence} is not valid notation
      */
     static String commandIdFor(String keySequence) throws ParseException {
+        ParameterizedCommand command = commandFor(keySequence);
+        return command == null ? null : command.getId();
+    }
+
+    /**
+     * The command the key would run now, with its parameters, ready for
+     * {@code IHandlerService.executeCommand}; {@code null} if it runs none. Same notation and
+     * exceptions as {@link #commandIdFor}.
+     */
+    static ParameterizedCommand commandFor(String keySequence) throws ParseException {
         IBindingService bindings = PlatformUI.getWorkbench().getService(IBindingService.class);
         if (bindings == null) {
             throw new IllegalStateException("No IBindingService; cannot resolve " + keySequence);
         }
         Binding binding = bindings.getPerfectMatch(KeySequence.getInstance(keySequence));
-        return binding == null || binding.getParameterizedCommand() == null
-                ? null : binding.getParameterizedCommand().getId();
+        return binding == null ? null : binding.getParameterizedCommand();
     }
 }

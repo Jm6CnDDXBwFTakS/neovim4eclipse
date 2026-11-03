@@ -90,6 +90,11 @@ public final class KeyInterceptor implements VerifyKeyListener {
         router.setSyncPointSupplier(supplier);
     }
 
+    /** See {@link KeyRouter#setEclipseBinding}. */
+    public void setEclipseBinding(Consumer<String> eclipseBinding) {
+        router.setEclipseBinding(eclipseBinding);
+    }
+
     /** See {@link KeyRouter#cancelCtrlX}. UI thread. */
     public void cancelCtrlX() {
         router.cancelCtrlX();

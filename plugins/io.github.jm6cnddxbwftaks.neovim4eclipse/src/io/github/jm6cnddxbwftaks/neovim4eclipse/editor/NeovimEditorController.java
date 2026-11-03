@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.commands.ParameterizedCommand;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
@@ -48,6 +49,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
@@ -222,6 +224,7 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
         keyInterceptor.setCompletion(this::runCompletion);
+        keyInterceptor.setEclipseBinding(this::runEclipseBinding);
         this.otherCommandWatch = new OtherCommandWatch(editor.getSite().getService(ICommandService.class),
                 keyInterceptor::cancelCtrlX);
         // At Esc and at a sync point, only the lines typed since Neovim's buffer last equaled the document.
@@ -790,6 +793,35 @@ public final class NeovimEditorController implements AutoCloseable {
                 editor.getSite().getService(IHandlerService.class).executeCommand(commandId, null);
             } catch (Exception e) {
                 LOG.log(Level.FINE, "cannot run " + commandId + " in " + editor.getTitle(), e);
+            }
+        });
+    }
+
+    /**
+     * Runs Eclipse's own command for {@code nvimKey} ({@code <C-w>}), which the plug-in's normal-mode
+     * binding took in an insert, before the key contexts had switched to the insert letters
+     * ({@link KeyRouter#routeBound}). The contexts are switched now, so the binding found is
+     * Eclipse's (Close, for {@code Ctrl+W} in the Java editor), then it runs, posted after this key
+     * event as a binding's command would. A key Eclipse binds nothing to does nothing. UI thread.
+     */
+    private void runEclipseBinding(String nvimKey) {
+        char letter = VimCtrlKeys.letterOf(nvimKey);
+        if (letter == 0) {
+            return;
+        }
+        keyContext.update(); // the insert letters, now that the mode is known to be insert
+        String keySequence = "CTRL+" + Character.toUpperCase(letter);
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (closed || styledText.isDisposed()) {
+                return;
+            }
+            try {
+                ParameterizedCommand command = KeyBindings.commandFor(keySequence);
+                if (command != null && !VimCtrlKeys.isCtrlKeyCommand(command.getId())) {
+                    editor.getSite().getService(IHandlerService.class).executeCommand(command, null);
+                }
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "cannot run Eclipse's " + keySequence + " in " + editor.getTitle(), e);
             }
         });
     }

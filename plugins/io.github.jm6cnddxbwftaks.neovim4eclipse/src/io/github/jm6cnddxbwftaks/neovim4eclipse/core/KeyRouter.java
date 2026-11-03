@@ -106,6 +106,8 @@ public final class KeyRouter {
     private volatile Predicate<Character> insertCtrlKeyFilter = letter -> false;
     /** Produces, at a sync point, what to hand to Neovim before the key. */
     private volatile Supplier<InsertReplay.SyncPoint> syncPointSupplier;
+    /** Runs the command Eclipse binds to a {@code Ctrl} key (see {@link #routeBound}); {@code null} for none. */
+    private volatile Consumer<String> eclipseBinding;
 
     public KeyRouter(Neovim neovim) {
         this.neovim = neovim;
@@ -143,6 +145,14 @@ public final class KeyRouter {
     }
 
     /**
+     * Runs Eclipse's own command for a {@code Ctrl} key the plug-in's binding took although the
+     * letter is Eclipse's in insert mode ({@link #routeBound}). Gets the key in Neovim notation.
+     */
+    public void setEclipseBinding(Consumer<String> eclipseBinding) {
+        this.eclipseBinding = eclipseBinding;
+    }
+
+    /**
      * Forgets a pending {@code Ctrl-X} ({@link #ctrlXPending}): a key Eclipse handled without this
      * router came next. Example: {@code Ctrl-X}, then {@code Ctrl-N}, whose binding runs Word
      * Completion directly; without this, a {@code Ctrl-O} typed much later would still run Content
@@ -166,10 +176,12 @@ public final class KeyRouter {
 
     /**
      * Routes a key that one of the plug-in's key bindings delivered ({@code SendKeyHandler}): the
-     * binding was active, so the key is Neovim's in every mode, and Eclipse has already consumed
-     * it. In an insert Eclipse types it is a sync point, whatever the insert filter says now (the
-     * filter may have changed since the binding was activated; leaving the key to Eclipse then would
-     * lose it).
+     * binding was active, and Eclipse has already consumed the key. In an insert Eclipse types it is
+     * a sync point if the letter is Neovim's in insert mode. If it is not, the binding was a
+     * normal-mode one not switched off yet: the key contexts follow the mode a moment later than
+     * the keys. Example: {@code Ctrl+W} ticked for Normal only, {@code i} then {@code Ctrl+W} typed
+     * fast. Eclipse's own command for the key runs then (Close), as if the contexts had been on
+     * time ({@link #setEclipseBinding}), not Vim's insert-mode {@code Ctrl-W}.
      */
     public void routeBound(String nvimKey) {
         route(nvimKey, true);
@@ -199,8 +211,15 @@ public final class KeyRouter {
             if (afterCtrlX && (letter == 'o' || letter == 'n' || letter == 'p')) {
                 return complete(letter == 'o' ? Completion.CONTENT_ASSIST : Completion.WORD);
             }
-            if (bound || (letter != 0 && insertCtrlKeyFilter.test(letter))) {
+            if (letter != 0 && insertCtrlKeyFilter.test(letter)) {
                 return insertCtrlKey(letter, nvimKey);
+            }
+            if (bound) {
+                Consumer<String> eclipse = eclipseBinding;
+                if (eclipse != null) {
+                    eclipse.accept(nvimKey); // the letter is Eclipse's here (see routeBound)
+                }
+                return true;
             }
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }

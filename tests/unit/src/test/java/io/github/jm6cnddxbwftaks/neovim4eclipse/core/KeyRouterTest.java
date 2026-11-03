@@ -209,12 +209,27 @@ class KeyRouterTest {
         assertTrue(neovim.neovimDriven);
     }
 
-    /** A key binding delivered it: Eclipse has consumed it, so it is Neovim's whatever the filter says now. */
     @Test
     void aBoundKeyInAnInsertEclipseTypesIsASyncPoint() {
         neovim.typing = true;
+        router.setInsertCtrlKeyFilter(letter -> letter == 'u');
         router.routeBound("<C-u>");
         assertEquals(List.of("<C-u>"), neovim.synced);
+    }
+
+    /**
+     * Ctrl+W ticked for Normal only, i then Ctrl+W typed fast: the normal-mode binding was still on.
+     * The letter is Eclipse's in insert mode, so Eclipse's own command for it runs, not a sync point.
+     */
+    @Test
+    void aBoundKeyEclipseOwnsInInsertModeRunsEclipsesCommand() {
+        List<String> eclipse = new ArrayList<>();
+        router.setEclipseBinding(eclipse::add);
+        neovim.typing = true;
+        router.routeBound("<C-w>");
+        assertEquals(List.of("<C-w>"), eclipse);
+        assertEquals(List.of(), neovim.synced);
+        assertEquals(List.of(), neovim.sent);
     }
 
     @Test

@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -60,6 +61,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -1037,6 +1039,29 @@ class EditorEndToEndTest extends EndToEndTestBase {
             expectText("apple\napricot\napple\n");
         } finally {
             store.setToDefault(PreferenceConstants.ctrlKeyInInsert('n'));
+        }
+    }
+
+    /**
+     * A normal-mode binding that had not been switched off yet when a key came in insert mode (the
+     * key contexts follow the mode a moment late): the letter is Eclipse's in insert mode, so
+     * Eclipse's command runs. Ctrl+D, given to Eclipse for insert mode, is Delete Line, not Vim's
+     * unindent. The binding's delivery is simulated with the command's own entry point.
+     */
+    @Test
+    void aNormalModeBindingStillOnInInsertModeRunsEclipsesCommand() {
+        assumeFalse(PlatformUtil.isMac(), "Delete Line is Cmd+D on macOS: Ctrl+D runs nothing there");
+        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+        store.setValue(PreferenceConstants.ctrlKeyInInsert('d'), false);
+        try {
+            type(widget, "gg");
+            type(widget, 'A');
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            EditorAttachManager.getInstance().getActiveController().sendKey("<C-d>");
+            expectText("beta\ngamma\n");
+            assertTrue(session.isTypingMode(), "still in the insert");
+        } finally {
+            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('d'));
         }
     }
 
