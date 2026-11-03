@@ -4,8 +4,6 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.net.http.HttpClient;
@@ -16,6 +14,10 @@ import java.net.http.HttpTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Downloads a release archive into a temporary file, for {@link NeovimInstaller} to check and unpack.
@@ -24,8 +26,20 @@ import java.time.Duration;
  * Java's {@link HttpClient}, built by the caller: it follows GitHub's redirect from
  * {@code github.com} to {@code release-assets.githubusercontent.com}, and takes its proxy from a
  * {@code ProxySelector} the Eclipse side builds from Eclipse's own network settings
- * ({@code editor/EclipseProxies}), so the download works wherever Eclipse's own updater does.
+ * ({@code prefs/EclipseProxies}), so the download works wherever Eclipse's own updater does.
  * Example: {@code client(proxySelector)} then {@code download(archive, client, folder, progress)}.
+ *
+ * <h2>Cancel, a stalled connection, a body too long</h2>
+ * The body is written to the file by the client's own threads ({@code sendAsync} with
+ * {@code BodySubscribers.ofFile}), and the calling thread watches, every
+ * {@value #POLL_MILLIS} ms, how far the file has grown. That thread is never stuck in a read, so it
+ * can always act: on Cancel, when nothing arrived for {@link #STALL} (a connection that stays open
+ * but sends nothing, which {@code HttpRequest.timeout} does not cover: it ends at the response's
+ * headers), and when the file grows past the archive's pinned size (it cannot be the archive then,
+ * and a broken or hostile server would otherwise fill the disk). Each time it cancels the request
+ * ({@code CompletableFuture.cancel(true)}, which aborts the exchange) and deletes the file.
+ * Example: GitHub sends 4 MB of the 10.8 MB, then nothing; after a minute the download fails with
+ * "nothing arrived for 60 seconds", and Retry starts over.
  *
  * <h2>A proxy that wants a password</h2>
  * Java refuses to send a Basic proxy password through an HTTPS tunnel unless
@@ -39,6 +53,12 @@ public final class NeovimDownload {
 
     /** The {@code eclipse.ini} line that lets Java send a proxy password through an HTTPS tunnel. */
     public static final String TUNNEL_AUTH_LINE = "-Djdk.http.auth.tunneling.disabledSchemes=";
+
+    /** How long the download may go without a byte before it is given up as stalled. */
+    static final Duration STALL = Duration.ofSeconds(60);
+
+    /** How often the calling thread looks at the file, Cancel and the stall clock. */
+    private static final long POLL_MILLIS = 250;
 
     private NeovimDownload() {
     }
@@ -62,6 +82,12 @@ public final class NeovimDownload {
      */
     public static Path download(NeovimRelease.Archive archive, HttpClient client, Path folder,
             InstallProgress progress) {
+        return download(archive, client, folder, progress, STALL);
+    }
+
+    /** {@link #download(NeovimRelease.Archive, HttpClient, Path, InstallProgress)} with the stall time a test chooses. */
+    static Path download(NeovimRelease.Archive archive, HttpClient client, Path folder, InstallProgress progress,
+            Duration stall) {
         Path file;
         try {
             Files.createDirectories(folder);
@@ -70,51 +96,101 @@ public final class NeovimDownload {
             throw new NeovimInstallException(NeovimInstallException.Reason.FILES,
                     "Cannot write in " + folder + ": " + e.getMessage(), e);
         }
+        CompletableFuture<HttpResponse<Path>> future = null;
         boolean done = false;
         try {
             HttpRequest request = HttpRequest.newBuilder(archive.url()).timeout(Duration.ofMinutes(10)).build();
-            HttpResponse<InputStream> response = send(client, request, archive);
-            try (InputStream in = response.body()) {
-                int status = response.statusCode();
-                if (status == 407) {
-                    throw proxyPassword();
-                }
-                if (status != 200) {
-                    throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK,
-                            "GitHub answered HTTP " + status + " for " + response.uri() + ".");
-                }
-                progress.step("Downloading " + archive.asset(), archive.size());
-                try (OutputStream out = Files.newOutputStream(file)) {
-                    byte[] buffer = new byte[64 * 1024];
-                    for (int n; (n = in.read(buffer)) > 0;) {
-                        progress.checkCancelled();
-                        out.write(buffer, 0, n);
-                        progress.worked(n);
-                    }
-                }
-            } catch (IOException e) {
-                throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK,
-                        "The download of " + archive.asset() + " broke off: " + e.getMessage(), e);
+            // Only a 200's body goes into the file; any other answer's body is dropped.
+            future = client.sendAsync(request, info -> info.statusCode() == 200
+                    ? HttpResponse.BodySubscribers.ofFile(file)
+                    : HttpResponse.BodySubscribers.replacing(file));
+            progress.step("Downloading " + archive.asset(), archive.size());
+            HttpResponse<Path> response = watch(future, file, archive, progress, stall);
+            int status = response.statusCode();
+            if (status == 407) {
+                throw proxyPassword();
             }
+            if (status != 200) {
+                throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK,
+                        "GitHub answered HTTP " + status + " for " + response.uri() + ".");
+            }
+            checkSize(file, archive); // the whole body may have come between two looks
             done = true;
             return file;
         } finally {
             if (!done) {
+                if (future != null) {
+                    future.cancel(true);
+                }
                 deleteQuietly(file);
             }
         }
     }
 
-    private static HttpResponse<InputStream> send(HttpClient client, HttpRequest request,
-            NeovimRelease.Archive archive) {
-        try {
-            return client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new NeovimInstallException(NeovimInstallException.Reason.CANCELLED, "Cancelled.", e);
-        } catch (IOException e) {
-            throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK, networkMessage(archive, e), e);
+    /**
+     * Waits for the response and its whole body, looking every {@value #POLL_MILLIS} ms at Cancel, the
+     * file's growth (for the progress bar and the stall clock) and its size. The caller cancels the
+     * request when this throws.
+     */
+    private static HttpResponse<Path> watch(CompletableFuture<HttpResponse<Path>> future, Path file,
+            NeovimRelease.Archive archive, InstallProgress progress, Duration stall) {
+        long seen = 0;
+        long lastGrowth = System.nanoTime();
+        while (true) {
+            try {
+                return future.get(POLL_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                // still running: look below
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new NeovimInstallException(NeovimInstallException.Reason.CANCELLED, "Cancelled.", e);
+            } catch (ExecutionException e) {
+                throw failure(archive, e.getCause());
+            }
+            progress.checkCancelled();
+            long size = checkSize(file, archive);
+            if (size > seen) {
+                progress.worked(size - seen);
+                seen = size;
+                lastGrowth = System.nanoTime();
+            } else if (System.nanoTime() - lastGrowth > stall.toNanos()) {
+                throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK, "The download of "
+                        + archive.asset() + " stalled: nothing arrived for " + stall.toSeconds() + " seconds, after "
+                        + size + " of " + archive.size() + " bytes. Check the network connection, and try again.");
+            }
         }
+    }
+
+    /**
+     * The file's size so far.
+     *
+     * @throws NeovimInstallException NETWORK if it is larger than the archive can be
+     */
+    private static long checkSize(Path file, NeovimRelease.Archive archive) {
+        long size;
+        try {
+            size = Files.size(file);
+        } catch (IOException e) {
+            size = 0; // not created yet by the client, or being replaced: look again next time
+        }
+        if (size > archive.size()) {
+            throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK, "The download of "
+                    + archive.asset() + " sent more than its " + archive.size() + " bytes, so it cannot be the "
+                    + "archive; it was stopped.");
+        }
+        return size;
+    }
+
+    /** The exception for a request that failed: an I/O error in words for the user, or a bug passed on. */
+    private static NeovimInstallException failure(NeovimRelease.Archive archive, Throwable cause) {
+        if (cause instanceof NeovimInstallException e) {
+            return e;
+        }
+        if (cause instanceof IOException e) {
+            return new NeovimInstallException(NeovimInstallException.Reason.NETWORK, networkMessage(archive, e), e);
+        }
+        return new NeovimInstallException(NeovimInstallException.Reason.NETWORK,
+                "The download of " + archive.asset() + " failed: " + cause, cause);
     }
 
     /**
@@ -150,7 +226,8 @@ public final class NeovimDownload {
                         + "archive in a browser and use Install from File.");
     }
 
-    static void deleteQuietly(Path file) {
+    /** Deletes a temporary file, ignoring a failure (a file still open on Windows, say). */
+    public static void deleteQuietly(Path file) {
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {

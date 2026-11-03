@@ -3,13 +3,10 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.eclipse.jface.fieldassist.ControlDecoration;
 import org.eclipse.jface.fieldassist.FieldDecoration;
@@ -25,7 +22,6 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Link;
-import org.eclipse.ui.PlatformUI;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
@@ -80,8 +76,6 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     /** The note's link text when the dedicated Neovim is current ({@link #markup}). */
     static final String REINSTALL = "Reinstall...";
 
-    private static final Logger LOG = Logger.getLogger(NeovimLocationFieldEditor.class.getName());
-
     private Link note;
     private Button getNeovim;
     private Link help;
@@ -125,7 +119,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         help.setText(NeovimPreferencePage.NEOVIM_FIELD_HELP);
         help.setLayoutData(fullRow(numColumns, WRAP_WIDTH));
         help.addSelectionListener(SelectionListener.widgetSelectedAdapter(
-                e -> openInBrowser(NeovimPreferencePage.FINDING_NEOVIM_URL)));
+                e -> ExternalBrowser.open(NeovimPreferencePage.FINDING_NEOVIM_URL)));
         getTextControl().addModifyListener(e -> scheduleProbe());
     }
 
@@ -150,14 +144,6 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         GridData data = new GridData(SWT.FILL, SWT.TOP, true, false, numColumns, 1);
         data.widthHint = widthHint;
         return data;
-    }
-
-    private static void openInBrowser(String url) {
-        try {
-            PlatformUI.getWorkbench().getBrowserSupport().getExternalBrowser().openURL(URI.create(url).toURL());
-        } catch (Exception e) { // PartInitException (no browser), or a malformed URL (a bug)
-            LOG.log(Level.WARNING, "Could not open " + url, e);
-        }
     }
 
     @Override

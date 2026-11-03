@@ -11,8 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.ui.IEditorPart;
@@ -55,6 +57,26 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
         assertEquals(List.of(RestartNeovimHandler.TITLE), dialogs);
         assertSame(session, Activator.getDefault().currentSession(), "the same Neovim");
         assertTrue(session.isAlive());
+    }
+
+    /**
+     * Get Neovim's swap ({@code NeovimInstaller.SwapGate}) asks the Activator, at the moment of the
+     * swap, whether the running Neovim comes from the folder being replaced: then the folder stays,
+     * and the new Neovim waits for this restart.
+     */
+    @Test
+    void anInstallLeavesTheFolderTheRunningNeovimComesFrom() {
+        Path program = Path.of(session.program());
+        assertTrue(program.isAbsolute(), program.toString());
+        Path home = program.getParent().getParent(); // <home>/bin/nvim
+        AtomicBoolean swapped = new AtomicBoolean();
+        assertFalse(Activator.getDefault().swapUnlessRunningFrom(home, () -> {
+            swapped.set(true);
+            return true;
+        }));
+        assertFalse(swapped.get(), "the folder Neovim runs from is not swapped");
+        assertTrue(Activator.getDefault().swapUnlessRunningFrom(home.resolveSibling("elsewhere"), () -> true),
+                "another folder is");
     }
 
     @Test

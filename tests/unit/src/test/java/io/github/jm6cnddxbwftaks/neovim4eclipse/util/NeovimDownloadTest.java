@@ -15,6 +15,9 @@ import java.net.ProxySelector;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -26,7 +29,8 @@ import com.sun.net.httpserver.HttpServer;
 
 /**
  * {@link NeovimDownload} against a local HTTP server (the JDK's own), so no test touches GitHub: the
- * archive, a redirect as GitHub sends one, a proxy's 407, and a missing file.
+ * archive, a redirect as GitHub sends one, a proxy's 407, a missing file, a connection that stops
+ * sending, and a body longer than the archive.
  */
 class NeovimDownloadTest {
 
@@ -35,6 +39,8 @@ class NeovimDownloadTest {
 
     HttpServer server;
     byte[] body = "an archive".getBytes();
+    /** Holds {@code /stall}'s handler after the first bytes, until the test ends. */
+    final CountDownLatch release = new CountDownLatch(1);
 
     @BeforeEach
     void serve() throws IOException {
@@ -50,16 +56,37 @@ class NeovimDownloadTest {
             x.sendResponseHeaders(302, -1);
             x.close();
         });
+        server.createContext("/stall", x -> {
+            x.sendResponseHeaders(200, body.length);
+            OutputStream out = x.getResponseBody();
+            out.write(body, 0, 3);
+            out.flush();
+            try {
+                release.await(); // then nothing more, with the connection open
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            x.close();
+        });
+        server.createContext("/longer", x -> {
+            byte[] longer = new byte[body.length * 2];
+            x.sendResponseHeaders(200, longer.length);
+            try (OutputStream out = x.getResponseBody()) {
+                out.write(longer);
+            }
+        });
         server.createContext("/proxy", x -> {
             x.getResponseHeaders().add("Proxy-Authenticate", "Basic realm=\"test\"");
             x.sendResponseHeaders(407, -1);
             x.close();
         });
+        server.setExecutor(Executors.newCachedThreadPool()); // a held /stall must not block the others
         server.start();
     }
 
     @AfterEach
     void stop() {
+        release.countDown();
         server.stop(0);
     }
 
@@ -103,6 +130,52 @@ class NeovimDownloadTest {
         NeovimInstallException e = assertThrows(NeovimInstallException.class, () -> download("/asset"));
         assertEquals(NeovimInstallException.Reason.NETWORK, e.reason());
         assertTrue(e.getMessage().contains("Network Connections"), e.getMessage());
+        assertNoLeftovers();
+    }
+
+    @Test
+    void aConnectionThatStopsSendingIsGivenUp() throws IOException {
+        NeovimInstallException e = assertThrows(NeovimInstallException.class,
+                () -> NeovimDownload.download(archive("/stall"), NeovimDownload.client(ProxySelector.of(null), null),
+                        tmp, InstallProgress.NONE, Duration.ofMillis(300)));
+        assertEquals(NeovimInstallException.Reason.NETWORK, e.reason());
+        assertTrue(e.getMessage().contains("stalled"), e.getMessage());
+        assertTrue(e.getMessage().contains("after 3 of " + body.length + " bytes"), e.getMessage());
+        assertNoLeftovers();
+    }
+
+    @Test
+    void cancelEndsADownloadThatWaitsForBytes() throws IOException {
+        // The default stall time (a minute) is far off: only Cancel can end this download now.
+        InstallProgress cancelAfterTheFirstBytes = new InstallProgress() {
+            private long received;
+
+            @Override
+            public void step(String name, long total) {
+            }
+
+            @Override
+            public void worked(long amount) {
+                received += amount;
+            }
+
+            @Override
+            public boolean cancelled() {
+                return received > 0;
+            }
+        };
+        NeovimInstallException e = assertThrows(NeovimInstallException.class, () -> NeovimDownload.download(
+                archive("/stall"), NeovimDownload.client(ProxySelector.of(null), null), tmp,
+                cancelAfterTheFirstBytes));
+        assertEquals(NeovimInstallException.Reason.CANCELLED, e.reason());
+        assertNoLeftovers();
+    }
+
+    @Test
+    void aBodyLongerThanTheArchiveIsStopped() throws IOException {
+        NeovimInstallException e = assertThrows(NeovimInstallException.class, () -> download("/longer"));
+        assertEquals(NeovimInstallException.Reason.NETWORK, e.reason());
+        assertTrue(e.getMessage().contains("more than its " + body.length + " bytes"), e.getMessage());
         assertNoLeftovers();
     }
 

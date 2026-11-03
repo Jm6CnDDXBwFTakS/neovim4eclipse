@@ -112,6 +112,8 @@ final class NeovimConnection implements AutoCloseable {
     private static final long QUIT_TIMEOUT_MS = 1500;
 
     private final Process process;
+    /** The program started, as the command's first word: {@code /home/you/.local/share/.../neovim/la/bin/nvim}. */
+    private final String program;
     private final RpcChannel channel;
     private final NeovimApi api;
     /** Where Neovim's notifications and requests go; see {@link #setIncoming}. */
@@ -119,8 +121,9 @@ final class NeovimConnection implements AutoCloseable {
     /** The errors the user's configuration reported while Neovim started, or "" (see {@link #waitForStartup}). */
     private String startupErrors = "";
 
-    private NeovimConnection(Process process) {
+    private NeovimConnection(Process process, String program) {
         this.process = process;
+        this.program = program;
         this.channel = new RpcChannel(process.getInputStream(), process.getOutputStream(), new Forwarder(),
                 "neovim4eclipse-rpc");
         this.api = new MsgpackNeovimApi(channel);
@@ -148,7 +151,7 @@ final class NeovimConnection implements AutoCloseable {
         LOG.info(() -> "Started Neovim pid=" + process.pid() + " cmd=" + cmd);
         logStderr(process.getErrorStream());
 
-        NeovimConnection connection = new NeovimConnection(process);
+        NeovimConnection connection = new NeovimConnection(process, cmd.get(0));
         connection.channel.start();
         try {
             await(connection.api.setClientInfo(CLIENT_NAME, clientVersion(clientVersion), "remote", Map.of(), Map.of()));
@@ -320,6 +323,11 @@ final class NeovimConnection implements AutoCloseable {
             }
             return target.request(method, params);
         }
+    }
+
+    /** The program started (see {@link #program}). */
+    String program() {
+        return program;
     }
 
     boolean isAlive() {

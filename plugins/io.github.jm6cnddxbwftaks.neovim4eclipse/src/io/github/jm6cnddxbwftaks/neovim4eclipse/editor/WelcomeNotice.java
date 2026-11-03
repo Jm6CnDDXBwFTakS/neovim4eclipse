@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.net.URI;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,6 +20,7 @@ import org.osgi.service.prefs.BackingStoreException;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ExternalBrowser;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
@@ -101,7 +101,7 @@ final class WelcomeNotice {
             return new ActingDialog(shell, WelcomeNote.updatedMessage(version), new String[] { "What's New", "Close" },
                     button -> {
                         if (button == UPDATED_WHATS_NEW) {
-                            openInBrowser(WelcomeNote.CHANGELOG_URL);
+                            ExternalBrowser.open(WelcomeNote.CHANGELOG_URL);
                         }
                     });
         }
@@ -111,7 +111,7 @@ final class WelcomeNotice {
                         // After the dialog closes, so the preferences are not stacked on top of it.
                         Display.getCurrent().asyncExec(() -> OpenPreferencesHandler.open(activeShell()));
                     } else if (button == WELCOME_DOCUMENTATION) {
-                        openInBrowser(WelcomeNote.DOCUMENTATION_URL);
+                        ExternalBrowser.open(WelcomeNote.DOCUMENTATION_URL);
                     }
                 });
     }
@@ -167,14 +167,6 @@ final class WelcomeNotice {
         } catch (BackingStoreException e) {
             // The note may then show again on the next start; not worth more than a log line.
             LOG.log(Level.WARNING, "Could not save that the welcome was shown", e);
-        }
-    }
-
-    private static void openInBrowser(String url) {
-        try {
-            PlatformUI.getWorkbench().getBrowserSupport().getExternalBrowser().openURL(URI.create(url).toURL());
-        } catch (Exception e) { // PartInitException (no browser), or a malformed URL (a bug)
-            LOG.log(Level.WARNING, "Could not open " + url, e);
         }
     }
 

@@ -3,12 +3,16 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse;
 
+import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
@@ -22,6 +26,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.QuickfixLists;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ContributionVisibility;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
@@ -179,12 +184,39 @@ public class Activator extends AbstractUIPlugin {
         if (session == null || !session.isAlive()) {
             // A Neovim that Get Neovim installed while the old one ran waits in neovim/<code>.new;
             // nothing runs from the plug-in's folder now, so it can take its place (NeovimInstaller).
-            NeovimInstaller.finishPending(PluginFolders.neovimFolder());
+            // Only the two folder moves happen here; the replaced Neovim is deleted in the background.
+            Path folder = PluginFolders.neovimFolder();
+            if (NeovimInstaller.finishPending(folder)) {
+                Job cleanup = Job.create("Removing the replaced dedicated Neovim", monitor -> {
+                    NeovimInstaller.deleteReplaced(folder);
+                    return Status.OK_STATUS;
+                });
+                cleanup.setSystem(true); // housekeeping: not shown in the Progress view
+                cleanup.schedule();
+            }
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
         }
         return session;
+    }
+
+    /**
+     * For <i>Get Neovim</i>'s install ({@code NeovimInstaller.SwapGate}): runs {@code swap}, which
+     * moves the new Neovim into {@code home}, unless the running Neovim's program is inside
+     * {@code home}. Synchronized like {@link #getOrCreateSession()}, so no Neovim starts between the
+     * answer and the end of the swap (two folder moves, milliseconds). Example: Neovim runs from
+     * {@code neovim/la/bin/nvim} and {@code home} is {@code neovim/la}: {@code false}, and the new
+     * one waits in {@code neovim/la.new} for <i>Restart Neovim</i>.
+     *
+     * @return {@code swap}'s answer, or {@code false} if Neovim runs from {@code home}
+     */
+    public synchronized boolean swapUnlessRunningFrom(Path home, BooleanSupplier swap) {
+        NeovimSession running = currentSession();
+        if (running != null && FilePaths.inside(running.program(), home.toString(), FilePaths.Platform.current())) {
+            return false;
+        }
+        return swap.getAsBoolean();
     }
 
     /**

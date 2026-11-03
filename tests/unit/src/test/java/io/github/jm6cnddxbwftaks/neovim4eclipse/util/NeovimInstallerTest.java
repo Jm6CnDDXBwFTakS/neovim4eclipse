@@ -13,7 +13,9 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,7 +64,9 @@ class NeovimInstallerTest {
     }
 
     private NeovimInstaller.Result install(Path file, boolean inUse, Function<Path, NeovimVersion> versionOf) {
-        return NeovimInstaller.install(file, release, LA, folder, inUse, versionOf, InstallProgress.NONE);
+        return NeovimInstaller.install(file, release, LA, folder,
+                inUse ? NeovimInstaller.SwapGate.IN_USE : NeovimInstaller.SwapGate.FREE, versionOf,
+                InstallProgress.NONE);
     }
 
     @Test
@@ -97,10 +101,59 @@ class NeovimInstallerTest {
         assertTrue(Files.exists(folder.resolve("la/marker")), "the running one is untouched");
         assertTrue(PluginNeovim.isInstall(folder.resolve("la.new"), false));
 
-        NeovimInstaller.finishPending(folder);
+        assertTrue(NeovimInstaller.finishPending(folder), "the replaced one is left to delete");
         assertFalse(Files.exists(folder.resolve("la/marker")));
         assertFalse(Files.exists(folder.resolve("la.new")));
         assertTrue(PluginNeovim.isInstall(folder.resolve("la"), false));
+        assertTrue(Files.exists(folder.resolve("la.old/marker")), "not deleted before Neovim starts");
+
+        NeovimInstaller.deleteReplaced(folder);
+        assertFalse(Files.exists(folder.resolve("la.old")));
+        assertFalse(NeovimInstaller.finishPending(folder), "nothing left to do");
+    }
+
+    @Test
+    void whetherNeovimRunsFromTheFolderIsAskedOnlyAtTheSwap() throws IOException {
+        install(archive, false, RUNS);
+        AtomicBoolean asked = new AtomicBoolean();
+        NeovimInstaller.Result r = NeovimInstaller.install(archive, release, LA, folder, swap -> {
+            // A Neovim that started while the archive downloaded or unpacked is seen here.
+            assertTrue(PluginNeovim.isInstall(folder.resolve("la.new"), false), "asked after the unpack");
+            asked.set(true);
+            return false;
+        }, RUNS, InstallProgress.NONE);
+        assertTrue(asked.get());
+        assertEquals(NeovimInstaller.Outcome.WAITS_FOR_RESTART, r.outcome());
+    }
+
+    @Test
+    void aLeftoverOldFolderBlocksTheSwapUntilItIsDeleted() throws IOException {
+        install(archive, false, RUNS);
+        install(archive, true, RUNS);
+        Files.createDirectories(folder.resolve("la.old/bin")); // an earlier delete failed
+        assertTrue(NeovimInstaller.finishPending(folder));
+        assertTrue(Files.exists(folder.resolve("la.new")), "not swapped: la cannot move to la.old");
+        assertTrue(PluginNeovim.isInstall(folder.resolve("la"), false), "the old Neovim still works");
+
+        NeovimInstaller.deleteReplaced(folder);
+        NeovimInstaller.finishPending(folder);
+        assertFalse(Files.exists(folder.resolve("la.new")), "swapped at the next start");
+    }
+
+    @Test
+    void theCheckedCopyIsWhatIsUnpackedAndItIsDeletedAfterwards() throws IOException {
+        install(archive, false, RUNS);
+        assertNoTemporaryFiles();
+        Path other = TestArchives.zip(tmp.resolve("other.tar.gz"), "x/y", "z");
+        assertThrows(NeovimInstallException.class, () -> install(other, false, RUNS));
+        assertNoTemporaryFiles();
+    }
+
+    private void assertNoTemporaryFiles() throws IOException {
+        try (Stream<Path> files = Files.list(folder)) {
+            assertEquals(0, files.filter(f -> f.getFileName().toString().startsWith(PluginNeovim.DOWNLOAD_PREFIX))
+                    .count(), "the copy of the archive is deleted");
+        }
     }
 
     @Test
@@ -154,7 +207,8 @@ class NeovimInstallerTest {
             }
         };
         NeovimInstallException e = assertThrows(NeovimInstallException.class,
-                () -> NeovimInstaller.install(archive, release, LA, folder, false, RUNS, cancelled));
+                () -> NeovimInstaller.install(archive, release, LA, folder, NeovimInstaller.SwapGate.FREE, RUNS,
+                        cancelled));
         assertEquals(NeovimInstallException.Reason.CANCELLED, e.reason());
         assertFalse(Files.exists(folder.resolve("la")));
         assertFalse(Files.exists(folder.resolve("la.new")));

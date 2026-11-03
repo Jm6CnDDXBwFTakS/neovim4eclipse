@@ -35,20 +35,56 @@ import org.osgi.framework.ServiceReference;
  * proxy where Eclipse can read one (Linux: environment variables and GNOME's settings; Windows: the
  * Windows proxy settings); macOS has no reader, so there <em>Native</em> means no proxy.
  *
+ * <h2>Holding the service</h2>
+ * OSGi counts each {@code getService} against the plug-in until {@code ungetService}. So the service
+ * is taken once per download, by {@link #open()}, and given back when the download ends
+ * ({@link #close()}, in a try-with-resources). Example:
+ * <pre>
+ *   try (EclipseProxies proxies = EclipseProxies.open()) {
+ *       NeovimDownload.download(archive, NeovimDownload.client(proxies.selector(), proxies.authenticator()), ...);
+ *   }
+ * </pre>
+ *
  * <h2>Passwords</h2>
  * {@link #authenticator()} answers a proxy's password request with the login stored on that page. Java
  * only asks it for a plain HTTP proxy connection, or for HTTPS when Eclipse runs with
  * {@code -Djdk.http.auth.tunneling.disabledSchemes=} ({@code NeovimDownload} explains the 407 that
  * comes otherwise). See docs/design/DOWNLOAD_NEOVIM.md, section 4.
  */
-final class EclipseProxies {
+final class EclipseProxies implements AutoCloseable {
 
-    private EclipseProxies() {
+    /** Where the service came from, to give it back; {@code null} without one. */
+    private final BundleContext context;
+    private final ServiceReference<IProxyService> reference;
+    /** Eclipse's proxy service, or {@code null} (no OSGi, or {@code org.eclipse.core.net} not running). */
+    private final IProxyService service;
+
+    private EclipseProxies(BundleContext context, ServiceReference<IProxyService> reference, IProxyService service) {
+        this.context = context;
+        this.reference = reference;
+        this.service = service;
+    }
+
+    /** Takes Eclipse's proxy service, if there is one, until {@link #close()}. */
+    static EclipseProxies open() {
+        var bundle = FrameworkUtil.getBundle(EclipseProxies.class);
+        BundleContext context = bundle == null ? null : bundle.getBundleContext();
+        ServiceReference<IProxyService> ref = context == null ? null
+                : context.getServiceReference(IProxyService.class);
+        IProxyService service = ref == null ? null : context.getService(ref);
+        return service == null ? new EclipseProxies(null, null, null) : new EclipseProxies(context, ref, service);
+    }
+
+    /** Gives the service back. The selector and authenticator must not be used after this. */
+    @Override
+    public void close() {
+        if (service != null) {
+            context.ungetService(reference);
+        }
     }
 
     /** A selector that asks Eclipse's proxy service for each address; Java's default without one. */
-    static ProxySelector selector() {
-        IProxyService service = service();
+    ProxySelector selector() {
         if (service == null) {
             return ProxySelector.getDefault();
         }
@@ -75,8 +111,7 @@ final class EclipseProxies {
     }
 
     /** Answers a proxy's password request with the login stored in Eclipse; {@code null} without a service. */
-    static Authenticator authenticator() {
-        IProxyService service = service();
+    Authenticator authenticator() {
         if (service == null) {
             return null;
         }
@@ -95,15 +130,5 @@ final class EclipseProxies {
                 return null;
             }
         };
-    }
-
-    private static IProxyService service() {
-        var bundle = FrameworkUtil.getBundle(EclipseProxies.class);
-        BundleContext context = bundle == null ? null : bundle.getBundleContext();
-        if (context == null) {
-            return null;
-        }
-        ServiceReference<IProxyService> ref = context.getServiceReference(IProxyService.class);
-        return ref == null ? null : context.getService(ref);
     }
 }

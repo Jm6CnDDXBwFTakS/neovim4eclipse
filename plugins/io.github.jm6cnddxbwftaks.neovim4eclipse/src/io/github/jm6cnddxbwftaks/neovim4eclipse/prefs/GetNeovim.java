@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,6 +26,7 @@ import org.eclipse.ui.handlers.IHandlerService;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstallProgress;
@@ -54,15 +54,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  *       ({@code util/NeovimDownload}, through Eclipse's proxy settings, {@link EclipseProxies}) or
  *       takes the chosen file, and installs it ({@code util/NeovimInstaller}). Nothing of this runs
  *       on the UI thread.</li>
- *   <li>The done note says where Neovim went and offers what is still needed: <em>Use the
- *       Download</em> when the preference names another Neovim, <em>Restart Neovim</em> when one runs.
+ *   <li>The done note says where Neovim went and offers what is still needed: <em>Use Dedicated
+ *       Neovim</em> when the preference names another Neovim, <em>Restart Neovim</em> when one runs.
  *       Without a running Neovim the active editor attaches at once. The failure dialog offers
  *       <em>Retry</em>, <em>Install from File…</em> and the release page.</li>
  * </ol>
  * Every dialog is a {@link HeadedMessageDialog}, the layout the welcome and the Restart Neovim
  * question have; the words, links and values are {@code util/GetNeovimText}'s, where the unit tests
- * read them. The platform is the real processor's ({@code util/ProcessorProbe}), as known when the dialog opens;
- * the dialog names it, and the Job installs exactly what the dialog showed.
+ * read them. Links open in Eclipse's external browser ({@link ExternalBrowser}). The platform is the
+ * real processor's ({@code util/ProcessorProbe}), as known when the dialog opens; the dialog names it,
+ * and the Job installs exactly what the dialog showed.
  */
 public final class GetNeovim {
 
@@ -125,15 +126,7 @@ public final class GetNeovim {
      */
     private static int show(Shell shell, int kind, HeadedMessage message, List<String> buttons) {
         return new HeadedMessageDialog(shell, GetNeovimText.TITLE, kind, message, 0, buttons.toArray(String[]::new))
-                .openLinksWith(GetNeovim::openInBrowser).open();
-    }
-
-    private static void openInBrowser(URI url) {
-        try {
-            PlatformUI.getWorkbench().getBrowserSupport().getExternalBrowser().openURL(url.toURL());
-        } catch (Exception e) { // PartInitException (no browser), or a malformed URL (a bug)
-            LOG.log(Level.WARNING, "Could not open " + url, e);
-        }
+                .openLinksWith(ExternalBrowser::open).open();
     }
 
     /** The file chooser for <i>Install from File…</i>, then the install. */
@@ -157,11 +150,10 @@ public final class GetNeovim {
     /** Starts the Job. UI thread. */
     private static void start(Shell shell, NeovimRelease release, NeovimRelease.Archive archive, Source source,
             Path file) {
-        String configured = Activator.getDefault().getNvimExecutable();
-        boolean running = Activator.getDefault().currentSession() != null;
+        Activator activator = Activator.getDefault();
         Job job = Job.create((source == Source.DOWNLOAD ? "Downloading Neovim " : "Installing Neovim ")
                 + release.version(), monitor -> {
-                    run(shell, release, archive, source, file, configured, running, monitor);
+                    run(shell, activator, release, archive, source, file, monitor);
                     // Our own dialogs report the outcome; an error status would add Eclipse's own pop-up.
                     return Status.OK_STATUS;
                 });
@@ -170,44 +162,60 @@ public final class GetNeovim {
     }
 
     /** The Job's work, off the UI thread. */
-    private static void run(Shell shell, NeovimRelease release, NeovimRelease.Archive archive, Source source,
-            Path file, String configured, boolean running, IProgressMonitor monitor) {
+    private static void run(Shell shell, Activator activator, NeovimRelease release, NeovimRelease.Archive archive,
+            Source source, Path file, IProgressMonitor monitor) {
         Path folder = PluginFolders.neovimFolder();
         Path home = PluginNeovim.home(folder, archive.platform());
-        // Which Neovim the preference finds now (it may run nvim --version, hence here): whether a
-        // running Neovim comes from the folder being replaced, and whether the download will be used.
-        Path current = NvimExecutable.locate(NvimExecutable.resolve(configured));
-        boolean fromHome = current != null && current.toAbsolutePath().startsWith(home.toAbsolutePath());
+        // Whether Neovim runs from home is asked at the swap, not now: one may start from there
+        // while the archive downloads (NeovimInstaller.SwapGate).
+        NeovimInstaller.SwapGate gate = swap -> activator.swapUnlessRunningFrom(home, swap);
         InstallProgress progress = new MonitorProgress(monitor);
         try {
             NeovimInstaller.Result result;
             if (source == Source.DOWNLOAD) {
-                Path downloaded = NeovimDownload.download(archive,
-                        NeovimDownload.client(EclipseProxies.selector(), EclipseProxies.authenticator()), folder,
-                        progress);
+                Path downloaded;
+                try (EclipseProxies proxies = EclipseProxies.open()) {
+                    downloaded = NeovimDownload.download(archive,
+                            NeovimDownload.client(proxies.selector(), proxies.authenticator()), folder, progress);
+                }
                 try {
-                    result = NeovimInstaller.install(downloaded, release, archive.platform(), folder,
-                            running && fromHome, InstalledVersions::of, progress);
+                    result = NeovimInstaller.install(downloaded, release, archive.platform(), folder, gate,
+                            InstalledVersions::of, progress);
                 } finally {
-                    Files.deleteIfExists(downloaded);
+                    // Quietly: a temporary file left behind must not hide whether the install worked.
+                    NeovimDownload.deleteQuietly(downloaded);
                 }
             } else {
-                result = NeovimInstaller.install(file, release, archive.platform(), folder, running && fromHome,
+                result = NeovimInstaller.install(file, release, archive.platform(), folder, gate,
                         InstalledVersions::of, progress);
             }
-            boolean otherInUse = !configured.isBlank() && !fromHome;
-            asyncExec(() -> done(shell, release, result, running, otherInUse));
+            // The preference as it is now, after the install (the user may have changed it meanwhile).
+            boolean otherInUse = namesAnotherNeovim(activator.getNvimExecutable(), home);
+            asyncExec(() -> done(shell, release, result, otherInUse));
         } catch (NeovimInstallException e) {
             if (e.reason() != NeovimInstallException.Reason.CANCELLED) {
                 asyncExec(() -> failed(shell, release, archive, source, file, e));
             }
-        } catch (Exception e) { // a bug, or an I/O error deleting the temporary file
+        } catch (Exception e) { // a bug
             LOG.log(Level.WARNING, "Get Neovim failed", e);
             asyncExec(() -> failed(shell, release, archive, source, file, new NeovimInstallException(
                     NeovimInstallException.Reason.FILES, String.valueOf(e.getMessage()), e)));
         } finally {
             monitor.done();
         }
+    }
+
+    /**
+     * Whether the preference names a Neovim outside {@code home}, so the dedicated one is not used
+     * until it is cleared. Off the UI thread: finding the program may run {@code nvim --version}.
+     */
+    private static boolean namesAnotherNeovim(String configured, Path home) {
+        if (configured.isBlank()) {
+            return false;
+        }
+        Path program = NvimExecutable.locate(NvimExecutable.resolve(configured));
+        return program == null || !FilePaths.inside(program.toAbsolutePath().toString(),
+                home.toAbsolutePath().toString(), FilePaths.Platform.current());
     }
 
     private static void asyncExec(Runnable r) {
@@ -218,8 +226,9 @@ public final class GetNeovim {
     }
 
     /** The done note, and what follows from it. UI thread. */
-    private static void done(Shell shell, NeovimRelease release, NeovimInstaller.Result result, boolean running,
+    private static void done(Shell shell, NeovimRelease release, NeovimInstaller.Result result,
             boolean otherInUse) {
+        boolean running = Activator.getDefault().currentSession() != null; // now, not when the Job started
         GetNeovimOffer.recheck();
         LISTENERS.forEach(Runnable::run);
         boolean waits = result.outcome() == NeovimInstaller.Outcome.WAITS_FOR_RESTART;

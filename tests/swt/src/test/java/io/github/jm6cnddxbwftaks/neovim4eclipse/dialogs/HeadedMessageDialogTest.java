@@ -116,6 +116,21 @@ class HeadedMessageDialogTest {
     }
 
     @Test
+    void anAmpersandShowsAsWrittenNotAsAMnemonic() {
+        dialog = new HeadedMessageDialog(null, "Get Neovim", MessageDialog.INFORMATION, new HeadedMessage("A & B",
+                List.of(new Point("Q&A", "Tom & Jerry").withLinks(new HeadedMessage.Link("R&D", PAGE))), "C & D"),
+                0, "Close");
+        dialog.setBlockOnOpen(false);
+        dialog.open();
+        // SWT shows "&&" as one "&"; a single "&" would vanish and underline the next letter.
+        for (String text : List.of("A && B", "Q&&A", "Tom && Jerry", "C && D")) {
+            label(text);
+        }
+        assertEquals("<a href=\"0\">R&&D</a>", find(Link.class).get(0).getText());
+        assertEquals("Tom && Jerry", HeadedMessageDialog.literal("Tom & Jerry"));
+    }
+
+    @Test
     void aButtonAnswersItsIndex() {
         open();
         Button cancel = find(Button.class).stream().filter(b -> b.getText().equals("Cancel")).findFirst()

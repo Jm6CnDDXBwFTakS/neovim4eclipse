@@ -307,6 +307,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return !closed && connection.isAlive();
     }
 
+    /**
+     * The Neovim program this session started, an absolute path: what <i>Get Neovim</i> compares
+     * with the folder it replaces ({@code Activator.swapUnlessRunningFrom}).
+     */
+    public String program() {
+        return connection.program();
+    }
+
     /** Alias of {@link #close()}. */
     public void shutdown() {
         close();

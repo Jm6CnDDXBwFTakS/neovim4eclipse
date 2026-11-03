@@ -48,7 +48,10 @@ public final class PluginNeovim {
     /** Suffix of the folder the previous install moves to during the swap, then deleted. */
     public static final String OLD = ".old";
 
-    /** Start of a download's temporary file in {@code neovim/} ({@link NeovimDownload}). */
+    /**
+     * Start of a temporary file in {@code neovim/}: a download ({@link NeovimDownload}), or the
+     * checked copy of an archive ({@link NeovimInstaller}).
+     */
     public static final String DOWNLOAD_PREFIX = ".download-";
 
     private PluginNeovim() {

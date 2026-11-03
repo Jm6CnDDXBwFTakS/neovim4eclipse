@@ -134,7 +134,7 @@ public class HeadedMessageDialog extends MessageDialog {
         for (HeadedMessage.Point point : message.points()) {
             int above = first ? groupGap : 0;
             Label heading = new Label(body, SWT.NONE);
-            heading.setText(point.heading());
+            heading.setText(literal(point.heading()));
             heading.setFont(bold);
             GridData headingData = GridDataFactory.fillDefaults().align(SWT.BEGINNING, SWT.BEGINNING)
                     .indent(0, above).create();
@@ -147,7 +147,7 @@ public class HeadedMessageDialog extends MessageDialog {
             cellWidth.add(cellData);
             if (!point.text().isEmpty()) {
                 Label text = new Label(cell, SWT.WRAP);
-                text.setText(point.text());
+                text.setText(literal(point.text()));
                 GridData textData = GridDataFactory.fillDefaults().grab(true, false).hint(textWidth, SWT.DEFAULT)
                         .create();
                 text.setLayoutData(textData);
@@ -206,7 +206,7 @@ public class HeadedMessageDialog extends MessageDialog {
         StringBuilder text = new StringBuilder();
         for (int i = 0; i < links.size(); i++) {
             text.append(i == 0 ? "" : LINK_SEPARATOR).append("<a href=\"").append(i).append("\">")
-                    .append(links.get(i).label()).append("</a>");
+                    .append(literal(links.get(i).label())).append("</a>");
         }
         widget.setText(text.toString());
         // A Link has one tooltip, not one per link: it lists where each goes.
@@ -242,6 +242,15 @@ public class HeadedMessageDialog extends MessageDialog {
         }
     }
 
+    /**
+     * {@code text} as a Label or Link shows it literally: SWT takes a single {@code &} as the
+     * mnemonic marker (it underlines the next letter and hides itself), so each one is doubled.
+     * Example: {@code "Tom & Jerry"} is set as {@code "Tom && Jerry"}, and shows as written.
+     */
+    static String literal(String text) {
+        return text.replace("&", "&&");
+    }
+
     /** The width of {@code text} in {@code control}'s font, in pixels. */
     private static int textWidthOf(Control control, String text) {
         GC gc = new GC(control);
@@ -255,7 +264,7 @@ public class HeadedMessageDialog extends MessageDialog {
     /** A paragraph across both columns, wrapped at {@code width}, {@code above} pixels below the row before it. */
     private void paragraph(Composite body, String text, int above, int width) {
         Label label = new Label(body, SWT.WRAP);
-        label.setText(text);
+        label.setText(literal(text));
         GridData data = GridDataFactory.fillDefaults().span(2, 1).grab(true, false).hint(width, SWT.DEFAULT)
                 .indent(0, above).create();
         label.setLayoutData(data);
