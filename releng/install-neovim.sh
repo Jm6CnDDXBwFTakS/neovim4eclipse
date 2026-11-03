@@ -41,6 +41,7 @@ version=$(value version)
 asset=$(value "$code.asset")
 size=$(value "$code.size")
 sha=$(value "$code.sha256")
+tree=$(value "$code.tree")
 url=$(value url | sed "s/{version}/$version/; s/{asset}/$asset/")
 
 archive="$folder/$asset"
@@ -65,6 +66,24 @@ case "$asset" in
     *.zip) unzip -q "$archive" -d "$folder"; exe=nvim.exe; top=${asset%.zip} ;;
     *)     tar -xzf "$archive" -C "$folder"; exe=nvim;     top=${asset%.tar.gz} ;;
 esac
+# The tree hash (util/InstallTree): every file's SHA-256, as sha256sum lists them in byte order,
+# hashed again. The plug-in checks the dedicated Neovim the same way at each start; checking it here
+# in every CI run, on Linux, macOS and Windows, shows the pinned value and that rule agree.
+if command -v sha256sum >/dev/null 2>&1; then
+    sum="sha256sum"
+else
+    sum="shasum -a 256"   # macOS
+fi
+actual_tree=$(cd "$folder/$top" && find . -type f ! -name .DS_Store | sed 's|^\./||' | LC_ALL=C sort \
+    | tr '\n' '\0' | xargs -0 $sum | $sum | cut -d' ' -f1)
+if [ "$actual_tree" != "$tree" ]; then
+    echo "The unpacked $asset does not match its tree hash in the data file:" >&2
+    echo "  expected $tree" >&2
+    echo "  got      $actual_tree" >&2
+    exit 1
+fi
+echo "  tree $tree (matches)" >&2
+
 program="$folder/$top/bin/$exe"
 "$program" --version | head -1 >&2
 printf '%s\n' "$program"

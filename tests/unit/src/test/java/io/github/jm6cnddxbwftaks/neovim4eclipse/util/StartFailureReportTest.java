@@ -100,13 +100,13 @@ class StartFailureReportTest {
         assertEquals("TimeoutException", StartFailureReport.rootMessage(error));
     }
 
-    /** After an update raised the minimum, the plug-in's own old copy is named first, with its fix. */
+    /** A dedicated Neovim that fails the check (older, damaged) is named first, with its fix. */
     @Test
-    void theMessageNamesAnOutdatedPluginNeovim() {
+    void theMessageNamesAnUnverifiedPluginNeovim() {
         Path old = Path.of("/n/la/bin/nvim");
-        String message = StartFailureReport.message("/usr/bin/nvim", new IOException("x"), List.of(),
-                Optional.of(new PluginNeovim.Outdated(old, new NeovimVersion(0, 11, 0))));
-        assertTrue(message.contains("\n\nThe plug-in's Neovim 0.11.0 is too old: Get Neovim " + NeovimVersion.MINIMUM
-                + " replaces it (" + old + ").\nInstall Neovim"), message);
+        String message = StartFailureReport.message("/n/la/bin/nvim", new IOException("x"), List.of(),
+                Optional.of(new PluginNeovim.Unverified(old)));
+        assertTrue(message.contains("\n\nThe dedicated Neovim's files differ from Neovim " + NeovimVersion.MINIMUM
+                + "'s release (an older one, or damaged): Get Neovim replaces it (" + old + ")."), message);
     }
 }

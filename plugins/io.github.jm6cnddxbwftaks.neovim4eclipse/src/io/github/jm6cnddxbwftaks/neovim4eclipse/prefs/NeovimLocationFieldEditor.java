@@ -21,19 +21,21 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.DirectoryDialog;
+import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
 /**
- * The "Neovim folder or program" field: a text field, a <em>Browse...</em> button that picks a
- * folder, a note underneath saying which Neovim the current text finds, for example
- * {@code Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim},
+ * The "Neovim program" field: a text field (blank for the dedicated Neovim, or the absolute path of
+ * one program), a <em>Browse...</em> button that picks a program file, a note underneath saying
+ * which Neovim the current text names, for example
+ * {@code Found: dedicated Neovim 0.12.6, checked, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim},
  * the <em>Get Neovim 0.12.6...</em> button ({@link GetNeovim}), and the help: what the field takes,
- * with a link to the README section on where Neovim is searched.
+ * with a link to the README section on it.
  *
  * <p>When the note finds the dedicated Neovim, current ({@link NvimProbe.Note#current}), there is
  * nothing to get: the button is hidden, and a small <em>Reinstall...</em> link under the note
@@ -180,13 +182,18 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         return 3; // label, text, button; the note has a row of its own
     }
 
-    /** Browse: pick Neovim's folder, starting at the current one or the plug-in's own folder. */
+    /**
+     * Browse: pick a Neovim program (a file, never a folder: nothing is searched), starting in the
+     * current program's folder or the plug-in's own. Blank, the default, needs no browsing.
+     */
     @Override
     protected String changePressed() {
-        DirectoryDialog dialog = new DirectoryDialog(getShell(), SWT.NONE);
-        dialog.setText("Neovim folder");
-        dialog.setMessage("Choose Neovim's folder (the one with bin/nvim, or a folder with extracted releases"
-                + " up to " + NvimExecutable.maxSearchDepth() + " levels down).");
+        FileDialog dialog = new FileDialog(getShell(), SWT.OPEN);
+        dialog.setText("Neovim program");
+        if (PlatformUtil.isWindows()) {
+            dialog.setFilterExtensions(new String[] { "nvim.exe", "*.exe" });
+            dialog.setFilterNames(new String[] { "Neovim (nvim.exe)", "Programs (*.exe)" });
+        }
         Path start = startFolder(getStringValue());
         if (start != null) {
             dialog.setFilterPath(start.toString());

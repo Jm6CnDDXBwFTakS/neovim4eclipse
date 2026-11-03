@@ -11,9 +11,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The plug-in's own Neovim: where it lives and what counts as one.
@@ -28,8 +29,15 @@ import java.util.function.Function;
  * </pre>
  * One Neovim per {@link NeovimPlatform} code, in a folder named after the code: no version folders,
  * no {@code current} link, no choice to make. The path to the plug-in's Neovim is stable
- * ({@code neovim/la/bin/nvim}), so a user can name it elsewhere. A user who wants another version
- * installs it anywhere else and names it in the preference.
+ * ({@code neovim/la/bin/nvim}), so a user can name it elsewhere. A user who needs another Neovim
+ * (a system without an official build, such as Alpine) names its program in the preference,
+ * unchecked and unsupported ({@link NvimExecutable}).
+ *
+ * <h2>Checked at start</h2>
+ * The plug-in runs this Neovim only if it is {@link #verified}: every file matches the release's
+ * {@link InstallTree tree hash}, pinned in {@code neovim-downloads.properties}. A Neovim left from an
+ * older plug-in, a damaged copy or a file someone changed all fail the check alike, and Get Neovim
+ * offers to replace it; nothing of it runs before (not even {@code --version}).
  *
  * <h2>Strict</h2>
  * Only {@code neovim/<code>/bin/nvim} ({@code bin\nvim.exe} on Windows) with Neovim's runtime files
@@ -75,32 +83,79 @@ public final class PluginNeovim {
     }
 
     /**
-     * The plug-in's own Neovim that is installed but older than {@link NeovimVersion#MINIMUM}.
+     * The plug-in's own Neovim that is installed but fails the check: older than the release this
+     * plug-in pins (left from before an update of the plug-in), damaged, or changed.
      *
      * @param program where it is
-     * @param version what it reports
      */
-    public record Outdated(Path program, NeovimVersion version) {
+    public record Unverified(Path program) {
     }
 
     /**
-     * The first of {@code homes} that holds an install older than {@link NeovimVersion#MINIMUM}: left
-     * from before an update of the plug-in raised the minimum. The search passes over it
-     * ({@link NvimExecutable}); the preference note and the "Neovim not started" notice say that
-     * <i>Get Neovim</i> replaces it. Runs {@code nvim --version} ({@code versionOf}).
+     * The first of {@code homes} that holds an install that is not {@link #verified}. It is passed
+     * over ({@link NvimExecutable}); the preference note and the "Neovim not started" notice say
+     * that <i>Get Neovim</i> replaces it.
      */
-    public static Optional<Outdated> outdated(List<Path> homes, boolean windows,
-            Function<Path, NeovimVersion> versionOf) {
+    public static Optional<Unverified> unverified(List<Path> homes, boolean windows, NeovimRelease release) {
         for (Path home : homes) {
-            if (isInstall(home, windows)) {
-                Path program = program(home, windows).toAbsolutePath();
-                NeovimVersion version = versionOf.apply(program);
-                if (version != null && !version.isSupported()) {
-                    return Optional.of(new Outdated(program, version));
-                }
+            if (isInstall(home, windows) && !verified(home, windows, release)) {
+                return Optional.of(new Unverified(program(home, windows).toAbsolutePath()));
             }
         }
         return Optional.empty();
+    }
+
+    /** {@link #verified(Path, boolean, NeovimRelease)} against the release this plug-in pins. */
+    public static boolean verified(Path home, boolean windows) {
+        return verified(home, windows, NeovimRelease.bundled());
+    }
+
+    /**
+     * Whether {@code home} holds an install whose files are exactly the release's for its platform
+     * (the folder's name, {@code la}): its {@link InstallTree tree hash} equals the pinned one.
+     * Hashing takes about 0.2 s, so the answer is kept until the install changes (its folders' and
+     * program's modification times, which a swap or a reinstall changes) or {@link #forget} is
+     * called; call this off the UI thread the first time.
+     */
+    public static boolean verified(Path home, boolean windows, NeovimRelease release) {
+        Optional<NeovimPlatform> platform = NeovimPlatform.byCode(String.valueOf(home.getFileName()));
+        Optional<String> expected = platform.flatMap(release::forPlatform).map(NeovimRelease.Archive::tree);
+        if (expected.isEmpty() || !isInstall(home, windows)) {
+            return false;
+        }
+        Path key = home.toAbsolutePath().normalize();
+        String stamp = expected.get() + " " + stamp(home, windows);
+        Verdict known = VERDICTS.get(key);
+        if (known != null && known.stamp().equals(stamp)) {
+            return known.matches();
+        }
+        boolean matches = InstallTree.of(home).map(expected.get()::equals).orElse(false);
+        VERDICTS.put(key, new Verdict(stamp, matches));
+        return matches;
+    }
+
+    /** Forgets every kept answer of {@link #verified}: after an install, so the next start checks again. */
+    public static void forget() {
+        VERDICTS.clear();
+    }
+
+    private record Verdict(String stamp, boolean matches) {
+    }
+
+    private static final Map<Path, Verdict> VERDICTS = new ConcurrentHashMap<>();
+
+    /** What changes when the install is replaced or touched: modification times of its main parts. */
+    private static String stamp(Path home, boolean windows) {
+        StringBuilder s = new StringBuilder();
+        for (Path part : List.of(home, home.resolve("bin"), program(home, windows),
+                home.resolve("share").resolve("nvim").resolve("runtime"))) {
+            try {
+                s.append(Files.getLastModifiedTime(part).toMillis()).append(' ');
+            } catch (IOException | SecurityException e) {
+                s.append("- ");
+            }
+        }
+        return s.toString();
     }
 
     /** {@link #searchHomes(Path, Optional, Optional)} for this machine's plug-in folder. */

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -29,71 +30,64 @@ class NvimProbeTest {
     private static final NeovimVersion MIN = NeovimVersion.MINIMUM;
     private static final NeovimVersion OLD = new NeovimVersion(0, 9, 5);
 
-    /** A note that Neovim would start with. */
-    private static Note fine(String text) {
-        return new Note(text, false);
+    private static final NeovimVersion NEWER = new NeovimVersion(MIN.major(), MIN.minor() + 1, 0);
+
+    private static NvimExecutable.Resolved resolved(Path program, NvimExecutable.Kind kind) {
+        return new NvimExecutable.Resolved(program.toString(), kind);
     }
 
-    /** A note that Neovim would not start with. */
-    private static Note problem(String text) {
-        return new Note(text, true);
+    private static Note note(NvimExecutable.Resolved r, NeovimVersion version) {
+        return NvimProbe.note(r, version, Optional.empty(), DEDICATED, MIN);
+    }
+
+    /** The verified dedicated Neovim: "checked", and the page offers only a reinstall. */
+    @Test
+    void theVerifiedDedicatedNeovimIsCheckedAndCurrent() {
+        assertEquals(new Note("Found: dedicated Neovim " + MIN + ", checked, " + OWN, false, true),
+                note(resolved(OWN, NvimExecutable.Kind.DEDICATED), null));
     }
 
     @Test
-    void aSupportedNeovimShowsItsVersionThenItsPath() {
-        assertEquals(fine("Found: Neovim " + MIN + ", " + PROGRAM), NvimProbe.note("", PROGRAM, MIN, 1, DEDICATED, MIN));
+    void noDedicatedNeovimPointsToGetNeovim() {
+        assertEquals(new Note("No dedicated Neovim yet. Get Neovim " + MIN + " installs it into " + DEDICATED, true),
+                note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null));
     }
 
     @Test
-    void aChoiceAmongSeveralSaysSo() {
-        assertEquals(fine("Found: Neovim " + MIN + " (newest of 2 in this folder), " + PROGRAM),
-                NvimProbe.note("", PROGRAM, MIN, 2, DEDICATED, MIN));
+    void anUnverifiedDedicatedNeovimSaysGetNeovimReplacesIt() {
+        Note n = NvimProbe.note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null,
+                Optional.of(new PluginNeovim.Unverified(OWN)), DEDICATED, MIN);
+        assertEquals(new Note("The dedicated Neovim's files differ from Neovim " + MIN + "'s release (an older one, "
+                + "or damaged): Get Neovim replaces it (" + OWN + ")", true), n);
+    }
+
+    /** A program the user names runs unchecked, and the note says so; it is not a problem. */
+    @Test
+    void aNamedProgramIsUncheckedAndUnsupported() {
+        Note n = note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), NEWER);
+        assertEquals(new Note("Found: Neovim " + NEWER + ", " + PROGRAM + ". Not the dedicated Neovim: not checked "
+                + "by the plug-in, and unsupported. Clear the field to use the dedicated one.", false), n);
+        assertFalse(note(resolved(OWN, NvimExecutable.Kind.PROGRAM), MIN).current(),
+                "the dedicated program named in the field is not checked either");
     }
 
     @Test
-    void anOldNeovimSaysItIsTooOldAndIsAProblem() {
-        // "Found:", yet Neovim would refuse to start: a problem all the same.
-        assertEquals(problem("Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs " + MIN + " or newer), "
-                + PROGRAM), NvimProbe.note("", PROGRAM, OLD, 1, DEDICATED, MIN));
+    void aNamedProgramThatIsOldOrNotNeovimIsAProblem() {
+        assertEquals(new Note("Found: Neovim " + OLD + " (too old: Neovim for Eclipse needs " + MIN + " or newer), "
+                + PROGRAM, true), note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), OLD));
+        assertEquals(new Note("Found: no Neovim version (it did not answer --version), " + PROGRAM, true),
+                note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), null));
     }
 
     @Test
-    void anOldNewestOfSeveralSaysBoth() {
-        assertEquals(problem("Found: Neovim 0.9.5 (newest of 3 in this folder; too old: Neovim for Eclipse needs "
-                + MIN + " or newer), " + PROGRAM), NvimProbe.note("", PROGRAM, OLD, 3, DEDICATED, MIN));
-    }
-
-    @Test
-    void nothingFoundByTheDefaultSearchSuggestsTheDefaultNeovimFolder() {
-        Note expected = problem("No Neovim found in the default folders. Get Neovim " + MIN + " installs it into "
-                + DEDICATED);
-        assertEquals(expected, NvimProbe.note("", null, null, 0, DEDICATED, MIN));
-        assertEquals(expected, NvimProbe.note("  ", null, null, 0, DEDICATED, MIN));
-        assertEquals(expected, NvimProbe.note(null, null, null, 0, DEDICATED, MIN));
-    }
-
-    @Test
-    void nothingFoundAtAnEnteredValueSuggestsClearingTheField() {
-        assertEquals(problem("No Neovim found at /opt/nvim. Clear the field to search the default folders, or "
-                + "enter a value as described."), NvimProbe.note("  /opt/nvim ", null, null, 0, DEDICATED, MIN));
-    }
-
-    @Test
-    void aProgramThatIsNotNeovimIsNamed() {
-        assertEquals(problem("Found: no Neovim version (it did not answer --version), " + PROGRAM),
-                NvimProbe.note("", PROGRAM, null, 1, DEDICATED, MIN));
-    }
-
-    @Test
-    void theDedicatedNeovimIsCalledSoAndWhenCurrentThePageOffersOnlyAReinstall() {
-        Note current = NvimProbe.note("", OWN, MIN, 1, DEDICATED, MIN);
-        assertEquals(new Note("Found: dedicated Neovim " + MIN + ", " + OWN, false, true), current);
-        NeovimVersion newer = new NeovimVersion(MIN.major(), MIN.minor() + 1, 0);
-        assertTrue(NvimProbe.note("", OWN, newer, 1, DEDICATED, MIN).current(), "newer than Get Neovim's");
-        assertFalse(NvimProbe.note("", OWN, MIN, 1, DEDICATED, newer).current(), "Get Neovim has a newer one");
-        assertFalse(NvimProbe.note("", OWN, null, 1, DEDICATED, MIN).current(),
-                "a copy that does not answer --version gets the Get Neovim button back");
-        assertFalse(NvimProbe.note("", PROGRAM, MIN, 1, DEDICATED, MIN).current(), "not the dedicated one");
+    void aFolderMissingOrRelativeValueSaysWhatToEnter() {
+        Path folder = Path.of("/opt/nvim");
+        assertEquals(new Note(folder + " is a folder: enter the Neovim program inside it, such as "
+                + folder.resolve("bin").resolve(NvimExecutable.defaultCommandName()), true),
+                note(resolved(folder, NvimExecutable.Kind.FOLDER), null));
+        assertEquals(new Note("No Neovim program at " + PROGRAM + ". Clear the field to use the dedicated Neovim.",
+                true), note(resolved(PROGRAM, NvimExecutable.Kind.MISSING), null));
+        assertTrue(note(new NvimExecutable.Resolved("nvim", NvimExecutable.Kind.NOT_ABSOLUTE), null).problem());
     }
 
     @Test

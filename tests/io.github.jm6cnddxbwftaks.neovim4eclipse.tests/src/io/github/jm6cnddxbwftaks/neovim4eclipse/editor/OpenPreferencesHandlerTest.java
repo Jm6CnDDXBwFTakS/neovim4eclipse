@@ -69,8 +69,8 @@ class OpenPreferencesHandlerTest {
         assertTrue(dialog.getSelectedPage() instanceof NeovimPreferencePage, String.valueOf(dialog.getSelectedPage()));
         Control page = ((NeovimPreferencePage) dialog.getSelectedPage()).getControl();
         Label label = find(page, Label.class).stream()
-                .filter(l -> l.getText().startsWith("Neovim folder or program")).findFirst().orElse(null);
-        assertNotNull(label, "no 'Neovim folder or program' label");
+                .filter(l -> l.getText().startsWith("Neovim program")).findFirst().orElse(null);
+        assertNotNull(label, "no 'Neovim program' label");
         assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
         // The note under the field names what the field finds (NvimProbe), after a short delay.
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
@@ -111,7 +111,8 @@ class OpenPreferencesHandlerTest {
     /** The note under the Neovim field (a Label), once it says what the field finds; {@code null} before. */
     private static Label note(Control page) {
         return find(page, Label.class).stream()
-                .filter(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found"))
+                .filter(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No dedicated Neovim")
+                        || l.getText().startsWith("The dedicated Neovim's files"))
                 .findFirst().orElse(null);
     }
 

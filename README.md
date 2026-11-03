@@ -55,11 +55,11 @@ To use the plug-in in your own Eclipse, without building it.
 
 - Eclipse IDE **2024-12 (4.34) or newer**, any package (Java, C/C++, Committers, ...), running on
   Java 21 or newer (the Eclipse packages bring their own Java 21+).
-- **Neovim 0.12.6 or newer**: `nvim --version` in a terminal should print it. The plug-in follows
-  new Neovim releases closely, so a system package is often too old. Then let the plug-in install
-  one of its own: **Get Neovim 0.12.6…**, offered in the "Neovim not started" notice, on
-  *Window → Preferences → Neovim* and in the *Neovim* menu. See [Get Neovim](#get-neovim). An
-  older Neovim is refused with a message that names both versions.
+- **Nothing else**: the plug-in installs the Neovim it runs, its *dedicated Neovim* (0.12.6), with
+  **Get Neovim 0.12.6…**: offered in the "Neovim not started" notice, on
+  *Window → Preferences → Neovim* and in the *Neovim* menu. It checks that Neovim's files at every
+  start, and runs no other Neovim unless you name one. A Neovim of your own, from your system's
+  packages or `PATH`, is not used. See [Get Neovim](#get-neovim) and [Finding Neovim](#finding-neovim).
 
 **Steps**
 
@@ -117,12 +117,9 @@ are needed to [install](#install) it.
 - **JDK 21 or newer** for the build. Maven itself is not needed: `./mvnw` (Windows: `mvnw.cmd`) downloads
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
 - Eclipse IDE with PDE, **2024-12 (4.34) or newer** (the supported minimum; the build targets it), running on Java 21+, with a **JDK 21** registered for the JavaSE-21 execution environment
-- **Neovim 0.12.6+**: the plug-in's own (*Get Neovim*, in
-  `~/.local/share/neovim4eclipse-plugin/neovim/<code>`), on the Eclipse process's `PATH`
-  (`nvim --version`), or its folder set in *Window → Preferences → Neovim*
-
-> Eclipse started from a desktop launcher may not inherit your shell `PATH`. Start it from a
-> terminal, or set Neovim's folder in the preferences.
+- **Neovim 0.12.6**: the dedicated one (*Get Neovim*, in
+  `~/.local/share/neovim4eclipse-plugin/neovim/<code>`), or another Neovim's program named in
+  *Window → Preferences → Neovim* (unchecked; for a system without an official build).
 
 ## Run it (PDE)
 
@@ -141,7 +138,7 @@ Things to try: `hjkl`, `diw`, `ci"`, `dd`, `u`, `v` + motion, `i … Esc`, `:` t
 ./mvnw clean verify -Pui                     # the same plus the UI tests, which open an Eclipse window
 ./mvnw verify -DskipTests                    # the same without any tests (no display needed)
 ./mvnw test -f tests/unit/pom.xml            # unit tests only (no Eclipse, no Neovim needed)
-./mvnw test -f tests/unit/pom.xml -Pintegration   # needs `nvim` on PATH (or -Dnvim.path=...)
+./mvnw test -f tests/unit/pom.xml -Pintegration   # needs the dedicated Neovim (or -Dnvim.path=/path/to/bin/nvim)
 ```
 
 There are two test modules:
@@ -868,58 +865,51 @@ Uninstalling the plug-in leaves this folder (about 40 MB per platform); delete i
 
 ### Finding Neovim
 
-The *Neovim folder or program* field on *Window → Preferences → Neovim* takes one of three things,
-and the note under it shows which Neovim that finds, for example
-`Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim`.
-When Neovim would not start with what the field finds (nothing found, a program that is not
-Neovim, or one too old), the note is in the theme's error color and the field gets an error mark.
+The plug-in runs exactly one Neovim, and looks nowhere else for it: not on `PATH`, not in the usual
+install folders. The *Neovim program* field on *Window → Preferences → Neovim* says which, and the
+note under it shows what that is, for example
+`Found: dedicated Neovim 0.12.6, checked, /home/you/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim`.
+When Neovim would not start with it, the note is in the theme's error color and the field gets an
+error mark.
 
-- **Blank** (the default) searches the default folders, in this order:
-  1. **The plug-in's own Neovim**, the one *Get Neovim* installs, so that an older Neovim elsewhere
-     cannot get in its way: `<code>/bin/nvim` in the plug-in's Neovim folder, where `<code>` names
-     the platform (below). Only that exact place counts. The folder is the first of these whose
-     variable is set (to an absolute path):
-     - Linux and macOS: `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`, then
-       `$HOME/.local/share/neovim4eclipse-plugin/neovim`.
-     - Windows: `%XDG_DATA_HOME%\neovim4eclipse-plugin\neovim`, then
-       `%HOME%\.local\share\neovim4eclipse-plugin\neovim`, then
-       `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`.
+- **Blank** (the default): the **dedicated Neovim**, the one *Get Neovim* installs, at
+  `<code>/bin/nvim` in the plug-in's Neovim folder, where `<code>` names the platform (below). The
+  folder is the first of these whose variable is set (to an absolute path):
+  - Linux and macOS: `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`, then
+    `$HOME/.local/share/neovim4eclipse-plugin/neovim`.
+  - Windows: `%XDG_DATA_HOME%\neovim4eclipse-plugin\neovim`, then
+    `%HOME%\.local\share\neovim4eclipse-plugin\neovim`, then
+    `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`.
 
-     The code is the system's letter (`l` Linux, `m` macOS, `w` Windows) and the processor's (`x`
-     x86_64, `a` arm64): `lx`, `la`, `mx`, `ma`, `wx`, `wa`. The processor is the machine's real one,
-     also when Eclipse itself runs emulated (an x86_64 Eclipse on Apple silicon uses `ma`). Anything
-     else in the folder, such as an archive extracted there before 0.2.1, is not used; the
-     preference page and the notice list each such entry's full path, and you can delete it. A plug-in Neovim older than the
-     minimum, left from before an update of the plug-in raised it, is passed over too (a newer `nvim`
-     on `PATH` is used meanwhile); the preference page and the notice say that *Get Neovim* replaces
-     it.
-  2. `nvim` on `PATH`.
-  3. The usual install folders, each checked for `bin/nvim` or `nvim` directly inside it (not
-     searched further down, since folders such as `/usr/local` can be large):
-     - Linux and macOS: `/opt/homebrew` (Homebrew on Apple silicon), `/usr/local` (Homebrew on
-       Intel macOS, `make install` from source), `/home/linuxbrew/.linuxbrew` and `~/.linuxbrew`
-       (Homebrew on Linux), `/opt/local` (MacPorts), `~/.local`, `~/bin`, and Neovim's own
-       `/opt/nvim-linux-x86_64`, `/opt/nvim-linux-arm64` and `/opt/nvim`. A folder that does not
-       exist is skipped.
-     - Windows: `%ProgramFiles%\Neovim` (the installer, for all users),
-       `%LOCALAPPDATA%\Programs\Neovim` (the installer, for one user), `%USERPROFILE%\scoop\shims` and
-       `%USERPROFILE%\scoop\apps\neovim\current` (Scoop), `%ProgramData%\chocolatey\bin` (Chocolatey).
-- **A folder that holds Neovim**: its own `bin/nvim` (or `nvim`, for a `bin` folder or Scoop's
-  `shims`), and the `nvim` executable found recursively, up to four levels deep, with the intent that
-  a release archive can be extracted directly into the folder (also as Windows Explorer's
-  *Extract All* leaves it, with one more folder around it). Below the folder itself, a `bin/nvim`
-  is only considered a Neovim install when Neovim's `share/nvim/runtime` folder is alongside its
-  `bin` folder. Links are not followed.
-- **A direct path to an `nvim` executable**, used as is. It must be an absolute path; a leading `~`
-  stands for the home folder. A command name such as `nvim`, or a relative path, is not looked up
-  anywhere: Neovim does not start, and the error says the value must be absolute. To use the `nvim`
-  on `PATH`, leave the field blank.
+  The code is the system's letter (`l` Linux, `m` macOS, `w` Windows) and the processor's (`x`
+  x86_64, `a` arm64): `lx`, `la`, `mx`, `ma`, `wx`, `wa`. The processor is the machine's real one,
+  also when Eclipse itself runs emulated (an x86_64 Eclipse on Apple silicon uses `ma`).
 
-Every Neovim a search finds is asked its version (`nvim --version`); one that does not answer, such
-as an archive for another processor, is skipped, and the newest of the rest is used. Eclipse sees
-only the environment variables (`PATH`, `XDG_DATA_HOME`, `HOME`) of whatever started it: set in a
-shell's startup file, they are missing when Eclipse starts from the macOS Dock, a desktop menu or
-the Windows Start menu. [docs/PLATFORM.md](docs/PLATFORM.md#neovim-executable) has the details.
+  **Checked at every start.** Before it first runs that Neovim, the plug-in hashes all its files
+  (about 2,000, in a fraction of a second, in the background) and compares the result with the
+  hash pinned for this release in the plug-in. A Neovim left from an older version of the plug-in,
+  a damaged copy, or one where a file was changed or added fails the check: nothing of it runs,
+  not even `nvim --version`, and the preference page and the "Neovim not started" notice say that
+  *Get Neovim* replaces it. Anything else in the plug-in's Neovim folder, such as an archive
+  extracted there by hand before 0.2.1, is not used; the page and the notice list each such
+  entry's full path, and you can delete it.
+- **The absolute path of a Neovim program** (`/usr/bin/nvim`, `C:\tools\nvim\bin\nvim.exe`; a
+  leading `~` stands for the home folder): that program, run as it is. It is **not checked and not
+  supported**: for a system Neovim publishes no build for, or where the official one does not run
+  (Alpine and other musl-based Linux, NixOS without nix-ld, FreeBSD), or for a Neovim you built
+  yourself. *Browse…* picks a file. A folder is refused (the note names the program to enter
+  instead, such as `<folder>/bin/nvim`), as are a command name (`nvim`) and a relative path:
+  nothing is looked up or searched.
+
+**Why so strict.** Until 0.2.1 a blank field also searched `PATH` and the usual install folders, and
+a folder was searched four levels deep, running `nvim --version` on every `bin/nvim` it found. That
+ran programs nobody chose: picking `~/src` by mistake would run a `bin/nvim` planted in a cloned
+repository below it. It also depended on how Eclipse was started, since Eclipse started from the
+macOS Dock or a desktop menu does not see your shell's `PATH`. Now the plug-in runs a Neovim it
+installed and checked, or the one program you named. Eclipse sees only the environment variables
+(`XDG_DATA_HOME`, `HOME`) of whatever started it: set in a shell's startup file, they are missing
+when Eclipse starts from the Dock, a desktop menu or the Start menu.
+[docs/PLATFORM.md](docs/PLATFORM.md#neovim-executable) has the details.
 
 ## Known limitations
 

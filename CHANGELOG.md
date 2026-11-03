@@ -40,6 +40,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- **The plug-in runs only its own Neovim, checked at every start.** With the preference blank (the
+  default) it uses the dedicated Neovim that *Get Neovim* installs, and only if every file in it
+  matches Neovim 0.12.6's release, by a hash pinned in the plug-in; a damaged, changed or older copy
+  is not run, and *Get Neovim* is offered to replace it. The preference, now *Neovim program*,
+  takes the absolute path of one Neovim program for a system with no official build (Alpine,
+  NixOS): it is run unchecked and unsupported, and *Browse…* picks a file. See the README, "Finding
+  Neovim".
 - The plug-in's own Neovim now lives in one folder per platform,
   `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (`lx`, `la`, `mx`, `ma`, `wx`, `wa`), and a blank
   preference uses only that exact place there. A Neovim extracted into
@@ -52,6 +59,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   apply where Neovim reads the keys itself (a block-visual `I`, while recording, the `Ctrl` keys
   ticked for insert mode); the text Eclipse typed is handed to Neovim without them, so a `jk`
   mapped to `Esc` cannot cut it short.
+
+### Removed
+
+- Neovim is no longer searched for: not on `PATH`, not in the usual install folders (Homebrew,
+  `/usr/local`, `%ProgramFiles%\Neovim`, Scoop, ...), and a folder in the preference is no longer
+  searched four levels down. A Neovim of your own is used only if the preference names its program.
+  The search ran `nvim --version` on programs nobody chose (0.2.1 security review).
 
 ### Fixed
 

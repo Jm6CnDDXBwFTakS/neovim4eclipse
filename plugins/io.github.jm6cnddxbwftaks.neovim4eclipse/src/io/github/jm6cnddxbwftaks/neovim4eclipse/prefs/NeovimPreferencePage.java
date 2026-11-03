@@ -39,11 +39,15 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
 
     /**
      * The help under the Neovim field, after the note: what the field takes, then a link to the
-     * README section that lists the default folders. {@code <a>} marks the clickable part.
+     * README section on it. {@code <a>} marks the clickable part.
      */
-    public static final String NEOVIM_FIELD_HELP = "Leave blank to use the dedicated Neovim, or else search the "
-            + "default folders. Or enter a folder that holds Neovim, or a direct path to an nvim executable. "
+    public static final String NEOVIM_FIELD_HELP = "Leave blank to use the dedicated Neovim, which Get Neovim "
+            + "installs and the plug-in checks at every start. Only where it cannot run (a system with no official "
+            + "build), enter the absolute path of another Neovim program: it is run unchecked and unsupported. "
             + "<a>How Neovim for Eclipse finds Neovim</a>";
+
+    /** The field's label. */
+    public static final String NEOVIM_FIELD_LABEL = "Neovim program:";
 
     private Group program;
     private Group workbench;
@@ -62,11 +66,11 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
     @Override
     protected void createFieldEditors() {
         program = group("Neovim program");
-        // A folder that holds Neovim, the absolute path of the program, or blank to search. Under it:
-        // the note saying which Neovim that finds, then the help (NeovimLocationFieldEditor).
+        // Blank for the dedicated Neovim, or the absolute path of one program. Under it: the note
+        // saying which Neovim that is, then the help (NeovimLocationFieldEditor).
         addField(new NeovimLocationFieldEditor(
                 PreferenceConstants.NVIM_EXECUTABLE,
-                "Neovim folder or program:",
+                NEOVIM_FIELD_LABEL,
                 program));
 
         workbench = group("Workbench");

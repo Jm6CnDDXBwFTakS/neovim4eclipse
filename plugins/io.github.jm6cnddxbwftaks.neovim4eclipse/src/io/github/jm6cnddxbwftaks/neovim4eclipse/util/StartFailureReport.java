@@ -90,13 +90,13 @@ public final class StartFailureReport {
      * @param error      why the start failed; its innermost cause is shown ({@link #rootMessage})
      * @param unused     entries of the plug-in's Neovim folder it no longer uses
      *                   ({@link PluginNeovim#unusedEntries}); may be empty
-     * @param outdated   the plug-in's own Neovim if it is older than the minimum
-     *                   ({@link PluginNeovim#outdated}), named first in the advice; may be empty
+     * @param outdated   the plug-in's own Neovim if it fails the check (older or damaged,
+     *                   {@link PluginNeovim#unverified}), named first in the advice; may be empty
      */
     public static String message(String executable, Throwable error, List<String> unused,
-            Optional<PluginNeovim.Outdated> outdated) {
+            Optional<PluginNeovim.Unverified> outdated) {
         String unusedLines = NvimProbe.unusedLines(unused, NvimExecutable.dedicatedFolder());
-        String outdatedLine = outdated.map(o -> NvimProbe.outdatedLine(o) + ".\n").orElse("");
+        String outdatedLine = outdated.map(o -> NvimProbe.unverifiedLine(o, NeovimVersion.MINIMUM) + ".\n").orElse("");
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
                 + "Error: " + rootMessage(error) + "\n\n"

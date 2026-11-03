@@ -9,6 +9,10 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -104,6 +108,22 @@ final class TestArchives {
     }
 
     /** A Neovim-like release: {@code top/bin/nvim} (executable) and {@code top/share/nvim/runtime/}. */
+    /**
+     * The {@link InstallTree tree hash} of what {@link #neovimTarGz} unpacks to: its two files
+     * {@code bin/nvim} and {@code share/nvim/runtime/filetype.lua}, whatever the top folder.
+     */
+    static String neovimTree() {
+        return InstallTree.of(Map.of("bin/nvim", sha("#!/bin/sh\n"), "share/nvim/runtime/filetype.lua", sha("-- ft\n")));
+    }
+
+    private static String sha(String text) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     static Path neovimTarGz(Path file, String top) throws IOException {
         return new Tar().folder(top + "/").folder(top + "/bin/").file(top + "/bin/nvim", "#!/bin/sh\n", true)
                 .folder(top + "/share/nvim/runtime/").file(top + "/share/nvim/runtime/filetype.lua", "-- ft\n", false)

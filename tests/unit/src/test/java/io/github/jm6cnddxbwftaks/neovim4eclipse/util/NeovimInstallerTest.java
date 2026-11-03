@@ -62,10 +62,12 @@ class NeovimInstallerTest {
                 la.asset=nvim-linux-arm64.tar.gz
                 la.size=%d
                 la.sha256=%s
+                la.tree=%s
                 ma.asset=nvim-macos-arm64.tar.gz
                 ma.size=%d
                 ma.sha256=%s
-                """.formatted(laSize, laSha, maSize, maSha)));
+                ma.tree=%s
+                """.formatted(laSize, laSha, TestArchives.neovimTree(), maSize, maSha, TestArchives.neovimTree())));
     }
 
     private NeovimInstaller.Result install(Path file, boolean inUse, Function<Path, NeovimVersion> versionOf) {

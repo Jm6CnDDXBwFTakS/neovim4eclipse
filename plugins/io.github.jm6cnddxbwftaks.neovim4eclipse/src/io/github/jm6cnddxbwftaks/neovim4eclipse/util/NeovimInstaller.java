@@ -189,14 +189,24 @@ public final class NeovimInstaller {
                 throw new NeovimInstallException(NeovimInstallException.Reason.WRONG_ARCHIVE,
                         "The archive holds no bin/nvim with its runtime files.");
             }
+            // The unpacked files must be the pinned ones, as the start check (PluginNeovim.verified)
+            // will want them: the archive's SHA-256 matched, so a difference here is a full disk or a
+            // file another program changed meanwhile, not a different Neovim.
+            progress.step("Checking the unpacked files", -1);
+            String tree = InstallTree.of(staging).orElse("none");
+            if (!tree.equals(expected.tree())) {
+                throw new NeovimInstallException(NeovimInstallException.Reason.FILES, "The unpacked files in "
+                        + staging + " differ from Neovim's release (tree hash " + tree + ", expected "
+                        + expected.tree() + "). Check the free disk space, and try again.");
+            }
             progress.step("Checking that Neovim runs", -1);
             NeovimVersion version = versionOf.apply(program);
             if (version == null) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.DOES_NOT_RUN,
                         "The unpacked Neovim does not run on this machine (" + program + " --version failed). "
                                 + "The official Linux builds need glibc; on a musl system such as Alpine, "
-                                + "install Neovim from the system's packages and enter its path in the "
-                                + "preferences.");
+                                + "install Neovim from the system's packages and enter its program "
+                                + "(/usr/bin/nvim) in the preferences.");
             }
             if (!version.equals(release.version())) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.DOES_NOT_RUN,

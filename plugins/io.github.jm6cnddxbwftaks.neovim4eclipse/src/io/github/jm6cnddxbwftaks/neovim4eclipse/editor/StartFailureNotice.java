@@ -11,7 +11,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.PlatformUI;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.GetNeovim;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstalledVersions;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
@@ -67,9 +67,9 @@ final class StartFailureNotice {
         Shell shell = PlatformUI.isWorkbenchRunning() && PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null
                 ? PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell()
                 : null;
-        // nvim --version of the plug-in's own copy: cached (InstalledVersions), as for resolve above.
-        Optional<PluginNeovim.Outdated> outdated = configured == null || configured.isBlank()
-                ? PluginNeovim.outdated(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), InstalledVersions::of)
+        // The dedicated Neovim's check: its answer is kept (PluginNeovim.verified), as for resolve above.
+        Optional<PluginNeovim.Unverified> outdated = configured == null || configured.isBlank()
+                ? PluginNeovim.unverified(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), NeovimRelease.bundled())
                 : Optional.empty();
         String message = StartFailureReport.message(NvimExecutable.resolve(configured), error,
                 PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()), outdated);

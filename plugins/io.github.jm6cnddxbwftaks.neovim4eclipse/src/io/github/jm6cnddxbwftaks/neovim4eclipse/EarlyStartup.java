@@ -3,9 +3,14 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse;
 
+import java.nio.file.Path;
+
 import org.eclipse.ui.IStartup;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
 
 /**
  * Ensures auto-attach listeners are registered after the workbench starts, even if the bundle was
@@ -17,11 +22,24 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
  * Without this hook, nothing would load the bundle until the user clicked a Neovim menu item, and
  * editors would open without Neovim. Users can disable early start-up per plug-in under
  * Window &gt; Preferences &gt; General &gt; Startup and Shutdown.
+ *
+ * <p>It also checks the dedicated Neovim here, on this background thread
+ * ({@link PluginNeovim#verified}: about 0.2 s to hash its files), so the answer is kept by the time
+ * the first editor attaches, on the UI thread. With early start-up turned off, that first attach
+ * does the check itself.
  */
 public class EarlyStartup implements IStartup {
 
     @Override
     public void earlyStartup() {
         EditorAttachManager.getInstance().installWorkbenchListeners();
+        String configured = Activator.getDefault().getNvimExecutable();
+        if (configured == null || configured.isBlank()) {
+            ProcessorProbe.await(); // the real processor, which orders the folders searchHomes lists
+            boolean windows = PlatformUtil.isWindows();
+            for (Path home : PluginNeovim.searchHomes()) {
+                PluginNeovim.verified(home, windows);
+            }
+        }
     }
 }

@@ -73,9 +73,9 @@ class NeovimPreferencePageTest {
         // The help is a Link (to the README); the note a Label, as it shows paths (NeovimLocationFieldEditor).
         Link help = find(program, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_FIELD_HELP));
         Label note = find(program, Label.class, label -> label.getText().startsWith("Found: ")
-                || label.getText().startsWith("No Neovim found") || label.getText().startsWith("Looking for"));
+                || label.getText().startsWith("No Neovim program at") || label.getText().startsWith("Looking for"));
         field.setText("/no/such/folder/with/a/rather/long/name/so/that/the/note/wraps/onto/several/lines/nvim");
-        waitUntil("the note to report the missing program", () -> note.getText().startsWith("No Neovim found"));
+        waitUntil("the note to report the missing program", () -> note.getText().startsWith("No Neovim program at"));
         waitUntil("the help to lie inside its group", () -> {
             Rectangle group = program.getClientArea();
             Rectangle link = help.getBounds();
@@ -106,8 +106,8 @@ class NeovimPreferencePageTest {
         Text field = find(program, Text.class);
         field.setText("/no/<a>such</a>/nvim");
         waitUntil("the note to report the missing program", () -> find(program, Label.class,
-                label -> label.getText().startsWith("No Neovim found")) != null);
-        Label note = find(program, Label.class, label -> label.getText().startsWith("No Neovim found"));
+                label -> label.getText().startsWith("No Neovim program at")) != null);
+        Label note = find(program, Label.class, label -> label.getText().startsWith("No Neovim program at"));
         assertTrue(note.getText().contains("<a>such</a>"), note.getText());
         assertTrue(find(program, Link.class, link -> link.getText().contains("such")) == null,
                 "no Link shows the path");

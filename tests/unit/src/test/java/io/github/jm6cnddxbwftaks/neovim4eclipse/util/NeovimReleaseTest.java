@@ -55,7 +55,8 @@ class NeovimReleaseTest {
                 la.asset=nvim-linux-arm64.tar.gz
                 la.size=11367117
                 la.sha256=%s
-                """.formatted(SHA)));
+                la.tree=%s
+                """.formatted(SHA, SHA)));
         assertEquals(new NeovimVersion(0, 12, 6), r.version());
         NeovimRelease.Archive a = r.forPlatform(platform("la")).orElseThrow();
         assertEquals(URI.create("https://github.com/neovim/neovim/releases/download/v0.12.6/nvim-linux-arm64.tar.gz"),
@@ -68,7 +69,7 @@ class NeovimReleaseTest {
     @Test
     void refusesABadHashSizeOrUrl() {
         String good = "version=0.12.6\nurl=https://github.com/neovim/neovim/releases/download/v{version}/{asset}\n"
-                + "la.asset=nvim-linux-arm64.tar.gz\nla.size=1\nla.sha256=" + SHA + "\n";
+                + "la.asset=nvim-linux-arm64.tar.gz\nla.size=1\nla.sha256=" + SHA + "\nla.tree=" + SHA + "\n";
         assertThrows(IllegalArgumentException.class,
                 () -> NeovimRelease.parse(new StringReader(good.replace(SHA, "abc"))));
         assertThrows(IllegalArgumentException.class,

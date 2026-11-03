@@ -66,7 +66,13 @@ public record NeovimRelease(NeovimVersion version, Map<String, Archive> download
      * @param size     its size in bytes
      * @param sha256   its SHA-256, 64 lower-case hex digits
      */
-    public record Archive(NeovimPlatform platform, String asset, URI url, long size, String sha256) {
+    /**
+     * One release archive.
+     *
+     * @param tree the {@link InstallTree tree hash} of the files inside it, which an unpacked
+     *             install must match to be run (checked at every start)
+     */
+    public record Archive(NeovimPlatform platform, String asset, URI url, long size, String sha256, String tree) {
 
         /** The format, from the name. */
         public Kind kind() {
@@ -119,6 +125,10 @@ public record NeovimRelease(NeovimVersion version, Map<String, Archive> download
             if (!SHA256.matcher(sha).matches()) {
                 throw new IllegalArgumentException(code + ".sha256 is not 64 hex digits: " + sha);
             }
+            String tree = required(p, code + ".tree").toLowerCase(Locale.ROOT);
+            if (!SHA256.matcher(tree).matches()) {
+                throw new IllegalArgumentException(code + ".tree is not 64 hex digits: " + tree);
+            }
             long size;
             try {
                 size = Long.parseLong(required(p, code + ".size"));
@@ -132,7 +142,7 @@ public record NeovimRelease(NeovimVersion version, Map<String, Archive> download
             if (!url.startsWith(URL_PREFIX)) {
                 throw new IllegalArgumentException("url must start with " + URL_PREFIX + ": " + url);
             }
-            downloads.put(code, new Archive(platform, asset, URI.create(url), size, sha));
+            downloads.put(code, new Archive(platform, asset, URI.create(url), size, sha, tree));
         }
         return new NeovimRelease(version, Map.copyOf(downloads));
     }

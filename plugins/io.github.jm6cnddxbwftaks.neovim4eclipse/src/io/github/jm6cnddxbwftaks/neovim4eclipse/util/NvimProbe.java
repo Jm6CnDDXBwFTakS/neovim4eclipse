@@ -4,37 +4,31 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Says which Neovim a preference value finds, for the note under the field on the preference page:
+ * Says which Neovim a preference value names, for the note under the field on the preference page:
  *
  * <pre>
- *   Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
- *   Found: Neovim 0.13.0 (newest of 2 in this folder), /home/you/opt/nvim-0.13.0/bin/nvim
+ *   Found: dedicated Neovim 0.12.6, checked, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
+ *   No dedicated Neovim yet. Get Neovim 0.12.6 installs it into /home/you/.local/share/neovim4eclipse-plugin/neovim
+ *   The dedicated Neovim's files differ from Neovim 0.12.6's release (an older one, or damaged): Get Neovim replaces it (/home/you/.../neovim/la/bin/nvim)
+ *   Found: Neovim 0.13.0, /usr/bin/nvim. Not the dedicated Neovim: not checked by the plug-in, and unsupported. Clear the field to use the dedicated one.
  *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
  *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
- *   No Neovim found in the default folders. Get Neovim 0.12.6 installs it into /home/you/.local/share/neovim4eclipse-plugin/neovim
- *   No Neovim found at /opt/nvim. Clear the field to search the default folders, or enter a value as described.
+ *   /opt/nvim is a folder: enter the Neovim program inside it, such as /opt/nvim/bin/nvim
+ *   No Neovim program at /opt/nvim/bin/nvim. Clear the field to use the dedicated Neovim.
  * </pre>
  *
- * <p>"As described" points at the page's description, which says what the field takes. "Dedicated"
- * marks the plug-in's own Neovim, the one Get Neovim installs into the plug-in's folder
- * ({@link PluginNeovim}), so it is not taken for a Neovim the user installed themselves.
+ * <p>"Dedicated" marks the plug-in's own Neovim, the one Get Neovim installs into the plug-in's
+ * folder ({@link PluginNeovim}); "checked" says its files matched the pinned release
+ * ({@link PluginNeovim#verified}). A program the user names is run as it is: nothing about it is
+ * checked, so the note says so.
  *
- * <p>When the note finds the dedicated Neovim at the release Get Neovim installs, or newer, the
- * page has nothing to get: it hides its <em>Get Neovim</em> button and offers a small
- * <em>Reinstall...</em> link on the note instead ({@link Note#current}), for the rare copy that
- * answers {@code --version} but is damaged otherwise (a damaged copy that does not answer gets the
- * button back, as its version is then unknown).
- *
- * <p>With a blank preference, a plug-in Neovim older than the minimum (left from before an update of
- * the plug-in raised it) gets a line of its own ({@link #outdatedLine}):
- *
- * <pre>
- *   The plug-in's Neovim 0.12.6 is too old: Get Neovim 0.13.0 replaces it (/home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim)
- * </pre>
+ * <p>When the note finds the verified dedicated Neovim, the page has nothing to get: it hides its
+ * <em>Get Neovim</em> button and offers a small <em>Reinstall...</em> link instead
+ * ({@link Note#current}).
  *
  * <p>If the plug-in's folder holds anything it no longer uses ({@link PluginNeovim#unusedEntries}),
  * such as an archive extracted there by hand before 0.2.1, the lines after say so, one full path a
@@ -47,11 +41,13 @@ import java.util.List;
  * </pre>
  *
  * <p>The version comes first and the path last: the version is what you look for, and a long path
- * then cannot push it out of view. No full stop follows the path, which would read as part of it.
+ * then cannot push it out of view. No full stop follows a path that ends a line, which would read
+ * as part of it.
  *
- * <p>{@link #describe} runs {@code nvim --version} ({@link InstalledVersions}), which takes some
- * milliseconds and may hang on a broken install, so the caller runs it off the UI thread.
- * {@link #note} only builds the note, and is what the unit tests check.
+ * <p>{@link #describe} hashes the dedicated Neovim the first time (about 0.2 s) and runs a named
+ * program's {@code --version} ({@link InstalledVersions}), which may hang on a broken one, so the
+ * caller runs it off the UI thread. {@link #note} only builds the note, and is what the unit tests
+ * check.
  */
 public final class NvimProbe {
 
@@ -62,55 +58,49 @@ public final class NvimProbe {
     }
 
     /**
-     * What the note says, and whether it reports a problem: Neovim would not start with this value
-     * (nothing found, a program that is not Neovim, or one too old). The page shows a problem in the
-     * theme's error color, with an error mark on the field.
+     * What the note says, and whether it reports a problem: Neovim would not start with this value,
+     * or would start one too old. The page shows a problem in the theme's error color, with an error
+     * mark on the field.
      *
      * @param text    the note's text
      * @param problem whether starting Neovim with this value would fail
-     * @param current whether it finds the dedicated Neovim at the release Get Neovim installs, or newer:
-     *                then there is nothing to get, and the page offers only a reinstall
+     * @param current whether it is the verified dedicated Neovim: then there is nothing to get, and
+     *                the page offers only a reinstall
      */
     public record Note(String text, boolean problem, boolean current) {
 
-        /** A note that does not find a current dedicated Neovim (all but one kind). */
+        /** A note that does not find the verified dedicated Neovim (all but one kind). */
         public Note(String text, boolean problem) {
             this(text, problem, false);
         }
     }
 
     /**
-     * Resolves {@code configured} as starting a session would ({@link NvimExecutable#resolve}), asks
-     * the program found for its version, and describes the result.
+     * Resolves {@code configured} as starting a session would ({@link NvimExecutable#find}), asks a
+     * named program for its version, and describes the result.
      *
      * @param configured the preference value as typed (not yet saved)
      */
     public static Note describe(String configured) {
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
-        Path program = NvimExecutable.locate(resolved.command());
         Path folder = NvimExecutable.dedicatedFolder();
-        NeovimVersion offered = NeovimRelease.bundled().version();
-        Note note = program == null ? note(configured, null, null, 0, folder, offered)
-                : note(configured, program, InstalledVersions.of(program), resolved.among(), folder, offered);
-        StringBuilder text = new StringBuilder(note.text());
-        if (configured == null || configured.isBlank()) {
-            PluginNeovim.outdated(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), InstalledVersions::of)
-                    .ifPresent(old -> text.append('\n').append(outdatedLine(old)));
-        }
+        NeovimVersion version = resolved.kind() == NvimExecutable.Kind.PROGRAM
+                ? InstalledVersions.of(Path.of(resolved.command())) : null;
+        Optional<PluginNeovim.Unverified> unverified = resolved.kind() == NvimExecutable.Kind.NO_DEDICATED
+                ? PluginNeovim.unverified(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), NeovimRelease.bundled())
+                : Optional.empty();
+        Note note = note(resolved, version, unverified, folder, NeovimRelease.bundled().version());
         String unused = unusedLines(PluginNeovim.unusedEntries(folder), folder);
-        if (unused != null) {
-            text.append('\n').append(unused);
-        }
-        return new Note(text.toString(), note.problem(), note.current());
+        return unused == null ? note : new Note(note.text() + "\n" + unused, note.problem(), note.current());
     }
 
     /**
-     * The line about the plug-in's own Neovim when it is older than the minimum. Example:
-     * {@code The plug-in's Neovim 0.12.6 is too old: Get Neovim 0.13.0 replaces it (/home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim)}
+     * The line about a dedicated Neovim that fails the check. Example:
+     * {@code The dedicated Neovim's files differ from Neovim 0.12.6's release (an older one, or damaged): Get Neovim replaces it (/home/you/.../neovim/la/bin/nvim)}
      */
-    public static String outdatedLine(PluginNeovim.Outdated old) {
-        return "The plug-in's Neovim " + old.version() + " is too old: Get Neovim " + NeovimVersion.MINIMUM
-                + " replaces it (" + old.program() + ")";
+    public static String unverifiedLine(PluginNeovim.Unverified install, NeovimVersion offered) {
+        return "The dedicated Neovim's files differ from Neovim " + offered + "'s release (an older one, or "
+                + "damaged): Get Neovim replaces it (" + install.program() + ")";
     }
 
     /**
@@ -132,42 +122,40 @@ public final class NvimProbe {
         return lines.toString();
     }
 
-
     /**
      * The note.
      *
-     * @param configured the field's text; blank means the default search
-     * @param program    the program found, or {@code null}
-     * @param version    its version, or {@code null} if it did not run as Neovim
-     * @param among      how many installs in the same folder it was chosen from (1: no choice)
-     * @param dedicated  the plug-in's Neovim folder: suggested when the default search finds nothing,
-     *                   and a program inside it is the dedicated Neovim
+     * @param resolved   what the value names ({@link NvimExecutable#find})
+     * @param version    a named program's version ({@link NvimExecutable.Kind#PROGRAM}), or
+     *                   {@code null} if it did not run as Neovim or is not asked
+     * @param unverified a dedicated Neovim that fails the check, for a blank value that found none
+     * @param dedicated  the plug-in's Neovim folder: where Get Neovim installs
      * @param offered    the version Get Neovim installs ({@link NeovimRelease#version})
      */
-    static Note note(String configured, Path program, NeovimVersion version, int among, Path dedicated,
-            NeovimVersion offered) {
-        if (program == null) {
-            if (configured == null || configured.isBlank()) {
-                return problem("No Neovim found in the default folders. Get Neovim " + NeovimVersion.MINIMUM
-                        + " installs it into " + dedicated);
+    static Note note(NvimExecutable.Resolved resolved, NeovimVersion version,
+            Optional<PluginNeovim.Unverified> unverified, Path dedicated, NeovimVersion offered) {
+        String program = resolved.command();
+        return switch (resolved.kind()) {
+            case DEDICATED -> new Note("Found: dedicated Neovim " + offered + ", checked, " + program, false, true);
+            case NO_DEDICATED -> problem(unverified.map(u -> unverifiedLine(u, offered))
+                    .orElse("No dedicated Neovim yet. Get Neovim " + offered + " installs it into " + dedicated));
+            case PROGRAM -> {
+                if (version == null) {
+                    yield problem("Found: no Neovim version (it did not answer --version), " + program);
+                }
+                if (!version.isSupported()) {
+                    yield problem("Found: Neovim " + version + " (too old: Neovim for Eclipse needs "
+                            + NeovimVersion.MINIMUM + " or newer), " + program);
+                }
+                yield new Note("Found: Neovim " + version + ", " + program + ". Not the dedicated Neovim: not "
+                        + "checked by the plug-in, and unsupported. Clear the field to use the dedicated one.", false);
             }
-            return problem("No Neovim found at " + configured.strip()
-                    + ". Clear the field to search the default folders, or enter a value as described.");
-        }
-        if (version == null) {
-            return problem("Found: no Neovim version (it did not answer --version), " + program);
-        }
-        List<String> remarks = new ArrayList<>();
-        if (among > 1) {
-            remarks.add("newest of " + among + " in this folder");
-        }
-        if (!version.isSupported()) {
-            remarks.add("too old: Neovim for Eclipse needs " + NeovimVersion.MINIMUM + " or newer");
-        }
-        String remark = remarks.isEmpty() ? "" : " (" + String.join("; ", remarks) + ")";
-        boolean isDedicated = FilePaths.inside(program.toString(), dedicated.toString(), FilePaths.Platform.current());
-        return new Note("Found: " + (isDedicated ? "dedicated " : "") + "Neovim " + version + remark + ", " + program,
-                !version.isSupported(), isDedicated && version.compareTo(offered) >= 0);
+            case FOLDER -> problem(program + " is a folder: enter the Neovim program inside it, such as "
+                    + Path.of(program).resolve("bin").resolve(NvimExecutable.defaultCommandName()));
+            case MISSING -> problem("No Neovim program at " + program + ". Clear the field to use the dedicated Neovim.");
+            case NOT_ABSOLUTE -> problem("Enter the absolute path of a Neovim program (a leading ~ is fine), or clear "
+                    + "the field to use the dedicated Neovim.");
+        };
     }
 
     private static Note problem(String text) {

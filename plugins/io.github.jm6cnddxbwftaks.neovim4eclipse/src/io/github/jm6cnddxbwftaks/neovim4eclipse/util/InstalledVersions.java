@@ -16,9 +16,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * The version of a Neovim program on disk, found by running {@code nvim --version}.
  *
- * <p>Used where a folder holds several Neovims and the newest must be chosen
- * ({@link NvimExecutable#findInFolder}), and for the note on the preference page
- * ({@link NvimProbe}). Running a program takes some milliseconds, so each answer is remembered
+ * <p>Used for the note on the preference page about a program the user named ({@link NvimProbe}),
+ * after the dedicated Neovim's check ({@link NvimExecutable}: one for another processor, which
+ * cannot run here, gives no version), and by the installer. Running a program takes some
+ * milliseconds, so each answer is remembered
  * per path, together with the file's modification time: replacing the program (extracting a newer
  * release over it) asks again.
  *

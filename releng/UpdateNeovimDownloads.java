@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 // SPDX-License-Identifier: EPL-2.0
 
+import java.io.ByteArrayInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,6 +18,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +26,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Keeps {@code neovim-downloads.properties}, the data file behind the plug-in's <i>Get Neovim</i>
@@ -41,7 +48,10 @@ import java.util.regex.Pattern;
  *   <li>Takes the asset names from the current file. Neovim renames an asset now and then (0.10.4
  *       renamed {@code nvim-linux64} to {@code nvim-linux-x86_64}); that is the one hand edit, and
  *       the old name then fails here with a 404 that says so.</li>
- *   <li>Downloads each of the six archives and computes its size and SHA-256.</li>
+ *   <li>Downloads each of the six archives and computes its size, its SHA-256 and the <em>tree
+ *       hash</em> of the files inside it: what the plug-in checks the unpacked Neovim against at
+ *       every start (the plug-in's {@code util/InstallTree} has the rule; {@link #treeHash} here
+ *       must give the same answer, which {@code releng/install-neovim.sh} confirms in every CI run).</li>
  *   <li>Reads the release's entry in GitHub's API and requires GitHub's own {@code digest} and size
  *       to match. That catches a download damaged or changed on its way (a proxy, a broken mirror),
  *       but it is not a second, independent source: GitHub computes the digest from whatever file
@@ -108,7 +118,11 @@ public final class UpdateNeovimDownloads {
             .connectTimeout(Duration.ofSeconds(30)).build();
 
     /** One archive: what the file says, or what was measured. */
-    record Entry(String code, String asset, long size, String sha256) {
+    /**
+     * One archive: what the file says, or what was measured. {@code tree} is the tree hash of the
+     * files inside it (see {@link #treeHash}); {@code null} for GitHub's API entry, which knows none.
+     */
+    record Entry(String code, String asset, long size, String sha256, String tree) {
     }
 
     public static void main(String[] args) throws Exception {
@@ -168,9 +182,12 @@ public final class UpdateNeovimDownloads {
         for (Entry e : measured.values()) {
             String size = required(current, e.code() + ".size");
             String sha = required(current, e.code() + ".sha256");
+            String tree = required(current, e.code() + ".tree");
             if (!size.equals(String.valueOf(e.size())) || !sha.equalsIgnoreCase(e.sha256())) {
                 wrong.add(e.asset() + ": the file says " + size + " bytes, " + sha + "; GitHub has " + e.size()
                         + " bytes, " + e.sha256());
+            } else if (!tree.equalsIgnoreCase(e.tree())) {
+                wrong.add(e.asset() + ": the file says tree " + tree + ", the archive's files give " + e.tree());
             }
         }
         if (!wrong.isEmpty()) {
@@ -245,15 +262,35 @@ public final class UpdateNeovimDownloads {
                     + (response.statusCode() == 404 ? " (was the asset renamed? fix " + code + ".asset by hand)" : ""));
         }
         MessageDigest sha = sha256();
-        long size = 0;
-        try (InputStream in = response.body()) {
-            byte[] buffer = new byte[64 * 1024];
-            for (int n; (n = in.read(buffer)) > 0;) {
-                sha.update(buffer, 0, n);
-                size += n;
+        long[] size = { 0 };
+        String tree;
+        // One pass: the bytes go through the archive's SHA-256 (and size) on their way to the reader
+        // of its entries, so nothing is written to disk.
+        try (InputStream in = new FilterInputStream(response.body()) {
+            @Override
+            public int read() throws IOException {
+                int b = super.read();
+                if (b >= 0) {
+                    sha.update((byte) b);
+                    size[0]++;
+                }
+                return b;
             }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                int n = super.read(b, off, len);
+                if (n > 0) {
+                    sha.update(b, off, n);
+                    size[0] += n;
+                }
+                return n;
+            }
+        }) {
+            tree = treeHash(asset.endsWith(".zip") ? zipFiles(in) : tarFiles(in));
+            in.transferTo(OutputStream.nullOutputStream()); // the rest (padding), for the whole SHA-256
         }
-        return new Entry(code, asset, size, HexFormat.of().formatHex(sha.digest()));
+        return new Entry(code, asset, size[0], HexFormat.of().formatHex(sha.digest()), tree);
     }
 
     /**
@@ -275,7 +312,7 @@ public final class UpdateNeovimDownloads {
         if (!size.find() || !digest.find()) {
             throw new Failure("GitHub's API gives no size or sha256 digest for " + asset);
         }
-        return new Entry(code, asset, Long.parseLong(size.group(1)), digest.group(1));
+        return new Entry(code, asset, Long.parseLong(size.group(1)), digest.group(1), null);
     }
 
     /** The file's text: a fixed header, then the release and the six entries. */
@@ -291,7 +328,8 @@ public final class UpdateNeovimDownloads {
                 # which downloads each archive, hashes it, compares with GitHub's published digest and
                 # rewrites this file (docs/UPGRADING.md, "Neovim"). The one hand edit is an asset name that
                 # Neovim renamed. Codes: OS letter (l Linux, m macOS, w Windows), then processor (x x86_64,
-                # a arm64), as in the plug-in's folder neovim/<code>/ (util/NeovimPlatform).
+                # a arm64), as in the plug-in's folder neovim/<code>/ (util/NeovimPlatform). <code>.tree is
+                # the hash of every file inside the archive (util/InstallTree), checked at each start.
                 """);
         s.append("version=").append(version).append('\n');
         s.append("url=").append(URL_TEMPLATE).append('\n');
@@ -300,6 +338,7 @@ public final class UpdateNeovimDownloads {
             s.append(e.code()).append(".asset=").append(e.asset()).append('\n');
             s.append(e.code()).append(".size=").append(e.size()).append('\n');
             s.append(e.code()).append(".sha256=").append(e.sha256()).append('\n');
+            s.append(e.code()).append(".tree=").append(e.tree()).append('\n');
         }
         return s.toString();
     }
@@ -360,6 +399,136 @@ public final class UpdateNeovimDownloads {
             throw new Failure(url + ": HTTP " + r.statusCode());
         }
         return r.body();
+    }
+
+    // ---- The tree hash: the same rule as the plug-in's util/InstallTree --------------------------
+
+    /**
+     * The tree hash of an archive's files, each path below the archive's top folder
+     * ({@code nvim-linux-arm64/bin/nvim} gives {@code bin/nvim}) to its SHA-256: one line
+     * {@code <sha256><two spaces><path>} per file, in the order of the paths' UTF-8 bytes, and the
+     * SHA-256 of those lines. Files the operating system adds ({@code .DS_Store}, {@code Thumbs.db},
+     * {@code desktop.ini}, {@code ._*}) are left out, as the plug-in leaves them out of an install.
+     */
+    static String treeHash(Map<String, String> files) {
+        List<String> paths = new ArrayList<>(files.keySet());
+        paths.sort((a, b) -> Arrays.compareUnsigned(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
+        StringBuilder lines = new StringBuilder();
+        for (String path : paths) {
+            lines.append(files.get(path)).append("  ").append(path).append('\n');
+        }
+        return HexFormat.of().formatHex(sha256().digest(lines.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** Adds one archive entry to {@code files}: its path below the top folder, and its SHA-256. */
+    private static void addFile(Map<String, String> files, String name, InputStream data) throws IOException {
+        String clean = name.replace('\\', '/');
+        while (clean.startsWith("./")) {
+            clean = clean.substring(2);
+        }
+        int slash = clean.indexOf('/');
+        String path = slash < 0 ? "" : clean.substring(slash + 1);
+        String last = path.substring(path.lastIndexOf('/') + 1);
+        if (path.isEmpty() || path.contains("..") || last.equals(".DS_Store") || last.equals("Thumbs.db")
+                || last.equals("desktop.ini") || last.startsWith("._")) {
+            if (path.isEmpty() || path.contains("..")) {
+                throw new Failure("an archive entry outside its top folder: " + name);
+            }
+            return;
+        }
+        MessageDigest sha = sha256();
+        byte[] buffer = new byte[64 * 1024];
+        for (int n; (n = data.read(buffer)) > 0;) {
+            sha.update(buffer, 0, n);
+        }
+        if (files.put(path, HexFormat.of().formatHex(sha.digest())) != null) {
+            throw new Failure("an archive entry twice: " + name);
+        }
+    }
+
+    /** The files of a zip archive (Windows). */
+    static Map<String, String> zipFiles(InputStream in) throws IOException {
+        Map<String, String> files = new LinkedHashMap<>();
+        ZipInputStream zip = new ZipInputStream(in, StandardCharsets.UTF_8); // not closed: the caller drains `in`
+        for (ZipEntry entry; (entry = zip.getNextEntry()) != null;) {
+            if (!entry.isDirectory()) {
+                addFile(files, entry.getName(), zip);
+            }
+        }
+        return files;
+    }
+
+    /**
+     * The files of a gzip-compressed tar archive (Linux, macOS): the same few header types the
+     * plug-in's {@code util/ArchiveExtractor} reads (plain files, folders, PAX and GNU long names);
+     * a link fails, as the plug-in would refuse to unpack it.
+     */
+    static Map<String, String> tarFiles(InputStream in) throws IOException {
+        Map<String, String> files = new LinkedHashMap<>();
+        InputStream tar = new GZIPInputStream(in, 64 * 1024); // not closed: the caller drains `in`
+        byte[] header = new byte[512];
+        String longName = null;
+        while (tar.readNBytes(header, 0, 512) == 512 && !allZero(header)) {
+            String name = text(header, 0, 100);
+            String prefix = text(header, 345, 155);
+            if (!prefix.isEmpty() && "ustar".equals(text(header, 257, 5))) {
+                name = prefix + "/" + name;
+            }
+            long size = octal(header, 124, 12);
+            char type = (char) header[156];
+            if (longName != null) {
+                name = longName;
+                longName = null;
+            }
+            long padding = (512 - size % 512) % 512;
+            switch (type) {
+                case 'x' -> longName = paxPath(tar.readNBytes((int) size));
+                case 'L' -> longName = text(tar.readNBytes((int) size), 0, (int) size);
+                case '0', '\0', '7' -> addFile(files, name, new ByteArrayInputStream(tar.readNBytes((int) size)));
+                case '1', '2' -> throw new Failure("the archive holds a link, which the plug-in refuses: " + name);
+                default -> tar.skipNBytes(size); // folders, global headers
+            }
+            tar.skipNBytes(padding); // each entry's data fills whole 512-byte blocks
+        }
+        return files;
+    }
+
+    private static String paxPath(byte[] data) {
+        String path = null;
+        for (String record : new String(data, StandardCharsets.UTF_8).split("\n")) {
+            int space = record.indexOf(' ');
+            if (space > 0 && record.startsWith("path=", space + 1)) {
+                path = record.substring(space + 6);
+            }
+        }
+        return path;
+    }
+
+    private static boolean allZero(byte[] block) {
+        for (byte b : block) {
+            if (b != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String text(byte[] b, int off, int len) {
+        int end = off;
+        while (end < off + len && end < b.length && b[end] != 0) {
+            end++;
+        }
+        return new String(b, off, end - off, StandardCharsets.UTF_8);
+    }
+
+    private static long octal(byte[] b, int off, int len) {
+        long value = 0;
+        for (int i = off; i < off + len; i++) {
+            if (b[i] >= '0' && b[i] <= '7') {
+                value = value * 8 + (b[i] - '0');
+            }
+        }
+        return value;
     }
 
     static Properties load() throws IOException {

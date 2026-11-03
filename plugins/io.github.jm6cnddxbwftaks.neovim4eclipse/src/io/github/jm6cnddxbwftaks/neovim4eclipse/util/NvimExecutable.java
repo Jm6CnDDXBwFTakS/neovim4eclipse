@@ -4,341 +4,134 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
- * Resolves the Neovim executable and builds the {@code --embed} command line.
+ * Says which Neovim the plug-in runs, and builds the {@code --embed} command line.
  *
  * <h2>What the preference may hold</h2>
  * <ul>
- *   <li><b>Blank</b> (the default): the plug-in's own Neovim ({@link PluginNeovim}:
- *       {@code ~/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim} on Linux arm64, which
- *       <i>Get Neovim</i> installs), then {@code nvim} on {@code PATH}, then the usual install
- *       folders ({@link #searchFolders}). The plug-in's own comes first so that an older Neovim
- *       from the system's package manager, on {@code PATH}, cannot shadow the one installed for
- *       Eclipse (the plug-in raises its minimum Neovim readily; docs/UPGRADING.md).</li>
- *   <li><b>A folder</b>: a folder that holds Neovim, at its top ({@code bin/nvim}, as in
- *       {@code C:\Program Files\Neovim}) or further down (release archives extracted into it, as
- *       they are or by Windows Explorer's "Extract All"). See {@link #findInFolder} for the exact
- *       rules.</li>
- *   <li><b>A program</b>: an absolute path to {@code nvim}, used as it is.</li>
+ *   <li><b>Blank</b> (the default): the dedicated Neovim, the one <i>Get Neovim</i> installs
+ *       ({@link PluginNeovim}: {@code ~/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim} on
+ *       Linux arm64), and only if it is {@link PluginNeovim#verified verified}: every file matches
+ *       the release the plug-in pins. Nothing else is looked for: not {@code PATH}, not the usual
+ *       install folders, not the folders below one.</li>
+ *   <li><b>A program</b>: the absolute path of one Neovim program, used as it is, unchecked and
+ *       unsupported: for a system with no official build (Alpine and other musl Linux, NixOS without
+ *       nix-ld, FreeBSD), a Neovim built by hand, or the tests' own. A leading {@code ~} stands for
+ *       the home folder ({@code ~/opt/nvim/bin/nvim}).</li>
  * </ul>
- * A leading {@code ~} stands for the home folder: {@code ~/opt/nvim-linux-x86_64}.
- * Anything else, such as a command name ({@code nvim}) or a relative path ({@code bin/nvim}), is
- * refused when Neovim starts ({@link NeovimNotFoundException}): a value names one Neovim, and only
- * a blank preference searches, {@code PATH} included. Releases before 0.1.6 took a command name and
- * defaulted to {@code nvim}; that default was never saved, so it became blank by itself.
+ * Anything else is refused when Neovim starts ({@link NeovimNotFoundException}): a folder (the
+ * program inside it must be named), a command name ({@code nvim}) or a relative path
+ * ({@code bin/nvim}).
  *
- * <h2>Why search outside {@code PATH}</h2>
- * A program inherits {@code PATH} from whatever started it. Eclipse started from the macOS Dock or
- * Finder, from a Linux desktop menu, or from a PDE launch inside another Eclipse, gets a minimal
- * system {@code PATH} instead of the one your shell sets up, so package managers' folders such as
- * Homebrew's {@code /opt/homebrew/bin} are missing.
+ * <h2>Why nothing is searched</h2>
+ * Until 0.2.1 a blank preference also searched {@code PATH} and the usual install folders, and a
+ * folder was searched up to four levels down, running {@code nvim --version} on every
+ * {@code bin/nvim} it found there. The 0.2.1 security review found that this ran programs the user
+ * never named: choosing {@code ~/src} by mistake would run a {@code bin/nvim} planted in a cloned
+ * repository below it. Now the plug-in runs only a Neovim it installed and checked, or the one
+ * program the user named; and searching {@code PATH} had its own trouble anyway (Eclipse started
+ * from the macOS Dock or a desktop menu gets a minimal {@code PATH}, so a Homebrew Neovim was found
+ * or not depending on how Eclipse started).
  */
 public final class NvimExecutable {
-
-    /** How deep {@link #installsIn} looks: {@code folder/a/b/bin/nvim} is depth 4. */
-    private static final int SEARCH_DEPTH = 4;
 
     private NvimExecutable() {
     }
 
-    /**
-     * A Neovim found in a folder.
-     *
-     * @param program the program
-     * @param among   how many working Neovims it was chosen from (1: there was no choice)
-     */
-    public record Found(Path program, int among) {
+    /** What a preference value names, as {@link #find(String)} sees it. */
+    public enum Kind {
+        /** Blank, and the dedicated Neovim is installed and verified. */
+        DEDICATED,
+        /** Blank, and no verified dedicated Neovim is installed: Get Neovim is what helps. */
+        NO_DEDICATED,
+        /** An absolute path to a file: the user's own Neovim, unchecked. */
+        PROGRAM,
+        /** An absolute path to a folder: refused, the program inside it must be named. */
+        FOLDER,
+        /** An absolute path where nothing is. */
+        MISSING,
+        /** Not an absolute path ({@code nvim}, {@code bin/nvim}): refused. */
+        NOT_ABSOLUTE
     }
 
     /**
      * What {@link #find(String)} settled on.
      *
-     * @param command the absolute path of the program; when nothing was found, what was looked for
-     *                (the value as entered, or {@code nvim} for a blank preference), which
-     *                {@link #embedCommand} refuses to start
-     * @param among   how many working Neovims in one folder it was chosen from (1: no choice)
+     * @param command the absolute path of the program for {@link Kind#DEDICATED} and
+     *                {@link Kind#PROGRAM}; otherwise what was looked for (the value as entered, or
+     *                the dedicated program's path for a blank value), which {@link #embedCommand}
+     *                refuses to start
+     * @param kind    which case it is
      */
-    public record Resolved(String command, int among) {
+    public record Resolved(String command, Kind kind) {
+
+        /** Whether Neovim can be started with it. */
+        public boolean startable() {
+            return kind == Kind.DEDICATED || kind == Kind.PROGRAM;
+        }
     }
 
     /**
      * Turns the configured preference value into the program to start.
      *
-     * <p>Searching a folder runs {@code nvim --version} on what it finds ({@link InstalledVersions},
-     * which remembers the answers), so call this off the SWT UI thread where possible.
+     * <p>Verifying the dedicated Neovim hashes its files the first time (about 0.2 s,
+     * {@link PluginNeovim#verified}), so call this off the SWT UI thread where possible.
      *
-     * @param configured preference value: blank, a folder or an absolute path to the program
-     * @return the absolute path of the program; if nothing was found, what was looked for (see
+     * @param configured preference value: blank, or the absolute path of a Neovim program
+     * @return the absolute path of the program; if there is none, what was looked for (see
      *         {@link Resolved#command})
      */
     public static String resolve(String configured) {
         return find(configured).command();
     }
 
-    /** {@link #resolve(String)}, also saying how many Neovims the program was chosen from. */
+    /** {@link #resolve(String)}, also saying which case the value is. */
     public static Resolved find(String configured) {
-        return find(configured, System.getenv("PATH"), PlatformUtil.isWindows(), PluginNeovim.searchHomes(),
-                searchFolders(), InstalledVersions::of);
+        boolean windows = PlatformUtil.isWindows();
+        return find(configured, windows, PluginNeovim.searchHomes(), home -> PluginNeovim.verified(home, windows),
+                InstalledVersions::of);
     }
 
     /**
      * Testable core of {@link #find(String)}.
      *
-     * @param pathEnv       value of the {@code PATH} variable; may be {@code null}
-     * @param windows       whether Windows rules apply ({@code nvim.exe}, {@code ;} separators, suffixes)
-     * @param pluginHomes   the plug-in's own Neovim folders ({@link PluginNeovim#searchHomes()}), the
-     *                      first that holds a working install is used for a blank preference
-     * @param searchFolders the usual install folders, checked in order, without searching inside
-     *                      them, when a blank preference finds nothing before
-     * @param versionOf     a program's version, or {@code null} if it does not run as Neovim
+     * @param windows     whether Windows rules apply ({@code nvim.exe})
+     * @param pluginHomes the dedicated Neovim's folders in the order to try ({@link PluginNeovim#searchHomes()})
+     * @param verified    whether a folder holds a verified install ({@link PluginNeovim#verified})
+     * @param versionOf   a program's version, or {@code null} if it does not run as Neovim: asked
+     *                    only of a verified install, to pass over one for another processor that
+     *                    cannot run here
      */
-    static Resolved find(String configured, String pathEnv, boolean windows, List<Path> pluginHomes,
-            List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
-        String program = windows ? "nvim.exe" : "nvim";
+    static Resolved find(String configured, boolean windows, List<Path> pluginHomes, Predicate<Path> verified,
+            Function<Path, NeovimVersion> versionOf) {
         if (configured == null || configured.isBlank()) {
-            return searchDefaultFolders(program, pathEnv, windows, pluginHomes, searchFolders, versionOf);
+            for (Path home : pluginHomes) {
+                Path program = PluginNeovim.program(home, windows).toAbsolutePath();
+                if (verified.test(home) && versionOf.apply(program) != null) {
+                    return new Resolved(program.toString(), Kind.DEDICATED);
+                }
+            }
+            Path expected = pluginHomes.isEmpty() ? Path.of(windows ? "nvim.exe" : "nvim")
+                    : PluginNeovim.program(pluginHomes.get(0), windows).toAbsolutePath();
+            return new Resolved(expected.toString(), Kind.NO_DEDICATED);
         }
         String name = expandHome(configured.strip());
         File file = new File(name);
-        if (file.isAbsolute()) {
-            if (file.isFile()) {
-                return new Resolved(file.getAbsolutePath(), 1); // the program itself: the user's choice
-            }
-            if (file.isDirectory()) {
-                Found found = findInFolder(file.toPath(), program, windows, true, versionOf);
-                // Not found: name the program where it was expected, so the start error says
-                // "…/bin/nvim: No such file" rather than "is a directory".
-                return found != null ? resolved(found)
-                        : new Resolved(file.toPath().resolve("bin").resolve(program).toString(), 1);
-            }
-            return new Resolved(name, 1);
+        if (!file.isAbsolute()) {
+            return new Resolved(name, Kind.NOT_ABSOLUTE);
         }
-        return new Resolved(name, 1); // not absolute: never looked up, refused at start
-    }
-
-    /**
-     * A blank preference: the plug-in's own Neovim (strictly {@code <home>/bin/nvim} with its runtime,
-     * see {@link PluginNeovim}; one that does not run, or is older than {@link NeovimVersion#MINIMUM},
-     * is passed over), then {@code program} on {@code PATH}, then the usual install folders (checked,
-     * not searched).
-     *
-     * <p>Why an old plug-in copy is passed over: after an update of the plug-in raises the minimum,
-     * {@code neovim/<code>/} still holds the old release until <i>Get Neovim</i> replaces it. Picking it
-     * would only lead to a refused start, while a newer Neovim on {@code PATH} could run. The preference note and the notice name the old copy ({@link PluginNeovim#outdated}).
-     */
-    private static Resolved searchDefaultFolders(String program, String pathEnv, boolean windows,
-            List<Path> pluginHomes, List<Path> searchFolders, Function<Path, NeovimVersion> versionOf) {
-        for (Path home : pluginHomes) {
-            Path own = PluginNeovim.program(home, windows).toAbsolutePath();
-            if (PluginNeovim.isInstall(home, windows)) {
-                NeovimVersion version = versionOf.apply(own);
-                if (version != null && version.isSupported()) {
-                    return new Resolved(own.toString(), 1);
-                }
-            }
+        if (file.isFile()) {
+            return new Resolved(file.getAbsolutePath(), Kind.PROGRAM);
         }
-        Path onPath = locate(program, pathEnv, windows);
-        if (onPath != null) {
-            return new Resolved(onPath.toString(), 1);
-        }
-        for (Path dir : searchFolders) {
-            Found found = findInFolder(dir, program, windows, false, versionOf);
-            if (found != null) {
-                return resolved(found);
-            }
-        }
-        return new Resolved(program, 1);
-    }
-
-    private static Resolved resolved(Found found) {
-        return new Resolved(found.program().toString(), found.among());
-    }
-
-    /**
-     * Finds the newest working Neovim in a folder. The candidates are:
-     * <ul>
-     *   <li>{@code folder/bin/nvim} and {@code folder/nvim}: the folder is Neovim's install folder,
-     *       or a {@code bin} folder itself (or Scoop's {@code shims}). On Windows also with
-     *       {@code .exe}, {@code .cmd} and {@code .bat}.</li>
-     *   <li>With {@code search}: every install below the folder ({@link #installsIn}), e.g.
-     *       {@code ~/opt/nvim-linux-x86_64/bin/nvim} for the folder {@code ~/opt} or, after Windows
-     *       Explorer's "Extract All", {@code nvim-win64\nvim-win64\bin\nvim.exe}.</li>
-     * </ul>
-     * All of them compete: each is asked its version ({@code nvim --version}), one that does not
-     * answer as Neovim (an archive for another processor, a broken install, another program called
-     * {@code nvim}) is skipped, and the newest wins. Names are not trusted: a folder renamed
-     * {@code nvim-0.13.0} may hold 0.12.6. The same file reached twice counts once. On a tie the
-     * first candidate in the order above wins.
-     *
-     * @param search    whether to search below the folder; {@code false} for the usual install
-     *                  folders ({@link #searchFolders}), which may be large, such as {@code /usr/local}
-     * @param versionOf a program's version, or {@code null} if it does not run as Neovim
-     * @return the program and how many working installs it was chosen from, or {@code null}
-     */
-    static Found findInFolder(Path folder, String program, boolean windows, boolean search,
-            Function<Path, NeovimVersion> versionOf) {
-        Map<Path, Path> candidates = new LinkedHashMap<>(); // real path -> path, so each program counts once
-        for (Path dir : List.of(folder.resolve("bin"), folder)) {
-            addOnce(firstExisting(dir, program, windows), candidates);
-        }
-        if (search) {
-            for (Path install : installsIn(folder, program, windows)) {
-                addOnce(install, candidates);
-            }
-        }
-        Path newest = null;
-        NeovimVersion newestVersion = null;
-        int working = 0;
-        for (Path candidate : candidates.values()) {
-            NeovimVersion version = versionOf.apply(candidate);
-            if (version == null) {
-                continue;
-            }
-            working++;
-            if (newestVersion == null || version.compareTo(newestVersion) > 0) {
-                newest = candidate;
-                newestVersion = version;
-            }
-        }
-        return newest == null ? null : new Found(newest, working);
-    }
-
-    /** Adds {@code program} unless it is {@code null} or the same file is already there. */
-    private static void addOnce(Path program, Map<Path, Path> candidates) {
-        if (program == null) {
-            return;
-        }
-        try {
-            candidates.putIfAbsent(program.toRealPath(), program);
-        } catch (IOException | SecurityException e) {
-            // vanished or unreadable meanwhile: not a candidate
-        }
-    }
-
-    /**
-     * How deep {@link #installsIn} looks below a folder, counted to the program:
-     * {@code folder/a/b/bin/nvim} is depth 4. Deep enough for an archive extracted with an extra
-     * folder around it, shallow enough that choosing a large folder by mistake stays quick.
-     */
-    public static int maxSearchDepth() {
-        return SEARCH_DEPTH;
-    }
-
-    /**
-     * The Neovim installs below {@code folder}, down to {@link #maxSearchDepth()}: each
-     * {@code bin/nvim} ({@code bin\nvim.exe} on Windows) with Neovim's runtime files beside its
-     * {@code bin} folder ({@code share/nvim/runtime}). Every release archive and installer has that
-     * layout, so stray copies, wrapper scripts and half-built source trees are not taken for one.
-     *
-     * <p>Links are not followed (on Windows, junctions neither), so a link such as
-     * {@code current -> nvim-0.12.6} does not count the same install twice, and a link loop or a
-     * link to a large folder does not make the search slow. A folder that cannot be read is skipped.
-     *
-     * @return the programs, sorted by path so the result does not depend on the file system's order;
-     *         empty if the folder does not exist
-     */
-    public static List<Path> installsIn(Path folder, String program, boolean windows) {
-        String exe = windows && !program.toLowerCase(Locale.ROOT).endsWith(".exe") ? program + ".exe" : program;
-        Path root;
-        try {
-            root = folder.toRealPath();
-        } catch (IOException | SecurityException e) {
-            return List.of();
-        }
-        Map<Path, Path> found = new LinkedHashMap<>(); // real path -> path, so each program counts once
-        try {
-            // The walk's depth counts folders; a bin folder at depth 3 holds the program at depth 4.
-            Files.walkFileTree(root, EnumSet.noneOf(FileVisitOption.class), maxSearchDepth() - 1,
-                    new SimpleFileVisitor<>() {
-                        @Override
-                        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                            if (!dir.equals(root) && !isPlainFolder(dir, attrs)) {
-                                return FileVisitResult.SKIP_SUBTREE;
-                            }
-                            addIfInstall(dir, exe, windows, found);
-                            return FileVisitResult.CONTINUE;
-                        }
-
-                        @Override
-                        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) {
-                            // Folders at the depth limit arrive here instead of in preVisitDirectory.
-                            if (attrs.isDirectory() && isPlainFolder(path, attrs)) {
-                                addIfInstall(path, exe, windows, found);
-                            }
-                            return FileVisitResult.CONTINUE;
-                        }
-
-                        @Override
-                        public FileVisitResult visitFileFailed(Path path, IOException e) {
-                            return FileVisitResult.CONTINUE; // unreadable: skip it
-                        }
-                    });
-        } catch (IOException e) {
-            return List.of();
-        }
-        List<Path> programs = new ArrayList<>(found.values());
-        programs.sort(null);
-        return programs;
-    }
-
-    /**
-     * Whether {@code dir} is a folder of its own rather than a link to one. The attributes catch a
-     * symbolic link, and a Windows junction, which Java reports as "other". The real path is a second
-     * check that does not depend on how a Java version reports a junction: a link's real path is
-     * where it leads. {@code NvimExecutableTest} creates junctions to check both.
-     */
-    private static boolean isPlainFolder(Path dir, BasicFileAttributes attrs) {
-        if (attrs.isSymbolicLink() || attrs.isOther()) {
-            return false;
-        }
-        try {
-            return dir.toRealPath().equals(dir);
-        } catch (IOException | SecurityException e) {
-            return false;
-        }
-    }
-
-    /** Adds {@code dir/exe} if {@code dir} is a {@code bin} folder with Neovim's runtime beside it. */
-    private static void addIfInstall(Path dir, String exe, boolean windows, Map<Path, Path> found) {
-        String name = String.valueOf(dir.getFileName());
-        if (!(windows ? name.equalsIgnoreCase("bin") : name.equals("bin")) || dir.getParent() == null) {
-            return;
-        }
-        Path program = dir.resolve(exe);
-        if (!Files.isRegularFile(program)
-                || !Files.isDirectory(dir.getParent().resolve("share").resolve("nvim").resolve("runtime"))) {
-            return;
-        }
-        try {
-            found.putIfAbsent(program.toRealPath(), program);
-        } catch (IOException | SecurityException e) {
-            // vanished or unreadable meanwhile: not an install
-        }
-    }
-
-    private static Path firstExisting(Path dir, String program, boolean windows) {
-        for (String candidate : candidates(program, windows)) {
-            Path path = dir.resolve(candidate);
-            if (Files.isRegularFile(path)) {
-                return path.toAbsolutePath();
-            }
-        }
-        return null;
+        return new Resolved(name, file.isDirectory() ? Kind.FOLDER : Kind.MISSING);
     }
 
     /** {@code ~} or {@code ~/x} ({@code ~\x}) with the home folder in place of the {@code ~}. */
@@ -349,57 +142,9 @@ public final class NvimExecutable {
         return path;
     }
 
-    /**
-     * The folder of the plug-in's own Neovim ({@link PluginFolders#neovimFolder()}):
-     * {@code ~/.local/share/neovim4eclipse-plugin/neovim}, or under {@code $XDG_DATA_HOME} when that is
-     * set. Its install is in the platform's folder inside it ({@link PluginNeovim}), which
-     * <i>Get Neovim</i> fills; a blank preference uses it first.
-     */
+    /** The folder the dedicated Neovim lives in ({@link PluginFolders#neovimFolder()}). */
     public static Path dedicatedFolder() {
         return PluginFolders.neovimFolder();
-    }
-
-    /**
-     * Install folders where Neovim is commonly found, checked (not searched, see
-     * {@link #findInFolder}) when {@code nvim} is not on {@code PATH}. macOS and Linux: Homebrew
-     * (Apple silicon macOS; Intel macOS and {@code make install} from source; Linux system-wide and
-     * per-user), MacPorts, the per-user {@code ~/.local} and {@code ~/bin}, the {@code /opt} folders
-     * of Neovim's own Linux instructions. Windows: the official installer (all users and per user),
-     * Scoop and Chocolatey. Folders that do not exist are skipped.
-     */
-    static List<Path> searchFolders() {
-        return searchFolders(PlatformUtil.isWindows());
-    }
-
-    /** {@link #searchFolders()} for the given platform. */
-    static List<Path> searchFolders(boolean windows) {
-        String home = System.getProperty("user.home", "");
-        List<Path> dirs = new ArrayList<>();
-        if (windows) {
-            addIfSet(dirs, System.getenv("ProgramFiles"), "Neovim");
-            addIfSet(dirs, System.getenv("LOCALAPPDATA"), "Programs", "Neovim");
-            addIfSet(dirs, home, "scoop", "shims");
-            addIfSet(dirs, home, "scoop", "apps", "neovim", "current");
-            addIfSet(dirs, System.getenv("ProgramData"), "chocolatey", "bin");
-        } else {
-            dirs.add(Path.of("/opt/homebrew"));
-            dirs.add(Path.of("/usr/local"));
-            dirs.add(Path.of("/home/linuxbrew/.linuxbrew"));
-            addIfSet(dirs, home, ".linuxbrew");
-            dirs.add(Path.of("/opt/local"));
-            addIfSet(dirs, home, ".local");
-            addIfSet(dirs, home, "bin");
-            dirs.add(Path.of("/opt/nvim-linux-x86_64"));
-            dirs.add(Path.of("/opt/nvim-linux-arm64"));
-            dirs.add(Path.of("/opt/nvim"));
-        }
-        return dirs;
-    }
-
-    private static void addIfSet(List<Path> dirs, String base, String... more) {
-        if (base != null && !base.isBlank()) {
-            dirs.add(Path.of(base, more));
-        }
     }
 
     /** {@code nvim.exe} on Windows, {@code nvim} elsewhere. */
@@ -428,19 +173,17 @@ public final class NvimExecutable {
      * argument with a space in it; {@link ProcessBuilder} quotes it on Windows, and
      * {@code NeovimSessionIntegrationTest} checks that Neovim receives it whole.
      *
-     * @param configured preference value: blank, a folder or an absolute path to the program
+     * @param configured preference value: blank, or the absolute path of a Neovim program
      * @param extraArgs  optional extra arguments, e.g. {@code --clean}; may be {@code null}
-     * @throws NeovimNotFoundException if the value is not an absolute path, or a blank value finds
-     *         no Neovim: the operating system would otherwise look a bare {@code nvim} up on
-     *         {@code PATH} itself
+     * @throws NeovimNotFoundException if the value names no program to start ({@link Resolved#startable})
      */
     public static List<String> embedCommand(String configured, List<String> extraArgs) {
-        String program = resolve(configured);
-        if (!new File(program).isAbsolute()) {
-            throw notFound(configured);
+        Resolved resolved = find(configured);
+        if (!resolved.startable()) {
+            throw notFound(resolved, configured);
         }
         List<String> cmd = new ArrayList<>();
-        cmd.add(program);
+        cmd.add(resolved.command());
         cmd.add("--embed");
         cmd.add("--cmd");
         cmd.add("let g:" + GUARD_VARIABLE + "=1");
@@ -476,85 +219,37 @@ public final class NvimExecutable {
     }
 
     /**
-     * Why {@link #embedCommand} refuses {@code configured}: a blank value found nothing, or the value
-     * is not an absolute path.
+     * Why {@link #embedCommand} refuses {@code configured}. Example: {@code /opt/nvim is a folder:
+     * enter the Neovim program inside it, such as /opt/nvim/bin/nvim}.
      */
-    static NeovimNotFoundException notFound(String configured) {
-        if (configured == null || configured.isBlank()) {
-            return new NeovimNotFoundException("No Neovim found in the default folders");
-        }
-        return new NeovimNotFoundException(
-                "The Neovim folder or program must be an absolute path (a leading ~ is fine): " + configured.strip());
+    static NeovimNotFoundException notFound(Resolved resolved, String configured) {
+        String value = configured == null ? "" : configured.strip();
+        String program = defaultCommandName();
+        return new NeovimNotFoundException(switch (resolved.kind()) {
+            case NO_DEDICATED -> "The dedicated Neovim is missing, or its files differ from Neovim "
+                    + NeovimRelease.bundled().version() + "'s release (" + resolved.command() + ")";
+            case FOLDER -> value + " is a folder: enter the Neovim program inside it, such as "
+                    + Path.of(resolved.command()).resolve("bin").resolve(program);
+            case MISSING -> "No Neovim program at " + value;
+            case NOT_ABSOLUTE -> "The Neovim program must be an absolute path (a leading ~ is fine): " + value;
+            case DEDICATED, PROGRAM -> throw new IllegalArgumentException("startable: " + resolved);
+        });
     }
 
-    /** Best-effort check that the configured value names a Neovim program that exists. */
+    /** Whether the configured value names a Neovim that can be started. */
     public static boolean looksAvailable(String configured) {
-        return locate(resolve(configured)) != null;
+        return find(configured).startable();
     }
 
     /**
-     * Whether {@link #locate(String, String, boolean)} finds {@code command}: the PATH search a blank
-     * preference does.
-     *
-     * @param command a command name to look up on {@code pathEnv}, or an absolute path
-     * @param pathEnv value of the {@code PATH} variable; may be {@code null}
-     * @param windows whether to use {@code ;} separators and try Windows executable suffixes
-     */
-    static boolean isAvailable(String command, String pathEnv, boolean windows) {
-        return locate(command, pathEnv, windows) != null;
-    }
-
-    /**
-     * The program {@link #resolve(String)} found, if it is an absolute path to a file. A command name
-     * is not looked up: only a blank preference searches {@code PATH}, and its result is already
-     * absolute. Used to show which {@code nvim} was found, e.g. on the preference page.
-     *
-     * @param resolved what {@link #resolve(String)} returned
-     * @return the path, or {@code null} if it is not absolute or no such file exists
+     * {@code resolved} as a path if it is an absolute path to a file, else {@code null}: which
+     * {@code nvim} {@link #resolve(String)} found, e.g. for the preference page.
      */
     public static Path locate(String resolved) {
-        return locate(resolved, null, PlatformUtil.isWindows());
-    }
-
-    /**
-     * {@code command} itself if it is an absolute path to a file, else its first match on
-     * {@code pathEnv} (used for a blank preference's {@code PATH} step).
-     */
-    static Path locate(String command, String pathEnv, boolean windows) {
-        if (new File(command).isAbsolute()) {
-            Path path = Path.of(command);
-            return Files.isRegularFile(path) ? path : null;
-        }
-        if (pathEnv == null || pathEnv.isBlank()) {
+        if (resolved == null || !new File(resolved).isAbsolute()) {
             return null;
         }
-        String separator = windows ? ";" : ":";
-        for (String dir : pathEnv.split(separator)) {
-            if (dir.isBlank()) {
-                continue;
-            }
-            Path found = firstExisting(Path.of(dir), command, windows);
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
-    }
-
-    /** The file names a command can have: on Windows also with {@code .exe}, {@code .cmd}, {@code .bat}. */
-    private static List<String> candidates(String command, boolean windows) {
-        List<String> candidates = new ArrayList<>();
-        candidates.add(command);
-        if (windows && !hasWindowsExecutableSuffix(command)) {
-            for (String ext : new String[] { ".exe", ".cmd", ".bat" }) {
-                candidates.add(command + ext);
-            }
-        }
-        return candidates;
-    }
-
-    private static boolean hasWindowsExecutableSuffix(String command) {
-        String lower = command.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat");
+        Path path = Path.of(resolved);
+        return Files.isRegularFile(path) ? path : null;
     }
 }

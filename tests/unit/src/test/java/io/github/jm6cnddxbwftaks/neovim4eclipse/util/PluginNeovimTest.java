@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -37,6 +38,50 @@ class PluginNeovimTest {
         Files.createDirectories(home.resolve("share/nvim/runtime"));
         assertTrue(PluginNeovim.isInstall(home, false));
         assertFalse(PluginNeovim.isInstall(home, true), "Windows wants bin\\nvim.exe");
+    }
+
+    /** An install with TestArchives' two files, whose tree hash a test release pins as la.tree. */
+    private Path testInstall() throws IOException {
+        Path home = tmp.resolve("la");
+        Files.createDirectories(home.resolve("bin"));
+        Files.writeString(home.resolve("bin/nvim"), "#!/bin/sh\n");
+        Files.createDirectories(home.resolve("share/nvim/runtime"));
+        Files.writeString(home.resolve("share/nvim/runtime/filetype.lua"), "-- ft\n");
+        return home;
+    }
+
+    private static NeovimRelease release(String laTree) throws IOException {
+        return NeovimRelease.parse(new StringReader("version=0.12.6\n"
+                + "url=https://github.com/neovim/neovim/releases/download/v{version}/{asset}\n"
+                + "la.asset=nvim-linux-arm64.tar.gz\nla.size=1\nla.sha256=" + "0".repeat(64) + "\nla.tree=" + laTree + "\n"));
+    }
+
+    @Test
+    void anInstallIsVerifiedOnlyIfItsTreeIsThePinnedOne() throws IOException {
+        Path home = testInstall();
+        PluginNeovim.forget();
+        assertTrue(PluginNeovim.verified(home, false, release(TestArchives.neovimTree())));
+        assertFalse(PluginNeovim.verified(home, false, release("1".repeat(64))), "another release's files");
+        assertFalse(PluginNeovim.verified(tmp.resolve("lx"), false, release(TestArchives.neovimTree())),
+                "no install there");
+        assertEquals(Optional.of(new PluginNeovim.Unverified(home.resolve("bin/nvim").toAbsolutePath())),
+                PluginNeovim.unverified(List.of(home), false, release("1".repeat(64))));
+        assertEquals(Optional.empty(), PluginNeovim.unverified(List.of(home), false, release(TestArchives.neovimTree())));
+    }
+
+    /** The answer is kept, but a reinstall (new folders and program) or forget() asks again. */
+    @Test
+    void aChangedInstallIsCheckedAgain() throws IOException {
+        Path home = testInstall();
+        NeovimRelease release = release(TestArchives.neovimTree());
+        PluginNeovim.forget();
+        assertTrue(PluginNeovim.verified(home, false, release));
+        Files.writeString(home.resolve("bin/nvim"), "#!/bin/sh\nevil\n"); // changes the program's time too
+        Files.setLastModifiedTime(home.resolve("bin/nvim"), java.nio.file.attribute.FileTime.fromMillis(0));
+        assertFalse(PluginNeovim.verified(home, false, release), "the program changed: hashed again");
+        Files.writeString(home.resolve("bin/nvim"), "#!/bin/sh\n");
+        PluginNeovim.forget();
+        assertTrue(PluginNeovim.verified(home, false, release));
     }
 
     @Test

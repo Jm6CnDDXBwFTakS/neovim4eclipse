@@ -97,7 +97,7 @@ public final class GetNeovimText {
                     + "folder, in this Eclipse or another. Restart Neovim to finish, once no other Eclipse runs it."));
         }
         if (otherInUse) {
-            points.add(new Point("Preference", "The \"Neovim folder or program\" preference names another Neovim. "
+            points.add(new Point("Preference", "The \"Neovim program\" preference names another Neovim. "
                     + USE_DEDICATED_LABEL + " clears it, so the dedicated Neovim is used."));
         }
         points.add(new Point("SHA-256", "The archive matched the one pinned in the plug-in.").withCopy(sha256)
@@ -163,7 +163,8 @@ public final class GetNeovimText {
     public static HeadedMessage noArchive(NeovimVersion version, String osName, String osArch) {
         return new HeadedMessage("Neovim publishes no release archive for " + osName + " on " + osArch + ".",
                 List.of(new Point("Instead", "Install Neovim " + version + " or newer from your system's packages, "
-                        + "and enter its path on the Neovim preference page if it is not on PATH.")),
+                        + "and enter its program, such as /usr/bin/nvim, on the Neovim preference page (Window > "
+                        + "Preferences > Neovim). It is run unchecked.")),
                 "");
     }
 

@@ -93,7 +93,7 @@ class NeovimDownloadTest {
     private NeovimRelease.Archive archive(String path) {
         URI url = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + path);
         return new NeovimRelease.Archive(NeovimPlatform.byCode("la").orElseThrow(), "nvim-linux-arm64.tar.gz", url,
-                body.length, "0".repeat(64));
+                body.length, "0".repeat(64), "0".repeat(64));
     }
 
     private Path download(String path) {
