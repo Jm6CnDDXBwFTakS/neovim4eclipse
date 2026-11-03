@@ -255,6 +255,15 @@ t.test('a completed name with a backslash and backticks reaches Eclipse literall
   t.eq(0, vim.fn.filereadable(app .. '/MARK'), 'the shell command did not run')
 end)
 
+-- The same with a name legal on Windows too: completion escapes the backticks, and the name is
+-- expanded once, so no shell runs (on Windows, cmd.exe would run mkdir).
+t.test('a completed name with backticks reaches Eclipse literally; no shell runs', function()
+  local name = 'notes`mkdir MARK`.txt'
+  local app = complete_into('x', name, 'no')
+  t.eq({ { 'xit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
+  t.eq(0, vim.fn.isdirectory(app .. '/MARK'), 'the shell command did not run')
+end)
+
 -- Not x$HOME on Windows: there fnameescape() does not escape $, so completion writes :e x$HOME,
 -- and Neovim's own :e opens xC:/Users/me/home as well; the plug-in does as Neovim does.
 local kept_names = vim.fn.has('win32') == 1 and { 'a%b', 'my file.txt' } or { 'x$HOME', 'a%b', 'my file.txt' }
