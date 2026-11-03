@@ -748,18 +748,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * After the first push into a reused buffer ({@link DocumentBuffer#reopened}), puts Neovim's
-     * cursor on the buffer's {@code '"} mark ({@link LuaScripts#GO_TO_LAST_POSITION}), as Vim does on
-     * {@code :e} of a buffer {@code :bd} kept. Once per reopening. Input thread (the attach push).
+     * After an editor's attach push, places Neovim's cursor where Vim would after {@code :e}
+     * ({@link LuaScripts#GO_TO_LAST_POSITION}): runs the {@code +cmd} of the {@code :e +cmd name}
+     * that opened this file ({@code :e +40 a.txt}), or, after the first push into a reused buffer
+     * ({@link DocumentBuffer#reopened}, once per reopening), puts it on the buffer's {@code '"} mark,
+     * as Vim does on {@code :e} of a buffer {@code :bd} kept. Input thread (the attach push).
      *
-     * @return whether the cursor was put there (the caret is then to follow Neovim's cursor)
+     * @return whether the cursor was moved (the caret is then to follow Neovim's cursor)
      */
     public boolean goToLastPositionIfReopened(DocumentBuffer buffer) throws Exception {
-        if (!buffer.reopened) {
-            return false;
-        }
+        boolean reopened = buffer.reopened;
         buffer.reopened = false;
-        return Boolean.TRUE.equals(await(api.execLua(LuaScripts.GO_TO_LAST_POSITION, List.of())));
+        return Boolean.TRUE.equals(await(api.execLua(LuaScripts.GO_TO_LAST_POSITION,
+                List.of(String.valueOf(reopened)))));
     }
 
     /**

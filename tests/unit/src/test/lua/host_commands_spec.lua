@@ -11,8 +11,9 @@ local t = ...
 --- A full path as :Eclipse sends it: vim.fs.normalize'd, so with / only. On Windows getcwd(),
 --- tempname() and expand('~') give backslashes (C:\Users\me), and an expected path built from them
 --- with .. '/name' would mix the two; Java turns the / form into the system's (Path.of).
+--- Without expanding $NAME: a file named x$HOME is sent as that (no second expansion).
 local function sent_path(path)
-  return vim.fs.normalize(path)
+  return vim.fs.normalize(path, { expand_env = false })
 end
 
 local function start()
@@ -209,6 +210,77 @@ t.test('a | or " in a name reaches Eclipse as part of the name, and nothing afte
     { 'edit', false, { sent_path(app .. '/say"hi') } },
   }, t.sent('eclipse_command'))
   t.eq('clean', vim.fn.getreg('a'), 'the Lua after the | did not run')
+end)
+
+--- Makes a file named `name` in the window's folder and types `:<cmd> <prefix><Tab><CR>`, so that
+--- Neovim's completion writes the name with its own escapes, as when you complete a name from a
+--- cloned repository. Returns the folder.
+local function complete_into(cmd, name, prefix)
+  local app = editing_main_in_a_project()
+  local f = assert(io.open(app .. '/' .. name, 'w'))
+  f:write('hi\n')
+  f:close()
+  vim.o.wildmenu = false
+  t.type(':' .. cmd .. ' ' .. prefix .. '<Tab><CR>')
+  return app
+end
+
+-- 0.2.1 security review, file by file: nvim_parse_cmd also takes away the backslash before a line
+-- break, so a completed name with one ended the :Eclipse line there and ran the rest. Such a name
+-- is refused now, for :e, :wq and :x alike.
+for _, cmd in ipairs({ 'e', 'wq', 'x' }) do
+  t.test(':' .. cmd .. ' of a completed name with a line break is refused, and nothing in it runs', function()
+    complete_into(cmd, 'notes\nlua=vim.g.ran=1', 'no')
+    t.eq(nil, vim.g.ran, 'the Lua after the line break did not run')
+    t.eq({}, t.sent('eclipse_command'), 'nothing sent to Eclipse')
+    t.ok(vim.fn.execute('messages'):find('line break is not supported', 1, true), 'the refusal is shown')
+  end)
+end
+
+-- The same review: <f-args> made a completed name's doubled backslash a single one, which then
+-- unescaped the backtick after it, and :Eclipse's second expandcmd() ran the rest in a shell, and
+-- even put its output into the path Eclipse wrote. The name is expanded once now, from the parsed
+-- line. (Backslashes in names are a Linux and macOS thing: on Windows the name is not legal.)
+t.test('a completed name with a backslash and backticks reaches Eclipse literally; no shell runs', function()
+  if vim.fn.has('win32') == 1 then
+    return
+  end
+  local name = 'notes\\`touch MARK\\`.txt'
+  local app = complete_into('x', name, 'no')
+  t.eq({ { 'xit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
+  t.eq(0, vim.fn.filereadable(app .. '/MARK'), 'the shell command did not run')
+end)
+
+for _, name in ipairs({ 'x$HOME', 'a%b', 'my file.txt' }) do
+  t.test('a completed name ' .. name .. ' keeps it: nothing is expanded a second time', function()
+    local app = complete_into('e', name, name:sub(1, 1))
+    t.eq({ { 'edit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
+  end)
+end
+
+t.test(':e a b is the one file "a b", as Neovim\'s :edit reads it', function()
+  local app = editing_main_in_a_project()
+  t.type(':e a b<CR>')
+  t.eq({ { 'edit', false, { sent_path(app .. '/a b') } } }, t.sent('eclipse_command'))
+end)
+
+t.test(':e +cmd name sends the file alone, and the +cmd runs once Eclipse shows it', function()
+  start()
+  local _, a_name = t.document('a.txt', { 'one', 'two', 'three', 'four' })
+  t.document('b.txt', { 'x' })
+  t.forget()
+  t.type(':e +3 ' .. vim.fn.fnameescape(a_name) .. '<CR>')
+  t.eq({ { 'edit', false, { sent_path(a_name) } } }, t.sent('eclipse_command'), 'no +3 for Eclipse')
+  -- Eclipse opens a.txt: its attach push enters the buffer, then places the cursor.
+  vim.cmd.buffer(vim.fn.bufnr(a_name))
+  t.eq(true, t.run('GO_TO_LAST_POSITION', 'false'), 'the +cmd ran')
+  t.eq(3, vim.fn.line('.'))
+  t.eq(false, t.run('GO_TO_LAST_POSITION', 'false'), 'only once')
+
+  t.forget()
+  t.type(':e ++ff=unix + ' .. vim.fn.fnameescape(a_name) .. '<CR>') -- + alone: the last line
+  t.eq({ 'edit' }, vim.tbl_map(function(c) return c[1] end, t.sent('eclipse_command')))
+  t.eq(4, vim.fn.line('.'), 'the current file: run at once')
 end)
 
 t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without one is E194', function()

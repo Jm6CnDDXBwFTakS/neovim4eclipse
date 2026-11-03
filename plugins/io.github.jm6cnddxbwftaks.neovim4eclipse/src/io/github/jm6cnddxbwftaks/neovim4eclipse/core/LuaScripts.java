@@ -373,11 +373,15 @@ final class LuaScripts {
      * (Checked on Neovim 0.12.6.)
      *
      * <p><b>A file name arrives as a full path</b> ({@code :e name}, {@code :wq name},
-     * {@code :x name}). {@code :Eclipse} expands it as Neovim's own command would
-     * ({@code expandcmd()}: {@code %:h/x}, {@code #}, {@code ~}) and makes it absolute against the
-     * window's folder ({@code fnamemodify(':p')}, then {@code vim.fs.normalize}), so Eclipse uses the file Neovim would, and
-     * {@code :e x}, {@code :w x} and {@code :wq x} mean the same file. {@code ./x} is that folder
-     * too, as in Neovim; the file's own folder is {@code %:h/x}.
+     * {@code :x name}). The rewrite expands it once, from the parsed line, as Neovim's own command
+     * would ({@code expandcmd()}: {@code %:h/x}, {@code #}, {@code ~}, escapes taken out) and makes
+     * it absolute against the window's folder ({@code fnamemodify(':p')}, then
+     * {@code vim.fs.normalize}), so Eclipse uses the file Neovim would, and {@code :e x},
+     * {@code :w x} and {@code :wq x} mean the same file. {@code ./x} is that folder too, as in
+     * Neovim; the file's own folder is {@code %:h/x}. {@code :Eclipse} does not expand the name a
+     * second time (that ran a shell for a completed name with a backslash and a backtick), and a
+     * name with a line break is refused. {@code :e +cmd name}: Eclipse opens the file, and Neovim
+     * runs the {@code +cmd} once it shows it ({@link #GO_TO_LAST_POSITION}).
      *
      * <p>Not replaced, so left to Neovim: a range the command does not take ({@code :5,10w}),
      * arguments it does not take ({@code :q foo}: Neovim reports E488), a line Neovim cannot parse.
@@ -405,6 +409,16 @@ final class LuaScripts {
             -- The reasons eclipse_form found in the line about to run, by name: its :Eclipse form
             -- carries only the name, and the reason may depend on the rest (:tabclose 2).
             local refusing = {}
+            -- The +cmd of :e +cmd name (:e +10 a.txt, :e + a.txt), waiting for Eclipse to show the
+            -- file: { file = its full path (PATHS canonical), command = '10' }. The attach push of
+            -- that file's editor runs it (GO_TO_LAST_POSITION, take_open_command below), as Vim runs
+            -- it once the file is read. The next : line drops one left over (Eclipse could not open).
+            local open_command
+            local BS = string.char(92) -- a backslash (written as one char: in Java source it needs two)
+            local LINE_BREAK = '[' .. string.char(13, 10) .. ']'
+            -- The first word of :Eclipse's arguments when eclipse_form wrote the line: the words after
+            -- it are final (++opt words, a +cmd, the full path) and are not expanded again.
+            local FINAL = '++expanded'
             package.loaded['neovim4eclipse.host_commands'] = {
               refuse = function(name, why)
                 refusals[name] = why
@@ -425,6 +439,27 @@ final class LuaScripts {
               return false
             end
             local file_commands = { edit = true, wq = true, xit = true, exit = true } -- take a file name
+            local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
+            -- Runs the +cmd of :e +cmd name as Vim does: + alone goes to the last line, +10 to line
+            -- 10, +/pat to the first match, any other an Ex command. It is what you typed (a
+            -- completed file name has its + escaped, so a name never becomes one).
+            local function run_open_command(command)
+              local ok, err = pcall(vim.cmd, command == '' and '$' or command)
+              if not ok then
+                vim.api.nvim_echo({ { (tostring(err):gsub('^Vim:', '')) } }, true, { err = true })
+              end
+            end
+            package.loaded['neovim4eclipse.host_commands'].take_open_command = function(file)
+              -- GO_TO_LAST_POSITION, after the attach push of file's editor: runs a waiting +cmd for
+              -- that file, and says whether there was one (then the caret follows Neovim's cursor).
+              if not open_command or canonical(file) ~= open_command.file then
+                return false
+              end
+              local command = open_command.command
+              open_command = nil
+              run_open_command(command)
+              return true
+            end
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
                 vim.fn.histdel(':', -1) -- the replacement
@@ -443,28 +478,45 @@ final class LuaScripts {
                 return
               end
               local args = vim.list_slice(o.fargs, 2)
-              -- A file name (:e name, :wq name, :x name): Neovim turns it into the full path its
-              -- own :edit or :write would use, and Eclipse uses that. expandcmd() expands what those
-              -- commands expand (%, #, ~, $HOME; E194 when there is no alternate file for #), and
-              -- fnamemodify(':p') makes the name absolute against the window's folder (getcwd(0):
-              -- the project's root, or a folder you went to with :cd or :lcd), as Neovim's own
-              -- :w other.txt does. ++opt words (++p) are left as they are. Example, editing
-              -- src/Main.java in /ws/app: `:e notes.txt` and `:e ./notes.txt` send
-              -- /ws/app/notes.txt, `:wq %:h/Copy.java` sends /ws/app/src/Copy.java.
+              local command -- the +cmd of :e +cmd name, which Neovim runs itself (open_command)
               if file_commands[name] then
-                for i, word in ipairs(args) do
-                  if word:sub(1, 1) ~= '+' then
-                    local ok, expanded = pcall(vim.fn.expandcmd, word, { errmsg = true })
-                    if not ok then
-                      vim.api.nvim_echo({ { (tostring(expanded):gsub('^Vim:', '')) } }, true, { err = true })
-                      return
+                if args[1] == FINAL then
+                  -- The usual way: eclipse_form wrote this line from the : line as typed, and
+                  -- already made the file name the full path (file_words). Expanding the words
+                  -- again would be wrong, and was a 0.2.1 security bug: splitting the arguments
+                  -- (fargs) turns a completed name's doubled backslash into one, so a backtick after
+                  -- it was no longer escaped, and expandcmd() ran what followed in a shell (a cloned
+                  -- repository's file named with a backslash and a backtick, completed into :x).
+                  table.remove(args, 1)
+                else
+                  -- :Eclipse edit name typed by hand: the name is expanded here, as :edit would.
+                  for i, word in ipairs(args) do
+                    if word:sub(1, 1) ~= '+' then
+                      local ok, expanded = pcall(vim.fn.expandcmd, word, { errmsg = true })
+                      if not ok then
+                        vim.api.nvim_echo({ { (tostring(expanded):gsub('^Vim:', '')) } }, true, { err = true })
+                        return
+                      end
+                      args[i] = vim.fs.normalize(vim.fn.fnamemodify(expanded, ':p'), { expand_env = false })
                     end
-                    -- normalize: ../ resolved, as :edit shows the name (fnamemodify keeps it)
-                    args[i] = vim.fs.normalize(vim.fn.fnamemodify(expanded, ':p'))
+                  end
+                end
+                for i = #args, 1, -1 do
+                  if args[i]:match('^%+[^+]') or args[i] == '+' then
+                    command = args[i]:sub(2)
+                    table.remove(args, i)
                   end
                 end
               end
               vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, args)
+              if command then
+                local file = args[#args]
+                if file and file:sub(1, 2) ~= '++' and canonical(file) ~= canonical(vim.api.nvim_buf_get_name(0)) then
+                  open_command = { file = canonical(file), command = command }
+                else
+                  run_open_command(command) -- :e +10, or :e +10 of this file: here, now
+                end
+              end
             end, { nargs = '+', bang = true, bar = true, desc = 'Eclipse carries out an ex command (:Eclipse quit)' })
 
             -- The buffer of the document another editor has open when :e name is for its file, else
@@ -482,7 +534,6 @@ final class LuaScripts {
             -- name again its own way. It would not always agree: on Windows a junction to a file not
             -- on disk yet gives a new buffer, since Neovim matches such a name as written (found
             -- 2026-10-29). :buffer is a jump and sets the alternate file as :edit does.
-            local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
             local function open_document_edited(p)
               if p.cmd ~= 'edit' or p.bang or #p.args ~= 1 or p.args[1]:sub(1, 1) == '+' then
                 return nil
@@ -501,6 +552,81 @@ final class LuaScripts {
                 end
               end
               return nil
+            end
+
+            -- Where the word of s that starts at i ends: the index after it. A backslash keeps the
+            -- next character in the word (an escaped space, as completion writes my file.txt, is in it).
+            local function word_end(s, i)
+              while i <= #s do
+                local c = s:sub(i, i)
+                if c == BS then
+                  i = i + 2
+                elseif c:match('%s') then
+                  return i
+                else
+                  i = i + 1
+                end
+              end
+              return #s + 1
+            end
+
+            -- The words :Eclipse sends for the argument of :e, :wq or :x, as nvim_parse_cmd gives it
+            -- (one string, escapes as typed): its ++opt words, its +cmd (backslashes taken out, as
+            -- Vim does), and the file as the full path Neovim's own :edit or :write would use (the
+            -- rest is one name, spaces and all, as for :edit: :e a b is the file "a b"). Returns nil
+            -- and why when it is refused.
+            --
+            -- The name is expanded here, once, from the parsed form, where a completed name's
+            -- escapes are as Neovim wrote them: expandcmd() expands what :edit expands (%, #, ~,
+            -- $HOME; E194 when there is no alternate file for #) and takes the backslashes out
+            -- (an escaped space a space, an escaped backtick a plain one); fnamemodify(':p') makes it
+            -- absolute against the window's folder (getcwd(0): the project's root, or a folder
+            -- you went to with :cd or :lcd), as Neovim's :w other.txt does; vim.fs.normalize
+            -- resolves ../, without expanding $NAME a second time (a file named x$HOME stays so).
+            -- Example, editing src/Main.java in /ws/app: `:e notes.txt` and `:e ./notes.txt` give
+            -- /ws/app/notes.txt, `:wq %:h/Copy.java` /ws/app/src/Copy.java, `:x ++p out/a.txt`
+            -- { '++p', '/ws/app/out/a.txt' }, `:e +10 a.txt` { '+10', '/ws/app/a.txt' }.
+            --
+            -- A name with a line break is refused: Eclipse cannot show it, and the :Eclipse line
+            -- would end at it, running the rest of the name as a command (0.2.1 security review: a
+            -- cloned repository's file named notes, a line break, then lua=os.execute(...)).
+            local function file_words(raw)
+              local words, rest = {}, raw
+              while rest:match('^%+%+') do -- ++opt words
+                local e = word_end(rest, 1)
+                words[#words + 1] = rest:sub(1, e - 1)
+                rest = (rest:sub(e):gsub('^%s+', ''))
+              end
+              if rest:sub(1, 1) == '+' then -- +cmd; a backslash before a space keeps it in
+                local e = word_end(rest, 1)
+                words[#words + 1] = (rest:sub(1, e - 1):gsub(BS .. '(.)', '%1'))
+                rest = (rest:sub(e):gsub('^%s+', ''))
+              end
+              if rest == '' then
+                return words
+              end
+              if rest:find(LINE_BREAK) then
+                return nil, 'a file name with a line break is not supported'
+              end
+              local ok, expanded = pcall(vim.fn.expandcmd, rest, { errmsg = true })
+              if not ok then
+                return nil, (tostring(expanded):gsub('^Vim:', ''))
+              end
+              if expanded:find(LINE_BREAK) then
+                return nil, 'a file name with a line break is not supported'
+              end
+              words[#words + 1] = vim.fs.normalize(vim.fn.fnamemodify(expanded, ':p'), { expand_env = false })
+              return words
+            end
+
+            -- One word as :Eclipse's line must spell it so that its fargs give the word back: a
+            -- backslash before each space, backslash, | and " (bar = true takes the one before | and
+            -- " away, splitting into fargs the one before a space or a backslash). Example:
+            -- /ws/my file|x gets a backslash before the space and one before the |.
+            local function fargs_word(word)
+              return (word:gsub('[%s|"' .. BS .. ']', function(c)
+                return BS .. c
+              end))
             end
 
             -- The :Eclipse form of one parsed command (p, from nvim_parse_cmd; what follows a | is
@@ -549,16 +675,29 @@ final class LuaScripts {
                 return nil
               end
               local cmd = 'Eclipse' .. (p.bang and '!' or '') .. ' ' .. p.cmd
+              if file_commands[p.cmd] and #args > 0 then
+                local words, why = file_words(table.concat(args, ' '))
+                if not words then
+                  refusing[p.cmd] = why
+                  return 'Eclipse ' .. p.cmd -- without the name: none of it runs
+                end
+                return cmd .. ' ' .. FINAL .. ' ' .. table.concat(vim.tbl_map(fargs_word, words), ' ')
+              end
               if #args > 0 then
                 -- As typed: a name keeps its backslashes (one before a space or a %), but
-                -- nvim_parse_cmd took away the one before | and ", so it goes back. :Eclipse takes a
-                -- | after it (bar = true): without the backslash, a cloned repository's file named
-                -- x|lua(os.execute)(...) ran that Lua when its name was completed into :e and Enter
-                -- pressed (0.2.1 security review), and a " began a comment. :Eclipse gets the
-                -- backslashed | and " back as | and ", as any command marked -bar does.
+                -- nvim_parse_cmd took away the one before |, " and a line break, so it goes back.
+                -- :Eclipse takes a | after it (bar = true): without the backslash, a cloned
+                -- repository's file named x|lua(os.execute)(...) ran that Lua when its name was
+                -- completed into :e and Enter pressed (0.2.1 security review), and a " began a
+                -- comment. :Eclipse gets the backslashed | and " back as | and ", as any command
+                -- marked -bar does. A line break would end the line there: refused, as for files.
                 local typed_args = {}
                 for i, a in ipairs(args) do
-                  typed_args[i] = (a:gsub('[|"]', '\\\\%0'))
+                  if a:find(LINE_BREAK) then
+                    refusing[p.cmd] = 'a name with a line break is not supported'
+                    return 'Eclipse ' .. p.cmd
+                  end
+                  typed_args[i] = (a:gsub('[|"]', BS .. '%0'))
                 end
                 cmd = cmd .. ' ' .. table.concat(typed_args, ' ')
               end
@@ -617,6 +756,7 @@ final class LuaScripts {
                   return
                 end
                 local line = vim.fn.getcmdline()
+                open_command = nil -- a +cmd whose file Eclipse never showed
                 refusing = {} -- a line that never got to its :Eclipse (an error before it) left some
                 local cmd = replacement(line)
                 if cmd then
@@ -753,14 +893,32 @@ final class LuaScripts {
             """;
 
     /**
-     * Puts the cursor of the current window on the current buffer's {@code '"} mark, where the cursor
-     * was when its window last left it, and returns whether it did (not when the mark is unset or
-     * past the end). Run after the first push into a reused buffer (CREATE_DOCUMENT_BUFFER): Vim puts
-     * the cursor there on {@code :e} of a buffer {@code :bd} kept, and the editor's caret follows
-     * (docs/design/BUFFER_NUMBERS.md, 2.2). Example: a.txt closed with the cursor on line 40; opened
-     * again, its caret is on line 40, not line 1.
+     * Places Neovim's cursor after an editor's attach push, where Vim would after {@code :e}, and
+     * returns whether it moved it (the editor's caret then follows). Argument: {@code "true"} when
+     * the buffer was reused (CREATE_DOCUMENT_BUFFER), else {@code "false"}. Two cases, the first
+     * wins:
+     * <ul>
+     *   <li>{@code :e +cmd name} sent Eclipse to open this file: the {@code +cmd} runs now, once
+     *       the document is in the buffer ({@link #HOST_COMMANDS}, {@code take_open_command}).
+     *       Example: {@code :e +40 a.txt} opens a.txt with the caret on line 40, {@code :e + a.txt}
+     *       on its last line.</li>
+     *   <li>A reused buffer: the cursor goes to its {@code '"} mark, where the cursor was when its
+     *       window last left it (not when the mark is unset or past the end). Vim puts the cursor
+     *       there on {@code :e} of a buffer {@code :bd} kept (docs/design/BUFFER_NUMBERS.md, 2.2).
+     *       Example: a.txt closed with the cursor on line 40; opened again, its caret is on line
+     *       40, not line 1.</li>
+     * </ul>
      */
     static final String GO_TO_LAST_POSITION = """
+            local reused = ...
+            local file = vim.b.neovim4eclipse_file
+            local host = package.loaded['neovim4eclipse.host_commands']
+            if file and host and host.take_open_command and host.take_open_command(file) then
+              return true
+            end
+            if reused ~= 'true' then
+              return false
+            end
             local mark = vim.api.nvim_buf_get_mark(0, '"')
             if mark[1] < 1 or mark[1] > vim.api.nvim_buf_line_count(0) then
               return false

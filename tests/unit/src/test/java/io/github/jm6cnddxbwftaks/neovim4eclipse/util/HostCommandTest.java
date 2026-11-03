@@ -117,6 +117,8 @@ class HostCommandTest {
     void theFileAndTheCount() {
         assertEquals("my file.txt", HostCommand.of("edit", false, List.of("my file.txt")).file());
         assertEquals("", HostCommand.of("edit", true, List.of()).file(), ":e! alone reverts");
+        assertEquals("/ws/a.txt", HostCommand.of("edit", false, List.of("++ff=unix", "/ws/a.txt")).file(),
+                "++opt words are not part of the name (Eclipse picks the encoding and line ends)");
         assertEquals(3, HostCommand.of("tabnext", false, List.of("3")).count());
         assertEquals(0, HostCommand.of("tabnext", false, List.of()).count());
     }

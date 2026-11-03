@@ -76,20 +76,30 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- `:e +10 a.txt` opens a.txt on line 10, and `:e + a.txt` on its last line, as in Vim (any
+  `+cmd` runs once the file is shown); it opened a new file named `+10 …/a.txt`. `:e ++ff=unix
+  a.txt` opens a.txt (Eclipse picks the encoding and line ends).
+- A file whose name has a `$`, such as `x$HOME`, is now opened and written under that name by
+  `:e`, `:wq` and `:x`; the `$HOME` was expanded a second time.
 - In an insert Neovim drives (after `Ctrl+V` then `I`, `A` or `c`, or while recording a macro), a
   `Ctrl` key ticked for insert mode, such as `Ctrl+O` (Quick Outline) in the Java editor, now
   reaches Neovim, also where Eclipse binds it.
 
 ### Security
 
-- **A cloned repository could make the plug-in run commands.** Three ways, all fixed:
+- **A cloned repository could make the plug-in run commands.** Five ways, all fixed:
   - a project folder (or a file's folder) named with backticks, such as ``evil`curl …|sh` ``, ran
     that shell command as soon as one of its files opened, as the plug-in set Neovim's folder with
     `:lcd`; it now uses `chdir()`, which takes the name as it is;
   - a file whose name has a line break ran the rest of its name as a Neovim command when Neovim
     loaded it itself (`:vimgrep` then `:cnext`, `:b`, a file picker); such a file is no longer read;
   - a file named with a `|`, such as `x|lua(…)`, ran what follows the `|` when its name was
-    completed into `:e` (also `:wq`, `:x`, `:bd`); the name now reaches Eclipse whole.
+    completed into `:e` (also `:wq`, `:x`, `:bd`); the name now reaches Eclipse whole;
+  - a file whose name has a line break did the same when its name was completed into `:e`, `:wq`
+    or `:x`; such a name is now refused there too, with a message;
+  - a file named with a backslash before a backtick (Linux, macOS) ran a shell command when its
+    name was completed into `:e`, `:wq` or `:x`, and the command's output became part of the file
+    `:wq` wrote; the name is now read once, as Neovim's own `:edit` reads it.
 - `:e` of an existing file opens it in an editor inside Eclipse, never with the system's program
   for its type: on Windows, `:e build.bat` could run the script.
 - The update site checks every release's signatures each time it is rebuilt, and holds only signed

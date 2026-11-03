@@ -198,9 +198,13 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         return String.join(" ", args.stream().filter(word -> !word.startsWith("++")).toList());
     }
 
-    /** The file of {@code :e file}, or "" for {@code :e} alone (reload). */
+    /**
+     * The file of {@code :e file}, or "" for {@code :e} alone (reload). The {@code ++opt} words are
+     * left out: Eclipse picks the encoding and line ends ({@code :e ++ff=unix a.txt} opens a.txt).
+     * Neovim runs a {@code +cmd} itself, and never sends it ({@code LuaScripts.HOST_COMMANDS}).
+     */
     public String file() {
-        return String.join(" ", args);
+        return String.join(" ", args.stream().filter(word -> !word.startsWith("++")).toList());
     }
 
     /** The tab count ({@code :tabn 3}): the number, or 0 when there is none. */
