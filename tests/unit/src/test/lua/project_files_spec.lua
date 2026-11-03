@@ -18,7 +18,7 @@ local function project()
   vim.fn.mkdir(vim.fs.joinpath(root, 'src'), 'p')
   vim.fn.writefile({ 'see B.java' }, vim.fs.joinpath(root, 'src', 'A.java'))
   vim.fn.writefile({ 'class B {', '\tint x;', '}' }, vim.fs.joinpath(root, 'src', 'B.java'))
-  t.run('SET_PROJECT_FOLDERS', root)
+  t.run('SET_PROJECT_FOLDERS', { root })
   return root
 end
 
@@ -179,11 +179,11 @@ t.test('buffers made before the folders came get the hook; a folder that goes ta
   local early = vim.fn.bufadd(f)
   local files = require('neovim4eclipse.project_files')
   t.eq('', files.file_of(early))
-  t.run('SET_PROJECT_FOLDERS', root)
+  t.run('SET_PROJECT_FOLDERS', { root })
   t.eq(vim.api.nvim_buf_get_name(early), files.file_of(early))
   vim.fn.bufload(early)
   t.eq('', vim.bo[early].filetype, 'read by the hook')
-  t.run('SET_PROJECT_FOLDERS') -- the project was closed
+  t.run('SET_PROJECT_FOLDERS', {}) -- the project was closed
   t.eq('', files.file_of(early))
 end)
 
@@ -193,7 +193,7 @@ t.test('a closed document\'s buffer is read by the hook: its number, marks and l
   local b = made[1]
   vim.api.nvim_win_set_buf(0, b)
   t.run('DOCUMENT_BUFFER', tostring(b))
-  t.run('LOAD_WITHOUT_UNDO', 'class B {', '\tint x;', '}')
+  t.run('LOAD_WITHOUT_UNDO', { 'class B {', '\tint x;', '}' })
   vim.api.nvim_buf_set_mark(b, 'a', 2, 0, {})
   vim.api.nvim_win_set_cursor(0, { 3, 0 })
   local other = vim.api.nvim_create_buf(true, true)
@@ -215,7 +215,7 @@ t.test('a document reloaded by a script\'s :edit! keeps its text; loaded empty, 
   local b = made[1]
   vim.api.nvim_win_set_buf(0, b)
   t.run('DOCUMENT_BUFFER', tostring(b))
-  t.run('LOAD_WITHOUT_UNDO', 'unsaved in Eclipse')
+  t.run('LOAD_WITHOUT_UNDO', { 'unsaved in Eclipse' })
   vim.api.nvim_buf_set_mark(b, 'a', 1, 0, {})
   t.forget()
   vim.cmd('edit!')
@@ -225,14 +225,14 @@ t.test('a document reloaded by a script\'s :edit! keeps its text; loaded empty, 
   vim.api.nvim_buf_set_lines(b, 0, -1, false, { '' })
   local other = vim.api.nvim_create_buf(true, true)
   vim.api.nvim_win_set_buf(0, other) -- the reload works on a buffer that is not the current one
-  t.run('RELOAD_DOCUMENT_BUFFER', tostring(b), 'unsaved in Eclipse', 'two')
+  t.run('RELOAD_DOCUMENT_BUFFER', tostring(b), { 'unsaved in Eclipse', 'two' })
   t.eq({ 'unsaved in Eclipse', 'two' }, vim.api.nvim_buf_get_lines(b, 0, -1, false))
   t.eq(false, vim.bo[b].modified)
   t.eq(other, vim.api.nvim_get_current_buf())
   vim.api.nvim_win_set_buf(0, b)
   t.type('u')
   t.eq({ 'unsaved in Eclipse', 'two' }, vim.api.nvim_buf_get_lines(b, 0, -1, false), 'no undo step')
-  t.run('RELOAD_DOCUMENT_BUFFER', '9999', 'x') -- a buffer that is gone: nothing
+  t.run('RELOAD_DOCUMENT_BUFFER', '9999', { 'x' }) -- a buffer that is gone: nothing
 end)
 
 t.test('a stale swap file does not stop the read at E325', function()
@@ -240,7 +240,7 @@ t.test('a stale swap file does not stop the read at E325', function()
   local path = file(root, 'src', 'B.java')
   -- A swap file as an earlier Neovim that crashed would leave it: made (by Neovim's own read, the
   -- project off for a moment), kept aside, put back.
-  t.run('SET_PROJECT_FOLDERS')
+  t.run('SET_PROJECT_FOLDERS', {})
   vim.o.updatecount = 200 -- nvim -l starts with swap files off (0), a normal Neovim with 200
   vim.o.directory = vim.fn.tempname() .. '//'
   vim.fn.mkdir(vim.o.directory, 'p')
@@ -253,7 +253,7 @@ t.test('a stale swap file does not stop the read at E325', function()
   assert(vim.uv.fs_copyfile(swap, swap .. '.keep'))
   vim.api.nvim_buf_delete(probe, { force = true })
   assert(vim.uv.fs_rename(swap .. '.keep', swap))
-  t.run('SET_PROJECT_FOLDERS', root)
+  t.run('SET_PROJECT_FOLDERS', { root })
   vim.cmd.edit(vim.fn.fnameescape(path))
   t.eq({ 'class B {', '\tint x;', '}' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
   t.eq('n', vim.api.nvim_get_mode().mode, 'no question asked')

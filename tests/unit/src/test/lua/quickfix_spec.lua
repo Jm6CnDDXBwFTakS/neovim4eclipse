@@ -36,7 +36,7 @@ local function set(kind, arg, mode, jump, entries)
   for _, e in ipairs(entries) do
     vim.list_extend(args, e)
   end
-  t.run('SET_QUICKFIX', unpack(args))
+  t.run('SET_QUICKFIX', args)
 end
 
 local function last_message()

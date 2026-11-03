@@ -249,6 +249,11 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             neovimBehind = false;
             LOG.fine(() -> "Pushed " + lines.size() + " lines to Neovim");
         } catch (Exception e) {
+            // Neovim lacks the document now (an empty buffer, if this was the first load), so
+            // Neovim's whole-buffer text must not replace it: the next push writes everything
+            // instead. Without this, a failed first load (before 0.2.1, a file of 33,000 lines did
+            // that) let the next full-buffer sync from Neovim empty the Eclipse document.
+            neovimBehind = true;
             onUi(() -> {
                 changedLines.forget();
                 return null;

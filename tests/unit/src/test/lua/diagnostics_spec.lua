@@ -25,10 +25,10 @@ local function buffer_with_problems()
     lines[i] = 'line ' .. i
   end
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  t.run('SET_DIAGNOSTICS', tostring(buf),
+  t.run('SET_DIAGNOSTICS', { tostring(buf),
     '2', '0', '2', '4', '1', 'first error',
     '5', '5', '5', '6', '2', 'a warning\nwith a second line',
-    '8', '0', '8', '1', '3', 'some info')
+    '8', '0', '8', '1', '3', 'some info' })
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
   return buf
 end
@@ -55,17 +55,17 @@ end)
 
 t.test('each call replaces the list, and the buffer number alone clears it', function()
   local buf = buffer_with_problems()
-  t.run('SET_DIAGNOSTICS', tostring(buf), '0', '0', '0', '1', '1', 'only this one')
+  t.run('SET_DIAGNOSTICS', { tostring(buf), '0', '0', '0', '1', '1', 'only this one' })
   t.eq({ 'only this one' }, vim.tbl_map(function(d) return d.message end, vim.diagnostic.get(buf)))
-  t.run('SET_DIAGNOSTICS', tostring(buf))
+  t.run('SET_DIAGNOSTICS', { tostring(buf) })
   t.eq({}, vim.diagnostic.get(buf))
 end)
 
 t.test('a buffer that is gone is left alone, and a problem past the end is accepted', function()
-  t.run('SET_DIAGNOSTICS', '999', '0', '0', '0', '1', '1', 'x') -- no error
+  t.run('SET_DIAGNOSTICS', { '999', '0', '0', '0', '1', '1', 'x' }) -- no error
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a' })
-  t.run('SET_DIAGNOSTICS', tostring(buf), '7', '3', '9', '0', '1', 'stale')
+  t.run('SET_DIAGNOSTICS', { tostring(buf), '7', '3', '9', '0', '1', 'stale' })
   t.eq(1, #vim.diagnostic.get(buf))
 end)
 

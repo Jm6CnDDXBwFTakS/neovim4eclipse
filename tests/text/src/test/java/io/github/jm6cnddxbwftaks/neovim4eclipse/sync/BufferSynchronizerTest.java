@@ -301,6 +301,30 @@ class BufferSynchronizerTest {
     }
 
     /**
+     * A push that fails leaves Neovim without the document (an empty buffer, on the first load), so
+     * Neovim's next whole-buffer text is not applied: it would empty the Eclipse document, which a
+     * save then writes (file-by-file security review of 0.2.1: a file of 33,000 lines failed to
+     * load). The next push sends everything again.
+     */
+    @Test
+    void afterAFailedPushNeovimsWholeBufferDoesNotReplaceTheDocument() {
+        IDocument doc = new Document("keep\nthis\n");
+        neovim.duringPush = () -> {
+            throw new IllegalStateException("Lua: stack overflow");
+        };
+        try (BufferSynchronizer sync = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            sync.pushDocumentToNeovim();
+            sync.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(0, -1, List.of(""))); // Neovim's empty buffer
+            assertEquals("keep\nthis\n", doc.get(), "not emptied");
+
+            neovim.duringPush = () -> { };
+            sync.pushDocumentToNeovim();
+            assertEquals(List.of("keep", "this"), neovim.pushed.get(neovim.pushed.size() - 1), "pushed again");
+        }
+    }
+
+    /**
      * A push keeps a file without a final newline that way: the empty last line that {@code o} made
      * is sent as a line, so {@code Go} after Esc goes to it and adds a second one, as in Vim.
      */

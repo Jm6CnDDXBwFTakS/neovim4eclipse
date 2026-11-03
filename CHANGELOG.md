@@ -76,6 +76,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A file of more than about 33,000 lines opens in Neovim mode: it stayed empty in Neovim, and
+  from about 65,500 lines, or about 9,400 entries in `:Eproblems`, the Neovim every editor shares
+  ended, with all undo history. A document that fails to load into Neovim is no longer replaced
+  by Neovim's empty buffer.
 - `:e +10 a.txt` opens a.txt on line 10, and `:e + a.txt` on its last line, as in Vim (any
   `+cmd` runs once the file is shown); it opened a new file named `+10 …/a.txt`. `:e ++ff=unix
   a.txt` opens a.txt (Eclipse picks the encoding and line ends).

@@ -26,7 +26,7 @@ local function set_folds(folds)
   for _, f in ipairs(folds) do
     vim.list_extend(args, { tostring(f[1]), tostring(f[2]), f[3] and '1' or '0' })
   end
-  t.run('SET_FOLDS', unpack(args))
+  t.run('SET_FOLDS', args)
 end
 
 --- The closed folds Neovim shows, outermost only, as 'first-last' strings.
@@ -176,7 +176,7 @@ t.test('a buffer that is not current is left alone', function()
   local other = vim.api.nvim_create_buf(true, false)
   vim.api.nvim_buf_set_lines(other, 0, -1, false, { 'a', 'b', 'c' })
   lines(10)
-  t.run('SET_FOLDS', tostring(other), '1', '3', '1')
+  t.run('SET_FOLDS', { tostring(other), '1', '3', '1' })
   t.eq(nil, vim.b[other].neovim4eclipse_folds)
 end)
 

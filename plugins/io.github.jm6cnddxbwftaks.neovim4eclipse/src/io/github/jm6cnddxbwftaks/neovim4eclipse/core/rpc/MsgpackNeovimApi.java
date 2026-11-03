@@ -37,7 +37,7 @@ public final class MsgpackNeovimApi implements NeovimApi {
     }
 
     @Override
-    public CompletableFuture<Object> execLua(String code, List<String> args) {
+    public CompletableFuture<Object> execLua(String code, List<?> args) {
         return rpc.request("nvim_exec_lua", code, args);
     }
 

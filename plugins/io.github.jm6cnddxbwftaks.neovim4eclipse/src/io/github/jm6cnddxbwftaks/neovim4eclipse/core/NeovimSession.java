@@ -4,7 +4,6 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -693,10 +692,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (handle == null) {
                 return;
             }
-            List<String> args = new ArrayList<>(target.size() + 1);
-            args.add(String.valueOf(buffer.bufnr));
-            args.addAll(target);
-            await(api.execLua(LuaScripts.RELOAD_DOCUMENT_BUFFER, args)); // before the attach: no line event for it
+            // Before the attach: no line event for it. The lines as one list, however long.
+            await(api.execLua(LuaScripts.RELOAD_DOCUMENT_BUFFER, List.of(String.valueOf(buffer.bufnr), target)));
             await(api.bufAttach(handle, false));
             applyModified(buffer);
         });
@@ -739,7 +736,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void setProjectFoldersAsync(List<String> folders) {
         List<String> copy = List.copyOf(folders);
-        submit(copy.size() + " project folders", Level.FINE, () -> await(api.execLua(LuaScripts.SET_PROJECT_FOLDERS, copy)));
+        submit(copy.size() + " project folders", Level.FINE, () -> await(api.execLua(LuaScripts.SET_PROJECT_FOLDERS, List.of(copy))));
     }
 
     /** Switches Neovim back to the attached buffer (it entered one that Eclipse does not show). */
@@ -862,7 +859,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
         DocumentBuffer document = buffers.attachedDocument();
         if (document != null && !document.loaded) {
-            await(api.execLua(LuaScripts.LOAD_WITHOUT_UNDO, target));
+            await(api.execLua(LuaScripts.LOAD_WITHOUT_UNDO, List.of(target))); // one list, however long
             document.loaded = true;
             applyModified(document);
             return;
@@ -935,7 +932,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (buffers.handleOf(buffer) == null || !buffer.loaded) {
                 return;
             }
-            await(api.execLua(LuaScripts.SET_DIAGNOSTICS, Diagnostic.toLuaArgs(buffer.bufnr, copy)));
+            await(api.execLua(LuaScripts.SET_DIAGNOSTICS, List.of(Diagnostic.toLuaArgs(buffer.bufnr, copy))));
         });
     }
 
@@ -950,7 +947,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         List<String> args = QuickfixEntries.toLuaArgs(kind, arg, mode, jump, entries);
         String what = entries.size() + " entries for " + kind.title();
         submit(what, Level.FINE, () -> whenAnswering(what,
-                () -> await(api.execLua(LuaScripts.SET_QUICKFIX, args))));
+                () -> await(api.execLua(LuaScripts.SET_QUICKFIX, List.of(args)))));
     }
 
     @Override
@@ -998,7 +995,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (buffers.handleOf(buffer) == null || !buffer.loaded) {
                 return;
             }
-            await(api.execLua(LuaScripts.SET_FOLDS, FoldRegions.toLuaArgs(buffer.bufnr, copy)));
+            await(api.execLua(LuaScripts.SET_FOLDS, List.of(FoldRegions.toLuaArgs(buffer.bufnr, copy))));
         });
     }
 

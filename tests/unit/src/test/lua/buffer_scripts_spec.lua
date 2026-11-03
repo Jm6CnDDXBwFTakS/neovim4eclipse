@@ -13,7 +13,7 @@ end
 
 t.test('loading without undo leaves nothing to undo, and the buffer unmodified', function()
   vim.bo.undolevels = 50
-  t.run('LOAD_WITHOUT_UNDO', 'one', 'two')
+  t.run('LOAD_WITHOUT_UNDO', { 'one', 'two' })
   t.eq({ 'one', 'two' }, lines())
   t.eq(false, vim.bo.modified)
   t.eq(50, vim.bo.undolevels, 'the buffer\'s own value is back')
@@ -23,7 +23,7 @@ end)
 
 t.test('a load also clears the history before it, but a later change is undone as usual', function()
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'old' })
-  t.run('LOAD_WITHOUT_UNDO', 'loaded')
+  t.run('LOAD_WITHOUT_UNDO', { 'loaded' })
   t.type('dd')
   t.type('u')
   t.eq({ 'loaded' }, lines())
@@ -33,7 +33,7 @@ end)
 
 t.test('the global undolevels stays global after a load', function()
   t.eq(-123456, vim.bo.undolevels, 'Neovim\'s "use the global value"')
-  t.run('LOAD_WITHOUT_UNDO', 'x')
+  t.run('LOAD_WITHOUT_UNDO', { 'x' })
   t.eq(-123456, vim.bo.undolevels)
 end)
 
@@ -42,7 +42,7 @@ t.test('a load keeps the marks on their lines (a reused buffer, BUFFER_NUMBERS.m
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { '1', '2', '3' })
   vim.api.nvim_buf_set_mark(0, 'a', 2, 0, {})
   vim.cmd('lockmarks call nvim_buf_set_lines(0, 0, -1, v:false, [""])')
-  t.run('LOAD_WITHOUT_UNDO', 'one', 'two', 'three', 'four')
+  t.run('LOAD_WITHOUT_UNDO', { 'one', 'two', 'three', 'four' })
   t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(0, 'a'), 'not moved down by the lines replacing the empty one')
   t.eq(nil, vim.g.neovim4eclipse_load, 'nothing left in g:')
 end)

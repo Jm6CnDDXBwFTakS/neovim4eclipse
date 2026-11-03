@@ -35,8 +35,16 @@ public interface NeovimApi {
      * {@code nvim_exec_lua(code, args)}: runs a Lua chunk; inside it, {@code ...} are the arguments.
      * The answer is what the chunk returns, decoded into plain Java values (lists, maps, strings,
      * numbers, booleans, {@code null}).
+     *
+     * <p>An argument may be a list (of strings, or of lists), which the chunk gets as one Lua table.
+     * Send data whose length the user's files decide that way, never as one argument each: Lua
+     * holds {@code ...} on its stack, so Neovim 0.12.6 fails with "stack overflow" from about
+     * 33,000 arguments (with {@code { ... }} in the chunk) and the embedded Neovim exits from
+     * about 65,500, before the chunk runs (file-by-file security review of 0.2.1: a file of 70,000
+     * lines made the shared Neovim exit when it opened). Example: a document's lines go as
+     * {@code List.of(lines)}, and the chunk reads them with {@code local lines = ...}.
      */
-    CompletableFuture<Object> execLua(String code, List<String> args);
+    CompletableFuture<Object> execLua(String code, List<?> args);
 
     /** {@code nvim_command(command)}: runs an Ex command, as if typed after {@code :}. */
     CompletableFuture<Void> command(String command);

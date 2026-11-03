@@ -14,12 +14,15 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /** One Neovim buffer per Eclipse document, against a real {@code nvim} (skipped when none is found). */
@@ -499,6 +502,57 @@ class NeovimBufferIntegrationTest {
             assertTrue(lines.stream().anyMatch(i -> !i.error() && i.message().contains("A.txt")
                     && i.message().startsWith(String.valueOf(a.bufnr()))), "the one-line :ls: " + lines);
             assertEquals(List.of(), outputs, "no popup for one line");
+        }
+    }
+
+    /**
+     * A document's lines, its problems and a quickfix list go to Neovim as one list each, however
+     * long (file-by-file security review of 0.2.1). Sent as one argument each, Lua's stack
+     * overflowed from about 33,000 lines (the load failed, the editor showed an empty buffer), and
+     * the embedded Neovim exited from about 65,500: a cloned repository's file of 70,000 lines, or a
+     * workspace with about 9,400 problems in :Eproblems, ended the Neovim every editor shares.
+     */
+    @Test
+    void seventyThousandLinesAndTwelveThousandProblemsReachNeovim() throws Exception {
+        int many = 70_000;
+        List<String> lines = IntStream.range(0, many).mapToObj(i -> "line " + i).toList();
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer("");
+            s.showBuffer(a);
+            s.setBufferLines(lines); // the first load (LOAD_WITHOUT_UNDO)
+            assertEquals(many, ((Number) s.lua("return vim.api.nvim_buf_line_count(0)")).intValue());
+
+            DocumentBuffer b = new DocumentBuffer("");
+            s.showBuffer(b);
+            s.reloadDocumentAsync(a, lines.reversed()); // RELOAD_DOCUMENT_BUFFER, into a buffer not shown
+            waitFor(() -> ("line " + (many - 1)).equals(firstLineOf(s, a.bufnr)), "the reload");
+            s.showBuffer(a);
+
+            int problems = 12_000;
+            s.setDiagnosticsAsync(a, IntStream.range(0, problems)
+                    .mapToObj(i -> new Diagnostic(i, 0, i, 1, Diagnostic.Severity.WARN, "w" + i)).toList());
+            waitFor(() -> problems == count(s, "#vim.diagnostic.get(" + a.bufnr + ")"), "the problems");
+            s.setQuickfixAsync(QuickfixEntries.Kind.PROBLEMS, "", QuickfixEntries.Mode.COMMAND, false,
+                    IntStream.range(0, problems).mapToObj(i -> new QuickfixEntries.Entry(a.bufnr, "", "", i + 1, 1,
+                            Diagnostic.Severity.WARN, "w" + i)).toList());
+            waitFor(() -> problems == count(s, "#vim.fn.getqflist()"), "the quickfix list");
+            assertEquals(2L, ((Number) s.lua("return 1 + 1")).longValue(), "Neovim is still there");
+        }
+    }
+
+    private static String firstLineOf(NeovimSession s, int bufnr) {
+        try {
+            return String.valueOf(s.lua("return vim.api.nvim_buf_get_lines(" + bufnr + ", 0, 1, false)[1]"));
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private static int count(NeovimSession s, String expression) {
+        try {
+            return ((Number) s.lua("return " + expression)).intValue();
+        } catch (Exception e) {
+            throw new AssertionError(e);
         }
     }
 }

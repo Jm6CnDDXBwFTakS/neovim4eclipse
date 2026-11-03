@@ -1753,11 +1753,12 @@ final class LuaScripts {
      * first attach and whenever a project or a linked folder comes or goes.
      */
     static final String SET_PROJECT_FOLDERS = """
-            require('neovim4eclipse.project_files').set_folders({ ... })
+            require('neovim4eclipse.project_files').set_folders((...)) -- one list: every folder
             """;
 
     /**
-     * Loads a document's text into its buffer again (arguments: the buffer number, then the lines),
+     * Loads a document's text into its buffer again (arguments: the buffer number, and the lines as
+     * one list),
      * as the first load does ({@link #LOAD_WITHOUT_UNDO}: no undo step, marks kept): after Neovim
      * loaded it empty by itself, with no text kept from the unload ({@link #DOCUMENT_BUFFER},
      * "Reloaded by Neovim"). Nothing for a buffer that is gone.
@@ -1765,9 +1766,9 @@ final class LuaScripts {
     static final String RELOAD_DOCUMENT_BUFFER = "local function load(...)\n" + LuaScripts.LOAD_WITHOUT_UNDO + """
             end
             local buf = tonumber((select(1, ...)))
-            local lines = { select(2, ...) }
+            local lines = (select(2, ...))
             if vim.api.nvim_buf_is_valid(buf) then
-              vim.api.nvim_buf_call(buf, function() load(unpack(lines)) end)
+              vim.api.nvim_buf_call(buf, function() load(lines) end)
             end
             """;
 
@@ -1799,19 +1800,20 @@ final class LuaScripts {
 
     /**
      * Replaces the Eclipse problems of one buffer with a new list, as Neovim diagnostics in the
-     * namespace {@code neovim4eclipse} ({@code :help vim.diagnostic.set()}). Arguments: the buffer
-     * number, then six per problem: lnum, col, end_lnum, end_col (0-based lines, byte columns),
+     * namespace {@code neovim4eclipse} ({@code :help vim.diagnostic.set()}). Argument: one list, of
+     * the buffer number, then six per problem (one list: a big workspace has thousands, see
+     * {@code NeovimApi.execLua}): lnum, col, end_lnum, end_col (0-based lines, byte columns),
      * severity (1 error, 2 warning, 3 info), message ({@code util/Diagnostic.toLuaArgs}). With the
      * number alone, the buffer's problems are cleared. A buffer that is gone (its editor closed
      * meanwhile) is left alone.
      *
      * <p>Each call replaces the whole list, so nothing is diffed. Neovim then moves the diagnostics
      * with the text as it is edited (extmarks) until Eclipse sends the next list. Example: arguments
-     * {@code 3, 0, 4, 0, 7, 1, "x cannot be resolved"} put one error on line 1 of buffer 3, and
+     * {@code { 3, 0, 4, 0, 7, 1, "x cannot be resolved" }} put one error on line 1 of buffer 3, and
      * {@code ]d} from the start of the buffer goes there.
      */
     static final String SET_DIAGNOSTICS = """
-            local args = { ... }
+            local args = ...
             local buf = tonumber(args[1])
             if not buf or not vim.api.nvim_buf_is_valid(buf) then
               return
@@ -2047,8 +2049,8 @@ final class LuaScripts {
               return title .. ': ' .. #items .. (#parts > 0 and ' (' .. table.concat(parts, ', ') .. ')' or '')
             end
 
-            function M.set(kind, arg, mode, jump, ...)
-              local flat, items = { ... }, {}
+            function M.set(kind, arg, mode, jump, flat)
+              local items = {}
               for i = 1, #flat - 6, 7 do
                 local bufnr = tonumber(flat[i]) or 0
                 local item = {
@@ -2157,10 +2159,14 @@ final class LuaScripts {
             """;
 
     /**
-     * Fills or updates a quickfix list of Eclipse's (arguments: {@code util/QuickfixEntries.toLuaArgs});
-     * see {@link #QUICKFIX}.
+     * Fills or updates a quickfix list of Eclipse's (argument: {@code util/QuickfixEntries.toLuaArgs}
+     * as one list, since {@code :Eproblems} may have thousands of entries; see
+     * {@code NeovimApi.execLua}); see {@link #QUICKFIX}.
      */
-    static final String SET_QUICKFIX = "require('neovim4eclipse.quickfix').set(...)";
+    static final String SET_QUICKFIX = """
+            local a = ...
+            require('neovim4eclipse.quickfix').set(a[1], a[2], a[3], a[4], vim.list_slice(a, 5))
+            """;
 
     /**
      * The current quickfix list's kind and argument ({@code {"problems", "warning"}}) when it is one
@@ -2512,18 +2518,18 @@ final class LuaScripts {
             """;
 
     /**
-     * Replaces the folds of the window showing a buffer with Eclipse's (arguments: the buffer
-     * number, then first line, last line, {@code "1"} if collapsed, per fold, from
+     * Replaces the folds of the window showing a buffer with Eclipse's (argument: one list, of the
+     * buffer number, then first line, last line, {@code "1"} if collapsed, per fold, from
      * {@code util/FoldRegions.toLuaArgs}). Done only when that buffer is the current one: folds
      * belong to a window, and another buffer gets its folds when Eclipse shows it. With the number
      * alone the editor cannot fold, and folding is turned off in the window. How: {@link #FOLDS}'
      * {@code set}. Sent only when folding is on, so the module is always there.
      *
-     * <p>Example: {@code 3, 1, 20, 0, 10, 15, 1} gives buffer 3 an open fold over lines 1-20 with a
+     * <p>Example: {@code { 3, 1, 20, 0, 10, 15, 1 }} gives buffer 3 an open fold over lines 1-20 with a
      * closed one over lines 10-15 inside it; {@code zj} from line 1 then goes to line 10.
      */
     static final String SET_FOLDS = """
-            local args = { ... }
+            local args = ...
             local buf = tonumber(args[1])
             local folds = package.loaded['neovim4eclipse.folds']
             if not folds or not buf or vim.api.nvim_get_current_buf() ~= buf then
@@ -2867,7 +2873,8 @@ final class LuaScripts {
             """;
 
     /**
-     * Replaces the current buffer's text without an undo step (arguments: the lines, one each). Setting
+     * Replaces the current buffer's text without an undo step (argument: the lines, as one list;
+     * never one argument each, see {@code NeovimApi.execLua}). Setting
      * {@code 'undolevels'} to -1 for one change is Vim's documented way to do that (see
      * {@code :help clear-undo}); it also clears any earlier history. The buffer-local value is put
      * back afterwards, which may be "use the global value" (-123456).
@@ -2884,7 +2891,7 @@ final class LuaScripts {
     static final String LOAD_WITHOUT_UNDO = """
             local saved = vim.bo.undolevels
             vim.bo.undolevels = -1
-            package.loaded['neovim4eclipse.load'] = { ... }
+            package.loaded['neovim4eclipse.load'] = (...)
             local ok, err = pcall(vim.cmd, "lockmarks lua vim.api.nvim_buf_set_lines(0, 0, -1, false, package.loaded['neovim4eclipse.load'])")
             package.loaded['neovim4eclipse.load'] = nil
             vim.bo.undolevels = saved
