@@ -227,9 +227,13 @@ end
 
 -- 0.2.1 security review, file by file: nvim_parse_cmd also takes away the backslash before a line
 -- break, so a completed name with one ended the :Eclipse line there and ran the rest. Such a name
--- is refused now, for :e, :wq and :x alike.
+-- is refused now, for :e, :wq and :x alike. (Not on Windows: a file name there may not hold a line
+-- break, so completion cannot produce one, and the test cannot make the file.)
 for _, cmd in ipairs({ 'e', 'wq', 'x' }) do
   t.test(':' .. cmd .. ' of a completed name with a line break is refused, and nothing in it runs', function()
+    if vim.fn.has('win32') == 1 then
+      return
+    end
     complete_into(cmd, 'notes\nlua=vim.g.ran=1', 'no')
     t.eq(nil, vim.g.ran, 'the Lua after the line break did not run')
     t.eq({}, t.sent('eclipse_command'), 'nothing sent to Eclipse')
@@ -251,7 +255,10 @@ t.test('a completed name with a backslash and backticks reaches Eclipse literall
   t.eq(0, vim.fn.filereadable(app .. '/MARK'), 'the shell command did not run')
 end)
 
-for _, name in ipairs({ 'x$HOME', 'a%b', 'my file.txt' }) do
+-- Not x$HOME on Windows: there fnameescape() does not escape $, so completion writes :e x$HOME,
+-- and Neovim's own :e opens xC:/Users/me/home as well; the plug-in does as Neovim does.
+local kept_names = vim.fn.has('win32') == 1 and { 'a%b', 'my file.txt' } or { 'x$HOME', 'a%b', 'my file.txt' }
+for _, name in ipairs(kept_names) do
   t.test('a completed name ' .. name .. ' keeps it: nothing is expanded a second time', function()
     local app = complete_into('e', name, name:sub(1, 1))
     t.eq({ { 'edit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))

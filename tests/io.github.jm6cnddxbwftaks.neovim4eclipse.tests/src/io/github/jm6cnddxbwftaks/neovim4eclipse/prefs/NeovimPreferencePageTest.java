@@ -39,6 +39,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
  */
 class NeovimPreferencePageTest {
 
+    /**
+     * A path is absolute on Windows only with a drive letter: {@code /no/such/nvim} would get the
+     * note "Enter the absolute path...", not "No Neovim program at".
+     */
+    private static final boolean WINDOWS = System.getProperty("os.name").startsWith("Windows");
+
     private Shell shell;
     private NeovimPreferencePage page;
 
@@ -79,7 +85,8 @@ class NeovimPreferencePageTest {
         Link help = find(program, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_FIELD_HELP));
         Label note = find(program, Label.class, label -> label.getText().startsWith("Found: ")
                 || label.getText().startsWith("No Neovim program at") || label.getText().startsWith("Looking for"));
-        field.setText("/no/such/folder/with/a/rather/long/name/so/that/the/note/wraps/onto/several/lines/nvim");
+        String path = "/no/such/folder/with/a/rather/long/name/so/that/the/note/wraps/onto/several/lines/nvim";
+        field.setText(WINDOWS ? "C:" + path.replace('/', '\\') + ".exe" : path);
         waitUntil("the note to report the missing program", () -> note.getText().startsWith("No Neovim program at"));
         waitUntil("the help to lie inside its group", () -> {
             Rectangle group = program.getClientArea();
@@ -96,7 +103,7 @@ class NeovimPreferencePageTest {
      */
     @Test
     void aTypedProgramIsNotRun() throws Exception {
-        assumeFalse(System.getProperty("os.name").startsWith("Windows"), "a shell script as the program");
+        assumeFalse(WINDOWS, "a shell script as the program");
         Path dir = Files.createTempDirectory("neovim4eclipse-typed");
         Path mark = dir.resolve("ran");
         Path program = dir.resolve("nvim");
@@ -133,7 +140,7 @@ class NeovimPreferencePageTest {
     void aFolderNameWithLinkMarkupStaysText() {
         Group program = page.groups()[0];
         Text field = find(program, Text.class);
-        field.setText("/no/<a>such</a>/nvim");
+        field.setText(WINDOWS ? "C:\\no\\<a>such</a>\\nvim.exe" : "/no/<a>such</a>/nvim");
         waitUntil("the note to report the missing program", () -> find(program, Label.class,
                 label -> label.getText().startsWith("No Neovim program at")) != null);
         Label note = find(program, Label.class, label -> label.getText().startsWith("No Neovim program at"));
