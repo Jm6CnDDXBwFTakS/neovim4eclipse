@@ -3149,7 +3149,11 @@ final class LuaScripts {
      * insert it opened, and normally it is; but a timer or an autocommand of the user's config may
      * have ended it ({@code stopinsert}), and the plug-in must not turn text into commands then. The
      * check runs in the same request as the typing, when Neovim is idle, so the mode cannot change
-     * in between. {@code mode} starts with {@code i} in Insert mode and its completion submodes
+     * in between. Nor while the keys are read: Neovim runs timers and other events only once its
+     * typeahead is used up. Checked 2026-11-03 with Neovim 0.12.6 and a timer calling
+     * {@code stopinsert} every millisecond: 200,000 fed characters all went into the one insert.
+     * ({@code nvim_paste}, which never reads text as keys, was tried instead and dropped: in the
+     * plug-in's session {@code .} no longer repeated the insert.) {@code mode} starts with {@code i} in Insert mode and its completion submodes
      * ({@code ic}, {@code ix}), with {@code R} in Replace and Virtual Replace ({@code Rv}); after
      * insert-mode {@code Ctrl-O} it is {@code niI}, Normal mode, and nothing is typed.
      */

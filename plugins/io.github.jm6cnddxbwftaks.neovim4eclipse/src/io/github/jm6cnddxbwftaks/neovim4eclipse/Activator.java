@@ -30,6 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
@@ -53,6 +54,8 @@ public class Activator extends AbstractUIPlugin {
     private static Activator plugin;
 
     private NeovimSession session;
+    /** Whether a Neovim was started in this Eclipse session: each later start checks the install again. */
+    private boolean startedBefore;
     private IPropertyChangeListener preferenceListener;
     /** Copies the plug-in's JUL warnings and errors to the Error Log. */
     private ErrorLogHandler errorLogHandler;
@@ -201,6 +204,14 @@ public class Activator extends AbstractUIPlugin {
             });
             cleanup.setSystem(true); // housekeeping: not shown in the Progress view
             cleanup.schedule();
+            // The dedicated Neovim's files are hashed again before every start but the first: the
+            // first uses the check EarlyStartup just made at Eclipse's start, in the background; a
+            // later one (Restart Neovim, after Neovim quit) hashes in full here, about 0.1 s, so a
+            // file changed meanwhile is caught (PluginNeovim.verified keeps answers until forget).
+            if (startedBefore) {
+                PluginNeovim.forget();
+            }
+            startedBefore = true;
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
