@@ -92,7 +92,9 @@ final class InsertTracker implements IDocumentListener {
      */
     InsertReplay.SyncPoint consumeSyncPoint(int caretOffset) {
         try {
-            return InsertReplay.syncPoint(before, document.get(), base, caretOffset);
+            InsertReplay.SyncPoint sync = InsertReplay.syncPoint(before, document.get(), base, caretOffset);
+            return new InsertReplay.SyncPoint(sync.typed(), sync.caretLine1Based(), sync.caretCol0Based(),
+                    document.getNumberOfLines());
         } finally {
             reset();
         }

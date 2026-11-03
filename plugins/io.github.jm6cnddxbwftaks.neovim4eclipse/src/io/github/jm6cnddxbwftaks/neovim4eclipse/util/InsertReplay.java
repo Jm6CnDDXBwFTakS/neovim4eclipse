@@ -63,8 +63,16 @@ public final class InsertReplay {
      *                        then only the document is pushed
      * @param caretLine1Based the caret: 1-based line
      * @param caretCol0Based  ... and 0-based UTF-8 byte column
+     * @param documentLines   the document's number of lines, which decides how Eclipse takes the
+     *                        typing back after the key ({@link ChangedLines#comparesWhole}); 0 when
+     *                        not known (then as for a short document)
      */
-    public record SyncPoint(Plan typed, int caretLine1Based, int caretCol0Based) {
+    public record SyncPoint(Plan typed, int caretLine1Based, int caretCol0Based, int documentLines) {
+
+        /** A sync point in a document of unknown length. */
+        public SyncPoint(Plan typed, int caretLine1Based, int caretCol0Based) {
+            this(typed, caretLine1Based, caretCol0Based, 0);
+        }
     }
 
     private InsertReplay() {

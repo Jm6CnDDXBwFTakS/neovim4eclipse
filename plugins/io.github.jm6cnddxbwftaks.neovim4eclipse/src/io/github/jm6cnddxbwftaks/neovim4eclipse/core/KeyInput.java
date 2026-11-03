@@ -12,6 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ModeTransition;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimKeys;
@@ -491,9 +492,10 @@ final class KeyInput {
      *       scrolled alone while it typed).</li>
      *   <li>The key is sent: Neovim's own {@code <C-w>} deletes {@code bar} as Vim does, {@code .}
      *       later repeats the whole insert, {@code Ctrl-U} still knows where the insert began.</li>
-     *   <li>Its change reaches the document as a buffer event. If Neovim is still in insert mode, a
-     *       full sync follows, after which Eclipse types again: the same handshake as at the start of
-     *       an insert ({@link StateSync#isEclipseTypingReady()}). After {@code Ctrl-O} Neovim is in
+     *   <li>Its change reaches the document as a buffer event. If Neovim is still in insert mode,
+     *       Eclipse types again once the editor has applied it: the same handshake as at the start of
+     *       an insert ({@link StateSync#isEclipseTypingReady()}), with a full sync for a document of
+     *       up to {@link ChangedLines#COMPARE_WHOLE_UP_TO_LINES} lines. After {@code Ctrl-O} Neovim is in
      *       {@code niI} until its one command ends, and entering insert again syncs then.</li>
      * </ol>
      * If the key leaves Neovim waiting for another ({@code Ctrl-R} for a register, {@code Ctrl-V},
@@ -528,7 +530,14 @@ final class KeyInput {
         nvim.awaitKeysConsumed();
         state.publishState();
         if (state.isTypingMode()) {
-            state.syncBuffer(); // the handshake: Eclipse types again once the document has Neovim's text
+            // The handshake: Eclipse types again once the document has Neovim's text. The key's line
+            // events bring that text; a short document is also compared whole, which repairs any
+            // difference (ChangedLines.COMPARE_WHOLE_UP_TO_LINES), a long one only waits for them.
+            if (sync == null || ChangedLines.comparesWhole(sync.documentLines())) {
+                state.syncBuffer();
+            } else {
+                state.letEclipseTypeOnceApplied();
+            }
         }
     }
 

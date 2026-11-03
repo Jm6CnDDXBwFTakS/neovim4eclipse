@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 
 /**
@@ -322,6 +323,20 @@ class KeyInputTest {
         assertFalse(keys.isNeovimDrivenInsert());
         editor.changes.get(editor.changes.size() - 1).afterApply().run(); // the editor applied the sync
         assertTrue(state.isEclipseTypingReady(), "Eclipse types again");
+    }
+
+    /** In a long document the key's line events are enough: Eclipse types once they are applied, without a full sync. */
+    @Test
+    void aSyncPointInALongDocumentWaitsOnlyForTheKeysEvents() throws Exception {
+        nvim.mode = new Mode("i", false);
+        int lines = ChangedLines.COMPARE_WHOLE_UP_TO_LINES + 1;
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0, lines), "<C-w>");
+
+        assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        assertTrue(lastChange().changesNothing(), "a marker after the key's events");
+        lastChange().afterApply().run();
+        assertTrue(state.isEclipseTypingReady());
     }
 
     /** Ctrl-W's own change is Neovim's, so it reaches the editor. */

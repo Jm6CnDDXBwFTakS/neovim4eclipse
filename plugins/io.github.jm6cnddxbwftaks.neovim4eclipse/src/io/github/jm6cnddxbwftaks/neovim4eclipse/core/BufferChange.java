@@ -18,4 +18,19 @@ public record BufferChange(int firstLine, int lastLine, List<String> newLines, R
     public BufferChange(int firstLine, int lastLine, List<String> newLines) {
         this(firstLine, lastLine, newLines, null);
     }
+
+    /**
+     * A change of no line, only to run {@code afterApply} once the editor has applied every change
+     * sent before it (they are applied in order). Example: at a sync point in a long document,
+     * Eclipse may type again once Ctrl-W's own line events have reached the document, without
+     * reading Neovim's whole buffer for it.
+     */
+    public static BufferChange marker(Runnable afterApply) {
+        return new BufferChange(0, 0, List.of(), afterApply);
+    }
+
+    /** Whether this replaces no line with none: nothing to apply ({@link #marker}). */
+    public boolean changesNothing() {
+        return lastLine == firstLine && newLines.isEmpty();
+    }
 }

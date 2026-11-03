@@ -23,6 +23,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferChange;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.VimText;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 
 /**
  * {@link BufferSynchronizer} against a real JFace {@link Document} and a fake {@link BufferPort}: no
@@ -142,6 +143,10 @@ class BufferSynchronizerTest {
     private final FakeBufferPort neovim = new FakeBufferPort();
     private final BufferSynchronizer sync = new BufferSynchronizer(document, neovim, UiExecutor.IMMEDIATE);
 
+    {
+        sync.setCompareWholeUpToLines(0); // the region push even on these short documents
+    }
+
     @AfterEach
     void close() {
         sync.close();
@@ -174,6 +179,28 @@ class BufferSynchronizerTest {
         document.replace(8, 0, "\n"); // "be" / "ta"
         sync.pushChangedLinesToNeovim();
         assertEquals(List.of("1|1|[be, ta]"), neovim.regions);
+    }
+
+    /** A short document is compared whole, as before phase F: that repairs a difference anywhere. */
+    @Test
+    void aShortDocumentIsComparedWhole() throws Exception {
+        sync.setCompareWholeUpToLines(ChangedLines.COMPARE_WHOLE_UP_TO_LINES);
+        document.set("alpha\nbeta\ngamma\n");
+        sync.pushDocumentToNeovim();
+        document.replace(8, 0, "XY");
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of(), neovim.regions);
+        assertEquals(List.of("alpha", "beXYta", "gamma"), neovim.pushed.get(neovim.pushed.size() - 1));
+    }
+
+    /** A change of no line only runs its after-apply action, in order: the cheap sync-point handshake. */
+    @Test
+    void aMarkerChangesNothingAndRunsItsAction() {
+        List<String> ran = new ArrayList<>();
+        sync.startRemoteListening();
+        neovim.neovimChanged(BufferChange.marker(() -> ran.add("after")));
+        assertEquals(List.of("after"), ran);
+        assertEquals("alpha\nbeta\n", document.get());
     }
 
     @Test

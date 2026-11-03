@@ -34,6 +34,15 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  */
 public final class ChangedLines {
 
+    /**
+     * Documents up to this many lines are compared whole at {@code Esc} and at a sync point, as
+     * before phase F: Neovim's whole buffer is read and diffed against the document, about 3 ms at
+     * 10,000 lines. That repairs any difference between the two, wherever it is, not only in the
+     * lines typed (a safety net: a lost event, or a bug elsewhere, does not stay). Longer documents
+     * push only the changed lines ({@link #region}), where a whole comparison costs 20 ms and more.
+     */
+    public static final int COMPARE_WHOLE_UP_TO_LINES = 10_000;
+
     /** Nothing changed at all: as many unchanged lines as there can be. */
     private static final int ALL = Integer.MAX_VALUE;
 
@@ -56,6 +65,14 @@ public final class ChangedLines {
 
     /** The region when nothing changed since the last {@link #clear}. */
     private static final Region NOTHING = new Region(0, 0, ALL);
+
+    /**
+     * Whether a document of {@code lineCount} lines is compared whole rather than pushed by region
+     * ({@link #COMPARE_WHOLE_UP_TO_LINES}).
+     */
+    public static boolean comparesWhole(int lineCount) {
+        return lineCount <= COMPARE_WHOLE_UP_TO_LINES;
+    }
 
     /** A new tracker knows nothing yet: everything may differ, until the first {@link #clear}. */
     public ChangedLines() {

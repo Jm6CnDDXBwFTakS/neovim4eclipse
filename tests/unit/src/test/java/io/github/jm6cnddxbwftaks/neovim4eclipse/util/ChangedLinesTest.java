@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,6 +14,12 @@ import org.junit.jupiter.api.Test;
 class ChangedLinesTest {
 
     private final ChangedLines changed = new ChangedLines();
+
+    @Test
+    void documentsUpToTheLimitAreComparedWhole() {
+        assertTrue(ChangedLines.comparesWhole(ChangedLines.COMPARE_WHOLE_UP_TO_LINES));
+        assertFalse(ChangedLines.comparesWhole(ChangedLines.COMPARE_WHOLE_UP_TO_LINES + 1));
+    }
 
     @Test
     void beforeTheFirstClearEverythingIsPushed() {

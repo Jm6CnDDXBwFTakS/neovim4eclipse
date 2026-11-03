@@ -284,6 +284,15 @@ final class StateSync {
         }
     }
 
+    /**
+     * Lets Eclipse type once the editor has applied the buffer events sent so far, without reading
+     * Neovim's buffer ({@link BufferChange#marker}): the cheaper handshake at a sync point in a long
+     * document ({@code KeyInput#syncInsertThenInput}).
+     */
+    void letEclipseTypeOnceApplied() {
+        dispatchBufferChange(0, 0, List.of(), this::markTypingReadyIfTyping);
+    }
+
     /** After-apply action of a full sync: the document now matches Neovim, so Eclipse may type. */
     private void markTypingReadyIfTyping() {
         if (isTypingMode()) {

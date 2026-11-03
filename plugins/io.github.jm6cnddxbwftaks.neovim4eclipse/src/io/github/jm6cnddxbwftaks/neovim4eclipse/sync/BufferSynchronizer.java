@@ -257,13 +257,23 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
     }
 
+    /** See {@link ChangedLines#COMPARE_WHOLE_UP_TO_LINES}; tests lower it to see the region push on short documents. */
+    private int compareWholeUpToLines = ChangedLines.COMPARE_WHOLE_UP_TO_LINES;
+
+    /** Sets {@link #compareWholeUpToLines} (tests). */
+    void setCompareWholeUpToLines(int lines) {
+        compareWholeUpToLines = lines;
+    }
+
     /**
      * Makes the Neovim buffer equal to the document by writing only the lines changed since the
      * last push ({@link ChangedLines}): at {@code Esc} and at a sync point, the lines typed in insert
      * mode, not the whole document. Example: one line typed into a file of 100k lines reads and
      * writes that line, where {@link #pushDocumentToNeovim} reads Neovim's whole buffer (19 ms) to
-     * find it. The whole document is pushed when the change may reach the last line (its final line
-     * break), when nothing is known yet, or when Neovim's buffer cannot be written in part.
+     * find it. The whole document is pushed (and compared, which repairs any difference) when it has
+     * at most {@link ChangedLines#COMPARE_WHOLE_UP_TO_LINES} lines, when the change may reach the
+     * last line (its final line break), when nothing is known yet, or when Neovim's buffer cannot be
+     * written in part.
      * Blocking RPC: not for the UI thread.
      */
     public void pushChangedLinesToNeovim() {
@@ -272,6 +282,9 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
         try {
             RegionPush push = onUi(() -> {
+                if (document.getNumberOfLines() <= compareWholeUpToLines) {
+                    return null; // cheap enough to compare all of it, which repairs any difference
+                }
                 ChangedLines.Region region = changedLines.region(document.getNumberOfLines(), endsWithLineBreak()
                         && FinalNewlines.of(document));
                 if (region == null) {
@@ -368,6 +381,10 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         if (closed) {
             return;
         }
+        if (change.changesNothing()) {
+            runOnUi(() -> runAfterApply(change)); // in order with the changes before it
+            return;
+        }
         if (!listening) {
             // A Neovim change the document does not get: lines may differ anywhere. Posted, not
             // waited for: while not listening, the UI thread may itself wait for a push (see
@@ -416,7 +433,11 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             neovimBehind = true;
             onLocalChange();
         }
-        if (change.afterApply() != null) {
+        runAfterApply(change);
+    }
+
+    private void runAfterApply(BufferChange change) {
+        if (change.afterApply() != null && listening && !closed) {
             change.afterApply().run(); // e.g. the session lets Eclipse type once insert mode's sync has landed
         }
     }
