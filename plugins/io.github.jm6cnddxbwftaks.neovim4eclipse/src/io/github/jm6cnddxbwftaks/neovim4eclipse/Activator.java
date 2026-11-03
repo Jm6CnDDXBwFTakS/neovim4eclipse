@@ -188,17 +188,19 @@ public class Activator extends AbstractUIPlugin {
     public synchronized NeovimSession getOrCreateSession() throws Exception {
         if (session == null || !session.isAlive()) {
             // A Neovim that Get Neovim installed while the old one ran waits in neovim/<code>.new;
-            // nothing runs from the plug-in's folder now, so it can take its place (NeovimInstaller).
-            // Only the two folder moves happen here; the replaced Neovim is deleted in the background.
+            // nothing of this Eclipse runs from the plug-in's folder now, so it can take its place,
+            // unless another Eclipse's Neovim runs from there (NeovimInstaller, NeovimProcesses).
+            // Only folder moves happen here; the replaced Neovim, and downloads left by an Eclipse
+            // killed meanwhile, are deleted in the background, at every start (a quick look when
+            // there is nothing to delete).
             Path folder = PluginFolders.neovimFolder();
-            if (NeovimInstaller.finishPending(folder)) {
-                Job cleanup = Job.create("Removing the replaced dedicated Neovim", monitor -> {
-                    NeovimInstaller.deleteReplaced(folder);
-                    return Status.OK_STATUS;
-                });
-                cleanup.setSystem(true); // housekeeping: not shown in the Progress view
-                cleanup.schedule();
-            }
+            NeovimInstaller.finishPending(folder);
+            Job cleanup = Job.create("Cleaning up the dedicated Neovim's folder", monitor -> {
+                NeovimInstaller.deleteReplaced(folder);
+                return Status.OK_STATUS;
+            });
+            cleanup.setSystem(true); // housekeeping: not shown in the Progress view
+            cleanup.schedule();
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());

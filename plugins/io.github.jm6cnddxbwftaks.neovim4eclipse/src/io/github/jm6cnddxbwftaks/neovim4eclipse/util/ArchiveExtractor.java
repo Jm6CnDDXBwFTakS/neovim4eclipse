@@ -33,9 +33,12 @@ import java.util.zip.ZipInputStream;
  * An archive names its files itself, and a crafted one could name {@code ../../.bashrc} or an
  * absolute path to write outside the target. Every name is resolved inside the target and refused if
  * it leaves it (the "zip slip" attack, https://security.snyk.io/research/zip-slip-vulnerability).
- * Links (symbolic and hard) and device files are skipped: Neovim's archives have none, and a link
- * could point outside the target too. The archive was already checked against the pinned SHA-256
- * before unpacking, so this is a second line of defense.
+ * Links (symbolic and hard) stop the unpacking: Neovim's archives have none, a link could point
+ * outside the target, and skipping one would leave an install that looks complete but lacks a file.
+ * So a Neovim release that starts shipping links fails loudly when its data file is pinned (try
+ * Get Neovim then; docs/UPGRADING.md), instead of installing half of itself. Device files and
+ * FIFOs, which no program needs, are skipped. The archive was already checked against the pinned
+ * SHA-256 before unpacking, so this is a second line of defense.
  *
  * <h2>The tar format, briefly</h2>
  * A tar file is a list of 512-byte headers, each followed by the file's bytes padded to a multiple
@@ -128,7 +131,8 @@ public final class ArchiveExtractor {
                     unpacker.file(name, new Limited(in, size), (mode & 0111) != 0);
                     skip(in, padding(size));
                 }
-                default -> skip(in, size); // links, devices, FIFOs: skipped (see the class comment)
+                case '1', '2' -> throw notARelease("a link: " + name); // see the class comment
+                default -> skip(in, size); // devices, FIFOs: skipped (see the class comment)
             }
         }
     }

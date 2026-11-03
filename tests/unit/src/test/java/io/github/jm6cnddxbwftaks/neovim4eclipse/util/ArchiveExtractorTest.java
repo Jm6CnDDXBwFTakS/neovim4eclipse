@@ -58,12 +58,15 @@ class ArchiveExtractorTest {
         assertFalse(Files.exists(target().resolve("ignored-short-name")));
     }
 
+    /** A link stops the unpacking: skipped, it would leave an install that lacks a file yet looks whole. */
     @Test
-    void linksAreSkipped() throws IOException {
-        untar(new TestArchives.Tar().folder("nvim/").symlink("nvim/evil", "/etc/passwd").file("nvim/ok", "ok", false)
-                .gzipTo(tmp.resolve("l.tar.gz")));
+    void aLinkIsRefused() throws IOException {
+        Path archive = new TestArchives.Tar().folder("nvim/").symlink("nvim/evil", "/etc/passwd")
+                .file("nvim/ok", "ok", false).gzipTo(tmp.resolve("l.tar.gz"));
+        NeovimInstallException e = assertThrows(NeovimInstallException.class, () -> untar(archive));
+        assertEquals(NeovimInstallException.Reason.WRONG_ARCHIVE, e.reason());
+        assertTrue(e.getMessage().contains("a link: nvim/evil"), e.getMessage());
         assertFalse(Files.exists(target().resolve("evil"), LinkOption.NOFOLLOW_LINKS));
-        assertTrue(Files.exists(target().resolve("ok")));
     }
 
     @Test

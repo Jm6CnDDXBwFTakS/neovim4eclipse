@@ -54,8 +54,8 @@ class GetNeovimTextTest {
         assertEquals(List.of(GetNeovimText.virusTotal(LA.sha256())), urls(point(plain, "SHA-256")));
 
         HeadedMessage waits = GetNeovimText.done(RELEASE.version(), program, LA.sha256(), true, false);
-        assertEquals("The new dedicated Neovim replaces the one running now, from the same folder. Restart Neovim "
-                + "to finish.", point(waits, "Restart").text());
+        assertEquals("The new dedicated Neovim replaces the one running now from the same folder, in this Eclipse or "
+                + "another. Restart Neovim to finish, once no other Eclipse runs it.", point(waits, "Restart").text());
         HeadedMessage other = GetNeovimText.done(RELEASE.version(), program, LA.sha256(), false, true);
         assertEquals("The \"Neovim folder or program\" preference names another Neovim. Use Dedicated Neovim clears "
                 + "it, so the dedicated Neovim is used.", point(other, "Preference").text(),

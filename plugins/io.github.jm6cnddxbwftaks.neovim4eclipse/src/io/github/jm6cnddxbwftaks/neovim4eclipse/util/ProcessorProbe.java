@@ -137,7 +137,7 @@ public final class ProcessorProbe {
     private static String run(List<String> command) {
         Process process = null;
         try {
-            process = new ProcessBuilder(command).redirectErrorStream(false).start();
+            process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start(); // no pipe left open
             process.getOutputStream().close();
             if (!process.waitFor(COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS) || process.exitValue() != 0) {
                 return null;

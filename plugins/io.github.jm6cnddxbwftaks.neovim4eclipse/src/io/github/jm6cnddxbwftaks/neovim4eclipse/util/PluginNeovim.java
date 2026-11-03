@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -138,7 +139,8 @@ public final class PluginNeovim {
 
     /**
      * What else is in {@code folder}: everything but the platform folders, their {@code .new} and
-     * {@code .old} folders, the lock file and download leftovers, sorted by name. Example:
+     * {@code .old} folders, the lock file, download leftovers (cleaned up at each start) and the
+     * file manager's own files ({@link #isSystemFile}), sorted by name. Example:
      * {@code [current, nvim-linux-arm64_0.12.6]} after an earlier hand install. Empty if the folder
      * does not exist or cannot be read.
      */
@@ -154,7 +156,8 @@ public final class PluginNeovim {
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(folder)) {
             for (Path entry : entries) {
                 String name = String.valueOf(entry.getFileName());
-                if (!known.contains(name) && !name.startsWith(DOWNLOAD_PREFIX)) {
+                if (!known.contains(name) && !name.startsWith(DOWNLOAD_PREFIX) && !isReplaced(name)
+                        && !isSystemFile(name)) {
                     unused.add(name);
                 }
             }
@@ -163,5 +166,21 @@ public final class PluginNeovim {
         }
         unused.sort(null);
         return unused;
+    }
+
+    /** A replaced Neovim set aside for deleting ({@code la.old-123}, {@code NeovimInstaller.swap}). */
+    private static boolean isReplaced(String name) {
+        return NeovimPlatform.ALL.stream().anyMatch(p -> name.startsWith(p.code() + OLD + "-"));
+    }
+
+    /**
+     * A file the operating system's file manager puts into any folder it shows: macOS Finder's
+     * {@code .DS_Store} and {@code ._name} (AppleDouble) files, Windows Explorer's
+     * {@code desktop.ini} and {@code Thumbs.db}. Not the user's leftovers, so not listed for deleting.
+     */
+    static boolean isSystemFile(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        return lower.equals(".ds_store") || name.startsWith("._") || lower.equals("desktop.ini")
+                || lower.equals("thumbs.db");
     }
 }

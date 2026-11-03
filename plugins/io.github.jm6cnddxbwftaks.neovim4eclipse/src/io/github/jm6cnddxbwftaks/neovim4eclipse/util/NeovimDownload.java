@@ -216,6 +216,19 @@ public final class NeovimDownload {
         return "The download of " + archive.asset() + " failed: " + detail;
     }
 
+    /**
+     * The download cannot go through Eclipse's proxy: it is a SOCKS one, which Java's HTTP client
+     * ({@code java.net.http}) does not support. Without this the client would connect directly, past
+     * the proxy, and fail in a network that allows only the proxy (or quietly bypass it elsewhere).
+     */
+    public static NeovimInstallException socksOnly(NeovimRelease.Archive archive) {
+        return new NeovimInstallException(NeovimInstallException.Reason.NETWORK,
+                "Eclipse sends " + archive.url().getHost() + " through a SOCKS proxy (Window > Preferences > General > "
+                        + "Network Connections), which Java's HTTP client cannot use, so the plug-in does not "
+                        + "download. Download " + archive.asset() + " in a browser and use Install from File, or "
+                        + "set an HTTP or HTTPS proxy there.");
+    }
+
     private static NeovimInstallException proxyPassword() {
         return new NeovimInstallException(NeovimInstallException.Reason.PROXY_PASSWORD,
                 "The proxy asks for a password (HTTP 407). Java does not send proxy passwords through an "

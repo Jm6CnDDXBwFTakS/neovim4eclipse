@@ -13,8 +13,11 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +33,8 @@ class NeovimInstallerTest {
     private static final NeovimPlatform LA = NeovimPlatform.byCode("la").orElseThrow();
     private static final NeovimVersion VERSION = new NeovimVersion(0, 12, 6);
     private static final Function<Path, NeovimVersion> RUNS = p -> VERSION;
+    /** No process runs from any folder (the real question is NeovimProcesses.runFrom). */
+    private static final Predicate<Path> NOTHING_RUNS = p -> false;
 
     @TempDir
     Path tmp;
@@ -126,18 +131,78 @@ class NeovimInstallerTest {
         assertEquals(NeovimInstaller.Outcome.WAITS_FOR_RESTART, r.outcome());
     }
 
+    /** A {@code la.old} whose delete failed earlier is moved aside: the waiting one is swapped in at once. */
     @Test
-    void aLeftoverOldFolderBlocksTheSwapUntilItIsDeleted() throws IOException {
+    void aLeftoverOldFolderIsSetAsideAndTheSwapGoesOn() throws IOException {
         install(archive, false, RUNS);
         install(archive, true, RUNS);
         Files.createDirectories(folder.resolve("la.old/bin")); // an earlier delete failed
-        assertTrue(NeovimInstaller.finishPending(folder));
-        assertTrue(Files.exists(folder.resolve("la.new")), "not swapped: la cannot move to la.old");
-        assertTrue(PluginNeovim.isInstall(folder.resolve("la"), false), "the old Neovim still works");
+        Files.writeString(folder.resolve("la.old/leftover"), "x");
+        assertTrue(NeovimInstaller.finishPending(folder, NOTHING_RUNS));
+        assertFalse(Files.exists(folder.resolve("la.new")), "swapped at this start, not the next");
+        assertTrue(PluginNeovim.isInstall(folder.resolve("la"), false));
+        try (Stream<Path> set = Files.list(folder)) {
+            assertEquals(1, set.filter(p -> p.getFileName().toString().startsWith("la.old-")).count(), "set aside");
+        }
 
-        NeovimInstaller.deleteReplaced(folder);
-        NeovimInstaller.finishPending(folder);
-        assertFalse(Files.exists(folder.resolve("la.new")), "swapped at the next start");
+        NeovimInstaller.deleteReplaced(folder, NOTHING_RUNS, Instant.now());
+        try (Stream<Path> left = Files.list(folder)) {
+            assertEquals(0, left.filter(p -> p.getFileName().toString().startsWith("la.old")).count(),
+                    "both replaced folders deleted");
+        }
+        assertFalse(NeovimInstaller.finishPending(folder, NOTHING_RUNS), "nothing left to do");
+    }
+
+    /**
+     * Another Eclipse's Neovim runs from {@code la}: the folder is shared, so the swap waits (on Linux
+     * and macOS it would take that Neovim's runtime files away). This Eclipse's own gate says free.
+     */
+    @Test
+    void aNeovimOfAnotherProcessHoldsTheSwap() throws IOException {
+        install(archive, false, RUNS);
+        Files.writeString(folder.resolve("la/marker"), "running elsewhere");
+        Predicate<Path> otherRuns = p -> p.equals(folder.resolve("la"));
+        NeovimInstaller.Result r = NeovimInstaller.install(archive, release, LA, folder,
+                NeovimInstaller.SwapGate.FREE, RUNS, InstallProgress.NONE, otherRuns);
+        assertEquals(NeovimInstaller.Outcome.WAITS_FOR_RESTART, r.outcome());
+        assertTrue(Files.exists(folder.resolve("la/marker")), "the running one is untouched");
+
+        NeovimInstaller.finishPending(folder, otherRuns);
+        assertTrue(Files.exists(folder.resolve("la/marker")), "not at a start while it still runs");
+        assertTrue(Files.exists(folder.resolve("la.new")));
+
+        NeovimInstaller.finishPending(folder, NOTHING_RUNS);
+        assertFalse(Files.exists(folder.resolve("la/marker")), "swapped once it stopped");
+    }
+
+    /** A replaced Neovim a process still runs from is not deleted under it. */
+    @Test
+    void aReplacedNeovimStillRunningIsKept() throws IOException {
+        Files.createDirectories(folder.resolve("la.old/bin"));
+        NeovimInstaller.deleteReplaced(folder, p -> p.equals(folder.resolve("la.old")), Instant.now());
+        assertTrue(Files.exists(folder.resolve("la.old/bin")));
+        NeovimInstaller.deleteReplaced(folder, NOTHING_RUNS, Instant.now());
+        assertFalse(Files.exists(folder.resolve("la.old")));
+    }
+
+    /** Downloads left by an Eclipse killed in the middle go; one that may still be written stays. */
+    @Test
+    void staleDownloadsAreDeletedAndFreshOnesKept() throws IOException {
+        Files.createDirectories(folder);
+        Instant now = Instant.now();
+        Path stale = Files.writeString(folder.resolve(PluginNeovim.DOWNLOAD_PREFIX + "1.part"), "x");
+        Files.setLastModifiedTime(stale, FileTime.from(now.minus(NeovimInstaller.STALE_DOWNLOAD).minusSeconds(60)));
+        Path fresh = Files.writeString(folder.resolve(PluginNeovim.DOWNLOAD_PREFIX + "2.part"), "x");
+        Files.setLastModifiedTime(fresh, FileTime.from(now.minusSeconds(60)));
+        NeovimInstaller.deleteReplaced(folder, NOTHING_RUNS, now);
+        assertFalse(Files.exists(stale));
+        assertTrue(Files.exists(fresh), "may be a download in progress");
+    }
+
+    @Test
+    void cleaningAMissingFolderCreatesNothing() {
+        NeovimInstaller.deleteReplaced(folder, NOTHING_RUNS, Instant.now());
+        assertFalse(Files.exists(folder));
     }
 
     @Test

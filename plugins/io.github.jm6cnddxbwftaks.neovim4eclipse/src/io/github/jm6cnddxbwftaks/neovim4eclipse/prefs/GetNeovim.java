@@ -175,6 +175,9 @@ public final class GetNeovim {
             if (source == Source.DOWNLOAD) {
                 Path downloaded;
                 try (EclipseProxies proxies = EclipseProxies.open()) {
+                    if (proxies.socksOnly(archive.url())) {
+                        throw NeovimDownload.socksOnly(archive);
+                    }
                     downloaded = NeovimDownload.download(archive,
                             NeovimDownload.client(proxies.selector(), proxies.authenticator()), folder, progress);
                 }
@@ -199,7 +202,8 @@ public final class GetNeovim {
         } catch (Exception e) { // a bug
             LOG.log(Level.WARNING, "Get Neovim failed", e);
             asyncExec(() -> failed(shell, release, archive, source, file, new NeovimInstallException(
-                    NeovimInstallException.Reason.FILES, String.valueOf(e.getMessage()), e)));
+                    NeovimInstallException.Reason.FILES,
+                    e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(), e)));
         } finally {
             monitor.done();
         }

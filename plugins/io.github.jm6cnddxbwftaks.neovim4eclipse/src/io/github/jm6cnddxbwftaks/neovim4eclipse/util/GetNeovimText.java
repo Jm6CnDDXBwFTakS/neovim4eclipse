@@ -93,8 +93,8 @@ public final class GetNeovimText {
         List<Point> points = new ArrayList<>();
         points.add(new Point("Program", "").withCopy(program.toString()));
         if (waits) {
-            points.add(new Point("Restart", "The new dedicated Neovim replaces the one running now, from the same "
-                    + "folder. Restart Neovim to finish."));
+            points.add(new Point("Restart", "The new dedicated Neovim replaces the one running now from the same "
+                    + "folder, in this Eclipse or another. Restart Neovim to finish, once no other Eclipse runs it."));
         }
         if (otherInUse) {
             points.add(new Point("Preference", "The \"Neovim folder or program\" preference names another Neovim. "

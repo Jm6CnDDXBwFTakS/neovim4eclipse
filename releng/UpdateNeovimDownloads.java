@@ -200,9 +200,13 @@ public final class UpdateNeovimDownloads {
         if (at < 0) {
             throw new Failure("GitHub's release has no asset named " + asset);
         }
-        Matcher size = Pattern.compile("\"size\":(\\d+)").matcher(json);
-        Matcher digest = Pattern.compile("\"digest\":\"sha256:([0-9a-f]{64})\"").matcher(json);
-        if (!size.find(at) || !digest.find(at)) {
+        // Only this asset's own fields: up to the next asset's "name", or the end. Without the bound,
+        // an asset with no digest would take the next asset's, and fail as a false mismatch.
+        int next = json.indexOf("\"name\":\"", at + 1);
+        int end = next < 0 ? json.length() : next;
+        Matcher size = Pattern.compile("\"size\":(\\d+)").matcher(json).region(at, end);
+        Matcher digest = Pattern.compile("\"digest\":\"sha256:([0-9a-f]{64})\"").matcher(json).region(at, end);
+        if (!size.find() || !digest.find()) {
             throw new Failure("GitHub's API gives no size or sha256 digest for " + asset);
         }
         return new Entry(code, asset, Long.parseLong(size.group(1)), digest.group(1));

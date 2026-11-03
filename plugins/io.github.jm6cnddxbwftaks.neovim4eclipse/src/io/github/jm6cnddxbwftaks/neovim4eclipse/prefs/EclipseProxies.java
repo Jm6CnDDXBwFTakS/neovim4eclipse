@@ -93,12 +93,13 @@ final class EclipseProxies implements AutoCloseable {
             public List<Proxy> select(URI uri) {
                 List<Proxy> proxies = new ArrayList<>();
                 for (IProxyData data : service.select(uri)) {
-                    if (data.getHost() == null || data.getPort() <= 0) {
+                    // SOCKS left out: java.net.http.HttpClient uses only HTTP proxies and would ignore a
+                    // SOCKS one, connecting directly instead. See socksOnly.
+                    if (data.getHost() == null || data.getPort() <= 0 || isSocks(data)) {
                         continue;
                     }
-                    Proxy.Type type = IProxyData.SOCKS_PROXY_TYPE.equals(data.getType()) ? Proxy.Type.SOCKS
-                            : Proxy.Type.HTTP;
-                    proxies.add(new Proxy(type, InetSocketAddress.createUnresolved(data.getHost(), data.getPort())));
+                    proxies.add(new Proxy(Proxy.Type.HTTP,
+                            InetSocketAddress.createUnresolved(data.getHost(), data.getPort())));
                 }
                 return proxies.isEmpty() ? List.of(Proxy.NO_PROXY) : proxies;
             }
@@ -111,6 +112,33 @@ final class EclipseProxies implements AutoCloseable {
     }
 
     /** Answers a proxy's password request with the login stored in Eclipse; {@code null} without a service. */
+    /**
+     * Whether Eclipse sends {@code uri} through a SOCKS proxy only. Java's HTTP client cannot use
+     * one: it would silently connect directly, past the proxy the user set up. So Get Neovim stops
+     * with a message instead ({@code NeovimDownload.socksOnly}). Example: <i>Network Connections</i>
+     * with only SOCKS set to {@code proxy.example:1080}.
+     */
+    boolean socksOnly(URI uri) {
+        if (service == null) {
+            return false;
+        }
+        boolean socks = false;
+        for (IProxyData data : service.select(uri)) {
+            if (data.getHost() == null || data.getPort() <= 0) {
+                continue;
+            }
+            if (!isSocks(data)) {
+                return false; // an HTTP(S) proxy is used for it
+            }
+            socks = true;
+        }
+        return socks;
+    }
+
+    private static boolean isSocks(IProxyData data) {
+        return IProxyData.SOCKS_PROXY_TYPE.equals(data.getType());
+    }
+
     Authenticator authenticator() {
         if (service == null) {
             return null;

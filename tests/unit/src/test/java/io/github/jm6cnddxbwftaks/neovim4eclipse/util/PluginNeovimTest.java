@@ -56,6 +56,11 @@ class PluginNeovimTest {
         }
         Files.createFile(tmp.resolve(PluginNeovim.LOCK));
         Files.createFile(tmp.resolve("notes.txt"));
+        Files.createDirectories(tmp.resolve("la.old-12345")); // set aside by a swap, deleted at the next start
+        Files.createFile(tmp.resolve(PluginNeovim.DOWNLOAD_PREFIX + "1.part"));
+        for (String name : List.of(".DS_Store", "._la", "desktop.ini", "Thumbs.db")) { // the file managers'
+            Files.createFile(tmp.resolve(name));
+        }
         assertEquals(List.of("current", "notes.txt", "nvim-linux-arm64_0.12.6"), PluginNeovim.unusedEntries(tmp));
         assertEquals(List.of(), PluginNeovim.unusedEntries(tmp.resolve("missing")));
     }
