@@ -23,6 +23,8 @@
  *       opens, and which of them the user opened),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand} (the commands Neovim hands to
  *       Eclipse),
+ *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.EnewEditors} (the untitled editors
+ *       {@code :enew} opened, whose window keeps the folder it copies),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent} and
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute} (Neovim's messages, and
  *       where they go: the message line or the output popup),

@@ -446,7 +446,7 @@ opens, so a `:lcd` you type stays with that editor. An untitled document (*File 
 Text File*) gets the root of the project selected in the Project Explorer or Package Explorer (the
 one you right-clicked to make it), so `:w notes.txt` saves it there; with none selected, the folder
 of the editor that was active before it, or your home folder if none was. One made with `:enew`
-gets the folder of the editor you typed it in, as a Vim window keeps its folder. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its file's folder
+gets the folder of the editor you typed it in, a `:lcd` there included, as a Vim window keeps its folder. With `'autochdir'` set in your `init.lua`, Neovim moves each window to its file's folder
 instead.
 
 While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back to where
@@ -470,7 +470,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:e[dit] file` | open `file`, as Neovim's `:e` names it: relative to the editor's project folder (the window's folder, `:lcd`), `./file` too; `%:h/file` is beside the current file, `#` the alternate file, and `~` and absolute paths work. A file that does not exist opens as a new, empty editor (`"file" [New]`); nothing is written until `:w` |
 | `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
-| `:ene[w]` | open a new untitled editor (*File → New → Untitled Text File*), working in this editor's folder, so `:w notes.txt` saves it there. Unlike Vim's `:enew`, which empties the window, this editor stays open (so `:enew!` is the same). `Ctrl-^` goes back |
+| `:ene[w]` | open a new untitled editor (*File → New → Untitled Text File*), working in this editor's folder (its `:lcd` too), so `:w notes.txt` saves it there. Unlike Vim's `:enew`, which empties the window, this editor stays open (so `:enew!` is the same). `Ctrl-^` goes back |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |

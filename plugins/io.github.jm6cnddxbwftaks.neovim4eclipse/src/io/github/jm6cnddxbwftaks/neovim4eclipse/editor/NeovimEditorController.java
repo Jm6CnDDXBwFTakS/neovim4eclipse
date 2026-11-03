@@ -485,28 +485,19 @@ public final class NeovimEditorController implements AutoCloseable {
      * types stays with the editor: {@code :e} completion, {@code :!} and {@code :find} start at the
      * project's root, or at the file's folder for a file outside any project. A relative {@code :e}, {@code :w}, {@code :wq} or {@code :x} name is relative
      * to it, as in Neovim ({@code util/EditPath}).
-     * For an untitled document opened by {@code :enew}, the folder of the editor it was typed in
-     * ({@link UntitledFolders}); for one opened from Eclipse's menu, the root of the project selected
-     * in the project tree ({@link SelectedProject}: the one right-clicked for <i>New → Untitled Text
-     * File</i>); with none, {@code null}: its window takes the folder of the editor attached before
-     * it, or the home folder ({@link NeovimSession#showWindow}).
+     * For an untitled document opened by {@code :enew}, {@code null}: its window keeps the folder
+     * it copies from the window it opens from, the one of the editor {@code :enew} was typed in,
+     * {@code :lcd} included ({@code util/EnewEditors}). For one opened from Eclipse's menu, the root of
+     * the project selected in the project tree ({@link SelectedProject}: the one right-clicked for
+     * <i>New → Untitled Text File</i>); with none, {@code null} too: its window takes the folder of
+     * the editor attached before it, or the home folder ({@link NeovimSession#showWindow}).
      */
     private static String windowFolder(ITextEditor editor) {
-        Path folder = folderOf(editor);
-        return folder == null ? null : folder.toString();
-    }
-
-    /** {@link #windowFolder} as a path, or {@code null}. UI thread. */
-    static Path folderOf(ITextEditor editor) {
         Path folder = EclipseFileCommands.windowFolder(editor);
-        if (folder != null) {
-            return folder;
+        if (folder == null && !EclipseFileCommands.ENEW_EDITORS.isOpenedByEnew(editor.getEditorInput())) {
+            folder = SelectedProject.root(editor.getSite().getWorkbenchWindow());
         }
-        var fromEnew = UntitledFolders.get(editor.getEditorInput());
-        if (fromEnew.isPresent()) {
-            return fromEnew.get().orElse(null);
-        }
-        return SelectedProject.root(editor.getSite().getWorkbenchWindow());
+        return folder == null ? null : folder.toString();
     }
 
     /** The editor's current document (looked up each time; may be {@code null}). */

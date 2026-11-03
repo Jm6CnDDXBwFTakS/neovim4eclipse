@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IStorage;
@@ -429,6 +430,36 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             explorer.selectReveal(StructuredSelection.EMPTY);
             page().closeAllEditors(false);
             other.delete(true, true, null);
+        }
+    }
+
+    /**
+     * A {@code :lcd} typed in the editor goes with {@code :enew}: the new editor's window copies the
+     * folder of the one it was typed in, as a Vim window keeps its local folder when {@code :enew}
+     * empties it, rather than the project's root worked out again.
+     */
+    @Test
+    void enewKeepsTheLcdOfTheEditorItWasTypedIn() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        IFolder sub = project.getFolder("enew-lcd");
+        sub.create(true, true, null);
+        try {
+            runInBox(widget, "lcd enew-lcd"); // relative to the window's folder, the project's root
+            runInBox(widget, "enew");
+            ITextEditor untitled = expectUntitledEditor();
+            StyledText untitledWidget = widgetOf(untitled);
+            runInBox(untitledWidget, "call setline(1, 'local')");
+            expectText(untitled, "local");
+            runInBox(untitledWidget, "w f.txt");
+            waitUntil("the editor on f.txt", TIMEOUT_MS, () -> "f.txt".equals(untitled.getTitle()),
+                    () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+            assertEquals(sub.getFile("f.txt"), untitled.getEditorInput().getAdapter(IFile.class),
+                    "in the folder :lcd chose");
+            assertFalse(project.getFile("f.txt").exists(), "not in the project's root");
+            assertEquals(List.of(), dialogs);
+        } finally {
+            page().closeAllEditors(false);
+            sub.delete(true, null);
         }
     }
 

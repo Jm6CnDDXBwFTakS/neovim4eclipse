@@ -33,6 +33,7 @@ import org.eclipse.ui.wizards.IWizardDescriptor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EnewEditors;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
@@ -314,40 +315,50 @@ public final class EclipseFileCommands {
     static final String UNTITLED_TEXT_FILE_WIZARD = "org.eclipse.ui.editors.wizards.UntitledTextFileWizard";
 
     /**
+     * The untitled editors {@code :enew} opened: their Neovim window keeps the folder of the window
+     * it opens from ({@link NeovimEditorController}'s {@code windowFolder}). UI thread.
+     */
+    static final EnewEditors ENEW_EDITORS = new EnewEditors();
+
+    /**
      * {@code :enew}: opens a new untitled editor, as <i>File &gt; New &gt; Untitled Text File</i>
-     * does, and has it work in {@code editor}'s folder ({@link UntitledFolders}). The wizard has no
-     * pages and may finish at once, so it is finished without a dialog, as Eclipse's own shortcut
-     * to it does: created from the workbench's wizard registry (public API), initialized, finished.
+     * does, which works in {@code editor}'s folder ({@link EnewEditors}). The wizard has no pages and
+     * may finish at once, so it is finished without a dialog, as Eclipse's own shortcut to it does:
+     * created from the workbench's wizard registry (public API), initialized, finished, disposed.
      * The new editor is then the active one, and Neovim attaches to it as to any editor; its
      * window's alternate file is {@code editor}'s file, so {@code Ctrl-^} goes back.
      */
     static void newUntitled(ITextEditor editor) {
         IWorkbenchWindow window = editor.getSite().getWorkbenchWindow();
-        Path folder = NeovimEditorController.folderOf(editor);
+        IWizardDescriptor descriptor = PlatformUI.getWorkbench().getNewWizardRegistry()
+                .findWizard(UNTITLED_TEXT_FILE_WIZARD);
+        if (descriptor == null) {
+            HostCommands.showError(editor, "Cannot open an untitled editor: this Eclipse has no Untitled Text File wizard");
+            return;
+        }
+        IWorkbenchWizard wizard = null;
         try {
-            IWizardDescriptor descriptor = PlatformUI.getWorkbench().getNewWizardRegistry()
-                    .findWizard(UNTITLED_TEXT_FILE_WIZARD);
-            if (descriptor == null) {
-                HostCommands.showError(editor, "E492: No Untitled Text File in this Eclipse");
-                return;
-            }
-            IWorkbenchWizard wizard = descriptor.createWizard();
+            wizard = descriptor.createWizard();
             wizard.init(PlatformUI.getWorkbench(), StructuredSelection.EMPTY);
-            UntitledFolders.opening(folder);
+            ENEW_EDITORS.opening();
             boolean finished;
             try {
                 finished = wizard.performFinish();
             } finally {
-                UntitledFolders.opened();
+                ENEW_EDITORS.opened();
             }
             IEditorPart opened = window.getActivePage() == null ? null : window.getActivePage().getActiveEditor();
-            if (finished && opened != null && opened != EditorAttachManager.getInstance().workbenchPartOf(editor)
-                    && UntitledFolders.get(opened.getEditorInput()).isEmpty()) {
-                UntitledFolders.put(opened.getEditorInput(), folder); // it had not asked yet
+            if (finished && opened != null && opened != EditorAttachManager.getInstance().workbenchPartOf(editor)) {
+                ENEW_EDITORS.add(opened.getEditorInput()); // in case Neovim attaches to it only now
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not open an untitled editor", e);
-            HostCommands.showError(editor, "Could not open an untitled editor: " + e.getMessage());
+            String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            HostCommands.showError(editor, "Could not open an untitled editor: " + reason);
+        } finally {
+            if (wizard != null) {
+                wizard.dispose();
+            }
         }
     }
 
