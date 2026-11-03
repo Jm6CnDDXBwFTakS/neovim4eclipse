@@ -29,6 +29,22 @@ public record BufferChange(int firstLine, int lastLine, List<String> newLines, R
         return new BufferChange(0, 0, List.of(), afterApply);
     }
 
+    /**
+     * The change without its text: the lines it replaces and how many come instead. A record's own
+     * {@code toString} would list every new line, and a change that cannot be applied is logged
+     * at WARNING, into Eclipse's Error Log ({@code .metadata/.log}): for a full sync that was the
+     * whole document, perhaps a file of passwords (file-by-file security review of 0.2.1).
+     * Example: {@code BufferChange[lines 3-5 replaced by 2 lines]}, {@code BufferChange[whole
+     * buffer, 120 lines]}.
+     */
+    @Override
+    public String toString() {
+        int count = newLines == null ? 0 : newLines.size();
+        String lines = count + (count == 1 ? " line" : " lines");
+        return lastLine < 0 ? "BufferChange[whole buffer, " + lines + "]"
+                : "BufferChange[lines " + firstLine + "-" + lastLine + " replaced by " + lines + "]";
+    }
+
     /** Whether this replaces no line with none: nothing to apply ({@link #marker}). */
     public boolean changesNothing() {
         return lastLine == firstLine && newLines.isEmpty();

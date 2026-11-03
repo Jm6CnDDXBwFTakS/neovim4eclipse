@@ -76,6 +76,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A `&` in a file name shows in Neovim's message line, the status bar and the startup error
+  notice: `R&D.txt` showed as `RD.txt`, with the `D` underlined.
 - A file of more than about 33,000 lines opens in Neovim mode: it stayed empty in Neovim, and
   from about 65,500 lines, or about 9,400 entries in `:Eproblems`, the Neovim every editor shares
   ended, with all undo history. A document that fails to load into Neovim is no longer replaced
@@ -116,6 +118,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the SVG's script; such files now open in the Text Editor, as Vim shows them.
 - The update site checks every release's signatures each time it is rebuilt, and holds only signed
   releases (0.1.4 and later), so Eclipse never asks to trust unsigned content from it.
+- A change Neovim made that Eclipse could not apply is logged without its text: the log entry
+  in Eclipse's Error Log held the new lines, for a full sync the whole document.
 - A key that took long to process is no longer written to Eclipse's Error Log, where it could have
   been a character of a password typed at a Neovim prompt.
 - Text Eclipse typed is re-typed into Neovim only while Neovim is still in insert mode. If a timer
