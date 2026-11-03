@@ -890,7 +890,7 @@ error mark.
 
   **Checked at every start.** The plug-in hashes all its files (about 2,000, in about a tenth of a
   second) and compares the result with the hash pinned for this release in the plug-in: when
-  Eclipse starts, in the background, and again before every later start of Neovim (*Restart
+  Eclipse starts, in the background, and again before every start of Neovim (the first, *Restart
   Neovim*, or after Neovim quit). A Neovim left from an older version of the plug-in,
   a damaged copy, or one where a file was changed or added fails the check: nothing of it runs,
   not even `nvim --version`, and the preference page and the "Neovim not started" notice say that

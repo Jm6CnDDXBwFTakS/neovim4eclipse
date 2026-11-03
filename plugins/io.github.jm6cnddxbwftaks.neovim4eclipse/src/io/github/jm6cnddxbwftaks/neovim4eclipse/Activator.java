@@ -54,8 +54,6 @@ public class Activator extends AbstractUIPlugin {
     private static Activator plugin;
 
     private NeovimSession session;
-    /** Whether a Neovim was started in this Eclipse session: each later start checks the install again. */
-    private boolean startedBefore;
     private IPropertyChangeListener preferenceListener;
     /** Copies the plug-in's JUL warnings and errors to the Error Log. */
     private ErrorLogHandler errorLogHandler;
@@ -204,14 +202,13 @@ public class Activator extends AbstractUIPlugin {
             });
             cleanup.setSystem(true); // housekeeping: not shown in the Progress view
             cleanup.schedule();
-            // The dedicated Neovim's files are hashed again before every start but the first: the
-            // first uses the check EarlyStartup just made at Eclipse's start, in the background; a
-            // later one (Restart Neovim, after Neovim quit) hashes in full here, about 0.1 s, so a
-            // file changed meanwhile is caught (PluginNeovim.verified keeps answers until forget).
-            if (startedBefore) {
-                PluginNeovim.forget();
-            }
-            startedBefore = true;
+            // The dedicated Neovim's files are hashed again before every start, about 0.1 s, so a
+            // file changed since the last check is caught. That includes the first start: the
+            // check EarlyStartup made at Eclipse's start may be hours old, and its kept answer
+            // (PluginNeovim.verified) notices a change only through four modification times,
+            // which editing a runtime file in place does not touch (file-by-file security review
+            // of 0.2.1). EarlyStartup's check still decides whether Get Neovim opens at once.
+            PluginNeovim.forget();
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
