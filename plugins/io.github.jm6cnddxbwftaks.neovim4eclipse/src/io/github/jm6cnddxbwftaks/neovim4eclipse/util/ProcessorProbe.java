@@ -34,6 +34,11 @@ import java.util.function.Function;
  *   <li><b>Linux</b>: {@code os.arch} as it is.</li>
  * </ul>
  *
+ * <p>Both programs are run by their full path, {@code /usr/sbin/sysctl} and
+ * {@code %SystemRoot%\System32\reg.exe}, never by name: Windows looks for a bare {@code reg} in the
+ * current folder before {@code System32}, so a {@code reg.exe} in the folder Eclipse was started
+ * from (a cloned repository, say) would run instead.
+ *
  * <h2>When</h2>
  * Starting a program takes some milliseconds, so the answer is asked once per Eclipse session, on a
  * background thread, and kept. {@link #known()} never waits: until the answer is in, or if asking
@@ -77,7 +82,8 @@ public final class ProcessorProbe {
                 if (a == null) {
                     String osName = System.getProperty("os.name", "");
                     String osArch = System.getProperty("os.arch", "");
-                    a = CompletableFuture.supplyAsync(() -> probe(osName, osArch, ProcessorProbe::run));
+                    String systemRoot = System.getenv("SystemRoot");
+                    a = CompletableFuture.supplyAsync(() -> probe(osName, osArch, systemRoot, ProcessorProbe::run));
                     answer = a;
                 }
             }
@@ -88,13 +94,15 @@ public final class ProcessorProbe {
     /**
      * Testable core: the platform for {@code osName} with the processor the system reports.
      *
-     * @param run runs a command and gives its output, or {@code null} if it failed
+     * @param systemRoot Windows' {@code %SystemRoot%} ({@code C:\Windows}), or {@code null}
+     * @param run        runs a command and gives its output, or {@code null} if it failed
      */
-    static Optional<NeovimPlatform> probe(String osName, String osArch, Function<List<String>, String> run) {
+    static Optional<NeovimPlatform> probe(String osName, String osArch, String systemRoot,
+            Function<List<String>, String> run) {
         String os = osName.toLowerCase(Locale.ROOT);
         String real = null;
         if (os.startsWith("mac")) {
-            String out = run.apply(List.of("sysctl", "-n", "hw.optional.arm64"));
+            String out = run.apply(List.of(SYSCTL, "-n", "hw.optional.arm64"));
             if (out != null) {
                 real = switch (out.strip()) {
                     case "1" -> "arm64";
@@ -103,13 +111,26 @@ public final class ProcessorProbe {
                 };
             }
         } else if (os.startsWith("windows")) {
-            String out = run.apply(List.of("reg", "query",
+            String out = run.apply(List.of(reg(systemRoot), "query",
                     "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", "/v",
                     "PROCESSOR_ARCHITECTURE"));
             real = windowsArchitecture(out);
         }
         Optional<NeovimPlatform> platform = real == null ? Optional.empty() : NeovimPlatform.of(osName, real);
         return platform.isPresent() ? platform : NeovimPlatform.of(osName, osArch);
+    }
+
+    /** macOS's {@code sysctl}, by its full path (see the class comment). */
+    static final String SYSCTL = "/usr/sbin/sysctl";
+
+    /**
+     * Windows' {@code reg.exe} in {@code System32}, by its full path (see the class comment).
+     * {@code %SystemRoot%} is where Windows is; when it is missing or not an absolute
+     * {@code X:\...} path, {@code C:\Windows}. Example: {@code C:\Windows\System32\reg.exe}.
+     */
+    static String reg(String systemRoot) {
+        String root = systemRoot != null && systemRoot.matches("[A-Za-z]:\\\\.*") ? systemRoot : "C:\\Windows";
+        return (root.endsWith("\\") ? root : root + "\\") + "System32\\reg.exe";
     }
 
     /**

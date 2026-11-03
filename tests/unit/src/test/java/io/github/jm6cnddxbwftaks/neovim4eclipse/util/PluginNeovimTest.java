@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -67,9 +68,9 @@ class PluginNeovimTest {
 
     @Test
     void macOsAsksSysctl() {
-        assertEquals(code("ma"), ProcessorProbe.probe("Mac OS X", "x86_64", cmd -> "1\n"), "Rosetta 2");
-        assertEquals(code("mx"), ProcessorProbe.probe("Mac OS X", "x86_64", cmd -> "0\n"));
-        assertEquals(code("mx"), ProcessorProbe.probe("Mac OS X", "x86_64", cmd -> null), "sysctl failed: Java's");
+        assertEquals(code("ma"), ProcessorProbe.probe("Mac OS X", "x86_64", null, cmd -> "1\n"), "Rosetta 2");
+        assertEquals(code("mx"), ProcessorProbe.probe("Mac OS X", "x86_64", null, cmd -> "0\n"));
+        assertEquals(code("mx"), ProcessorProbe.probe("Mac OS X", "x86_64", null, cmd -> null), "sysctl failed: Java's");
     }
 
     @Test
@@ -80,16 +81,35 @@ class PluginNeovimTest {
                     PROCESSOR_ARCHITECTURE    REG_SZ    ARM64
 
                 """;
-        assertEquals(code("wa"), ProcessorProbe.probe("Windows 11", "amd64", cmd -> arm), "x64 emulation");
-        assertEquals(code("wx"), ProcessorProbe.probe("Windows 11", "amd64", cmd -> arm.replace("ARM64", "AMD64")));
-        assertEquals(code("wx"), ProcessorProbe.probe("Windows 11", "amd64", cmd -> "garbage"));
+        assertEquals(code("wa"), ProcessorProbe.probe("Windows 11", "amd64", "C:\\Windows", cmd -> arm), "x64 emulation");
+        assertEquals(code("wx"), ProcessorProbe.probe("Windows 11", "amd64", "C:\\Windows", cmd -> arm.replace("ARM64", "AMD64")));
+        assertEquals(code("wx"), ProcessorProbe.probe("Windows 11", "amd64", "C:\\Windows", cmd -> "garbage"));
+    }
+
+    /** Never by bare name: Windows would run a reg.exe from the current folder first. */
+    @Test
+    void theProgramsRunByTheirFullPath() {
+        List<List<String>> ran = new ArrayList<>();
+        ProcessorProbe.probe("Mac OS X", "x86_64", null, cmd -> {
+            ran.add(cmd);
+            return null;
+        });
+        ProcessorProbe.probe("Windows 11", "amd64", "D:\\Win", cmd -> {
+            ran.add(cmd);
+            return null;
+        });
+        assertEquals("/usr/sbin/sysctl", ran.get(0).get(0));
+        assertEquals("D:\\Win\\System32\\reg.exe", ran.get(1).get(0));
+        assertEquals("C:\\Windows\\System32\\reg.exe", ProcessorProbe.reg(null), "no SystemRoot");
+        assertEquals("C:\\Windows\\System32\\reg.exe", ProcessorProbe.reg("Windows"), "not absolute");
+        assertEquals("C:\\Windows\\System32\\reg.exe", ProcessorProbe.reg("C:\\Windows\\"), "a trailing backslash");
     }
 
     @Test
     void linuxTakesJavasWord() {
-        assertEquals(code("la"), ProcessorProbe.probe("Linux", "aarch64", cmd -> {
+        assertEquals(code("la"), ProcessorProbe.probe("Linux", "aarch64", null, cmd -> {
             throw new AssertionError("no command on Linux");
         }));
-        assertEquals(Optional.empty(), ProcessorProbe.probe("Linux", "riscv64", cmd -> null));
+        assertEquals(Optional.empty(), ProcessorProbe.probe("Linux", "riscv64", null, cmd -> null));
     }
 }

@@ -66,12 +66,21 @@ jobs:
             exit 1
           fi
       - id: tag
-        # v0.1.0 -> 0.1.0. GITHUB_REF_NAME is the tag name for a tag push.
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        # v0.1.0 -> 0.1.0. GITHUB_REF_NAME is the tag name for a tag push. Only vX.Y.Z is a
+        # release: Git allows $, ` and ; in a tag name (v1$(id)), and the version ends up in shell
+        # lines, Maven arguments and file names, so anything else stops here, before any of them.
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The tag must look like v1.2.3; this one does not, so nothing is released."
+            exit 1
+          fi
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       # Here, before the build, so that a forgotten changelog stops the release in seconds rather
       # than after the whole build. The output is thrown away; publish reads the notes again.
       - name: Check that CHANGELOG.md has a section for ${{ steps.tag.outputs.version }}
-        run: releng/release-notes.sh "${{ steps.tag.outputs.version }}" > /dev/null
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}   # through env, never pasted into the script
+        run: releng/release-notes.sh "$VERSION" > /dev/null
       # Get Neovim installs only an archive whose SHA-256 equals the one pinned in
       # util/neovim-downloads.properties. CI downloads three of the six archives (and checks them);
       # this downloads all six and compares each with the file and with GitHub's published digest,
@@ -90,13 +99,20 @@ jobs:
       # then skips them. Example: v0.2.0 tagged 9dde160, whose push to main ran Build 41404567004.
       # Anything else (none yet, still running, failed, or an error from the API) answers false,
       # and the release runs every test, as before this check existed.
+      #
+      # Only push and Run workflow (workflow_dispatch) runs of this repository count. A run's
+      # "branch" is its head branch, and a pull request from a fork's own main has head branch main
+      # too, but its run tests the pull request merged into main, and the fork's copy of build.yml.
+      # Without the filter, tagging that commit would skip the tests even though main's own Build
+      # failed or never ran (gh run list cannot filter on two events, hence the API and jq).
       - name: Look for a green Build of this commit on main
         id: tested
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run=$(gh run list --workflow build.yml --branch main --commit "$GITHUB_SHA" \
-                  --status success --limit 1 --json url --jq '.[0].url // empty') || run=''
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&status=success&per_page=100" \
+                  --jq '[.workflow_runs[] | select((.event == "push" or .event == "workflow_dispatch")
+                          and .head_repository.full_name == $ENV.GITHUB_REPOSITORY)] | .[0].html_url // empty') || run=''
           if [ -n "$run" ]; then
             echo "Build passed on main for $GITHUB_SHA: $run. The release build skips the tests."
             echo "tested=true" >> "$GITHUB_OUTPUT"

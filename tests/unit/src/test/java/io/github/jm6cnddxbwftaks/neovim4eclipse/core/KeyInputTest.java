@@ -49,6 +49,8 @@ class KeyInputTest {
         /** Typing this key makes Neovim send a buffer line event (as editing in Neovim does). */
         String keyWithLineEvent;
         boolean bufferLinesFail;
+        /** Re-typing this text finds Neovim outside an insert (a timer's stopinsert): nothing is typed. */
+        String refusedText;
 
         @Override
         public void type(String keys) throws Exception {
@@ -63,12 +65,17 @@ class KeyInputTest {
         }
 
         @Override
-        public void typeText(String text) throws Exception {
+        public boolean typeText(String text) throws Exception {
+            if (text.equals(refusedText)) {
+                calls.add("feed " + text + " refused");
+                return false;
+            }
             try {
                 type(text); // the same, recorded as "feed": raw text, with no mapping applied
             } finally {
                 calls.set(calls.size() - 1, "feed " + text);
             }
+            return true;
         }
 
         @Override
@@ -297,6 +304,26 @@ class KeyInputTest {
         }
     }
 
+    /**
+     * Neovim left the insert behind Eclipse's back (a timer's {@code stopinsert}): the typed text is
+     * not re-typed, since in Normal mode a pasted {@code :!cmd} would run. The document push makes
+     * the text right; only {@code .} misses it.
+     */
+    @Test
+    void aReplayOutsideInsertModeTypesNothingAndFallsBackToPushThenEsc() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
+            nvim.refusedText = ":!rm -rf x";
+
+            keys.leaveInsertMode(new InsertReplay.Plan(List.of(":!rm -rf x", "more"), 1, 0, 1, 2));
+
+            assertEquals(List.of("setCursor 1:0", "feed :!rm -rf x refused", "push document", "type <Esc>",
+                    "snapshot"), nvim.calls, "no later chunk is typed either");
+            state.dispatchBufferChange(0, 1, List.of("later"));
+            assertEquals(List.of("mode n", "buffer [later]"), heard, "buffer events count again");
+            log.assertLogged(Level.WARNING, "Neovim was no longer in insert mode");
+        }
+    }
+
     // ---- Enter on Neovim's own : command line ----
 
     /**
@@ -323,6 +350,26 @@ class KeyInputTest {
         assertFalse(keys.isNeovimDrivenInsert());
         editor.changes.get(editor.changes.size() - 1).afterApply().run(); // the editor applied the sync
         assertTrue(state.isEclipseTypingReady(), "Eclipse types again");
+    }
+
+    /**
+     * At a sync point Neovim turns out to be in Normal mode: the typed text is not re-typed and the
+     * key is not sent either (Normal-mode Ctrl-W is a window command); the document is still pushed
+     * and the editor hears the real mode.
+     */
+    @Test
+    void aSyncPointOutsideInsertModeSendsNeitherTextNorKey() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
+            nvim.refusedText = "foo bar";
+            InsertReplay.Plan typed = new InsertReplay.Plan(List.of("foo bar"), 1, 2, 1, 9);
+
+            keys.syncInsertThenInput(new InsertReplay.SyncPoint(typed, 1, 9), "<C-w>");
+
+            assertEquals(List.of("setCursor 1:2", "feed foo bar refused", "push document", "setCursor 1:9",
+                    "snapshot"), nvim.calls);
+            assertTrue(heard.contains("mode n"), "the editor hears Normal mode: " + heard);
+            log.assertLogged(Level.WARNING, "the key was not sent");
+        }
     }
 
     /** In a long document the key's line events are enough: Eclipse types once they are applied, without a full sync. */

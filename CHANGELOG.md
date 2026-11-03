@@ -59,6 +59,17 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `Ctrl` key ticked for insert mode, such as `Ctrl+O` (Quick Outline) in the Java editor, now
   reaches Neovim, also where Eclipse binds it.
 
+### Security
+
+- Text Eclipse typed is re-typed into Neovim only while Neovim is still in insert mode. If a timer
+  or autocommand of your config had ended the insert, a pasted `:!command` line could have run as a
+  Normal-mode command; now nothing is re-typed then (only `.` misses that text).
+- Links in the plug-in's dialogs, notices and preference page open only `https` pages. On Windows
+  the system would run a `file:` link's program; no link is built from outside text today, so this
+  guards future ones.
+- Get Neovim runs `reg.exe` (Windows) and `sysctl` (macOS) by their full paths, so a program of that
+  name in the folder Eclipse was started from cannot run instead.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

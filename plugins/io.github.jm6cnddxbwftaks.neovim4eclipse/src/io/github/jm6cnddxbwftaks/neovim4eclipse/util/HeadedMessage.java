@@ -47,8 +47,17 @@ import java.util.stream.Stream;
  */
 public record HeadedMessage(String intro, List<Point> points, String footer) {
 
-    /** A link a point offers: what it says, and where it goes (opened in the user's browser). */
+    /**
+     * A link a point offers: what it says, and where it goes (opened in the user's browser). Only an
+     * {@code https} page ({@link HttpsLinks}): the dialog's opener would run a {@code file:} link's
+     * program on Windows.
+     *
+     * @throws IllegalArgumentException if {@code url} is not an {@code https} URL with a host
+     */
     public record Link(String label, URI url) {
+        public Link {
+            HttpsLinks.require(url);
+        }
     }
 
     /**

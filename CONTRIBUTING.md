@@ -504,8 +504,10 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    This run is also the release's test run. When the *Release* workflow finds a successful *Build*
    run on `main` for the tagged commit, it only builds the ZIP (the `skip-tests` input of
    `build.yml`) instead of running every test again, Windows and macOS included, on a commit they
-   just passed. Tag before that run has passed and the release runs every test itself, as it does
-   for any commit without one; the log of its first job says which it found.
+   just passed. Only a push or *Run workflow* run of this repository counts: a pull request from a
+   fork's own `main` also runs on a branch named `main`, but tests something else. Tag before that
+   run has passed and the release runs every test itself, as it does for any commit without one;
+   the log of its first job says which it found.
 
 3. Tag the commit on `main` and push the tag:
 
@@ -523,8 +525,9 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    git push origin --delete release/0.1.2
    ```
 
-The workflow stops before building anything if the tagged commit is not on `main` or the changelog
-has no `0.1.2` section. Nothing is committed back: the build replaces the committed
+The workflow stops before building anything if the tag is not `v<major>.<minor>.<patch>` (such as
+`v0.1.2`; Git allows `$` and `;` in a tag name, and the version reaches shell lines and file names),
+if the tagged commit is not on `main`, or if the changelog has no `0.1.2` section. Nothing is committed back: the build replaces the committed
 `0.1.2-SNAPSHOT` / `0.1.2.qualifier` with the tag's `0.1.2` inside the runner only. Because each
 release branch carries its own snapshot version, a test build of it (`0.1.3.<timestamp>`) sorts
 above the last release, so Eclipse installs it as an update.

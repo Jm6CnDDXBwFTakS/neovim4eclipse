@@ -69,9 +69,12 @@ final class KeyInput {
         /**
          * Types raw {@code text} with no mapping or abbreviation applied
          * ({@code nvim_feedkeys(text, 'n')}): the re-typing of what Eclipse typed, which the user's
-         * insert mappings must not change.
+         * insert mappings must not change. Only into an open insert ({@link LuaScripts#TYPE_TEXT}):
+         * outside Insert and Replace mode nothing is typed, since the text would run as commands.
+         *
+         * @return {@code true} if typed, {@code false} if Neovim was not in an insert
          */
-        void typeText(String text) throws Exception;
+        boolean typeText(String text) throws Exception;
 
         /**
          * Returns once Neovim has consumed all pending input. Any cheap request does that, because
@@ -452,7 +455,12 @@ final class KeyInput {
     private boolean replayTypedText(InsertReplay.Plan plan) {
         state.setSuppressBufferEvents(true);
         try {
-            typeAtBase(plan);
+            if (!typeAtBase(plan)) {
+                LOG.warning("Neovim was no longer in insert mode, so the typed text was not replayed "
+                        + "(it would have run as commands); dot-repeat will not include it");
+                state.setSuppressBufferEvents(false);
+                return false;
+            }
             nvim.type("<Esc>");
             nvim.awaitKeysConsumed();
             return true;
@@ -470,13 +478,19 @@ final class KeyInput {
      * typed {@code jk} is re-typed as two letters and does not end the insert half way.
      * {@link Neovim#awaitKeysConsumed()} follows every chunk, so the text is processed before the
      * next step.
+     *
+     * @return {@code false} if Neovim was not in an insert (any more), so the rest was not typed:
+     *         the text must not become Normal-mode commands ({@link LuaScripts#TYPE_TEXT})
      */
-    private void typeAtBase(InsertReplay.Plan plan) throws Exception {
+    private boolean typeAtBase(InsertReplay.Plan plan) throws Exception {
         nvim.setCursor(plan.baseLine1Based(), plan.baseCol0Based());
         for (String chunk : plan.textChunks()) {
-            nvim.typeText(chunk);
+            if (!nvim.typeText(chunk)) {
+                return false;
+            }
             nvim.awaitKeysConsumed();
         }
+        return true;
     }
 
     /**
@@ -511,11 +525,19 @@ final class KeyInput {
      * @param key  the key, in Neovim notation ({@code <C-w>})
      */
     void syncInsertThenInput(InsertReplay.SyncPoint sync, String key) throws Exception {
+        boolean inInsert;
         leavingInsert = true;
         try {
-            handOverTypedText(sync);
+            inInsert = handOverTypedText(sync);
         } finally {
             leavingInsert = false;
+        }
+        if (!inInsert) {
+            // Neovim left the insert behind Eclipse's back (a timer's stopinsert): the key is not sent
+            // either, since in Normal mode Ctrl-W or Ctrl-R is another command. The editor hears the
+            // real mode and ends its insert; the document is already pushed.
+            state.publishState();
+            return;
         }
         status.clearMessage(); // as a key does
         nvim.type(key);
@@ -541,15 +563,25 @@ final class KeyInput {
         }
     }
 
-    /** Steps 1 to 3 of {@link #syncInsertThenInput}. */
-    private void handOverTypedText(InsertReplay.SyncPoint sync) throws Exception {
+    /**
+     * Steps 1 to 3 of {@link #syncInsertThenInput}.
+     *
+     * @return {@code false} if Neovim was found outside an insert, so the typed text was not
+     *         re-typed and the key must not be sent
+     */
+    private boolean handOverTypedText(InsertReplay.SyncPoint sync) throws Exception {
         Runnable push = leaveInsertPush.get();
+        boolean inInsert = true;
         state.setSuppressBufferEvents(true);
         try {
             InsertReplay.Plan typed = sync == null ? null : sync.typed();
             if (typed != null) {
                 try {
-                    typeAtBase(typed);
+                    inInsert = typeAtBase(typed);
+                    if (!inInsert) {
+                        LOG.warning("Neovim was no longer in insert mode, so the typed text was not "
+                                + "re-typed (it would have run as commands) and the key was not sent");
+                    }
                 } catch (Exception e) {
                     // The push below still makes the text right; only . misses the typed text.
                     LOG.log(Level.WARNING, "re-typing the typed text into Neovim failed; dot-repeat will not include it", e);
@@ -569,5 +601,6 @@ final class KeyInput {
             nvim.awaitKeysConsumed();
             view.run();
         }
+        return inInsert;
     }
 }

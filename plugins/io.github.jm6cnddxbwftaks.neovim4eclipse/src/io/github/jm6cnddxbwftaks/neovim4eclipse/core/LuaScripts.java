@@ -3135,6 +3135,33 @@ final class LuaScripts {
             return true
             """;
 
+    /**
+     * Types argument 1 as raw characters into Neovim's open insert, with no mapping or abbreviation
+     * applied ({@code nvim_feedkeys(text, "n", true)}: {@code "<"} is a {@code <}, Neovim's special
+     * byte 0x80 is escaped), and returns {@code true}; or types nothing and returns {@code false} when
+     * Neovim is not in Insert or Replace mode. The re-typing of what Eclipse typed
+     * ({@link KeyInput}), which the user's {@code inoremap jk <Esc>} or {@code iabbrev teh the} must
+     * not change.
+     *
+     * <p><b>Why the mode check.</b> The text is whatever Eclipse typed: a paste from a web page, a
+     * template's text. In Normal mode the same characters are commands, so a pasted
+     * {@code :!curl x|sh} followed by a newline would run. Eclipse believes Neovim is still in the
+     * insert it opened, and normally it is; but a timer or an autocommand of the user's config may
+     * have ended it ({@code stopinsert}), and the plug-in must not turn text into commands then. The
+     * check runs in the same request as the typing, when Neovim is idle, so the mode cannot change
+     * in between. {@code mode} starts with {@code i} in Insert mode and its completion submodes
+     * ({@code ic}, {@code ix}), with {@code R} in Replace and Virtual Replace ({@code Rv}); after
+     * insert-mode {@code Ctrl-O} it is {@code niI}, Normal mode, and nothing is typed.
+     */
+    static final String TYPE_TEXT = """
+            local first = vim.api.nvim_get_mode().mode:sub(1, 1)
+            if first ~= 'i' and first ~= 'R' then
+              return false
+            end
+            vim.api.nvim_feedkeys(select(1, ...), 'n', true)
+            return true
+            """;
+
     /** Pastes argument 1 at the cursor, in any mode, as a paste rather than typed keys. */
     static final String PASTE = "vim.api.nvim_paste(select(1, ...), false, -1)";
 

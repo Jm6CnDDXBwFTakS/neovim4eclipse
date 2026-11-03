@@ -48,15 +48,6 @@ public interface NeovimApi {
     CompletableFuture<Integer> input(String keys);
 
     /**
-     * {@code nvim_feedkeys(text, "n", true)}: queues {@code text} as raw characters, not key notation
-     * ({@code "<"} is a {@code <}, {@code "\r"} is Enter), with no mapping or abbreviation applied
-     * ({@code "n"}, as {@code :normal!}); Neovim's special byte 0x80 is escaped. For text already
-     * typed elsewhere that Neovim must insert exactly: a user's {@code inoremap jk <Esc>} or
-     * {@code iabbrev teh the} must not change it. Answers before Neovim has processed it.
-     */
-    CompletableFuture<Void> feedText(String text);
-
-    /**
      * {@code nvim_set_client_info(name, version, type, methods, attributes)}: tells Neovim who is on
      * this channel; {@code :lua =vim.api.nvim_get_chan_info(n).client} shows it.
      *

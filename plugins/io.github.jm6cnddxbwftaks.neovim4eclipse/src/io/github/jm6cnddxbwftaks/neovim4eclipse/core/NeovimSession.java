@@ -1749,8 +1749,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void typeText(String text) throws Exception {
-            await(api.feedText(text));
+        public boolean typeText(String text) throws Exception {
+            return Boolean.TRUE.equals(await(api.execLua(LuaScripts.TYPE_TEXT, List.of(text))));
         }
 
         @Override
