@@ -9,11 +9,16 @@
 # Five jobs, each starting only when the one before succeeded:
 #   1. version: checks that the tagged commit is on main, that CHANGELOG.md has a section for
 #               the version, and that the six Neovim archives Get Neovim installs still match the
-#               plug-in's data file; reads the version from the tag.
+#               plug-in's data file; reads the version from the tag; and looks for a successful
+#               Build run on main for the tagged commit.
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
-#               version: the same Neovim, UI tests and integration tests as every CI run. It uploads
-#               neovim4eclipse-<version>.zip as an artifact of this run. The build is unsigned and
-#               sees no secrets, exactly as on main.
+#               version. It uploads neovim4eclipse-<version>.zip as an artifact of this run. The
+#               build is unsigned and sees no secrets, exactly as on main. When the Build on main
+#               passed for this commit (the usual case: CONTRIBUTING.md, "Releasing", step 2), it
+#               only builds the ZIP (skip-tests): the same tests on the same commit would only
+#               give the same answer, at a cost of about an hour of Windows and macOS minutes
+#               (counted 2x and 10x). Otherwise it runs every test, as every CI run does. It is
+#               rebuilt either way, since only this build stamps the release version into the ZIP.
 #   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh) and uploads the result
 #               as neovim4eclipse-<version>.signed.zip. Only this job can read the key: it is a secret of the
 #               GitHub environment "release", which only v* tags may use. See
@@ -39,8 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read   # for the checkout
+      actions: read    # to list the Build workflow's runs
     outputs:
       version: ${{ steps.tag.outputs.version }}
+      tested: ${{ steps.tested.outputs.tested }}
     steps:
       # Releases come from main only: main holds what the Build workflow has tested (it runs on
       # every push to main). A tag on a release-branch commit main does not have yet, or any other
@@ -78,6 +85,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}   # GitHub's API, with this run's rate limit
         run: java releng/UpdateNeovimDownloads.java --check
+      # A successful Build run (push or Run workflow, every job: Linux UI, integration, Windows,
+      # macOS) on main for exactly this commit means the tests already passed on it; the build job
+      # then skips them. Example: v0.2.0 tagged 9dde160, whose push to main ran Build 41404567004.
+      # Anything else (none yet, still running, failed, or an error from the API) answers false,
+      # and the release runs every test, as before this check existed.
+      - name: Look for a green Build of this commit on main
+        id: tested
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list --workflow build.yml --branch main --commit "$GITHUB_SHA" \
+                  --status success --limit 1 --json url --jq '.[0].url // empty') || run=''
+          if [ -n "$run" ]; then
+            echo "Build passed on main for $GITHUB_SHA: $run. The release build skips the tests."
+            echo "tested=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No successful Build on main for $GITHUB_SHA: the release build runs every test."
+            echo "tested=false" >> "$GITHUB_OUTPUT"
+          fi
 
   build:
     name: Build
@@ -87,6 +113,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.version.outputs.version }}
+      skip-tests: ${{ needs.version.outputs.tested == 'true' }}   # job outputs are strings
 
   sign:
     name: Sign with PGP

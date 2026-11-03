@@ -13,8 +13,10 @@
 # same tests on Windows and macOS, so every OS the plug-in claims to support is tested on each run.
 #
 # It is also a reusable workflow (workflow_call): release.yml runs this same build for a tag, with
-# the version taken from the tag, so a release is built and tested exactly like every CI run. Keep
-# the build steps here only.
+# the version taken from the tag, so a release is built exactly like every CI run. Keep the build
+# steps here only. When the tagged commit already passed this workflow on main, release.yml passes
+# skip-tests: true, and only the ZIP is built: the tests ran on that very commit minutes before,
+# and running them again (Windows minutes count 2x, macOS 10x) would only repeat that answer.
 name: Build
 
 on:
@@ -32,6 +34,15 @@ on:
           the version as committed.
         type: string
         default: ''
+      skip-tests:
+        description: >-
+          Build the ZIP without running any test: the build job runs verify -DskipTests without
+          -Pui, and the integration and platforms jobs are skipped. Only for release.yml, when
+          this workflow already passed on main for the same commit. False by default; push, pull
+          request and manual runs have no inputs, and an absent input is false too, so they always
+          run every test.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,7 +54,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build, unit and UI tests
+    name: ${{ inputs.skip-tests && 'Build (tested on main)' || 'Build, unit and UI tests' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -64,7 +75,9 @@ jobs:
       # Ubuntu's packaged Neovim is too old, so use the official release archive: exactly the one
       # Get Neovim installs (util/neovim-downloads.properties, util/NeovimVersion.MINIMUM), its
       # SHA-256 checked. The script prints the program's path, kept in NVIM for the next steps.
+      # Only for the tests. "!inputs.skip-tests": an absent input (push, pull request) is false.
       - name: Install Neovim
+        if: ${{ !inputs.skip-tests }}
         # The assignment on its own line, so a failed check fails the step (set -e does not see a
         # failure inside an echo's arguments).
         run: |
@@ -73,9 +86,16 @@ jobs:
       # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
       # test"); -Pui adds the UI tests, which are off by default because they open a window. They
       # need an X display: xvfb-run provides a virtual one.
-      - run: >
+      - name: Build, unit and UI tests
+        if: ${{ !inputs.skip-tests }}
+        run: >
           xvfb-run -a ./mvnw -B -ntp verify -Pui
           -Dnvim.path=$NVIM
+      # The same build with every test left out (the test modules are still compiled): the ZIP
+      # alone, at the version release.yml set above.
+      - name: Build only (the tests passed on main)
+        if: ${{ inputs.skip-tests }}
+        run: ./mvnw -B -ntp verify -DskipTests
       - uses: actions/upload-artifact@v7
         with:
           # archive: false (upload-artifact v7+) uploads the single file as it is, instead of
@@ -86,6 +106,7 @@ jobs:
 
   integration:
     name: Integration tests (real Neovim)
+    if: ${{ !inputs.skip-tests }}   # see the build job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -118,6 +139,7 @@ jobs:
   # Apple silicon (arm64), so the Neovim platform codes below are wx and ma.
   platforms:
     name: All tests on ${{ matrix.name }}
+    if: ${{ !inputs.skip-tests }}   # see the build job
     runs-on: ${{ matrix.os }}
     # A UI test that hangs (a dialog nobody closes) would otherwise hold the runner for 6 hours.
     timeout-minutes: 60

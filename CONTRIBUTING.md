@@ -471,7 +471,7 @@ Rerun the tests after a rebase that had conflicts. Three guards keep it so:
 ## Releasing
 
 A release is a `v<version>` tag on `main`; pushing it starts the *Release* workflow
-(`.github/workflows/release.yml`), which builds and tests that version like every CI run,
+(`.github/workflows/release.yml`), which builds that version (and tests it, unless the *Build* on `main` already passed for that commit; step 2),
 signs the ZIP with the project's PGP key (see [docs/PACKAGING.md](docs/PACKAGING.md), "PGP
 signing of releases"), publishes a GitHub Release with it, and then rebuilds the update site on GitHub Pages
 (`.github/workflows/update-site.yml`, see [docs/PACKAGING.md](docs/PACKAGING.md)) with the new
@@ -500,6 +500,12 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    ```bash
    git push origin release/0.1.2:main
    ```
+
+   This run is also the release's test run. When the *Release* workflow finds a successful *Build*
+   run on `main` for the tagged commit, it only builds the ZIP (the `skip-tests` input of
+   `build.yml`) instead of running every test again, Windows and macOS included, on a commit they
+   just passed. Tag before that run has passed and the release runs every test itself, as it does
+   for any commit without one; the log of its first job says which it found.
 
 3. Tag the commit on `main` and push the tag:
 
