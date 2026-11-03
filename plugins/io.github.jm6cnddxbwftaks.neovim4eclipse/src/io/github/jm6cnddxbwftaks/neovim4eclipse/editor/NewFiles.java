@@ -241,14 +241,21 @@ final class NewFiles {
      */
     static String editorIdFor(String fileName) {
         try {
-            IEditorDescriptor descriptor = IDE.getEditorDescriptor(fileName, true, false);
-            if (descriptor != null && descriptor.isInternal()) {
-                return descriptor.getId();
-            }
+            return internalOr(IDE.getEditorDescriptor(fileName, true, false));
         } catch (Exception e) {
             LOG.log(Level.FINE, "No editor descriptor for " + fileName, e);
         }
         return TEXT_EDITOR;
+    }
+
+    /**
+     * {@code descriptor}'s ID if it is an editor inside Eclipse, else the Text Editor's: an external
+     * editor (the system's program for the file) or an in-place one (an OLE document on Windows)
+     * would run something outside Eclipse on the file.
+     */
+    static String internalOr(IEditorDescriptor descriptor) {
+        return descriptor != null && descriptor.isInternal() && !descriptor.isOpenExternal()
+                && !descriptor.isOpenInPlace() ? descriptor.getId() : TEXT_EDITOR;
     }
 
     /**

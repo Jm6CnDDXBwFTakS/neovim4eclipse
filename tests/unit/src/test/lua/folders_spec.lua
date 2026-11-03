@@ -55,6 +55,24 @@ t.test('a window in a folder that is gone does not stop the leaving', function()
   t.same_file(root, vim.uv.cwd())
 end)
 
+-- The parent a window moves to is set with chdir(): :lcd would expand `...` in its name as a shell
+-- command (0.2.1 security review).
+t.test('a parent folder named with backticks is moved to as it is, nothing runs', function()
+  if vim.fn.has('win32') == 1 then
+    return
+  end
+  local _, root = folder('x')
+  local marker = vim.fs.joinpath(root, 'MARKER')
+  local parent = vim.fs.joinpath(root, 'evil`touch ' .. marker .. '`')
+  local project = vim.fs.joinpath(parent, 'app')
+  vim.fn.mkdir(project, 'p')
+  vim.cmd.vsplit()
+  vim.fn.chdir(project, 'window')
+  t.eq(1, t.run('LEAVE_FOLDER', project), 'the window inside')
+  t.same_file(parent, cwd(), 'it works in the parent now')
+  t.eq(0, vim.fn.filereadable(marker), 'the backtick command did not run')
+end)
+
 t.test('on Windows the folder is matched ignoring case and slashes', function()
   if vim.fn.has('win32') == 0 then
     return

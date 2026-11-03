@@ -143,6 +143,22 @@ t.test("the folder is set once with :lcd; without one the window keeps the folde
     'silent: no message replaces the one the user reads')
 end)
 
+-- A project folder named with backticks: :lcd would expand `...` as a shell command (0.2.1
+-- security review); chdir() takes the name as it is. Not on Windows, whose names cannot hold `|`.
+t.test('a folder name with backticks is used as it is, nothing runs', function()
+  if vim.fn.has('win32') == 1 then
+    return
+  end
+  start()
+  local base = vim.fn.fnamemodify(vim.fn.tempname(), ':p')
+  local marker = base .. 'MARKER'
+  local dir = base .. 'evil`touch ' .. marker .. '`'
+  vim.fn.mkdir(dir, 'p')
+  local win = open(buffer(1), dir)
+  t.same_file(dir, cwd(win)[1], 'the window works in that very folder')
+  t.eq(0, vim.fn.filereadable(marker), 'the backtick command did not run')
+end)
+
 t.test('a folder that does not exist yet is skipped: the window opens with the copied one', function()
   start()
   local win = open(buffer(1), vim.fn.tempname() .. '/missing')

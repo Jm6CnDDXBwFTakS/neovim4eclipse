@@ -54,6 +54,28 @@ t.test('gf into a project file: read without filetype, undo step or swap file; i
   t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4], 'the file, for Eclipse to open its editor')
 end)
 
+-- A cloned repository may hold a file whose name has a line break (legal on Linux and macOS). Built
+-- into the hook's :read, the rest of the name ran as a command of its own: the attack needed only
+-- a second file named like the first line plus a backslash, so the :read before it succeeded
+-- (0.2.1 security review). Now such a file is not read at all.
+t.test('a file name with a line break is not read, and nothing in it runs', function()
+  if vim.fn.has('win32') == 1 then
+    return -- Windows names cannot hold a line break
+  end
+  local root = project()
+  vim.g.pwned = nil
+  local decoy = file(root, 'src', 'x\\')
+  local evil = file(root, 'src', 'x\nlua=vim.g.pwned=1')
+  vim.fn.writefile({ 'decoy' }, decoy)
+  vim.fn.writefile({ 'evil' }, evil)
+  local b = vim.fn.bufadd(evil)
+  vim.api.nvim_set_current_buf(b)
+  vim.cmd('silent! edit') -- loads it: the hook's BufReadCmd runs
+  t.eq(nil, vim.g.pwned, 'the Lua in the name did not run')
+  t.eq({ '' }, vim.api.nvim_buf_get_lines(b, 0, -1, false), 'not read')
+  t.ok(vim.fn.execute('messages'):find('line break', 1, true), 'it says why')
+end)
+
 -- :vimgrep makes the buffers of the files it matched while it searches, without BufNew, and its
 -- jump into one fires only BufAdd before the read (Neovim 0.12.6). Found on macOS 2026-10-30: the
 -- buffers had no hook, and Eclipse opened no editor. What the hook cannot prevent: to search a file,

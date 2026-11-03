@@ -17,7 +17,7 @@ import java.util.logging.Logger;
  * Queuing all work here solves both. Example:
  *
  * <pre>{@code
- * inputThread.submit("input 'x'", Level.WARNING, () -> keyInput.input("x"));
+ * inputThread.submit("input of a key", Level.WARNING, () -> keyInput.input("x"));
  * }</pre>
  *
  * <p>A failing task is logged at the level given with it and does not stop the thread. Work

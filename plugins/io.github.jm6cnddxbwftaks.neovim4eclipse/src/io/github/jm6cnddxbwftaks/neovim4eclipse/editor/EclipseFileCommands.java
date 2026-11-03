@@ -27,6 +27,7 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.IWorkbenchWizard;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.editors.text.IEncodingSupport;
+import org.eclipse.ui.ide.FileStoreEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.wizards.IWizardDescriptor;
@@ -378,17 +379,26 @@ public final class EclipseFileCommands {
     }
 
     /**
-     * Opens {@code file} in its default editor: through the workspace if it belongs to a project
-     * (so that the editor knows its project, builders, markers), else as an outside file.
+     * Opens {@code file} in an editor inside Eclipse: through the workspace if it belongs to a
+     * project (so that the editor knows its project, builders, markers), else as an outside file.
+     *
+     * <p><b>Never a program outside Eclipse.</b> Eclipse's default lookup picks the system's
+     * program for a file type it has no editor for, and opening it runs that program on the file:
+     * on Windows {@code :e build.bat} of a cloned repository's script would run it (0.2.1 security
+     * review). So the editor is the file's own internal editor (its "Open With" choice, its content
+     * type, its name), or the Text Editor when that is external or in-place, as gf and quickfix
+     * jumps already did ({@code ProjectFileEditors}) and a new file does ({@link NewFiles#editorIdFor}).
      */
     private static void open(IWorkbenchPage page, Path file) {
         try {
             IFile candidate = NewFiles.workspaceFileAt(file);
             if (candidate != null && candidate.isAccessible()) {
-                IDE.openEditor(page, candidate, true);
+                IDE.openEditor(page, candidate, NewFiles.internalOr(IDE.getEditorDescriptor(candidate, true, false)),
+                        true);
                 return;
             }
-            IDE.openEditorOnFileStore(page, EFS.getLocalFileSystem().getStore(file.toUri()));
+            page.openEditor(new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri())),
+                    NewFiles.editorIdFor(file.getFileName().toString()), true);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not open " + file, e);
         }

@@ -196,6 +196,21 @@ t.test(':e name, ./name and ../name are relative to the window\'s folder, as in 
   }, t.sent('eclipse_command'))
 end)
 
+-- Completing a cloned repository's file named x|lua=... into :e escapes the | (x\|lua=...).
+-- nvim_parse_cmd took that backslash away, so the :Eclipse line ran the rest as a command of its
+-- own (0.2.1 security review). Now the name reaches Eclipse whole, and nothing runs.
+t.test('a | or " in a name reaches Eclipse as part of the name, and nothing after it runs', function()
+  local app = editing_main_in_a_project()
+  vim.fn.setreg('a', 'clean')
+  t.type([[:e x\|lua=vim.fn.setreg(string.char(97),string.char(80))<CR>]])
+  t.type([[:e say\"hi<CR>]])
+  t.eq({
+    { 'edit', false, { sent_path(app .. '/x|lua=vim.fn.setreg(string.char(97),string.char(80))') } },
+    { 'edit', false, { sent_path(app .. '/say"hi') } },
+  }, t.sent('eclipse_command'))
+  t.eq('clean', vim.fn.getreg('a'), 'the Lua after the | did not run')
+end)
+
 t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without one is E194', function()
   local app = editing_main_in_a_project()
   t.type(':e %:h/Util.java<CR>')

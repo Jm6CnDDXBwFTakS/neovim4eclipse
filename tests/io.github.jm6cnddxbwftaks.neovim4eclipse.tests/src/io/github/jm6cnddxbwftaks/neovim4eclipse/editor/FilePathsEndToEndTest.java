@@ -26,6 +26,7 @@ import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorRegistry;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IFileEditorInput;
 import org.eclipse.ui.IURIEditorInput;
@@ -113,6 +114,28 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
                 page().closeEditor(part, false);
             }
         }
+    }
+
+    /**
+     * {@code :e} of a file whose Eclipse editor is the system's program opens it in a text editor
+     * inside Eclipse instead: running the program on it, as Eclipse's default lookup would, runs a
+     * cloned repository's {@code build.bat} on Windows (0.2.1 security review). The file is set to
+     * open with the system editor as a file's "Open With" choice would set it.
+     */
+    @Test
+    void eNeverOpensAFileWithAProgramOutsideEclipse() throws Exception {
+        IFile script = createFile("build.zzz", "echo hi\n");
+        IDE.setDefaultEditor(script, IEditorRegistry.SYSTEM_EXTERNAL_EDITOR_ID);
+        assertEquals(IEditorRegistry.SYSTEM_EXTERNAL_EDITOR_ID, IDE.getEditorDescriptor(script, true, false).getId(),
+                "Eclipse itself would run the system's program on it");
+
+        session.inputAsync(":e build.zzz<CR>");
+
+        waitUntil("build.zzz in an editor inside Eclipse", TIMEOUT_MS, () -> {
+            IEditorPart active = page().getActiveEditor();
+            return active != null && active.getEditorInput() instanceof IFileEditorInput input
+                    && input.getFile().equals(script) && EditorAttachManager.textEditorOf(active) != null;
+        }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
     }
 
     /**

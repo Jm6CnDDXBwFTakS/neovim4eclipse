@@ -236,7 +236,11 @@ final class KeyInput {
         } finally {
             long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             if (ms >= SLOW_KEY_WARNING_MS) {
-                LOG.warning("input('" + keys + "') took " + ms + " ms (mode=" + state.mode() + ")");
+                // The key itself only at FINE: a WARNING goes to Eclipse's Error Log (.metadata/.log),
+                // and the key may be a character of a password typed into inputsecret() or a :!
+                // prompt (0.2.1 security review).
+                LOG.warning("A key took " + ms + " ms (mode=" + state.mode() + ")");
+                LOG.fine(() -> "the slow key: input('" + keys + "')");
             }
         }
     }

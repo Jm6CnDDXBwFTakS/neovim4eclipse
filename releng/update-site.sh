@@ -6,11 +6,20 @@
 # are the releases, one folder each. Users add its URL once (Help > Install New Software > Add >
 # Location), and Check for Updates finds every later release under the same URL.
 #
-#   releng/update-site.sh <dir with neovim4eclipse-<version>.zip files> <output dir>
+#   releng/update-site.sh <dir with neovim4eclipse-<version>.zip files> <output dir> [<public key>]
 #
 # Example (what .github/workflows/update-site.yml runs, after downloading every release's ZIP):
 #
-#   releng/update-site.sh dist site
+#   releng/update-site.sh dist site releng/signing-key.asc
+#
+# With a public key, every release must carry valid PGP signatures by that key
+# (releng/verify-signatures.sh) or nothing is built, and releases from before signing began
+# (FIRST_SIGNED, 0.1.4) are left out. Why: the site is rebuilt from the release ZIPs on GitHub at
+# every release, and a ZIP replaced there later (by anyone holding a token that may write the
+# repository) would otherwise go out unchecked; the release workflow checks each ZIP only once,
+# before it publishes it (0.2.1 security review). Leaving out the unsigned 0.1.0 to 0.1.3 also
+# means the site never asks to install unsigned content, which a user might then accept for a
+# forged jar too.
 #
 #   site/
 #     index.html               a page for people: the URL to add and the versions inside
@@ -26,12 +35,15 @@
 
 set -euo pipefail
 
-if [ $# -ne 2 ]; then
-  echo "usage: $0 <dir with neovim4eclipse-<version>.zip> <output dir>" >&2
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+  echo "usage: $0 <dir with neovim4eclipse-<version>.zip> <output dir> [<public key>]" >&2
   exit 2
 fi
 zips=$1
 out=$2
+key=${3:-}
+# The first release signed with the project's key; older ones are left out when a key is given.
+FIRST_SIGNED=0.1.4
 
 # Versions from the file names, oldest first (sort -V knows that 0.1.10 comes after 0.1.9).
 # Written without mapfile and GNU find so that it also runs with macOS's bash 3.2.
@@ -43,6 +55,19 @@ versions=($(
     name=${name#neovim4eclipse-}
     echo "${name%.zip}"
   done | sort -V))
+if [ -n "$key" ]; then
+  [ -f "$key" ] || { echo "error: public key $key not found" >&2; exit 1; }
+  kept=()
+  for version in ${versions[@]+"${versions[@]}"}; do
+    # sort -V puts the older one first: version is kept if FIRST_SIGNED comes first (or they match).
+    if [ "$(printf '%s\n%s\n' "$FIRST_SIGNED" "$version" | sort -V | head -n 1)" = "$FIRST_SIGNED" ]; then
+      kept+=("$version")
+    else
+      echo "left out $version: released before signing began ($FIRST_SIGNED)"
+    fi
+  done
+  versions=(${kept[@]+"${kept[@]}"})
+fi
 if [ ${#versions[@]} -eq 0 ]; then
   echo "error: no neovim4eclipse-<version>.zip in $zips" >&2
   exit 1
@@ -63,6 +88,9 @@ for version in "${versions[@]}"; do
   if [ ! -f "$dir/content.jar" ] || [ ! -f "$dir/artifacts.jar" ]; then
     echo "error: neovim4eclipse-$version.zip is not a p2 update site (no content.jar/artifacts.jar)" >&2
     exit 1
+  fi
+  if [ -n "$key" ]; then
+    "$(dirname "$0")/verify-signatures.sh" "$dir" "$key"  # fails the whole build on any bad jar
   fi
   echo "added $version"
 done

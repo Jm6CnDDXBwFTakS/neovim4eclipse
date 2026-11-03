@@ -82,6 +82,20 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Security
 
+- **A cloned repository could make the plug-in run commands.** Three ways, all fixed:
+  - a project folder (or a file's folder) named with backticks, such as ``evil`curl …|sh` ``, ran
+    that shell command as soon as one of its files opened, as the plug-in set Neovim's folder with
+    `:lcd`; it now uses `chdir()`, which takes the name as it is;
+  - a file whose name has a line break ran the rest of its name as a Neovim command when Neovim
+    loaded it itself (`:vimgrep` then `:cnext`, `:b`, a file picker); such a file is no longer read;
+  - a file named with a `|`, such as `x|lua(…)`, ran what follows the `|` when its name was
+    completed into `:e` (also `:wq`, `:x`, `:bd`); the name now reaches Eclipse whole.
+- `:e` of an existing file opens it in an editor inside Eclipse, never with the system's program
+  for its type: on Windows, `:e build.bat` could run the script.
+- The update site checks every release's signatures each time it is rebuilt, and holds only signed
+  releases (0.1.4 and later), so Eclipse never asks to trust unsigned content from it.
+- A key that took long to process is no longer written to Eclipse's Error Log, where it could have
+  been a character of a password typed at a Neovim prompt.
 - Text Eclipse typed is re-typed into Neovim only while Neovim is still in insert mode. If a timer
   or autocommand of your config had ended the insert, a pasted `:!command` line could have run as a
   Normal-mode command; now nothing is re-typed then (only `.` misses that text).
