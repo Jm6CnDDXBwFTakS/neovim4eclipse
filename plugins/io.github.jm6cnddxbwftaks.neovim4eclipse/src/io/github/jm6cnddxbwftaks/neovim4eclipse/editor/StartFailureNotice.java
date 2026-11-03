@@ -26,7 +26,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 /**
  * Tells the user, once, that Neovim could not be started, and offers <i>Get Neovim</i> (the default
  * button, {@link GetNeovim}; not when a program in the preference failed and the dedicated Neovim
- * checks out), and the preference page where a program can be named.
+ * checks out), and the preference page where a program can be named. With a blank preference and
+ * no verified dedicated Neovim it opens Get Neovim's own dialog instead, saying why
+ * ({@link StartFailureReport#getNeovimInstead}); nothing follows a cancel there.
  *
  * <p>Attaching is attempted every time a text editor is activated, so without a guard a missing
  * {@code nvim} would raise a dialog on every editor switch. The notice is shown once per configured
@@ -81,6 +83,11 @@ final class StartFailureNotice {
         List<Path> homes = PluginNeovim.searchHomes();
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Optional<PluginNeovim.Unverified> unverified = PluginNeovim.unverified(homes, windows, NeovimRelease.bundled());
+        Optional<String> why = StartFailureReport.getNeovimInstead(resolved, unverified);
+        if (why.isPresent()) {
+            GetNeovim.open(shell, why.get()); // a cancel there ends it: no notice after it
+            return;
+        }
         boolean dedicatedVerified = homes.stream().anyMatch(home -> PluginNeovim.verified(home, windows));
         HeadedMessage message = StartFailureReport.message(resolved, error,
                 PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()), unverified, dedicatedVerified,

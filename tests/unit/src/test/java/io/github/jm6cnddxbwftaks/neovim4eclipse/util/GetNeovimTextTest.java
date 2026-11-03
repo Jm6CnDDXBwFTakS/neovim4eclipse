@@ -24,6 +24,18 @@ class GetNeovimTextTest {
     private static final NeovimRelease.Archive LA = RELEASE.forPlatform(NeovimPlatform.byCode("la").orElseThrow())
             .orElseThrow();
 
+    /** Opened by the plug-in (no verified dedicated Neovim): a first Why point says so. */
+    @Test
+    void theConfirmationThePlugInOpensSaysWhy() {
+        Path home = Path.of("/n/la");
+        HeadedMessage m = GetNeovimText.confirm(RELEASE, LA, home, "The dedicated Neovim is not installed.");
+        assertEquals(List.of("Why", "Folder", "Download", "From File", "SHA-256"), headings(m));
+        assertEquals("The dedicated Neovim is not installed. Neovim for Eclipse runs only this Neovim; until it is "
+                + "installed, editors keep their normal Eclipse keys.", point(m, "Why").text());
+        assertEquals(headings(GetNeovimText.confirm(RELEASE, LA, home)),
+                headings(GetNeovimText.confirm(RELEASE, LA, home, null)), "no Why when the user opened it");
+    }
+
     @Test
     void theConfirmationNamesTheFolderTheSourceAndTheCheck() {
         Path home = Path.of("/home/you/.local/share/neovim4eclipse-plugin/neovim/la");

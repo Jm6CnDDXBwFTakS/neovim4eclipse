@@ -51,6 +51,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimNotFoundException;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach
@@ -132,6 +134,17 @@ public final class EditorAttachManager {
             onDirtyChanged(part);
         }
     };
+    /**
+     * At Eclipse's start (EarlyStartup, off the UI thread): with a blank preference and no verified
+     * dedicated Neovim, opens <i>Get Neovim</i> once, as the first editor's failed start would
+     * ({@code StartFailureNotice}); that first failure then stays quiet, being the same report.
+     */
+    public static void offerGetNeovimAtStart(String configured) {
+        if (NvimExecutable.find(configured).kind() == NvimExecutable.Kind.NO_DEDICATED) {
+            StartFailureNotice.report(configured, new NeovimNotFoundException("No verified dedicated Neovim at start"));
+        }
+    }
+
     /** Guarded by {@code this}. */
     private boolean listenersRegistered;
     private final IPartListener2 partListener = new IPartListener2() {

@@ -821,10 +821,12 @@ every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, and the Insert boxes of `C
 **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder,
 `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (see [Finding Neovim](#finding-neovim) for the
 folder and the code). The dialogs and the preference page call it the **dedicated Neovim**: it is
-for Eclipse alone, and no other Neovim on the machine is changed. It is offered in the "Neovim not
-started" notice, and, while the dedicated Neovim is missing or older than the release, under the
-field on *Window → Preferences → Neovim* and in the *Neovim* menu. When it is current, the
-preference note has a *Reinstall…* link under it instead, for a copy that is damaged. A dialog first says where it goes and what it downloads, and offers two ways:
+for Eclipse alone, and no other Neovim on the machine is changed. With the preference blank, while
+the dedicated Neovim is missing or fails the start check (older, or damaged), the dialog opens by
+itself: once when Eclipse starts, or when an editor first needs Neovim, with a *Why* line saying
+which. Cancel it and nothing more appears; editors keep their normal Eclipse keys. It is also under
+the field on *Window → Preferences → Neovim* and in the *Neovim* menu while it is needed. When the
+dedicated Neovim checks out, the preference note has a *Reinstall…* link under it instead. A dialog first says where it goes and what it downloads, and offers two ways:
 
 - **Download**: from Neovim's GitHub release, which redirects to
   `release-assets.githubusercontent.com`; about 10 to 13 MB. The download goes through Eclipse's

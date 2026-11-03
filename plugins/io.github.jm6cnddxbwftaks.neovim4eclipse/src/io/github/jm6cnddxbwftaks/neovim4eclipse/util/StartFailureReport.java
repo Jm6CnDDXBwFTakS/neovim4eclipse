@@ -90,6 +90,19 @@ public final class StartFailureReport {
         return isDedicated(resolved) || !dedicatedVerified;
     }
 
+    /**
+     * The reason to open <i>Get Neovim</i> instead of the notice, or empty for the notice: with a
+     * blank preference and no verified dedicated Neovim, installing it is the one fix, so its dialog
+     * opens at once, with this as its <i>Why</i> line. Cancelling it shows nothing more: the editor keeps its Eclipse keys, and Get Neovim stays in the Neovim menu and on
+     * the preference page. Example: {@code The dedicated Neovim is not installed.}
+     */
+    public static Optional<String> getNeovimInstead(NvimExecutable.Resolved resolved,
+            Optional<PluginNeovim.Unverified> unverified) {
+        return resolved.kind() == NvimExecutable.Kind.NO_DEDICATED
+                ? Optional.of(dedicatedReason(resolved, unverified).text())
+                : Optional.empty();
+    }
+
     /** Whether the preference is blank, so the dedicated Neovim was to start. */
     private static boolean isDedicated(NvimExecutable.Resolved resolved) {
         return resolved.kind() == NvimExecutable.Kind.DEDICATED || resolved.kind() == NvimExecutable.Kind.NO_DEDICATED;

@@ -25,8 +25,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  *
  * <p>It also checks the dedicated Neovim here, on this background thread
  * ({@link PluginNeovim#verified}: about 0.2 s to hash its files), so the answer is kept by the time
- * the first editor attaches, on the UI thread. With early start-up turned off, that first attach
- * does the check itself.
+ * the first editor attaches, on the UI thread, and opens <i>Get Neovim</i> if it is missing or fails
+ * the check (once; a cancel ends it). With early start-up turned off, the first editor that tries to
+ * start Neovim does both.
  */
 public class EarlyStartup implements IStartup {
 
@@ -40,6 +41,7 @@ public class EarlyStartup implements IStartup {
             for (Path home : PluginNeovim.searchHomes()) {
                 PluginNeovim.verified(home, windows);
             }
+            EditorAttachManager.offerGetNeovimAtStart(configured); // missing or failing the check
         }
     }
 }

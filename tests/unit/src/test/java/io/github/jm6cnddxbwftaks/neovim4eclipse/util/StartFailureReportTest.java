@@ -255,4 +255,22 @@ class StartFailureReportTest {
     private static List<String> said(Kind kind, Function<Path, NeovimVersion> versionOf) {
         return said(kind, new IOException("x"), versionOf);
     }
+
+    /** A blank preference without a verified dedicated Neovim opens Get Neovim instead, saying why. */
+    @Test
+    void withoutAVerifiedDedicatedNeovimGetNeovimOpensInstead() {
+        Path own = Path.of("/n/la/bin/nvim");
+        NvimExecutable.Resolved missing = new NvimExecutable.Resolved(own.toString(), Kind.NO_DEDICATED);
+        assertEquals(Optional.of("The dedicated Neovim is not installed."),
+                StartFailureReport.getNeovimInstead(missing, Optional.empty()));
+        assertEquals(Optional.of("The dedicated Neovim's files differ from Neovim " + NeovimVersion.MINIMUM
+                + "'s release. The install may be damaged."),
+                StartFailureReport.getNeovimInstead(missing, Optional.of(new PluginNeovim.Unverified(own))));
+        assertEquals(Optional.empty(), StartFailureReport.getNeovimInstead(
+                new NvimExecutable.Resolved(own.toString(), Kind.DEDICATED), Optional.empty()),
+                "verified but did not start: the notice, with its error");
+        assertEquals(Optional.empty(), StartFailureReport.getNeovimInstead(
+                new NvimExecutable.Resolved("/usr/bin/nvim", Kind.PROGRAM), Optional.empty()),
+                "a named program: the notice");
+    }
 }

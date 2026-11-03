@@ -99,6 +99,14 @@ public final class GetNeovim {
 
     /** Shows the confirmation and, if confirmed, starts the install. UI thread. */
     public static void open(Shell shell) {
+        open(shell, null);
+    }
+
+    /**
+     * {@link #open(Shell)}, opened by the plug-in rather than by the user: {@code why} is the
+     * confirmation's first line ({@code The dedicated Neovim is not installed.}), or {@code null}.
+     */
+    public static void open(Shell shell, String why) {
         NeovimRelease release = NeovimRelease.bundled();
         Optional<NeovimPlatform> platform = ProcessorProbe.known();
         Optional<NeovimRelease.Archive> archive = platform.flatMap(release::forPlatform);
@@ -109,7 +117,7 @@ public final class GetNeovim {
         }
         NeovimRelease.Archive a = archive.get();
         Path home = PluginNeovim.home(PluginFolders.neovimFolder(), a.platform());
-        switch (show(shell, MessageDialog.QUESTION, GetNeovimText.confirm(release, a, home),
+        switch (show(shell, MessageDialog.QUESTION, GetNeovimText.confirm(release, a, home, why),
                 GetNeovimText.CONFIRM_BUTTONS)) {
             case 0 -> start(shell, release, a, Source.DOWNLOAD, null);
             case 1 -> chooseFile(shell, release, a);

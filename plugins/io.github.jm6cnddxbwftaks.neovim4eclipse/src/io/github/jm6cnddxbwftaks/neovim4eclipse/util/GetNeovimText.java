@@ -68,9 +68,24 @@ public final class GetNeovimText {
 
     /** The confirmation, before anything is downloaded or unpacked: where it goes, from where, and the check. */
     public static HeadedMessage confirm(NeovimRelease release, NeovimRelease.Archive archive, Path home) {
-        return new HeadedMessage(
-                "Install the dedicated Neovim " + release.version() + " for " + archive.platform().describe() + "?",
-                List.of(new Point("Folder", "Dedicated to the plug-in; no other Neovim is changed.")
+        return confirm(release, archive, home, null);
+    }
+
+    /**
+     * {@link #confirm(NeovimRelease, NeovimRelease.Archive, Path)} with a first <i>Why</i> point, when
+     * the plug-in opened the dialog itself (at Eclipse's start, or an editor could not start the
+     * dedicated Neovim). Example: {@code Why   The dedicated Neovim is not installed. Neovim for
+     * Eclipse runs only this Neovim; until it is installed, editors keep their normal Eclipse keys.}
+     *
+     * @param why the reason, or {@code null} when the user opened the dialog
+     */
+    public static HeadedMessage confirm(NeovimRelease release, NeovimRelease.Archive archive, Path home, String why) {
+        List<Point> points = new ArrayList<>();
+        if (why != null && !why.isBlank()) {
+            points.add(new Point("Why", why + " Neovim for Eclipse runs only this Neovim; until it is installed, "
+                    + "editors keep their normal Eclipse keys."));
+        }
+        points.addAll(List.of(new Point("Folder", "Dedicated to the plug-in; no other Neovim is changed.")
                                 .withCopy(home.toString()),
                         new Point("Download", archive.asset() + ", " + megabytes(archive.size())
                                 + ", from github.com, which sends it on to release-assets.githubusercontent.com."),
@@ -78,8 +93,10 @@ public final class GetNeovimText {
                                 + "browser.").withLinks(inBrowser(archive)),
                         new Point("SHA-256", "Either way, the plug-in checks the archive against this before "
                                 + "unpacking.").withCopy(archive.sha256())
-                                .withLinks(releasePage(release), virusTotalLink(archive.sha256()))),
-                "");
+                                .withLinks(releasePage(release), virusTotalLink(archive.sha256()))));
+        return new HeadedMessage(
+                "Install the dedicated Neovim " + release.version() + " for " + archive.platform().describe() + "?",
+                points, "");
     }
 
     /**
