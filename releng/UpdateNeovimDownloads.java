@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -30,6 +31,7 @@ import java.util.regex.Pattern;
  * <h2>Usage</h2>
  * <pre>
  *   java releng/UpdateNeovimDownloads.java 0.13.0     rewrite the file for Neovim 0.13.0
+ *   java releng/UpdateNeovimDownloads.java 0.13.0 --allow-young   the same for a release under 7 days old
  *   java releng/UpdateNeovimDownloads.java --check    verify the file as it is; writes nothing
  *   java releng/UpdateNeovimDownloads.java --virustotal   ask VirusTotal about each hash (needs VT_API_KEY)
  * </pre>
@@ -41,9 +43,30 @@ import java.util.regex.Pattern;
  *       the old name then fails here with a 404 that says so.</li>
  *   <li>Downloads each of the six archives and computes its size and SHA-256.</li>
  *   <li>Reads the release's entry in GitHub's API and requires GitHub's own {@code digest} and size
- *       to match: two independent sources for each hash.</li>
- *   <li>Writes the file, and only if every step passed.</li>
+ *       to match. That catches a download damaged or changed on its way (a proxy, a broken mirror),
+ *       but it is not a second, independent source: GitHub computes the digest from whatever file
+ *       was uploaded, so an asset replaced on GitHub has a matching digest too.</li>
+ *   <li>Refuses a release published less than {@link #MIN_AGE} ago, unless {@code --allow-young}
+ *       follows the version.</li>
+ *   <li>Writes the file, and only if every step passed, then prints each archive's VirusTotal page.</li>
  * </ol>
+ *
+ * <h2>What the hashes can and cannot vouch for</h2>
+ * The pinned hash is trusted on first use: it says "the file GitHub served when this was run", not
+ * "the file Neovim's maintainers built". Neovim publishes no checksum file, signature or GitHub
+ * build attestation for its archives (checked for v0.12.6: {@code gh api
+ * repos/neovim/neovim/attestations/sha256:<hash>} answers 404, and the release has only the
+ * archives, AppImages and MSIs), so there is nothing else to compare with. What narrows the risk:
+ * <ul>
+ *   <li>Waiting: a release is pinned only once it is a week old. A replaced asset is usually
+ *       noticed and reported within days (Neovim's users download each release by the thousand).</li>
+ *   <li>Looking: the VirusTotal pages printed after a rewrite, and {@code --virustotal}, show what
+ *       the antivirus engines and the community say about exactly these files.</li>
+ *   <li>Checking again: {@code --check} at every release, and CI's {@code install-neovim.sh} at
+ *       every run, compare the files GitHub serves now with the pinned hashes, so a file replaced
+ *       after pinning is caught.</li>
+ * </ul>
+ * If Neovim starts publishing signatures or attestations, verify them here instead.
  * After a rewrite, set {@code NeovimVersion.MINIMUM} to the same version and run the tests:
  * {@code VersionConsistencyTest} lists what else still names the old one (docs/UPGRADING.md).
  *
@@ -76,6 +99,11 @@ public final class UpdateNeovimDownloads {
 
     private static final Pattern VERSION = Pattern.compile("\\d+\\.\\d+\\.\\d+");
 
+    /** How old a release must be before a rewrite pins it (see the class comment, "What the hashes ..."). */
+    static final Duration MIN_AGE = Duration.ofDays(7);
+
+    static final String ALLOW_YOUNG = "--allow-young";
+
     private static final HttpClient HTTP = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30)).build();
 
@@ -84,7 +112,8 @@ public final class UpdateNeovimDownloads {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 1) {
+        boolean allowYoung = args.length == 2 && args[1].equals(ALLOW_YOUNG);
+        if (args.length != 1 && !allowYoung) {
             usage();
         }
         Properties current = load();
@@ -97,7 +126,7 @@ public final class UpdateNeovimDownloads {
                     if (!VERSION.matcher(arg).matches()) {
                         usage();
                     }
-                    rewrite(current, arg);
+                    rewrite(current, arg, allowYoung);
                 }
             }
         } catch (Failure f) {
@@ -107,16 +136,26 @@ public final class UpdateNeovimDownloads {
     }
 
     private static void usage() {
-        System.err.println("Usage: java releng/UpdateNeovimDownloads.java <version> | --check | --virustotal");
+        System.err.println("Usage: java releng/UpdateNeovimDownloads.java <version> [" + ALLOW_YOUNG
+                + "] | --check | --virustotal");
         System.exit(2);
     }
 
     /** Downloads and compares every archive of {@code version}, then writes the file. */
-    static void rewrite(Properties current, String version) throws Exception {
-        Map<String, Entry> measured = measure(current, version);
+    static void rewrite(Properties current, String version, boolean allowYoung) throws Exception {
+        String api = release(version);
+        Instant published = publishedAt(api);
+        if (!allowYoung) {
+            requireOldEnough(version, published, Instant.now());
+        }
+        Map<String, Entry> measured = measure(current, version, api);
         String text = render(version, measured);
         Files.writeString(FILE, text, StandardCharsets.UTF_8);
-        System.out.println("Wrote " + FILE + " for Neovim " + version + ".");
+        System.out.println("Wrote " + FILE + " for Neovim " + version + " (published " + published + ").");
+        System.out.println("Look at each archive's VirusTotal page before committing (or run --virustotal):");
+        for (Entry e : measured.values()) {
+            System.out.println("  " + e.asset() + ": https://www.virustotal.com/gui/file/" + e.sha256());
+        }
         System.out.println("Next: set NeovimVersion.MINIMUM to " + version
                 + " and run the tests; VersionConsistencyTest lists what else names the old version.");
     }
@@ -124,7 +163,7 @@ public final class UpdateNeovimDownloads {
     /** The version in the file, downloaded and compared again; fails on any difference. */
     static void check(Properties current) throws Exception {
         String version = required(current, "version");
-        Map<String, Entry> measured = measure(current, version);
+        Map<String, Entry> measured = measure(current, version, release(version));
         List<String> wrong = new ArrayList<>();
         for (Entry e : measured.values()) {
             String size = required(current, e.code() + ".size");
@@ -143,13 +182,40 @@ public final class UpdateNeovimDownloads {
         System.out.println("OK: all six archives of Neovim " + version + " match " + FILE + ".");
     }
 
+    /** The release's entry in GitHub's API, as JSON text. */
+    static String release(String version) throws Exception {
+        return get("https://api.github.com/repos/neovim/neovim/releases/tags/v" + version, true);
+    }
+
+    /**
+     * When the release was published: its {@code "published_at"} (assets have no such field, so the
+     * first one is the release's own). Example: {@code "published_at":"2026-10-20T14:03:11Z"}.
+     */
+    static Instant publishedAt(String json) {
+        Matcher m = Pattern.compile("\"published_at\":\"([^\"]+)\"").matcher(json);
+        if (!m.find()) {
+            throw new Failure("GitHub's release has no published_at (a draft?)");
+        }
+        return Instant.parse(m.group(1));
+    }
+
+    /** Fails if {@code published} is less than {@link #MIN_AGE} before {@code now}. */
+    static void requireOldEnough(String version, Instant published, Instant now) {
+        Instant ready = published.plus(MIN_AGE);
+        if (now.isBefore(ready)) {
+            throw new Failure("Neovim " + version + " was published " + published + ", less than "
+                    + MIN_AGE.toDays() + " days ago. Pin it from " + ready + " on, once a replaced archive would "
+                    + "likely have been noticed; or add " + ALLOW_YOUNG + " (for example for a security fix).");
+        }
+    }
+
     /**
      * For each code: download the archive, hash it, and compare with GitHub's API entry.
      *
+     * @param api the release's API answer ({@link #release})
      * @return the measured entries by code, in {@link #CODES} order
      */
-    static Map<String, Entry> measure(Properties current, String version) throws Exception {
-        String api = get("https://api.github.com/repos/neovim/neovim/releases/tags/v" + version, true);
+    static Map<String, Entry> measure(Properties current, String version, String api) throws Exception {
         Map<String, Entry> result = new LinkedHashMap<>();
         for (String code : CODES) {
             String asset = required(current, code + ".asset");

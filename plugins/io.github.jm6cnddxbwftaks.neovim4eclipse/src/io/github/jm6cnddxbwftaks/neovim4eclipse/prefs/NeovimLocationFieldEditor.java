@@ -20,7 +20,9 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.DirectoryDialog;
+import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -34,16 +36,18 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
  * with a link to the README section on where Neovim is searched.
  *
  * <p>When the note finds the dedicated Neovim, current ({@link NvimProbe.Note#current}), there is
- * nothing to get: the button is hidden, and the note's first line ends in a small
- * <em>Reinstall...</em> link that opens the same Get Neovim dialog, for a copy damaged in a way
- * {@code --version} does not show. Example:
+ * nothing to get: the button is hidden, and a small <em>Reinstall...</em> link under the note
+ * opens the same Get Neovim dialog, for a copy damaged in a way {@code --version} does not show.
+ * Example:
  *
  * <pre>
- *   Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim (Reinstall...)
+ *   Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
+ *   Reinstall...
  * </pre>
  *
- * The note is therefore a {@link Link}, not a {@code Label}: a {@code Link} shows text with
- * clickable parts marked {@code <a>...</a>} ({@link #markup}).
+ * The note is a {@link Label} and the link a {@link Link} of its own, not one {@code Link} for both:
+ * a {@code Link} reads {@code <a>...</a>} in its text as a link, and the note shows paths that
+ * anyone who can name a folder chooses ({@link #labelText}).
  *
  * <p>The note comes first because it answers what was typed and changes with it; the help, which
  * does not change, follows. A note that reports a problem (Neovim would not start:
@@ -73,10 +77,18 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     /** Width at which the note and the help wrap, rather than widening the dialog. */
     private static final int WRAP_WIDTH = 400;
 
-    /** The note's link text when the dedicated Neovim is current ({@link #markup}). */
+    /** The link under the note when the dedicated Neovim is current. */
     static final String REINSTALL = "Reinstall...";
 
-    private Link note;
+    /**
+     * What the field finds, in a {@link Label}, never a {@link Link}: the text holds paths (the
+     * preference, a program on {@code PATH}, the entries of the plug-in's Neovim folder), and a Link
+     * would turn an {@code <a>...</a>} in a folder's name into a link. The one link, Reinstall...,
+     * is a control of its own ({@link #reinstall}).
+     */
+    private Label note;
+    /** {@code <a>Reinstall...</a>} under the note, shown only while the dedicated Neovim is current. */
+    private Link reinstall;
     private Button getNeovim;
     private Link help;
     private ControlDecoration errorMark;
@@ -96,9 +108,15 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         getTextControl().setMessage("Leave blank for the dedicated Neovim"); // shown while the field is empty, as the help says
         addErrorMark();
 
-        note = new Link(parent, SWT.NONE); // a Link wraps at its width hint, as the help below does
+        note = new Label(parent, SWT.WRAP); // wraps at its width hint, as the help below does
         note.setLayoutData(fullRow(numColumns, WRAP_WIDTH));
-        note.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(getShell())));
+
+        reinstall = new Link(parent, SWT.NONE);
+        reinstall.setText("<a>" + REINSTALL + "</a>");
+        reinstall.setToolTipText("Install the dedicated Neovim again, for a copy that is damaged");
+        reinstall.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false, numColumns, 1));
+        reinstall.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(getShell())));
+        setVisible(reinstall, false);
 
         // Hidden while the note offers Reinstall instead (show); after an install the note probes again.
         getNeovim = new Button(parent, SWT.PUSH);
@@ -151,6 +169,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
         super.adjustForNumColumns(numColumns);
         if (note != null) {
             ((GridData) note.getLayoutData()).horizontalSpan = numColumns;
+            ((GridData) reinstall.getLayoutData()).horizontalSpan = numColumns;
             ((GridData) getNeovim.getLayoutData()).horizontalSpan = numColumns;
             ((GridData) help.getLayoutData()).horizontalSpan = numColumns;
         }
@@ -199,8 +218,9 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
      * the Get Neovim button, or the Reinstall link instead when the dedicated Neovim is current.
      */
     private void show(NvimProbe.Note shown) {
-        note.setText(markup(shown));
+        note.setText(labelText(shown));
         setVisible(getNeovim, !shown.current());
+        setVisible(reinstall, shown.current());
         note.setForeground(shown.problem() ? errorColor() : null); // null: the theme's normal color
         if (shown.problem()) {
             errorMark.setDescriptionText(shown.text()); // shown when hovering the mark
@@ -215,26 +235,19 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
     }
 
     /**
-     * The note as {@link Link} text: {@code &} doubled, as a {@code Link} takes a single one as a
-     * mnemonic marker (a folder may be called {@code R&D}), and for a current dedicated Neovim
-     * {@code (<a>Reinstall...</a>)} at the end of the first line, the Found line. Example:
-     * {@code Found: dedicated Neovim 0.12.6, /n/la/bin/nvim (<a>Reinstall...</a>)}.
+     * The note as {@link Label} text: {@code &} doubled, as a Label takes a single one as a mnemonic
+     * marker (a folder may be called {@code R&D}). Everything else shows as it is, {@code <a>} too.
+     * Example: {@code Found: Neovim 0.12.6, /R&&D/bin/nvim}.
      */
-    static String markup(NvimProbe.Note shown) {
-        String text = shown.text().replace("&", "&&");
-        if (!shown.current()) {
-            return text;
-        }
-        int end = text.indexOf('\n');
-        end = end < 0 ? text.length() : end;
-        return text.substring(0, end) + " (<a>" + REINSTALL + "</a>)" + text.substring(end);
+    static String labelText(NvimProbe.Note shown) {
+        return shown.text().replace("&", "&&");
     }
 
     /**
      * Shows or hides {@code control}, and lets the grid close up the row it leaves:
      * {@link GridData#exclude} takes a hidden control out of the layout, which visibility alone does not.
      */
-    private static void setVisible(Button control, boolean visible) {
+    private static void setVisible(Control control, boolean visible) {
         if (control.getVisible() != visible) {
             control.setVisible(visible);
             ((GridData) control.getLayoutData()).exclude = !visible;

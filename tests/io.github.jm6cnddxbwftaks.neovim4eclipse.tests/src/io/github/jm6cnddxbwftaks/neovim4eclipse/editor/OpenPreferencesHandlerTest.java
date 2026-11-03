@@ -79,9 +79,12 @@ class OpenPreferencesHandlerTest {
         Button getNeovim = find(page, Button.class).stream()
                 .filter(b -> b.getText().equals("Get Neovim " + NeovimVersion.MINIMUM + "...")).findFirst().orElse(null);
         assertNotNull(getNeovim, "no Get Neovim button");
-        boolean reinstall = note(page).getText().contains("<a>Reinstall...</a>");
+        Link reinstallLink = find(page, Link.class).stream()
+                .filter(l -> l.getText().equals("<a>Reinstall...</a>")).findFirst().orElse(null);
+        assertNotNull(reinstallLink, "no Reinstall link (shown only while the dedicated Neovim is current)");
+        boolean reinstall = reinstallLink.isVisible();
         assertEquals(!reinstall, getNeovim.isEnabled() && getNeovim.isVisible(),
-                "the button is usable unless the note offers Reinstall: " + note(page).getText());
+                "the button is usable unless Reinstall is offered: " + note(page).getText());
         Text field = find(page, Text.class).stream().findFirst().orElse(null);
         assertNotNull(field, "no text field");
         assertTrue(field.isVisible(), "field hidden (its window is not the dialog's)");
@@ -99,15 +102,15 @@ class OpenPreferencesHandlerTest {
         assertNotNull(help, "no help with a link to how Neovim is found");
         assertTrue(help.isVisible(), "help hidden");
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
-        Link note = note(page);
+        Label note = note(page);
         assertTrue(note.getParent() == help.getParent() && note.getBounds().y < help.getBounds().y,
                 "the note (what the field finds) comes before the help (what it takes): note " + note.getBounds()
                         + ", help " + help.getBounds());
     }
 
-    /** The note under the Neovim field, once it says what the field finds; {@code null} before. */
-    private static Link note(Control page) {
-        return find(page, Link.class).stream()
+    /** The note under the Neovim field (a Label), once it says what the field finds; {@code null} before. */
+    private static Label note(Control page) {
+        return find(page, Label.class).stream()
                 .filter(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found"))
                 .findFirst().orElse(null);
     }

@@ -15,6 +15,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
+import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
@@ -69,9 +70,10 @@ class NeovimPreferencePageTest {
     void aLongNoteGrowsTheGroupAndKeepsTheHelpVisible() {
         Group program = page.groups()[0];
         Text field = find(program, Text.class);
-        // Both are Links: the note may offer Reinstall... (NeovimLocationFieldEditor), the help links to the README.
+        // The help is a Link (to the README); the note a Label, as it shows paths (NeovimLocationFieldEditor).
         Link help = find(program, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_FIELD_HELP));
-        Link note = find(program, Link.class, link -> link != help);
+        Label note = find(program, Label.class, label -> label.getText().startsWith("Found: ")
+                || label.getText().startsWith("No Neovim found") || label.getText().startsWith("Looking for"));
         field.setText("/no/such/folder/with/a/rather/long/name/so/that/the/note/wraps/onto/several/lines/nvim");
         waitUntil("the note to report the missing program", () -> note.getText().startsWith("No Neovim found"));
         waitUntil("the help to lie inside its group", () -> {
@@ -82,18 +84,33 @@ class NeovimPreferencePageTest {
     }
 
     /**
-     * The note's Link text: a single {@code &} would be a mnemonic marker, so it is doubled; a current
-     * dedicated Neovim gets the Reinstall link at the end of the Found line, before the lines after.
+     * The note's Label text: a single {@code &} would be a mnemonic marker, so it is doubled; nothing
+     * else changes, and the Reinstall link is not in it (a control of its own).
      */
     @Test
-    void theNoteOffersReinstallOnlyForTheCurrentDedicatedNeovim() {
+    void theNoteTextOnlyDoublesAmpersands() {
         String found = "Found: dedicated Neovim 0.12.6, /R&D/la/bin/nvim";
-        String unused = "\nNot used by the plug-in, you can delete:\n  /R&D/current";
-        assertEquals("Found: dedicated Neovim 0.12.6, /R&&D/la/bin/nvim (<a>Reinstall...</a>)\n"
-                + "Not used by the plug-in, you can delete:\n  /R&&D/current",
-                NeovimLocationFieldEditor.markup(new NvimProbe.Note(found + unused, false, true)));
-        assertEquals("Found: Neovim 0.12.6, /usr/bin/nvim",
-                NeovimLocationFieldEditor.markup(new NvimProbe.Note("Found: Neovim 0.12.6, /usr/bin/nvim", false)));
+        String unused = "\nNot used by the plug-in, you can delete:\n  /R&D/<a>current</a>";
+        assertEquals("Found: dedicated Neovim 0.12.6, /R&&D/la/bin/nvim\n"
+                + "Not used by the plug-in, you can delete:\n  /R&&D/<a>current</a>",
+                NeovimLocationFieldEditor.labelText(new NvimProbe.Note(found + unused, false, true)));
+    }
+
+    /**
+     * A folder named with {@code <a>...</a>} shows as text: the note is a Label, so the name cannot
+     * become a link (in a Link it would, and its click would open Get Neovim).
+     */
+    @Test
+    void aFolderNameWithLinkMarkupStaysText() {
+        Group program = page.groups()[0];
+        Text field = find(program, Text.class);
+        field.setText("/no/<a>such</a>/nvim");
+        waitUntil("the note to report the missing program", () -> find(program, Label.class,
+                label -> label.getText().startsWith("No Neovim found")) != null);
+        Label note = find(program, Label.class, label -> label.getText().startsWith("No Neovim found"));
+        assertTrue(note.getText().contains("<a>such</a>"), note.getText());
+        assertTrue(find(program, Link.class, link -> link.getText().contains("such")) == null,
+                "no Link shows the path");
     }
 
     /** Waits for {@code condition} while the display runs (the note's probe answers through it). */

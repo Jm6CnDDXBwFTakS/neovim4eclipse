@@ -54,7 +54,7 @@ jobs:
       # stops the release here, before anything is built or published.
       # fetch-depth: 0 fetches the whole history and all branches, so origin/main exists and
       # merge-base can walk back from it.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Check that the tag is on main
@@ -86,7 +86,7 @@ jobs:
       # this downloads all six and compares each with the file and with GitHub's published digest,
       # so a release never ships a pin that no longer matches (about 70 MB, once per release).
       # Nothing is written. See releng/UpdateNeovimDownloads.java and docs/design/DOWNLOAD_NEOVIM.md.
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .java-version
@@ -146,7 +146,7 @@ jobs:
       SITE_ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.zip
       SIGNED_ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.signed.zip
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Fail here, before the secrets are touched, rather than publish an unsigned release.
       - name: Check that the public key is in the repository
         run: |
@@ -155,11 +155,11 @@ jobs:
             exit 1
           fi
       # For ./mvnw, which runs the signer (releng/sign/pom.xml).
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .java-version
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ env.SITE_ZIP }}
           path: unsigned
@@ -175,7 +175,7 @@ jobs:
       # unsigned one. The v0.1.4 tag's second run used the same name with overwrite: true, which
       # left two artifacts of that name, and publish downloaded the unsigned one (its signed-ZIP
       # check stopped it). publish renames the file back to neovim4eclipse-<version>.zip.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           archive: false
           path: signed/${{ env.SIGNED_ZIP }}
@@ -189,13 +189,13 @@ jobs:
       contents: write   # needed to create the release
     steps:
       # For CHANGELOG.md and releng/release-notes.sh, and so that gh knows the repository.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The sign job uploads the ZIP unwrapped (upload-artifact's archive: false), so the artifact
       # is named after the file; download-artifact v8 fetches such a file by that name.
       # skip-decompress: by default download-artifact unpacks any ZIP it downloads, which would
       # leave the update site's files in dist/ instead of the ZIP itself (the v0.1.0 tag's first
       # run failed that way: "no matches found for dist/neovim4eclipse-0.1.0.zip").
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: neovim4eclipse-${{ needs.version.outputs.version }}.signed.zip
           path: dist

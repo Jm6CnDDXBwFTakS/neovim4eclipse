@@ -57,8 +57,8 @@ jobs:
     name: ${{ inputs.skip-tests && 'Build (tested on main)' || 'Build, unit and UI tests' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
@@ -96,7 +96,7 @@ jobs:
       - name: Build only (the tests passed on main)
         if: ${{ inputs.skip-tests }}
         run: ./mvnw -B -ntp verify -DskipTests
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # archive: false (upload-artifact v7+) uploads the single file as it is, instead of
           # wrapping it in a ZIP of its own; the artifact is then named after the file.
@@ -109,8 +109,8 @@ jobs:
     if: ${{ !inputs.skip-tests }}   # see the build job
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
@@ -160,8 +160,8 @@ jobs:
         # .gitattributes checks shell scripts out with LF endings, which bash needs.
         shell: bash
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
