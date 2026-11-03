@@ -27,6 +27,9 @@ class KeyRouterTest {
         boolean eclipseTypingReady = true;
         final List<String> sent = new ArrayList<>();
         final List<InsertReplay.Plan> leftInsert = new ArrayList<>();
+        /** Each sync point, as {@code key} after {@code sync}. */
+        final List<String> synced = new ArrayList<>();
+        final List<InsertReplay.SyncPoint> syncPoints = new ArrayList<>();
 
         @Override
         public boolean isTypingMode() {
@@ -56,6 +59,13 @@ class KeyRouterTest {
         @Override
         public void leaveInsertModeAsync(InsertReplay.Plan replay) {
             leftInsert.add(replay);
+        }
+
+        @Override
+        public void syncInsertThenInputAsync(InsertReplay.SyncPoint sync, String key) {
+            eclipseTypingReady = false; // as the session does: the next key goes to Neovim
+            syncPoints.add(sync);
+            synced.add(key);
         }
     }
 
@@ -155,5 +165,66 @@ class KeyRouterTest {
         neovim.neovimDriven = true;
         assertEquals(List.of(true), type("<C-w>"));
         assertEquals(List.of("<C-w>"), neovim.sent);
+    }
+
+    // ---- sync points: a Ctrl key Neovim handles while Eclipse types (INSERT_CTRL_KEYS.md, phase C) ----
+
+    @Test
+    void aCtrlLetterGivenToNeovimForInsertIsASyncPoint() {
+        neovim.typing = true;
+        InsertReplay.SyncPoint sync = new InsertReplay.SyncPoint(null, 1, 7);
+        router.setSyncPointSupplier(() -> sync);
+        router.setInsertCtrlKeyFilter(letter -> letter == 'w');
+        assertEquals(List.of(true), type("<C-w>"));
+        assertEquals(List.of("<C-w>"), neovim.synced);
+        assertSame(sync, neovim.syncPoints.get(0));
+        assertEquals(List.of(), neovim.sent, "not a plain key: the typed text goes first");
+    }
+
+    @Test
+    void insertCtrlLettersLeftToEclipseAreLeftAlone() {
+        neovim.typing = true;
+        router.setInsertCtrlKeyFilter(letter -> letter == 'w');
+        assertEquals(List.of(false), type("<C-v>"));
+        assertEquals(List.of(), neovim.synced);
+        assertEquals(List.of(), neovim.sent);
+    }
+
+    /** No letter goes to Neovim in insert mode until the editor chooses them. */
+    @Test
+    void byDefaultNoInsertCtrlLetterIsASyncPoint() {
+        neovim.typing = true;
+        assertEquals(List.of(false), type("<C-w>"));
+        assertEquals(List.of(), neovim.synced);
+    }
+
+    /** {@code Ctrl-W} then {@code x} typed at once: the x goes to Neovim after the Ctrl-W, never before it. */
+    @Test
+    void aKeyRightAfterASyncPointGoesToNeovimInOrder() {
+        neovim.typing = true;
+        router.setInsertCtrlKeyFilter(letter -> letter == 'w');
+        assertEquals(List.of(true, true), type("<C-w>", "x"));
+        assertEquals(List.of("<C-w>"), neovim.synced);
+        assertEquals(List.of("x"), neovim.sent);
+        assertTrue(neovim.neovimDriven);
+    }
+
+    /** A key binding delivered it: Eclipse has consumed it, so it is Neovim's whatever the filter says now. */
+    @Test
+    void aBoundKeyInAnInsertEclipseTypesIsASyncPoint() {
+        neovim.typing = true;
+        router.routeBound("<C-u>");
+        assertEquals(List.of("<C-u>"), neovim.synced);
+    }
+
+    @Test
+    void aBoundKeyOutsideAnInsertEclipseTypesIsAPlainKey() {
+        router.setCtrlKeyFilter(letter -> false);
+        router.routeBound("<C-f>");
+        neovim.typing = true;
+        neovim.neovimDriven = true;
+        router.routeBound("<C-o>");
+        assertEquals(List.of("<C-f>", "<C-o>"), neovim.sent);
+        assertEquals(List.of(), neovim.synced);
     }
 }

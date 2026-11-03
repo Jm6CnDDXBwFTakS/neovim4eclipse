@@ -156,6 +156,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.styledText = styledText;
         this.keyInterceptor = new KeyInterceptor(session);
         this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
+        this.keyInterceptor.setInsertCtrlKeyFilter(EditorKeyContext::isCtrlKeyInInsert);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), session, SwtUiExecutor.INSTANCE);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
         this.buffer = buffer;
@@ -199,9 +200,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
-                this::commandLineHasFocus, session::isNeovimDrivenInsert);
-        // A key can make the insert Neovim-driven without a mode change (KeyRouter): look again after each.
-        keyInterceptor.setAfterKey(keyContext::update);
+                this::commandLineHasFocus);
         this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
         this.commandLine = new CommandLineBox(styledText, new SessionCommands(session), messageLine,
                 this::onCommandLineStateChanged);
@@ -213,6 +212,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 : new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
                         lines -> session.scrollLinesAsync(buffer, lines));
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
+        keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
         session.setLeaveInsertPush(() -> {
             try {
                 synchronizer.pushDocumentToNeovim();
@@ -760,14 +760,22 @@ public final class NeovimEditorController implements AutoCloseable {
         return styledText.isDisposed() ? null : insertTracker.consumePlan(offsets.caretModelOffset());
     }
 
-    /** Sends one key (Neovim notation) to Neovim; used by the key-binding command for Vim Ctrl keys. */
+    /** Called by the key listener at a sync point (a Ctrl key Neovim handles while Eclipse types), on the UI thread. */
+    private InsertReplay.SyncPoint consumeSyncPoint() {
+        return styledText.isDisposed() ? null : insertTracker.consumeSyncPoint(offsets.caretModelOffset());
+    }
+
+    /**
+     * Sends one key (Neovim notation) to Neovim; used by the key-binding command for Vim Ctrl keys.
+     * In an insert Eclipse types, the typed text goes to Neovim first (a sync point, {@code core/KeyRouter}).
+     */
     public void sendKey(String nvimKey) {
         if (!closed && neovimModeActive && commandLine.isOpen()) {
             commandLine.ctrlKey(nvimKey); // the : box has the focus: its line, or its paste and copy
             return;
         }
         if (!closed && neovimModeActive) {
-            session.inputAsync(nvimKey);
+            keyInterceptor.routeBound(nvimKey);
         }
     }
 

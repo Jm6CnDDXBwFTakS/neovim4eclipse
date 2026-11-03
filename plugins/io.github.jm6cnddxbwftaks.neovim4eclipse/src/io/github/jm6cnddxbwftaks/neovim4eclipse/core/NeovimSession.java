@@ -1328,6 +1328,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("leave insert mode", Level.WARNING, () -> keyInput.leaveInsertMode(replay));
     }
 
+    /**
+     * A sync point: a {@code Ctrl} key Neovim handles in an insert Eclipse types. Eclipse stops
+     * typing now, on the UI thread, so a key that follows goes to Neovim after this one
+     * ({@code KeyRouter}); then, on the input thread, the typed text goes to Neovim and the key is
+     * sent. See {@link KeyInput#syncInsertThenInput}.
+     *
+     * @param sync what to hand over, or {@code null} for nothing but the document
+     */
+    public void syncInsertThenInputAsync(InsertReplay.SyncPoint sync, String key) {
+        state.pauseEclipseTyping();
+        submit(key + " after the typed text", Level.WARNING, () -> keyInput.syncInsertThenInput(sync, key));
+    }
+
     /** See {@link InputThread#submit}; {@code false} if {@code work} will never run. */
     /**
      * Queues {@code work} on the input thread. Afterward, even if it failed, the input-handled

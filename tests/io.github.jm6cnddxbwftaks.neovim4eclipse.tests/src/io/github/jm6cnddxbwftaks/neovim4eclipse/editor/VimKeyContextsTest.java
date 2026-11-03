@@ -44,7 +44,7 @@ class VimKeyContextsTest {
 
     @Test
     void activatesTheNormalContextAndTheChosenLetters() {
-        contexts.activate(service, letter -> letter != 's');
+        contexts.apply(service, letter -> letter != 's');
         assertTrue(contexts.isActive());
         assertTrue(active().contains(VimCtrlKeys.NORMAL_CONTEXT_ID));
         assertTrue(active().contains(VimCtrlKeys.contextId('v')));
@@ -53,7 +53,7 @@ class VimKeyContextsTest {
 
     @Test
     void deactivateRemovesEverything() {
-        contexts.activate(service, letter -> true);
+        contexts.apply(service, letter -> true);
         contexts.deactivate(service);
         assertFalse(contexts.isActive());
         assertFalse(active().contains(VimCtrlKeys.NORMAL_CONTEXT_ID));
@@ -74,7 +74,7 @@ class VimKeyContextsTest {
     @Test
     void activatingIsOneBatch() {
         List<String> calls = new ArrayList<>();
-        new VimKeyContexts().activate(recording(calls, -1), letter -> letter == 'v' || letter == 'r');
+        new VimKeyContexts().apply(recording(calls, -1), letter -> letter == 'v' || letter == 'r');
         assertEquals(List.of("deferUpdates true", "activateContext", "activateContext", "activateContext",
                 "deferUpdates false"), calls);
     }
@@ -84,11 +84,39 @@ class VimKeyContextsTest {
         List<String> calls = new ArrayList<>();
         IContextService fake = recording(calls, -1);
         VimKeyContexts batch = new VimKeyContexts();
-        batch.activate(fake, letter -> true);
+        batch.apply(fake, letter -> true);
         calls.clear();
         batch.deactivate(fake);
         assertEquals(List.of("deferUpdates true", "deactivateContexts", "deferUpdates false"), calls);
         assertFalse(batch.isActive());
+    }
+
+    /**
+     * Insert mode's letters replace normal mode's: only the letters whose two choices differ change,
+     * in one batch. Here {@code v} goes off, {@code w} comes on, {@code r} and the parent stay.
+     */
+    @Test
+    void switchingLettersChangesOnlyTheDifference() {
+        List<String> calls = new ArrayList<>();
+        IContextService fake = recording(calls, -1);
+        VimKeyContexts batch = new VimKeyContexts();
+        batch.apply(fake, letter -> letter == 'v' || letter == 'r');
+        calls.clear();
+        batch.apply(fake, letter -> letter == 'w' || letter == 'r');
+        assertEquals(List.of("deferUpdates true", "deactivateContexts", "activateContext", "deferUpdates false"),
+                calls);
+        calls.clear();
+        batch.apply(fake, letter -> letter == 'w' || letter == 'r');
+        assertEquals(List.of(), calls, "nothing to change, no batch");
+    }
+
+    @Test
+    void switchingLettersInTheWorkbench() {
+        contexts.apply(service, letter -> letter == 'v');
+        contexts.apply(service, letter -> letter == 'w');
+        assertTrue(active().contains(VimCtrlKeys.NORMAL_CONTEXT_ID));
+        assertTrue(active().contains(VimCtrlKeys.contextId('w')));
+        assertFalse(active().contains(VimCtrlKeys.contextId('v')));
     }
 
     /** A failure must not leave the workbench holding back every later context change. */
@@ -98,7 +126,7 @@ class VimKeyContextsTest {
         // try/catch, not assertThrows: this fragment imports only org.junit.jupiter.api (MANIFEST.MF),
         // and assertThrows takes a type from org.junit.jupiter.api.function.
         try {
-            new VimKeyContexts().activate(recording(calls, 2), letter -> true);
+            new VimKeyContexts().apply(recording(calls, 2), letter -> true);
             fail("the third activation should have failed");
         } catch (IllegalStateException expected) {
             assertEquals("deferUpdates false", calls.get(calls.size() - 1));

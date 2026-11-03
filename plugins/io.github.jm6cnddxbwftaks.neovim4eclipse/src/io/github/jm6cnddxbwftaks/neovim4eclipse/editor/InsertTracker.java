@@ -14,7 +14,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 /**
  * Remembers what the document looked like when an Eclipse-driven insert began to change it, so that
  * at Esc the typed text can be re-typed into Neovim (see {@link InsertReplay}) and {@code .} can
- * repeat it.
+ * repeat it. A {@code Ctrl} key Neovim handles in the middle of the insert (a <em>sync point</em>,
+ * such as {@code Ctrl-W}) hands over the text typed so far in the same way, and the tracker starts
+ * over from there.
  *
  * <p>The snapshot is taken in {@code documentAboutToBeChanged} of the <em>first</em> change of an
  * insert, which gives both the text before the typing (identical to Neovim's buffer at that point)
@@ -76,6 +78,21 @@ final class InsertTracker implements IDocumentListener {
                 return null;
             }
             return InsertReplay.plan(before, document.get(), base, caretOffset);
+        } finally {
+            reset();
+        }
+    }
+
+    /**
+     * Builds the sync point for a {@code Ctrl} key Neovim handles in the middle of the insert, and
+     * resets the tracker: the insert goes on, and the next change starts a new snapshot from the text
+     * Neovim then has. So at Esc only the text typed after the last sync point is replayed.
+     *
+     * @param caretOffset caret offset now
+     */
+    InsertReplay.SyncPoint consumeSyncPoint(int caretOffset) {
+        try {
+            return InsertReplay.syncPoint(before, document.get(), base, caretOffset);
         } finally {
             reset();
         }

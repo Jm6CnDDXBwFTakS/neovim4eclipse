@@ -23,6 +23,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the plug-in, which the dialog shows with links to the GitHub release and VirusTotal; then it is
   unpacked, test-run and put in place. No `xattr` step is needed on macOS. See the README, "Get
   Neovim".
+- **Vim's `Ctrl` keys in insert mode.** *Window → Preferences → Neovim → Ctrl Keys* now has a
+  Normal and an Insert check box per letter. Ticked Insert letters reach Neovim while you type:
+  by default `Ctrl+W` (delete the word before), `Ctrl+U` (delete back to where the insert began),
+  `Ctrl+R` (insert a register), `Ctrl+O` (one normal-mode command), `Ctrl+T` and `Ctrl+D` (indent,
+  unindent) on Windows and Linux, and every letter with an insert-mode meaning on macOS. Neovim
+  first gets the text Eclipse typed, so the key acts on it as in Vim, and `.` repeats the whole
+  insert. Eclipse's other shortcuts (`Ctrl+Space`, `Ctrl+V`, `Ctrl+S`, ...) keep working while you
+  type. See docs/KEYBOARD.md, "Insert mode".
 
 ### Changed
 
@@ -36,8 +44,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Fixed
 
 - In an insert Neovim drives (after `Ctrl+V` then `I`, `A` or `c`, or while recording a macro), a
-  `Ctrl` key Eclipse binds, such as `Ctrl+O` (Quick Outline) in the Java editor, now reaches Neovim
-  as the other keys do.
+  `Ctrl` key ticked for insert mode, such as `Ctrl+O` (Quick Outline) in the Java editor, now
+  reaches Neovim, also where Eclipse binds it.
 
 ## [0.2.0] - 2026-11-02
 

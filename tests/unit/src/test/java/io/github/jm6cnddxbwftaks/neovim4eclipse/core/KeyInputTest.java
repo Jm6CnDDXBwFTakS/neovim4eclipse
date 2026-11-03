@@ -294,6 +294,73 @@ class KeyInputTest {
      * carries out back as {@code :Eclipse quit} (LuaScripts.HOST_COMMANDS). No buffer sync follows:
      * Eclipse runs such a command later (a revert, {@code :e!}, must not be overwritten).
      */
+    // ---- sync points: a Ctrl key Neovim handles while Eclipse types ----
+
+    /** "foo bar" then Ctrl-W: the text into Neovim's open insert (no Esc), push, caret, view, then the key. */
+    @Test
+    void aSyncPointHandsTheTypedTextOverThenSendsTheKeyInTheSameInsert() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.keyWithLineEvent = "foo bar"; // the re-typing's echo: Eclipse has that text already
+        keys.setLeaveInsertView(() -> nvim.calls.add("view"));
+        InsertReplay.Plan typed = new InsertReplay.Plan(List.of("foo bar"), 1, 2, 1, 9);
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(typed, 1, 9), "<C-w>");
+
+        assertEquals(List.of("setCursor 1:2", "type foo bar", "keysConsumed", "push document", "setCursor 1:9",
+                "keysConsumed", "view", "type <C-w>", "keysConsumed", "snapshot", "bufferLines"), nvim.calls);
+        assertFalse(nvim.calls.contains("type <Esc>"), "the insert goes on");
+        assertFalse(heard.contains("buffer [event for foo bar]"), "not applied twice");
+        assertFalse(keys.isNeovimDrivenInsert());
+        editor.changes.get(editor.changes.size() - 1).afterApply().run(); // the editor applied the sync
+        assertTrue(state.isEclipseTypingReady(), "Eclipse types again");
+    }
+
+    /** Ctrl-W's own change is Neovim's, so it reaches the editor. */
+    @Test
+    void theKeysChangeReachesTheEditor() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.keyWithLineEvent = "<C-w>";
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0), "<C-w>");
+
+        assertTrue(heard.contains("buffer [event for <C-w>]"), heard.toString());
+    }
+
+    @Test
+    void aSyncPointIsHandledAsLeavingUntilTheKey() throws Exception {
+        nvim.mode = new Mode("i", false);
+        push = () -> nvim.calls.add("push, leaving " + keys.isLeavingInsertMode());
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0), "<C-u>");
+
+        assertTrue(nvim.calls.contains("push, leaving true"), "the re-typing's cursors are dropped: " + nvim.calls);
+        assertFalse(keys.isLeavingInsertMode());
+    }
+
+    /** Ctrl-R waits for a register name: Neovim drives the rest of the insert, and nothing is asked. */
+    @Test
+    void aKeyNeovimWaitsAfterLetsNeovimDriveTheRestOfTheInsert() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.after.put("<C-r>", new Mode("i", true));
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0), "<C-r>");
+
+        assertEquals(List.of("push document", "setCursor 1:0", "type <C-r>"), nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /** Ctrl-O: one normal-mode command; entering insert again after it is the usual sync. */
+    @Test
+    void ctrlOLeavesInsertForOneCommandWithoutABufferSync() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.after.put("<C-o>", new Mode("niI", false));
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0), "<C-o>");
+
+        assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        assertTrue(heard.contains("mode niI"));
+    }
+
     @Test
     void enterOnAColonLineIsTypedAndSyncsNoBuffer() throws Exception {
         nvim.mode = new Mode("c", false);

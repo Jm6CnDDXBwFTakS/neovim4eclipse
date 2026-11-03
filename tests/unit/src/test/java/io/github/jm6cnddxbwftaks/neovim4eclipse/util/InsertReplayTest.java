@@ -212,6 +212,42 @@ class InsertReplayTest {
         assertTrue(plan.keyChunks().size() == 1);
     }
 
+    // ---- sync points (a Ctrl key Neovim handles while Eclipse types) ----
+
+    /** "foo bar" typed after "x ", then Ctrl-W: re-type it, and Neovim's cursor goes to the caret itself. */
+    @Test
+    void aSyncPointReTypesTheTextAndPutsTheCursorAtTheCaret() {
+        String before = "x \nend";
+        String after = "x foo bar\nend";
+        InsertReplay.SyncPoint sync = InsertReplay.syncPoint(before, after, 2, 9);
+        assertEquals(List.of("foo bar"), sync.typed().keyChunks());
+        assertEquals(List.of(1, 2), List.of(sync.typed().baseLine1Based(), sync.typed().baseCol0Based()));
+        assertEquals(List.of(1, 9), List.of(sync.caretLine1Based(), sync.caretCol0Based()), "not one left, as at Esc");
+        assertEquals(List.of(1, 9), List.of(sync.typed().finalLine1Based(), sync.typed().finalCol0Based()));
+    }
+
+    @Test
+    void aSyncPointWithNothingTypedOnlyPlacesTheCursor() {
+        InsertReplay.SyncPoint sync = InsertReplay.syncPoint(null, "ab\ncd", -1, 4);
+        assertNull(sync.typed());
+        assertEquals(List.of(2, 1), List.of(sync.caretLine1Based(), sync.caretCol0Based()));
+    }
+
+    /** Typing that deleted text before the insertion point cannot be re-typed: the document push makes it right. */
+    @Test
+    void aSyncPointAfterADeletionHasNoTextToReType() {
+        InsertReplay.SyncPoint sync = InsertReplay.syncPoint("abc", "aX", 1, 2);
+        assertNull(sync.typed());
+        assertEquals(List.of(1, 2), List.of(sync.caretLine1Based(), sync.caretCol0Based()));
+    }
+
+    /** The caret's column is in UTF-8 bytes, as Neovim counts: "é" is two. */
+    @Test
+    void aSyncPointCountsTheCaretInBytes() {
+        InsertReplay.SyncPoint sync = InsertReplay.syncPoint("", "é", 0, 1);
+        assertEquals(2, sync.caretCol0Based());
+    }
+
     private static List<Integer> asList(int[] pair) {
         return List.of(pair[0], pair[1]);
     }

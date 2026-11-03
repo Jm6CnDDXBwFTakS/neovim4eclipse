@@ -22,6 +22,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  *       Neovim to Eclipse's save and close ({@link IdeAction}).</li>
  *   <li><b>Insert / replace:</b> Eclipse inserts printable characters itself (no flicker, content
  *       assist keeps working). {@code Esc} pushes the document to Neovim and leaves insert mode.
+ *       A {@code Ctrl+letter} the user gave to Neovim for insert mode ({@code Ctrl-W},
+ *       {@code Ctrl-U}, ...) is a <em>sync point</em>: the text Eclipse typed so far goes to Neovim
+ *       first, then the key ({@link Neovim#syncInsertThenInputAsync}).
  *       Exception: an insert driven by Neovim (from blockwise visual, while recording a macro, or
  *       started before Eclipse could take over) forwards every key.</li>
  *   <li>A {@code Ctrl+letter} the user gave to Eclipse (the Ctrl Keys preference page) is left to
@@ -61,6 +64,14 @@ public final class KeyRouter {
         void inputAsync(String keys);
 
         void leaveInsertModeAsync(InsertReplay.Plan replay);
+
+        /**
+         * A sync point: hands Neovim the text Eclipse typed, then sends {@code key} into the same
+         * insert. Eclipse stops typing at once, so keys that follow go to Neovim, in order.
+         *
+         * @param sync what to hand over, or {@code null} for nothing but the document
+         */
+        void syncInsertThenInputAsync(InsertReplay.SyncPoint sync, String key);
     }
 
     private final Neovim neovim;
@@ -68,6 +79,10 @@ public final class KeyRouter {
     private volatile Supplier<InsertReplay.Plan> insertReplaySupplier;
     /** Whether a {@code Ctrl+letter} goes to Neovim; letters it rejects are left to Eclipse. */
     private volatile Predicate<Character> ctrlKeyFilter = letter -> true;
+    /** Whether a {@code Ctrl+letter} goes to Neovim in an insert Eclipse types (a sync point). */
+    private volatile Predicate<Character> insertCtrlKeyFilter = letter -> false;
+    /** Produces, at a sync point, what to hand to Neovim before the key. */
+    private volatile Supplier<InsertReplay.SyncPoint> syncPointSupplier;
 
     public KeyRouter(Neovim neovim) {
         this.neovim = neovim;
@@ -87,6 +102,19 @@ public final class KeyRouter {
     }
 
     /**
+     * Chooses which {@code Ctrl+letter} keys go to Neovim in an insert Eclipse types, each through
+     * a sync point; a rejected letter is left to Eclipse. None by default.
+     */
+    public void setInsertCtrlKeyFilter(Predicate<Character> toNeovim) {
+        this.insertCtrlKeyFilter = toNeovim;
+    }
+
+    /** Supplier of the sync point for a {@code Ctrl} key in an insert Eclipse types. */
+    public void setSyncPointSupplier(Supplier<InsertReplay.SyncPoint> supplier) {
+        this.syncPointSupplier = supplier;
+    }
+
+    /**
      * Routes one key.
      *
      * @param nvimKey the key in Neovim notation, not {@code null}
@@ -94,6 +122,21 @@ public final class KeyRouter {
      *         (the caller sets {@code event.doit = false}); {@code false} to let Eclipse handle it
      */
     public boolean route(String nvimKey) {
+        return route(nvimKey, false);
+    }
+
+    /**
+     * Routes a key that one of the plug-in's key bindings delivered ({@code SendKeyHandler}): the
+     * binding was active, so the key is Neovim's in every mode, and Eclipse has already consumed
+     * it. In an insert Eclipse types it is a sync point, whatever the insert filter says now (the
+     * filter may have changed since the binding was activated; leaving the key to Eclipse then would
+     * lose it).
+     */
+    public void routeBound(String nvimKey) {
+        route(nvimKey, true);
+    }
+
+    private boolean route(String nvimKey, boolean bound) {
         if (neovim.isTypingMode() && !neovim.isNeovimDrivenInsert() && !neovim.isEclipseTypingReady()) {
             // Insert mode has begun but the editor has not yet received Neovim's text for it (a fast
             // typist, or a test): Eclipse typing now could be overwritten. Let Neovim type the rest of
@@ -112,11 +155,19 @@ public final class KeyRouter {
                 neovim.leaveInsertModeAsync(supplier == null ? null : supplier.get());
                 return true;
             }
+            char letter = VimCtrlKeys.letterOf(nvimKey);
+            if (bound || (letter != 0 && insertCtrlKeyFilter.test(letter))) {
+                // Example: Ctrl-W after "foo bar". Neovim gets "foo bar" first, so its own Ctrl-W
+                // deletes "bar" as Vim does, and . later repeats the whole insert.
+                Supplier<InsertReplay.SyncPoint> supplier = syncPointSupplier;
+                neovim.syncInsertThenInputAsync(supplier == null ? null : supplier.get(), nvimKey);
+                return true;
+            }
             return false; // let SWT/JFace insert it; Neovim learns the text on Esc
         }
 
         char ctrlLetter = VimCtrlKeys.letterOf(nvimKey);
-        if (ctrlLetter != 0 && !ctrlKeyFilter.test(ctrlLetter)) {
+        if (!bound && ctrlLetter != 0 && !ctrlKeyFilter.test(ctrlLetter)) {
             return false; // the user gave this Ctrl key to Eclipse (Window > Preferences > Neovim > Ctrl Keys)
         }
         return send(nvimKey);

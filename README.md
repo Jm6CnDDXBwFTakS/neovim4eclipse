@@ -633,11 +633,12 @@ Neovim's `tabstop` is set to the editor's tab width so both agree.
 **Key bindings.** Eclipse handles shortcuts before the editor sees keys (`Ctrl-V` is *Paste* on
 Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that sends the key to Neovim.
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
-of the letters you send to Neovim (*Window → Preferences → Neovim → Ctrl Keys*; by default every letter
-except `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, see [docs/KEYBOARD.md](docs/KEYBOARD.md)). The bindings work only while Neovim owns normal/visual mode and the
-editor has focus; in insert mode and in Eclipse mode (toggle with the toolbar button: color logo in
-Neovim mode, grey in Eclipse mode) Eclipse's own
-shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
+of the letters you send to Neovim in the current mode (*Window → Preferences → Neovim → Ctrl Keys*;
+in normal mode by default every letter except `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, in insert mode
+`Ctrl+W`, `U`, `R`, `O`, `T` and `D`; see [docs/KEYBOARD.md](docs/KEYBOARD.md)). The bindings work
+only while Neovim owns the editor's keys and the editor has focus; for the other letters, and in
+Eclipse mode (toggle with the toolbar button: color logo in Neovim mode, grey in Eclipse mode),
+Eclipse's own shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
 the system Paste.
 
 **If `Ctrl-V` does nothing**, the plug-in's log says why. It goes to the console of the Eclipse
@@ -793,10 +794,14 @@ adds a brief flash to errors in the message line ([Messages and errors](#message
 *Window → Preferences → Neovim → Status Bar*: which parts of the Vim status appear in the status bar,
 how the mode reads, and how wide the statusline may be (see [Status bar](#status-bar)).
 
-*Window → Preferences → Neovim → Ctrl Keys*: one check box per letter. Ticked `Ctrl+letter` keys go to
-Neovim in normal and visual mode; cleared ones keep their Eclipse shortcut. *Select All* and *Deselect
-All* set every box; *Restore Defaults* ticks all but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`. Changes apply
-immediately. [docs/KEYBOARD.md](docs/KEYBOARD.md) explains those three defaults and which keys go where.
+*Window → Preferences → Neovim → Ctrl Keys*: two check boxes per letter, each with Vim's meaning
+beside it. Ticked `Ctrl+letter` keys go to Neovim, in normal and visual mode (**Normal**) or in
+insert mode (**Insert**); cleared ones keep their Eclipse shortcut. In an insert Eclipse types, an
+Insert key first hands Neovim the typed text, so `Ctrl+W` deletes the word just typed, and `.`
+repeats the whole insert. *Select All* and *Deselect All* set a column; *Restore Defaults* ticks
+every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, and the Insert boxes of `Ctrl+W`, `U`, `R`,
+`O`, `T` and `D` (on macOS every letter with an insert meaning). Changes apply immediately.
+[docs/KEYBOARD.md](docs/KEYBOARD.md) explains the defaults and which keys go where.
 
 ### Get Neovim
 

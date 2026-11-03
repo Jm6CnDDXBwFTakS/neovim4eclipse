@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.ctrlKey;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.escape;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
@@ -18,7 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -917,29 +918,111 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * The Vim key contexts follow who reads the keys: off in an insert Eclipse types (so Eclipse's
-     * own Ctrl shortcuts work), on in one Neovim drives (block-visual {@code I}), so that a Ctrl key
-     * Eclipse binds, such as the Java editor's Ctrl+O, reaches Neovim (KeyContextRule).
+     * The Vim key contexts switch on the letters chosen for the mode (KeyContextRule): in normal mode
+     * the Normal choices (Ctrl+F on, Ctrl+W Eclipse's by default), in insert mode the Insert choices
+     * (Ctrl+W on, Ctrl+F Eclipse's), whether Eclipse types or Neovim drives the insert (block-visual
+     * {@code I}).
      */
     @Test
-    void theKeyContextsStayOnInAnInsertNeovimDrives() {
+    void theKeyContextsSwitchOnTheLettersChosenForTheMode() {
         IContextService contexts = PlatformUI.getWorkbench().getService(IContextService.class);
-        BooleanSupplier on = () -> contexts.getActiveContextIds().contains(VimCtrlKeys.NORMAL_CONTEXT_ID);
-        waitUntil("contexts on in normal mode", TIMEOUT_MS, on);
+        Predicate<Character> on = letter -> contexts.getActiveContextIds().contains(VimCtrlKeys.contextId(letter));
+        waitUntil("normal mode's letters", TIMEOUT_MS, () -> on.test('f') && !on.test('w'));
 
         type(widget, "gg");
         type(widget, 'A');
         waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
-        waitUntil("contexts off while Eclipse types", TIMEOUT_MS, () -> !on.getAsBoolean());
+        waitUntil("insert mode's letters while Eclipse types", TIMEOUT_MS, () -> on.test('w') && !on.test('f'));
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        waitUntil("normal mode's letters again", TIMEOUT_MS, () -> on.test('f') && !on.test('w'));
 
         session.inputAsync("<C-v>");
         waitUntil("visual block mode", TIMEOUT_MS, () -> "\u0016".equals(session.getMode()));
         typeSlowly("j");
         type(widget, 'I');
         waitUntil("an insert Neovim drives", TIMEOUT_MS, session::isNeovimDrivenInsert);
-        waitUntil("contexts on while Neovim drives the insert", TIMEOUT_MS, on);
+        waitUntil("insert mode's letters while Neovim drives the insert", TIMEOUT_MS,
+                () -> on.test('w') && on.test('o') && !on.test('f'));
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+    }
+
+    /**
+     * A sync point (docs/design/INSERT_CTRL_KEYS.md, phase C): Ctrl+W while Eclipse types hands the
+     * typed text to Neovim, whose own Ctrl-W deletes the word; Eclipse then types on, and {@code .}
+     * repeats the whole insert, Ctrl-W included, as in Vim.
+     */
+    @Test
+    void ctrlWWhileEclipseTypesDeletesTheWordAndDotRepeatsTheWholeInsert() {
+        type(widget, "gg");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, " foo bar");
+        expectText("alpha foo bar\nbeta\ngamma\n");
+
+        ctrlKey(widget, 'w');
+        expectText("alpha foo \nbeta\ngamma\n");
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        assertFalse(session.isNeovimDrivenInsert(), "Eclipse, not Neovim, types the rest");
+        type(widget, "baz");
+        expectText("alpha foo baz\nbeta\ngamma\n");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+
+        typeSlowly("j.");
+        expectText("alpha foo baz\nbeta foo baz\ngamma\n");
+    }
+
+    /** Ctrl-U knows where the insert began, although Eclipse typed the text: it deletes only that. */
+    @Test
+    void ctrlUWhileEclipseTypesDeletesBackToWhereTheInsertBegan() {
+        type(widget, "gg");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, " foo");
+        expectText("alpha foo\nbeta\ngamma\n");
+        ctrlKey(widget, 'u');
+        expectText("alpha\nbeta\ngamma\n");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+    }
+
+    /**
+     * Ctrl-O runs one normal-mode command ({@code 0}: to the line's start) and the insert goes on
+     * there; once Neovim is back in insert mode, Eclipse types again.
+     */
+    @Test
+    void ctrlOWhileEclipseTypesRunsOneNormalCommandThenEclipseTypesOn() {
+        type(widget, "gg");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, " foo");
+        ctrlKey(widget, 'o');
+        waitUntil("one normal-mode command", TIMEOUT_MS, () -> "niI".equals(session.getMode()));
+        type(widget, '0');
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        assertFalse(session.isNeovimDrivenInsert(), "Eclipse, not Neovim, types the rest");
+        type(widget, "X");
+        expectText("Xalpha foo\nbeta\ngamma\n");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+    }
+
+    /**
+     * Ctrl-R waits for a register name: Neovim drives the rest of the insert, so the {@code "} that
+     * follows reaches it, and the unnamed register's text is inserted.
+     */
+    @Test
+    void ctrlRWhileEclipseTypesInsertsARegister() {
+        typeSlowly("ggyiw"); // "alpha" in the unnamed register
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, " ");
+        ctrlKey(widget, 'r');
+        type(widget, '"');
+        expectText("alpha alpha\nbeta\ngamma\n");
+        assertTrue(session.isNeovimDrivenInsert(), "Neovim drives the rest of the insert");
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
     }

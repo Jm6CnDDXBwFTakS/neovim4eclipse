@@ -162,7 +162,7 @@ public class Activator extends AbstractUIPlugin {
         return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter));
     }
 
-    /** Whether {@code Ctrl+letter} goes to Neovim in an insert Eclipse types, as chosen in the preferences. */
+    /** Whether {@code Ctrl+letter} goes to Neovim in insert mode, as chosen in the preferences. */
     public boolean isCtrlKeyInInsert(char letter) {
         return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyInInsert(letter));
     }

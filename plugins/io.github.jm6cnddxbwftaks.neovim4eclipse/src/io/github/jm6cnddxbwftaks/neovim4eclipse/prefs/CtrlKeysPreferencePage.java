@@ -22,8 +22,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * Window > Preferences > Neovim > Ctrl Keys: one row per letter, with two check boxes, each with
- * Vim's meaning beside it: <em>Normal</em> (normal and visual mode, an insert Neovim drives, the
- * {@code :} box) and <em>Insert</em> (an insert Eclipse types). A ticked box sends
+ * Vim's meaning beside it: <em>Normal</em> (normal and visual mode, the {@code :} box) and
+ * <em>Insert</em> (insert and replace mode, whether Eclipse types or Neovim drives the insert). A ticked box sends
  * {@code Ctrl+letter} to Neovim there; a cleared one leaves Eclipse's shortcut. Example row:
  *
  * <pre>
@@ -66,8 +66,8 @@ public class CtrlKeysPreferencePage extends PreferencePage implements IWorkbench
 
     public CtrlKeysPreferencePage() {
         setDescription("A ticked box sends the Ctrl key to Neovim; a cleared one keeps Eclipse's shortcut.\n"
-                + "Normal: normal and visual mode, an insert Neovim drives, and the : box. Insert: while Eclipse "
-                + "types in insert mode;\nNeovim then gets the typed text first, so its key acts on it.");
+                + "Normal: normal and visual mode, and the : box. Insert: insert mode; when Eclipse types,\n"
+                + "Neovim gets the typed text first, so its key acts on it.");
     }
 
     @Override

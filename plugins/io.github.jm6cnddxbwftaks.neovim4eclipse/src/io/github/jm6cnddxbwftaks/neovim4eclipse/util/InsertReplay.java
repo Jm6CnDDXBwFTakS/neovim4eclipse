@@ -36,11 +36,30 @@ public final class InsertReplay {
      * @param keyChunks        the typed text as Neovim key notation, in pieces to send one by one
      * @param baseLine1Based   where the insertion started in Neovim's buffer: 1-based line
      * @param baseCol0Based    ... and 0-based UTF-8 byte column
-     * @param finalLine1Based  where Vim leaves the cursor after Esc (one character left of the caret)
+     * @param finalLine1Based  where Neovim's cursor goes once the text is typed: at Esc, where Vim
+     *                         leaves it (one character left of the caret); at a sync point, the caret
      * @param finalCol0Based   ... 0-based UTF-8 byte column
      */
     public record Plan(List<String> keyChunks, int baseLine1Based, int baseCol0Based,
             int finalLine1Based, int finalCol0Based) {
+    }
+
+    /**
+     * What a <em>sync point</em> hands to Neovim: a {@code Ctrl} key Neovim handles in the middle of
+     * an insert Eclipse types (docs/design/INSERT_CTRL_KEYS.md, phase C). Unlike Esc, the insert goes
+     * on, so Neovim's cursor goes to the caret itself, not one character left of it.
+     *
+     * <p>Example: Eclipse typed {@code foo bar} and the user presses {@code Ctrl+W}. {@code typed}
+     * re-types {@code foo bar} into Neovim's still-open insert, the cursor goes after {@code bar},
+     * and then Neovim's own {@code <C-w>} deletes {@code bar} exactly as Vim does.
+     *
+     * @param typed           what to re-type, or {@code null} when nothing was typed since the insert
+     *                        began (or since the last sync point), or it is not one plain insertion:
+     *                        then only the document is pushed
+     * @param caretLine1Based the caret: 1-based line
+     * @param caretCol0Based  ... and 0-based UTF-8 byte column
+     */
+    public record SyncPoint(Plan typed, int caretLine1Based, int caretCol0Based) {
     }
 
     private InsertReplay() {
@@ -74,6 +93,26 @@ public final class InsertReplay {
      * @return the plan, or {@code null} if the edit is not a replayable plain insertion
      */
     public static Plan plan(String before, String after, int baseOffset, int caretAfter) {
+        return planTo(before, after, baseOffset, cursorAfterEsc(after, caretAfter));
+    }
+
+    /**
+     * The sync point for a {@code Ctrl} key Neovim handles while Eclipse types (see {@link SyncPoint}).
+     *
+     * @param before     document text when the first change since the insert began (or since the last
+     *                   sync point) happened; {@code null} if nothing changed since
+     * @param after      document text now
+     * @param baseOffset offset of that first change in {@code before}
+     * @param caretAfter caret offset in {@code after}
+     */
+    public static SyncPoint syncPoint(String before, String after, int baseOffset, int caretAfter) {
+        Plan typed = before == null ? null : planTo(before, after, baseOffset, caretAfter);
+        int[] caret = lineAndByteCol(after, caretAfter);
+        return new SyncPoint(typed, caret[0], caret[1]);
+    }
+
+    /** @param finalOffset where Neovim's cursor goes once the text is typed, an offset in {@code after} */
+    private static Plan planTo(String before, String after, int baseOffset, int finalOffset) {
         String typed = insertedText(before, after, baseOffset);
         if (typed == null || typed.length() > MAX_REPLAY_CHARS) {
             return null;
@@ -83,7 +122,7 @@ public final class InsertReplay {
             return null;
         }
         int[] base = lineAndByteCol(before, baseOffset);
-        int[] last = lineAndByteCol(after, cursorAfterEsc(after, caretAfter));
+        int[] last = lineAndByteCol(after, finalOffset);
         return new Plan(chunks, base[0], base[1], last[0], last[1]);
     }
 

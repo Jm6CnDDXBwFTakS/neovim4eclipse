@@ -17,6 +17,8 @@ import org.eclipse.ui.contexts.IContextService;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyContextRule;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyContextRule.Column;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -28,15 +30,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * see {@link VimKeyContexts}); while a context is active its binding wins over Eclipse's.
  *
  * <p><b>The rule</b> ({@link KeyContextRule}, unit-tested). The contexts are active exactly while
- * Neovim owns the keys and either this editor's text widget has keyboard focus and Neovim reads the
- * keys (any mode but insert, or an insert Neovim drives: after a block-visual {@code I}, or while
- * recording), or the editor's {@code :} box has the focus (so that {@code <C-r>}, {@code <C-u>},
- * {@code <C-n>} reach Neovim's command line, see {@link CommandLineBox}). In an insert Eclipse types,
- * in Eclipse mode, on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own
- * shortcuts (paste, content assist, other views) are untouched there. A driven insert can begin
- * without a mode change (a key typed before Eclipse could take over), so the editor calls
- * {@link #update()} after each key too. Activation is workbench-wide (the standard,
- * well-trodden path); the focus check keeps it from leaking into other parts.
+ * Neovim owns the keys and this editor's text widget or its {@code :} box has the keyboard focus (so
+ * that {@code <C-r>}, {@code <C-u>}, {@code <C-n>} reach Neovim's command line, see
+ * {@link CommandLineBox}). In insert and replace mode they switch on the letters the user gave to
+ * Neovim for insert mode, in other modes those for normal mode (the Ctrl Keys preference page has
+ * both choices per letter); the mode listener calls {@link #update(String)} at each mode change. In
+ * Eclipse mode, on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own
+ * shortcuts (paste, content assist, other views) are untouched there. Activation is workbench-wide
+ * (the standard, well-trodden path); the focus check keeps it from leaking into other parts.
  *
  * <p>UI thread only, except {@link #updateFromAnyThread}.
  */
@@ -58,8 +59,6 @@ final class EditorKeyContext {
     private final BooleanSupplier neovimOwnsKeys;
     /** Whether the editor's {@code :} box has the keyboard focus. */
     private final BooleanSupplier commandLineFocused;
-    /** Whether Neovim, not Eclipse, receives the keys of the current insert. */
-    private final BooleanSupplier neovimDrivenInsert;
     private final VimKeyContexts contexts = new VimKeyContexts();
     private boolean disposed;
 
@@ -76,12 +75,11 @@ final class EditorKeyContext {
     };
 
     EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys,
-            BooleanSupplier commandLineFocused, BooleanSupplier neovimDrivenInsert) {
+            BooleanSupplier commandLineFocused) {
         this.widget = widget;
         this.mode = mode;
         this.neovimOwnsKeys = neovimOwnsKeys;
         this.commandLineFocused = commandLineFocused;
-        this.neovimDrivenInsert = neovimDrivenInsert;
         widget.addFocusListener(focusListener);
     }
 
@@ -92,21 +90,26 @@ final class EditorKeyContext {
 
     /** Applies the rule for {@code nvimMode}. UI thread. */
     void update(String nvimMode) {
-        boolean wanted = !disposed && KeyContextRule.wanted(nvimMode, neovimDrivenInsert.getAsBoolean(),
-                !widget.isDisposed() && widget.isFocusControl(), neovimOwnsKeys.getAsBoolean(),
-                commandLineFocused.getAsBoolean());
+        boolean onCommandLine = commandLineFocused.getAsBoolean();
+        boolean wanted = !disposed && KeyContextRule.wanted(!widget.isDisposed() && widget.isFocusControl(),
+                neovimOwnsKeys.getAsBoolean(), onCommandLine);
         try {
             IContextService service = contextService();
             if (service == null) {
                 LOG.warning("No workbench IContextService; Vim Ctrl keys cannot be enabled");
                 return;
             }
-            if (wanted && !contexts.isActive()) {
-                contexts.activate(service, EditorKeyContext::isCtrlKeyToNeovim);
-                LOG.fine("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
-                // Report what the workbench would run for Ctrl-V now; see KeyContextDiagnostics.
-                Display.getDefault().asyncExec(() -> KeyContextDiagnostics.logResolution("CTRL+V"));
-            } else if (!wanted && contexts.isActive()) {
+            if (wanted) {
+                boolean wasActive = contexts.isActive();
+                contexts.apply(service, KeyContextRule.column(nvimMode, onCommandLine) == Column.INSERT
+                        ? EditorKeyContext::isCtrlKeyInInsert
+                        : EditorKeyContext::isCtrlKeyToNeovim);
+                if (!wasActive) {
+                    LOG.fine("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
+                    // Report what the workbench would run for Ctrl-V now; see KeyContextDiagnostics.
+                    Display.getDefault().asyncExec(() -> KeyContextDiagnostics.logResolution("CTRL+V"));
+                }
+            } else if (contexts.isActive()) {
                 contexts.deactivate(service);
                 LOG.fine("Neovim key context deactivated");
             }
@@ -159,6 +162,16 @@ final class EditorKeyContext {
     static boolean isCtrlKeyToNeovim(char letter) {
         Activator activator = Activator.getDefault();
         return activator == null || activator.isCtrlKeyToNeovim(letter);
+    }
+
+    /**
+     * Whether {@code Ctrl+letter} goes to Neovim in insert mode; while the preferences are
+     * unavailable, the default letters do ({@link VimCtrlKeys#inInsertByDefault}).
+     */
+    static boolean isCtrlKeyInInsert(char letter) {
+        Activator activator = Activator.getDefault();
+        return activator == null ? VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac())
+                : activator.isCtrlKeyInInsert(letter);
     }
 
     private static IContextService contextService() {

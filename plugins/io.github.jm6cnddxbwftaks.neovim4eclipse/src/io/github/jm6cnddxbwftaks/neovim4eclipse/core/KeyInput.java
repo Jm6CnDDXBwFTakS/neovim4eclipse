@@ -27,7 +27,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  *       nothing else is asked (see {@link #input}).</li>
  *   <li><b>Insert mode</b>: Eclipse types; entering insert decides whether Neovim must see the keys
  *       instead ({@link #isNeovimDrivenInsert}); leaving it replays the typed text into Neovim so
- *       {@code .} can repeat it ({@link #leaveInsertMode}).</li>
+ *       {@code .} can repeat it ({@link #leaveInsertMode}); a {@code Ctrl} key Neovim handles in the
+ *       middle of it does the same without leaving ({@link #syncInsertThenInput}).</li>
  *   <li><b>Macro playback</b> ({@code @a}): buffer events are held back and the final text is
  *       pulled once ({@link #syncBufferAfterMacro}).</li>
  *   <li><b>The mouse</b> in normal and visual mode goes the same way as a key ({@link #mouse}).</li>
@@ -99,7 +100,8 @@ final class KeyInput {
      */
     private volatile boolean neovimDrivenInsert;
     /**
-     * Set while {@link #leaveInsertMode} runs, until Neovim's state is read at its end. What Neovim
+     * Set while {@link #leaveInsertMode} runs, until Neovim's state is read at its end, and while
+     * {@link #syncInsertThenInput} hands the typed text over, until its key is sent. What Neovim
      * reports until then is of text it does not have yet (the replay types into the old lines) or of
      * a cursor about to be dragged into the editor's view, so the editor ignores those cursors and
      * top lines ({@code NeovimSession.isLeavingInsertMode}). Example: the caret on line 1, the wheel
@@ -341,19 +343,12 @@ final class KeyInput {
      * Leaves buffer events suppressed on success (the caller resumes them after pushing the
      * document; applying them would insert the text twice) and resumes them on failure.
      *
-     * <p>{@link Neovim#awaitKeysConsumed()} follows every chunk, so the keys are processed before the
-     * next step and Neovim's input buffer does not overflow.
-     *
      * @return {@code true} if the text was typed and insert mode was left
      */
     private boolean replayTypedText(InsertReplay.Plan plan) {
         state.setSuppressBufferEvents(true);
         try {
-            nvim.setCursor(plan.baseLine1Based(), plan.baseCol0Based());
-            for (String chunk : plan.keyChunks()) {
-                nvim.type(chunk);
-                nvim.awaitKeysConsumed();
-            }
+            typeAtBase(plan);
             nvim.type("<Esc>");
             nvim.awaitKeysConsumed();
             return true;
@@ -361,6 +356,101 @@ final class KeyInput {
             LOG.log(Level.WARNING, "replaying typed text into Neovim failed; dot-repeat will not include it", e);
             state.setSuppressBufferEvents(false);
             return false;
+        }
+    }
+
+    /**
+     * Types the plan's text at its base position into Neovim's open insert.
+     * {@link Neovim#awaitKeysConsumed()} follows every chunk, so the keys are processed before the
+     * next step and Neovim's input buffer does not overflow.
+     */
+    private void typeAtBase(InsertReplay.Plan plan) throws Exception {
+        nvim.setCursor(plan.baseLine1Based(), plan.baseCol0Based());
+        for (String chunk : plan.keyChunks()) {
+            nvim.type(chunk);
+            nvim.awaitKeysConsumed();
+        }
+    }
+
+    /**
+     * A <em>sync point</em>: a {@code Ctrl} key Neovim handles in the middle of an insert Eclipse
+     * types (docs/design/INSERT_CTRL_KEYS.md, phase C). Example: Eclipse typed {@code foo bar}, the
+     * user presses {@code Ctrl+W}.
+     * <ol>
+     *   <li>The typed text is re-typed into Neovim's still-open insert ({@code foo bar}), as at Esc
+     *       but without the {@code <Esc>}, so the insert Neovim records goes on.</li>
+     *   <li>The document is pushed: Eclipse's text is authoritative (auto-indent, a closing bracket
+     *       Eclipse added, or typing the re-typing cannot express).</li>
+     *   <li>Neovim's cursor goes to the caret, and Neovim's window to the editor's view (Eclipse
+     *       scrolled alone while it typed).</li>
+     *   <li>The key is sent: Neovim's own {@code <C-w>} deletes {@code bar} as Vim does, {@code .}
+     *       later repeats the whole insert, {@code Ctrl-U} still knows where the insert began.</li>
+     *   <li>Its change reaches the document as a buffer event. If Neovim is still in insert mode, a
+     *       full sync follows, after which Eclipse types again: the same handshake as at the start of
+     *       an insert ({@link StateSync#isEclipseTypingReady()}). After {@code Ctrl-O} Neovim is in
+     *       {@code niI} until its one command ends, and entering insert again syncs then.</li>
+     * </ol>
+     * If the key leaves Neovim waiting for another ({@code Ctrl-R} for a register, {@code Ctrl-V},
+     * {@code Ctrl-K}), Neovim drives the rest of this insert: every key goes to it until Esc
+     *. It answers no request until that key arrives, so nothing is read here.
+     *
+     * <p>Buffer events stay suppressed from the re-typing until the key: Eclipse has that text
+     * already, and applying Neovim's events for it would insert it twice. Their cursor reports are
+     * dropped by the editor meanwhile ({@link #isLeavingInsertMode()}).
+     *
+     * @param sync what to hand over, or {@code null} for nothing but the document
+     * @param key  the key, in Neovim notation ({@code <C-w>})
+     */
+    void syncInsertThenInput(InsertReplay.SyncPoint sync, String key) throws Exception {
+        leavingInsert = true;
+        try {
+            handOverTypedText(sync);
+        } finally {
+            leavingInsert = false;
+        }
+        status.clearMessage(); // as a key does
+        nvim.type(key);
+        Mode mode = state.readMode();
+        if (mode != null && mode.blocking()) {
+            neovimDrivenInsert = true;
+            return;
+        }
+        // The key's buffer events have been dispatched once Neovim has consumed it; the cursor is
+        // published after them, so the caret lands on the changed text.
+        nvim.awaitKeysConsumed();
+        state.publishState();
+        if (state.isTypingMode()) {
+            state.syncBuffer(); // the handshake: Eclipse types again once the document has Neovim's text
+        }
+    }
+
+    /** Steps 1 to 3 of {@link #syncInsertThenInput}. */
+    private void handOverTypedText(InsertReplay.SyncPoint sync) throws Exception {
+        Runnable push = leaveInsertPush.get();
+        state.setSuppressBufferEvents(true);
+        try {
+            InsertReplay.Plan typed = sync == null ? null : sync.typed();
+            if (typed != null) {
+                try {
+                    typeAtBase(typed);
+                } catch (Exception e) {
+                    // The push below still makes the text right; only . misses the typed text.
+                    LOG.log(Level.WARNING, "re-typing the typed text into Neovim failed; dot-repeat will not include it", e);
+                }
+            }
+            if (push != null) {
+                push.run();
+            }
+            if (sync != null) {
+                nvim.setCursor(sync.caretLine1Based(), sync.caretCol0Based());
+            }
+        } finally {
+            state.setSuppressBufferEvents(false);
+        }
+        Runnable view = leaveInsertView;
+        if (view != null) {
+            nvim.awaitKeysConsumed();
+            view.run();
         }
     }
 }

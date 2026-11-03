@@ -217,6 +217,20 @@ final class UiTestSupport {
         widget.notifyListeners(SWT.KeyDown, event);
     }
 
+    /**
+     * Sends Ctrl plus a letter key, Ctrl on macOS too (unlike {@link #m1Key}): the plug-in binds its
+     * Vim Ctrl keys to Ctrl everywhere (M4 on macOS). As for {@link #m1Key}, the workbench's key
+     * bindings see it; where none is active, the editor's key listener does.
+     */
+    static void ctrlKey(StyledText widget, char letter) {
+        Event event = new Event();
+        event.keyCode = letter;
+        event.character = (char) (letter - 'a' + 1);
+        event.stateMask = SWT.CTRL;
+        event.doit = true;
+        widget.notifyListeners(SWT.KeyDown, event);
+    }
+
     /** Sends Escape. */
     static void escape(StyledText widget) {
         Event event = new Event();

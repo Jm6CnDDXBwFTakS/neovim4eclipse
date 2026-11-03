@@ -140,6 +140,15 @@ final class StateSync {
         return eclipseTypingReady && isTypingMode();
     }
 
+    /**
+     * Eclipse stops typing in the current insert until the next full sync has been applied: at a
+     * sync point ({@code KeyInput#syncInsertThenInput}), Neovim's answer to the key is about to change
+     * the text, and keys that follow go to Neovim, in order. UI thread, at the key.
+     */
+    void pauseEclipseTyping() {
+        eclipseTypingReady = false;
+    }
+
     /** Whether Neovim is waiting for the argument character of a command ({@code f}, {@code @}, ...). */
     boolean isWaitingForArgument() {
         return waitingForArgument;

@@ -115,7 +115,7 @@ public final class PreferenceConstants {
 
     /**
      * Prefix of the per-letter insert-mode preferences: {@code ctrlKeyInInsert.w} is {@code true} when
-     * Ctrl+W goes to Neovim in an insert Eclipse types (docs/design/INSERT_CTRL_KEYS.md).
+     * Ctrl+W goes to Neovim in insert mode (docs/design/INSERT_CTRL_KEYS.md).
      */
     public static final String CTRL_KEY_IN_INSERT_PREFIX = "ctrlKeyInInsert.";
 
