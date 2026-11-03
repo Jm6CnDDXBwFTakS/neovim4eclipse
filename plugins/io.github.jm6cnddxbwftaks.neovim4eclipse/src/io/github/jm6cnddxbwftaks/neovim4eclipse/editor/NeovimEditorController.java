@@ -25,6 +25,7 @@ import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionConstants;
+import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.eclipse.ui.texteditor.ITextEditorExtension6;
 import org.eclipse.ui.texteditor.IUpdate;
 
@@ -35,6 +36,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FoldState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.KeyRouter;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
@@ -200,7 +202,10 @@ public final class NeovimEditorController implements AutoCloseable {
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
-                this::commandLineHasFocus);
+                this::commandLineHasFocus, session::isNeovimDrivenInsert);
+        // A key can make the insert Neovim-driven without a mode change (KeyRouter), which turns
+        // insert-mode Ctrl-N and Ctrl-P from Eclipse's Word Completion into Neovim's: look after each.
+        keyInterceptor.setAfterKey(keyContext::update);
         this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
         this.commandLine = new CommandLineBox(styledText, new SessionCommands(session), messageLine,
                 this::onCommandLineStateChanged);
@@ -213,6 +218,7 @@ public final class NeovimEditorController implements AutoCloseable {
                         lines -> session.scrollLinesAsync(buffer, lines));
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
+        keyInterceptor.setCompletion(this::runCompletion);
         session.setLeaveInsertPush(() -> {
             try {
                 synchronizer.pushDocumentToNeovim();
@@ -760,6 +766,28 @@ public final class NeovimEditorController implements AutoCloseable {
         return styledText.isDisposed() ? null : insertTracker.consumePlan(offsets.caretModelOffset());
     }
 
+    /**
+     * Runs Eclipse's Word Completion or Content Assist for Vim's insert-mode {@code Ctrl-N},
+     * {@code Ctrl-P} and {@code Ctrl-X Ctrl-O} (KeyRouter), through the editor's command handlers, as
+     * {@code Alt+/} and {@code Ctrl+Space} would. Posted, so it runs after the key event that asked
+     * for it. An editor without the command (no handler) just logs it. UI thread.
+     */
+    private void runCompletion(KeyRouter.Completion completion) {
+        String commandId = completion == KeyRouter.Completion.WORD
+                ? ITextEditorActionDefinitionIds.HIPPIE_COMPLETION
+                : ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS;
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (closed || styledText.isDisposed()) {
+                return;
+            }
+            try {
+                editor.getSite().getService(IHandlerService.class).executeCommand(commandId, null);
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "cannot run " + commandId + " in " + editor.getTitle(), e);
+            }
+        });
+    }
+
     /** Called by the key listener at a sync point (a Ctrl key Neovim handles while Eclipse types), on the UI thread. */
     private InsertReplay.SyncPoint consumeSyncPoint() {
         return styledText.isDisposed() ? null : insertTracker.consumeSyncPoint(offsets.caretModelOffset());
@@ -767,7 +795,7 @@ public final class NeovimEditorController implements AutoCloseable {
 
     /**
      * Sends one key (Neovim notation) to Neovim; used by the key-binding command for Vim Ctrl keys.
-     * In an insert Eclipse types, the typed text goes to Neovim first (a sync point, {@code core/KeyRouter}).
+     * In an insert Eclipse types, the typed text goes to Neovim first (a sync point, {@link KeyRouter}).
      */
     public void sendKey(String nvimKey) {
         if (!closed && neovimModeActive && commandLine.isOpen()) {

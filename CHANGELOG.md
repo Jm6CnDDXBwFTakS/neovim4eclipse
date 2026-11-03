@@ -29,7 +29,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `Ctrl+R` (insert a register), `Ctrl+O` (one normal-mode command), `Ctrl+T` and `Ctrl+D` (indent,
   unindent) on Windows and Linux, and every letter with an insert-mode meaning on macOS. Neovim
   first gets the text Eclipse typed, so the key acts on it as in Vim, and `.` repeats the whole
-  insert. Eclipse's other shortcuts (`Ctrl+Space`, `Ctrl+V`, `Ctrl+S`, ...) keep working while you
+  insert. `Ctrl+N` and `Ctrl+P` run Eclipse's Word Completion, `Ctrl+X Ctrl+O` its Content Assist,
+  and `Ctrl+C` ends the insert as `Esc` does (ticked by default on macOS). Eclipse's other shortcuts (`Ctrl+Space`, `Ctrl+V`, `Ctrl+S`, ...) keep working while you
   type. See docs/KEYBOARD.md, "Insert mode".
 
 ### Changed

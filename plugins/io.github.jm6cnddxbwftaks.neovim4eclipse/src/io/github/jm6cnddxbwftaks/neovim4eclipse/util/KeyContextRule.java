@@ -58,4 +58,19 @@ public final class KeyContextRule {
     public static Column column(String mode, boolean commandLineFocused) {
         return VimModes.isTyping(mode) && !commandLineFocused ? Column.INSERT : Column.NORMAL;
     }
+
+    /**
+     * The context that switches on a chosen letter's binding. Normally the letter's own
+     * ({@link VimCtrlKeys#contextId}), whose binding sends the key to the plug-in. In an insert
+     * Eclipse types, {@code Ctrl-N} and {@code Ctrl-P} use the Word Completion context instead
+     * ({@link VimCtrlKeys#completionContextId}): Eclipse completes there, not Neovim. In an insert
+     * Neovim drives they stay Neovim's, since Eclipse does not type there.
+     *
+     * @param eclipseTypes whether Eclipse types the current insert (not Neovim)
+     */
+    public static String contextId(char letter, Column column, boolean eclipseTypes) {
+        boolean completes = column == Column.INSERT && eclipseTypes
+                && VimCtrlKeys.COMPLETION_LETTERS.indexOf(Character.toLowerCase(letter)) >= 0;
+        return completes ? VimCtrlKeys.completionContextId(letter) : VimCtrlKeys.contextId(letter);
+    }
 }

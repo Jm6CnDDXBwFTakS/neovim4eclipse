@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
@@ -44,6 +45,8 @@ public final class KeyInterceptor implements VerifyKeyListener {
     /** Set when {@link #verifyKey} saw an Esc; read and cleared by {@link #afterKeyDown} for the same key press. UI thread. */
     private boolean escapeVerified;
     private final Listener afterKeyDown = this::afterKeyDown;
+    /** Run after each routed key; see {@link #setAfterKey}. */
+    private Runnable afterKey = () -> { };
 
     public KeyInterceptor(NeovimSession session) {
         this.session = session;
@@ -64,12 +67,22 @@ public final class KeyInterceptor implements VerifyKeyListener {
         router.setCtrlKeyFilter(toNeovim);
     }
 
+    /** Runs after each key this interceptor routed (the editor re-checks its key contexts). */
+    public void setAfterKey(Runnable afterKey) {
+        this.afterKey = afterKey;
+    }
+
     /**
      * Chooses which {@code Ctrl+letter} keys reach Neovim in an insert Eclipse types, each through a
      * sync point ({@link KeyRouter#setInsertCtrlKeyFilter}).
      */
     public void setInsertCtrlKeyFilter(Predicate<Character> toNeovim) {
         router.setInsertCtrlKeyFilter(toNeovim);
+    }
+
+    /** Runs Eclipse's completions for insert-mode {@code Ctrl-N}, {@code Ctrl-P}, {@code Ctrl-X Ctrl-O}; UI thread. */
+    public void setCompletion(Consumer<KeyRouter.Completion> completion) {
+        router.setCompletion(completion);
     }
 
     /** Supplier of the sync point for a {@code Ctrl} key in an insert Eclipse types; called on the UI thread. */
@@ -84,6 +97,7 @@ public final class KeyInterceptor implements VerifyKeyListener {
     public void routeBound(String nvimKey) {
         if (enabled && session.isAlive()) {
             router.routeBound(nvimKey);
+            afterKey.run();
         }
     }
 
@@ -102,6 +116,7 @@ public final class KeyInterceptor implements VerifyKeyListener {
         if (nvimKey != null && router.route(nvimKey)) {
             event.doit = false;
         }
+        afterKey.run();
     }
 
     /**

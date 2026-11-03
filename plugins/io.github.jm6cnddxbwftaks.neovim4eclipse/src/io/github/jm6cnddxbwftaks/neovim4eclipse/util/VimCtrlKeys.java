@@ -48,6 +48,23 @@ public final class VimCtrlKeys {
     /** Parent of the letter contexts; active while Neovim owns the keys of the focused editor. */
     public static final String NORMAL_CONTEXT_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal";
 
+    /**
+     * Letters that, in an insert Eclipse types, run Eclipse's Word Completion
+     * ({@link #WORD_COMPLETION_COMMAND_ID}) instead of reaching Neovim, whose completion popup the
+     * plug-in does not draw: {@code Ctrl-N} and {@code Ctrl-P}. Each has a second context
+     * ({@link #completionContextId}) whose binding runs Eclipse's command itself. Why not the
+     * plug-in's own command, which could run it too: Word Completion offers the next word when
+     * pressed again only while no other command runs in between, and the plug-in's command would be
+     * one.
+     */
+    public static final String COMPLETION_LETTERS = "np";
+
+    /** Prefix of the Word Completion contexts; the letter follows it. */
+    public static final String COMPLETION_CONTEXT_PREFIX = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.";
+
+    /** Eclipse's <i>Word Completion</i> (Alt+/), {@code ITextEditorActionDefinitionIds.HIPPIE_COMPLETION}. */
+    public static final String WORD_COMPLETION_COMMAND_ID = "org.eclipse.ui.edit.text.hippieCompletion";
+
     /** Every letter that can be sent to Neovim. */
     public static final String LETTERS = "abcdefghijklmnopqrstuvwxyz";
 
@@ -148,6 +165,11 @@ public final class VimCtrlKeys {
     /** Context id for a letter, e.g. {@code 'v'} gives {@code ...context.ctrl.v}. */
     public static String contextId(char letter) {
         return CONTEXT_PREFIX + Character.toLowerCase(letter);
+    }
+
+    /** Word Completion context id for a letter of {@link #COMPLETION_LETTERS}, e.g. {@code ...context.complete.n}. */
+    public static String completionContextId(char letter) {
+        return COMPLETION_CONTEXT_PREFIX + Character.toLowerCase(letter);
     }
 
     /** Whether the letter goes to Neovim when the user has not chosen otherwise. */

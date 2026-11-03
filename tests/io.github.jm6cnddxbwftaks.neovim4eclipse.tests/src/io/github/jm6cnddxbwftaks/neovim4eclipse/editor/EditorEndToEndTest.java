@@ -26,6 +26,7 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.ILogListener;
 import org.eclipse.core.runtime.Platform;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
@@ -57,6 +58,8 @@ import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -1007,6 +1010,53 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("Xalpha foo\nbeta\ngamma\n");
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+    }
+
+    /**
+     * Ctrl-N runs Eclipse's Word Completion, which offers the nearest matching word before the caret
+     * first, and the next one when pressed again (Neovim's popup is not drawn). Ticked for the test:
+     * on Windows and Linux Ctrl+N is Eclipse's in insert mode by default.
+     */
+    @Test
+    void ctrlNWhileEclipseTypesRunsWordCompletion() {
+        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+        store.setValue(PreferenceConstants.ctrlKeyInInsert('n'), true);
+        try {
+            document.set("apple\napricot\n");
+            settle();
+            typeSlowly("Go");
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            type(widget, "ap");
+            ctrlKey(widget, 'n');
+            expectText("apple\napricot\napricot\n");
+            ctrlKey(widget, 'n');
+            expectText("apple\napricot\napple\n");
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            settle();
+            expectText("apple\napricot\napple\n");
+        } finally {
+            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('n'));
+        }
+    }
+
+    /** Ctrl-C, when ticked for insert mode, ends the insert as Esc does: {@code .} repeats the typed text. */
+    @Test
+    void ctrlCEndsAnInsertAsEscDoes() {
+        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+        store.setValue(PreferenceConstants.ctrlKeyInInsert('c'), true);
+        try {
+            type(widget, "gg");
+            type(widget, 'A');
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            type(widget, " foo");
+            ctrlKey(widget, 'c');
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            typeSlowly("j.");
+            expectText("alpha foo\nbeta foo\ngamma\n");
+        } finally {
+            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('c'));
+        }
     }
 
     /**

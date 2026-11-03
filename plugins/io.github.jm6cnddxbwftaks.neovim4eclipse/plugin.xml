@@ -320,6 +320,20 @@
             name="Neovim Ctrl-Z"
             parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
       </context>
+      <!-- Insert mode while Eclipse types: Ctrl+N and Ctrl+P run Eclipse's Word Completion itself
+           (VimCtrlKeys.COMPLETION_LETTERS). Bound to Eclipse's command directly, not through the
+           plug-in's: Word Completion offers the next word when pressed again only while no other
+           command runs in between. -->
+      <context
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.n"
+            name="Neovim insert Ctrl-N"
+            parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
+      </context>
+      <context
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.p"
+            name="Neovim insert Ctrl-P"
+            parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
+      </context>
    </extension>
 
    <extension point="org.eclipse.ui.handlers">
@@ -1126,6 +1140,48 @@
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             platform="cocoa"
             sequence="M4+Z">
+      </key>
+      <key
+            commandId="org.eclipse.ui.edit.text.hippieCompletion"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.n"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="win32"
+            sequence="M1+N">
+      </key>
+      <key
+            commandId="org.eclipse.ui.edit.text.hippieCompletion"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.n"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="gtk"
+            sequence="M1+N">
+      </key>
+      <key
+            commandId="org.eclipse.ui.edit.text.hippieCompletion"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.n"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="cocoa"
+            sequence="M4+N">
+      </key>
+      <key
+            commandId="org.eclipse.ui.edit.text.hippieCompletion"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.p"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="win32"
+            sequence="M1+P">
+      </key>
+      <key
+            commandId="org.eclipse.ui.edit.text.hippieCompletion"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.p"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="gtk"
+            sequence="M1+P">
+      </key>
+      <key
+            commandId="org.eclipse.ui.edit.text.hippieCompletion"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.complete.p"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="cocoa"
+            sequence="M4+P">
       </key>
    </extension>
 

@@ -34,7 +34,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * that {@code <C-r>}, {@code <C-u>}, {@code <C-n>} reach Neovim's command line, see
  * {@link CommandLineBox}). In insert and replace mode they switch on the letters the user gave to
  * Neovim for insert mode, in other modes those for normal mode (the Ctrl Keys preference page has
- * both choices per letter); the mode listener calls {@link #update(String)} at each mode change. In
+ * both choices per letter); the mode listener calls {@link #update(String)} at each mode change.
+ * In an insert Eclipse types, {@code Ctrl-N} and {@code Ctrl-P} switch on Eclipse's Word Completion
+ * instead ({@link KeyContextRule#contextId}); an insert can become Neovim-driven without a mode
+ * change (a key typed before Eclipse could take over, {@code Ctrl-R}), so the editor calls
+ * {@link #update()} after each key too. In
  * Eclipse mode, on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own
  * shortcuts (paste, content assist, other views) are untouched there. Activation is workbench-wide
  * (the standard, well-trodden path); the focus check keeps it from leaking into other parts.
@@ -59,6 +63,8 @@ final class EditorKeyContext {
     private final BooleanSupplier neovimOwnsKeys;
     /** Whether the editor's {@code :} box has the keyboard focus. */
     private final BooleanSupplier commandLineFocused;
+    /** Whether Neovim, not Eclipse, types the current insert (then Ctrl-N, Ctrl-P are Neovim's). */
+    private final BooleanSupplier neovimDrivenInsert;
     private final VimKeyContexts contexts = new VimKeyContexts();
     private boolean disposed;
 
@@ -75,11 +81,12 @@ final class EditorKeyContext {
     };
 
     EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys,
-            BooleanSupplier commandLineFocused) {
+            BooleanSupplier commandLineFocused, BooleanSupplier neovimDrivenInsert) {
         this.widget = widget;
         this.mode = mode;
         this.neovimOwnsKeys = neovimOwnsKeys;
         this.commandLineFocused = commandLineFocused;
+        this.neovimDrivenInsert = neovimDrivenInsert;
         widget.addFocusListener(focusListener);
     }
 
@@ -101,9 +108,11 @@ final class EditorKeyContext {
             }
             if (wanted) {
                 boolean wasActive = contexts.isActive();
-                contexts.apply(service, KeyContextRule.column(nvimMode, onCommandLine) == Column.INSERT
-                        ? EditorKeyContext::isCtrlKeyInInsert
-                        : EditorKeyContext::isCtrlKeyToNeovim);
+                Column column = KeyContextRule.column(nvimMode, onCommandLine);
+                boolean eclipseTypes = !neovimDrivenInsert.getAsBoolean();
+                contexts.apply(service,
+                        column == Column.INSERT ? EditorKeyContext::isCtrlKeyInInsert : EditorKeyContext::isCtrlKeyToNeovim,
+                        letter -> KeyContextRule.contextId(letter, column, eclipseTypes));
                 if (!wasActive) {
                     LOG.fine("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
                     // Report what the workbench would run for Ctrl-V now; see KeyContextDiagnostics.

@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.eclipse.ui.contexts.IContextActivation;
@@ -57,17 +58,27 @@ final class VimKeyContexts {
     }
 
     /**
-     * Makes the active contexts the normal-mode parent and those of the letters {@code toNeovim}
-     * accepts, changing only the difference to what is active now, in one batch.
+     * Makes the active contexts the normal-mode parent and the letter contexts of the letters
+     * {@code toNeovim} accepts ({@link VimCtrlKeys#contextId}).
      *
      * @param toNeovim whether a letter (lower case) is sent to Neovim
      */
     void apply(IContextService service, Predicate<Character> toNeovim) {
+        apply(service, toNeovim, VimCtrlKeys::contextId);
+    }
+
+    /**
+     * Makes the active contexts the normal-mode parent and, for each letter {@code toNeovim} accepts,
+     * the context {@code contextOf} names (its letter context, or in an insert Eclipse types the
+     * Word Completion context of {@code Ctrl-N}, {@code Ctrl-P}), changing only the difference to what
+     * is active now, in one batch.
+     */
+    void apply(IContextService service, Predicate<Character> toNeovim, Function<Character, String> contextOf) {
         Set<String> wanted = new HashSet<>();
         wanted.add(VimCtrlKeys.NORMAL_CONTEXT_ID);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             if (toNeovim.test(letter)) {
-                wanted.add(VimCtrlKeys.contextId(letter));
+                wanted.add(contextOf.apply(letter));
             }
         }
         if (wanted.equals(activations.keySet())) {

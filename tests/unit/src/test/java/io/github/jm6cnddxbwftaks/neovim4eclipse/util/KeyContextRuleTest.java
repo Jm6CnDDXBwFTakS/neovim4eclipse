@@ -44,6 +44,20 @@ class KeyContextRuleTest {
         assertEquals(Column.NORMAL, KeyContextRule.column(null, false), "mode not known yet");
     }
 
+    /** Neovim's completion popup is not drawn: while Eclipse types, Ctrl-N and Ctrl-P are Eclipse's Word Completion. */
+    @Test
+    void ctrlNAndCtrlPRunWordCompletionWhileEclipseTypes() {
+        assertEquals(VimCtrlKeys.completionContextId('n'), KeyContextRule.contextId('n', Column.INSERT, true));
+        assertEquals(VimCtrlKeys.completionContextId('p'), KeyContextRule.contextId('p', Column.INSERT, true));
+        assertEquals(VimCtrlKeys.contextId('w'), KeyContextRule.contextId('w', Column.INSERT, true));
+    }
+
+    @Test
+    void ctrlNAndCtrlPAreNeovimsWhereNeovimTypesOrInNormalMode() {
+        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.INSERT, false), "Neovim drives");
+        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.NORMAL, true), "normal mode");
+    }
+
     @Test
     void theCommandLineBoxUsesTheNormalChoices() {
         assertEquals(Column.NORMAL, KeyContextRule.column("i", true));

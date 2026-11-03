@@ -204,6 +204,28 @@ class PluginXmlConsistencyTest {
      * toolbar button passes (a menu item, not a key binding) so that the handler can tell the
      * button from the menu entry.
      */
+    /** Insert-mode Ctrl-N and Ctrl-P: Eclipse's Word Completion, bound directly, each in its own context. */
+    @Test
+    void everyCompletionLetterIsBoundToWordCompletionInItsOwnContext() throws Exception {
+        Set<String> contexts = attributes(extension(load(), "org.eclipse.ui.contexts"), "context", "id");
+        NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
+        for (char letter : VimCtrlKeys.COMPLETION_LETTERS.toCharArray()) {
+            String context = VimCtrlKeys.completionContextId(letter);
+            assertTrue(contexts.contains(context), "context " + context);
+            Map<String, String> sequences = new HashMap<>(); // platform -> sequence
+            for (int i = 0; i < list.getLength(); i++) {
+                Element e = (Element) list.item(i);
+                if (context.equals(e.getAttribute("contextId"))) {
+                    assertEquals(VimCtrlKeys.WORD_COMPLETION_COMMAND_ID, e.getAttribute("commandId"));
+                    sequences.put(e.getAttribute("platform"), e.getAttribute("sequence"));
+                }
+            }
+            String key = String.valueOf(Character.toUpperCase(letter));
+            assertEquals(Map.of("win32", "M1+" + key, "gtk", "M1+" + key, "cocoa", "M4+" + key), sequences,
+                    "Ctrl, the physical Control key on macOS, as for the other Vim Ctrl keys");
+        }
+    }
+
     @Test
     void noKeyBindingHasACommandParameter() throws Exception {
         Document doc = load();

@@ -227,4 +227,78 @@ class KeyRouterTest {
         assertEquals(List.of("<C-f>", "<C-o>"), neovim.sent);
         assertEquals(List.of(), neovim.synced);
     }
+
+    // ---- special keys: Eclipse's completions, Ctrl-C (INSERT_CTRL_KEYS.md, phase D) ----
+
+    private final List<KeyRouter.Completion> completions = new ArrayList<>();
+
+    private void eclipseTypes(String insertLetters) {
+        neovim.typing = true;
+        router.setInsertCtrlKeyFilter(letter -> insertLetters.indexOf(letter) >= 0);
+        router.setCompletion(completions::add);
+    }
+
+    /** Neovim's popup is not drawn: Ctrl-N and Ctrl-P run Eclipse's Word Completion instead. */
+    @Test
+    void ctrlNAndCtrlPRunWordCompletion() {
+        eclipseTypes("np");
+        assertEquals(List.of(true, true), type("<C-n>", "<C-p>"));
+        assertEquals(List.of(KeyRouter.Completion.WORD, KeyRouter.Completion.WORD), completions);
+        assertEquals(List.of(), neovim.synced);
+        assertEquals(List.of(), neovim.sent);
+    }
+
+    @Test
+    void ctrlXCtrlORunsContentAssist() {
+        eclipseTypes("xo");
+        assertEquals(List.of(true, true), type("<C-x>", "<C-o>"));
+        assertEquals(List.of(KeyRouter.Completion.CONTENT_ASSIST), completions);
+        assertEquals(List.of(), neovim.synced, "not Ctrl-O's one normal command");
+    }
+
+    /** Ctrl-X then Ctrl-N, as Vim's keyword completion: Word Completion too. */
+    @Test
+    void ctrlXCtrlNRunsWordCompletion() {
+        eclipseTypes("x");
+        assertEquals(List.of(true, true), type("<C-x>", "<C-n>"));
+        assertEquals(List.of(KeyRouter.Completion.WORD), completions);
+    }
+
+    /** Only the very next key: Ctrl-X then a letter is typed as usual, and a later Ctrl-O is Ctrl-O again. */
+    @Test
+    void ctrlXChoosesOnlyTheNextKey() {
+        eclipseTypes("xo");
+        assertEquals(List.of(true, false, true), type("<C-x>", "a", "<C-o>"));
+        assertEquals(List.of(), completions);
+        assertEquals(List.of("<C-o>"), neovim.synced);
+    }
+
+    /** Ctrl-X Ctrl-O works also when the Ctrl-O came through its key binding. */
+    @Test
+    void ctrlXThenABoundCtrlORunsContentAssist() {
+        eclipseTypes("x");
+        type("<C-x>");
+        router.routeBound("<C-o>");
+        assertEquals(List.of(KeyRouter.Completion.CONTENT_ASSIST), completions);
+    }
+
+    @Test
+    void ctrlCEndsTheInsertAsEscDoes() {
+        eclipseTypes("c");
+        InsertReplay.Plan plan = new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 3);
+        router.setInsertReplaySupplier(() -> plan);
+        assertEquals(List.of(true), type("<C-c>"));
+        assertEquals(List.of(plan), neovim.leftInsert);
+        assertEquals(List.of(), neovim.synced);
+    }
+
+    /** In an insert Neovim drives, Neovim types: the keys are its own there, Eclipse cannot complete. */
+    @Test
+    void inAnInsertNeovimDrivesTheSpecialKeysGoToNeovim() {
+        eclipseTypes("npxc");
+        neovim.neovimDriven = true;
+        type("<C-n>", "<C-x>", "<C-c>");
+        assertEquals(List.of("<C-n>", "<C-x>", "<C-c>"), neovim.sent);
+        assertEquals(List.of(), completions);
+    }
 }
