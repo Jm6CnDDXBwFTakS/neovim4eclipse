@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -260,10 +261,24 @@ final class StateSync {
      * editor has applied it in insert mode, Eclipse may type ({@link #isEclipseTypingReady()}).
      */
     void syncBuffer() {
+        syncBuffer(() -> true);
+    }
+
+    /**
+     * {@link #syncBuffer()}, but Eclipse may type afterward only if {@code mayType} says so when the
+     * editor has applied it (on the UI thread, where keys are routed, so no key slips in between).
+     * Example: handing an insert back to Eclipse after {@code Ctrl-R a}
+     * ({@code KeyInput#handBackToEclipse}) is called off if a key reached Neovim after the read.
+     */
+    void syncBuffer(BooleanSupplier mayType) {
         try {
             List<String> lines = nvim.bufferLines();
             LOG.fine(() -> "full buffer sync: " + lines.size() + " lines");
-            dispatchBufferChange(0, -1, lines, this::markTypingReadyIfTyping);
+            dispatchBufferChange(0, -1, lines, () -> {
+                if (mayType.getAsBoolean()) {
+                    markTypingReadyIfTyping();
+                }
+            });
         } catch (Exception e) {
             LOG.log(Level.WARNING, "buffer sync failed", e);
         }

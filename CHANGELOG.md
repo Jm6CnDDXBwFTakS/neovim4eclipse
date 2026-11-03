@@ -30,7 +30,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   unindent) on Windows and Linux, and every letter with an insert-mode meaning on macOS. Neovim
   first gets the text Eclipse typed, so the key acts on it as in Vim, and `.` repeats the whole
   insert. `Ctrl+N` and `Ctrl+P` run Eclipse's Word Completion, `Ctrl+X Ctrl+O` its Content Assist,
-  and `Ctrl+C` ends the insert as `Esc` does (ticked by default on macOS). Eclipse's other shortcuts (`Ctrl+Space`, `Ctrl+V`, `Ctrl+S`, ...) keep working while you
+  and `Ctrl+C` ends the insert as `Esc` does (ticked by default on macOS). After `Ctrl+R` (and the other
+  keys that wait for one more, such as `Ctrl+K` for a digraph) Eclipse types again once Neovim has that key. Eclipse's other shortcuts (`Ctrl+Space`, `Ctrl+V`, `Ctrl+S`, ...) keep working while you
   type. See docs/KEYBOARD.md, "Insert mode".
 
 ### Changed

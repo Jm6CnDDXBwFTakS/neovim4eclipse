@@ -358,6 +358,117 @@ class KeyInputTest {
         assertTrue(keys.isNeovimDrivenInsert());
     }
 
+    /**
+     * Ctrl-R then {@code a}: Neovim inserts register a and is in plain insert mode again, so typing
+     * goes back to Eclipse with the insert-start handshake (a full sync, Eclipse types once applied).
+     */
+    @Test
+    void onceNeovimHasTheKeyItWaitedForEclipseTypesAgain() throws Exception {
+        ctrlRWaitingForARegister();
+        nvim.after.put("a", new Mode("i", false));
+
+        queue("a");
+
+        assertTrue(nvim.calls.contains("bufferLines"), "the handshake: " + nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert(), "Neovim drives until the editor has applied the sync");
+        lastChange().afterApply().run(); // the editor applied the sync
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
+        assertTrue(state.isEclipseTypingReady(), "Eclipse types again");
+    }
+
+    /** Ctrl-K e: Neovim still waits for the digraph's second letter: no hand-back yet, and nothing asked. */
+    @Test
+    void whileNeovimStillWaitsTheInsertStaysNeovims() throws Exception {
+        ctrlRWaitingForARegister();
+        nvim.after.put("<C-r>", new Mode("i", true)); // Ctrl-R Ctrl-R waits for the register too
+
+        queue("<C-r>");
+
+        assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertTrue(keys.isHandBackPending());
+    }
+
+    /** {@code a} then {@code b} typed fast: {@code b} waits behind {@code a}, so {@code a} does not hand back; {@code b} does. */
+    @Test
+    void aKeyThatWaitsInTheQueuePutsTheHandBackOffToTheLastKey() throws Exception {
+        ctrlRWaitingForARegister();
+        nvim.after.put("a", new Mode("i", false));
+        keys.keyQueued(); // a
+        keys.keyQueued(); // b, queued behind it
+
+        keys.inputQueued("a");
+        assertFalse(nvim.calls.contains("bufferLines"), "a key waits: " + nvim.calls);
+        keys.inputQueued("b");
+
+        assertTrue(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        lastChange().afterApply().run();
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    /** A key queued after the read and before the editor applied the sync: Neovim keeps the insert, the next key retries. */
+    @Test
+    void aKeyQueuedBeforeTheSyncIsAppliedCallsTheHandBackOff() throws Exception {
+        ctrlRWaitingForARegister();
+        nvim.after.put("a", new Mode("i", false));
+        queue("a");
+
+        keys.keyQueued(); // the user typed b; it goes to Neovim, which drives
+        lastChange().afterApply().run();
+
+        assertTrue(keys.isNeovimDrivenInsert(), "b reaches Neovim after the read: Eclipse must not type yet");
+        assertFalse(state.isEclipseTypingReady());
+        assertTrue(keys.isHandBackPending(), "the next key retries");
+        keys.inputQueued("b");
+        lastChange().afterApply().run();
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    /** A block-visual I or a recording: Neovim drives to the end, nothing is handed back. */
+    @Test
+    void anInsertNeovimDrivesFromTheStartIsNotHandedBack() throws Exception {
+        nvim.mode = new Mode("i", false);
+        state.readMode(); // already in that insert
+        keys.driveFromNeovim();
+        nvim.calls.clear();
+
+        queue("a");
+
+        assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /** Esc while Neovim still waits ends the insert: no hand-back is left for the next one. */
+    @Test
+    void leavingTheInsertDropsTheHandBack() throws Exception {
+        ctrlRWaitingForARegister();
+        nvim.after.put("<Esc>", new Mode("n", false));
+
+        queue("<Esc>");
+
+        assertFalse(keys.isHandBackPending());
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    private void ctrlRWaitingForARegister() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.after.put("<C-r>", new Mode("i", true));
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0), "<C-r>");
+        assertTrue(keys.isHandBackPending());
+        nvim.calls.clear();
+    }
+
+    /** One key as the session queues it: counted, then typed on the input thread. */
+    private void queue(String key) throws Exception {
+        keys.keyQueued();
+        keys.inputQueued(key);
+    }
+
+    private BufferChange lastChange() {
+        return editor.changes.get(editor.changes.size() - 1);
+    }
+
     /** Ctrl-O: one normal-mode command; entering insert again after it is the usual sync. */
     @Test
     void ctrlOLeavesInsertForOneCommandWithoutABufferSync() throws Exception {

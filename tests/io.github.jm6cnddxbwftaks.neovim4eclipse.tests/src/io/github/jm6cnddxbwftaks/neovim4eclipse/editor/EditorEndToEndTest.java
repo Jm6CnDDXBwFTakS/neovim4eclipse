@@ -1060,11 +1060,12 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Ctrl-R waits for a register name: Neovim drives the rest of the insert, so the {@code "} that
-     * follows reaches it, and the unnamed register's text is inserted.
+     * Ctrl-R waits for a register name: Neovim drives the insert until it has one, so the {@code "}
+     * that follows reaches it, and the unnamed register's text is inserted. Then Eclipse types
+     * again, and {@code .} repeats the whole insert, the register's text included.
      */
     @Test
-    void ctrlRWhileEclipseTypesInsertsARegister() {
+    void ctrlRWhileEclipseTypesInsertsARegisterThenEclipseTypesAgain() {
         typeSlowly("ggyiw"); // "alpha" in the unnamed register
         type(widget, 'A');
         waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
@@ -1072,9 +1073,14 @@ class EditorEndToEndTest extends EndToEndTestBase {
         ctrlKey(widget, 'r');
         type(widget, '"');
         expectText("alpha alpha\nbeta\ngamma\n");
-        assertTrue(session.isNeovimDrivenInsert(), "Neovim drives the rest of the insert");
+        waitUntil("Eclipse typing again", TIMEOUT_MS,
+                () -> session.isEclipseTypingReady() && !session.isNeovimDrivenInsert());
+        type(widget, "!");
+        assertEquals("alpha alpha!\nbeta\ngamma\n", documentOf(editor).get(), "Eclipse typed it at once");
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        typeSlowly("j.");
+        expectText("alpha alpha!\nbeta alpha!\ngamma\n");
     }
 
     /**

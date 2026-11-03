@@ -367,7 +367,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Insert mode where Neovim, not Eclipse, must receive the typed keys: after a block-visual
-     * insert, while recording a macro, or after {@link #driveInsertFromNeovim()}.
+     * insert, while recording a macro, or after {@link #driveInsertFromNeovim()}; and from a
+     * {@code Ctrl-R} (or another key Neovim waits after) until Neovim has the key it waits for
+     * ({@code KeyInput#handBackToEclipse}).
      */
     public boolean isNeovimDrivenInsert() {
         return keyInput.isNeovimDrivenInsert() && isTypingMode();
@@ -1236,7 +1238,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Queues one key (Neovim notation) for ordered processing. */
     public void inputAsync(String keys) {
-        submit("input '" + keys + "'", Level.WARNING, () -> input(keys));
+        keyInput.keyQueued(); // before the submit, so a hand-back sees it (KeyInput#handBackToEclipse)
+        submit("input '" + keys + "'", Level.WARNING, () -> keyInput.inputQueued(keys));
     }
 
     /**

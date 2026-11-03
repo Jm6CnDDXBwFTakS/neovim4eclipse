@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -107,6 +108,22 @@ final class KeyInput {
      */
     private volatile boolean neovimDrivenInsert;
     /**
+     * Set when a sync point's key left Neovim waiting for another ({@code Ctrl-R}, {@code Ctrl-V},
+     * {@code Ctrl-K}, ...), which made the insert Neovim-driven: once Neovim has that key and is in
+     * plain insert mode again, typing goes back to Eclipse ({@link #handBackToEclipse}). Example:
+     * {@code Ctrl-R a} inserts register {@code a}, then Eclipse types again, with content assist.
+     * Only such an insert is handed back: a block-visual {@code I} or a recording stays Neovim's to
+     * the end. Cleared when the insert ends.
+     */
+    private volatile boolean handBackPending;
+    /**
+     * Keys queued for Neovim ({@link #keyQueued}, UI thread) and keys taken from that queue
+     * ({@link #inputQueued}, input thread). Equal when no key waits: a hand-back starts only then,
+     * and is called off if a key was queued after Neovim's text was read for it.
+     */
+    private final AtomicLong keysQueued = new AtomicLong();
+    private volatile long keysTaken;
+    /**
      * Set while {@link #leaveInsertMode} runs, until Neovim's state is read at its end, and while
      * {@link #syncInsertThenInput} hands the typed text over, until its key is sent. What Neovim
      * reports until then is of text it does not have yet (the replay types into the old lines) or of
@@ -154,7 +171,24 @@ final class KeyInput {
     void onModeChanged(String mode) {
         if (!VimModes.isTyping(mode)) {
             neovimDrivenInsert = false;
+            handBackPending = false;
         }
+    }
+
+    /** A key is about to be queued for {@link #inputQueued} (see {@link #keysQueued}). Any thread. */
+    void keyQueued() {
+        keysQueued.incrementAndGet();
+    }
+
+    /** {@link #input} for a key queued after {@link #keyQueued}. Input thread. */
+    void inputQueued(String keys) throws Exception {
+        keysTaken++; // only the input thread writes it
+        input(keys);
+    }
+
+    /** Whether a hand-back to Eclipse is waiting for Neovim to stop waiting (tests). */
+    boolean isHandBackPending() {
+        return handBackPending;
     }
 
     /**
@@ -260,6 +294,39 @@ final class KeyInput {
             state.syncBuffer();
         }
         state.publishState();
+        if (handBackPending && neovimDrivenInsert && state.isTypingMode()) {
+            handBackToEclipse();
+        }
+    }
+
+    /**
+     * Gives the rest of an insert back to Eclipse once Neovim has the key it waited for after a
+     * sync point (docs/design/INSERT_CTRL_KEYS.md, phase D). Example: Eclipse typed {@code foo},
+     * the user pressed {@code Ctrl-R} (Neovim drives, since it waits for a register name), then
+     * {@code a}: Neovim inserts register {@code a} and is in plain insert mode again. The same
+     * handshake as at the start of an insert follows: a full sync, and once the editor has applied
+     * it, Eclipse types. {@code .} still repeats the whole insert, since Neovim's insert never ended.
+     *
+     * <p><b>Keys in flight.</b> Keys typed while Neovim drives go to Neovim, queued in order. A key
+     * queued before the editor applied the sync, but typed into Neovim after the read, would arrive
+     * as a buffer event while Eclipse already types, and could land among Eclipse's own typing. So
+     * the hand-back starts only when no key waits, and is called off when the editor applies the
+     * sync if one was queued since. The insert then stays Neovim's, and the next key retries.
+     */
+    private void handBackToEclipse() {
+        long taken = keysTaken;
+        if (keysQueued.get() != taken) {
+            return; // keys wait: the last of them retries
+        }
+        state.syncBuffer(() -> {
+            // On the UI thread, where keys are routed: nothing can be queued during this check.
+            if (!handBackPending || !neovimDrivenInsert || keysQueued.get() != taken) {
+                return false;
+            }
+            handBackPending = false;
+            neovimDrivenInsert = false;
+            return true;
+        });
     }
 
     /**
@@ -343,6 +410,7 @@ final class KeyInput {
             view.run();
         }
         neovimDrivenInsert = false;
+        handBackPending = false;
     }
 
     /**
@@ -401,8 +469,9 @@ final class KeyInput {
      *       {@code niI} until its one command ends, and entering insert again syncs then.</li>
      * </ol>
      * If the key leaves Neovim waiting for another ({@code Ctrl-R} for a register, {@code Ctrl-V},
-     * {@code Ctrl-K}), Neovim drives the rest of this insert: every key goes to it until Esc
-     *. It answers no request until that key arrives, so nothing is read here.
+     * {@code Ctrl-K}), Neovim drives the insert until it has that key: every key goes to it, and it
+     * answers no request until that key arrives, so nothing is read here. Then Eclipse types again
+     * ({@link #handBackToEclipse}).
      *
      * <p>Buffer events stay suppressed from the re-typing until the key: Eclipse has that text
      * already, and applying Neovim's events for it would insert it twice. Their cursor reports are
@@ -423,6 +492,7 @@ final class KeyInput {
         Mode mode = state.readMode();
         if (mode != null && mode.blocking()) {
             neovimDrivenInsert = true;
+            handBackPending = true; // until Neovim has the key it waits for (inputKey)
             return;
         }
         // The key's buffer events have been dispatched once Neovim has consumed it; the cursor is
