@@ -22,6 +22,10 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
+import org.eclipse.core.commands.ExecutionEvent;
+import org.eclipse.core.commands.ExecutionException;
+import org.eclipse.core.commands.IExecutionListener;
+import org.eclipse.core.commands.NotHandledException;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -54,9 +58,11 @@ import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
@@ -1062,6 +1068,53 @@ class EditorEndToEndTest extends EndToEndTestBase {
             assertTrue(session.isTypingMode(), "still in the insert");
         } finally {
             store.setToDefault(PreferenceConstants.ctrlKeyInInsert('d'));
+        }
+    }
+
+    /**
+     * Ctrl-X then Ctrl-O asks for Eclipse's Content Assist (Vim's omni completion). The text editor
+     * has no proposals to show, so the test checks that the command is run, through the workbench's
+     * command service. Ticked for the test: Ctrl+X is Eclipse's in insert mode by default.
+     */
+    @Test
+    void ctrlXCtrlOWhileEclipseTypesRunsContentAssist() {
+        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+        store.setValue(PreferenceConstants.ctrlKeyInInsert('x'), true);
+        ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
+        List<String> run = new CopyOnWriteArrayList<>();
+        IExecutionListener listener = new IExecutionListener() {
+            @Override
+            public void preExecute(String commandId, ExecutionEvent event) {
+                run.add(commandId);
+            }
+
+            @Override
+            public void notHandled(String commandId, NotHandledException exception) {
+                run.add(commandId); // asked for, though no handler took it
+            }
+
+            @Override
+            public void postExecuteFailure(String commandId, ExecutionException exception) {
+            }
+
+            @Override
+            public void postExecuteSuccess(String commandId, Object returnValue) {
+            }
+        };
+        commands.addExecutionListener(listener);
+        try {
+            type(widget, 'A');
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            ctrlKey(widget, 'x');
+            ctrlKey(widget, 'o');
+            waitUntil("Content Assist", TIMEOUT_MS,
+                    () -> run.contains(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS), run::toString);
+            assertTrue(session.isTypingMode(), "not Ctrl-O's one normal-mode command");
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        } finally {
+            commands.removeExecutionListener(listener);
+            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('x'));
         }
     }
 
