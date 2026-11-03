@@ -118,6 +118,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CaretSync.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/EditorCaret.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/InsertTracker.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/BlockHighlight.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/VisualSelectionView.java</include>
           </includes>

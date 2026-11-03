@@ -47,6 +47,15 @@ public final class InsertReplay {
      */
     public record Plan(List<String> textChunks, int baseLine1Based, int baseCol0Based,
             int finalLine1Based, int finalCol0Based) {
+
+        /**
+         * The same plan, its lines moved down by {@code lines}: for a plan made from a window of the
+         * document that starts at 0-based line {@code lines} ({@code editor/InsertTracker}). Columns
+         * stay, since such a window starts at a line start.
+         */
+        public Plan withLineOffset(int lines) {
+            return new Plan(textChunks, baseLine1Based + lines, baseCol0Based, finalLine1Based + lines, finalCol0Based);
+        }
     }
 
     /**
