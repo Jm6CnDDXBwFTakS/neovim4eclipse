@@ -65,6 +65,11 @@ class HostCommandRunnerTest {
         }
 
         @Override
+        public void newUntitled() {
+            calls.add("newUntitled");
+        }
+
+        @Override
         public void goToTab(TabNavigation.Action action, int count) {
             calls.add("tab " + action + " " + count);
         }
@@ -200,6 +205,14 @@ class HostCommandRunnerTest {
     @Test
     void editBangWithoutAFileReloadsTheCurrentOne() {
         assertEquals(List.of("edit! []"), run("edit!"));
+    }
+
+    /** The old editor stays open, so {@code !} (discard its changes) changes nothing. */
+    @Test
+    void enewOpensAnUntitledEditorWithOrWithoutBang() {
+        run("enew");
+        run("enew!");
+        assertEquals(List.of("newUntitled", "newUntitled"), ide.calls);
     }
 
     // ---- tabs ----

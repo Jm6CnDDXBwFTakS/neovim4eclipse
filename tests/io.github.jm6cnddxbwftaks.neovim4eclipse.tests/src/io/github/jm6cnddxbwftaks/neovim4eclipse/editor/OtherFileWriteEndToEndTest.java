@@ -395,6 +395,63 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * {@code :enew} opens an untitled editor, as <i>File → New → Untitled Text File</i> does, which
+     * works in the folder of the editor it was typed in, as a Vim window keeps its folder: another
+     * project selected in the Project Explorer does not count here (it does for the menu, above).
+     */
+    @Test
+    void enewOpensAnUntitledEditorThatWorksInTheEditorsFolder() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        IProject other = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-enew-selected");
+        other.create(null);
+        other.open(null);
+        ISetSelectionTarget explorer = (ISetSelectionTarget) page().showView(IPageLayout.ID_PROJECT_EXPLORER);
+        try {
+            settle();
+            explorer.selectReveal(new StructuredSelection(other));
+            page().activate(editor);
+            waitForAttach(editor, "test.txt");
+
+            runInBox(widget, "enew");
+            ITextEditor untitled = expectUntitledEditor();
+            StyledText untitledWidget = widgetOf(untitled);
+            runInBox(untitledWidget, "call setline(1, 'new')");
+            expectText(untitled, "new");
+            runInBox(untitledWidget, "w e.txt");
+            waitUntil("the editor on e.txt", TIMEOUT_MS, () -> "e.txt".equals(untitled.getTitle()),
+                    () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+            assertEquals(project.getFile("e.txt"), untitled.getEditorInput().getAdapter(IFile.class),
+                    "in the project of the editor :enew was typed in");
+            assertFalse(other.getFile("e.txt").exists(), "not in the selected project");
+            assertEquals(List.of(), dialogs);
+        } finally {
+            explorer.selectReveal(StructuredSelection.EMPTY);
+            page().closeAllEditors(false);
+            other.delete(true, true, null);
+        }
+    }
+
+    /** The untitled editor's alternate file is the editor {@code :enew} came from: {@code Ctrl-^} goes back. */
+    @Test
+    void ctrlCaretInAnEnewEditorGoesBack() throws Exception {
+        runInBox(widget, "enew");
+        expectUntitledEditor();
+        session.inputAsync("<C-^>");
+        waitForAttach(editor, "test.txt, after Ctrl-^");
+        assertEquals(editor, page().getActiveEditor());
+    }
+
+    /** Waits for the untitled editor {@code :enew} opens to be active, with Neovim attached to it. */
+    private ITextEditor expectUntitledEditor() {
+        waitUntil("an untitled editor", TIMEOUT_MS, () -> page().getActiveEditor() instanceof ITextEditor active
+                && active != editor && active.getEditorInput().getAdapter(IFile.class) == null,
+                () -> "; the active editor is " + page().getActiveEditor() + ", the message line shows " + messageText(editor));
+        ITextEditor untitled = (ITextEditor) page().getActiveEditor();
+        waitForAttach(untitled, "the untitled editor");
+        return untitled;
+    }
+
     /** {@code :wq b.txt} in an untitled editor saves it as {@code b.txt}, then closes it without asking. */
     @Test
     void wqWithANameSavesAnUntitledEditorAsThatFileAndClosesWithoutAsking() throws Exception {

@@ -43,6 +43,7 @@ class HostCommandTest {
         assertEquals(Kind.WRITE_QUIT_ALL, kind("wqall"));
         assertEquals(Kind.WRITE_QUIT_ALL, kind("xall"));
         assertEquals(Kind.EDIT, kind("edit", "a.txt"));
+        assertEquals(Kind.NEW_UNTITLED, kind("enew"));
         assertEquals(Kind.TAB_NEXT, kind("tabnext"));
         assertEquals(Kind.TAB_PREVIOUS, kind("tabprevious"));
         assertEquals(Kind.TAB_PREVIOUS, kind("tabNext"), ":tabN is backward, whatever its spelling suggests");
@@ -66,6 +67,7 @@ class HostCommandTest {
         assertNull(kind("quit", "foo"));
         assertNull(kind("wall", "x"));
         assertNull(kind("tablast", "2"));
+        assertNull(kind("enew", "a.txt"), ":enew takes no name (E488 from Neovim)");
         assertNull(kind("tabnext", "two"));
         assertNull(kind("tabnext", "1", "2"));
         assertEquals(Kind.TAB_NEXT, kind("tabnext", "3"));

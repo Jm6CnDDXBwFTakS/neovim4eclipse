@@ -70,6 +70,13 @@ public final class HostCommandRunner {
          */
         void edit(String file, boolean force);
 
+        /**
+         * {@code :enew}: opens a new untitled editor, which works in the current editor's folder (as a
+         * Vim window keeps its folder), so {@code :w notes.txt} there writes next to the project's
+         * other files.
+         */
+        void newUntitled();
+
         /** Switches editor tabs; {@code count} is the {@code :tabn N} number, 0 when none. */
         void goToTab(TabNavigation.Action action, int count);
     }
@@ -115,6 +122,7 @@ public final class HostCommandRunner {
                 }
             });
             case EDIT -> onUi.accept(() -> ide.edit(cmd.file(), force));
+            case NEW_UNTITLED -> onUi.accept(ide::newUntitled);
             case TAB_NEXT -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.NEXT, cmd.count()));
             case TAB_PREVIOUS -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.PREVIOUS, cmd.count()));
             case TAB_FIRST -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.FIRST, 0));

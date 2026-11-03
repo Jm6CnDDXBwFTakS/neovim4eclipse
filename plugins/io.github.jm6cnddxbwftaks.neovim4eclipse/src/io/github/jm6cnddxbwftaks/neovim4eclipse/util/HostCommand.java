@@ -35,6 +35,7 @@ import java.util.TreeMap;
  *       name ({@code :wq other.txt}), write a copy there and close</td></tr>
  *   <tr><td>{@code wqall}, {@code xall}</td><td>{@link Kind#WRITE_QUIT_ALL}</td><td>save all, close all</td></tr>
  *   <tr><td>{@code edit file}, {@code edit!}</td><td>{@link Kind#EDIT}</td><td>open a file; revert</td></tr>
+ *   <tr><td>{@code enew}, {@code enew!}</td><td>{@link Kind#NEW_UNTITLED}</td><td>File &gt; New &gt; Untitled Text File</td></tr>
  *   <tr><td>{@code tabnext}, {@code tabprevious}, ...</td><td>{@code TAB_*}</td><td>switch editor tabs</td></tr>
  * </table>
  *
@@ -91,6 +92,14 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         WRITE_QUIT_ALL,
         /** {@code :e [file]}, {@code :e!}: open a file, or reload/revert the current one. */
         EDIT,
+        /**
+         * {@code :enew}, {@code :enew!}: a new untitled editor (<i>File &gt; New &gt; Untitled Text
+         * File</i>). Vim's {@code :enew} puts an empty buffer in the window; here an editor is the
+         * window, so a new editor opens and the old one stays, which is why {@code !} (discard the
+         * current buffer's changes) changes nothing. Left to Neovim, the empty buffer would have no
+         * editor, and Neovim would be sent straight back to the editor's file.
+         */
+        NEW_UNTITLED,
         /** {@code :tabn [N]}: next tab, or tab N (1-based). */
         TAB_NEXT,
         /** {@code :tabp [N]}, {@code :tabN [N]}: previous tab, or N tabs back. */
@@ -226,6 +235,7 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         table.put("wqall", new Entry(Kind.WRITE_QUIT_ALL, Arguments.NONE, false));
         table.put("xall", new Entry(Kind.WRITE_QUIT_ALL, Arguments.NONE, false));
         table.put("edit", new Entry(Kind.EDIT, Arguments.ANY, false));
+        table.put("enew", new Entry(Kind.NEW_UNTITLED, Arguments.NONE, false));
         table.put("tabnext", new Entry(Kind.TAB_NEXT, Arguments.COUNT, false));
         table.put("tabprevious", new Entry(Kind.TAB_PREVIOUS, Arguments.COUNT, false));
         table.put("tabNext", new Entry(Kind.TAB_PREVIOUS, Arguments.COUNT, false));

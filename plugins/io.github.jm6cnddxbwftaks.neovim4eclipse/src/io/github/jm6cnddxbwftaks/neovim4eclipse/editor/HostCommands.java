@@ -87,6 +87,11 @@ public final class HostCommands {
         }
 
         @Override
+        public void newUntitled() {
+            EclipseFileCommands.newUntitled(editor);
+        }
+
+        @Override
         public void goToTab(TabNavigation.Action action, int count) {
             EditorTabs.go(editor, action, count);
         }

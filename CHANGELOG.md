@@ -14,6 +14,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
+- `:enew` opens a new untitled editor (*File → New → Untitled Text File*) that works in the folder
+  of the editor you typed it in, so `:w notes.txt` saves next to that editor's project files.
+  `Ctrl-^` goes back. Before, `:enew` did nothing visible. The old editor stays open, unlike Vim's
+  `:enew`, which empties the window.
 - **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder (the *dedicated
   Neovim*; no other Neovim is changed), from the "Neovim not started" notice (the default button), or
   from the Neovim preference page and the *Neovim* menu while the dedicated Neovim is missing or old

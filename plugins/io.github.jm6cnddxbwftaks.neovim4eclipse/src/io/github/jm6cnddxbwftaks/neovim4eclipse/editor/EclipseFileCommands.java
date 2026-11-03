@@ -17,16 +17,19 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.IWorkbenchWizard;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.editors.text.IEncodingSupport;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.wizards.IWizardDescriptor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
@@ -305,6 +308,47 @@ public final class EclipseFileCommands {
             return;
         }
         open(editor.getEditorSite().getPage(), file);
+    }
+
+    /** The wizard behind <i>File &gt; New &gt; Untitled Text File</i> (org.eclipse.ui.editors). */
+    static final String UNTITLED_TEXT_FILE_WIZARD = "org.eclipse.ui.editors.wizards.UntitledTextFileWizard";
+
+    /**
+     * {@code :enew}: opens a new untitled editor, as <i>File &gt; New &gt; Untitled Text File</i>
+     * does, and has it work in {@code editor}'s folder ({@link UntitledFolders}). The wizard has no
+     * pages and may finish at once, so it is finished without a dialog, as Eclipse's own shortcut
+     * to it does: created from the workbench's wizard registry (public API), initialized, finished.
+     * The new editor is then the active one, and Neovim attaches to it as to any editor; its
+     * window's alternate file is {@code editor}'s file, so {@code Ctrl-^} goes back.
+     */
+    static void newUntitled(ITextEditor editor) {
+        IWorkbenchWindow window = editor.getSite().getWorkbenchWindow();
+        Path folder = NeovimEditorController.folderOf(editor);
+        try {
+            IWizardDescriptor descriptor = PlatformUI.getWorkbench().getNewWizardRegistry()
+                    .findWizard(UNTITLED_TEXT_FILE_WIZARD);
+            if (descriptor == null) {
+                HostCommands.showError(editor, "E492: No Untitled Text File in this Eclipse");
+                return;
+            }
+            IWorkbenchWizard wizard = descriptor.createWizard();
+            wizard.init(PlatformUI.getWorkbench(), StructuredSelection.EMPTY);
+            UntitledFolders.opening(folder);
+            boolean finished;
+            try {
+                finished = wizard.performFinish();
+            } finally {
+                UntitledFolders.opened();
+            }
+            IEditorPart opened = window.getActivePage() == null ? null : window.getActivePage().getActiveEditor();
+            if (finished && opened != null && opened != EditorAttachManager.getInstance().workbenchPartOf(editor)
+                    && UntitledFolders.get(opened.getEditorInput()).isEmpty()) {
+                UntitledFolders.put(opened.getEditorInput(), folder); // it had not asked yet
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Could not open an untitled editor", e);
+            HostCommands.showError(editor, "Could not open an untitled editor: " + e.getMessage());
+        }
     }
 
     /**

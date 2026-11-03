@@ -609,19 +609,19 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A buffer no editor shows (here a new empty one, {@code :enew}; also help or {@code :e} of a
-     * file that is not open) is not followed: Neovim is sent back to the attached document, so
-     * the next key still edits it. (The send-back is {@code core/DocumentBuffers.onEntered}; the
+     * A buffer no editor shows (here a new empty one, made by Lua; also help or {@code :e} of a
+     * file that is not open; {@code :enew} opens an untitled editor instead) is not followed: Neovim
+     * is sent back to the attached document, so the next key still edits it. (The send-back is {@code core/DocumentBuffers.onEntered}; the
      * one in {@code EditorAttachManager} is for a document's buffer whose editor cannot show it,
      * such as a multi-page editor on a form page, which no test here sets up.)
      */
     @Test
     void neovimIsSentBackFromABufferNoEditorShows() throws Exception {
-        type(widget, "G"); // line 3, "gamma"; in :enew's empty buffer the cursor would be on line 1
+        type(widget, "G"); // line 3, "gamma"; in a new empty buffer the cursor would be on line 1
         settle();
         assertEquals(3, cursorLine());
 
-        session.inputAsync(":enew<CR>");
+        session.inputAsync(":lua vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))<CR>");
         settle();
         waitUntil("Neovim back in test.txt", TIMEOUT_MS, () -> cursorLine() == 3);
 
