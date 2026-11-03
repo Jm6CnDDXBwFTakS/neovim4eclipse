@@ -802,9 +802,11 @@ immediately. [docs/KEYBOARD.md](docs/KEYBOARD.md) explains those three defaults 
 
 **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder,
 `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (see [Finding Neovim](#finding-neovim) for the
-folder and the code). It is offered in the "Neovim not started" notice, under the field on
-*Window → Preferences → Neovim*, and in the *Neovim* menu while the plug-in has no current Neovim of
-its own. A dialog first says where it goes and what it downloads, and offers two ways:
+folder and the code). The dialogs and the preference page call it the **dedicated Neovim**: it is
+for Eclipse alone, and no other Neovim on the machine is changed. It is offered in the "Neovim not
+started" notice, and, while the dedicated Neovim is missing or older than the release, under the
+field on *Window → Preferences → Neovim* and in the *Neovim* menu. When it is current, the
+preference note ends in *Reinstall…* instead, for a copy that is damaged. A dialog first says where it goes and what it downloads, and offers two ways:
 
 - **Download**: from Neovim's GitHub release, which redirects to
   `release-assets.githubusercontent.com`; about 10 to 13 MB. The download goes through Eclipse's
@@ -820,7 +822,7 @@ dialog shows it, with *Copy*, and links to the GitHub release page and the Virus
 that hash), unpacks it, checks that it runs and reports the right version, and only then puts it in
 place. Nothing changes if any step fails. Without a running Neovim the active editor attaches at
 once; otherwise the note offers *Restart Neovim*, and a Neovim running from the same folder is
-replaced when it restarts. If the preference names another Neovim, *Use the Download* clears it.
+replaced when it restarts. If the preference names another Neovim, *Use Dedicated Neovim* clears it.
 
 **A proxy that asks for a password**: Java does not send a proxy password through an HTTPS
 connection unless Eclipse starts with this line in `eclipse.ini`, after `-vmargs` (Eclipse's own
@@ -847,7 +849,7 @@ Uninstalling the plug-in leaves this folder (about 40 MB per platform); delete i
 
 The *Neovim folder or program* field on *Window → Preferences → Neovim* takes one of three things,
 and the note under it shows which Neovim that finds, for example
-`Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim`.
+`Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim`.
 When Neovim would not start with what the field finds (nothing found, a program that is not
 Neovim, or one too old), the note is in the theme's error color and the field gets an error mark.
 
@@ -865,8 +867,8 @@ Neovim, or one too old), the note is in the theme's error color and the field ge
      The code is the system's letter (`l` Linux, `m` macOS, `w` Windows) and the processor's (`x`
      x86_64, `a` arm64): `lx`, `la`, `mx`, `ma`, `wx`, `wa`. The processor is the machine's real one,
      also when Eclipse itself runs emulated (an x86_64 Eclipse on Apple silicon uses `ma`). Anything
-     else in the folder, such as an archive extracted there before 0.2.1, is no longer used; the
-     preference page and the notice say so, and you can delete it. A plug-in Neovim older than the
+     else in the folder, such as an archive extracted there before 0.2.1, is not used; the
+     preference page and the notice list each such entry's full path, and you can delete it. A plug-in Neovim older than the
      minimum, left from before an update of the plug-in raised it, is passed over too (a newer `nvim`
      on `PATH` is used meanwhile); the preference page and the notice say that *Get Neovim* replaces
      it.

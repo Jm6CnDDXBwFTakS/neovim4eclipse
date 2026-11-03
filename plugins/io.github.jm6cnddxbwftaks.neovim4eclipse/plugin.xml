@@ -505,7 +505,7 @@
             </command>
             <!-- Only while the plug-in's own Neovim for this machine is missing or older than the
                  release it installs (prefs/GetNeovimOffer); the preference page and the "Neovim not
-                 started" notice always offer it. The label has no version: plugin.xml cannot read the
+                 started" notice always offer it (the page as a Reinstall link when it is current). The label has no version: plugin.xml cannot read the
                  data file, and the dialog names it. -->
             <command
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.getNeovim"

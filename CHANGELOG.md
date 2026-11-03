@@ -14,9 +14,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
-- **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder, from the
-  "Neovim not started" notice (the default button), the Neovim preference page, or the *Neovim* menu
-  (while the plug-in has no current Neovim of its own). It downloads the official release archive
+- **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder (the *dedicated
+  Neovim*; no other Neovim is changed), from the "Neovim not started" notice (the default button), or
+  from the Neovim preference page and the *Neovim* menu while the dedicated Neovim is missing or old
+  (when it is current, the preference note offers *Reinstall…*). It downloads the official release archive
   from GitHub, through Eclipse's proxy settings, or installs one you already have (*Install from
   File…*, for when Eclipse cannot download). Either way the archive must match the SHA-256 pinned in
   the plug-in, which the dialog shows with links to the GitHub release and VirusTotal; then it is

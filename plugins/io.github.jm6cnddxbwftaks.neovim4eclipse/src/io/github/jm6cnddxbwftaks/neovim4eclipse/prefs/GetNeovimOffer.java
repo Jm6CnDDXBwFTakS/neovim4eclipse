@@ -24,7 +24,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  * Whether the Neovim menu offers <i>Get Neovim</i>: while the plug-in's own folder for this platform
  * ({@code neovim/<code>/}) has no Neovim, or an older one than the release would install. What is on
  * {@code PATH} does not matter: the entry is about the plug-in's own Neovim. (The preference page and
- * the "Neovim not started" notice always offer it.)
+ * the "Neovim not started" notice always offer it; the page as its note's <i>Reinstall...</i> link
+ * when the dedicated Neovim is current, {@code NeovimLocationFieldEditor}.)
  *
  * <h2>Why cached</h2>
  * The answer runs {@code nvim --version}, and the menu asks while it is being shown, on the UI

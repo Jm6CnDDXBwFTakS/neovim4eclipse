@@ -81,7 +81,7 @@ public final class StartFailureReport {
      * </pre>
      *
      * If the plug-in's folder holds entries it no longer uses, a last paragraph names them
-     * ({@link NvimProbe#unusedLine}).
+     * ({@link NvimProbe#unusedLines}).
      *
      * With an old Neovim the error line says so: {@code Error: Neovim 0.12.4 is too old: Neovim for
      * Eclipse needs 0.12.6 or newer.}
@@ -95,7 +95,7 @@ public final class StartFailureReport {
      */
     public static String message(String executable, Throwable error, List<String> unused,
             Optional<PluginNeovim.Outdated> outdated) {
-        String unusedLine = NvimProbe.unusedLine(unused, NvimExecutable.dedicatedFolder());
+        String unusedLines = NvimProbe.unusedLines(unused, NvimExecutable.dedicatedFolder());
         String outdatedLine = outdated.map(o -> NvimProbe.outdatedLine(o) + ".\n").orElse("");
         return "Neovim for Eclipse could not start Neovim, so editors keep their normal Eclipse keys.\n\n"
                 + "Executable: " + executable + "\n"
@@ -109,7 +109,7 @@ public final class StartFailureReport {
                 + PREFERENCES_PATH + ").\n"
                 + "Eclipse started from the Dock, a desktop menu or a PDE launch may not see your shell's PATH "
                 + "or environment variables."
-                + (unusedLine == null ? "" : "\n\n" + unusedLine);
+                + (unusedLines == null ? "" : "\n\n" + unusedLines);
     }
 
     /**

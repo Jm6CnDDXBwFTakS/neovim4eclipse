@@ -71,15 +71,16 @@ class StartFailureReportTest {
         assertTrue(message.contains("Install Neovim " + NeovimVersion.MINIMUM + " or newer"), message);
         assertTrue(message.contains(StartFailureReport.RELEASES_URL), message);
         assertTrue(message.contains("Get Neovim " + NeovimVersion.MINIMUM), message);
-        assertFalse(message.contains("No longer used"), message);
+        assertFalse(message.contains(NvimProbe.UNUSED_HEADING), message);
     }
 
     @Test
     void theMessageNamesWhatThePluginsFolderNoLongerUses() {
         String message = StartFailureReport.message("nvim", new IOException("x"),
                 List.of("current", "nvim-linux-arm64_0.12.6"), Optional.empty());
-        assertTrue(message.endsWith("\n\nNo longer used, you can delete them: current, nvim-linux-arm64_0.12.6 in "
-                + NvimExecutable.dedicatedFolder()), message);
+        assertTrue(message.endsWith("\n\n" + NvimProbe.UNUSED_HEADING + "\n  "
+                + NvimExecutable.dedicatedFolder().resolve("current") + "\n  "
+                + NvimExecutable.dedicatedFolder().resolve("nvim-linux-arm64_0.12.6")), message);
     }
 
     @Test

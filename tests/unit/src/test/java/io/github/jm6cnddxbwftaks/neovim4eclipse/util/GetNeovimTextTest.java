@@ -28,13 +28,16 @@ class GetNeovimTextTest {
     void theConfirmationNamesTheFolderTheSourceAndTheCheck() {
         Path home = Path.of("/home/you/.local/share/neovim4eclipse-plugin/neovim/la");
         HeadedMessage m = GetNeovimText.confirm(RELEASE, LA, home);
-        assertEquals("Install Neovim " + RELEASE.version() + " for Linux arm64?", m.intro());
+        assertEquals("Install the dedicated Neovim " + RELEASE.version() + " for Linux arm64?", m.intro());
         assertEquals(List.of("Folder", "Download", "From File", "SHA-256"), headings(m));
+        assertTrue(point(m, "Folder").text().startsWith("Dedicated to the plug-in"), "not a Neovim of the user's");
         assertEquals(home.toString(), point(m, "Folder").copy());
         String download = point(m, "Download").text();
         assertTrue(download.startsWith("nvim-linux-arm64.tar.gz, 10.8 MB, from github.com"), download);
         assertTrue(download.contains("release-assets.githubusercontent.com"), "the host a proxy must allow");
         assertEquals(List.of(LA.url()), urls(point(m, "From File")), "the archive itself, for a browser");
+        assertEquals("Download nvim-linux-arm64.tar.gz", point(m, "From File").links().get(0).label(),
+                "the label says it is the file itself, not a page");
         Point sha = point(m, "SHA-256");
         assertEquals(LA.sha256(), sha.copy());
         assertEquals(List.of(RELEASE.releasePage(), GetNeovimText.virusTotal(LA.sha256())), urls(sha));
@@ -44,16 +47,20 @@ class GetNeovimTextTest {
     void theDoneNoteSaysWhatIsStillNeeded() {
         Path program = Path.of("/n/la/bin/nvim");
         HeadedMessage plain = GetNeovimText.done(RELEASE.version(), program, LA.sha256(), false, false);
-        assertEquals("Neovim " + RELEASE.version() + " is installed.", plain.intro());
+        assertEquals("The dedicated Neovim " + RELEASE.version() + " is installed.", plain.intro());
         assertEquals(List.of("Program", "SHA-256"), headings(plain));
         assertEquals(program.toString(), point(plain, "Program").copy());
         assertEquals("The archive matched the one pinned in the plug-in.", point(plain, "SHA-256").text());
         assertEquals(List.of(GetNeovimText.virusTotal(LA.sha256())), urls(point(plain, "SHA-256")));
 
         HeadedMessage waits = GetNeovimText.done(RELEASE.version(), program, LA.sha256(), true, false);
-        assertTrue(point(waits, "Restart").text().contains("Restart Neovim to finish"));
+        assertEquals("The new dedicated Neovim replaces the one running now, from the same folder. Restart Neovim "
+                + "to finish.", point(waits, "Restart").text());
         HeadedMessage other = GetNeovimText.done(RELEASE.version(), program, LA.sha256(), false, true);
-        assertTrue(point(other, "Preference").text().contains("Use the Download clears it"));
+        assertEquals("The \"Neovim folder or program\" preference names another Neovim. Use Dedicated Neovim clears "
+                + "it, so the dedicated Neovim is used.", point(other, "Preference").text(),
+                "names the button, without its mnemonic");
+        assertEquals("&Use Dedicated Neovim", GetNeovimText.USE_DEDICATED_BUTTON);
         assertFalse(headings(other).contains("Restart"));
     }
 
@@ -61,17 +68,17 @@ class GetNeovimTextTest {
     void aProxyPasswordFailureGivesTheEclipseIniLineToCopy() {
         HeadedMessage m = GetNeovimText.failed(new NeovimInstallException(Reason.PROXY_PASSWORD, "long"), RELEASE, LA);
         assertEquals("Neovim was not installed.", m.intro());
-        assertEquals(List.of("Why", "Fix", "Then", "Or"), headings(m));
+        assertEquals(List.of("Why", "Fix", "Then", "Instead"), headings(m));
         assertTrue(point(m, "Why").text().contains("HTTP 407"));
         assertEquals(NeovimDownload.TUNNEL_AUTH_LINE, point(m, "Fix").copy());
-        assertEquals(List.of(LA.url(), RELEASE.releasePage()), urls(point(m, "Or")));
+        assertEquals(List.of(LA.url(), RELEASE.releasePage()), urls(point(m, "Instead")));
     }
 
     @Test
     void otherFailuresShowTheMessageAndOfferABrowserOnlyWhereItHelps() {
         HeadedMessage network = failed(Reason.NETWORK, "Cannot find github.com.");
         assertEquals("Cannot find github.com.", point(network, "Why").text());
-        assertEquals(List.of("Why", "Or"), headings(network));
+        assertEquals(List.of("Why", "Instead"), headings(network));
         // The same archive from a browser would not run either, and a busy folder needs only a retry.
         assertEquals(List.of("Why"), headings(failed(Reason.DOES_NOT_RUN, "x")));
         assertEquals(List.of("Why"), headings(failed(Reason.BUSY, "x")));
@@ -82,12 +89,13 @@ class GetNeovimTextTest {
         String other = "0".repeat(64);
         HeadedMessage m = GetNeovimText.failed(new NeovimInstallException("long, for the log",
                 new NeovimInstallException.Found("nvim(1).tar.gz", 11000, other)), RELEASE, LA);
-        assertEquals(List.of("Why", "Expected", "This File", "Or"), headings(m));
-        assertTrue(point(m, "Why").text().startsWith("nvim(1).tar.gz is not the Neovim " + RELEASE.version()));
+        assertEquals(List.of("Why", "Expected", "Your File", "Instead"), headings(m));
+        assertEquals("nvim(1).tar.gz is not the Neovim " + RELEASE.version() + " archive for Linux arm64: this file "
+                + "is another version, or damaged.", point(m, "Why").text());
         assertEquals("nvim-linux-arm64.tar.gz, 11,367,117 bytes, SHA-256:", point(m, "Expected").text());
         assertEquals(LA.sha256(), point(m, "Expected").copy());
-        assertEquals("11,000 bytes, SHA-256:", point(m, "This File").text());
-        assertEquals(other, point(m, "This File").copy());
+        assertEquals("11,000 bytes, SHA-256:", point(m, "Your File").text());
+        assertEquals(other, point(m, "Your File").copy());
     }
 
     private static HeadedMessage failed(Reason reason, String message) {

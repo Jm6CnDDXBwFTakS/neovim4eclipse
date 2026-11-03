@@ -225,7 +225,7 @@ public final class GetNeovim {
         boolean waits = result.outcome() == NeovimInstaller.Outcome.WAITS_FOR_RESTART;
         List<String> buttons = new ArrayList<>();
         if (otherInUse) {
-            buttons.add("&Use the Download");
+            buttons.add(GetNeovimText.USE_DEDICATED_BUTTON);
         }
         if (running) {
             buttons.add("&Restart Neovim...");
@@ -234,7 +234,7 @@ public final class GetNeovim {
         int pressed = show(liveShell(shell), MessageDialog.INFORMATION,
                 GetNeovimText.done(release.version(), result.program(), result.sha256(), waits, otherInUse), buttons);
         String choice = pressed >= 0 && pressed < buttons.size() ? buttons.get(pressed) : "Close";
-        if (choice.startsWith("&Use")) {
+        if (choice.equals(GetNeovimText.USE_DEDICATED_BUTTON)) {
             // The Activator restarts Neovim on this change, and attaches the active editor.
             Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, "");
         } else if (choice.startsWith("&Restart")) {

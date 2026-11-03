@@ -18,13 +18,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage.Point;
  * so the unit tests can read them. Example of the confirmation ({@code [..]} is a field with Copy):
  *
  * <pre>
- *   Install Neovim 0.12.6 for Linux arm64?
+ *   Install the dedicated Neovim 0.12.6 for Linux arm64?
  *
- *   Folder      [/home/you/.local/share/neovim4eclipse-plugin/neovim/la]
+ *   Folder      Dedicated to the plug-in; no other Neovim is changed.
+ *               [/home/you/.local/share/neovim4eclipse-plugin/neovim/la]
  *   Download    nvim-linux-arm64.tar.gz, 10.8 MB, from github.com, which sends it on to
  *               release-assets.githubusercontent.com.
  *   From File   An nvim-linux-arm64.tar.gz you already have, for example from a browser.
- *               Download it in a browser
+ *               Download nvim-linux-arm64.tar.gz
  *   SHA-256     Either way, the plug-in checks the archive against this before unpacking.
  *               [2e58d259ffcc6145e5112ea02330126c6b57da09087bb9265fb2fa9aa10b485c]
  *               GitHub release page  ·  VirusTotal report
@@ -34,6 +35,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage.Point;
  * user who wants to check that hash themselves can compare it with GitHub's release page or look it
  * up on VirusTotal. The plug-in never contacts VirusTotal: only the user's click on the link sends
  * the hash, from their browser.
+ *
+ * <p>"Dedicated" is the word for the plug-in's own Neovim, in {@code neovim/<code>/} of the plug-in's
+ * folder ({@link PluginNeovim}): installed for Eclipse alone, apart from any Neovim the user runs
+ * elsewhere, which Get Neovim never changes. The dialogs, the preference page's note
+ * ({@link NvimProbe}) and the docs all use it, so the user can tell the two apart.
  */
 public final class GetNeovimText {
 
@@ -44,6 +50,13 @@ public final class GetNeovimText {
     public static final List<String> CONFIRM_BUTTONS = List.of("&Download", "Install from &File...", "Cancel");
     /** The failure dialog's buttons, in order; the first is the default. */
     public static final List<String> FAILED_BUTTONS = List.of("&Retry", "Install from &File...", "Close");
+
+    /**
+     * The done note's button that clears the preference when it names another Neovim; the note's
+     * <i>Preference</i> point names it, without the mnemonic.
+     */
+    public static final String USE_DEDICATED_BUTTON = "&Use Dedicated Neovim";
+    private static final String USE_DEDICATED_LABEL = USE_DEDICATED_BUTTON.replace("&", "");
 
     private GetNeovimText() {
     }
@@ -56,8 +69,9 @@ public final class GetNeovimText {
     /** The confirmation, before anything is downloaded or unpacked: where it goes, from where, and the check. */
     public static HeadedMessage confirm(NeovimRelease release, NeovimRelease.Archive archive, Path home) {
         return new HeadedMessage(
-                "Install Neovim " + release.version() + " for " + archive.platform().describe() + "?",
-                List.of(new Point("Folder", "").withCopy(home.toString()),
+                "Install the dedicated Neovim " + release.version() + " for " + archive.platform().describe() + "?",
+                List.of(new Point("Folder", "Dedicated to the plug-in; no other Neovim is changed.")
+                                .withCopy(home.toString()),
                         new Point("Download", archive.asset() + ", " + megabytes(archive.size())
                                 + ", from github.com, which sends it on to release-assets.githubusercontent.com."),
                         new Point("From File", "An " + archive.asset() + " you already have, for example from a "
@@ -79,16 +93,16 @@ public final class GetNeovimText {
         List<Point> points = new ArrayList<>();
         points.add(new Point("Program", "").withCopy(program.toString()));
         if (waits) {
-            points.add(new Point("Restart", "The Neovim running now came from the same folder: Restart Neovim to "
-                    + "finish. Until then the new one waits beside it."));
+            points.add(new Point("Restart", "The new dedicated Neovim replaces the one running now, from the same "
+                    + "folder. Restart Neovim to finish."));
         }
         if (otherInUse) {
-            points.add(new Point("Preference", "The Neovim preference names another Neovim. Use the Download "
-                    + "clears it, so that the plug-in uses this one."));
+            points.add(new Point("Preference", "The \"Neovim folder or program\" preference names another Neovim. "
+                    + USE_DEDICATED_LABEL + " clears it, so the dedicated Neovim is used."));
         }
         points.add(new Point("SHA-256", "The archive matched the one pinned in the plug-in.").withCopy(sha256)
                 .withLinks(virusTotalLink(sha256)));
-        return new HeadedMessage("Neovim " + version + " is installed.", points, "");
+        return new HeadedMessage("The dedicated Neovim " + version + " is installed.", points, "");
     }
 
     /**
@@ -97,12 +111,12 @@ public final class GetNeovimText {
      * <pre>
      *   Neovim was not installed.
      *
-     *   Why    The proxy asks for a password (HTTP 407), which Java does not send ...
-     *   Fix    Add this line to eclipse.ini, after -vmargs, and restart Eclipse ...:
-     *          [-Djdk.http.auth.tunneling.disabledSchemes=]
-     *   Then   Enter the proxy's user and password in ... Network Connections, and retry.
-     *   Or     Download nvim-linux-arm64.tar.gz in a browser, then use Install from File.
-     *          Download it in a browser  ·  GitHub release page
+     *   Why      The proxy asks for a password (HTTP 407), which Java does not send ...
+     *   Fix      Add this line to eclipse.ini, after -vmargs, and restart Eclipse ...:
+     *            [-Djdk.http.auth.tunneling.disabledSchemes=]
+     *   Then     Enter the proxy's user and password in ... Network Connections, and retry.
+     *   Instead  Download nvim-linux-arm64.tar.gz in a browser, then use Install from File.
+     *            Download nvim-linux-arm64.tar.gz  ·  GitHub release page
      * </pre>
      *
      * Mostly <i>Why</i> is the exception's message, written for the user. Two reasons are laid out
@@ -123,15 +137,15 @@ public final class GetNeovimText {
                     + "Network Connections, and retry."));
         } else if (found.isPresent()) {
             points.add(new Point("Why", found.get().fileName() + " is not the Neovim " + release.version()
-                    + " archive for " + archive.platform().describe() + ": another version, or damaged."));
+                    + " archive for " + archive.platform().describe() + ": this file is another version, or damaged."));
             points.add(new Point("Expected", archive.asset() + ", " + bytes(archive.size()) + ", SHA-256:")
                     .withCopy(archive.sha256()));
-            points.add(new Point("This File", bytes(found.get().size()) + ", SHA-256:").withCopy(found.get().sha256()));
+            points.add(new Point("Your File", bytes(found.get().size()) + ", SHA-256:").withCopy(found.get().sha256()));
         } else {
             points.add(new Point("Why", e.getMessage()));
         }
         if (browserHelps(reason)) {
-            points.add(new Point("Or", "Download " + archive.asset() + " in a browser, then use Install from File.")
+            points.add(new Point("Instead", "Download " + archive.asset() + " in a browser, then use Install from File.")
                     .withLinks(inBrowser(archive), releasePage(release)));
         }
         return new HeadedMessage("Neovim was not installed.", points, "");
@@ -166,9 +180,13 @@ public final class GetNeovimText {
         return new Link("GitHub release page", release.releasePage());
     }
 
-    /** The archive's own URL: the browser downloads it, for Install from File. */
+    /**
+     * The archive's own URL ({@code Download nvim-linux-arm64.tar.gz}): a direct download, not a page,
+     * so the browser saves the file at once, for Install from File. The label names the file so the
+     * user sees it is the archive itself.
+     */
     private static Link inBrowser(NeovimRelease.Archive archive) {
-        return new Link("Download it in a browser", archive.url());
+        return new Link("Download " + archive.asset(), archive.url());
     }
 
     /** {@code 11,367,117 bytes}: exact, as the release page gives it, with separators to read it by. */

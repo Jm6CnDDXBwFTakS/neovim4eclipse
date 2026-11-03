@@ -72,14 +72,16 @@ class OpenPreferencesHandlerTest {
                 .filter(l -> l.getText().startsWith("Neovim folder or program")).findFirst().orElse(null);
         assertNotNull(label, "no 'Neovim folder or program' label");
         assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
-        // Get Neovim is always offered on the page, with the version it installs (GetNeovim).
+        // The note under the field names what the field finds (NvimProbe), after a short delay.
+        UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
+        // Get Neovim is offered on the page, with the version it installs (GetNeovim): as a button, or,
+        // when the note finds the dedicated Neovim current, as the note's Reinstall link instead.
         Button getNeovim = find(page, Button.class).stream()
                 .filter(b -> b.getText().equals("Get Neovim " + NeovimVersion.MINIMUM + "...")).findFirst().orElse(null);
         assertNotNull(getNeovim, "no Get Neovim button");
-        assertTrue(getNeovim.isEnabled() && getNeovim.isVisible(), "Get Neovim button usable");
-        // The note under the field names what the field finds (NvimProbe), after a short delay.
-        UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> find(page, Label.class)
-                .stream().anyMatch(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found")));
+        boolean reinstall = note(page).getText().contains("<a>Reinstall...</a>");
+        assertEquals(!reinstall, getNeovim.isEnabled() && getNeovim.isVisible(),
+                "the button is usable unless the note offers Reinstall: " + note(page).getText());
         Text field = find(page, Text.class).stream().findFirst().orElse(null);
         assertNotNull(field, "no text field");
         assertTrue(field.isVisible(), "field hidden (its window is not the dialog's)");
@@ -97,15 +99,15 @@ class OpenPreferencesHandlerTest {
         assertNotNull(help, "no help with a link to how Neovim is found");
         assertTrue(help.isVisible(), "help hidden");
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
-        Label note = note(page);
+        Link note = note(page);
         assertTrue(note.getParent() == help.getParent() && note.getBounds().y < help.getBounds().y,
                 "the note (what the field finds) comes before the help (what it takes): note " + note.getBounds()
                         + ", help " + help.getBounds());
     }
 
     /** The note under the Neovim field, once it says what the field finds; {@code null} before. */
-    private static Label note(Control page) {
-        return find(page, Label.class).stream()
+    private static Link note(Control page) {
+        return find(page, Link.class).stream()
                 .filter(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No Neovim found"))
                 .findFirst().orElse(null);
     }

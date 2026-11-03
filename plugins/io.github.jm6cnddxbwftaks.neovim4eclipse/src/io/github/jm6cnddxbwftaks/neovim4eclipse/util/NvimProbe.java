@@ -11,7 +11,7 @@ import java.util.List;
  * Says which Neovim a preference value finds, for the note under the field on the preference page:
  *
  * <pre>
- *   Found: Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
+ *   Found: dedicated Neovim 0.12.6, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
  *   Found: Neovim 0.13.0 (newest of 2 in this folder), /home/you/opt/nvim-0.13.0/bin/nvim
  *   Found: Neovim 0.9.5 (too old: Neovim for Eclipse needs 0.12.6 or newer), /usr/bin/nvim
  *   Found: no Neovim version (it did not answer --version), /usr/local/bin/nvim
@@ -19,7 +19,15 @@ import java.util.List;
  *   No Neovim found at /opt/nvim. Clear the field to search the default folders, or enter a value as described.
  * </pre>
  *
- * <p>"As described" points at the page's description, which says what the field takes.
+ * <p>"As described" points at the page's description, which says what the field takes. "Dedicated"
+ * marks the plug-in's own Neovim, the one Get Neovim installs into the plug-in's folder
+ * ({@link PluginNeovim}), so it is not taken for a Neovim the user installed themselves.
+ *
+ * <p>When the note finds the dedicated Neovim at the release Get Neovim installs, or newer, the
+ * page has nothing to get: it hides its <em>Get Neovim</em> button and offers a small
+ * <em>Reinstall...</em> link on the note instead ({@link Note#current}), for the rare copy that
+ * answers {@code --version} but is damaged otherwise (a damaged copy that does not answer gets the
+ * button back, as its version is then unknown).
  *
  * <p>With a blank preference, a plug-in Neovim older than the minimum (left from before an update of
  * the plug-in raised it) gets a line of its own ({@link #outdatedLine}):
@@ -29,10 +37,13 @@ import java.util.List;
  * </pre>
  *
  * <p>If the plug-in's folder holds anything it no longer uses ({@link PluginNeovim#unusedEntries}),
- * such as an archive extracted there by hand before 0.2.1, a second line says so ({@link #unusedLine}):
+ * such as an archive extracted there by hand before 0.2.1, the lines after say so, one full path a
+ * line, so each stands apart and can be copied whole ({@link #unusedLines}):
  *
  * <pre>
- *   No longer used, you can delete them: nvim-linux-arm64_0.12.6, current in /home/you/.local/share/neovim4eclipse-plugin/neovim
+ *   Not used by the plug-in, you can delete:
+ *     /home/you/.local/share/neovim4eclipse-plugin/neovim/current
+ *     /home/you/.local/share/neovim4eclipse-plugin/neovim/nvim-linux-arm64_0.12.6
  * </pre>
  *
  * <p>The version comes first and the path last: the version is what you look for, and a long path
@@ -44,6 +55,9 @@ import java.util.List;
  */
 public final class NvimProbe {
 
+    /** The first of the {@link #unusedLines}. */
+    public static final String UNUSED_HEADING = "Not used by the plug-in, you can delete:";
+
     private NvimProbe() {
     }
 
@@ -54,8 +68,15 @@ public final class NvimProbe {
      *
      * @param text    the note's text
      * @param problem whether starting Neovim with this value would fail
+     * @param current whether it finds the dedicated Neovim at the release Get Neovim installs, or newer:
+     *                then there is nothing to get, and the page offers only a reinstall
      */
-    public record Note(String text, boolean problem) {
+    public record Note(String text, boolean problem, boolean current) {
+
+        /** A note that does not find a current dedicated Neovim (all but one kind). */
+        public Note(String text, boolean problem) {
+            this(text, problem, false);
+        }
     }
 
     /**
@@ -68,18 +89,19 @@ public final class NvimProbe {
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Path program = NvimExecutable.locate(resolved.command());
         Path folder = NvimExecutable.dedicatedFolder();
-        Note note = program == null ? note(configured, null, null, 0, folder)
-                : note(configured, program, InstalledVersions.of(program), resolved.among(), folder);
+        NeovimVersion offered = NeovimRelease.bundled().version();
+        Note note = program == null ? note(configured, null, null, 0, folder, offered)
+                : note(configured, program, InstalledVersions.of(program), resolved.among(), folder, offered);
         StringBuilder text = new StringBuilder(note.text());
         if (configured == null || configured.isBlank()) {
             PluginNeovim.outdated(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), InstalledVersions::of)
                     .ifPresent(old -> text.append('\n').append(outdatedLine(old)));
         }
-        String unused = unusedLine(PluginNeovim.unusedEntries(folder), folder);
+        String unused = unusedLines(PluginNeovim.unusedEntries(folder), folder);
         if (unused != null) {
             text.append('\n').append(unused);
         }
-        return new Note(text.toString(), note.problem());
+        return new Note(text.toString(), note.problem(), note.current());
     }
 
     /**
@@ -92,18 +114,24 @@ public final class NvimProbe {
     }
 
     /**
-     * The line about entries of the plug-in's Neovim folder that are no longer used, or {@code null}
-     * if there are none.
+     * The lines about entries of the plug-in's Neovim folder that it does not use, or {@code null} if
+     * there are none: a heading line, then each entry's full path on a line of its own, indented.
+     * Example: {@code "Not used by the plug-in, you can delete:\n  /home/you/.../neovim/current"}.
      *
      * @param unused the entries' names ({@link PluginNeovim#unusedEntries})
      * @param folder the plug-in's Neovim folder
      */
-    public static String unusedLine(List<String> unused, Path folder) {
+    public static String unusedLines(List<String> unused, Path folder) {
         if (unused.isEmpty()) {
             return null;
         }
-        return "No longer used, you can delete them: " + String.join(", ", unused) + " in " + folder;
+        StringBuilder lines = new StringBuilder(UNUSED_HEADING);
+        for (String name : unused) {
+            lines.append("\n  ").append(folder.resolve(name));
+        }
+        return lines.toString();
     }
+
 
     /**
      * The note.
@@ -112,9 +140,12 @@ public final class NvimProbe {
      * @param program    the program found, or {@code null}
      * @param version    its version, or {@code null} if it did not run as Neovim
      * @param among      how many installs in the same folder it was chosen from (1: no choice)
-     * @param dedicated  the default Neovim folder, suggested when the default search finds nothing
+     * @param dedicated  the plug-in's Neovim folder: suggested when the default search finds nothing,
+     *                   and a program inside it is the dedicated Neovim
+     * @param offered    the version Get Neovim installs ({@link NeovimRelease#version})
      */
-    static Note note(String configured, Path program, NeovimVersion version, int among, Path dedicated) {
+    static Note note(String configured, Path program, NeovimVersion version, int among, Path dedicated,
+            NeovimVersion offered) {
         if (program == null) {
             if (configured == null || configured.isBlank()) {
                 return problem("No Neovim found in the default folders. Get Neovim " + NeovimVersion.MINIMUM
@@ -134,7 +165,9 @@ public final class NvimProbe {
             remarks.add("too old: Neovim for Eclipse needs " + NeovimVersion.MINIMUM + " or newer");
         }
         String remark = remarks.isEmpty() ? "" : " (" + String.join("; ", remarks) + ")";
-        return new Note("Found: Neovim " + version + remark + ", " + program, !version.isSupported());
+        boolean isDedicated = FilePaths.inside(program.toString(), dedicated.toString(), FilePaths.Platform.current());
+        return new Note("Found: " + (isDedicated ? "dedicated " : "") + "Neovim " + version + remark + ", " + program,
+                !version.isSupported(), isDedicated && version.compareTo(offered) >= 0);
     }
 
     private static Note problem(String text) {

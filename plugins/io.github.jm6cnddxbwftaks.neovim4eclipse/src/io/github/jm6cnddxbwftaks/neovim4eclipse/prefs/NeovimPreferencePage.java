@@ -41,8 +41,9 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
      * The help under the Neovim field, after the note: what the field takes, then a link to the
      * README section that lists the default folders. {@code <a>} marks the clickable part.
      */
-    public static final String NEOVIM_FIELD_HELP = "Leave blank to search the default folders, or enter a folder "
-            + "that holds Neovim, or a direct path to an nvim executable. <a>How Neovim for Eclipse finds Neovim</a>";
+    public static final String NEOVIM_FIELD_HELP = "Leave blank to use the dedicated Neovim, or else search the "
+            + "default folders. Or enter a folder that holds Neovim, or a direct path to an nvim executable. "
+            + "<a>How Neovim for Eclipse finds Neovim</a>";
 
     private Group program;
     private Group workbench;
