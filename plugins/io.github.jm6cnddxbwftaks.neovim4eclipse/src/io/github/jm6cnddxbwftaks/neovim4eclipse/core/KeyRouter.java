@@ -143,6 +143,17 @@ public final class KeyRouter {
     }
 
     /**
+     * Forgets a pending {@code Ctrl-X} ({@link #ctrlXPending}): a key Eclipse handled without this
+     * router came next. Example: {@code Ctrl-X}, then {@code Ctrl-N}, whose binding runs Word
+     * Completion directly; without this, a {@code Ctrl-O} typed much later would still run Content
+     * Assist. The editor calls it for every command other than the plug-in's own key commands.
+     * UI thread.
+     */
+    public void cancelCtrlX() {
+        ctrlXPending = false;
+    }
+
+    /**
      * Routes one key.
      *
      * @param nvimKey the key in Neovim notation, not {@code null}

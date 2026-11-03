@@ -607,6 +607,12 @@ are kept: the re-typing applies none of them (a `jk` mapped to `Esc` cannot end 
 work wherever Neovim reads the keys itself, as in a block-visual `I` or for the `Ctrl` keys ticked for
 insert mode. While Eclipse types, they do not apply: Eclipse inserts what you type.
 
+A completion plug-in (nvim-cmp, blink.cmp, ...) maps `Enter` and `Tab` in insert mode to accept its
+popup. The plug-in does not draw that popup, so in an insert Neovim types (a block-visual `I`, or
+while recording a macro) `Enter` could accept an entry you never saw. Leave completion plug-ins out
+inside Eclipse, which has its own (`Ctrl+Space`, and `Ctrl+N` as Word Completion): see
+[Your `init.lua` in Eclipse](#your-initlua-in-eclipse).
+
 ## Clipboard
 
 Eclipse is the embedded Neovim's *clipboard provider* (`:help clipboard`), so the registers that
@@ -703,7 +709,14 @@ end
 require('lazy').setup('plugins')
 ```
 
-With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.neovim4eclipse`. The
+With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.neovim4eclipse`, for
+example a completion plug-in, whose popup the plug-in does not draw:
+
+```lua
+{ 'hrsh7th/nvim-cmp', cond = not vim.g.neovim4eclipse },
+```
+
+The
 variable is set with `--cmd`, not in the environment, so a Neovim you start in a `:terminal` inside
 Eclipse does not see it.
 

@@ -282,6 +282,17 @@ class KeyRouterTest {
         assertEquals(List.of(KeyRouter.Completion.CONTENT_ASSIST), completions);
     }
 
+    /** Ctrl-X, then a key Eclipse's binding took (Ctrl-N's Word Completion): a later Ctrl-O is Ctrl-O again. */
+    @Test
+    void aCommandEclipseRanEndsAPendingCtrlX() {
+        eclipseTypes("xo");
+        type("<C-x>");
+        router.cancelCtrlX(); // the editor: another command ran
+        type("<C-o>");
+        assertEquals(List.of(), completions);
+        assertEquals(List.of("<C-o>"), neovim.synced);
+    }
+
     @Test
     void ctrlCEndsTheInsertAsEscDoes() {
         eclipseTypes("c");

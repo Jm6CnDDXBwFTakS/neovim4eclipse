@@ -376,9 +376,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Whether Esc is being handled now: the typed text replayed into Neovim, the document pushed,
-     * the editor's top line sent ({@link #setLeaveInsertPush}). What Neovim reports meanwhile is of
-     * a window about to be scrolled to the editor's view, so the editor ignores its top lines.
+     * Whether Esc, or a sync point before its key, is being handled now: the typed text replayed into
+     * Neovim, the document pushed, Neovim's cursor and the editor's top line sent
+     * ({@link #setLeaveInsertPush}, {@code KeyInput#syncInsertThenInput}). What Neovim reports
+     * meanwhile is of text it does not have yet or of a window about to be scrolled to the editor's
+     * view, so the editor ignores its cursors and top lines.
      */
     public boolean isLeavingInsertMode() {
         return keyInput.isLeavingInsertMode();

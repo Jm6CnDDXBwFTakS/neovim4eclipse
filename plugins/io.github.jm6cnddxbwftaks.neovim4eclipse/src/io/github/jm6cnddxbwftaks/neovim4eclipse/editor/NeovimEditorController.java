@@ -20,6 +20,7 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
@@ -114,6 +115,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final VisualSelectionView selectionView;
     /** When the Vim Ctrl-key bindings are active for this editor. */
     private final EditorKeyContext keyContext;
+    /** Ends a pending {@code Ctrl-X} when a key Eclipse binds runs a command instead (KeyRouter). */
+    private final OtherCommandWatch otherCommandWatch;
     /** Caret and Neovim cursor, kept in the same place. */
     private final CaretSync caretSync;
     /** Widget offsets to document offsets and back (folded code is not in the widget). */
@@ -219,6 +222,8 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
         keyInterceptor.setCompletion(this::runCompletion);
+        this.otherCommandWatch = new OtherCommandWatch(editor.getSite().getService(ICommandService.class),
+                keyInterceptor::cancelCtrlX);
         // At Esc and at a sync point, only the lines typed since Neovim's buffer last equaled the document.
         session.setLeaveInsertPush(() -> {
             try {
@@ -960,6 +965,7 @@ public final class NeovimEditorController implements AutoCloseable {
             LOG.log(Level.FINE, "removeVerifyKeyListener", e);
         }
         keyContext.dispose(); // deactivates the Vim key contexts
+        otherCommandWatch.dispose();
         try {
             synchronizer.close();
             insertTracker.dispose();

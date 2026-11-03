@@ -90,6 +90,11 @@ public final class KeyInterceptor implements VerifyKeyListener {
         router.setSyncPointSupplier(supplier);
     }
 
+    /** See {@link KeyRouter#cancelCtrlX}. UI thread. */
+    public void cancelCtrlX() {
+        router.cancelCtrlX();
+    }
+
     /**
      * Routes a key one of the plug-in's key bindings delivered ({@link KeyRouter#routeBound}): to
      * Neovim, through a sync point in an insert Eclipse types. UI thread.
