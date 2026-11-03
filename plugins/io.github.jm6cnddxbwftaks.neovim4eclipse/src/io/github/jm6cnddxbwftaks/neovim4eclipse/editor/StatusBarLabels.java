@@ -21,6 +21,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusBarWidths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
@@ -162,8 +163,9 @@ final class StatusBarLabels {
             return;
         }
         String shown = text == null ? "" : text;
-        if (!shown.equals(label.getText())) {
-            label.setText(shown);
+        String literal = LabelText.literal(shown); // a file named R&D.txt keeps its & (no mnemonic)
+        if (!literal.equals(label.getText())) {
+            label.setText(literal);
         }
         label.setToolTipText(shown.isEmpty() ? null : tooltip != null ? tooltip : shown);
         label.setForeground(foreground);

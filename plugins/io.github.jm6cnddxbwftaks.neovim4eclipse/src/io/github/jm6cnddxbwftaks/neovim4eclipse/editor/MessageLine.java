@@ -17,6 +17,7 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Listener;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLineFormat;
 
@@ -116,7 +117,7 @@ final class MessageLine {
             host.addControlListener(repositionOnResize);
         }
         CLabel label = frame.content();
-        label.setText(text);
+        label.setText(LabelText.literal(text)); // a file named R&D.txt keeps its & (no mnemonic)
         label.setToolTipText(text);
         label.setForeground(isError ? errorColor() : host.getForeground());
         reposition();

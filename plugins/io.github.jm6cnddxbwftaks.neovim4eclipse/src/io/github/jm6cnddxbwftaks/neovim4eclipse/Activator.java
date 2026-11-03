@@ -134,7 +134,7 @@ public class Activator extends AbstractUIPlugin {
     }
 
     /**
-     * The configured Neovim: blank (search), a folder that holds Neovim, or an absolute path to the program;
+     * The configured Neovim: blank for the dedicated one, or the absolute path of a Neovim program;
      * {@code util/NvimExecutable.resolve} turns it into the program to start.
      */
     public String getNvimExecutable() {

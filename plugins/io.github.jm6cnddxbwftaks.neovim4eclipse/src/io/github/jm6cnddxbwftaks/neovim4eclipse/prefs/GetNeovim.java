@@ -219,7 +219,8 @@ public final class GetNeovim {
 
     /**
      * Whether the preference names a Neovim outside {@code home}, so the dedicated one is not used
-     * until it is cleared. Off the UI thread: finding the program may run {@code nvim --version}.
+     * until it is cleared. Runs nothing; off the UI thread, since a blank value hashes the dedicated
+     * Neovim the first time ({@code NvimExecutable.resolve}).
      */
     private static boolean namesAnotherNeovim(String configured, Path home) {
         if (configured.isBlank()) {

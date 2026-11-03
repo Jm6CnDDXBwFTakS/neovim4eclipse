@@ -12,6 +12,7 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartupErrorReport;
 
 /**
@@ -43,7 +44,9 @@ final class StartupErrorNotice {
                 return;
             }
             warned = new WeakReference<>(session);
-            MessageDialog.openWarning(activeShell(), StartupErrorReport.TITLE, StartupErrorReport.message(errors));
+            // The errors name files of the config (R&D/init.lua): & doubled, as the message is a Label.
+            MessageDialog.openWarning(activeShell(), StartupErrorReport.TITLE,
+                    LabelText.literal(StartupErrorReport.message(errors)));
         });
     }
 

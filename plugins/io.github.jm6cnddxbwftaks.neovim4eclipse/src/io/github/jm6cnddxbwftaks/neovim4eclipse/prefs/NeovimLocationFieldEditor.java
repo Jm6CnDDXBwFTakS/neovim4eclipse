@@ -25,6 +25,7 @@ import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
@@ -282,7 +283,7 @@ final class NeovimLocationFieldEditor extends StringButtonFieldEditor {
      * Example: {@code Found: Neovim 0.12.6, /R&&D/bin/nvim}.
      */
     static String labelText(NvimProbe.Note shown) {
-        return shown.text().replace("&", "&&");
+        return LabelText.literal(shown.text());
     }
 
     /**

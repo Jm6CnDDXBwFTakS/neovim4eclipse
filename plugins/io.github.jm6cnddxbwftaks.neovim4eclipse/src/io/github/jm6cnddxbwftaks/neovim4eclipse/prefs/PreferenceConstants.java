@@ -12,16 +12,16 @@ public final class PreferenceConstants {
     }
 
     /**
-     * Where Neovim is: blank (search the default folders), a folder that holds Neovim, or an absolute
-     * path to {@code nvim} (see {@code util/NvimExecutable}). The key keeps its old name so existing
-     * settings still apply.
+     * Which Neovim runs: blank for the dedicated Neovim (the plug-in's own, checked before every
+     * start), or the absolute path of one Neovim program, run unchecked (see
+     * {@code util/NvimExecutable}). Nothing is searched: no {@code PATH}, and a folder is refused.
+     * The key keeps its old name so existing settings still apply.
      */
     public static final String NVIM_EXECUTABLE = "nvimExecutable";
 
     /**
-     * Default: blank, which uses the plug-in's own Neovim first
-     * ({@code ~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim}, which Get Neovim installs),
-     * then {@code PATH}, then the usual install folders.
+     * Default: blank, the dedicated Neovim
+     * ({@code ~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim}, which Get Neovim installs).
      */
     public static final String NVIM_EXECUTABLE_DEFAULT = "";
 
