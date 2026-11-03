@@ -52,6 +52,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   preference uses only that exact place there. A Neovim extracted into
   `~/.local/share/neovim4eclipse-plugin/neovim` by hand before is no longer found: use *Get Neovim*,
   or rename its folder to the code. The preference page and the notice name what is no longer used.
+- The "Neovim not started" notice is laid out as the welcome and the *Get Neovim* dialogs are:
+  the reason, the error where it adds something, and the fix, each under a heading. For the dedicated
+  Neovim it says whether it is missing, not the release (an older one, or damaged), or checked and
+  still failed; for a program named in the preference, whether the file is missing or a folder, and
+  which Neovim version it is. Paths are in fields with *Copy*. When a program in the preference
+  fails and the dedicated Neovim is installed, it does not offer *Get Neovim*.
 - CI tests exactly the archive *Get Neovim* installs, and checks its SHA-256.
 - `Esc` after typing in a large file (over 10,000 lines) is quicker: only the lines typed are
   compared with Neovim's buffer and written, not the whole file.

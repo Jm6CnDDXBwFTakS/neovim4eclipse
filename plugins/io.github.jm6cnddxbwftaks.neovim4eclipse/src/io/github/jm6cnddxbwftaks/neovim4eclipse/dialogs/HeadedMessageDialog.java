@@ -37,8 +37,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
  * A {@link MessageDialog} whose message is laid out, not one block of text: the opening paragraph,
  * then each point as a row with its heading in bold on the left and its text wrapping beside it (a
  * hanging indent), then the closing line, with some space between the three groups
- * ({@link HeadedMessage} has the parts and an example). The welcome, the Restart Neovim question and
- * Get Neovim's dialogs use it, so the plug-in's longer dialogs look alike.
+ * ({@link HeadedMessage} has the parts and an example). The welcome, the Restart Neovim question,
+ * the "Neovim not started" notice and Get Neovim's dialogs use it, so the plug-in's longer dialogs
+ * look alike.
  *
  * <p>A point's cell (the second column) holds, from the top: its text; its value to copy, in a
  * read-only field in the text font (fixed width, so a hash or a path reads character by character)

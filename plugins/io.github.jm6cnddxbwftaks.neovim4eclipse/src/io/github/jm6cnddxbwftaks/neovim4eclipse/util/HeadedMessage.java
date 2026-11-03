@@ -14,7 +14,8 @@ import java.util.stream.Stream;
  * A dialog's message in parts, for {@code dialogs/HeadedMessageDialog} to lay out: an opening
  * paragraph, a few points, each a short heading (shown bold, in a column of its own) and its text,
  * and a closing line. Used by the welcome ({@link WelcomeNote#welcome}), the Restart Neovim question
- * ({@code editor/RestartNeovimHandler}) and Get Neovim's dialogs ({@link GetNeovimText}).
+ * ({@code editor/RestartNeovimHandler}), the "Neovim not started" notice ({@link StartFailureReport})
+ * and Get Neovim's dialogs ({@link GetNeovimText}).
  *
  * <p>Why parts, not one string with dashes: a {@code MessageDialog} draws its message as one
  * wrapping label, so a point's second line went back under its dash, and the groups ran together
