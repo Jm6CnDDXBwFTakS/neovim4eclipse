@@ -81,6 +81,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   three times and no kana combined (`:kkkおoお…`). The text being composed shows in the box and
   reaches Neovim only once kept; Enter, Esc and Tab while composing are the input method's, so
   they neither run nor cancel the line. Cmd+V while composing keeps the composed text first.
+- On macOS, holding a letter in the `:` box shows its accent menu as in other Mac apps: hold E,
+  then press 2 (or pick with the arrows and Enter), and Neovim gets `é` in place of the `e`. Before,
+  the held letter repeated and the pick added the digit too (`:echo "eeeeeeeeee2é"`). Esc right
+  after closes only the menu. With press-and-hold turned off (`defaults write -g
+  ApplePressAndHoldEnabled -bool false`), a held letter repeats as before. Clicking an accent works
+  only when quick, because of an SWT bug: use the digit or the arrows.
 - The preference note for a program that does not answer `--version` reads `Not a working Neovim
   (no answer to --version): <path>`; it began with "Found:" although nothing usable was found.
 - A `&` in a file name shows in Neovim's message line, the status bar and the startup error

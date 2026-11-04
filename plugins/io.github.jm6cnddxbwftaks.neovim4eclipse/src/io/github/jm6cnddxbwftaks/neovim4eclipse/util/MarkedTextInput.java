@@ -48,6 +48,12 @@ import java.util.List;
  *       the box stays open on a click, the typed text is kept rather than lost. Outside Ex mode the
  *       click abandons the line anyway.</li>
  *   <li>Cmd+Tab to another application and back leaves the marked text as it is.</li>
+ *   <li><b>The accent menu</b> (holding E, with press-and-hold on): once the key is let go, the
+ *       arrows choose an accent as marked text <em>over the {@code e} already in the line</em>
+ *       ({@code è} over {@code e}), and Enter commits it. That {@code e} is Neovim's too, so when the
+ *       composition ends Neovim deletes it first ({@link Edit#deletes}): {@code :echo "é}, not
+ *       {@code :echo "eé}. Repeats of the held key and picking with a digit are
+ *       {@link PressAndHold}'s.</li>
  * </ul>
  *
  * <h2>Neovim's views</h2>
@@ -89,20 +95,26 @@ public final class MarkedTextInput {
     /**
      * What the box does with an edit.
      *
-     * @param allow  whether the field makes the edit itself (marked text is shown this way)
-     * @param pastes the text to send to Neovim as pastes, in order; none for marked text
+     * @param allow   whether the field makes the edit itself (marked text is shown this way)
+     * @param deletes how many characters Neovim deletes ({@code <BS>}) before the pastes: those the
+     *                marked text took the place of, when the composition ends
+     * @param pastes  the text to send to Neovim as pastes, in order; none for marked text
      */
-    public record Edit(boolean allow, List<String> pastes) {
-        static final Edit SHOW = new Edit(true, List.of());
+    public record Edit(boolean allow, int deletes, List<String> pastes) {
+        static final Edit SHOW = new Edit(true, 0, List.of());
 
-        static Edit send(String... texts) {
+        static Edit show(int deletes) {
+            return deletes == 0 ? SHOW : new Edit(true, deletes, List.of());
+        }
+
+        static Edit send(int deletes, String... texts) {
             List<String> sent = new ArrayList<>();
             for (String text : texts) {
                 if (text != null && !text.isEmpty()) {
                     sent.add(text);
                 }
             }
-            return new Edit(false, List.copyOf(sent));
+            return new Edit(false, deletes, List.copyOf(sent));
         }
     }
 
@@ -113,6 +125,12 @@ public final class MarkedTextInput {
     private int markedKey;
     private int markedStart;
     private String marked = "";
+    /**
+     * How many characters of Neovim's line the marked text took the place of. Usually none; macOS's
+     * accent menu (holding E) puts its è over the {@code e} already typed. When the composition
+     * ends, the box no longer has them, so Neovim deletes them first ({@link Edit#deletes}).
+     */
+    private int replaced;
 
     /** Whether marked text is in the box: Neovim's views wait, and keys are the input method's. */
     public boolean composing() {
@@ -138,6 +156,7 @@ public final class MarkedTextInput {
         markedKey = 0;
         markedStart = 0;
         marked = "";
+        replaced = 0;
     }
 
     /**
@@ -146,9 +165,11 @@ public final class MarkedTextInput {
      * @param keyCode      the key code it carries (0 for none)
      * @param commandOrCtrl whether Cmd or Ctrl was held
      * @param text         the text it puts in, over {@code start} to {@code end}
+     * @param caret        where the box's caret is, which is Neovim's cursor in the line
      * @param programmatic whether the box itself is setting the text (Neovim's view)
      */
-    public Edit edit(int keyCode, boolean commandOrCtrl, String text, int start, int end, boolean programmatic) {
+    public Edit edit(int keyCode, boolean commandOrCtrl, String text, int start, int end, int caret,
+            boolean programmatic) {
         if (programmatic) {
             return Edit.SHOW; // Neovim's view, set by the box; macOS's edits during it are part of it
         }
@@ -156,8 +177,7 @@ public final class MarkedTextInput {
         boolean overMarked = start == markedStart && end == markedStart + marked.length();
         if (committing) {
             if (overMarked) {
-                end();
-                return Edit.send(put); // the commit's edit: the whole text, over the marked text
+                return Edit.send(end(), put); // the commit's edit: the whole text, over the marked text
             }
             // Not the commit's edit: its presses were not a commit after all, or an input method
             // committed without one. Back to the rules below, so that the next marked text is not
@@ -165,22 +185,27 @@ public final class MarkedTextInput {
             committing = false;
         }
         if (keyCode != 0 && !commandOrCtrl) {
+            if (!composing && !put.isEmpty()) {
+                replaced = end - start; // 0, but 1 when the accent menu puts è over the typed e
+            }
             markedKey = keyCode;
             markedStart = start;
             marked = put;
             composing = !put.isEmpty();
-            return Edit.SHOW;
+            return composing ? Edit.SHOW : Edit.show(end()); // emptied: it ended (Backspace, Esc)
         }
         if (!composing) {
-            return Edit.send(put); // a paste or a drop, as on every platform
+            // A paste or a drop, as on every platform. One that replaces text ending at the caret
+            // (the accent menu's click puts é over the typed e; a paste over a selection made
+            // leftwards) replaces it in Neovim too: Backspaces from the cursor, which is at the caret.
+            int deletes = put.isEmpty() || end <= start || end != caret ? 0 : end - start;
+            return Edit.send(deletes, put);
         }
         if (overMarked && put.isEmpty()) {
-            end(); // the marked text taken away (focus lost: its commit follows as an insert)
-            return Edit.SHOW;
+            return Edit.show(end()); // the marked text taken away (focus lost: its commit follows as an insert)
         }
         String before = overMarked ? "" : marked; // a paste beside it: the marked text is kept first
-        end();
-        return Edit.send(before, put);
+        return Edit.send(end(), before, put);
     }
 
     /**
@@ -209,10 +234,14 @@ public final class MarkedTextInput {
         return Key.PLATFORM; // everything else while composing is the input method's (Enter, Esc, Tab)
     }
 
-    private void end() {
+    /** Ends the composition; answers how many characters Neovim deletes first ({@link #replaced}). */
+    private int end() {
+        int deletes = replaced;
         composing = false;
         committing = false;
         marked = "";
+        replaced = 0;
+        return deletes;
     }
 
     /** Whether {@code character} is what {@code keyCode} types by itself ({@code \r} for Enter). */

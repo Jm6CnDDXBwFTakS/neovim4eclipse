@@ -154,8 +154,11 @@ public final class ProcessorProbe {
         return null;
     }
 
-    /** Runs {@code command}; its standard output, or {@code null} if it failed or took too long. */
-    private static String run(List<String> command) {
+    /**
+     * Runs {@code command}; its standard output, or {@code null} if it failed or took too long. Also
+     * used by {@link PressAndHoldSetting}.
+     */
+    static String run(List<String> command) {
         Process process = null;
         try {
             process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start(); // no pipe left open

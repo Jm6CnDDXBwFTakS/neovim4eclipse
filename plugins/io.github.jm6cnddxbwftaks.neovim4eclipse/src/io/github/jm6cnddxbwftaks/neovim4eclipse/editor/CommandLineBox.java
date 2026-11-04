@@ -27,6 +27,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CandidateLine;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MarkedTextInput;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PressAndHold;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PressAndHoldSetting;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -179,6 +181,10 @@ final class CommandLineBox {
     private final MarkedTextInput ime = new MarkedTextInput();
     /** macOS only: Neovim's newest view while composing, shown when the composition ends. */
     private CmdlineState.View heldView;
+    /** macOS only: the accent menu of a held letter ({@link PressAndHold}). */
+    private final PressAndHold pressAndHold = new PressAndHold();
+    /** macOS only: a digit held back in case it picks from the accent menu, in Neovim's notation. */
+    private String heldKey;
     /** Counts {@link #show} calls, so a held view posted for later is dropped if a newer one came. */
     private int showCount;
     /** The candidate list above the box; {@code null} while hidden. */
@@ -329,8 +335,18 @@ final class CommandLineBox {
         box = frame.content();
         ime.reset();
         heldView = null;
+        pressAndHold.reset();
+        heldKey = null;
         box.addVerifyListener(this::onEdit);
         box.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
+        if (COCOA) {
+            box.addKeyListener(KeyListener.keyReleasedAdapter(e -> {
+                if (pressAndHold.keyUp(e.keyCode)) {
+                    sendHeldKey(); // a digit let go that picked nothing from the accent menu
+                }
+            }));
+            PressAndHoldSetting.known(); // starts asking macOS, so the answer is in by the first held key
+        }
         box.addTraverseListener(this::onTraverse);
         box.addFocusListener(focusChange);
         host.addPaintListener(repositionOnPaint);
@@ -376,9 +392,15 @@ final class CommandLineBox {
         boolean wasComposing = ime.composing();
         boolean commandOrCtrl = (event.stateMask & (SWT.COMMAND | SWT.CTRL)) != 0;
         MarkedTextInput.Edit edit = ime.edit(event.keyCode, commandOrCtrl, event.text, event.start, event.end,
-                programmatic);
+                box.getCaretPosition(), programmatic);
         event.doit = edit.allow();
+        for (int i = 0; i < edit.deletes(); i++) {
+            commands.type("<BS>"); // what the marked text took the place of (the accent menu's e)
+        }
         edit.pastes().forEach(commands::paste);
+        if (!wasComposing && ime.composing()) {
+            pressAndHold.compositionStarted();
+        }
         if (wasComposing && !ime.composing()) {
             showHeldView();
         }
@@ -415,7 +437,7 @@ final class CommandLineBox {
             if (key == MarkedTextInput.Key.CANCEL) {
                 e.doit = false;
             }
-            if (key != MarkedTextInput.Key.SEND) {
+            if (key != MarkedTextInput.Key.SEND || !pressAndHoldKey(e)) {
                 return;
             }
         }
@@ -426,6 +448,49 @@ final class CommandLineBox {
         String key = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character);
         if (key != null) {
             submitted = key.equals("<CR>");
+            commands.type(key);
+        }
+    }
+
+    /**
+     * macOS: the accent menu of a held letter ({@link PressAndHold}). Whether the key goes on to
+     * Neovim as usual; if not, it is dropped, held back, or the menu's pick, sent here.
+     */
+    private boolean pressAndHoldKey(KeyEvent e) {
+        boolean modified = (e.stateMask & (SWT.COMMAND | SWT.CTRL | SWT.ALT)) != 0;
+        PressAndHold.Key decision = pressAndHold.keyDown(e.keyCode, e.character, modified, e.time & 0xFFFFFFFFL,
+                PressAndHoldSetting.known());
+        if (decision.sendHeldFirst()) {
+            sendHeldKey();
+        }
+        switch (decision.kind()) {
+        case SEND:
+            return true;
+        case HOLD:
+            e.doit = false;
+            heldKey = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character); // sent when let go, unless it picks
+            return false;
+        case PICK:
+            e.doit = false;
+            heldKey = null;
+            String accented = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character);
+            commands.type("<BS>"); // the held letter
+            if (accented != null) {
+                commands.type(accented);
+            }
+            return false;
+        case DROP:
+        default:
+            e.doit = false;
+            return false;
+        }
+    }
+
+    /** Sends the digit held back for the accent menu, if it picked nothing. */
+    private void sendHeldKey() {
+        String key = heldKey;
+        heldKey = null;
+        if (key != null && box != null) {
             commands.type(key);
         }
     }
@@ -635,6 +700,8 @@ final class CommandLineBox {
         box = null; // from here on, a commit macOS makes as the field goes is not sent (onEditCocoa)
         ime.reset();
         heldView = null;
+        pressAndHold.reset();
+        heldKey = null;
         if (!host.isDisposed()) {
             host.removePaintListener(repositionOnPaint);
             host.removeControlListener(repositionOnResize);

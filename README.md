@@ -429,7 +429,11 @@ letters ticked in the preferences (see "Ctrl keys") go to Neovim's line (`Ctrl-R
 except `Ctrl-V`, which pastes, and `Ctrl-C` with text selected, which copies (on macOS, Cmd-V and Cmd-C
 do that, and `Ctrl-V` is Neovim's). Shift+Insert pastes too, and text from an input method (IME) goes
 in the same way: the text you are composing shows in the box, and reaches Neovim once you keep it
-(Enter while composing is the input method's, not the command's). A message that arrives while you type (a timer's `:echo`) shows above the box.
+(Enter while composing is the input method's, not the command's). On macOS, holding a letter
+shows its accent menu: pick with a digit, or the arrows and Enter, or type the accent as two keys
+(Option+E, then E, makes `é`). Clicking an accent works only within a moment of letting go of the
+key: later clicks are lost to a bug in SWT, Eclipse's widget toolkit (its macOS `Text` asks for the
+event being handled, and after a pause there is none). A message that arrives while you type (a timer's `:echo`) shows above the box.
 
 The box opens for every command line Neovim opens: a mapping in your `init.lua`
 (`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript

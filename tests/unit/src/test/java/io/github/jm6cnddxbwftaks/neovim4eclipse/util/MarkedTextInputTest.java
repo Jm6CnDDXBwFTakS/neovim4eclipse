@@ -29,20 +29,30 @@ class MarkedTextInputTest {
     private static final int SPACE = 32;
     private static final int ARROW_UP = (1 << 24) + 1;
     private static final int ARROW_DOWN = (1 << 24) + 2;
+    private static final int ARROW_RIGHT = (1 << 24) + 4; // SWT.ARROW_RIGHT; logged as 16777220
     private static final int COMMAND = 1 << 22;
 
     private final MarkedTextInput input = new MarkedTextInput();
     /** What reached Neovim: pastes as they are, keys as {@code key:x}. */
     private final List<String> sent = new ArrayList<>();
 
-    /** An edit the input method or the platform makes. */
+    /** An edit the input method or the platform makes, with the caret at its end. */
     private MarkedTextInput.Edit edit(int keyCode, String text, int start, int end) {
-        return edit(keyCode, false, text, start, end, false);
+        return edit(keyCode, false, text, start, end, end, false);
     }
 
     private MarkedTextInput.Edit edit(int keyCode, boolean commandOrCtrl, String text, int start, int end,
             boolean programmatic) {
-        MarkedTextInput.Edit edit = input.edit(keyCode, commandOrCtrl, text, start, end, programmatic);
+        return edit(keyCode, commandOrCtrl, text, start, end, end, programmatic);
+    }
+
+    /** What reached Neovim, in order: a deleted character as {@code <BS>}, then the pastes. */
+    private MarkedTextInput.Edit edit(int keyCode, boolean commandOrCtrl, String text, int start, int end, int caret,
+            boolean programmatic) {
+        MarkedTextInput.Edit edit = input.edit(keyCode, commandOrCtrl, text, start, end, caret, programmatic);
+        for (int i = 0; i < edit.deletes(); i++) {
+            sent.add("<BS>");
+        }
         sent.addAll(edit.pastes());
         return edit;
     }
@@ -73,6 +83,54 @@ class MarkedTextInputTest {
         assertFalse(commit.allow());
         assertEquals(List.of("か"), sent);
         assertFalse(input.composing());
+    }
+
+    /**
+     * Logged with press-and-hold on: {@code :echo "}, E held (its repeats are PressAndHold's), let
+     * go, → twice, Enter. The arrows put è, then é, as marked text over the e already in the line;
+     * Enter commits é. Neovim has that e too, so it deletes it first: {@code :echo "é}.
+     */
+    @Test
+    void theAccentMenusPickReplacesTheTypedLetter() {
+        assertTrue(edit(ARROW_RIGHT, "è", 7, 8).allow(), "over the e at 7");
+        assertEquals(Key.PLATFORM, key(ARROW_RIGHT, '\0'));
+        assertTrue(edit(ARROW_RIGHT, "é", 7, 8).allow());
+        assertEquals(Key.PLATFORM, key(ARROW_RIGHT, '\0'));
+
+        assertEquals(Key.PLATFORM, key(ENTER, 'é'));
+        MarkedTextInput.Edit commit = edit(ENTER, "é", 7, 8);
+        assertEquals(1, commit.deletes(), "the e goes first");
+        assertEquals(List.of("é"), commit.pastes());
+        assertFalse(input.composing());
+    }
+
+    /**
+     * Logged: {@code :echo "}, E held, let go, a click on é in the menu. The click is one edit with no
+     * key code that puts é over the e before the caret; Neovim gets a Backspace for the e, then é.
+     * Before, it got é alone: {@code eé}.
+     */
+    @Test
+    void theAccentMenusClickReplacesTheTypedLetter() {
+        MarkedTextInput.Edit click = edit(0, false, "é", 7, 8, 8, false);
+        assertFalse(click.allow());
+        assertEquals(List.of("<BS>", "é"), sent);
+        assertFalse(input.composing());
+    }
+
+    /** A paste over text that does not end at the caret cannot be Backspaced away: pasted as before. */
+    @Test
+    void aReplacementAwayFromTheCaretDeletesNothing() {
+        edit(0, false, "x", 2, 4, 2, false);
+        assertEquals(List.of("x"), sent);
+    }
+
+    /** Marked text that only adds (Japanese, a dead key) deletes nothing in Neovim. */
+    @Test
+    void markedTextThatOnlyAddsDeletesNothing() {
+        marked('k', "k", 1, 1);
+        marked('a', "か", 1, 2);
+        key(ENTER, 'か');
+        assertEquals(0, edit(ENTER, "か", 1, 2).deletes());
     }
 
     /** Logged: konnichiwa, Enter. The commit is one press per kana, then one edit with them all. */
@@ -246,7 +304,7 @@ class MarkedTextInputTest {
     @Test
     void keysWhileTheBoxSetsTheTextAreCancelled() {
         assertEquals(Key.CANCEL, input.key(ENTER, 'こ', true));
-        assertTrue(input.edit(ENTER, false, "", 1, 6, true).allow());
+        assertTrue(input.edit(ENTER, false, "", 1, 6, 6, true).allow());
         assertFalse(input.composing());
     }
 
