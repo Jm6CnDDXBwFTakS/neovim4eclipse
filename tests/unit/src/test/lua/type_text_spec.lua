@@ -45,3 +45,20 @@ t.test('after insert-mode Ctrl-O (niI) nothing is typed', function()
   t.eq({ 'niI', false }, result)
   t.eq({ 'keep' }, lines())
 end)
+
+-- A pasted line that looks like a command, with its line
+-- break, is re-typed at Esc (InsertReplay turns the break into \r, the Enter key) and stays text, and
+-- dot repeats it as text. A ":lua" line stands in for ":!echo hi": it is just as much a
+-- command, and its effect can be checked (vim.g.n4e_ran stays unset).
+t.test('a pasted command line and its line break stay text, and dot repeats them as text', function()
+  t.setup()
+  vim.g.n4e_ran = nil
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'keep' })
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  local typed = t.during('o', function() return t.run('TYPE_TEXT', ':lua vim.g.n4e_ran = 1\rx') end)
+  t.eq(true, typed)
+  t.type('.')
+  t.eq({ 'keep', ':lua vim.g.n4e_ran = 1', 'x', ':lua vim.g.n4e_ran = 1', 'x' }, lines(),
+    'the text, twice: once re-typed, once by the dot')
+  t.eq(nil, vim.g.n4e_ran, 'nothing ran')
+end)
