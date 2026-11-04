@@ -250,6 +250,51 @@ class MarkedTextInputTest {
         assertFalse(input.composing());
     }
 
+    /**
+     * Vim's Ctrl keys come from Eclipse's key bindings, before the field: while composing they would
+     * change Neovim's line behind the box (Ctrl+U clearing ":abc" under "abcか"), so none is sent.
+     */
+    @Test
+    void boundCtrlKeysAreNotSentWhileComposing() {
+        assertTrue(input.sendsBoundKey());
+        marked('k', "k", 4, 4); // the line is ":abc"
+        marked('a', "か", 4, 5);
+        assertFalse(input.sendsBoundKey());
+        key(ENTER, 'か');
+        edit(ENTER, "か", 4, 5); // the commit
+        assertTrue(input.sendsBoundKey(), "after the commit they are Neovim's again");
+    }
+
+    /**
+     * A press taken as a commit's (a character not its key's own) with no edit of the whole text
+     * after it: the next marked text is marked text, not committed text, and is not sent.
+     */
+    @Test
+    void aCommitWithoutItsEditDoesNotSendTheNextMarkedText() {
+        marked('k', "k", 1, 1);
+        marked('a', "か", 1, 2);
+        assertEquals(Key.PLATFORM, key(ENTER, 'か'));
+
+        assertTrue(edit('k', "k", 2, 2).allow(), "beside the marked text: not the commit's edit");
+        assertTrue(input.composing());
+        assertEquals(List.of(), sent);
+        assertEquals(Key.PLATFORM, key('k', 'k'));
+    }
+
+    /**
+     * The key that made the last marked text keeps its claim on its press even when that edit ended
+     * the composition (Backspace on the last kana, the second Esc): its press follows, and sending it
+     * would delete Neovim's ":" or close the line.
+     */
+    @Test
+    void theKeyThatEndedACompositionIsNotSentEither() {
+        marked('k', "k", 1, 1);
+        edit(ESC, "", 1, 2);
+        assertFalse(input.composing());
+        assertEquals(Key.PLATFORM, key(ESC, '\u001b'));
+        assertEquals(List.of(), sent);
+    }
+
     @Test
     void resetForgetsAComposition() {
         marked('k', "k", 1, 1);

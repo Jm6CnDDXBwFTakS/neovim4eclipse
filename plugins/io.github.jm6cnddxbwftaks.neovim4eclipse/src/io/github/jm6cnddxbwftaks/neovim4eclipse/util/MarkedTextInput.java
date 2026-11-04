@@ -119,6 +119,18 @@ public final class MarkedTextInput {
         return composing;
     }
 
+    /**
+     * Whether a key that Eclipse's key bindings take before the field (the Vim Ctrl keys of the
+     * preferences, such as {@code <C-u>}, {@code <C-w>}, {@code <C-r>}) goes to Neovim. Not while
+     * composing: Neovim's line would change while the box, holding Neovim's views, still shows the
+     * old one, and the commit would then land in the changed line ({@code :abc}, compose {@code か},
+     * Ctrl+U: Neovim's line empty, the box {@code :abcか}, the commit {@code :か}). The input method
+     * never sees such a key, so it is dropped.
+     */
+    public boolean sendsBoundKey() {
+        return !composing;
+    }
+
     /** Forgets everything: the box opened or closed. */
     public void reset() {
         composing = false;
@@ -141,9 +153,16 @@ public final class MarkedTextInput {
             return Edit.SHOW; // Neovim's view, set by the box; macOS's edits during it are part of it
         }
         String put = text == null ? "" : text;
+        boolean overMarked = start == markedStart && end == markedStart + marked.length();
         if (committing) {
-            end();
-            return Edit.send(put);
+            if (overMarked) {
+                end();
+                return Edit.send(put); // the commit's edit: the whole text, over the marked text
+            }
+            // Not the commit's edit: its presses were not a commit after all, or an input method
+            // committed without one. Back to the rules below, so that the next marked text is not
+            // sent as committed text.
+            committing = false;
         }
         if (keyCode != 0 && !commandOrCtrl) {
             markedKey = keyCode;
@@ -155,7 +174,6 @@ public final class MarkedTextInput {
         if (!composing) {
             return Edit.send(put); // a paste or a drop, as on every platform
         }
-        boolean overMarked = start == markedStart && end == markedStart + marked.length();
         if (overMarked && put.isEmpty()) {
             end(); // the marked text taken away (focus lost: its commit follows as an insert)
             return Edit.SHOW;

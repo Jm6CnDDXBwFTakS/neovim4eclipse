@@ -179,6 +179,8 @@ final class CommandLineBox {
     private final MarkedTextInput ime = new MarkedTextInput();
     /** macOS only: Neovim's newest view while composing, shown when the composition ends. */
     private CmdlineState.View heldView;
+    /** Counts {@link #show} calls, so a held view posted for later is dropped if a newer one came. */
+    private int showCount;
     /** The candidate list above the box; {@code null} while hidden. */
     private OverlayFrame<StyledText> listFrame;
 
@@ -252,6 +254,9 @@ final class CommandLineBox {
      * @param nvimKey the key in Neovim's notation, such as {@code <C-r>}
      */
     void ctrlKey(String nvimKey) {
+        if (COCOA && !ime.sendsBoundKey()) {
+            return; // composing: Neovim's line must not change behind the box (MarkedTextInput)
+        }
         char letter = VimCtrlKeys.letterOf(nvimKey);
         if (CTRL_IS_MOD1 && letter == 'v') {
             paste();
@@ -288,6 +293,7 @@ final class CommandLineBox {
      * candidate list, or closes the box when Neovim's line is closed. UI thread.
      */
     void show(CmdlineState.View view) {
+        showCount++;
         if (host.isDisposed()) {
             return;
         }
@@ -378,12 +384,20 @@ final class CommandLineBox {
         }
     }
 
-    /** Shows the view held while composing; later, not inside the platform's own edit. */
+    /**
+     * Shows the view held while composing; later, not inside the platform's own edit, and only if
+     * no newer view of Neovim's came in the meantime (that one is shown already).
+     */
     private void showHeldView() {
         CmdlineState.View view = heldView;
         heldView = null;
         if (view != null) {
-            display.asyncExec(() -> show(view));
+            int postedAt = showCount;
+            display.asyncExec(() -> {
+                if (showCount == postedAt) {
+                    show(view);
+                }
+            });
         }
     }
 
