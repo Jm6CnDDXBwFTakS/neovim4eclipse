@@ -473,6 +473,38 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals(editor, page().getActiveEditor());
     }
 
+    /**
+     * {@code :enew!} with unsaved changes and nothing selected in the Project Explorer (the manual
+     * check en-bang, automated): an untitled editor opens as for {@code :enew}, and the changed
+     * editor stays open with its changes, since an Eclipse editor is not a Vim window that
+     * {@code !} would empty. No error (E492, E37) and no dialog.
+     */
+    @Test
+    void enewBangWithUnsavedChangesKeepsThemAndOpensAnUntitledEditor() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        ISetSelectionTarget explorer = (ISetSelectionTarget) page().showView(IPageLayout.ID_PROJECT_EXPLORER);
+        try {
+            explorer.selectReveal(StructuredSelection.EMPTY);
+            page().activate(editor);
+            waitForAttach(editor, "test.txt");
+            type(widget, "ggdd");
+            expectText("beta\ngamma\n");
+            assertTrue(editor.isDirty());
+
+            runInBox(widget, "enew!");
+            ITextEditor untitled = expectUntitledEditor();
+            for (ITextEditor shown : List.of(untitled, editor)) {
+                assertFalse(messageText(shown).matches(".*E\\d+:.*"), "no error: " + messageText(shown));
+            }
+            assertTrue(List.of(page().getEditors()).contains(editor), "the changed editor stays open");
+            assertTrue(editor.isDirty(), "with its changes");
+            assertEquals("beta\ngamma\n", document.get());
+            assertEquals(List.of(), dialogs);
+        } finally {
+            page().closeAllEditors(false);
+        }
+    }
+
     /** Waits for the untitled editor {@code :enew} opens to be active, with Neovim attached to it. */
     private ITextEditor expectUntitledEditor() {
         waitUntil("an untitled editor", TIMEOUT_MS, () -> page().getActiveEditor() instanceof ITextEditor active
