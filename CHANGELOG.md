@@ -82,7 +82,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Web Browser*. Before, the click did nothing visible. On macOS, a browser added there by its
   `.app` folder (`/Applications/Safari.app`, or the path *Browse…* gives,
   `/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app`) cannot start; the
-  dialog says to add `/usr/bin/open` with `-a Safari %URL%` instead.
+  dialog says to add `/usr/bin/open` with `-a Safari %URL%` instead. The README's Get Neovim section
+  explains this, and why *Default system web browser* on macOS opens the app for `.html` files
+  (MacVim, for some Vim users) rather than the default browser.
 - On macOS, an input method (IME) works in the `:` box: with Japanese input, `konnichiwa` and
   Enter make `:こんにちわ`, and Space converts as usual. Before, every key reached Neovim up to
   three times and no kana combined (`:kkkおoお…`). The text being composed shows in the box and

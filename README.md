@@ -862,6 +862,19 @@ updates need the same):
 
 Then enter the user and password under *Network Connections*. Or use *Install from File…*.
 
+**The dialog's links** (GitHub release page, VirusTotal, the archive's download) open in the browser
+chosen in *Window → Preferences → General → Web Browser*. If Eclipse cannot start it, a *Link Not
+Opened* dialog shows the link to copy and why. On macOS two Eclipse quirks get in the way:
+
+- *Default system web browser* opens a link in the app macOS uses for **`.html` files**, not your
+  default browser. If that is MacVim (or another editor), the link opens there.
+- A browser added by its app folder (*Browse…* to `Safari.app`, which may show as
+  `/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app`) does not start, since an
+  `.app` is a folder, not a program.
+
+What works: *New…* on that page, with any name, the location `/usr/bin/open` and the parameters
+`-a Safari %URL%` (or `-a Firefox %URL%`, ...); then select it. `open` hands the link to that app.
+
 **By hand**, without the plug-in's help: extract the archive and rename its folder to the code, so
 that `neovim/<code>/bin/nvim` exists; or extract it anywhere and choose that folder in the
 preference. On macOS an archive downloaded with a browser is quarantined, and macOS then refuses to
