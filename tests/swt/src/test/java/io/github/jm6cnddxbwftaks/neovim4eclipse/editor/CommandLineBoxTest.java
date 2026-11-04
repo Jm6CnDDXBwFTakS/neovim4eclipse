@@ -654,4 +654,26 @@ class CommandLineBoxTest {
         keyAt(box, SWT.ESC, SWT.ESC, 2000);
         assertEquals(List.of("type e", "type e", "type e", "type <Esc>"), commands.calls);
     }
+
+    /**
+     * macOS, Japanese input: while text is being composed, Tab picks the input method's prediction,
+     * so neither its traversal nor its press reaches Neovim, which would complete the line behind
+     * the box. (MarkedTextInputTest.tabPicksAPredictionAsMarkedText has the input method's side.)
+     */
+    @Test
+    void tabWhileComposingIsTheInputMethods() {
+        assumeTrue("cocoa".equals(SWT.getPlatform()), "marked text is macOS's");
+        Text box = show(line(":", 1));
+        Event marked = new Event();
+        marked.keyCode = 'k';
+        marked.text = "k";
+        marked.start = 1;
+        marked.end = 1;
+        marked.doit = true;
+        box.notifyListeners(SWT.Verify, marked); // k as marked text: composing
+        box.traverse(SWT.TRAVERSE_TAB_NEXT);
+        key(box, SWT.TAB, '\t', 0);
+        assertEquals(List.of(), commands.calls);
+        assertTrue(box.isFocusControl(), "the box keeps the focus");
+    }
 }

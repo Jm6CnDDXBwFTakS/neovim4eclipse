@@ -393,7 +393,8 @@ class MarkedTextInputTest {
     /**
      * Logged with Japanese input: kon, Tab to pick the prediction こん, Enter (closes the list),
      * Enter (commits), Enter (runs the line). Tab's pick is marked text like any other, carrying
-     * Tab's key code; the box keeps Tab's press and traversal from Neovim while composing.
+     * Tab's key code. That the box keeps Tab's press and traversal from Neovim while composing is
+     * CommandLineBoxTest's (tabWhileComposingIsTheInputMethods).
      */
     @Test
     void tabPicksAPredictionAsMarkedText() {
