@@ -295,6 +295,45 @@ class MarkedTextInputTest {
         assertEquals(List.of(), sent);
     }
 
+    /**
+     * Logged with Latin input: {@code :echo "}, Option+E, E. macOS shows the accent as marked text
+     * (an edit with E's key code, Option held), then E commits: a press carrying é, which is not
+     * E's own character, and one edit with é over the accent. é is sent once; the next keys are
+     * Neovim's.
+     */
+    @Test
+    void anAccentTypedAsTwoKeysIsCommittedOnce() {
+        assertTrue(edit('e', "´", 7, 7).allow(), "the accent waits, as marked text");
+        assertEquals(Key.PLATFORM, key('e', '\0'), "Option+E's own press");
+        assertEquals(Key.PLATFORM, key('e', 'é'), "E commits");
+        assertFalse(edit('e', "é", 7, 8).allow());
+        assertEquals(List.of("é"), sent);
+        assertFalse(input.composing());
+        assertEquals(Key.SEND, key('\'', '"'));
+        assertEquals(Key.SEND, key(ENTER, '\r'), "Enter runs the line");
+    }
+
+    /**
+     * Logged with Japanese input: kon, Tab to pick the prediction こん, Enter (closes the list),
+     * Enter (commits), Enter (runs the line). Tab's pick is marked text like any other, carrying
+     * Tab's key code; the box keeps Tab's press and traversal from Neovim while composing.
+     */
+    @Test
+    void tabPicksAPredictionAsMarkedText() {
+        marked('k', "k", 1, 1);
+        marked('o', "こ", 1, 2);
+        assertTrue(edit('n', "こn", 1, 2).allow());
+        assertTrue(edit('\t', "こん", 1, 3).allow(), "Tab's pick");
+        assertTrue(input.composing());
+
+        assertEquals(Key.PLATFORM, key(ENTER, '\r'), "closes the list");
+        assertEquals(Key.PLATFORM, key(ENTER, 'こ'));
+        assertEquals(Key.PLATFORM, key(0, 'ん'));
+        edit(ENTER, "こん", 1, 3);
+        assertEquals(List.of("こん"), sent);
+        assertEquals(Key.SEND, key(ENTER, '\r'), "runs the line");
+    }
+
     @Test
     void resetForgetsAComposition() {
         marked('k', "k", 1, 1);
