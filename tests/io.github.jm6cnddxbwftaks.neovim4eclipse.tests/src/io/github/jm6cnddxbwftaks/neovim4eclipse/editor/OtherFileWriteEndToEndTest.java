@@ -101,8 +101,10 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals("test.txt", editor.getTitle());
 
         runInBox(widget, "w"); // still a save of the editor's own file
-        assertEquals(CHANGED, fileText("test.txt"));
-        assertFalse(editor.isDirty());
+        // The save goes through Eclipse a moment after Enter: wait for it, as for every outcome
+        // (it failed on Windows pinned to one core when read at once).
+        waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty() && CHANGED.equals(fileText("test.txt")),
+                () -> "; it reads " + fileText("test.txt").replace("\n", "\\n") + ", dirty " + editor.isDirty());
         assertEquals(List.of(), dialogs);
     }
 
