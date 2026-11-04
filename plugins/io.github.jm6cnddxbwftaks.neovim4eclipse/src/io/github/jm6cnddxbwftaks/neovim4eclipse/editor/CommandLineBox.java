@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.function.BooleanSupplier;
+
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
@@ -183,8 +185,8 @@ final class CommandLineBox {
     private CmdlineState.View heldView;
     /** macOS only: the accent menu of a held letter ({@link PressAndHold}). */
     private final PressAndHold pressAndHold = new PressAndHold();
-    /** macOS only: a digit held back in case it picks from the accent menu, in Neovim's notation. */
-    private String heldKey;
+    /** macOS only: whether press-and-hold is on ({@link PressAndHoldSetting}); never waits. */
+    private final BooleanSupplier pressAndHoldOn;
     /** Counts {@link #show} calls, so a held view posted for later is dropped if a newer one came. */
     private int showCount;
     /** The candidate list above the box; {@code null} while hidden. */
@@ -233,6 +235,16 @@ final class CommandLineBox {
      *                      contexts and edit handlers there. UI thread.
      */
     CommandLineBox(StyledText host, Commands commands, MessageLine messageLine, Runnable stateListener) {
+        this(host, commands, messageLine, stateListener, PressAndHoldSetting::known);
+    }
+
+    /**
+     * As above, with macOS's press-and-hold setting given: tests pass their own, so they do not
+     * depend on how the developer's Mac is set.
+     */
+    CommandLineBox(StyledText host, Commands commands, MessageLine messageLine, Runnable stateListener,
+            BooleanSupplier pressAndHoldOn) {
+        this.pressAndHoldOn = pressAndHoldOn;
         this.host = host;
         this.display = host.getDisplay();
         this.commands = commands;
@@ -262,6 +274,9 @@ final class CommandLineBox {
     void ctrlKey(String nvimKey) {
         if (COCOA && !ime.sendsBoundKey()) {
             return; // composing: Neovim's line must not change behind the box (MarkedTextInput)
+        }
+        if (COCOA) {
+            sendHeldKey(pressAndHold.interrupt()); // a digit held back goes before the Ctrl key
         }
         char letter = VimCtrlKeys.letterOf(nvimKey);
         if (CTRL_IS_MOD1 && letter == 'v') {
@@ -336,16 +351,13 @@ final class CommandLineBox {
         ime.reset();
         heldView = null;
         pressAndHold.reset();
-        heldKey = null;
         box.addVerifyListener(this::onEdit);
         box.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         if (COCOA) {
-            box.addKeyListener(KeyListener.keyReleasedAdapter(e -> {
-                if (pressAndHold.keyUp(e.keyCode)) {
-                    sendHeldKey(); // a digit let go that picked nothing from the accent menu
-                }
-            }));
-            PressAndHoldSetting.known(); // starts asking macOS, so the answer is in by the first held key
+            // a digit let go that picked nothing from the accent menu
+            box.addKeyListener(KeyListener.keyReleasedAdapter(e -> sendHeldKey(pressAndHold.keyUp(e.keyCode))));
+            box.addListener(SWT.MouseDown, e -> sendHeldKey(pressAndHold.interrupt())); // closes the menu
+            pressAndHoldOn.getAsBoolean(); // starts asking macOS, so the answer is in by the first held key
         }
         box.addTraverseListener(this::onTraverse);
         box.addFocusListener(focusChange);
@@ -390,6 +402,9 @@ final class CommandLineBox {
             return;
         }
         boolean wasComposing = ime.composing();
+        if (!programmatic && !wasComposing && event.keyCode == 0) {
+            sendHeldKey(pressAndHold.interrupt()); // a click on an accent, a paste: the menu is closed
+        }
         boolean commandOrCtrl = (event.stateMask & (SWT.COMMAND | SWT.CTRL)) != 0;
         MarkedTextInput.Edit edit = ime.edit(event.keyCode, commandOrCtrl, event.text, event.start, event.end,
                 box.getCaretPosition(), programmatic);
@@ -430,6 +445,9 @@ final class CommandLineBox {
             return;
         }
         if (isCopyOrPaste(e)) {
+            if (COCOA) {
+                sendHeldKey(pressAndHold.interrupt()); // a digit held back goes before the paste
+            }
             return; // the platform copies, or pastes into onEdit
         }
         if (COCOA) { // an input method's keys, and macOS committing again while the box sets the text
@@ -458,25 +476,21 @@ final class CommandLineBox {
      */
     private boolean pressAndHoldKey(KeyEvent e) {
         boolean modified = (e.stateMask & (SWT.COMMAND | SWT.CTRL | SWT.ALT)) != 0;
-        PressAndHold.Key decision = pressAndHold.keyDown(e.keyCode, e.character, modified, e.time & 0xFFFFFFFFL,
-                PressAndHoldSetting.known());
-        if (decision.sendHeldFirst()) {
-            sendHeldKey();
-        }
+        String neovimKey = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character);
+        PressAndHold.Key decision = pressAndHold.keyDown(e.keyCode, e.character, neovimKey, modified,
+                e.time & 0xFFFFFFFFL, pressAndHoldOn.getAsBoolean());
+        sendHeldKey(decision.sendFirst());
         switch (decision.kind()) {
         case SEND:
             return true;
         case HOLD:
-            e.doit = false;
-            heldKey = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character); // sent when let go, unless it picks
+            e.doit = false; // sent when let go, unless it picks
             return false;
         case PICK:
             e.doit = false;
-            heldKey = null;
-            String accented = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character);
             commands.type("<BS>"); // the held letter
-            if (accented != null) {
-                commands.type(accented);
+            if (neovimKey != null) {
+                commands.type(neovimKey); // the accented one
             }
             return false;
         case DROP:
@@ -486,10 +500,8 @@ final class CommandLineBox {
         }
     }
 
-    /** Sends the digit held back for the accent menu, if it picked nothing. */
-    private void sendHeldKey() {
-        String key = heldKey;
-        heldKey = null;
+    /** Sends {@code key}, the digit held back for the accent menu that picked nothing, if any. */
+    private void sendHeldKey(String key) {
         if (key != null && box != null) {
             commands.type(key);
         }
@@ -513,6 +525,9 @@ final class CommandLineBox {
             e.doit = false;
             if (COCOA && ime.composing()) {
                 return; // the input method's
+            }
+            if (COCOA) {
+                sendHeldKey(pressAndHold.interrupt()); // a digit held back goes before the Tab
             }
             commands.type(e.detail == SWT.TRAVERSE_TAB_PREVIOUS ? "<S-Tab>" : "<Tab>");
         }
@@ -701,7 +716,6 @@ final class CommandLineBox {
         ime.reset();
         heldView = null;
         pressAndHold.reset();
-        heldKey = null;
         if (!host.isDisposed()) {
             host.removePaintListener(repositionOnPaint);
             host.removeControlListener(repositionOnResize);

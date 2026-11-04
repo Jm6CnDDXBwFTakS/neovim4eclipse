@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,6 +74,8 @@ class CommandLineBoxTest {
     private CommandLineBox commandLine;
     /** How often the box reported a change of its state (open, closed, focus). */
     private int stateChanges;
+    /** macOS's press-and-hold as the box sees it: off, unless a test turns it on (not the Mac's own). */
+    private boolean pressAndHold;
 
     @BeforeEach
     void createHost() {
@@ -83,7 +86,7 @@ class CommandLineBoxTest {
         shell.open();
         KeyboardFocus.require(host, TIMEOUT_MS); // the box abandons its line on focus loss: start in the active window
         messageLine = new MessageLine(host, () -> false);
-        commandLine = new CommandLineBox(host, commands, messageLine, () -> stateChanges++);
+        commandLine = new CommandLineBox(host, commands, messageLine, () -> stateChanges++, () -> pressAndHold);
     }
 
     @AfterEach
@@ -113,6 +116,31 @@ class CommandLineBoxTest {
         event.stateMask = stateMask;
         event.doit = true;
         box.notifyListeners(SWT.KeyDown, event);
+    }
+
+    /** A press at {@code time} (ms): the accent menu's rules go by the time between presses. */
+    private static void keyAt(Text box, int keyCode, char character, int time) {
+        Event event = new Event();
+        event.keyCode = keyCode;
+        event.character = character;
+        event.time = time;
+        event.doit = true;
+        box.notifyListeners(SWT.KeyDown, event);
+    }
+
+    private static void keyUp(Text box, int keyCode) {
+        Event event = new Event();
+        event.keyCode = keyCode;
+        event.doit = true;
+        box.notifyListeners(SWT.KeyUp, event);
+    }
+
+    /** E held from {@code time}, as macOS sends it: a press, repeats with no release, the release. */
+    private static void holdE(Text box, int time) {
+        keyAt(box, 'e', 'e', time);
+        keyAt(box, 'e', 'e', time + 502);
+        keyAt(box, 'e', 'e', time + 585);
+        keyUp(box, 'e');
     }
 
     private static Text findText(Control control) {
@@ -550,5 +578,80 @@ class CommandLineBoxTest {
         colon.doit = true;
         popup.notifyListeners(SWT.KeyDown, colon);
         assertEquals(List.of("type :"), commands.calls);
+    }
+
+    // macOS's accent menu (press-and-hold): the box's part of PressAndHold, with the sequences
+    // SWT's macOS port sends. Only there: on Linux and Windows a held key just repeats.
+
+    private void assumeMacWithPressAndHold() {
+        assumeTrue("cocoa".equals(SWT.getPlatform()), "the accent menu is macOS's");
+        pressAndHold = true;
+    }
+
+    /** E held, 2: the repeats are not sent, and the pick replaces the e. */
+    @Test
+    void aDigitPickFromTheAccentMenuReplacesTheLetter() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, '2', '2', 3000);
+        keyAt(box, '2', '\u00e9', 3000); // the pick: the digit's key code, carrying é
+        keyUp(box, '2');
+        assertEquals(List.of("type e", "type <BS>", "type \u00e9"), commands.calls);
+    }
+
+    /** A digit after a held letter that picked nothing (no menu) is sent when let go. */
+    @Test
+    void aHeldBackDigitIsSentWhenLetGo() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, '2', '2', 3000);
+        assertEquals(List.of("type e"), commands.calls, "held back");
+        keyUp(box, '2');
+        assertEquals(List.of("type e", "type 2"), commands.calls);
+    }
+
+    /** Tab while a digit is held back: the digit first, as typed. */
+    @Test
+    void aHeldBackDigitGoesBeforeTab() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":e ", 3));
+        holdE(box, 1000);
+        keyAt(box, '2', '2', 3000);
+        box.traverse(SWT.TRAVERSE_TAB_NEXT);
+        keyUp(box, '2');
+        assertEquals(List.of("type e", "type 2", "type <Tab>"), commands.calls);
+    }
+
+    /**
+     * A click on é in the menu: an edit with no key code over the e before the caret. Neovim
+     * deletes the e and gets é; the click closed the menu, so the next Esc is Neovim's.
+     */
+    @Test
+    void aClickOnAnAccentReplacesTheLetterAndClosesTheMenu() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        box = show(line(":e", 2)); // Neovim's view with the e
+        commands.calls.clear();
+        Event click = new Event();
+        click.text = "\u00e9";
+        click.start = 1;
+        click.end = 2;
+        click.doit = true;
+        box.notifyListeners(SWT.Verify, click);
+        keyAt(box, SWT.ESC, SWT.ESC, 4000);
+        assertEquals(List.of("type <BS>", "paste \u00e9", "type <Esc>"), commands.calls);
+    }
+
+    /** With press-and-hold off (as many Vim users set it), a held letter repeats. */
+    @Test
+    void withPressAndHoldOffAHeldLetterRepeats() {
+        assumeTrue("cocoa".equals(SWT.getPlatform()), "the accent menu is macOS's");
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, SWT.ESC, SWT.ESC, 2000);
+        assertEquals(List.of("type e", "type e", "type e", "type <Esc>"), commands.calls);
     }
 }

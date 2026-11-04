@@ -4,8 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +25,12 @@ class PressAndHoldTest {
     private final PressAndHold hold = new PressAndHold();
 
     private Kind down(int keyCode, char character, long time) {
-        return hold.keyDown(keyCode, character, false, time, true).kind();
+        return press(keyCode, character, time).kind();
+    }
+
+    /** A press; the box passes the key in Neovim's notation, here simply the character. */
+    private PressAndHold.Key press(int keyCode, char character, long time) {
+        return hold.keyDown(keyCode, character, String.valueOf(character), false, time, true);
     }
 
     /** E held: the first press is sent, the repeats are not, and the menu may be open. */
@@ -45,11 +49,11 @@ class PressAndHoldTest {
     @Test
     void aDigitPicksFromTheMenu() {
         holdE(0);
-        PressAndHold.Key two = hold.keyDown('2', '2', false, 3160, true);
+        PressAndHold.Key two = press('2', '2', 3160);
         assertEquals(Kind.HOLD, two.kind());
-        assertFalse(two.sendHeldFirst());
+        assertNull(two.sendFirst());
         assertEquals(Kind.PICK, down('2', 'é', 3160), "Backspace over the e, then é");
-        assertFalse(hold.keyUp('2'), "the 2 is not sent");
+        assertNull(hold.keyUp('2'), "the 2 is not sent");
         assertEquals(Kind.SEND, down('\'', '"', 4900), "the menu is closed");
     }
 
@@ -58,8 +62,8 @@ class PressAndHoldTest {
     void aDigitThatPicksNothingIsSentBeforeTheNextKey() {
         holdE(0);
         assertEquals(Kind.HOLD, down('2', '2', 3160));
-        PressAndHold.Key next = hold.keyDown('3', '3', false, 3300, true);
-        assertTrue(next.sendHeldFirst(), "the 2 first");
+        PressAndHold.Key next = press('3', '3', 3300);
+        assertEquals("2", next.sendFirst(), "the 2 first");
         assertEquals(Kind.SEND, next.kind(), "then the 3, as usual: the menu was not there");
     }
 
@@ -68,8 +72,42 @@ class PressAndHoldTest {
     void aHeldDigitLetGoWithoutAPickIsSent() {
         holdE(0);
         assertEquals(Kind.HOLD, down('2', '2', 3160));
-        assertTrue(hold.keyUp('2'));
+        assertEquals("2", hold.keyUp('2'));
         assertEquals(Kind.SEND, down('3', '3', 3300), "and the menu is over");
+    }
+
+    /**
+     * A click on an accent in the menu (an edit, no key press) closes it: the next Esc is Neovim's.
+     * Before, it was taken as the menu's and the line stayed open.
+     */
+    @Test
+    void aClickClosesTheMenu() {
+        holdE(0);
+        assertNull(hold.interrupt(), "nothing held back");
+        assertEquals(Kind.SEND, down(ESC, '\u001b', 2300));
+    }
+
+    /**
+     * Tab, a Vim Ctrl key or a paste while a digit is held back: the digit goes first, then that,
+     * as they were typed, not the 2 after the Tab.
+     */
+    @Test
+    void aDigitHeldBackGoesBeforeAnInterruption() {
+        holdE(0);
+        assertEquals(Kind.HOLD, down('2', '2', 3160));
+        assertEquals("2", hold.interrupt());
+        assertNull(hold.keyUp('2'), "sent once");
+        assertEquals(Kind.SEND, down(ESC, '\u001b', 3400), "the menu is over");
+    }
+
+    /** A digit held back when a composition starts is dropped, so Neovim's line stays as the box shows it. */
+    @Test
+    void aCompositionDropsADigitHeldBack() {
+        holdE(0);
+        assertEquals(Kind.HOLD, down('2', '2', 3160));
+        hold.compositionStarted();
+        assertNull(hold.keyUp('2'));
+        assertNull(press('3', '3', 3300).sendFirst());
     }
 
     /** Logged: E held, Esc. Esc closed Neovim's line; it is the menu's. The next one is Neovim's. */
@@ -138,15 +176,15 @@ class PressAndHoldTest {
     /** With Cmd, Ctrl or Option held, nothing is a menu's. */
     @Test
     void modifiedKeysAreSent() {
-        assertEquals(Kind.SEND, hold.keyDown('e', 'e', true, 0, true).kind());
-        assertEquals(Kind.SEND, hold.keyDown('e', 'e', true, 502, true).kind());
+        assertEquals(Kind.SEND, hold.keyDown('e', 'e', "e", true, 0, true).kind());
+        assertEquals(Kind.SEND, hold.keyDown('e', 'e', "e", true, 502, true).kind());
     }
 
     /** With press-and-hold off (as many Vim users set it), a held letter repeats, as in a terminal. */
     @Test
     void withPressAndHoldOffHeldLettersRepeat() {
-        assertEquals(Kind.SEND, hold.keyDown('e', 'e', false, 0, false).kind());
-        assertEquals(Kind.SEND, hold.keyDown('e', 'e', false, 502, false).kind());
-        assertEquals(Kind.SEND, hold.keyDown(ESC, '\u001b', false, 900, false).kind());
+        assertEquals(Kind.SEND, hold.keyDown('e', 'e', "e", false, 0, false).kind());
+        assertEquals(Kind.SEND, hold.keyDown('e', 'e', "e", false, 502, false).kind());
+        assertEquals(Kind.SEND, hold.keyDown(ESC, '\u001b', "<Esc>", false, 900, false).kind());
     }
 }

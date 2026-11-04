@@ -117,11 +117,30 @@ class MarkedTextInputTest {
         assertFalse(input.composing());
     }
 
-    /** A paste over text that does not end at the caret cannot be Backspaced away: pasted as before. */
+    /**
+     * A paste over text that does not end at the caret cannot be Backspaced away: pasted as before.
+     * So is a paste over a selection, whose caret on macOS is its start.
+     */
     @Test
     void aReplacementAwayFromTheCaretDeletesNothing() {
         edit(0, false, "x", 2, 4, 2, false);
         assertEquals(List.of("x"), sent);
+    }
+
+    /**
+     * Japanese typed over a mouse selection: {@code abc} selected in {@code :abc def}, so the caret
+     * is at 1 (macOS: the selection's start) while Neovim's cursor is at the end. The marked text
+     * replaces the selection in the box, but Neovim gets the commit at its cursor and deletes
+     * nothing; Backspaces from its cursor would have deleted {@code def}.
+     */
+    @Test
+    void markedTextOverASelectionDeletesNothing() {
+        edit('k', false, "k", 1, 4, 1, false);
+        edit('a', false, "か", 1, 2, 2, false);
+        key(ENTER, 'か');
+        MarkedTextInput.Edit commit = edit(ENTER, false, "か", 1, 2, 2, false);
+        assertEquals(0, commit.deletes());
+        assertEquals(List.of("か"), sent);
     }
 
     /** Marked text that only adds (Japanese, a dead key) deletes nothing in Neovim. */

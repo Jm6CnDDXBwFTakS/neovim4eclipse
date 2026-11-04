@@ -25,11 +25,13 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *       second press with the digit's key code that carries the accented letter, then the digit's
  *       release about 90 ms later. The digit is held back ({@link Kind#HOLD}); the pick is sent as a
  *       Backspace over the {@code e} and the letter ({@link Kind#PICK}); a digit let go with no pick
- *       is sent then ({@link #keyUp}). Not "a moment later": the box tried that, and the moment came
+ *       is sent then ({@link #keyUp}), and so is one still held when something else comes first
+ *       ({@link #interrupt}). Not "a moment later": the box tried that, and the moment came
  *       between the digit's two presses, so the pick was lost ({@code :echo "e2"}).</li>
  *   <li><b>Esc</b> closes the menu; it went to Neovim, which closed the line. The first Esc after a
  *       held letter is the menu's ({@link Kind#DROP}).</li>
- *   <li>Another key, such as {@code x}, closes the menu and is typed as usual.</li>
+ *   <li>Another key, such as {@code x}, closes the menu and is typed as usual. So does anything
+ *       else that reaches the box, a click, Tab, a paste ({@link #interrupt}).</li>
  *   <li><b>A click</b> on an accent is an edit with no key code that puts it over the {@code e}
  *       before the caret: {@link MarkedTextInput} sends a Backspace and the accent. But only a click
  *       within about 0.2 s of letting go of the key arrives: later, SWT 3.135's
@@ -75,10 +77,11 @@ public final class PressAndHold {
     /**
      * What the box does with a key press.
      *
-     * @param kind          what to do with this press
-     * @param sendHeldFirst whether the box first sends the digit it holds back (it picked nothing)
+     * @param kind      what to do with this press
+     * @param sendFirst the digit held back, in Neovim's notation, which the box sends before anything
+     *                  else (it picked nothing); or {@code null}
      */
-    public record Key(Kind kind, boolean sendHeldFirst) {
+    public record Key(Kind kind, String sendFirst) {
     }
 
     /** The key now held down (pressed, not yet let go), or 0. */
@@ -88,84 +91,107 @@ public final class PressAndHold {
     private boolean menuMayBeOpen;
     /** The digit held back, or 0. */
     private int heldDigit;
+    /** {@link #heldDigit} in Neovim's notation, as the box sends it if it picks nothing. */
+    private String heldKey;
 
     /**
      * A key press, after {@link MarkedTextInput} found it is not an input method's.
      *
      * @param keyCode    its key code (letters lower case)
      * @param character  its character, or 0
+     * @param neovimKey  the key in Neovim's notation, kept if it is held back ({@link Kind#HOLD})
      * @param modified   whether Cmd, Ctrl or Option was held
      * @param timeMillis when it happened (the event's time)
      * @param enabled    whether press-and-hold is on ({@link PressAndHoldSetting})
      */
-    public Key keyDown(int keyCode, char character, boolean modified, long timeMillis, boolean enabled) {
+    public Key keyDown(int keyCode, char character, String neovimKey, boolean modified, long timeMillis,
+            boolean enabled) {
         boolean repeat = keyCode == downKey && timeMillis - downTime <= LONGEST_REPEAT_DELAY_MS;
         downKey = keyCode;
         downTime = timeMillis;
         if (!enabled) {
-            return send(false);
+            return new Key(Kind.SEND, null);
         }
-        boolean sendHeldFirst = false;
+        String sendFirst = null;
         if (heldDigit != 0) {
             // First: the pick is a second press of the digit, with no release, carrying a letter.
             boolean pick = keyCode == heldDigit && character >= 0x20 && character != (char) keyCode;
-            heldDigit = 0;
+            String held = heldKey;
+            forgetHeld();
             menuMayBeOpen = false;
             if (pick) {
-                return new Key(Kind.PICK, false);
+                return new Key(Kind.PICK, null);
             }
-            sendHeldFirst = true; // it picked nothing: there was no menu
+            sendFirst = held; // it picked nothing: there was no menu
         }
         if (repeat && !modified && Character.isLetter(character)) {
             menuMayBeOpen = true;
-            return new Key(Kind.DROP, sendHeldFirst); // as in macOS's own fields: a held letter shows its menu
+            return new Key(Kind.DROP, sendFirst); // as in macOS's own fields: a held letter shows its menu
         }
-        return keyDownWithMenu(keyCode, modified, sendHeldFirst);
+        return keyDownWithMenu(keyCode, neovimKey, modified, sendFirst);
     }
 
-    private Key keyDownWithMenu(int keyCode, boolean modified, boolean sendHeldFirst) {
+    private Key keyDownWithMenu(int keyCode, String neovimKey, boolean modified, String sendFirst) {
         if (!menuMayBeOpen || modified) {
             menuMayBeOpen = false;
-            return send(sendHeldFirst);
+            return new Key(Kind.SEND, sendFirst);
         }
         if (keyCode >= '1' && keyCode <= '9') {
             heldDigit = keyCode; // the menu's digit, or a digit typed after holding a letter
-            return new Key(Kind.HOLD, sendHeldFirst);
+            heldKey = neovimKey;
+            return new Key(Kind.HOLD, sendFirst);
         }
         menuMayBeOpen = false;
         if (keyCode == 27) {
-            return new Key(Kind.DROP, sendHeldFirst); // closes the menu, not Neovim's line
+            return new Key(Kind.DROP, sendFirst); // closes the menu, not Neovim's line
         }
-        return send(sendHeldFirst); // another key closes the menu and is typed
-    }
-
-    private static Key send(boolean sendHeldFirst) {
-        return new Key(Kind.SEND, sendHeldFirst);
+        return new Key(Kind.SEND, sendFirst); // another key closes the menu and is typed
     }
 
     /**
      * A key was let go.
      *
-     * @return whether the box now sends the digit it holds back: the digit was let go and no pick
-     *         came (the pick comes within the digit's own press, with the same event time, and the
-     *         release about 90 ms later), so there was no menu
+     * @return the digit held back, in Neovim's notation, for the box to send now: the digit was let
+     *         go and no pick came (the pick comes within the digit's own press, with the same event
+     *         time, and the release about 90 ms later), so there was no menu; or {@code null}
      */
-    public boolean keyUp(int keyCode) {
+    public String keyUp(int keyCode) {
         if (keyCode == downKey) {
             downKey = 0;
         }
         if (heldDigit != 0 && keyCode == heldDigit) {
-            heldDigit = 0;
+            String held = heldKey;
+            forgetHeld();
             menuMayBeOpen = false;
-            return true;
+            return held;
         }
-        return false;
+        return null;
     }
 
-    /** An input method's composition began (the menu's arrows): its keys are no longer ours. */
-    public void compositionStarted() {
+    /**
+     * Something reached the box that is not a key press seen by {@link #keyDown}: a click (in the
+     * box, or on an accent in the menu), a paste, Tab (a traversal), or a Vim Ctrl key from
+     * Eclipse's key bindings. The menu is closed by it, so the next Esc is Neovim's again; a digit
+     * held back is no pick now.
+     *
+     * @return the digit held back, in Neovim's notation, for the box to send before what came; or
+     *         {@code null}
+     */
+    public String interrupt() {
+        String held = heldKey;
+        forgetHeld();
         menuMayBeOpen = false;
-        heldDigit = 0;
+        return held;
+    }
+
+    /**
+     * An input method's composition began (the menu's arrows): its keys are no longer ours. A digit
+     * still held back is dropped, not sent: Neovim's line must not change while the box shows marked
+     * text ({@link MarkedTextInput}). It cannot happen with the menu, whose digit picks at once.
+     */
+    public void compositionStarted() {
+        forgetHeld();
+        menuMayBeOpen = false;
     }
 
     /** Forgets everything: the box opened or closed. */
@@ -173,6 +199,11 @@ public final class PressAndHold {
         downKey = 0;
         downTime = 0;
         menuMayBeOpen = false;
+        forgetHeld();
+    }
+
+    private void forgetHeld() {
         heldDigit = 0;
+        heldKey = null;
     }
 }

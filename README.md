@@ -433,7 +433,9 @@ in the same way: the text you are composing shows in the box, and reaches Neovim
 shows its accent menu: pick with a digit, or the arrows and Enter, or type the accent as two keys
 (Option+E, then E, makes `é`). Clicking an accent works only within a moment of letting go of the
 key: later clicks are lost to a bug in SWT, Eclipse's widget toolkit (its macOS `Text` asks for the
-event being handled, and after a pause there is none). A message that arrives while you type (a timer's `:echo`) shows above the box.
+event being handled, and after a pause there is none). With press-and-hold turned off, for every
+application or for Eclipse alone (`defaults write <Eclipse's id> ApplePressAndHoldEnabled -bool false`,
+the id being `CFBundleIdentifier` in `Eclipse.app/Contents/Info.plist`), a held letter repeats. A message that arrives while you type (a timer's `:echo`) shows above the box.
 
 The box opens for every command line Neovim opens: a mapping in your `init.lua`
 (`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript

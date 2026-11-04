@@ -165,7 +165,8 @@ public final class MarkedTextInput {
      * @param keyCode      the key code it carries (0 for none)
      * @param commandOrCtrl whether Cmd or Ctrl was held
      * @param text         the text it puts in, over {@code start} to {@code end}
-     * @param caret        where the box's caret is, which is Neovim's cursor in the line
+     * @param caret        where the box's caret is (on macOS, the start of a selection), which is
+     *                     Neovim's cursor in the line when nothing is selected
      * @param programmatic whether the box itself is setting the text (Neovim's view)
      */
     public Edit edit(int keyCode, boolean commandOrCtrl, String text, int start, int end, int caret,
@@ -185,8 +186,8 @@ public final class MarkedTextInput {
             committing = false;
         }
         if (keyCode != 0 && !commandOrCtrl) {
-            if (!composing && !put.isEmpty()) {
-                replaced = end - start; // 0, but 1 when the accent menu puts è over the typed e
+            if (!composing) {
+                replaced = replacedBeforeCaret(put, start, end, caret); // 1 when the accent menu puts è over the e
             }
             markedKey = keyCode;
             markedStart = start;
@@ -195,11 +196,8 @@ public final class MarkedTextInput {
             return composing ? Edit.SHOW : Edit.show(end()); // emptied: it ended (Backspace, Esc)
         }
         if (!composing) {
-            // A paste or a drop, as on every platform. One that replaces text ending at the caret
-            // (the accent menu's click puts é over the typed e; a paste over a selection made
-            // leftwards) replaces it in Neovim too: Backspaces from the cursor, which is at the caret.
-            int deletes = put.isEmpty() || end <= start || end != caret ? 0 : end - start;
-            return Edit.send(deletes, put);
+            // A paste or a drop, as on every platform; the accent menu's click puts é over the e.
+            return Edit.send(replacedBeforeCaret(put, start, end, caret), put);
         }
         if (overMarked && put.isEmpty()) {
             return Edit.show(end()); // the marked text taken away (focus lost: its commit follows as an insert)
@@ -232,6 +230,19 @@ public final class MarkedTextInput {
             committing = true; // Enter carrying こ, then ん, ...: the edit with the whole text follows
         }
         return Key.PLATFORM; // everything else while composing is the input method's (Enter, Esc, Tab)
+    }
+
+    /**
+     * How many characters of Neovim's line an edit takes the place of: those just before the caret,
+     * where Neovim's cursor is, which Backspaces delete. The accent menu puts its accent over the
+     * {@code e} before the caret, as marked text (the arrows) or as an edit (a click): 1. Over a
+     * selection, nothing: a field's caret on macOS is the start of its selection, so such an edit
+     * never ends at the caret, and Neovim's cursor is not where a mouse selection is, so Backspaces
+     * would delete other text ({@code :abc def}, {@code abc} selected, cursor at the end: they would
+     * delete {@code def}). The text is then put at Neovim's cursor, as before.
+     */
+    static int replacedBeforeCaret(String put, int start, int end, int caret) {
+        return put.isEmpty() || end <= start || end != caret ? 0 : end - start;
     }
 
     /** Ends the composition; answers how many characters Neovim deletes first ({@link #replaced}). */

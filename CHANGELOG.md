@@ -85,7 +85,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   then press 2 (or pick with the arrows and Enter), and Neovim gets `é` in place of the `e`. Before,
   the held letter repeated and the pick added the digit too (`:echo "eeeeeeeeee2é"`). Esc right
   after closes only the menu. With press-and-hold turned off (`defaults write -g
-  ApplePressAndHoldEnabled -bool false`), a held letter repeats as before. Clicking an accent works
+  ApplePressAndHoldEnabled -bool false`, or for Eclipse alone with its application id in place of
+  `-g`), a held letter repeats as before. Clicking an accent works
   only when quick, because of an SWT bug: use the digit or the arrows.
 - The preference note for a program that does not answer `--version` reads `Not a working Neovim
   (no answer to --version): <path>`; it began with "Found:" although nothing usable was found.
