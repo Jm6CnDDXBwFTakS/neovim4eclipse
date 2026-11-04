@@ -54,7 +54,9 @@ public final class PressAndHoldSetting {
                 a = answer;
                 if (a == null) {
                     String appId = System.getenv("__CFBundleIdentifier");
-                    a = CompletableFuture.supplyAsync(() -> probe(ProcessorProbe::run, appId));
+                    // A failure is no answer (on, macOS's default), never an exception on every key.
+                    a = CompletableFuture.supplyAsync(() -> probe(ProcessorProbe::run, appId))
+                            .exceptionally(failure -> true);
                     answer = a;
                 }
             }

@@ -41,7 +41,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *       without a verify listener takes such clicks; TextEdit takes them too. Not worked around:
  *       the box needs its verify listener for pastes and input methods.</li>
  * </ul>
- * Which letters have a menu depends on the input source (on the Mac this was logged on, {@code k}
+ * Only US keyboards were logged. On a layout whose digit row needs Shift (French AZERTY), the menu's
+ * digits may not arrive with the key codes {@code 1} to {@code 9}: then the digit is not held back,
+ * and a pick there shows as the digit's own character typed after the {@code e}, then the accent;
+ * the arrows and Enter pick as everywhere.
+ *
+ * <p>Which letters have a menu depends on the input source (on the Mac this was logged on, {@code k}
  * had one too), so the rules hold for every letter: after holding a letter with no menu, the first
  * Esc is lost, and a digit typed at once arrives a moment late.
  *
@@ -91,6 +96,8 @@ public final class PressAndHold {
     private boolean menuMayBeOpen;
     /** The digit held back, or 0. */
     private int heldDigit;
+    /** When the digit held back was pressed: the pick has that same time. */
+    private long heldTime;
     /** {@link #heldDigit} in Neovim's notation, as the box sends it if it picks nothing. */
     private String heldKey;
 
@@ -114,8 +121,10 @@ public final class PressAndHold {
         }
         String sendFirst = null;
         if (heldDigit != 0) {
-            // First: the pick is a second press of the digit, with no release, carrying a letter.
-            boolean pick = keyCode == heldDigit && character >= 0x20 && character != (char) keyCode;
+            // First: the pick is a second press of the digit, with no release and the same time,
+            // carrying a letter. Not a repeat of a held Shift+1, which carries ! and comes later.
+            boolean pick = keyCode == heldDigit && timeMillis == heldTime && Character.isLetter(character)
+                    && character != (char) keyCode;
             String held = heldKey;
             forgetHeld();
             menuMayBeOpen = false;
@@ -128,16 +137,18 @@ public final class PressAndHold {
             menuMayBeOpen = true;
             return new Key(Kind.DROP, sendFirst); // as in macOS's own fields: a held letter shows its menu
         }
-        return keyDownWithMenu(keyCode, neovimKey, modified, sendFirst);
+        return keyDownWithMenu(keyCode, neovimKey, modified, timeMillis, sendFirst);
     }
 
-    private Key keyDownWithMenu(int keyCode, String neovimKey, boolean modified, String sendFirst) {
+    private Key keyDownWithMenu(int keyCode, String neovimKey, boolean modified, long timeMillis,
+            String sendFirst) {
         if (!menuMayBeOpen || modified) {
             menuMayBeOpen = false;
             return new Key(Kind.SEND, sendFirst);
         }
         if (keyCode >= '1' && keyCode <= '9') {
             heldDigit = keyCode; // the menu's digit, or a digit typed after holding a letter
+            heldTime = timeMillis;
             heldKey = neovimKey;
             return new Key(Kind.HOLD, sendFirst);
         }

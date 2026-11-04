@@ -67,6 +67,27 @@ class PressAndHoldTest {
         assertEquals(Kind.SEND, next.kind(), "then the 3, as usual: the menu was not there");
     }
 
+    /**
+     * Shift+1 held after a held letter: its repeats carry {@code !} too, but come later than the
+     * press, so none is a pick. Before, the first repeat was: Backspace over the e, then !.
+     */
+    @Test
+    void aRepeatOfAHeldBackShiftedDigitIsNoPick() {
+        holdE(0);
+        assertEquals(Kind.HOLD, down('1', '!', 3000));
+        PressAndHold.Key repeat = press('1', '!', 3502);
+        assertEquals(Kind.SEND, repeat.kind(), "a repeat, sent as usual");
+        assertEquals("!", repeat.sendFirst(), "after the ! held back");
+    }
+
+    /** A second press of the digit at the same time but carrying no letter is no pick either. */
+    @Test
+    void onlyALetterIsAPick() {
+        holdE(0);
+        assertEquals(Kind.HOLD, down('1', '1', 3000));
+        assertEquals(Kind.SEND, down('1', '!', 3000));
+    }
+
     /** A held digit let go with no pick (no menu): the box sends it then. */
     @Test
     void aHeldDigitLetGoWithoutAPickIsSent() {
