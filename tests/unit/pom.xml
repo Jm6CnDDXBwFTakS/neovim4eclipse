@@ -90,7 +90,8 @@
            Given the folder twice, it kept the resource folder's excluding="**", so in the IDE the
            unit test project compiled none of the plug-in's sources (1000+ "cannot be resolved"
            errors) while the command-line build still passed. copy-resources registers no folder,
-           and m2e runs it in the IDE build too (its default lifecycle mapping). -->
+           and m2e runs it in the IDE build too (its default lifecycle mapping). EclipseImportTest
+           fails if any POM names one folder as both a source and a resource folder again. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-resources-plugin</artifactId>
