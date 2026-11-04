@@ -600,6 +600,91 @@ class CommandLineBoxTest {
         assertEquals(List.of("type e", "type <BS>", "type \u00e9"), commands.calls);
     }
 
+    /**
+     * ABC – AZERTY: E held, Shift, then Shift+2, which SWT reports as the é key carrying 2, then the
+     * pick on the same key. Before, Shift closed the menu and the 2 was taken by its key, no digit:
+     * {@code :e2}.
+     */
+    @Test
+    void aDigitThatNeedsShiftPicksFromTheAccentMenu() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, SWT.SHIFT, '\0', 2900);
+        keyAt(box, '\u00e9', '2', 3000);
+        keyAt(box, '\u00e9', '\u00e8', 3000); // the pick: the same key, carrying è
+        keyUp(box, '\u00e9');
+        assertEquals(List.of("type e", "type <BS>", "type \u00e8"), commands.calls);
+    }
+
+    /**
+     * QWERTY: E held, then Shift+2, which types {@code @}, no digit. As in TextEdit, the menu closes
+     * and {@code @} follows the e ({@code e@}); the next Esc is Neovim's.
+     */
+    @Test
+    void aShiftedDigitKeyThatTypesNoDigitClosesTheAccentMenu() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, SWT.SHIFT, '\0', 2900);
+        keyAt(box, '2', '@', 3000);
+        keyUp(box, '2');
+        keyAt(box, SWT.ESC, SWT.ESC, 4000);
+        assertEquals(List.of("type e", "type @", "type <Esc>"), commands.calls);
+    }
+
+    /**
+     * A letter is typed by the field too, so that macOS may open the menu over it (on ABC – AZERTY
+     * only over a letter the field typed itself): its press keeps doit, and its edit is let through,
+     * not sent again. With press-and-hold off the box types nothing itself, as before.
+     */
+    @Test
+    void aLetterIsTypedByTheFieldTooWithPressAndHoldOn() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        assertTrue(typeE(box), "the field types the e");
+        assertEquals(":e", box.getText());
+        assertEquals(List.of("type e"), commands.calls, "sent once, no paste");
+        box = show(line(":e", 2)); // Neovim's view, with the e
+        keyUp(box, 'e');
+        assertEquals(":e", box.getText());
+        pressAndHold = false;
+        commands.calls.clear();
+        assertFalse(typeE(box), "Neovim's view shows it");
+        assertEquals(":e", box.getText());
+        assertEquals(List.of("type e"), commands.calls);
+    }
+
+    /**
+     * {@code cnoremap e <Nop>}: Neovim's line does not change, so no view comes for the letter the
+     * field typed. When it is let go, the box shows Neovim's line again, without the letter.
+     */
+    @Test
+    void aLetterNeovimDoesNotTakeGoesWhenLetGo() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        assertTrue(typeE(box));
+        assertEquals(":e", box.getText(), "typed by the field");
+        keyUp(box, 'e');
+        assertEquals(":", box.getText(), "Neovim's line again");
+    }
+
+    /**
+     * E pressed: whether the field may type it; if so, the field's own insert, which SWT makes
+     * within the press (through the verify listener, as macOS's does).
+     */
+    private static boolean typeE(Text box) {
+        Event press = new Event();
+        press.keyCode = 'e';
+        press.character = 'e';
+        press.doit = true;
+        box.notifyListeners(SWT.KeyDown, press);
+        if (press.doit) {
+            box.insert("e");
+        }
+        return press.doit;
+    }
+
     /** A digit after a held letter that picked nothing (no menu) is sent when let go. */
     @Test
     void aHeldBackDigitIsSentWhenLetGo() {

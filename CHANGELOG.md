@@ -84,7 +84,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - On macOS, holding a letter in the `:` box shows its accent menu as in other Mac apps: hold E,
   then press 2 (or pick with the arrows and Enter), and Neovim gets `é` in place of the `e`. Before,
   the held letter repeated and the pick added the digit too (`:echo "eeeeeeeeee2é"`). Esc right
-  after closes only the menu. With press-and-hold turned off (`defaults write -g
+  after closes only the menu. On ABC – AZERTY, whose digits need Shift, the menu opens too, and
+  Shift+2 picks. With press-and-hold turned off (`defaults write -g
   ApplePressAndHoldEnabled -bool false`, or for Eclipse alone with its application id in place of
   `-g`), a held letter repeats as before. Clicking an accent works
   only when quick, because of an SWT bug: use the digit or the arrows.

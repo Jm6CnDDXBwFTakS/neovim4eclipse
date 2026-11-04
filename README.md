@@ -430,8 +430,8 @@ except `Ctrl-V`, which pastes, and `Ctrl-C` with text selected, which copies (on
 do that, and `Ctrl-V` is Neovim's). Shift+Insert pastes too, and text from an input method (IME) goes
 in the same way: the text you are composing shows in the box, and reaches Neovim once you keep it
 (Enter while composing is the input method's, not the command's). On macOS, holding a letter
-shows its accent menu: pick with a digit, or the arrows and Enter, or type the accent as two keys
-(Option+E, then E, makes `é`). Clicking an accent works only within a moment of letting go of the
+shows its accent menu: pick with a digit (with Shift where the digits need it, as on AZERTY), or the
+arrows and Enter, or type the accent as two keys (Option+E, then E, makes `é`). Clicking an accent works only within a moment of letting go of the
 key: later clicks are lost to a bug in SWT, Eclipse's widget toolkit (its macOS `Text` asks for the
 event being handled, and after a pause there is none). With press-and-hold turned off, for every
 application or for Eclipse alone (`defaults write <Eclipse's id> ApplePressAndHoldEnabled -bool false`,

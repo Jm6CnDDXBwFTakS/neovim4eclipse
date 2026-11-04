@@ -18,6 +18,7 @@ public final class KeyMapping {
     public static final int SWT_ALT = 1 << 16;
     public static final int SWT_SHIFT = 1 << 17;
     public static final int SWT_CTRL = 1 << 18;
+    public static final int SWT_COMMAND = 1 << 22;
 
     public static final int SWT_BS = 8;
     public static final int SWT_TAB = 9;

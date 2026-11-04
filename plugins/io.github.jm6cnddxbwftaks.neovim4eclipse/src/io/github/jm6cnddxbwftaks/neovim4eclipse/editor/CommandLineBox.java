@@ -66,7 +66,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * box as an edit, which is refused and sent to Neovim as a paste ({@link Commands#paste}); Ctrl+C with
  * text selected in the box copies it. On macOS the text an input method is still composing is the
  * one edit the box keeps: it shows there, unsent, until the input method commits it
- * ({@link MarkedTextInput}). Clicking elsewhere in Eclipse (another control takes the
+ * ({@link MarkedTextInput}). Also on macOS, with press-and-hold on, a letter is typed by the box as
+ * well as sent, because macOS opens its accent menu only over a letter the field typed itself on some
+ * keyboards (ABC – AZERTY); Neovim's view replaces the box's text a moment later ({@link PressAndHold}).
+ * Clicking elsewhere in Eclipse (another control takes the
  * focus) abandons the line in Neovim ({@code <C-c>}), as before; not after Enter, when the command
  * itself may move the focus ({@link #submitted}).
  *
@@ -185,6 +188,20 @@ final class CommandLineBox {
     private CmdlineState.View heldView;
     /** macOS only: the accent menu of a held letter ({@link PressAndHold}). */
     private final PressAndHold pressAndHold = new PressAndHold();
+    /**
+     * macOS: the letter being pressed, which the field types as well as Neovim getting it
+     * ({@link PressAndHold.Kind#SEND_AND_TYPE}), or {@code null}. Its edit, which follows within the
+     * press, is let through and not sent again; any other edit is handled as usual.
+     */
+    private String fieldTypes;
+    /**
+     * {@link #showCount} when the field last typed a letter itself, or -1. If no view of Neovim's
+     * came by the letter's release, Neovim's line did not change for it ({@code cnoremap q <Nop>}),
+     * and the last view is shown again so that the letter goes.
+     */
+    private int typedAtShow = -1;
+    /** Neovim's last view of the open line, shown again by {@link #typedAtShow}. */
+    private CmdlineState.View lastView;
     /** macOS only: whether press-and-hold is on ({@link PressAndHoldSetting}); never waits. */
     private final BooleanSupplier pressAndHoldOn;
     /** Counts {@link #show} calls, so a held view posted for later is dropped if a newer one came. */
@@ -327,6 +344,7 @@ final class CommandLineBox {
         if (abandoned) {
             return; // the line the user clicked away from; Neovim's hide is on its way
         }
+        lastView = view;
         if (!isOpen()) {
             openBox();
         }
@@ -351,11 +369,20 @@ final class CommandLineBox {
         ime.reset();
         heldView = null;
         pressAndHold.reset();
+        fieldTypes = null;
+        typedAtShow = -1;
         box.addVerifyListener(this::onEdit);
         box.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         if (COCOA) {
             // a digit let go that picked nothing from the accent menu
-            box.addKeyListener(KeyListener.keyReleasedAdapter(e -> sendHeldKey(pressAndHold.keyUp(e.keyCode))));
+            box.addKeyListener(KeyListener.keyReleasedAdapter(e -> {
+                fieldTypes = null;
+                if (typedAtShow == showCount && lastView != null) {
+                    typedAtShow = -1;
+                    show(lastView); // Neovim's line stayed as it was: the letter the field typed goes
+                }
+                sendHeldKey(pressAndHold.keyUp(e.keyCode));
+            }));
             box.addListener(SWT.MouseDown, e -> sendHeldKey(pressAndHold.interrupt())); // closes the menu
             pressAndHoldOn.getAsBoolean(); // starts asking macOS, so the answer is in by the first held key
         }
@@ -401,6 +428,12 @@ final class CommandLineBox {
             event.doit = false; // the box is closing: Neovim's line is gone, and normal mode would paste it
             return;
         }
+        if (fieldTypes != null && !programmatic && fieldTypes.equals(event.text)) {
+            fieldTypes = null;
+            typedAtShow = showCount;
+            return; // the field typing the letter Neovim just got; Neovim's view of the line follows
+        }
+        fieldTypes = null;
         boolean wasComposing = ime.composing();
         if (!programmatic && !wasComposing && event.keyCode == 0) {
             sendHeldKey(pressAndHold.interrupt()); // a click on an accent, a paste: the menu is closed
@@ -440,6 +473,7 @@ final class CommandLineBox {
 
     /** A key goes to Neovim, in Neovim's notation, except copying a selection and pasting. */
     private void onKey(KeyEvent e) {
+        fieldTypes = null;
         if (e.keyCode == SWT.TAB) {
             e.doit = false; // sent by onTraverse; no tab character in the box
             return;
@@ -459,7 +493,7 @@ final class CommandLineBox {
                 return;
             }
         }
-        e.doit = false;
+        e.doit = fieldTypes != null; // only a letter the field types too (macOS); else Neovim's view shows it
         if ((e.stateMask & SWT.COMMAND) != 0) {
             return; // other Cmd shortcuts (macOS) mean nothing on Neovim's command line
         }
@@ -482,6 +516,9 @@ final class CommandLineBox {
         sendHeldKey(decision.sendFirst());
         switch (decision.kind()) {
         case SEND:
+            return true;
+        case SEND_AND_TYPE:
+            fieldTypes = String.valueOf(e.character); // macOS may open the menu over it, as in a plain field
             return true;
         case HOLD:
             e.doit = false; // sent when let go, unless it picks
@@ -716,6 +753,9 @@ final class CommandLineBox {
         ime.reset();
         heldView = null;
         pressAndHold.reset();
+        fieldTypes = null;
+        typedAtShow = -1;
+        lastView = null;
         if (!host.isDisposed()) {
             host.removePaintListener(repositionOnPaint);
             host.removeControlListener(repositionOnResize);
