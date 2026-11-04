@@ -5,7 +5,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
 import java.io.IOException;
 import java.net.Authenticator;
-import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.net.ProxySelector;
@@ -19,6 +18,8 @@ import org.eclipse.core.net.proxy.IProxyService;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceReference;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProxyChoice;
 
 /**
  * Eclipse's proxy settings (<em>Window &gt; Preferences &gt; General &gt; Network Connections</em>)
@@ -91,17 +92,7 @@ final class EclipseProxies implements AutoCloseable {
         return new ProxySelector() {
             @Override
             public List<Proxy> select(URI uri) {
-                List<Proxy> proxies = new ArrayList<>();
-                for (IProxyData data : service.select(uri)) {
-                    // SOCKS left out: java.net.http.HttpClient uses only HTTP proxies and would ignore a
-                    // SOCKS one, connecting directly instead. See socksOnly.
-                    if (data.getHost() == null || data.getPort() <= 0 || isSocks(data)) {
-                        continue;
-                    }
-                    proxies.add(new Proxy(Proxy.Type.HTTP,
-                            InetSocketAddress.createUnresolved(data.getHost(), data.getPort())));
-                }
-                return proxies.isEmpty() ? List.of(Proxy.NO_PROXY) : proxies;
+                return ProxyChoice.httpProxies(entries(uri)); // SOCKS left out: see ProxyChoice
             }
 
             @Override
@@ -111,33 +102,26 @@ final class EclipseProxies implements AutoCloseable {
         };
     }
 
-    /** Answers a proxy's password request with the login stored in Eclipse; {@code null} without a service. */
     /**
-     * Whether Eclipse sends {@code uri} through a SOCKS proxy only. Java's HTTP client cannot use
-     * one: it would silently connect directly, past the proxy the user set up. So Get Neovim stops
-     * with a message instead ({@code NeovimDownload.socksOnly}). Example: <i>Network Connections</i>
-     * with only SOCKS set to {@code proxy.example:1080}.
+     * Whether Eclipse sends {@code uri} through a SOCKS proxy only, which Java's HTTP client would
+     * bypass ({@link ProxyChoice#socksOnly}): Get Neovim then stops with a message instead
+     * ({@code NeovimDownload.socksOnly}). Never without a service.
      */
     boolean socksOnly(URI uri) {
-        if (service == null) {
-            return false;
-        }
-        boolean socks = false;
-        for (IProxyData data : service.select(uri)) {
-            if (data.getHost() == null || data.getPort() <= 0) {
-                continue;
-            }
-            if (!isSocks(data)) {
-                return false; // an HTTP(S) proxy is used for it
-            }
-            socks = true;
-        }
-        return socks;
+        return service != null && ProxyChoice.socksOnly(entries(uri));
     }
 
-    private static boolean isSocks(IProxyData data) {
-        return IProxyData.SOCKS_PROXY_TYPE.equals(data.getType());
+    /** What Eclipse's proxy service names for {@code uri}, for {@link ProxyChoice}. */
+    private List<ProxyChoice.Entry> entries(URI uri) {
+        List<ProxyChoice.Entry> entries = new ArrayList<>();
+        for (IProxyData data : service.select(uri)) {
+            entries.add(new ProxyChoice.Entry(IProxyData.SOCKS_PROXY_TYPE.equals(data.getType()), data.getHost(),
+                    data.getPort()));
+        }
+        return entries;
     }
+
+    /** Answers a proxy's password request with the login stored in Eclipse; {@code null} without a service. */
 
     Authenticator authenticator() {
         if (service == null) {
