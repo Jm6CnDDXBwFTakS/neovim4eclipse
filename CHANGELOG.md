@@ -76,6 +76,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- On macOS, an input method (IME) works in the `:` box: with Japanese input, `konnichiwa` and
+  Enter make `:こんにちわ`, and Space converts as usual. Before, every key reached Neovim up to
+  three times and no kana combined (`:kkkおoお…`). The text being composed shows in the box and
+  reaches Neovim only once kept; Enter, Esc and Tab while composing are the input method's, so
+  they neither run nor cancel the line. Cmd+V while composing keeps the composed text first.
 - The preference note for a program that does not answer `--version` reads `Not a working Neovim
   (no answer to --version): <path>`; it began with "Found:" although nothing usable was found.
 - A `&` in a file name shows in Neovim's message line, the status bar and the startup error

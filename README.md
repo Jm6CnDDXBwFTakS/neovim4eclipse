@@ -428,7 +428,8 @@ box; `:vi` leaves Ex mode. In the box the `Ctrl`
 letters ticked in the preferences (see "Ctrl keys") go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-N`),
 except `Ctrl-V`, which pastes, and `Ctrl-C` with text selected, which copies (on macOS, Cmd-V and Cmd-C
 do that, and `Ctrl-V` is Neovim's). Shift+Insert pastes too, and text from an input method (IME) goes
-in the same way. A message that arrives while you type (a timer's `:echo`) shows above the box.
+in the same way: the text you are composing shows in the box, and reaches Neovim once you keep it
+(Enter while composing is the input method's, not the command's). A message that arrives while you type (a timer's `:echo`) shows above the box.
 
 The box opens for every command line Neovim opens: a mapping in your `init.lua`
 (`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript

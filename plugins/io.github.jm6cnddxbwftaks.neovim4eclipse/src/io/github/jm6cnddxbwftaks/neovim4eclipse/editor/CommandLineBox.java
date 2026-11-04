@@ -26,6 +26,7 @@ import org.eclipse.swt.widgets.Text;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CandidateLine;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MarkedTextInput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -59,7 +60,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * Only what Neovim cannot do: drawing, and text that does not come from a key. Pasting
  * (Ctrl+V, Cmd+V, Shift+Insert, a middle click) and an input method's composed text (IME) reach the
  * box as an edit, which is refused and sent to Neovim as a paste ({@link Commands#paste}); Ctrl+C with
- * text selected in the box copies it. Clicking elsewhere in Eclipse (another control takes the
+ * text selected in the box copies it. On macOS the text an input method is still composing is the
+ * one edit the box keeps: it shows there, unsent, until the input method commits it
+ * ({@link MarkedTextInput}). Clicking elsewhere in Eclipse (another control takes the
  * focus) abandons the line in Neovim ({@code <C-c>}), as before; not after Enter, when the command
  * itself may move the focus ({@link #submitted}).
  *
@@ -166,6 +169,16 @@ final class CommandLineBox {
      * it because the line can stay open after Enter ({@code <C-v><CR>} inserts a literal one).
      */
     private boolean submitted;
+    /**
+     * SWT's macOS port: an input method's text in the making arrives there as edits and key presses
+     * that {@link #ime} sorts out. On Linux and Windows only committed text arrives, once, and the
+     * box sends it as a paste ({@link MarkedTextInput}, "Why only macOS").
+     */
+    private static final boolean COCOA = "cocoa".equals(SWT.getPlatform());
+    /** macOS only: what an input method's edits and keys mean. */
+    private final MarkedTextInput ime = new MarkedTextInput();
+    /** macOS only: Neovim's newest view while composing, shown when the composition ends. */
+    private CmdlineState.View heldView;
     /** The candidate list above the box; {@code null} while hidden. */
     private OverlayFrame<StyledText> listFrame;
 
@@ -290,6 +303,10 @@ final class CommandLineBox {
         if (!isOpen()) {
             openBox();
         }
+        if (COCOA && ime.composing()) {
+            heldView = view; // setting the text would end the composition; the newest view wins
+            return;
+        }
         programmatic = true;
         try {
             box.setText(view.text());
@@ -304,6 +321,8 @@ final class CommandLineBox {
     private void openBox() {
         frame = new OverlayFrame<>(host, parent -> new Text(parent, SWT.SINGLE)); // border drawn by the frame
         box = frame.content();
+        ime.reset();
+        heldView = null;
         box.addVerifyListener(this::onEdit);
         box.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         box.addTraverseListener(this::onTraverse);
@@ -326,12 +345,45 @@ final class CommandLineBox {
      * is refused: the text goes to Neovim as a paste, and Neovim's report shows it.
      */
     private void onEdit(VerifyEvent event) {
+        if (COCOA) {
+            onEditCocoa(event);
+            return;
+        }
         if (programmatic) {
             return;
         }
         event.doit = false;
         if (event.text != null && !event.text.isEmpty()) {
             commands.paste(event.text);
+        }
+    }
+
+    /**
+     * macOS: marked text is shown in the box only, committed text and pastes go to Neovim
+     * ({@link MarkedTextInput}). When a composition ends, Neovim's view held meanwhile is shown.
+     */
+    private void onEditCocoa(VerifyEvent event) {
+        if (box == null) {
+            event.doit = false; // the box is closing: Neovim's line is gone, and normal mode would paste it
+            return;
+        }
+        boolean wasComposing = ime.composing();
+        boolean commandOrCtrl = (event.stateMask & (SWT.COMMAND | SWT.CTRL)) != 0;
+        MarkedTextInput.Edit edit = ime.edit(event.keyCode, commandOrCtrl, event.text, event.start, event.end,
+                programmatic);
+        event.doit = edit.allow();
+        edit.pastes().forEach(commands::paste);
+        if (wasComposing && !ime.composing()) {
+            showHeldView();
+        }
+    }
+
+    /** Shows the view held while composing; later, not inside the platform's own edit. */
+    private void showHeldView() {
+        CmdlineState.View view = heldView;
+        heldView = null;
+        if (view != null) {
+            display.asyncExec(() -> show(view));
         }
     }
 
@@ -343,6 +395,15 @@ final class CommandLineBox {
         }
         if (isCopyOrPaste(e)) {
             return; // the platform copies, or pastes into onEdit
+        }
+        if (COCOA) { // an input method's keys, and macOS committing again while the box sets the text
+            MarkedTextInput.Key key = ime.key(e.keyCode, e.character, programmatic);
+            if (key == MarkedTextInput.Key.CANCEL) {
+                e.doit = false;
+            }
+            if (key != MarkedTextInput.Key.SEND) {
+                return;
+            }
         }
         e.doit = false;
         if ((e.stateMask & SWT.COMMAND) != 0) {
@@ -371,6 +432,9 @@ final class CommandLineBox {
     private void onTraverse(TraverseEvent e) {
         if (e.detail == SWT.TRAVERSE_TAB_NEXT || e.detail == SWT.TRAVERSE_TAB_PREVIOUS) {
             e.doit = false;
+            if (COCOA && ime.composing()) {
+                return; // the input method's
+            }
             commands.type(e.detail == SWT.TRAVERSE_TAB_PREVIOUS ? "<S-Tab>" : "<Tab>");
         }
     }
@@ -554,7 +618,9 @@ final class CommandLineBox {
         }
         OverlayFrame<Text> old = frame;
         frame = null;
-        box = null;
+        box = null; // from here on, a commit macOS makes as the field goes is not sent (onEditCocoa)
+        ime.reset();
+        heldView = null;
         if (!host.isDisposed()) {
             host.removePaintListener(repositionOnPaint);
             host.removeControlListener(repositionOnResize);
