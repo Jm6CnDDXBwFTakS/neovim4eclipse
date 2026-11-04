@@ -25,7 +25,8 @@ import java.util.List;
  *       directly. Example: <i>Network Connections</i>, Manual, with only SOCKS set to
  *       {@code 127.0.0.1:1080}.</li>
  * </ul>
- * An entry with no host or no port (an empty row on that page) counts as none.
+ * An entry with no host or no port (an empty row on that page) counts as none; any other host is
+ * used as Eclipse gives it, as the plug-in did before this class.
  */
 public final class ProxyChoice {
 
@@ -38,7 +39,7 @@ public final class ProxyChoice {
      */
     public record Entry(boolean socks, String host, int port) {
         boolean set() {
-            return host != null && !host.isBlank() && port > 0;
+            return host != null && port > 0;
         }
     }
 

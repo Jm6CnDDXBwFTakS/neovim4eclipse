@@ -120,8 +120,12 @@ class LargeFileEndToEndTest extends EndToEndTestBase {
         waitUntil("Neovim's buffer to be the document", TIMEOUT_MS, () -> document.get().equals(neovimText()));
     }
 
+    /** The attached buffer's text, as the document spells it: its lines, each ended by a line break. */
     private String neovimText() {
-        return (String) SessionProbe.lua(session,
-                "return table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\\n') .. '\\n'");
+        try {
+            return String.join("\n", session.getBufferLines()) + "\n";
+        } catch (Exception e) {
+            return "(Neovim's lines not read: " + e + ")";
+        }
     }
 }

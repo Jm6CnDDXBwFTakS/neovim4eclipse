@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
@@ -493,8 +494,10 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
 
             runInBox(widget, "enew!");
             ITextEditor untitled = expectUntitledEditor();
+            settle(); // an error would reach the message line after the new editor shows
             for (ITextEditor shown : List.of(untitled, editor)) {
-                assertFalse(messageText(shown).matches(".*E\\d+:.*"), "no error: " + messageText(shown));
+                assertFalse(Pattern.compile("E\\d+:").matcher(messageText(shown)).find(),
+                        "no error: " + messageText(shown));
             }
             assertTrue(List.of(page().getEditors()).contains(editor), "the changed editor stays open");
             assertTrue(editor.isDirty(), "with its changes");

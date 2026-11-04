@@ -1002,32 +1002,50 @@ class EditorEndToEndTest extends EndToEndTestBase {
     /**
      * Ctrl-T and Ctrl-D while Eclipse types: each is a sync
      * point, and Neovim's own Ctrl-T indents the line by one {@code 'shiftwidth'}, Ctrl-D takes one
-     * back. Twice Ctrl-T, once Ctrl-D: one level, which Eclipse's document shows too, and the caret
-     * stays after the text, where the insert goes on. The indent is the one Neovim makes from the
-     * editor's settings (tabs or spaces, {@code core/LuaScripts}' indent script), so the test reads it
-     * from Neovim rather than assuming one.
+     * back. Each step is checked before the next key (one level, two, one again), so a lost key
+     * fails the test; the caret stays after the text, where the insert goes on. The indent is the
+     * one Neovim makes from the editor's settings (tabs or spaces, {@code core/LuaScripts}' indent
+     * script), so the test reads it from Neovim rather than assuming one.
      */
     @Test
     void ctrlTAndCtrlDWhileEclipseTypesIndentByOneShiftwidthEach() {
+        String oneLevel = indent(1);
+        String twoLevels = indent(2);
         type(widget, "gg");
         type(widget, 'A');
         waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
         ctrlKey(widget, 't');
-        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        expectIndentedAlpha(oneLevel);
         ctrlKey(widget, 't');
-        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        expectIndentedAlpha(twoLevels);
         ctrlKey(widget, 'd');
-        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
-        String oneLevel = (String) io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, """
-                local level = vim.fn.shiftwidth()
-                return vim.bo.expandtab and string.rep(' ', level)
-                  or string.rep('\\t', math.floor(level / vim.bo.tabstop)) .. string.rep(' ', level % vim.bo.tabstop)""");
-        expectText(oneLevel + "alpha\nbeta\ngamma\n");
-        assertEquals(oneLevel.length() + "alpha".length(), widget.getCaretOffset(), "the caret after alpha");
+        expectIndentedAlpha(oneLevel);
         type(widget, '!');
         expectText(oneLevel + "alpha!\nbeta\ngamma\n");
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+    }
+
+    /**
+     * {@code levels} indent levels as Neovim writes them in this buffer: spaces with
+     * {@code 'expandtab'}, else as many tabs as fit and spaces for the rest ({@code shiftwidth=4},
+     * {@code tabstop=8}: two levels are one tab).
+     */
+    private String indent(int levels) {
+        return (String) io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, """
+                local width = vim.fn.shiftwidth() * LEVELS
+                return vim.bo.expandtab and string.rep(' ', width)
+                  or string.rep('\\t', math.floor(width / vim.bo.tabstop)) .. string.rep(' ', width % vim.bo.tabstop)"""
+                .replace("LEVELS", Integer.toString(levels)));
+    }
+
+    /** Waits for the first line to be {@code indent} plus alpha, the caret after it, and Eclipse to type again. */
+    private void expectIndentedAlpha(String indent) {
+        expectText(indent + "alpha\nbeta\ngamma\n");
+        int end = indent.length() + "alpha".length();
+        waitUntil("the caret after alpha", TIMEOUT_MS, () -> widget.getCaretOffset() == end,
+                () -> "; it is at " + widget.getCaretOffset());
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
     }
 
     /**

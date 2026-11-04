@@ -48,8 +48,15 @@ class ProxyChoiceTest {
 
     @Test
     void aSocksRowWithNoHostOrPortCountsAsNone() {
-        assertFalse(ProxyChoice.socksOnly(List.of(new ProxyChoice.Entry(true, " ", 1080))));
+        assertFalse(ProxyChoice.socksOnly(List.of(new ProxyChoice.Entry(true, null, 1080))));
         assertFalse(ProxyChoice.socksOnly(List.of(new ProxyChoice.Entry(true, "127.0.0.1", 0))));
+    }
+
+    /** Any host Eclipse gives is passed on as it is, so a bad one fails at the proxy, never goes direct. */
+    @Test
+    void aBlankHostIsStillAProxyNotDirect() {
+        assertEquals(List.of(new Proxy(Proxy.Type.HTTP, InetSocketAddress.createUnresolved(" ", 3128))),
+                ProxyChoice.httpProxies(List.of(new ProxyChoice.Entry(false, " ", 3128))));
     }
 
     @Test

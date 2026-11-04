@@ -122,7 +122,6 @@ final class EclipseProxies implements AutoCloseable {
     }
 
     /** Answers a proxy's password request with the login stored in Eclipse; {@code null} without a service. */
-
     Authenticator authenticator() {
         if (service == null) {
             return null;
