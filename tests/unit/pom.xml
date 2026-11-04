@@ -79,16 +79,30 @@
               </sources>
             </configuration>
           </execution>
-          <!-- Data files the util/ classes read from beside themselves, such as
-               neovim-downloads.properties (NeovimRelease). add-source above brings only .java files
-               along; in the plug-in, Tycho and PDE copy non-Java files from src/ into the bundle. -->
+        </executions>
+      </plugin>
+      <!-- Data files the util/ classes read from beside themselves, such as
+           neovim-downloads.properties (NeovimRelease). add-source above brings only .java files
+           along; in the plug-in, Tycho and PDE copy non-Java files from src/ into the bundle.
+
+           Copied, not added as a resource folder (build-helper's add-resource): the plug-in's src/
+           is already a source folder here, and Eclipse's m2e makes one classpath entry per folder.
+           Given the folder twice, it kept the resource folder's excluding="**", so in the IDE the
+           unit test project compiled none of the plug-in's sources (1000+ "cannot be resolved"
+           errors) while the command-line build still passed. copy-resources registers no folder,
+           and m2e runs it in the IDE build too (its default lifecycle mapping). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
           <execution>
-            <id>add-plugin-resources</id>
-            <phase>generate-resources</phase>
+            <id>copy-plugin-data-files</id>
+            <phase>process-resources</phase>
             <goals>
-              <goal>add-resource</goal>
+              <goal>copy-resources</goal>
             </goals>
             <configuration>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
               <resources>
                 <resource>
                   <directory>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src</directory>
