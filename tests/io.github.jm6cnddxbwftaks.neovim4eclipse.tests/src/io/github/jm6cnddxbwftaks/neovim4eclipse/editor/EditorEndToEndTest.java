@@ -1000,6 +1000,37 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Ctrl-T and Ctrl-D while Eclipse types: each is a sync
+     * point, and Neovim's own Ctrl-T indents the line by one {@code 'shiftwidth'}, Ctrl-D takes one
+     * back. Twice Ctrl-T, once Ctrl-D: one level, which Eclipse's document shows too, and the caret
+     * stays after the text, where the insert goes on. The indent is the one Neovim makes from the
+     * editor's settings (tabs or spaces, {@code core/LuaScripts}' indent script), so the test reads it
+     * from Neovim rather than assuming one.
+     */
+    @Test
+    void ctrlTAndCtrlDWhileEclipseTypesIndentByOneShiftwidthEach() {
+        type(widget, "gg");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        ctrlKey(widget, 't');
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        ctrlKey(widget, 't');
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        ctrlKey(widget, 'd');
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        String oneLevel = (String) io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, """
+                local level = vim.fn.shiftwidth()
+                return vim.bo.expandtab and string.rep(' ', level)
+                  or string.rep('\\t', math.floor(level / vim.bo.tabstop)) .. string.rep(' ', level % vim.bo.tabstop)""");
+        expectText(oneLevel + "alpha\nbeta\ngamma\n");
+        assertEquals(oneLevel.length() + "alpha".length(), widget.getCaretOffset(), "the caret after alpha");
+        type(widget, '!');
+        expectText(oneLevel + "alpha!\nbeta\ngamma\n");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+    }
+
+    /**
      * Ctrl-O runs one normal-mode command ({@code 0}: to the line's start) and the insert goes on
      * there; once Neovim is back in insert mode, Eclipse types again.
      */
