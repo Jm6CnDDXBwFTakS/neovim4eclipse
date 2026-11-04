@@ -67,10 +67,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  */
 public final class PressAndHold {
 
-    /** Shift, Ctrl, Option and Cmd as key codes: pressed alone, they leave the menu open. */
-    private static final int MODIFIER_KEYS = KeyMapping.SWT_ALT | KeyMapping.SWT_SHIFT | KeyMapping.SWT_CTRL
-            | KeyMapping.SWT_COMMAND;
-
     /** The longest pause before a held key repeats that still counts as one (macOS allows 2 s). */
     static final long LONGEST_REPEAT_DELAY_MS = 2500;
 
@@ -126,7 +122,7 @@ public final class PressAndHold {
      */
     public Key keyDown(int keyCode, char character, String neovimKey, boolean modified, long timeMillis,
             boolean enabled) {
-        if ((keyCode & MODIFIER_KEYS) != 0) {
+        if (isModifierKey(keyCode)) {
             return new Key(Kind.SEND, null); // Shift alone, as before Shift+2 on AZERTY: the menu stays
         }
         boolean repeat = keyCode == downKey && timeMillis - downTime <= LONGEST_REPEAT_DELAY_MS;
@@ -157,6 +153,12 @@ public final class PressAndHold {
             return new Key(Kind.SEND_AND_TYPE, sendFirst); // so that macOS may open its menu over it
         }
         return key;
+    }
+
+    /** Shift, Ctrl, Option or Cmd pressed alone: SWT's key code is then the modifier's own bit. */
+    private static boolean isModifierKey(int keyCode) {
+        return keyCode == KeyMapping.SWT_SHIFT || keyCode == KeyMapping.SWT_CTRL || keyCode == KeyMapping.SWT_ALT
+                || keyCode == KeyMapping.SWT_COMMAND;
     }
 
     private Key keyDownWithMenu(int keyCode, char character, String neovimKey, boolean modified,

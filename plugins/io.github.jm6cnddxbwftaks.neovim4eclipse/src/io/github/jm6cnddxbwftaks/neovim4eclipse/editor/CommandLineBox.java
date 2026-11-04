@@ -197,7 +197,9 @@ final class CommandLineBox {
     /**
      * {@link #showCount} when the field last typed a letter itself, or -1. If no view of Neovim's
      * came by the letter's release, Neovim's line did not change for it ({@code cnoremap q <Nop>}),
-     * and the last view is shown again so that the letter goes.
+     * and the last view is shown again so that the letter goes. When Neovim is slower than the
+     * release (a loaded machine), the letter flickers instead: shown, taken away, then shown again
+     * by Neovim's view. The text is never wrong.
      */
     private int typedAtShow = -1;
     /** Neovim's last view of the open line, shown again by {@link #typedAtShow}. */
