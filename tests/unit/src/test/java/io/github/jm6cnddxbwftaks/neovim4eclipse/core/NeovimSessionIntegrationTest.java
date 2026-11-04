@@ -895,6 +895,37 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
+     * The other half of the test above: in an insert Neovim
+     * drives itself, the user's insert mapping applies, because every key goes to Neovim as typed. A
+     * block insert ({@code Ctrl-V j I}) and an insert while recording a macro are such inserts. With
+     * {@code inoremap jk <Esc>}, {@code jk} ends both, as in Neovim alone: {@code x} goes on both lines,
+     * and the macro holds {@code iyjk}, which replays as an insert of {@code y}.
+     */
+    @Test
+    void inAnInsertNeovimDrivesTheUsersInsertMappingApplies() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("aa", "bb", "cc"));
+            keys(s, ":inoremap jk <lt>Esc><CR>");
+
+            keys(s, "g", "g", "<C-v>", "j", "I");
+            assertTrue(s.isNeovimDrivenInsert(), "a block insert is Neovim's");
+            keys(s, "x", "j", "k");
+            assertEquals("n", s.getMode(), "jk left the block insert");
+            assertEquals(List.of("xaa", "xbb", "cc"), s.getBufferLines(), "and Neovim repeated it on each line");
+
+            keys(s, "G", "0", "q", "q", "i");
+            assertTrue(s.isNeovimDrivenInsert(), "an insert while recording is Neovim's");
+            keys(s, "y", "j", "k");
+            assertEquals("n", s.getMode(), "jk left the insert while recording");
+            keys(s, "q");
+            assertEquals(List.of("xaa", "xbb", "ycc"), s.getBufferLines());
+            keys(s, "g", "g", "0", "@", "q");
+            assertEquals("n", s.getMode(), "the macro's jk ends its insert too");
+            assertEquals(List.of("yxaa", "xbb", "ycc"), s.getBufferLines(), "the macro recorded iyjk, as typed");
+        }
+    }
+
+    /**
      * A sync point with real Neovim: " foo" typed by Eclipse, then Ctrl-U. The re-typed text is
      * this insert's, so Ctrl-U deletes just it; the user's own mapping of Ctrl-U applies to the key.
      */
