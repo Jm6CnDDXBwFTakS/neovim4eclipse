@@ -76,6 +76,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A link in the plug-in's dialogs (Get Neovim's GitHub, VirusTotal and download links, the welcome,
+  the "Neovim not started" notice) that Eclipse's web browser cannot open now says so: a *Link Not
+  Opened* dialog shows the link to copy, Eclipse's reason and the fix, with a button to *General >
+  Web Browser*. Before, the click did nothing visible. On macOS, a browser added there by its
+  `.app` folder (`/Applications/Safari.app`, or the path *Browse…* gives,
+  `/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app`) cannot start; the
+  dialog says to add `/usr/bin/open` with `-a Safari %URL%` instead.
 - On macOS, an input method (IME) works in the `:` box: with Japanese input, `konnichiwa` and
   Enter make `:こんにちわ`, and Space converts as usual. Before, every key reached Neovim up to
   three times and no kana combined (`:kkkおoお…`). The text being composed shows in the box and
