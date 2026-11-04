@@ -37,6 +37,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * Writes to a file other than the editor's: {@code :w name}
@@ -460,6 +461,12 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             assertEquals(List.of(), dialogs);
         } finally {
             page().closeAllEditors(false);
+            // Windows deletes no folder a process works in, and Neovim's window still has
+            // enew-lcd as its :lcd until the closes reach Neovim (on one core, not yet). Eclipse
+            // sends no event before a folder delete, only before a project's (ProjectFolderExit),
+            // so the test moves Neovim out itself, as leaveAndDelete does for folders outside.
+            settle();
+            session.leaveFolder(sub.getLocation().toOSString(), TestWait.duration());
             sub.delete(true, null);
         }
     }
