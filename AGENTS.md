@@ -21,6 +21,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ./mvnw verify -PuiHeavyJava                       # only the UI tests that need Java tooling (slow; not in CI)
 ./mvnw verify -PtimeoutReliant -Dnvim.path=/usr/bin/nvim   # only the tests tagged timeoutReliant (measure time; not in CI)
 ./mvnw verify -Pscreenshots                       # retake the Marketplace screenshots (see docs/design/MARKETPLACE.md)
+./mvnw verify -Pgallery                           # draw the dialogs the manual checks look at (target/gallery; CONTRIBUTING.md)
 ./mvnw verify -DskipTests                         # build only
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
 ./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)

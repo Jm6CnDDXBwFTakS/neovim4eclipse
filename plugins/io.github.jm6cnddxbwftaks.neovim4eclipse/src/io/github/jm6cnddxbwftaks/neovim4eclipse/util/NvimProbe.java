@@ -131,7 +131,8 @@ public final class NvimProbe {
     }
 
     /**
-     * The note.
+     * The note, from what {@link #describe} found: pure, so tests and the checks gallery
+     * (ChecksGalleryTest) can show any state without one on disk.
      *
      * @param resolved   what the value names ({@link NvimExecutable#find})
      * @param version    a named program's version ({@link NvimExecutable.Kind#PROGRAM}), or
@@ -140,7 +141,7 @@ public final class NvimProbe {
      * @param dedicated  the plug-in's Neovim folder: where Get Neovim installs
      * @param offered    the version Get Neovim installs ({@link NeovimRelease#version})
      */
-    static Note note(NvimExecutable.Resolved resolved, NeovimVersion version,
+    public static Note note(NvimExecutable.Resolved resolved, NeovimVersion version,
             Optional<PluginNeovim.Unverified> unverified, Path dedicated, NeovimVersion offered) {
         String program = resolved.command();
         String from = "from -D" + NeovimOption.PROPERTY;

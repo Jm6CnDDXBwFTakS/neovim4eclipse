@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.eclipse.jface.preference.JFacePreferences;
@@ -98,6 +99,8 @@ final class NeovimStatusSection {
     private final AtomicInteger generation = new AtomicInteger();
     /** The option's value ({@link NeovimOption#value}); tests give their own. */
     private final Supplier<String> configured;
+    /** What the note says for a value: {@link NvimProbe#describe}, which looks on disk; tests give their own. */
+    private final Function<String, NvimProbe.Note> describe;
 
     /** Fills {@code parent}, a one-column grid, and starts the first probe. */
     NeovimStatusSection(Composite parent) {
@@ -109,7 +112,17 @@ final class NeovimStatusSection {
      * of another (a missing program, a long path) passes its own.
      */
     NeovimStatusSection(Composite parent, Supplier<String> configured) {
+        this(parent, configured, NvimProbe::describe);
+    }
+
+    /**
+     * As above, with the note given too: the checks gallery shows "No dedicated Neovim yet" though
+     * this machine has one, without touching the real plug-in folder. Example:
+     * {@code new NeovimStatusSection(group, () -> "", value -> NvimProbe.note(...))}.
+     */
+    NeovimStatusSection(Composite parent, Supplier<String> configured, Function<String, NvimProbe.Note> describe) {
         this.configured = configured;
+        this.describe = describe;
         note = new Label(parent, SWT.WRAP); // wraps at its width hint, as the help below does
         note.setLayoutData(fullRow(WRAP_WIDTH));
 
@@ -195,7 +208,7 @@ final class NeovimStatusSection {
         int mine = generation.incrementAndGet();
         show(new NvimProbe.Note("Looking for Neovim...", false));
         String value = configured.get();
-        CompletableFuture.supplyAsync(() -> NvimProbe.describe(value)).thenAccept(result -> {
+        CompletableFuture.supplyAsync(() -> describe.apply(value)).thenAccept(result -> {
             if (note.isDisposed()) {
                 return;
             }

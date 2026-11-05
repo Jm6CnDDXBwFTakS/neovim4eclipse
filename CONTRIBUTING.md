@@ -28,6 +28,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ./mvnw verify -Pui                              # ... and the UI tests (opens an Eclipse window)
 ./mvnw verify -PuiHeavyJava                     # only the UI tests that need Java tooling (slow)
 xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake the listing screenshots
+xvfb-run -a ./mvnw verify -Pgallery              # draw the dialogs the manual checks look at (target/gallery)
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
@@ -42,7 +43,7 @@ taskset -c 0,1 ./mvnw verify -Pui               # any of these on two cores, as 
 **Running every test.** `-Pall` runs every test in one build: the unit, text, SWT and UI tests as
 `-Pui` does, the integration tests (`-Pintegration`), the Java editor tests (`-PuiHeavyJava`, so the
 test Eclipse gets the Java development tools) and the `timeoutReliant` ones. Only the screenshots
-stay out, since they are not tests and rewrite the Marketplace images. Listing the profiles instead
+and the gallery stay out, since they are not tests (the screenshots rewrite the Marketplace images). Listing the profiles instead
 (`-Pui,uiHeavyJava,timeoutReliant`) does not add them up: each one sets which tags run, and the last
 one wins. Pass `-Dnvim.path` as for `-Pintegration`. It is the slowest run (a large first download
 for the Java tools), so use it before a release or after a wide change, not for every commit. One
@@ -68,6 +69,15 @@ does not depend on JDT and still starts without it.
 
 `ScreenshotCaptureTest`, tagged `screenshots`, is not a check: it takes the Marketplace screenshots
 (`docs/design/MARKETPLACE.md`, *Images*). Only `-Pscreenshots` runs it; `-Pui` leaves it out.
+
+`ChecksGalleryTest`, tagged `gallery`, is not a check either: it draws the dialogs and the
+preference page's Neovim notes that the manual checks before a release look at (the Get Neovim
+dialog at a fresh start, the "Neovim not started" notice for each value `-Dneovim4eclipse.nvim`
+refuses, the old-preference note, ...) into `target/gallery/*.png`, with an `index.html` that puts
+each picture under its topic and says what to look for. Looking at the pictures replaces opening
+each dialog by hand. Only
+`-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each platform, since each draws
+its own fonts and spacing.
 
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 

@@ -210,7 +210,7 @@
     <ui.skip>true</ui.skip>
     <!-- The JUnit tags run and left out; see the uiHeavyJava profile. Empty: no filter. -->
     <ui.groups></ui.groups>
-    <ui.excludedGroups>heavyJava,screenshots,timeoutReliant</ui.excludedGroups>
+    <ui.excludedGroups>gallery,heavyJava,screenshots,timeoutReliant</ui.excludedGroups>
   </properties>
 
   <profiles>
@@ -325,10 +325,22 @@
         </plugins>
       </build>
     </profile>
+    <!-- ./mvnw verify -Pgallery: runs only ChecksGalleryTest (tagged "gallery"), which draws the
+         dialogs and preference-page notes the manual checks look at into target/gallery/*.png, with an
+         index.html that names each picture's topic. No Java tools
+         needed. CONTRIBUTING.md, under "Build and test". -->
+    <profile>
+      <id>gallery</id>
+      <properties>
+        <ui.skip>${skipTests}</ui.skip>
+        <ui.groups>gallery</ui.groups>
+        <ui.excludedGroups></ui.excludedGroups>
+      </properties>
+    </profile>
     <!-- ./mvnw verify -Pall: every test of every group in one run, here and in tests/unit (there
          also the integration tests): the -Pui tests, heavyJava (so with the Java development tools,
          as uiHeavyJava) and timeoutReliant. Only "screenshots" stays out: it is not a test, and it
-         rewrites the Marketplace images. Combining the other profiles (-Pui,uiHeavyJava) does not
+         rewrites the Marketplace images; nor does "gallery", which only draws pictures. Combining the other profiles (-Pui,uiHeavyJava) does not
          add them up: each sets ui.groups, and the last one wins. Slow; for a release or a big
          change, not CI. See CONTRIBUTING.md, "Running every test" (a paragraph under the build commands). -->
     <profile>
@@ -336,7 +348,7 @@
       <properties>
         <ui.skip>${skipTests}</ui.skip>
         <ui.groups></ui.groups>
-        <ui.excludedGroups>screenshots</ui.excludedGroups>
+        <ui.excludedGroups>gallery,screenshots</ui.excludedGroups>
       </properties>
       <build>
         <plugins>
