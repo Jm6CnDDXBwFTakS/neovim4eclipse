@@ -77,7 +77,12 @@ refuses, the old-preference note, ...) into `target/gallery/*.png`, with an `ind
 each picture under its topic and says what to look for. Looking at the pictures replaces opening
 each dialog by hand. Only
 `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each platform, since each draws
-its own fonts and spacing.
+its own fonts and spacing. On macOS run it from a terminal that has the Screen Recording
+permission (the pictures are read from the screen there), and expect a frame around the links in the
+preference page's group: the look follows the macOS SDK the test's Java was built with, and a Java
+built for macOS 26 or later (Homebrew's openjdk) gets macOS 26's look, which frames a link inside a
+group box. Eclipse.app's own Java, built for an older SDK, shows no frame, so users do not see one
+(checked 2026-11-05).
 
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 

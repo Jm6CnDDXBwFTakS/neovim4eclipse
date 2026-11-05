@@ -65,6 +65,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * The files land in {@code tests/...tests/target/gallery/}. Each platform draws its own fonts and
  * spacing, so the gallery is taken once on each.
  *
+ * <p>On macOS the look also follows the SDK the test's Java was built with: a Java built for macOS 26
+ * or later (Homebrew's openjdk, for one) gets macOS 26's look, in which AppKit frames a link inside a
+ * group box, so the preference-page pictures show a box around the help. Eclipse.app's own Java,
+ * built for an older SDK, draws none, and neither does the real page (checked 2026-11-05, SWT 3.128
+ * and 3.135). The box is expected there, not a fault of the plug-in.
+ *
  * <h2>How a picture is taken</h2>
  * On Linux, {@link Control#print(GC)} asks the window to draw itself into an image, which
  * {@link ImageLoader} saves as PNG. Unlike reading the screen (ScreenshotCaptureTest), it works on
