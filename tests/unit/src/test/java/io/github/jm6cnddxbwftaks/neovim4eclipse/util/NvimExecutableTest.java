@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -88,7 +89,9 @@ class NvimExecutableTest {
     @Test
     void aNameTheFileSystemCannotHoldIsMissing() throws IOException {
         Path la = install("la");
-        String bad = "/no/<a>such\0</a>/nvim";
+        // Under the temporary folder, so it is absolute on every system (on Windows "/no/..." has no
+        // drive and would be NOT_ABSOLUTE before the path is ever made).
+        String bad = tmp.toAbsolutePath() + File.separator + "<a>such\0</a>" + File.separator + "nvim";
         assertEquals(NvimExecutable.Kind.MISSING, find(bad, List.of(la), ALL_VERIFIED).kind());
         assertEquals(null, NvimExecutable.locate(bad), "Get Neovim's done note asks this too: no exception");
     }
