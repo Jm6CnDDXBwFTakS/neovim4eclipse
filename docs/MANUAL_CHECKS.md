@@ -91,6 +91,10 @@ steps, and the expected result:
   take a card out of `due`.
 - **Expect:** starts the expected result, after the steps.
 
+A step's own result goes right under it, on a line that starts with `⇒`, so you check it while the
+step is in front of you. **Expect:** then says "each step's result, after its ⇒", or holds what
+belongs to no single step (the gallery's list of pictures, a command's result).
+
 A code block whose info string names platforms after the language (```` ```sh linux macos ````)
 is shown on those platforms only.
 
@@ -123,6 +127,7 @@ xvfb-run -a ./mvnw verify -Pgallery
    read from the screen there. On Linux, without `xvfb-run` on a desktop session.
 2. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/index.html` in a
    browser and look at each picture against the text under it.
+   ⇒ Each picture matches its caption (the list below).
 
 **Expect:** every picture matches what its caption says to look for: the Get Neovim dialog at a
 fresh start and with changed files, the done note with and without `-Dneovim4eclipse.nvim`, the
@@ -146,12 +151,15 @@ the tests' own (`NeovimInstallerTest`).
 
 1. Launch for this card. Get Neovim opens by itself (its wording: the gallery). Cancel it; import
    `n4e-alpha` and open `notes.txt`.
+   ⇒ After the cancel, no second dialog, and the editor keeps Eclipse's keys.
 2. *Neovim → Get Neovim...* → **Download**.
+   ⇒ Progress, then done. SHA-256 *Copy* works; the GitHub and VirusTotal links open in the
+   browser. The editor attaches (or the note offers *Restart Neovim*).
+3. Open the *Neovim* menu, then *Window → Preferences → Neovim*.
+   ⇒ *Get Neovim...* has left the menu. The page says the dedicated Neovim is found and checked,
+   with *Reinstall…*.
 
-**Expect:** step 1: after the cancel, no second dialog, and the editor keeps Eclipse's keys. Step
-2: progress, then done. SHA-256 *Copy* works; the GitHub and VirusTotal links open in the browser.
-The editor attaches (or the note offers *Restart Neovim*). *Get Neovim...* leaves the menu. The
-preference page says the dedicated Neovim is found and checked, with *Reinstall…*.
+**Expect:** each step's result, after its ⇒.
 
 ### `gn-gatekeeper` macOS runs it without the quarantine prompt
 
@@ -163,13 +171,15 @@ macOS marks a downloaded file as quarantined, and Gatekeeper then asks before ru
 plug-in's own download must not leave that mark on Neovim.
 
 1. After `gn-download`, open any file so that Neovim starts.
+   ⇒ No "cannot be opened" dialog.
+2. Run the command below (`mx` in place of `ma` on an Intel Mac).
+   ⇒ `xattr` lists no `com.apple.quarantine`.
 
 ```sh macos
 xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 ```
 
-**Expect:** no "cannot be opened" dialog; `xattr` lists no `com.apple.quarantine` (`mx` in place of
-`ma` on an Intel Mac).
+**Expect:** each step's result, after its ⇒.
 
 ## Input method and accent menu in the `:` box
 
@@ -185,13 +195,15 @@ Sources* first.
 
 1. In an editor in Neovim mode, type `:`, switch to Japanese Romaji input, type `konnichiwa` and
    press <kbd>Enter</kbd>.
+   ⇒ While you type, the text being composed shows underlined in the box. After <kbd>Enter</kbd>
+   the box shows `:こんにちわ`: each kana once, no `kkk`, no doubled kana, and the line has not run.
 2. Press <kbd>Esc</kbd> to leave the line. Then `:`, type `kyou`, <kbd>Space</kbd> to convert
    (choose 今日 with the arrows if needed), <kbd>Enter</kbd> to keep it.
+   ⇒ The box shows `:今日`; the <kbd>Enter</kbd> that keeps the text does not run the line.
 3. Switch back to ABC input and press <kbd>Esc</kbd>.
+   ⇒ The line closes.
 
-**Expect:** the text being composed shows underlined in the box while you type. After
-<kbd>Enter</kbd> the box shows `:こんにちわ` (then `:今日`): each kana once, no `kkk`, no doubled
-kana. The <kbd>Enter</kbd> that keeps the text does not run the line.
+**Expect:** each step's result, after its ⇒.
 
 ### `ime-keys` Esc, Enter, Ctrl keys and Cmd+V while composing
 
@@ -200,15 +212,19 @@ kana. The <kbd>Enter</kbd> that keeps the text does not run the line.
 - **Areas:** util/MarkedTextInput.java, editor/CommandLineBox*.java, /pom.xml
 
 1. `:` `abc`, switch to Japanese, type `ka`, press <kbd>Ctrl+U</kbd>, then <kbd>Enter</kbd>.
+   ⇒ <kbd>Ctrl+U</kbd> does nothing while composing; the line becomes `:abcか`.
 2. Type `ka`, press <kbd>Esc</kbd> twice, then <kbd>Esc</kbd> once more.
+   ⇒ The first two <kbd>Esc</kbd> cancel the composition and the box stays open; the third
+   closes the line.
 3. Copy `src` to the clipboard; `:`, type `kaka`, press <kbd>Cmd+V</kbd>.
+   ⇒ The line is `:かかsrc`.
 4. <kbd>Esc</kbd>; in ABC input: `:` `echo "` <kbd>Option+E</kbd> <kbd>E</kbd> `"` <kbd>Enter</kbd>.
+   ⇒ The message line shows `é` once.
 5. In Ex mode (<kbd>g</kbd><kbd>Q</kbd>), Japanese, type `ka`, click in the editor's text. Then, in
    ABC input, <kbd>Ctrl+U</kbd>, `visual` <kbd>Enter</kbd> to leave Ex mode.
+   ⇒ The click keeps `か` in Ex mode's line.
 
-**Expect:** 1: <kbd>Ctrl+U</kbd> does nothing while composing; the line becomes `:abcか`. 2: the
-first two <kbd>Esc</kbd> cancel the composition and the box stays open; the third closes the line.
-3: `:かかsrc`. 4: the message line shows `é` once. 5: the click keeps `か` in Ex mode's line.
+**Expect:** each step's result, after its ⇒.
 
 ### `ime-accent` Holding a letter shows the accent menu, and its pick replaces the letter
 
@@ -218,16 +234,20 @@ first two <kbd>Esc</kbd> cancel the composition and the box stays open; the thir
 
 1. ABC input, press-and-hold on (macOS's default). `:` `echo "`, hold <kbd>E</kbd> until the accent
    menu shows, let go, press <kbd>2</kbd>, type `"`, <kbd>Enter</kbd>.
+   ⇒ The message line shows `é` once: no `eeee` from the held key, no `2`, no leftover `e`.
 2. The same, but pick with the arrow keys and <kbd>Enter</kbd> in place of <kbd>2</kbd>.
+   ⇒ The picked accent, once, as in step 1.
 3. `:` `echo "`, hold <kbd>E</kbd>, let go, <kbd>Esc</kbd>; then <kbd>Esc</kbd> again.
+   ⇒ The first <kbd>Esc</kbd> closes only the menu, and the box stays open on `:echo "e`; the
+   second closes the line.
 4. `:` `echo "`, hold <kbd>E</kbd>, let go, and click an accent at once.
+   ⇒ The clicked accent replaces the e. (A click made after a pause is lost, an SWT bug described
+   in the README: use the digit or the arrows.)
 5. With the *ABC – AZERTY* input source, if you have it: step 1 with <kbd>Shift</kbd> and the
    <kbd>é</kbd> key (2) as the digit.
+   ⇒ The picked accent, once, as in step 1.
 
-**Expect:** 1, 2 and 5: the message line shows the picked accent once (`é` for 2): no `eeee` from
-the held key, no `2`, no leftover `e`. 3: the first <kbd>Esc</kbd> closes only the menu and the box
-stays open on `:echo "e`; the second closes the line. 4: the clicked accent replaces the e. A click
-made after a pause is lost (an SWT bug, described in the README: use the digit or the arrows).
+**Expect:** each step's result, after its ⇒.
 
 ## Release
 
@@ -296,9 +316,11 @@ $env:JAVA_TOOL_OPTIONS = '-XX:ActiveProcessorCount=1'
 - **Areas:** always
 
 1. Run the *Build* workflow by hand on the release branch (CONTRIBUTING.md, "Releasing", step 1).
+   ⇒ Green on all three platforms.
+2. Open the *Install Neovim* step's log of each platform job.
+   ⇒ It shows `tree … (matches)` for `lx`, `wx` and `ma`.
 
-**Expect:** green on all three platforms. The *Install Neovim* step's log shows `tree … (matches)`
-for `lx`, `wx` and `ma`.
+**Expect:** each step's result, after its ⇒.
 
 ### `rl-tag` The tag's Release run reuses the Build on main
 
@@ -308,9 +330,10 @@ for `lx`, `wx` and `ma`.
 
 1. After `main` has the release and its *Build* passed, push the tag `v<version>` (CONTRIBUTING.md,
    "Releasing", steps 2 and 3).
+   ⇒ The Release log says the commit was tested; the job is named "Build (tested on main)", with
+   no integration or platform jobs; the tag check passes.
 
-**Expect:** the Release log says the commit was tested; the job is named "Build (tested on main)",
-with no integration or platform jobs; the tag check passes.
+**Expect:** the result after step 1's ⇒.
 
 ### `rl-publish` Release signed, published, installable
 
@@ -319,7 +342,8 @@ with no integration or platform jobs; the tag check passes.
 - **Areas:** always
 
 1. Check the GitHub release's assets and signatures (`releng/verify-signatures.sh`).
+   ⇒ The signatures verify.
 2. Install the release from the update site into a clean Eclipse.
+   ⇒ The plug-in installs, opens Get Neovim at the first start, and attaches after it.
 
-**Expect:** the signatures verify; the plug-in installs, opens Get Neovim at the first start, and
-attaches after it.
+**Expect:** each step's result, after its ⇒.
