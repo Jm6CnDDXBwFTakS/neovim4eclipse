@@ -2,13 +2,13 @@
 
 Most of what the plug-in does is checked by its tests ([CONTRIBUTING.md](../CONTRIBUTING.md), "Build
 and test"). This file lists what is left: the few checks that need a person, because they depend on
-something a test cannot fake (a real download, macOS's Gatekeeper or input methods, a proxy), or
-on eyes (the gallery of dialogs), or because they *are* the release (the full test runs, CI, the
-tag). Each is a *card* with an id, such as `gn-download`.
+something a test cannot fake (a real download, macOS's Gatekeeper or input methods), or
+on eyes (the gallery of dialogs, for the overall look), or because they *are* the release (the full
+test runs, CI, the tag). Each is a *card* with an id, such as `gn-download`.
 
 **Why so few.** A check stays here only while no test can do it. When a card can become a test, it
 should: a test runs on every change and on every platform, a card only when someone has the time.
-For 0.2.1, tests replaced 47 of the 60 cards its list once had. When you add a feature that needs a look
+For 0.2.1, tests replaced 49 of the 60 cards its list once had. When you add a feature that needs a look
 by hand, add a card here in the same commit, with the source files it depends on.
 
 ## How to run them
@@ -76,7 +76,9 @@ is shown on those platforms only.
 - **Areas:** dialogs/**, prefs/NeovimStatusSection.java, prefs/NeovimPreferencePage.java, prefs/GetNeovim.java, prefs/PageLayout.java, util/GetNeovimText.java, util/StartFailureReport.java, util/OldNeovimProgram.java, util/NvimProbe.java, util/HeadedMessage.java, util/LabelText.java, editor/StartFailureNotice.java, editor/OldNeovimProgramNotice.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/ChecksGalleryTest.java, /pom.xml
 
 The gallery draws the dialogs and preference-page notes that used to be checked by opening each
-one by hand (`ChecksGalleryTest`, CONTRIBUTING.md, "Build and test").
+one by hand (`ChecksGalleryTest`, CONTRIBUTING.md, "Build and test"). Pictures are not stored or
+compared: fonts, the operating system and SWT change pixels all the time, and a stored picture
+could only be refreshed on its own platform. So a person looks, and only when `due` lists this card.
 
 ```sh linux
 xvfb-run -a ./mvnw verify -Pgallery
@@ -98,7 +100,9 @@ xvfb-run -a ./mvnw verify -Pgallery
 **Expect:** every picture matches what its caption says to look for: the Get Neovim dialog at a
 fresh start and with changed files, the done note with and without `-Dneovim4eclipse.nvim`, the
 "Neovim not started" notice and the page note for each refused value, the old-preference note, the
-leftovers note. Nothing cut off, no stray `&` or markup, rows a little apart. (On macOS with a Java
+leftovers note. The wording reads right, no stray `&` or markup, rows a little apart. (Text cut
+off, over a window's edge or on top of other text fails the tests already: `DialogLayoutTest` in
+`tests/swt` and `NeovimPreferencePageTest` check every one of these dialogs with `LayoutCheck`.) (On macOS with a Java
 built for macOS 26 or later, such as Homebrew's, a frame around the page's links is expected;
 Eclipse.app's own Java shows none.)
 
@@ -139,34 +143,6 @@ xattr -l ~/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 **Expect:** no "cannot be opened" dialog; `xattr` lists no `com.apple.quarantine` (`mx` in place of
 `ma` on an Intel Mac).
-
-### `gn-option-ini` The option in eclipse.ini works too
-
-- **On:** linux, windows
-- **Launch:** checks
-- **Areas:** util/NeovimOption.java, util/NvimExecutable.java
-
-The tests start Eclipse with `-Dneovim4eclipse.nvim` on the command line; this checks the other way
-to give it.
-
-1. Quit Eclipse. Add the line `-Dneovim4eclipse.nvim=` and the path of a Neovim program of your
-   own at the end of `eclipse.ini` (after `-vmargs`, no quotes even with a space). Launch for this
-   card.
-2. Open *Window → Preferences → Neovim*. Then remove the line again.
-
-**Expect:** the note says "Found: Neovim …, from -Dneovim4eclipse.nvim". (On macOS the command line
-is enough: `eclipse.ini` is inside the signed app.)
-
-### `gn-http-proxy` HTTP proxy (if you have one)
-
-- **On:** linux, macos, windows
-- **Launch:** checks
-- **Areas:** util/NeovimDownload.java, util/ProxyChoice.java, prefs/EclipseProxies.java
-
-1. *Window → Preferences → General → Network Connections*: Manual, with an HTTP and HTTPS proxy.
-2. *Window → Preferences → Neovim → Reinstall…* → **Download**.
-
-**Expect:** the download goes through the proxy (its log shows the requests) and installs.
 
 ## Input method and accent menu in the `:` box
 

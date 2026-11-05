@@ -75,7 +75,9 @@ preference page's Neovim notes that the [manual checks](docs/MANUAL_CHECKS.md) b
 dialog at a fresh start, the "Neovim not started" notice for each value `-Dneovim4eclipse.nvim`
 refuses, the old-preference note, ...) into `target/gallery/*.png`, with an `index.html` that puts
 each picture under its topic and says what to look for. Looking at the pictures replaces opening
-each dialog by hand. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
+each dialog by hand. Whether any text is cut off, overlaps or hangs over a window's edge is not left
+to the eyes: `DialogLayoutTest` (`tests/swt`) and `NeovimPreferencePageTest` (UI tests) check the
+same dialogs and notes with `LayoutCheck` (the fragment's `shared-swt/` folder) on every run. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
 platform, since each draws its own fonts and spacing. On macOS run it from a terminal that has the Screen Recording
 permission (the pictures are read from the screen there), and expect a frame around the links in the
 preference page's group: the look follows the macOS SDK the test's Java was built with, and a Java
