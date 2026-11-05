@@ -217,8 +217,10 @@ class ChecksGalleryTest {
         // The note about the removed preference (editor/OldNeovimProgramNotice).
         dialog("old-setting", "Old preference note", OldNeovimProgram.TITLE, MessageDialog.INFORMATION,
                 OldNeovimProgram.message("/usr/local/bin/nvim", "", false).orElseThrow(), OldNeovimProgram.BUTTONS,
-                "Was with the old value to copy; Instead with the command line and the eclipse.ini line; "
-                        + "\"This note shows once\" last.");
+                "Intro: the dedicated Neovim runs, most setups need nothing more. Was with the old value to "
+                        + "copy; Instead \"Only if you named that program yourself and need it\", with the command "
+                        + "line and the eclipse.ini line; \"runs unchecked and unsupported\" and \"This note shows "
+                        + "once\" last.");
         dialog("old-setting", "Old preference note, a path with a space", OldNeovimProgram.TITLE,
                 MessageDialog.INFORMATION,
                 OldNeovimProgram.message("C:\\Program Files\\Neovim\\bin\\nvim.exe", "", true).orElseThrow(),

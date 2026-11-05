@@ -19,18 +19,25 @@ import java.util.Optional;
  *
  * <pre>
  *   The Neovim program preference is gone: Neovim for Eclipse no longer reads it, and runs the
- *   dedicated Neovim.
+ *   dedicated Neovim, which it checks at every start. Most setups need nothing more.
  *
  *   Was      [/usr/local/bin/nvim] (Copy)
- *   Instead  If you named that program yourself, start Eclipse with:
+ *   Instead  Only if you named that program yourself and need it (no official build for your
+ *            system, or a security fix you need that "Get Neovim" does not offer yet), start
+ *            Eclipse with:
  *            [-vmargs -Dneovim4eclipse.nvim=/usr/local/bin/nvim] (Copy)
  *            or add this line after -vmargs in eclipse.ini:
  *            [-Dneovim4eclipse.nvim=/usr/local/bin/nvim] (Copy)
  *
- *   This note shows once; the old setting is removed.
+ *   That program runs unchecked and unsupported. This note shows once; the old setting is removed.
  * </pre>
  *
- * <p>"If you named that program yourself": the value may not be the user's. A preferences file
+ * <p>The dedicated Neovim comes first: most who set the preference did so before 0.2.1, when it was
+ * how the plug-in found Neovim at all, and for them nothing is left to do (Get Neovim opens by itself
+ * if the dedicated Neovim is missing). Keeping one's own program is the exception, for the same two
+ * cases as the preference page's help, and the note says what it costs.
+ *
+ * <p>"Only if you named that program yourself": the value may not be the user's. A preferences file
  * imported from elsewhere (<i>File &gt; Import &gt; Preferences</i>) can still set the old key,
  * and the note must not present a program planted that way as one to keep. Nothing runs from the
  * note in any case; the user would have to start Eclipse with the line.
@@ -77,10 +84,13 @@ public final class OldNeovimProgram {
         String program = programFor(value, windows);
         List<HeadedMessage.Point> points = new ArrayList<>();
         points.add(new HeadedMessage.Point("Was", "").withCopy(value));
-        points.addAll(NeovimOption.rows("Instead", "If you named that program yourself, start Eclipse with:", program,
-                null));
+        points.addAll(NeovimOption.rows("Instead", "Only if you named that program yourself and need it (no official "
+                + "build for your system, or a security fix you need that \"Get Neovim\" does not offer yet), start "
+                + "Eclipse with:", program, null));
         return Optional.of(new HeadedMessage("The Neovim program preference is gone: Neovim for Eclipse no longer "
-                + "reads it, and runs the dedicated Neovim.", points, "This note shows once; the old setting is removed."));
+                + "reads it, and runs the dedicated Neovim, which it checks at every start. Most setups need nothing "
+                + "more.", points, "That program runs unchecked and unsupported. This note shows once; the old "
+                + "setting is removed."));
     }
 
     /**

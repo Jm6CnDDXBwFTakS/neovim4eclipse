@@ -35,7 +35,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
     variables of whatever started it: set in a shell's startup file, they are missing when Eclipse
     starts from the macOS Dock or the Windows Start menu. The preference page shows the folder used;
   - **a program**: an absolute path to `nvim`, used as it is, unchecked and unsupported (for a system
-    without an official build, or a newer Neovim's security fix). On the command line
+    without an official build, or a newer Neovim's security fix you need). On the command line
     `eclipse -vmargs -Dneovim4eclipse.nvim=/path/to/nvim`, which adds to `eclipse.ini`'s `-vmargs`
     when that has `--launcher.appendVmargs` (the EPP packages do) and replaces them otherwise; or the
     line `-Dneovim4eclipse.nvim=/path/to/nvim` after `-vmargs` in `eclipse.ini`. A leading `~` is the home folder. A folder is refused (the program
