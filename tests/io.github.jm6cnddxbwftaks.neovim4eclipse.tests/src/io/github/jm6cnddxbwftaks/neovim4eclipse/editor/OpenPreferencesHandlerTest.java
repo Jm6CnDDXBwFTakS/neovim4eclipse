@@ -12,6 +12,7 @@ import java.util.List;
 
 import org.eclipse.jface.preference.PreferenceDialog;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -106,9 +107,12 @@ class OpenPreferencesHandlerTest {
         assertTrue(help.isVisible(), "help hidden");
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
         Label note = note(page);
-        assertTrue(note.getParent() == help.getParent() && note.getBounds().y < help.getBounds().y,
-                "the note (which Neovim runs) comes before the help (how to run another): note " + note.getBounds()
-                        + ", help " + help.getBounds());
+        // The link sits in a block with the command, inside the note's group: compare on the screen.
+        Rectangle noteOnScreen = note.getDisplay().map(note.getParent(), null, note.getBounds());
+        Rectangle helpOnScreen = help.getDisplay().map(help.getParent(), null, help.getBounds());
+        assertTrue(help.getParent().getParent() == note.getParent() && noteOnScreen.y < helpOnScreen.y,
+                "the note (which Neovim runs) comes before the help (how to run another): note " + noteOnScreen
+                        + ", help " + helpOnScreen);
     }
 
     /** The note in the Neovim group (a Label), once it says which Neovim runs; {@code null} before. */
