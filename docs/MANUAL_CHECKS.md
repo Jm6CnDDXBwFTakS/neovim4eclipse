@@ -134,9 +134,9 @@ fresh start and with changed files, the done note with and without `-Dneovim4ecl
 "Neovim not started" notice and the page note for each refused value, the old-preference note, the
 leftovers note. The wording reads right, no stray `&` or markup, rows a little apart. (Text cut
 off, over a window's edge or on top of other text fails the tests already: `DialogLayoutTest` in
-`tests/swt` and `NeovimPreferencePageTest` check every one of these dialogs with `LayoutCheck`.) (On macOS with a Java
-built for macOS 26 or later, such as Homebrew's, a frame around the page's links is expected;
-Eclipse.app's own Java shows none.)
+`tests/swt` and `NeovimPreferencePageTest` check every one of these dialogs with `LayoutCheck`.) (On macOS with *Show
+borders* on and a Java built for macOS 26 or later, such as Homebrew's, a frame around the page's
+links is expected; Eclipse.app's own Java shows none, nor does any Java with the setting off.)
 
 ## Get Neovim
 
