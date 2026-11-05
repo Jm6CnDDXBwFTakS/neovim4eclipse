@@ -4,7 +4,6 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -17,6 +16,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.GridData;
@@ -25,6 +26,7 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
@@ -35,6 +37,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.CopyField;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.LayoutCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
@@ -86,9 +89,44 @@ class NeovimPreferencePageTest {
         assertTrue(find(groups[0], Label.class) != null && find(groups[0], Link.class,
                 link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP)) != null,
                 "the note and the help in the first group");
-        assertNull(find(groups[0], Text.class), "no field: the program is a startup option");
+        Text only = find(groups[0], Text.class);
+        assertTrue(only != null && only.getText().equals(NeovimStatusSection.HELP_COMMAND)
+                && (only.getStyle() & SWT.READ_ONLY) != 0,
+                "no field for the program, a startup option: the one field is the help's command, read-only");
         assertTrue(groups[1].getBounds().y >= groups[0].getBounds().y + groups[0].getBounds().height,
                 "the second group below the first");
+    }
+
+    /**
+     * The help's command line is a row of its own, a field with a Copy button as in the dialogs, a
+     * little apart from the sentence above it and the one below (NeovimStatusSection, HELP_LEAD).
+     */
+    @Test
+    void theHelpsCommandIsACopyFieldApartFromTheTextAroundIt() {
+        Group group = page.groups()[0];
+        Label lead = find(group, Label.class, l -> l.getText().equals(NeovimStatusSection.HELP_LEAD));
+        Text command = find(group, Text.class, t -> t.getText().equals(NeovimStatusSection.HELP_COMMAND));
+        Link help = find(group, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP));
+        assertTrue(lead != null && command != null && help != null, "the help's three rows");
+        assertTrue(command.getText().startsWith("-vmargs -Dneovim4eclipse.nvim="), command.getText());
+        Composite row = command.getParent();
+        Button copy = find(row, Button.class, b -> b.getText().equals(CopyField.COPY));
+        assertTrue(copy != null, "a Copy button beside the command");
+        waitUntil("the help to be laid out", () -> help.getBounds().height > 0 && row.getBounds().height > 0);
+        Rectangle above = lead.getBounds();
+        Rectangle line = row.getBounds();
+        Rectangle below = help.getBounds();
+        assertTrue(line.y >= above.y + above.height + 2, "room above the command: " + above + ", " + line);
+        assertTrue(below.y >= line.y + line.height + 2, "room below the command: " + line + ", " + below);
+        assertTrue(line.x > above.x, "the command is indented");
+        copy.notifyListeners(SWT.Selection, new Event());
+        assertEquals(CopyField.COPIED, copy.getText());
+        Clipboard clipboard = new Clipboard(copy.getDisplay());
+        try {
+            assertEquals(NeovimStatusSection.HELP_COMMAND, clipboard.getContents(TextTransfer.getInstance()));
+        } finally {
+            clipboard.dispose();
+        }
     }
 
     /** A note that wraps to several lines grows its group, so the help under it stays whole. */

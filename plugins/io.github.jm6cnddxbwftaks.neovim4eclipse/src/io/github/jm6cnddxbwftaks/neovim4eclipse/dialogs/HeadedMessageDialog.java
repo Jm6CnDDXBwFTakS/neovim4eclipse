@@ -15,21 +15,16 @@ import org.eclipse.jface.layout.GridDataFactory;
 import org.eclipse.jface.layout.GridLayoutFactory;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.dnd.Clipboard;
-import org.eclipse.swt.dnd.TextTransfer;
-import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.program.Program;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 
@@ -195,25 +190,10 @@ public class HeadedMessageDialog extends MessageDialog {
         return composite;
     }
 
-    /** A read-only field in the text font with {@code value}, and a Copy button that puts it on the clipboard. */
+    /** A read-only field in the text font with {@code value}, and a Copy button ({@link CopyField}). */
     private Composite valueRow(Composite cell, String value) {
-        Composite row = new Composite(cell, SWT.NONE);
-        GridLayoutFactory.fillDefaults().numColumns(2).applyTo(row);
+        Composite row = CopyField.create(cell, value);
         GridDataFactory.fillDefaults().grab(true, false).applyTo(row);
-        Text field = new Text(row, SWT.READ_ONLY | SWT.SINGLE | SWT.BORDER);
-        field.setText(value);
-        field.setFont(JFaceResources.getTextFont());
-        GridDataFactory.fillDefaults().grab(true, false).align(SWT.FILL, SWT.CENTER).applyTo(field);
-        Button copy = new Button(row, SWT.PUSH);
-        copy.setText("Copy");
-        // As wide as "Copied", which it says after a press, so the row does not shift.
-        int buttonWidth = Math.max(convertHorizontalDLUsToPixels(40), Math.max(copy.computeSize(SWT.DEFAULT,
-                SWT.DEFAULT).x, textWidthOf(copy, "Copied") + convertHorizontalDLUsToPixels(8)));
-        GridDataFactory.fillDefaults().align(SWT.END, SWT.CENTER).hint(buttonWidth, SWT.DEFAULT).applyTo(copy);
-        copy.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> {
-            copyToClipboard(value);
-            copy.setText("Copied");
-        }));
         return row;
     }
 
@@ -233,15 +213,6 @@ public class HeadedMessageDialog extends MessageDialog {
             int index = Integer.parseInt(e.text); // the href of the link clicked
             linkOpener.accept(links.get(index).url());
         }));
-    }
-
-    private void copyToClipboard(String text) {
-        Clipboard clipboard = new Clipboard(getShell().getDisplay());
-        try {
-            clipboard.setContents(new Object[] { text }, new Transfer[] { TextTransfer.getInstance() });
-        } finally {
-            clipboard.dispose();
-        }
     }
 
     /** The width of the widest heading in {@code bold}, in pixels. */
@@ -266,16 +237,6 @@ public class HeadedMessageDialog extends MessageDialog {
      */
     static String literal(String text) {
         return text.replace("&", "&&");
-    }
-
-    /** The width of {@code text} in {@code control}'s font, in pixels. */
-    private static int textWidthOf(Control control, String text) {
-        GC gc = new GC(control);
-        try {
-            return gc.textExtent(text).x;
-        } finally {
-            gc.dispose();
-        }
     }
 
     /** A paragraph across both columns, wrapped at {@code width}, {@code above} pixels below the row before it. */

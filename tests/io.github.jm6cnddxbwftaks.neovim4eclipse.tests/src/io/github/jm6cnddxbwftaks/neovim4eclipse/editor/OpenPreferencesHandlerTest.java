@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.jface.preference.PreferenceDialog;
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -72,7 +73,9 @@ class OpenPreferencesHandlerTest {
     void showsTheNeovimPageWithWhichNeovimRuns() {
         assertTrue(dialog.getSelectedPage() instanceof NeovimPreferencePage, String.valueOf(dialog.getSelectedPage()));
         Control page = ((NeovimPreferencePage) dialog.getSelectedPage()).getControl();
-        assertTrue(find(page, Text.class).isEmpty(), "a text field, but the program is a startup option now");
+        // The one field is the help's command to copy, read-only: there is none to type a program into.
+        assertTrue(find(page, Text.class).stream().allMatch(t -> (t.getStyle() & SWT.READ_ONLY) != 0),
+                "an editable text field, but the program is a startup option now");
         assertTrue(find(page, Button.class).stream().noneMatch(b -> b.getText().equals("Browse...")), "a Browse... button");
         // The note names which Neovim runs (NvimProbe), once the probe has answered.
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);

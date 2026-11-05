@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.eclipse.jface.layout.PixelConverter;
 import org.eclipse.jface.preference.JFacePreferences;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
@@ -20,6 +21,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.CopyField;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -68,22 +70,38 @@ final class NeovimStatusSection {
     /** The link under the note when the dedicated Neovim is current. */
     static final String REINSTALL = "Reinstall...";
 
-    /** The README section on where the plug-in looks for Neovim, opened by the link in the help. */
-    static final String FINDING_NEOVIM_URL = "https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#finding-neovim";
+    /**
+     * The README section the help's link opens: how to name a Neovim of your own, for one start or in
+     * {@code eclipse.ini}, and the {@code --launcher.appendVmargs} catch. It is what the help is about,
+     * where the section before it ("Finding Neovim") is about the dedicated Neovim's folders and check.
+     */
+    static final String OWN_NEOVIM_URL = "https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#using-a-neovim-of-your-own";
 
     /**
-     * The help under the note: what runs, when another Neovim may be needed, and how to name it. The
-     * two cases are the ones the option is for: no official build to run, and a security fix in a
-     * newer Neovim before Get Neovim offers it. The command is on a line of its own: wrapped with the
-     * rest, it broke at the {@code /} of its path ({@code -Dneovim4eclipse.nvim=/} on one line,
-     * {@code path/to/nvim} on the next). {@code <a>} marks the link.
+     * The help under the note, in three rows: {@link #HELP_LEAD}, the command ({@link #HELP_COMMAND}),
+     * and {@link #HELP}. Each is whole on its own: what runs and how to name another program, the
+     * command, then when to (the two cases the option is for: no official build to run, and a
+     * security fix in a newer Neovim before Get Neovim offers it) and what it costs.
+     *
+     * <p>The command is a row of its own, a little apart from the text above and below (a few DLUs,
+     * {@link #COMMAND_ROOM_DLUS}), in a field with a Copy button ({@link CopyField}, as in the
+     * dialogs), so it reads as the line to type and is copied whole. Wrapped with the rest, it broke
+     * at the {@code /} of its path ({@code -Dneovim4eclipse.nvim=/} on one line, {@code path/to/nvim}
+     * on the next); set off only by spaces in one block of text, it sat cramped between the sentences.
      */
-    static final String HELP = "Neovim for Eclipse runs the dedicated Neovim, which \"Get Neovim\" installs and the "
-            + "plug-in checks at every start. Where it cannot run (a system with no official build), or when a newer "
-            + "Neovim has a security fix that \"Get Neovim\" does not offer yet, start Eclipse with:\n"
-            + "    " + NeovimOption.commandLine(NeovimOption.exampleProgram()) + "\n"
-            + "to run another Neovim program: it is run unchecked and unsupported, so be sure it is Neovim. "
-            + "<a>How Neovim for Eclipse finds Neovim</a>";
+    static final String HELP_LEAD = "Neovim for Eclipse runs the dedicated Neovim, which \"Get Neovim\" installs and "
+            + "the plug-in checks at every start. To run another Neovim program instead, start Eclipse with:";
+
+    /** The command line in the help: {@code -vmargs -Dneovim4eclipse.nvim=/path/to/nvim}, a Windows path on Windows. */
+    static final String HELP_COMMAND = NeovimOption.commandLine(NeovimOption.exampleProgram());
+
+    /** The help's last row, with the one link ({@code <a>}, to the README's {@link #OWN_NEOVIM_URL}). */
+    static final String HELP = "Use it only where the dedicated Neovim cannot run (a system with no official build), "
+            + "or for a newer Neovim with a security fix that \"Get Neovim\" does not offer yet. That program runs "
+            + "unchecked and unsupported, so be sure it is Neovim. <a>Using a Neovim of your own</a>";
+
+    /** The room above and below the help's command, and its indent, in dialog units (about 2 px each). */
+    private static final int COMMAND_ROOM_DLUS = 3;
 
     /**
      * What the section found, in a {@link Label}, never a {@link Link}: the text holds paths (the
@@ -158,10 +176,23 @@ final class NeovimStatusSection {
         GetNeovim.addListener(afterInstall);
         getNeovim.addDisposeListener(e -> GetNeovim.removeListener(afterInstall));
 
+        PixelConverter dlus = new PixelConverter(parent);
+        int room = dlus.convertVerticalDLUsToPixels(COMMAND_ROOM_DLUS);
+        Label lead = new Label(parent, SWT.WRAP);
+        lead.setText(LabelText.literal(HELP_LEAD));
+        lead.setLayoutData(fullRow(WRAP_WIDTH));
+        // A field with a Copy button, like the dialogs' commands, so the line is copied whole.
+        Composite command = CopyField.create(parent, HELP_COMMAND);
+        GridData commandData = fullRow(WRAP_WIDTH);
+        commandData.verticalIndent = room;
+        commandData.horizontalIndent = dlus.convertHorizontalDLUsToPixels(4 * COMMAND_ROOM_DLUS);
+        command.setLayoutData(commandData);
         Link help = new Link(parent, SWT.NONE);
         help.setText(HELP);
-        help.setLayoutData(fullRow(WRAP_WIDTH));
-        help.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> ExternalBrowser.open(FINDING_NEOVIM_URL)));
+        GridData helpData = fullRow(WRAP_WIDTH);
+        helpData.verticalIndent = room;
+        help.setLayoutData(helpData);
+        help.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> ExternalBrowser.open(OWN_NEOVIM_URL)));
         probe();
     }
 
