@@ -214,19 +214,23 @@ class ChecksGalleryTest {
                 "The note in the error color; under it, in the normal color, \"Not used by the plug-in, you can "
                         + "delete:\" and the two entries, one full path a line.");
 
-        // The note about the removed preference (editor/OldNeovimProgramNotice).
+        // The note about the removed preference (editor/OldNeovimProgramNotice), with old values as
+        // this platform spells them: a Unix path on a Windows picture would show a value no Windows
+        // user has stored.
+        String oldValue = WINDOWS ? "C:\\Neovim\\bin\\nvim.exe" : "/usr/local/bin/nvim";
+        String oldValueWithSpace = WINDOWS ? "C:\\Program Files\\Neovim\\bin\\nvim.exe" : "/opt/my tools/nvim/bin/nvim";
         dialog("old-setting", "Old preference note", OldNeovimProgram.TITLE, MessageDialog.INFORMATION,
-                OldNeovimProgram.message("/usr/local/bin/nvim", "", false).orElseThrow(), OldNeovimProgram.BUTTONS,
+                OldNeovimProgram.message(oldValue, "", WINDOWS).orElseThrow(), OldNeovimProgram.BUTTONS,
                 "Intro: the dedicated Neovim runs, most setups need nothing more. Was with the old value to "
                         + "copy; Instead \"Only if you named that program yourself and need it\", with the command "
                         + "line and the eclipse.ini line; \"runs unchecked and unsupported\" and \"This note shows "
                         + "once\" last.");
         dialog("old-setting", "Old preference note, a path with a space", OldNeovimProgram.TITLE,
                 MessageDialog.INFORMATION,
-                OldNeovimProgram.message("C:\\Program Files\\Neovim\\bin\\nvim.exe", "", true).orElseThrow(),
+                OldNeovimProgram.message(oldValueWithSpace, "", WINDOWS).orElseThrow(),
                 OldNeovimProgram.BUTTONS,
-                "The command line is quoted (\"-Dneovim4eclipse.nvim=C:\\Program Files\\...\"); the eclipse.ini "
-                        + "line is not.");
+                "The command line is quoted (\"" + NeovimOption.iniLine(oldValueWithSpace) + "\"); the "
+                        + "eclipse.ini line is not.");
 
         Files.writeString(out.resolve("index.html"), GalleryPage.html(platformName(), shots),
                 StandardCharsets.UTF_8);
