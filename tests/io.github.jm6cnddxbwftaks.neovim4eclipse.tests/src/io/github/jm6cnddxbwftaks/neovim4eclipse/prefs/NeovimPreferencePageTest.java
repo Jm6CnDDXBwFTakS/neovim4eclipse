@@ -100,7 +100,7 @@ class NeovimPreferencePageTest {
     /**
      * The help's command line is a row of its own, a field with a Copy button as in the dialogs, a
      * little apart from the sentence above it; the link to the README's section on it right under
-     * it, one line, in line with the field; then the last paragraph, a little apart again
+     * it with no gap, one line, in line with the field; then the last paragraph, a little apart again
      * (NeovimStatusSection, HELP_LEAD).
      */
     @Test
@@ -116,13 +116,14 @@ class NeovimPreferencePageTest {
         Button copy = find(row, Button.class, b -> b.getText().equals(CopyField.COPY));
         assertTrue(copy != null, "a Copy button beside the command");
         waitUntil("the help to be laid out", () -> tail.getBounds().height > 0 && row.getBounds().height > 0);
-        Rectangle above = lead.getBounds();
-        Rectangle line = row.getBounds();
-        Rectangle link = help.getBounds();
-        Rectangle below = tail.getBounds();
+        // In the group's coordinates: the field's row and the link sit in a block of their own.
+        Rectangle above = inGroup(group, lead);
+        Rectangle line = inGroup(group, row);
+        Rectangle link = inGroup(group, help);
+        Rectangle below = inGroup(group, tail);
         assertTrue(line.y >= above.y + above.height + 2, "room above the command: " + above + ", " + line);
-        assertTrue(link.y >= line.y + line.height && link.x == line.x, "the link under the field, in line: " + line
-                + ", " + link);
+        assertTrue(link.y >= line.y + line.height - 1 && link.y <= line.y + line.height + 1 && link.x == line.x,
+                "the link right under the field, no gap, in line: " + line + ", " + link);
         assertTrue(below.y >= link.y + link.height + 2, "room above the last paragraph: " + link + ", " + below);
         assertTrue(line.x > above.x, "the command is indented");
         copy.notifyListeners(SWT.Selection, new Event());
@@ -259,6 +260,11 @@ class NeovimPreferencePageTest {
         window.setSize(600, 500);
         window.layout(true, true);
         return group;
+    }
+
+    /** {@code control}'s bounds in {@code group}'s coordinates, however deep in it the control is. */
+    private static Rectangle inGroup(Group group, Control control) {
+        return control.getDisplay().map(control.getParent(), group, control.getBounds());
     }
 
     /** Waits for {@code condition} while the display runs (the note's probe answers through it). */

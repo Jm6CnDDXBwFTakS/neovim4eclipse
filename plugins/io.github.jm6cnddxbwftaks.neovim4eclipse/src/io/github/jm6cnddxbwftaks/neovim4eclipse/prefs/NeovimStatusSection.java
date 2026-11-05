@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.eclipse.jface.layout.GridLayoutFactory;
 import org.eclipse.jface.layout.PixelConverter;
 import org.eclipse.jface.preference.JFacePreferences;
 import org.eclipse.jface.resource.JFaceResources;
@@ -84,19 +85,15 @@ final class NeovimStatusSection {
      * to use it (the two cases the option is for: no official build to run, and a security fix you
      * need in a newer Neovim before Get Neovim offers it) and what it costs.
      *
-     * <p>The link is a row of its own, under the command it explains (the README section says how to
-     * put the line in {@code eclipse.ini}, or pass it on macOS), and never at the end of a paragraph:
-     * a Link that wraps is measured wrong on Windows. Its size comes from the system's
-     * {@code LM_GETIDEALSIZE}, which breaks lines anywhere, while the control itself moves a link that
-     * does not fit to the next line whole; with the link at the end of a three-line paragraph the
-     * group was laid out a line too short and cut it off. A one-line Link and a wrapping Label are
-     * both measured right everywhere.
-     *
-     * <p>The command is a row of its own, a little apart from the text above and below (a few DLUs,
-     * {@link #COMMAND_ROOM_DLUS}), in a field with a Copy button ({@link CopyField}, as in the
+     * <p>The command is a row of its own, in a field with a Copy button ({@link CopyField}, as in the
      * dialogs), so it reads as the line to type and is copied whole. Wrapped with the rest, it broke
      * at the {@code /} of its path ({@code -Dneovim4eclipse.nvim=/} on one line, {@code path/to/nvim}
      * on the next); set off only by spaces in one block of text, it sat cramped between the sentences.
+     *
+     * <p>The link is a row of its own, right under the command it explains (the README section says
+     * how to put the line in {@code eclipse.ini}, or pass it on macOS), with no gap between them, so
+     * the two read as one block; a little room sets that block apart from the text above and below
+     * ({@link #COMMAND_ROOM_DLUS}).
      */
     static final String HELP_LEAD = "Neovim for Eclipse runs the dedicated Neovim, which \"Get Neovim\" installs and "
             + "the plug-in checks at every start. To run another Neovim program instead, start Eclipse with:";
@@ -112,7 +109,10 @@ final class NeovimStatusSection {
             + "build), or for a newer Neovim with a security fix you need that \"Get Neovim\" does not offer yet. That "
             + "program runs unchecked and unsupported, so be sure it is Neovim.";
 
-    /** The room above and below the help's command, and its indent, in dialog units (about 2 px each). */
+    /**
+     * The room above the help's command and below its link, before halving, over the layout's own
+     * row spacing, in dialog units (a DLU is about 2 px). The command's indent is four times this.
+     */
     private static final int COMMAND_ROOM_DLUS = 3;
 
     /**
@@ -189,21 +189,25 @@ final class NeovimStatusSection {
         getNeovim.addDisposeListener(e -> GetNeovim.removeListener(afterInstall));
 
         PixelConverter dlus = new PixelConverter(parent);
-        int room = dlus.convertVerticalDLUsToPixels(COMMAND_ROOM_DLUS);
+        int room = dlus.convertVerticalDLUsToPixels(COMMAND_ROOM_DLUS) / 2; // half: a hint of room, not a gap
         Label lead = new Label(parent, SWT.WRAP);
         lead.setText(LabelText.literal(HELP_LEAD));
         lead.setLayoutData(fullRow(WRAP_WIDTH));
+        // The command and its link, one block: a composite of its own, as the group's layout puts its
+        // row spacing between any two rows (and a negative indent only shortens a row, it does not
+        // pull it up).
+        Composite block = new Composite(parent, SWT.NONE);
+        GridLayoutFactory.fillDefaults().spacing(0, 0).applyTo(block);
+        GridData blockData = fullRow(WRAP_WIDTH);
+        blockData.verticalIndent = room;
+        blockData.horizontalIndent = dlus.convertHorizontalDLUsToPixels(4 * COMMAND_ROOM_DLUS);
+        block.setLayoutData(blockData);
         // A field with a Copy button, like the dialogs' commands, so the line is copied whole.
-        Composite command = CopyField.create(parent, HELP_COMMAND);
-        GridData commandData = fullRow(WRAP_WIDTH);
-        commandData.verticalIndent = room;
-        commandData.horizontalIndent = dlus.convertHorizontalDLUsToPixels(4 * COMMAND_ROOM_DLUS);
-        command.setLayoutData(commandData);
-        Link help = new Link(parent, SWT.NONE);
+        Composite command = CopyField.create(block, HELP_COMMAND);
+        command.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
+        Link help = new Link(block, SWT.NONE);
         help.setText(HELP);
-        GridData helpData = new GridData(SWT.BEGINNING, SWT.TOP, false, false); // one line: never wraps
-        helpData.horizontalIndent = commandData.horizontalIndent; // in line with the field it explains
-        help.setLayoutData(helpData);
+        help.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false)); // one line: never wraps
         help.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> ExternalBrowser.open(OWN_NEOVIM_URL)));
         Label tail = new Label(parent, SWT.WRAP);
         tail.setText(LabelText.literal(HELP_TAIL));
