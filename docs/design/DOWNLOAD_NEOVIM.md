@@ -346,7 +346,7 @@ unchecked and unsupported; a folder, a command name or a relative path is refuse
 
 **The cost:** naming a Neovim of your own means a command line or an `eclipse.ini` line, and a
 restart to change it. Who needs it: a system with no official build (FreeBSD, Alpine, NixOS without
-nix-ld), or a security fix in a newer Neovim before *Get Neovim* offers it.
+nix-ld), or a security fix you need in a newer Neovim before *Get Neovim* offers it.
 
 **`-vmargs` on the command line** adds to `eclipse.ini`'s only when `eclipse.ini` has
 `--launcher.appendVmargs`, which the EPP packages have (checked on Linux, the committers package;
@@ -372,7 +372,7 @@ for a permanent setting; editing `eclipse.ini` inside a signed macOS `Eclipse.ap
   the dedicated Neovim runs. Get Neovim's start offer waits until that note is closed, and then runs
   off the UI thread (it may hash the dedicated Neovim). No note when Eclipse already runs with the
   option (a second workspace with the old value): the value is only removed. The note's *Instead*
-  reads "If you named that program yourself, …", since an imported preferences file can still set
+  reads "Only if you named that program yourself and need it (…)", since an imported preferences file can still set
   the old key; and a 0.2.0 folder value is offered as its `bin/nvim`.
 - **Copying is never followed by editing.** The copied command quotes a path with a space
   (`-vmargs "-Dneovim4eclipse.nvim=C:\Program Files\…"`); the `eclipse.ini` line never does, and has

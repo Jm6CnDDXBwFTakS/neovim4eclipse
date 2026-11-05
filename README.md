@@ -943,7 +943,7 @@ when Eclipse starts from the Dock, a desktop menu or the Start menu.
 
 Where the dedicated Neovim cannot run (a system Neovim publishes no build for, or where the official
 one does not run: Alpine and other musl-based Linux, NixOS without nix-ld, FreeBSD), or when a newer
-Neovim has a security fix that *Get Neovim* does not offer yet, name another Neovim program when
+Neovim has a security fix you need that *Get Neovim* does not offer yet, name another Neovim program when
 Eclipse starts, with the Java system property `neovim4eclipse.nvim`. The value is the program's
 absolute path (`/usr/bin/nvim`, `C:\tools\nvim\bin\nvim.exe`; a leading `~` stands for the home
 folder). That program is **run unchecked and unsupported**, so be sure it is Neovim, 0.12.6 or newer.

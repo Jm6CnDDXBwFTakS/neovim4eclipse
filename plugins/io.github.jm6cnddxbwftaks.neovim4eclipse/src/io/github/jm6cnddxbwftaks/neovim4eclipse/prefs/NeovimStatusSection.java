@@ -81,7 +81,7 @@ final class NeovimStatusSection {
      * The help under the note, in three rows: {@link #HELP_LEAD}, the command ({@link #HELP_COMMAND}),
      * and {@link #HELP}. Each is whole on its own: what runs and how to name another program, the
      * command, then when to (the two cases the option is for: no official build to run, and a
-     * security fix in a newer Neovim before Get Neovim offers it) and what it costs.
+     * security fix you need in a newer Neovim before Get Neovim offers it) and what it costs.
      *
      * <p>The command is a row of its own, a little apart from the text above and below (a few DLUs,
      * {@link #COMMAND_ROOM_DLUS}), in a field with a Copy button ({@link CopyField}, as in the
@@ -97,7 +97,7 @@ final class NeovimStatusSection {
 
     /** The help's last row, with the one link ({@code <a>}, to the README's {@link #OWN_NEOVIM_URL}). */
     static final String HELP = "Use it only where the dedicated Neovim cannot run (a system with no official build), "
-            + "or for a newer Neovim with a security fix that \"Get Neovim\" does not offer yet. That program runs "
+            + "or for a newer Neovim with a security fix you need that \"Get Neovim\" does not offer yet. That program runs "
             + "unchecked and unsupported, so be sure it is Neovim. <a>Using a Neovim of your own</a>";
 
     /** The room above and below the help's command, and its indent, in dialog units (about 2 px each). */
