@@ -145,7 +145,7 @@ class ManualChecksTest {
         String json = ManualChecks.json(ManualChecks.parse(SAMPLE));
         assertTrue(json.contains("{\"title\": \"Get Neovim\", \"checks\": ["), json);
         assertTrue(json.contains("\"id\": \"gn-one\", \"on\": [\"linux\", \"macos\"], \"launch\": \"fresh\""), json);
-        assertTrue(json.contains("\"s\": \"<p>Launch: <code>java releng/tools/checks/ManualChecks.java launch gn-one</code></p>"), json);
+        assertTrue(json.contains("\"s\": \"<div class=\\\"snip\\\"><pre>java releng/tools/checks/ManualChecks.java launch gn-one</pre></div>"), json);
         assertFalse(json.contains("launch rl-one"), "no launch line for a card without Eclipse");
         assertEquals("\"a\\\"b\\\\c\\n\"", ManualChecks.quote("a\"b\\c\n"));
     }
