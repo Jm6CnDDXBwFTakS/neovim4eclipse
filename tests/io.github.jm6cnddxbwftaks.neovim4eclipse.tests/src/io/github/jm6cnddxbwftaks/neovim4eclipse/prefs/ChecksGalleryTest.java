@@ -67,11 +67,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * The files land in {@code tests/...tests/target/gallery/}. Each platform draws its own fonts and
  * spacing, so the gallery is taken once on each.
  *
- * <p>On macOS the look also follows the SDK the test's Java was built with: a Java built for macOS 26
- * or later (Homebrew's openjdk, for one) gets macOS 26's look, in which AppKit frames a link inside a
- * group box, so the preference-page pictures show a box around the help. Eclipse.app's own Java,
- * built for an older SDK, draws none, and neither does the real page (checked 2026-11-05, SWT 3.128
- * and 3.135). The box is expected there, not a fault of the plug-in.
+ * <p>On macOS the look also follows the SDK the test's Java was built with, and the user's
+ * accessibility settings. With <i>Show borders</i> on (Accessibility, Display), a Java built for macOS 26 or later
+ * (Homebrew's openjdk, for one) gets AppKit's outline around each link (an SWT Link is a text view
+ * inside a scroll view on macOS), so the preference-page pictures show a box around the help and
+ * Reinstall.... Eclipse.app's own Java, built for an older SDK, draws none with the same setting,
+ * and with the setting off neither does (checked with <i>Increase contrast</i> on, which only darkens the frame). SWT does nothing for
+ * either setting on macOS ({@code Display.getHighContrast()} returns false there). The box is expected then, not a fault of
+ * the plug-in.
  *
  * <h2>How a picture is taken</h2>
  * On Linux, {@link Control#print(GC)} asks the window to draw itself into an image, which

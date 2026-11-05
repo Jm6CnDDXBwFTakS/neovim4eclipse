@@ -79,11 +79,13 @@ each dialog by hand. Whether any text is cut off, overlaps or hangs over a windo
 to the eyes: `DialogLayoutTest` (`tests/swt`) and `NeovimPreferencePageTest` (UI tests) check the
 same dialogs and notes with `LayoutCheck` (the fragment's `shared-swt/` folder) on every run. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
 platform, since each draws its own fonts and spacing. On macOS run it from a terminal that has the Screen Recording
-permission (the pictures are read from the screen there), and expect a frame around the links in the
-preference page's group: the look follows the macOS SDK the test's Java was built with, and a Java
-built for macOS 26 or later (Homebrew's openjdk) gets macOS 26's look, which frames a link inside a
-group box. Eclipse.app's own Java, built for an older SDK, shows no frame, so users do not see one
-(checked 2026-11-05).
+permission (the pictures are read from the screen there). With *Show borders* on (*System
+Settings → Accessibility → Display*), expect a frame around the links in the preference page's group:
+the look follows the macOS SDK the test's Java was built with, and for a Java built for macOS 26 or
+later (Homebrew's openjdk) AppKit draws that setting's outline around a link (a text view inside a
+scroll view, in SWT). Eclipse.app's own Java, built for an older SDK, shows no frame with the same
+setting, and with *Show borders* off neither Java does (checked with *Increase contrast* on, which only darkens the frame); SWT itself
+does nothing for these settings on macOS.
 
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 
