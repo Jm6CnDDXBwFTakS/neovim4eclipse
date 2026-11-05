@@ -27,15 +27,23 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The docs, the feature description, Javadoc and test comments spell the folder out, e.g.
  * {@code ~/.local/share/neovim4eclipse-plugin/neovim} or
- * {@code %USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim}. If the folder is renamed or moved,
- * this test lists every file that still names the old one.
+ * {@code %LOCALAPPDATA%\neovim4eclipse-plugin\neovim}. If the folder is renamed or moved, this test
+ * lists every file that still names the old one.
  */
 class DedicatedFolderNameTest {
 
-    /** {@code .local/share/neovim4eclipse...} with either separator; the folder name is the group. */
-    private static final Pattern MENTION = Pattern.compile("\\.local[/\\\\]share[/\\\\](neovim4eclipse[A-Za-z0-9_.-]*)");
-    /** The folder's earlier home, before it followed the XDG data home. */
-    private static final Pattern OLD = Pattern.compile("\\.local[/\\\\]opt[/\\\\]");
+    /**
+     * {@code .local/share/neovim4eclipse...}, {@code AppData\Local\neovim4eclipse...} or
+     * {@code %LOCALAPPDATA%\neovim4eclipse...}, with either separator; the folder name is the group.
+     */
+    private static final Pattern MENTION = Pattern.compile(
+            "(?:\\.local[/\\\\]share|AppData[/\\\\]Local|%LOCALAPPDATA%)[/\\\\](neovim4eclipse[A-Za-z0-9_.-]*)");
+    /**
+     * The folder's earlier homes: {@code ~/.local/opt}, before it followed the XDG data home, and on
+     * Windows {@code %USERPROFILE%\.local\share} or {@code %HOME%\.local\share}, before it followed
+     * Neovim's data home there.
+     */
+    private static final Pattern OLD = Pattern.compile("\\.local[/\\\\]opt[/\\\\]|%(?:USERPROFILE|HOME)%[/\\\\]\\.local");
     /** Build output and tool folders: copies of the sources, or not ours. */
     private static final Set<String> SKIPPED_FOLDERS = Set.of(".git", "target", "bin", "node_modules");
     private static final Set<String> TEXT_SUFFIXES = Set.of(".java", ".md", ".xml", ".properties", ".yml",

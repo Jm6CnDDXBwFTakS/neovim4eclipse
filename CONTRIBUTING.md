@@ -10,7 +10,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 - **Neovim 0.12.6**, the oldest supported version and the one CI tests, for the integration and
   end-to-end tests. Without `-Dnvim.path` the tests use what the plug-in uses with a blank
   preference: the dedicated Neovim, `~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim`
-  (Windows: `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim\<code>`; *Get Neovim* puts
+  (Windows: `%LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>`; *Get Neovim* puts
   it there, README "Get Neovim"), and only if its files match the pinned release. Nothing else is
   searched. `-Dnvim.path=...` (the absolute path of the program, not a folder) picks another. A newer
   Neovim works too, but only 0.12.6 is what CI checks. Tests that find none are skipped, not failed:
@@ -115,11 +115,12 @@ for real use, with no flags, so their build sets these variables for the test Ec
   little start-up time.
 
 `XDG_DATA_HOME` is left alone: the plug-in finds its own Neovim there (see `util/PluginFolders`).
-So Neovim makes one empty data folder of its own there, inside the plug-in's folder on Linux and
-macOS: `~/.local/share/neovim4eclipse-plugin/tests`. On Windows, where Neovim keeps its data in
-`%LOCALAPPDATA%` and the plug-in does not, it is `%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data`,
-next to `nvim-data`. (Earlier builds made `neovim4eclipse-tests` next to `nvim`, or
-`neovim4eclipse-tests-data` on Windows; such a folder is empty and safe to delete.)
+The plug-in and Neovim use the same data home, so Neovim makes one empty data folder of its own
+inside the plug-in's folder: `~/.local/share/neovim4eclipse-plugin/tests` on Linux and macOS, and
+`%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data` on Windows, where Neovim adds `-data` to the name.
+(Earlier builds made `neovim4eclipse-tests` next to `nvim`, or `neovim4eclipse-tests-data` in
+`%LOCALAPPDATA%` on Windows, and on Windows kept the plug-in's folder at
+`C:\Users\you\.local\share\neovim4eclipse-plugin`; such folders are safe to delete.)
 `NeovimHomeEndToEndTest` checks that the isolation holds. A test about how the plug-in behaves with
 a given setting sets it in the test itself (for example `session.commandAsync("set shortmess-=F")`),
 so it runs the same everywhere. To try the plug-in with your own config, run it from Eclipse (see

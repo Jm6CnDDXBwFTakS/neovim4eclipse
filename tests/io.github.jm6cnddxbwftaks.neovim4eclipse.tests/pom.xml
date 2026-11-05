@@ -27,7 +27,8 @@
        tests are the only ones that open one. CI always passes -Pui. -Pui -DskipTests skips them
        again. The end-to-end tests also need nvim (they are skipped without it). Without
        -Dnvim.path they use the dedicated Neovim as a blank preference does (~/.local/share/neovim4eclipse-plugin/
-       neovim/<code>, checked against the pinned release; Get Neovim installs it); -Dnvim.path=/path/to/bin/nvim
+       neovim/<code>, on Windows %LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>, checked against the
+       pinned release; Get Neovim installs it); -Dnvim.path=/path/to/bin/nvim
        (the program itself, not a folder) selects another.
 
        The tests tagged "heavyJava" need the Java development tools (a Java editor, Format, Rename,
@@ -173,9 +174,11 @@
                on one machine and fail on another. NVIM_APPNAME makes Neovim look for all of that
                under another name, where there is nothing; the XDG folders put what Neovim writes
                (and any config it would look for) under target/. XDG_DATA_HOME stays as it is: the
-               plug-in finds its own Neovim there (util/PluginFolders). So Neovim makes an empty data
-               folder named after NVIM_APPNAME there; the name's slash puts it inside the plug-in's own
-               folder (~/.local/share/neovim4eclipse-plugin/tests) rather than beside it. The whole test
+               plug-in finds its own Neovim there (util/PluginFolders: the plug-in uses Neovim's data
+               home). So Neovim makes an empty data folder named after NVIM_APPNAME there; the name's
+               slash puts it inside the plug-in's own folder rather than beside it:
+               ~/.local/share/neovim4eclipse-plugin/tests, on Windows (where Neovim adds "-data")
+               %LOCALAPPDATA%\neovim4eclipse-plugin\tests-data. The whole test
                Eclipse sees these variables, not only Neovim: on Linux, GTK and font caches land under
                target/ too, which costs a little start-up time and nothing else. See CONTRIBUTING.md,
                "Your Neovim config and the UI tests". -->

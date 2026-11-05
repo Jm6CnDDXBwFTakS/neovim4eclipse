@@ -54,6 +54,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   preference uses only that exact place there. A Neovim extracted into
   `~/.local/share/neovim4eclipse-plugin/neovim` by hand before is no longer found: use *Get Neovim*,
   or rename its folder to the code. The preference page and the notice name what is no longer used.
+- **On Windows the plug-in's folder moved to `%LOCALAPPDATA%\neovim4eclipse-plugin`** (usually
+  `C:\Users\you\AppData\Local\neovim4eclipse-plugin`), where Neovim keeps its own data
+  (`stdpath('data')`). `XDG_DATA_HOME` still comes first when set. The old folder,
+  `C:\Users\you\.local\share\neovim4eclipse-plugin`, is no longer looked at, so the first start opens
+  *Get Neovim* to install the dedicated Neovim again; the old folder may be deleted. Linux and macOS
+  are unchanged.
 - The "Neovim not started" notice is laid out as the welcome and the *Get Neovim* dialogs are:
   the reason, the error where it adds something, and the fix, each under a heading. For the dedicated
   Neovim it says whether it is missing, not the release (an older one, or damaged), or checked and

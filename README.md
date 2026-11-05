@@ -119,7 +119,8 @@ are needed to [install](#install) it.
   the version pinned in `.mvn/wrapper/maven-wrapper.properties`.
 - Eclipse IDE with PDE, **2024-12 (4.34) or newer** (the supported minimum; the build targets it), running on Java 21+, with a **JDK 21** registered for the JavaSE-21 execution environment
 - **Neovim 0.12.6**: the dedicated one (*Get Neovim*, in
-  `~/.local/share/neovim4eclipse-plugin/neovim/<code>`), or another Neovim's program named in
+  `~/.local/share/neovim4eclipse-plugin/neovim/<code>`, on Windows
+  `%LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>`), or another Neovim's program named in
   *Window → Preferences → Neovim* (unchecked; for a system without an official build).
 
 ## Run it (PDE)
@@ -827,7 +828,8 @@ every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, and the Insert boxes of `C
 ### Get Neovim
 
 **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder,
-`~/.local/share/neovim4eclipse-plugin/neovim/<code>` (see [Finding Neovim](#finding-neovim) for the
+`~/.local/share/neovim4eclipse-plugin/neovim/<code>` (Windows:
+`%LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>`; see [Finding Neovim](#finding-neovim) for the
 folder and the code). The dialogs and the preference page call it the **dedicated Neovim**: it is
 for Eclipse alone, and no other Neovim on the machine is changed. With the preference blank, while
 the dedicated Neovim is missing or fails the start check (older, or damaged), the dialog opens by
@@ -903,8 +905,13 @@ error mark.
   - Linux and macOS: `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`, then
     `$HOME/.local/share/neovim4eclipse-plugin/neovim`.
   - Windows: `%XDG_DATA_HOME%\neovim4eclipse-plugin\neovim`, then
-    `%HOME%\.local\share\neovim4eclipse-plugin\neovim`, then
-    `%USERPROFILE%\.local\share\neovim4eclipse-plugin\neovim`.
+    `%LOCALAPPDATA%\neovim4eclipse-plugin\neovim` (usually
+    `C:\Users\you\AppData\Local\neovim4eclipse-plugin\neovim`), then
+    `%HOME%\AppData\Local\neovim4eclipse-plugin\neovim`, then
+    `%USERPROFILE%\AppData\Local\neovim4eclipse-plugin\neovim`.
+
+  These are the folders where Neovim itself keeps its data (`:echo stdpath('data')`), with the
+  plug-in's folder in place of `nvim` (or `nvim-data` on Windows).
 
   The code is the system's letter (`l` Linux, `m` macOS, `w` Windows) and the processor's (`x`
   x86_64, `a` arm64): `lx`, `la`, `mx`, `ma`, `wx`, `wa`. The processor is the machine's real one,
