@@ -49,7 +49,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   cancelling it shows nothing more). That dialog ends with an *Instead* line, for using a Neovim of
   your own. See the README, "Finding Neovim".
 - **A Neovim of your own is a startup option now, not a preference.** For a system with no official
-  build (Alpine, NixOS, FreeBSD), or a security fix in a newer Neovim before *Get Neovim* offers it,
+  build (Alpine, NixOS, FreeBSD), or a security fix you need in a newer Neovim before *Get Neovim* offers it,
   start Eclipse with `-vmargs -Dneovim4eclipse.nvim=/path/to/nvim`, or add
   `-Dneovim4eclipse.nvim=/path/to/nvim` after `-vmargs` in `eclipse.ini` (the dialogs show
   `C:\path\to\nvim.exe` on Windows, where a path needs its drive letter). The program is run
