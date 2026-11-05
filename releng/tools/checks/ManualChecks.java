@@ -308,6 +308,8 @@ public final class ManualChecks {
                     list = kind;
                 }
                 item = new StringBuilder(bullet ? line.substring(2) : ordered.group(1));
+            } else if (item != null && line.startsWith("  ") && line.strip().startsWith(RESULT)) {
+                item.append(RESULT_MARK).append(line.strip().substring(RESULT.length()).strip());
             } else if (item != null && line.startsWith("  ") && !line.isBlank()) {
                 item.append(' ').append(line.strip());
             } else if (line.isBlank()) {
@@ -327,9 +329,25 @@ public final class ManualChecks {
         return out.toString();
     }
 
+    /** Starts a step's own expected result, on the line under the step (see the checklist's format). */
+    static final String RESULT = "\u21D2"; // ⇒
+
+    /** Stands for a {@link #RESULT} line inside a list item until it is turned into HTML; survives {@link #inline}. */
+    private static final char RESULT_MARK = '\u0001';
+
+    /**
+     * Writes a list item. A step's result line becomes a block of its own under the step, so the page
+     * can set it apart: {@code 1. Press Esc.\n   ⇒ The line closes.} gives
+     * {@code <li>Press Esc.<div class="result">The line closes.</div></li>}.
+     */
     private static StringBuilder flushItem(StringBuilder out, StringBuilder item) {
         if (item != null) {
-            out.append("<li>").append(inline(item.toString())).append("</li>");
+            String[] parts = item.toString().split(String.valueOf(RESULT_MARK), -1);
+            out.append("<li>").append(inline(parts[0]));
+            for (int p = 1; p < parts.length; p++) {
+                out.append("<div class=\"result\">").append(inline(parts[p])).append("</div>");
+            }
+            out.append("</li>");
         }
         return null;
     }

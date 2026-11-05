@@ -143,6 +143,14 @@ class ManualChecksTest {
         assertEquals("&lt;script&gt;x&lt;/script&gt;", ManualChecks.inline("<script>x</script>"));
     }
 
+    /** A step's ⇒ line is its own block under the step, its continuation lines joined to it. */
+    @Test
+    void aStepsResultIsABlockUnderTheStep() {
+        assertEquals("<ol><li>Press <kbd>Esc</kbd>.<div class=\"result\">The line <code>:e</code> closes.</div></li>"
+                + "<li>Next.</li></ol>",
+                ManualChecks.html("1. Press <kbd>Esc</kbd>.\n   \u21D2 The line `:e`\n   closes.\n2. Next.\n"));
+    }
+
     @Test
     void jsonGroupsTheCardsBySectionWithTheLaunchCommandFirst() {
         String json = ManualChecks.json(ManualChecks.parse(SAMPLE));
