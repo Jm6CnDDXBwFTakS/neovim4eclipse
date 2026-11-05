@@ -670,6 +670,29 @@ class CommandLineBoxTest {
     }
 
     /**
+     * A capital E with Shift let go first: Shift's release is not the letter's, so the E stays until
+     * Neovim's view comes (it did flicker away and back). The E's own release still shows the line
+     * again when no view came.
+     */
+    @Test
+    void shiftLetGoBeforeTheLetterKeepsTheLetter() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        Event press = new Event();
+        press.keyCode = 'e';
+        press.character = 'E';
+        press.stateMask = SWT.SHIFT;
+        press.doit = true;
+        box.notifyListeners(SWT.KeyDown, press);
+        assertTrue(press.doit, "the field types the E");
+        box.insert("E");
+        keyUp(box, SWT.SHIFT);
+        assertEquals(":E", box.getText(), "Shift's release is not the E's");
+        keyUp(box, 'e');
+        assertEquals(":", box.getText(), "no view came: Neovim's line again");
+    }
+
+    /**
      * E pressed: whether the field may type it; if so, the field's own insert, which SWT makes
      * within the press (through the verify listener, as macOS's does).
      */

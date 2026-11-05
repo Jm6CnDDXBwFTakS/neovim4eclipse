@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
@@ -429,8 +430,12 @@ public final class UpdateNeovimDownloads {
         int slash = clean.indexOf('/');
         String path = slash < 0 ? "" : clean.substring(slash + 1);
         String last = path.substring(path.lastIndexOf('/') + 1);
-        if (path.isEmpty() || path.contains("..") || last.equals(".DS_Store") || last.equals("Thumbs.db")
-                || last.equals("desktop.ini") || last.startsWith("._")) {
+        // The same rule as the plug-in's PluginNeovim.isSystemFile, which this standalone script cannot
+        // import: case ignored, except for "._". A thumbs.db hashed here but skipped there would make
+        // every install of the release fail its start check.
+        String lower = last.toLowerCase(Locale.ROOT);
+        if (path.isEmpty() || path.contains("..") || lower.equals(".ds_store") || lower.equals("thumbs.db")
+                || lower.equals("desktop.ini") || last.startsWith("._")) {
             if (path.isEmpty() || path.contains("..")) {
                 throw new Failure("an archive entry outside its top folder: " + name);
             }

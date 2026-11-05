@@ -21,10 +21,10 @@ import org.eclipse.core.resources.ICommand;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IncrementalProjectBuilder;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.ILogListener;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
-import org.eclipse.core.runtime.jobs.IJobManager;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
@@ -118,8 +118,8 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Closes every editor, then waits until Eclipse's background jobs are done, before the base
-     * deletes project e2e (JUnit runs this class's {@code @AfterEach} first).
+     * Closes every editor, then waits until the build's and JDT's background jobs are done, before
+     * the base deletes project e2e (JUnit runs this class's {@code @AfterEach} first).
      *
      * <p>Why every editor: a test may open more than its Java file, such as {@code grt} opening
      * String's class-file editor. An editor left open on e2e's Java elements outlives the project:
@@ -127,17 +127,30 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
      * {@code CoreASTProvider.getAST} asked again and again until a {@code StackOverflowError} (seen in
      * every pinned one-core run on Windows, in {@code formattingALargeFileTwiceLogsNothing}). Why the
      * jobs: the editors' jobs (reconcile, AST, decorations) and the build may still be running after
-     * the close; the project must not vanish under them.
+     * the close; the project must not vanish under them. Only those jobs, not every job
+     * ({@code IJobManager.isIdle}): Eclipse also runs jobs that have nothing to do with e2e (update
+     * checks, a slow disk's indexing of other plug-ins, jobs that schedule themselves again), and
+     * waiting for them could time out a test that passed.
      */
     @AfterEach
     void closeEveryEditorAndLetJdtFinish() {
         page().closeAllEditors(false);
         editor = null; // closed too: the base must not close it again
-        IJobManager jobs = Job.getJobManager();
-        waitUntil("Eclipse's background jobs to finish", TIMEOUT_MS, jobs::isIdle,
-                () -> "; still running or waiting: " + Arrays.stream(jobs.find(null))
-                        .filter(job -> job.getState() == Job.RUNNING || job.getState() == Job.WAITING)
-                        .map(Job::getName).toList());
+        waitUntil("the build's and JDT's background jobs to finish", TIMEOUT_MS, () -> busyJdtJobs().isEmpty(),
+                () -> "; still running or waiting: " + busyJdtJobs());
+    }
+
+    /**
+     * The running or waiting jobs that can touch project e2e: the workspace build (its job
+     * families) and JDT's own jobs (their classes are JDT's, such as the AST and indexing jobs).
+     */
+    private static List<String> busyJdtJobs() {
+        return Arrays.stream(Job.getJobManager().find(null))
+                .filter(job -> job.getState() == Job.RUNNING || job.getState() == Job.WAITING)
+                .filter(job -> job.belongsTo(ResourcesPlugin.FAMILY_AUTO_BUILD)
+                        || job.belongsTo(ResourcesPlugin.FAMILY_MANUAL_BUILD)
+                        || job.getClass().getName().startsWith("org.eclipse.jdt."))
+                .map(Job::getName).toList();
     }
 
     private String javaText() {

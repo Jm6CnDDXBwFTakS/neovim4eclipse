@@ -202,6 +202,12 @@ final class CommandLineBox {
      * by Neovim's view. The text is never wrong.
      */
     private int typedAtShow = -1;
+    /**
+     * The key code of the letter the field last typed itself: only its release shows Neovim's view
+     * again ({@link #typedAtShow}), not Shift's. Shift is often let go before the letter (a capital
+     * E: Shift down, E down, Shift up), and the E would then go until Neovim's view put it back.
+     */
+    private int typedKey;
     /** Neovim's last view of the open line, shown again by {@link #typedAtShow}. */
     private CmdlineState.View lastView;
     /** macOS only: whether press-and-hold is on ({@link PressAndHoldSetting}); never waits. */
@@ -379,7 +385,7 @@ final class CommandLineBox {
             // a digit let go that picked nothing from the accent menu
             box.addKeyListener(KeyListener.keyReleasedAdapter(e -> {
                 fieldTypes = null;
-                if (typedAtShow == showCount && lastView != null) {
+                if (e.keyCode == typedKey && typedAtShow == showCount && lastView != null) {
                     typedAtShow = -1;
                     show(lastView); // Neovim's line stayed as it was: the letter the field typed goes
                 }
@@ -521,6 +527,7 @@ final class CommandLineBox {
             return true;
         case SEND_AND_TYPE:
             fieldTypes = String.valueOf(e.character); // macOS may open the menu over it, as in a plain field
+            typedKey = e.keyCode;
             return true;
         case HOLD:
             e.doit = false; // sent when let go, unless it picks

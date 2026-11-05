@@ -97,7 +97,8 @@ public final class GetNeovimText {
      */
     public static HeadedMessage confirm(NeovimRelease release, NeovimRelease.Archive archive, Path home, String why) {
         List<Point> points = new ArrayList<>();
-        if (why != null && !why.isBlank()) {
+        boolean openedByPlugIn = why != null && !why.isBlank(); // Why first, Instead last; neither from the menu
+        if (openedByPlugIn) {
             points.add(new Point("Why", why + " With the Neovim program preference blank, Neovim for Eclipse will "
                     + "only run with the dedicated Neovim; until it is installed or replaced, editors keep their "
                     + "normal Eclipse keys."));
@@ -111,7 +112,7 @@ public final class GetNeovimText {
                         new Point("SHA-256", "Either way, the plug-in checks the archive against this before "
                                 + "unpacking.").withCopy(archive.sha256())
                                 .withLinks(releasePage(release), virusTotalLink(archive.sha256()))));
-        if (why != null && !why.isBlank()) {
+        if (openedByPlugIn) {
             points.add(new Point("Instead", "To use a Neovim of your own, cancel and enter its program on the Neovim "
                     + "preference page (Window > Preferences > Neovim). It is run unchecked."));
         }

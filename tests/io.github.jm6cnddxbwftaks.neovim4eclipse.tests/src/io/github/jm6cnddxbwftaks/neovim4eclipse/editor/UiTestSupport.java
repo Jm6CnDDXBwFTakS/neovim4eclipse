@@ -40,6 +40,13 @@ final class UiTestSupport {
     /** Whether {@link #watchForErrorDialogs} is on. UI thread only, as are the fields below. */
     private static boolean watchingErrorDialogs;
 
+    /**
+     * Which watch is the current one: each start counts up, and a timer of an earlier watch stops
+     * at its next run. A flag alone would not do: a test that starts within 200 ms of the last one's
+     * end turns it on again before the old timer runs, and both timers would then go on.
+     */
+    private static int errorDialogWatch;
+
     /** How many {@code closeModalDialogsWhile} watches are on: they close every modal dialog themselves. */
     private static int dialogWatches;
 
@@ -65,11 +72,12 @@ final class UiTestSupport {
             return;
         }
         watchingErrorDialogs = true;
+        int watch = ++errorDialogWatch;
         Display display = Display.getCurrent();
         display.timerExec(ERROR_DIALOG_CHECK_MS, new Runnable() {
             @Override
             public void run() {
-                if (!watchingErrorDialogs || display.isDisposed()) {
+                if (!watchingErrorDialogs || watch != errorDialogWatch || display.isDisposed()) {
                     return;
                 }
                 if (dialogWatches == 0) {
