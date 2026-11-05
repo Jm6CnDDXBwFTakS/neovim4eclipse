@@ -18,6 +18,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,7 +35,7 @@ import java.util.stream.Stream;
  *   java releng/tools/checks/ManualChecks.java due [--since &lt;ref&gt;] [--all]
  *   java releng/tools/checks/ManualChecks.java list
  *   java releng/tools/checks/ManualChecks.java setup [--root &lt;folder&gt;]
- *   java releng/tools/checks/ManualChecks.java launch &lt;card&gt; [--root &lt;folder&gt;] [--eclipse &lt;program&gt;] [--workspace ws2] [--yes]
+ *   java releng/tools/checks/ManualChecks.java launch &lt;card&gt; [--root &lt;folder&gt;] [--eclipse &lt;program&gt;] [--zip &lt;file&gt;] [--own-eclipse] [--workspace ws2] [--yes]
  *   java releng/tools/checks/ManualChecks.java json            the cards as JSON, for a page that keeps ticks
  * </pre>
  *
@@ -459,8 +461,10 @@ public final class ManualChecks {
                 Usage: java releng/tools/checks/ManualChecks.java <command>
                   due [--since <ref>] [--all]   the cards this release needs (docs/MANUAL_CHECKS.md)
                   list                          every card
-                  setup [--root <folder>]       make the test project and folders (default ~/n4e-checks)
-                  launch <card> [--root <folder>] [--eclipse <program>] [--workspace ws2] [--yes]
+                  setup [--root <folder>]       make the test project and folders (default ~/var/n4e-checks)
+                  launch <card> [--root <folder>] [--eclipse <program>] [--zip <file>] [--own-eclipse]
+                                [--workspace ws2] [--yes]
+                                starts the checks' Eclipse, a copy of yours with the plug-in just built
                   json                          the cards as JSON, for a page that keeps ticks""";
     }
 
@@ -471,14 +475,17 @@ public final class ManualChecks {
     }
 
     /** The command line's options after the command; unknown ones stop the program. */
-    record Options(String card, String since, boolean all, Path root, String eclipse, String workspace, boolean yes) {
+    record Options(String card, String since, boolean all, Path root, String eclipse, Path zip, boolean ownEclipse,
+            String workspace, boolean yes) {
 
         static Options of(String[] args) {
             String card = null;
             String since = null;
             boolean all = false;
-            Path root = Path.of(System.getProperty("user.home"), "n4e-checks");
+            Path root = Path.of(System.getProperty("user.home"), "var", "n4e-checks");
             String eclipse = System.getenv("ECLIPSE");
+            Path zip = null;
+            boolean ownEclipse = false;
             String workspace = "ws1";
             boolean yes = false;
             for (int i = 1; i < args.length; i++) {
@@ -487,6 +494,8 @@ public final class ManualChecks {
                     case "--all" -> all = true;
                     case "--root" -> root = Path.of(value(args, ++i));
                     case "--eclipse" -> eclipse = value(args, ++i);
+                    case "--zip" -> zip = Path.of(value(args, ++i)).toAbsolutePath();
+                    case "--own-eclipse" -> ownEclipse = true;
                     case "--workspace" -> workspace = value(args, ++i);
                     case "--yes" -> yes = true;
                     default -> {
@@ -497,7 +506,7 @@ public final class ManualChecks {
                     }
                 }
             }
-            return new Options(card, since, all, root.toAbsolutePath(), eclipse, workspace, yes);
+            return new Options(card, since, all, root.toAbsolutePath(), eclipse, zip, ownEclipse, workspace, yes);
         }
 
         private static String value(String[] args, int i) {
@@ -568,7 +577,7 @@ public final class ManualChecks {
         }
     }
 
-    private static void launch(List<Card> cards, Options options) throws IOException {
+    private static void launch(List<Card> cards, Options options) throws IOException, InterruptedException {
         Card card = cards.stream().filter(c -> c.id().equals(options.card())).findFirst()
                 .orElseGet(() -> {
                     fail(options.card() == null ? "launch needs a card's id (see list)" : "no card " + options.card());
@@ -599,7 +608,9 @@ public final class ManualChecks {
                         + " uses it (and its Neovim), then launch again; the folder may be partly emptied.");
             }
         }
-        String eclipse = options.eclipse() != null ? options.eclipse() : defaultEclipse();
+        String yours = options.eclipse() != null ? options.eclipse() : defaultEclipse();
+        String eclipse = options.ownEclipse() ? yours
+                : ChecksEclipse.prepare(root, ChecksEclipse.program(yours), options.zip(), options.yes()).toString();
         List<String> command = List.of(eclipse, "-data", root.resolve(options.workspace()).toString());
         ProcessBuilder builder = new ProcessBuilder(command);
         if (!card.launch().equals("normal")) {
@@ -615,6 +626,306 @@ public final class ManualChecks {
         System.out.println("Started for " + card.id() + ": " + String.join(" ", command)
                 + (card.launch().equals("normal") ? "" : "\n  with XDG_DATA_HOME=" + xdg)
                 + "\n  output in " + log + "\nSteps: " + CHECKLIST + ", " + card.id() + ".");
+    }
+
+    // ---- The checks' own Eclipse ----
+
+    /**
+     * The checks' own Eclipse: a copy of yours under {@code <root>/eclipse}, with the update site ZIP
+     * just built installed into it, so {@code launch} always runs the version under test without
+     * <i>Help &gt; Install New Software</i> by hand, and your own Eclipse is never changed.
+     *
+     * <h2>A copy, made cheap with hard links</h2>
+     * Installing straight into your Eclipse would change the one you work in. A copy costs little:
+     * the files under {@code plugins/} and {@code features/} (nearly all of an Eclipse, about 1 GB)
+     * are <i>hard links</i> to yours, a second name for the same bytes, so they take no new space.
+     * They are safe to share because p2 never rewrites a bundle in place: it adds new files and
+     * deletes old ones, and deleting a link leaves your file alone. Everything p2 and Eclipse do
+     * write ({@code configuration/}, {@code p2/}, {@code eclipse.ini}, {@code artifacts.xml}) is a
+     * real copy. Where a link cannot be made (the root on another disk), the file is copied.
+     * Example, on Linux: {@code /opt/eclipse/eclipse-committers-2026-09-R-linux-gtk-aarch64} becomes
+     * {@code ~/var/n4e-checks/eclipse/eclipse-committers-2026-09-R-linux-gtk-aarch64}; on macOS
+     * {@code /Applications/Eclipse.app} becomes {@code ~/var/n4e-checks/eclipse/Eclipse.app}.
+     *
+     * <h2>Installed with p2's director</h2>
+     * The director ({@code -application org.eclipse.equinox.p2.director}) is <i>Install New
+     * Software</i> without a window: it resolves the feature against the copy's own p2 profile, so a
+     * dependency the plug-in needs and the Eclipse lacks fails here as it would for a user. It runs in
+     * the copy, which then installs into itself (p2 takes the install folder from where it runs, not
+     * from the copied profile). A ZIP already installed (same SHA-256, kept in
+     * {@code <root>/eclipse-copy.properties}) is not installed again. A new one replaces the old
+     * feature in one step ({@code -uninstallIU} and {@code -installIU} together), as a newer build
+     * of the same bundle could not sit beside it.
+     */
+    static final class ChecksEclipse {
+
+        /** The feature's installable unit, as p2 names a feature: its id plus {@code .feature.group}. */
+        static final String FEATURE = "io.github.jm6cnddxbwftaks.neovim4eclipse.feature.feature.group";
+
+        /** Where {@code ./mvnw verify} leaves the update site ZIP, from the repository's root. */
+        static final Path SITE_TARGET = Path.of("releng", "io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite", "target");
+
+        private static final String STATE = "eclipse-copy.properties";
+
+        private ChecksEclipse() {
+        }
+
+        /**
+         * Your Eclipse program as a path: as given if it names a file, else looked up on {@code PATH}
+         * (the Linux default is the bare {@code eclipse}).
+         */
+        static Path program(String name) {
+            Path given = Path.of(name);
+            if (given.getNameCount() > 1 || Files.isRegularFile(given)) {
+                return given.toAbsolutePath();
+            }
+            for (String folder : System.getenv().getOrDefault("PATH", "").split(java.io.File.pathSeparator)) {
+                if (!folder.isEmpty() && Files.isExecutable(Path.of(folder, name))) {
+                    return Path.of(folder, name);
+                }
+            }
+            fail("no Eclipse program " + name + " on PATH; name it with --eclipse or $ECLIPSE");
+            return null;
+        }
+
+        /**
+         * The installation a program belongs to, the folder to copy: on macOS the {@code .app} around
+         * it ({@code /Applications/Eclipse.app/Contents/MacOS/eclipse} gives {@code /Applications/Eclipse.app}),
+         * elsewhere the program's folder ({@code C:\eclipse\eclipse.exe} gives {@code C:\eclipse}).
+         */
+        static Path installation(Path program) {
+            for (Path folder = program.getParent(); folder != null; folder = folder.getParent()) {
+                if (folder.getFileName() != null && folder.getFileName().toString().endsWith(".app")) {
+                    return folder;
+                }
+            }
+            return program.getParent();
+        }
+
+        /**
+         * Whether a file of the installation may be a hard link to yours: one under the folder with
+         * {@code eclipse.ini} ({@code inner}: empty, or {@code Contents/Eclipse} in a macOS app), in
+         * {@code plugins/} or {@code features/}. Example: {@code plugins/org.eclipse.swt_3.130.jar}
+         * yes, {@code configuration/config.ini} no.
+         */
+        static boolean shared(Path relative, Path inner) {
+            return relative.startsWith(inner.resolve("plugins")) || relative.startsWith(inner.resolve("features"));
+        }
+
+        /** The feature's version in the director's {@code -listInstalledRoots} output, if installed. */
+        static Optional<String> installedVersion(String listing) {
+            return listing.lines().map(String::strip).filter(l -> l.startsWith(FEATURE + "/"))
+                    .map(l -> l.substring(FEATURE.length() + 1)).findFirst();
+        }
+
+        /**
+         * The director's arguments that install {@code zip}, after the program. Example:
+         * {@code --launcher.suppressErrors -nosplash -application org.eclipse.equinox.p2.director
+         * -repository jar:file:///.../neovim4eclipse-0.2.1-SNAPSHOT.zip!/ -uninstallIU <feature>
+         * -installIU <feature> -data @none}. {@code --launcher.suppressErrors} keeps a failed start
+         * on the terminal instead of in a dialog; {@code -data @none} gives it no workspace.
+         */
+        static List<String> installArguments(Path zip, boolean installed) {
+            List<String> args = new ArrayList<>(List.of("--launcher.suppressErrors", "-nosplash", "-application",
+                    "org.eclipse.equinox.p2.director", "-repository", "jar:" + zip.toUri() + "!/"));
+            if (installed) {
+                args.addAll(List.of("-uninstallIU", FEATURE));
+            }
+            args.addAll(List.of("-installIU", FEATURE, "-data", "@none"));
+            return args;
+        }
+
+        /**
+         * Makes or refreshes the copy of the Eclipse {@code yours} starts and installs the ZIP into it;
+         * returns the copy's program, which {@code launch} starts.
+         *
+         * @param zip the update site ZIP, or {@code null} for the newest in {@link #SITE_TARGET}
+         */
+        static Path prepare(Path root, Path yours, Path zip, boolean yes) throws IOException, InterruptedException {
+            Path real = yours.toRealPath();
+            Path source = installation(real);
+            Path copies = root.resolve("eclipse");
+            Path copy = copies.resolve(source.getFileName().toString());
+            Path stateFile = root.resolve(STATE);
+            Properties state = new Properties();
+            if (Files.isRegularFile(stateFile)) {
+                try (var in = Files.newBufferedReader(stateFile)) {
+                    state.load(in);
+                }
+            }
+            if (!source.toString().equals(state.getProperty("source")) || !Files.isDirectory(copy)) {
+                if (isNotEmpty(copies)) {
+                    if (!yes && !confirm("Replace the checks' Eclipse in " + copies + " (a copy of "
+                            + state.getProperty("source", "another Eclipse") + ") with a copy of " + source + "?")) {
+                        fail("stopped; nothing was changed (--yes answers yes, --own-eclipse starts yours as it is)");
+                    }
+                    refuseWhileRunning(root);
+                    deleteContents(copies); // links and copies only: your Eclipse keeps its files
+                }
+                System.out.println("Copying " + source + " to " + copy + " ...");
+                Path inner = Files.isRegularFile(source.resolve("Contents/Eclipse/eclipse.ini"))
+                        ? Path.of("Contents", "Eclipse") : Path.of("");
+                long[] counts = copyTree(source, copy, inner);
+                System.out.println("  " + counts[0] + " files linked, " + counts[1] + " copied ("
+                        + counts[2] / (1024 * 1024) + " MB of new space)");
+                state.clear();
+                state.setProperty("source", source.toString());
+                save(state, stateFile);
+            }
+            Path program = copy.resolve(source.relativize(real).toString());
+            Path site = zip != null ? zip : newestZip();
+            warnIfStale(site);
+            String sum = sha256(site);
+            if (sum.equals(state.getProperty("zip"))) {
+                System.out.println("The checks' Eclipse already has " + site.getFileName() + ".");
+                return program;
+            }
+            refuseWhileRunning(root);
+            Path director = director(program);
+            Path log = root.resolve("director.log");
+            List<String> list = new ArrayList<>(List.of(director.toString(), "--launcher.suppressErrors", "-nosplash",
+                    "-application", "org.eclipse.equinox.p2.director", "-listInstalledRoots", "-data", "@none"));
+            Optional<String> installed = installedVersion(run(list, log));
+            List<String> install = new ArrayList<>(List.of(director.toString()));
+            install.addAll(installArguments(site, installed.isPresent()));
+            String output = run(install, log);
+            if (!output.contains("Operation completed")) {
+                fail("installing " + site + " into " + copy + " failed:\n" + output + "\n(output in " + log + ")");
+            }
+            System.out.println("Installed " + site.getFileName() + " into the checks' Eclipse"
+                    + installed.map(v -> " (it had " + v + ")").orElse("") + ".");
+            state.setProperty("zip", sum);
+            save(state, stateFile);
+            return program;
+        }
+
+        /**
+         * The program to run the director with: on Windows {@code eclipsec.exe} beside
+         * {@code eclipse.exe}, the console launcher, since {@code eclipse.exe} detaches from the
+         * terminal and its output is lost.
+         */
+        private static Path director(Path program) {
+            Path console = program.resolveSibling("eclipsec.exe");
+            return Files.isRegularFile(console) ? console : program;
+        }
+
+        /** Copies the tree, hard-linking the {@link #shared} files; returns {linked, copied, bytes copied}. */
+        static long[] copyTree(Path source, Path target, Path inner) throws IOException {
+            long[] counts = new long[3];
+            Files.walkFileTree(source, new java.nio.file.SimpleFileVisitor<>() {
+                @Override
+                public java.nio.file.FileVisitResult preVisitDirectory(Path dir,
+                        java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+                    Files.createDirectories(target.resolve(source.relativize(dir).toString()));
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public java.nio.file.FileVisitResult visitFile(Path file,
+                        java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+                    Path relative = source.relativize(file);
+                    Path to = target.resolve(relative.toString());
+                    if (!attrs.isSymbolicLink() && shared(relative, inner)) {
+                        try {
+                            Files.createLink(to, file);
+                            counts[0]++;
+                            return java.nio.file.FileVisitResult.CONTINUE;
+                        } catch (IOException | UnsupportedOperationException e) {
+                            // Another disk, or a file system without hard links: copy instead.
+                        }
+                    }
+                    Files.copy(file, to, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                            java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+                    counts[1]++;
+                    counts[2] += attrs.size();
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
+            return counts;
+        }
+
+        /**
+         * Stops when an Eclipse started by {@code launch} still runs: p2 must not change an
+         * installation in use, nor may its files be deleted. Eclipse holds a lock on
+         * {@code <workspace>/.metadata/.lock} while it runs, so each workspace under the root is tried.
+         */
+        private static void refuseWhileRunning(Path root) throws IOException {
+            try (Stream<Path> folders = Files.list(root)) {
+                for (Path workspace : folders.filter(Files::isDirectory).toList()) {
+                    Path lock = workspace.resolve(".metadata/.lock");
+                    if (!Files.isRegularFile(lock)) {
+                        continue;
+                    }
+                    try (var channel = java.nio.channels.FileChannel.open(lock, java.nio.file.StandardOpenOption.WRITE);
+                            var held = channel.tryLock()) {
+                        if (held == null) {
+                            fail("an Eclipse still runs in " + workspace + "; close it, then launch again");
+                        }
+                    } catch (java.nio.channels.OverlappingFileLockException | IOException e) {
+                        fail("an Eclipse still runs in " + workspace + " (" + e + "); close it, then launch again");
+                    }
+                }
+            }
+        }
+
+        /** The newest {@code neovim4eclipse-*.zip} in {@link #SITE_TARGET}. */
+        private static Path newestZip() throws IOException {
+            if (Files.isDirectory(SITE_TARGET)) {
+                try (Stream<Path> files = Files.list(SITE_TARGET)) {
+                    Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("neovim4eclipse-.*\\.zip"))
+                            .max(Comparator.comparing(f -> f.toFile().lastModified()));
+                    if (newest.isPresent()) {
+                        return newest.get().toAbsolutePath();
+                    }
+                }
+            }
+            fail("no update site ZIP in " + SITE_TARGET + ": build it with ./mvnw verify -DskipTests (or name one with --zip)");
+            return null;
+        }
+
+        /**
+         * Warns when the ZIP may not hold the code under test: it is older than the last commit that
+         * changed the plug-in or the feature, or those folders have changes not committed. A warning,
+         * not a stop: a card about something else can run on an older build.
+         */
+        private static void warnIfStale(Path zip) throws IOException, InterruptedException {
+            String[] built = { "plugins", "features" };
+            String last = git("log", "-1", "--format=%ct", "--", built[0], built[1]).strip();
+            boolean older = !last.isEmpty() && Files.getLastModifiedTime(zip).toMillis() / 1000 < Long.parseLong(last);
+            boolean uncommitted = !git("status", "--porcelain", "--", built[0], built[1]).isBlank();
+            if (older || uncommitted) {
+                System.out.println("Warning: " + zip.getFileName() + " may not hold the code under test ("
+                        + (older ? "older than the last commit to plugins/ or features/" : "uncommitted changes")
+                        + "). Rebuild it with ./mvnw verify -DskipTests.");
+            }
+        }
+
+        private static String sha256(Path file) throws IOException {
+            try {
+                return java.util.HexFormat.of().formatHex(
+                        java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
+            } catch (java.security.NoSuchAlgorithmException e) {
+                throw new IllegalStateException("every JDK has SHA-256", e);
+            }
+        }
+
+        /** Runs a command to its end; returns its output, also kept in {@code log}. */
+        private static String run(List<String> command, Path log) throws IOException, InterruptedException {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            String output;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                output = String.join("\n", reader.lines().toList());
+            }
+            process.waitFor();
+            Files.writeString(log, String.join(" ", command) + "\n" + output + "\n");
+            return output;
+        }
+
+        private static void save(Properties state, Path file) throws IOException {
+            try (var out = Files.newBufferedWriter(file)) {
+                state.store(out, "The checks' Eclipse copy (ManualChecks launch): its source and the ZIP installed");
+            }
+        }
     }
 
     private static String defaultEclipse() {
