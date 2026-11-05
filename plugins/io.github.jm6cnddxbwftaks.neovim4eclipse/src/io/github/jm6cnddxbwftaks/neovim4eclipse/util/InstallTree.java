@@ -40,10 +40,13 @@ import java.util.TreeMap;
  * The lines are exactly what {@code sha256sum} prints, so the hash can be checked by hand:
  * <pre>
  *   cd ~/.local/share/neovim4eclipse-plugin/neovim/la
- *   find . -type f ! -name .DS_Store | sed 's|^\./||' | LC_ALL=C sort | tr '\n' '\0' | xargs -0 sha256sum | sha256sum
+ *   find . -type f ! -iname .DS_Store ! -iname Thumbs.db ! -iname desktop.ini ! -name '._*' \
+ *       | sed 's|^\./||' | LC_ALL=C sort | tr '\n' '\0' | xargs -0 sha256sum | sha256sum
  * </pre>
- * ({@code shasum -a 256} in place of both {@code sha256sum} on macOS). {@code releng/install-neovim.sh}
- * checks every CI run's Neovim that way, and {@code releng/UpdateNeovimDownloads.java} computes the
+ * ({@code shasum -a 256} in place of both {@code sha256sum} on macOS). The four {@code !} tests are
+ * the left-out files of point 1; leave one out and a {@code Thumbs.db} added by hand (or by Explorer)
+ * makes the hash differ from the pinned one although the plug-in accepts the install.
+ * {@code releng/install-neovim.sh} checks every CI run's Neovim that way, and {@code releng/UpdateNeovimDownloads.java} computes the
  * same hash from the archive's entries, with the archive's top folder ({@code nvim-linux-arm64/})
  * left out, and pins it as {@code <code>.tree} in {@code neovim-downloads.properties}.
  *

@@ -74,7 +74,8 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
     sum="shasum -a 256"   # macOS
 fi
-actual_tree=$(cd "$folder/$top" && find . -type f ! -name .DS_Store | sed 's|^\./||' | LC_ALL=C sort \
+actual_tree=$(cd "$folder/$top" && find . -type f ! -iname .DS_Store ! -iname Thumbs.db ! -iname desktop.ini ! -name '._*' \
+    | sed 's|^\./||' | LC_ALL=C sort \
     | tr '\n' '\0' | xargs -0 $sum | $sum | cut -d' ' -f1)
 if [ "$actual_tree" != "$tree" ]; then
     echo "The unpacked $asset does not match its tree hash in the data file:" >&2
