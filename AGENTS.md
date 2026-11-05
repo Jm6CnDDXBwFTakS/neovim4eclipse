@@ -23,6 +23,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ./mvnw verify -Pscreenshots                       # retake the Marketplace screenshots (see docs/design/MARKETPLACE.md)
 ./mvnw verify -Pgallery                           # draw the dialogs the manual checks look at (target/gallery; CONTRIBUTING.md)
 ./mvnw verify -DskipTests                         # build only
+java releng/tools/checks/ManualChecks.java due    # the manual checks a release needs (docs/MANUAL_CHECKS.md)
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
 ./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)
 ./mvnw test -f tests/swt/pom.xml                  # SWT widget tests (a display, no workbench)
@@ -109,6 +110,8 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - American spelling (behavior, color, license).
 - Every exception class the plug-in defines extends `util/NeovimExceptionBase` (abstract, unchecked).
 - Comments and docs in an explanatory style: say why, give an example, link the concept.
+- A check only a person can do gets a card in `docs/MANUAL_CHECKS.md` (with its source files),
+  in the same commit; keep that file free of anything personal (`ManualChecksTest` checks).
 - Add or update tests with every behavior change; update README and `docs/` when behavior changes,
   and add a user-visible change to `CHANGELOG.md` under *Unreleased*.
 - The repository is public: docs, comments and commit messages say how the code works and why,
