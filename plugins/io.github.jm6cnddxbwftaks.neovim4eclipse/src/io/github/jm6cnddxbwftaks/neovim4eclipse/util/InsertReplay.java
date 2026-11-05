@@ -60,7 +60,7 @@ public final class InsertReplay {
 
     /**
      * What a <em>sync point</em> hands to Neovim: a {@code Ctrl} key Neovim handles in the middle of
-     * an insert Eclipse types (docs/design/INSERT_CTRL_KEYS.md, phase C). Unlike Esc, the insert goes
+     * an insert Eclipse types (docs/design/INSERT_CTRL_KEYS.md, section 2). Unlike Esc, the insert goes
      * on, so Neovim's cursor goes to the caret itself, not one character left of it.
      *
      * <p>Example: Eclipse typed {@code foo bar} and the user presses {@code Ctrl+W}. {@code typed}

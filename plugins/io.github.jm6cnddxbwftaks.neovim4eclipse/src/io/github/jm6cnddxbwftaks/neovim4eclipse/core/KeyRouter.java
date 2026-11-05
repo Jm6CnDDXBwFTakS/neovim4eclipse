@@ -80,7 +80,7 @@ public final class KeyRouter {
 
     /**
      * Eclipse's completions, which some of Vim's insert-mode keys run instead of Neovim's popup (the
-     * plug-in does not draw that popup, docs/design/INSERT_CTRL_KEYS.md, phase D).
+     * plug-in does not draw that popup, docs/design/INSERT_CTRL_KEYS.md, section 6).
      */
     public enum Completion {
         /** <i>Word Completion</i> (Alt+/): the words of the open documents. For {@code Ctrl-N}, {@code Ctrl-P}. */

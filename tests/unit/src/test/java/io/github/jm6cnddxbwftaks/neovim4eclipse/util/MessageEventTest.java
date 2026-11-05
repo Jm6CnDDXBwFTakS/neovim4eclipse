@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Reading message events from {@code redraw} notifications, in the shape Neovim 0.12.6 sends them
- * (copied from experiment X1's recording, with the chunks {@code [attr_id, text, hl_id]}).
+ * (copied from a recording of Neovim's messages, with the chunks {@code [attr_id, text, hl_id]}).
  */
 class MessageEventTest {
 

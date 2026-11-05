@@ -14,8 +14,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * The proxies Get Neovim's download uses, down to the decision (
- * {@code prefs/EclipseProxies} only turns Eclipse's {@code IProxyData} into {@link ProxyChoice.Entry}).
+ * The proxies Get Neovim's download uses, down to the decision ({@code prefs/EclipseProxies} only
+ * turns Eclipse's {@code IProxyData} into {@link ProxyChoice.Entry}).
  */
 class ProxyChoiceTest {
 

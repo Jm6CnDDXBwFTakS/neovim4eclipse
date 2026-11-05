@@ -167,7 +167,7 @@ class KeyRouterTest {
         assertEquals(List.of("<C-w>"), neovim.sent);
     }
 
-    // ---- sync points: a Ctrl key Neovim handles while Eclipse types (INSERT_CTRL_KEYS.md, phase C) ----
+    // ---- sync points: a Ctrl key Neovim handles while Eclipse types (INSERT_CTRL_KEYS.md, section 2) ----
 
     @Test
     void aCtrlLetterGivenToNeovimForInsertIsASyncPoint() {
@@ -243,7 +243,7 @@ class KeyRouterTest {
         assertEquals(List.of(), neovim.synced);
     }
 
-    // ---- special keys: Eclipse's completions, Ctrl-C (INSERT_CTRL_KEYS.md, phase D) ----
+    // ---- special keys: Eclipse's completions, Ctrl-C (INSERT_CTRL_KEYS.md, section 6) ----
 
     private final List<KeyRouter.Completion> completions = new ArrayList<>();
 

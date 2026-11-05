@@ -97,7 +97,8 @@ public final class StartFailureReport {
     /**
      * The reason to open <i>Get Neovim</i> instead of the notice, or empty for the notice: with the
      * option unset and no verified dedicated Neovim, installing it is the one fix, so its dialog
-     * opens at once, with this as its <i>Why</i> line. Cancelling it shows nothing more: the editor keeps its Eclipse keys, and "Get Neovim" stays in the Neovim menu and on
+     * opens at once, with this as its <i>Why</i> line. Cancelling it shows nothing more:
+     * the editor keeps its Eclipse keys, and "Get Neovim" stays in the Neovim menu and on
      * the preference page. Example: {@code The dedicated Neovim is not installed.}
      */
     public static Optional<String> getNeovimInstead(NvimExecutable.Resolved resolved,

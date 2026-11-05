@@ -48,7 +48,7 @@ class FoldRegionsTest {
 
     @Test
     void aRegionCrossingAKeptOnesBorderIsDropped() {
-        // Neovim would widen 4-9 to 2-9 (experiment X14). One inside and one after are kept.
+        // Neovim would widen 4-9 to 2-9 (FOLDING.md, X14). One inside and one after are kept.
         List<Fold> folds = FoldRegions.forNeovim(List.of(open(2, 6), open(4, 9), open(3, 4), open(7, 9)));
         assertEquals(List.of(new Fold(2, 6, false), new Fold(3, 4, false), new Fold(7, 9, false)), folds);
     }

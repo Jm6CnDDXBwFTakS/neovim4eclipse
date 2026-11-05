@@ -152,7 +152,7 @@ class BufferSynchronizerTest {
         sync.close();
     }
 
-    // ---- the push of the changed lines only (INSERT_CTRL_KEYS.md, phase F) ----
+    // ---- the push of the changed lines only (INSERT_CTRL_KEYS.md, section 4) ----
 
     @Test
     void theFirstChangedLinesPushWritesTheWholeDocument() {
@@ -181,7 +181,7 @@ class BufferSynchronizerTest {
         assertEquals(List.of("1|1|[be, ta]"), neovim.regions);
     }
 
-    /** A short document is compared whole, as before phase F: that repairs a difference anywhere. */
+    /** A short document is compared whole: that repairs a difference anywhere. */
     @Test
     void aShortDocumentIsComparedWhole() throws Exception {
         sync.setCompareWholeUpToLines(ChangedLines.COMPARE_WHOLE_UP_TO_LINES);

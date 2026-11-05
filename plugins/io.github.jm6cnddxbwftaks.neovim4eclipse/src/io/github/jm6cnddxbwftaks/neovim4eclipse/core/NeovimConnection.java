@@ -78,11 +78,11 @@ final class NeovimConnection implements AutoCloseable {
      *   <li>{@code ext_messages}: every message, with its kind ({@code msg_show}), the pending
      *       command ({@code msg_showcmd}) and {@code :messages} ({@code msg_history_show}); see
      *       {@code util/MessageEvent}. Neovim then never waits at a "Press ENTER" prompt: there is
-     *       no message area to fill.</li>
+     *       no message area to fill (checked on Neovim 0.12.6).</li>
      *   <li>{@code ext_popupmenu}: completion candidates as {@code popupmenu_show}; on grid -1 they
      *       belong to the command line, and the box lists them. A menu of an insert Neovim drives
      *       ({@code <C-n>} in a block {@code I}) comes on grid 1 and is ignored, as it was drawn into
-     *       a grid nobody saw before (experiment X3).</li>
+     *       a grid nobody saw before.</li>
      *   <li>{@code ext_linegrid}, which {@code ext_messages} needs (Neovim turns it on anyway). The grid
      *       events it brings are ignored; they are fewer per key than the old cell-by-cell ones.</li>
      * </ul>

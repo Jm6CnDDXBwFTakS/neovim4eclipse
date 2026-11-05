@@ -30,8 +30,8 @@ import java.util.List;
  * command line opened inside another ({@code <C-r>=}). A {@code redraw} batch holds one entry per
  * event name, with one argument list per event: {@code ["cmdline_pos", args1, args2]}.
  *
- * <p>Examples as Neovim 0.12.6 sends them: {@code :set
- * tabs} gives {@code cmdline_show [[0, "set tabs"]] 8 ":" "" 0 1}; {@code <Left>} then
+ * <p>Examples as Neovim 0.12.6 sends them: {@code :set tabs}
+ * gives {@code cmdline_show [[0, "set tabs"]] 8 ":" "" 0 1}; {@code <Left>} then
  * {@code cmdline_pos 7 1}; {@code :e <Tab>} a {@code popupmenu_show} with every file and grid -1;
  * {@code input("Name: ")} a {@code cmdline_show} with firstc {@code ""} and prompt {@code "Name: "}.
  */

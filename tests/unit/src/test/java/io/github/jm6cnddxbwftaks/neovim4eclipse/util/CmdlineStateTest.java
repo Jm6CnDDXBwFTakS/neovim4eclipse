@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState.View;
 
-/** What the {@code :} box shows for the events Neovim 0.12.6 sends (experiments X3 and X8). */
+/** What the {@code :} box shows for the events Neovim 0.12.6 sends. */
 class CmdlineStateTest {
 
     private final CmdlineState state = new CmdlineState();

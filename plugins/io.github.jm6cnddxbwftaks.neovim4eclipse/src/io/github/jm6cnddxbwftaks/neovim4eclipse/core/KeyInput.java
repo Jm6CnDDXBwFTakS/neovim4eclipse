@@ -335,7 +335,7 @@ final class KeyInput {
 
     /**
      * Gives the rest of an insert back to Eclipse once Neovim has the keys it was given meanwhile
-     * (docs/design/INSERT_CTRL_KEYS.md, phase D). Example: Eclipse typed {@code foo}, the user
+     * (docs/design/INSERT_CTRL_KEYS.md, section 5). Example: Eclipse typed {@code foo}, the user
      * pressed {@code Ctrl-R} (Neovim drives, since it waits for a register name), then {@code a}:
      * Neovim inserts register {@code a} and is in plain insert mode again. Or a letter typed in the
      * millisecond after {@code Ctrl-W}, before Eclipse had Neovim's text, went to Neovim. The same
@@ -478,7 +478,7 @@ final class KeyInput {
     /**
      * Types the plan's text at its base position into Neovim's open insert, with no mapping or
      * abbreviation applied ({@link Neovim#typeText}), so the user's own insert mappings can stay
-     * (docs/design/INSERT_CTRL_KEYS.md, phase E). Example: with {@code inoremap jk <Esc>}, Eclipse's
+     * (docs/design/INSERT_CTRL_KEYS.md, section 3). Example: with {@code inoremap jk <Esc>}, Eclipse's
      * typed {@code jk} is re-typed as two letters and does not end the insert half way.
      * {@link Neovim#awaitKeysConsumed()} follows every chunk, so the text is processed before the
      * next step.
@@ -499,7 +499,7 @@ final class KeyInput {
 
     /**
      * A <em>sync point</em>: a {@code Ctrl} key Neovim handles in the middle of an insert Eclipse
-     * types (docs/design/INSERT_CTRL_KEYS.md, phase C). Example: Eclipse typed {@code foo bar}, the
+     * types (docs/design/INSERT_CTRL_KEYS.md, section 2). Example: Eclipse typed {@code foo bar}, the
      * user presses {@code Ctrl+W}.
      * <ol>
      *   <li>The typed text is re-typed into Neovim's still-open insert ({@code foo bar}), as at Esc

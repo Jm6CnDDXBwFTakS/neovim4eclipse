@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Reading command-line, completion-menu and view events out of {@code redraw} notifications, shaped
- * as Neovim 0.12.6 sends them (experiments X3 and X8) and as the RPC layer decodes them.
+ * as Neovim 0.12.6 sends them and as the RPC layer decodes them.
  */
 class CmdlineEventTest {
 

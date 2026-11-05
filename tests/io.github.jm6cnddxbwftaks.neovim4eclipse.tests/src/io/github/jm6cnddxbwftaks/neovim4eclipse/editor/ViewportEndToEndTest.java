@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
- * Neovim's window follows the editor (docs/design/VIEWPORT.md, commits 1 and 2): its size is the
+ * Neovim's window follows the editor (docs/design/VIEWPORT.md, 3.1 and 3.2): its size is the
  * text area's, so {@code L} is the editor's last line, {@code 'wrap'} is the editor's word wrap, both
  * ways, and the editor scrolls where Neovim's window scrolls. The pieces are tested alone in {@code ViewportFollowerTest}, {@code viewport_spec.lua} and
  * {@code NeovimViewportIntegrationTest}; this is the wiring.

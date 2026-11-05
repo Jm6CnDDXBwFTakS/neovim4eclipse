@@ -55,7 +55,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  *       other file.</li>
  *   <li><b>Never over unsaved changes.</b> If an Eclipse editor has the target open with unsaved
  *       changes, the copy is refused, even with {@code !}: the editor would keep its text and show
- *       "File Changed" when next activated (experiment X3), and one of the two texts would be lost.
+ *       "File Changed" when next activated, and one of the two texts would be lost.
  *       An editor without unsaved changes reloads the new text, and its Neovim buffer follows.</li>
  *   <li><b>No save actions.</b> Eclipse's save actions (format on save, organize imports) belong to
  *       an editor's save; a copy is the text as it is, as in Vim.</li>
@@ -149,7 +149,7 @@ final class OtherFileWrites {
      * dialog. The document provider saves the document to the new input, then the editor takes that
      * input ({@link EditorAttachManager#replaceInputKeepingBuffer}). Experiment X4 checked it for a
      * workspace file, a file outside the workspace and a Java file. Eclipse's save actions do not run
-     * in such a save (X4: format on save left the text as it was); a {@code :w} afterwards runs them.
+     * in such a save (format on save leaves the text as it was); a {@code :w} afterwards runs them.
      *
      * <p>Refused when another Eclipse editor has {@code target} open (Vim's E139 is for a file another
      * buffer has; Neovim gives it itself when that editor has a Neovim buffer), and for an editor

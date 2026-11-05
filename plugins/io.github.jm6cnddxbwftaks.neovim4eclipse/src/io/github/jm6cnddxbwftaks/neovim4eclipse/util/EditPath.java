@@ -24,7 +24,8 @@ import java.nio.file.Path;
  *
  * <p>History: until 0.1.9 a plain name was looked for beside the file first, then in the project
  * root, and {@code ./} meant the file's folder. That came from a time when Neovim's working folder
- * was wherever Eclipse had started. Once each window worked in its project ({@code :lcd}) the reason was gone, and the search made {@code :e} and {@code :w}
+ * was wherever Eclipse had started. Once each window worked in its project ({@code :lcd}) the
+ * reason was gone, and the search made {@code :e} and {@code :w}
  * disagree about the same name.
  */
 public final class EditPath {

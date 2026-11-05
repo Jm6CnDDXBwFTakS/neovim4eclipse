@@ -52,8 +52,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * The screenshot gallery for the manual checks: the dialogs and preference-page notes that a
  * person must look at before a release (layout, spacing, wording on screen, the error color), drawn
  * by the plug-in's own code, so looking at the pictures replaces opening each dialog by hand. The
- * pictures are grouped by topic (a short name such as {@code gn-download}, "gn" for Get Neovim), one
- * heading per topic on the page.
+ * pictures are grouped by topic (a short name such as {@code dedicated}), one heading per topic on
+ * the page.
  *
  * <p>Not a test, though named like one (Surefire runs only classes named *Test): it asserts only
  * what it needs to reach each state, and writes PNG files plus an {@code index.html} that shows
@@ -156,14 +156,14 @@ class ChecksGalleryTest {
         Resolved noDedicated = new Resolved(program.toString(), Kind.NO_DEDICATED);
 
         // Get Neovim, opened by the plug-in at Eclipse's start (prefs/GetNeovimOffer).
-        dialog("gn-start-offer", "Get Neovim at a fresh start", GetNeovimText.TITLE, MessageDialog.QUESTION,
+        dialog("start-offer", "Get Neovim at a fresh start", GetNeovimText.TITLE, MessageDialog.QUESTION,
                 GetNeovimText.confirm(release, archive, home,
                         StartFailureReport.getNeovimInstead(noDedicated, Optional.empty()).orElseThrow()),
                 GetNeovimText.CONFIRM_BUTTONS,
                 "Why first: not installed, will only run with the dedicated Neovim. Instead last, with two Copy "
                         + "fields (command line, eclipse.ini line) and \"so be sure it is Neovim\". Rows a little "
                         + "apart, nothing cut off.");
-        dialog("gn-corrupt", "Get Neovim when the files differ", GetNeovimText.TITLE, MessageDialog.QUESTION,
+        dialog("files-differ", "Get Neovim when the files differ", GetNeovimText.TITLE, MessageDialog.QUESTION,
                 GetNeovimText.confirm(release, archive, home, StartFailureReport.getNeovimInstead(noDedicated,
                         Optional.of(new PluginNeovim.Unverified(program))).orElseThrow()),
                 GetNeovimText.CONFIRM_BUTTONS, "Why says the files differ from the release and may be damaged.");
@@ -172,22 +172,22 @@ class ChecksGalleryTest {
         // The note as it reads on a machine without the dedicated Neovim: given, as this one may have it.
         NvimProbe.Note none = NvimProbe.note(noDedicated, null, Optional.empty(), NvimExecutable.dedicatedFolder(),
                 release.version());
-        group("gn-cancel-page", "Preference page, no dedicated Neovim", "", value -> none,
+        group("no-dedicated", "Preference page, no dedicated Neovim", "", value -> none,
                 "Note in the error color: no dedicated Neovim yet, \"Get Neovim\" installs it into the folder. "
                         + "The Get Neovim button, then the help with the -vmargs command on a line of its own. "
                         + "No field, no Browse.");
-        group("gn-download", "Preference page, dedicated Neovim checked", NeovimOption.value(), ChecksGalleryTest::withoutLeftovers,
+        group("dedicated", "Preference page, dedicated Neovim checked", NeovimOption.value(), ChecksGalleryTest::withoutLeftovers,
                 "Note in the normal color: Found: dedicated Neovim, checked, with its path; a Reinstall... link "
                         + "under it; no Get Neovim button.");
         // Get Neovim's done note, without and with the option (prefs/GetNeovim). A topic's pictures stay
         // together: the page starts a new heading whenever the topic changes.
-        dialog("gn-download", "Get Neovim done", GetNeovimText.TITLE, MessageDialog.INFORMATION,
+        dialog("dedicated", "Get Neovim done", GetNeovimText.TITLE, MessageDialog.INFORMATION,
                 GetNeovimText.done(release.version(), program, archive.sha256(), false, false), List.of("Close"),
                 "The program's path and the SHA-256, each with Copy; the VirusTotal report link.");
         Path own = fakeNeovim(release);
-        group("gn-option-program", "Preference page, a program of your own", own.toString(), ChecksGalleryTest::withoutLeftovers,
+        group("own-program", "Preference page, a program of your own", own.toString(), ChecksGalleryTest::withoutLeftovers,
                 "Note in the normal color: the program, from -Dneovim4eclipse.nvim, unchecked and unsupported.");
-        dialog("gn-option-done", "Get Neovim done, with the option set", GetNeovimText.TITLE,
+        dialog("done-with-option", "Get Neovim done, with the option set", GetNeovimText.TITLE,
                 MessageDialog.INFORMATION,
                 GetNeovimText.done(release.version(), program, archive.sha256(), false, true), List.of("Close"),
                 "An Option row: Eclipse still runs the program -Dneovim4eclipse.nvim names, until it is removed.");
@@ -205,17 +205,17 @@ class ChecksGalleryTest {
         // Named as real leftovers are: the archive's name and the version, as 0.2.0 extracted them.
         String extracted = archive.asset().replaceFirst("\\.(tar\\.gz|zip)$", "") + "_" + release.version();
         String leftovers = NvimProbe.unusedLines(List.of("current", extracted), neovim);
-        group("gn-leftovers", "Preference page, with leftovers in the Neovim folder", missing.toString(),
+        group("leftovers", "Preference page, with leftovers in the Neovim folder", missing.toString(),
                 value -> NvimProbe.describe(value).withUnused(leftovers),
                 "The note in the error color; under it, in the normal color, \"Not used by the plug-in, you can "
                         + "delete:\" and the two entries, one full path a line.");
 
         // The note about the removed preference (editor/OldNeovimProgramNotice).
-        dialog("gn-old-setting", "Old preference note", OldNeovimProgram.TITLE, MessageDialog.INFORMATION,
+        dialog("old-setting", "Old preference note", OldNeovimProgram.TITLE, MessageDialog.INFORMATION,
                 OldNeovimProgram.message("/usr/local/bin/nvim", "", false).orElseThrow(), OldNeovimProgram.BUTTONS,
                 "Was with the old value to copy; Instead with the command line and the eclipse.ini line; "
                         + "\"This note shows once\" last.");
-        dialog("gn-old-setting", "Old preference note, a path with a space", OldNeovimProgram.TITLE,
+        dialog("old-setting", "Old preference note, a path with a space", OldNeovimProgram.TITLE,
                 MessageDialog.INFORMATION,
                 OldNeovimProgram.message("C:\\Program Files\\Neovim\\bin\\nvim.exe", "", true).orElseThrow(),
                 OldNeovimProgram.BUTTONS,
@@ -229,12 +229,12 @@ class ChecksGalleryTest {
     /** The "Neovim not started" notice and the preference page's note for a value the option refuses. */
     private void refused(String name, String value, Kind kind, String reason) throws IOException {
         // As editor/StartFailureNotice shows it, with the dedicated Neovim installed (so no Get Neovim button).
-        dialog("gn-option-refused", "Neovim not started: " + name, StartFailureReport.TITLE, MessageDialog.ERROR,
+        dialog("refused", "Neovim not started: " + name, StartFailureReport.TITLE, MessageDialog.ERROR,
                 StartFailureReport.message(new Resolved(value, kind), new IOException("Cannot run program"),
                         List.of(), Optional.empty(), true, path -> null),
                 List.of("Open Preferences", "Close"),
                 "Program row with the value to copy; Reason: " + reason + "; Fix: remove -Dneovim4eclipse.nvim.");
-        group("gn-option-refused", "Preference page: " + name, value, ChecksGalleryTest::withoutLeftovers,
+        group("refused", "Preference page: " + name, value, ChecksGalleryTest::withoutLeftovers,
                 "Note in the error color: " + reason + ".");
     }
 
@@ -282,7 +282,7 @@ class ChecksGalleryTest {
 
     /**
      * Draws {@code shell}'s inside into a PNG named after the topic and its place in the gallery, for
-     * example {@code 03-gn-cancel-page.png}.
+     * example {@code 03-no-dedicated.png}.
      */
     private void save(Shell shell, String topic, String title, String lookFor) {
         shell.layout(true, true);
@@ -397,9 +397,9 @@ class ChecksGalleryTest {
 
     /**
      * The note as the page finds it, without this machine's leftovers in the plug-in's folder: they
-     * differ from machine to machine, so only the gn-leftovers picture lists them, and it lists the
-     * same two on every machine (seen 2026-11-05: on a machine with leftovers, every page picture
-     * listed them and the leftovers picture matched another one byte for byte).
+     * differ from machine to machine, so only the leftovers picture lists them, and it lists the
+     * same two on every machine (otherwise, on a machine with leftovers, every page picture lists them
+     * and the leftovers picture matches another one byte for byte).
      */
     private static NvimProbe.Note withoutLeftovers(String configured) {
         return NvimProbe.describe(configured).withUnused(null);

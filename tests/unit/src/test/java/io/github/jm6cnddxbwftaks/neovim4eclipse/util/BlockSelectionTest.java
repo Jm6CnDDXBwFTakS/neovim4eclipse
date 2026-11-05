@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Turning Neovim's block lines into document characters. Each case uses what Neovim 0.12.6's
- * {@code getregionpos()} returned for that text and block; the
- * screen-cell arithmetic behind those numbers is Neovim's and is not tested here.
+ * {@code getregionpos()} returned for that text and block; the screen-cell
+ * arithmetic behind those numbers is Neovim's and is not tested here.
  */
 class BlockSelectionTest {
 

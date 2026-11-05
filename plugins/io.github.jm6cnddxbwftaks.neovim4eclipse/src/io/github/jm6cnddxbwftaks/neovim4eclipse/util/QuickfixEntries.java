@@ -33,8 +33,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic.Severity;
  * As {@code setqflist()} takes them: lines 1-based, columns 1-based <em>byte</em> columns (Neovim's
  * {@code col} with {@code vcol} 0). 0 means "not known": a line of 0 opens the file and leaves the
  * cursor where it was in it, a column of 0 puts the cursor on the line's first non-blank. The
- * entries of a file without an open editor have the line only (DIAGNOSTICS.md, 5.3: a
- * column would need the file's text).
+ * entries of a file without an open editor have the line only (a column would need
+ * the file's text: DIAGNOSTICS.md, 5.3).
  */
 public final class QuickfixEntries {
 
@@ -123,7 +123,7 @@ public final class QuickfixEntries {
     // ---- which problems ------------------------------------------------------------------------
 
     /**
-     * The least severity {@code :Eproblems arg} lists (DIAGNOSTICS.md, 5.2: at least that severe, as
+     * The least severity {@code :Eproblems arg} lists (at least that severe, as
      * {@code vim.diagnostic}'s {@code severity = { min = ... }}): {@code ""} or {@code "info"} lists
      * all, {@code "warning"} errors and warnings, {@code "error"} errors. {@code null} for anything
      * else (Neovim's command refuses it first; this guards a hand-written call).

@@ -5,8 +5,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
  * Which lines of a document may differ from Neovim's buffer, so that a push writes only those
- * (docs/design/INSERT_CTRL_KEYS.md, phase F): at {@code Esc} and at a sync point, Eclipse used to
- * read Neovim's whole buffer to find the few lines typed in, 19 ms at 100k lines.
+ * (docs/design/INSERT_CTRL_KEYS.md, section 4): at {@code Esc} and at a sync point, reading Neovim's
+ * whole buffer to find the few lines typed in would take 19 ms at 100k lines.
  *
  * <h2>The idea</h2>
  * Kept as two numbers: how many lines at the start, and how many at the end, no change has touched
@@ -35,8 +35,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 public final class ChangedLines {
 
     /**
-     * Documents up to this many lines are compared whole at {@code Esc} and at a sync point, as
-     * before phase F: Neovim's whole buffer is read and diffed against the document, about 3 ms at
+     * Documents up to this many lines are compared whole at {@code Esc} and at a sync point:
+     * Neovim's whole buffer is read and diffed against the document, about 3 ms at
      * 10,000 lines. That repairs any difference between the two, wherever it is, not only in the
      * lines typed (a safety net: a lost event, or a bug elsewhere, does not stay). Longer documents
      * push only the changed lines ({@link #region}), where a whole comparison costs 20 ms and more.

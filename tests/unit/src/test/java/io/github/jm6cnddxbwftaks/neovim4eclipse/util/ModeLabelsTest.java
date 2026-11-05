@@ -15,9 +15,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ModeLabels.Group;
 
 /**
  * {@link ModeLabels}: every Neovim mode string the status bar names, its label and its tooltip. The
- * mode strings are those Neovim 0.12.6 reported for each state (probe of 2026-10-29); the labels are
- * lualine's names with Vim's parentheses
- * (docs/design/STATUS_BAR.md).
+ * mode strings are those Neovim 0.12.6 reported for each state; the labels are
+ * lualine's names with Vim's parentheses (docs/design/STATUS_BAR.md).
  */
 class ModeLabelsTest {
 

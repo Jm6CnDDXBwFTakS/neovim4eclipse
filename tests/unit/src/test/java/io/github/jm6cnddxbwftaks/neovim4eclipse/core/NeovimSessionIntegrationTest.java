@@ -368,7 +368,7 @@ class NeovimSessionIntegrationTest {
 
     /**
      * Long output leaves Neovim ready for the next key: with {@code ext_messages} there is no
-     * "Press ENTER" or "-- More --" prompt to wait at (experiment X2), so nothing dismisses one.
+     * "Press ENTER" or "-- More --" prompt to wait at, so nothing dismisses one.
      */
     @Test
     void longOutputLeavesNoPrompt() throws Exception {
@@ -853,7 +853,7 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    // ---- a push of part of the buffer (INSERT_CTRL_KEYS.md, phase F) ----
+    // ---- a push of part of the buffer (INSERT_CTRL_KEYS.md, section 4) ----
 
     /** Lines 1 .. end-1 replaced: the last line stays, counted from the end; outside the buffer: refused. */
     @Test
@@ -871,7 +871,7 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    // ---- the user's insert mappings and abbreviations are kept (INSERT_CTRL_KEYS.md, phase E) ----
+    // ---- the user's insert mappings and abbreviations are kept (INSERT_CTRL_KEYS.md, section 3) ----
 
     /**
      * The re-typing at Esc applies none of the user's insert mappings or abbreviations: Eclipse

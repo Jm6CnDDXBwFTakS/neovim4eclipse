@@ -960,7 +960,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A sync point (docs/design/INSERT_CTRL_KEYS.md, phase C): Ctrl+W while Eclipse types hands the
+     * A sync point (docs/design/INSERT_CTRL_KEYS.md, section 2): Ctrl+W while Eclipse types hands the
      * typed text to Neovim, whose own Ctrl-W deletes the word; Eclipse then types on, and {@code .}
      * repeats the whole insert, Ctrl-W included, as in Vim.
      */
@@ -1000,8 +1000,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Ctrl-T and Ctrl-D while Eclipse types: each is a sync
-     * point, and Neovim's own Ctrl-T indents the line by one {@code 'shiftwidth'}, Ctrl-D takes one
+     * Ctrl-T and Ctrl-D while Eclipse types: each is a sync point, and Neovim's own Ctrl-T indents the line by one {@code 'shiftwidth'}, Ctrl-D takes one
      * back. Each step is checked before the next key (one level, two, one again), so a lost key
      * fails the test; the caret stays after the text, where the insert goes on. The indent is the
      * one Neovim makes from the editor's settings (tabs or spaces, {@code core/LuaScripts}' indent

@@ -592,7 +592,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
     /**
      * A global mark into a closed file: {@code 'A} from another editor reopens the file's editor with
      * the caret on the mark's line. A closed file keeps its buffer, and the buffer keeps its marks
-     * (docs/design/BUFFER_NUMBERS.md). The manual test "A global mark into a closed file".
+     * (docs/design/BUFFER_NUMBERS.md).
      */
     @Test
     void aGlobalMarkIntoAClosedFileReopensItOnTheMarksLine() throws Exception {

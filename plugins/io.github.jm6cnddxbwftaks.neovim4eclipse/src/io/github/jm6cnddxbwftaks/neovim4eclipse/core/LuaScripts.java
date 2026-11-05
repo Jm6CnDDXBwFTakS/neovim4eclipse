@@ -98,7 +98,7 @@ final class LuaScripts {
             vim.opt.showmode = false
             -- The user's insert-mode mappings and abbreviations stay: the text Eclipse typed is
             -- re-typed into Neovim with nvim_feedkeys(text, 'n'), which applies none of them, so a
-            -- `jk` -> <Esc> mapping cannot end that re-typing half way (docs/design/INSERT_CTRL_KEYS.md, E).
+            -- `jk` -> <Esc> mapping cannot end that re-typing half way (docs/design/INSERT_CTRL_KEYS.md, section 3).
             vim.api.nvim_create_autocmd('ModeChanged', {
               callback = function()
                 vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode)
@@ -426,7 +426,7 @@ final class LuaScripts {
      * {@code :bufdo} runs, or after a {@code |} that {@code nvim_parse_cmd()} does not split
      * ({@code :let x = 1 | q}): those reach Neovim. For the ones that close something
      * there are safety nets, which tell Eclipse but cannot stop Neovim: {@code QuitPre} here (a
-     * {@code :quit} Neovim runs; on its last window Neovim ends, as experiment X7 found), and
+     * {@code :quit} Neovim runs; on its last window Neovim ends), and
      * {@code BufDelete} / {@code BufWipeout} on each document buffer ({@link #DOCUMENT_BUFFER}).
      * Both send {@code eclipse_buffer_closed}, and Eclipse closes the editor showing that buffer.
      */
@@ -818,7 +818,7 @@ final class LuaScripts {
      * {@code util/BlockSelection}). Neovim
      * does the screen-cell arithmetic: tabs, wide characters, {@code $}. Example: {@code Ctrl-V},
      * {@code j}, {@code l} from the start of {@code "abc"} and {@code "def"} gives
-     * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (experiment X5).
+     * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (Neovim 0.12.6).
      *
      * <p>The first argument is the status bar's statusline width in columns, {@code "0"} when it shows
      * no statusline (then nothing is evaluated). Neovim evaluates the {@code 'statusline'} (a Vim-like
@@ -1418,7 +1418,7 @@ final class LuaScripts {
      *
      * <p>In order: the plug-in's autocommands for the buffer go (the write hook and the safety net
      * belong to a document with an editor); {@code 'buftype'} goes back to a normal file's, since
-     * Neovim drops the marks of an {@code acwrite} buffer when it unloads it (X4); then unload and
+     * Neovim drops the marks of an {@code acwrite} buffer when it unloads it (BUFFER_NUMBERS.md, X4); then unload and
      * unlist. {@code b:neovim4eclipse_file} stays. Nothing for a buffer that is gone.
      */
     static final String CLOSE_DOCUMENT_BUFFER = """
@@ -2918,7 +2918,7 @@ final class LuaScripts {
      * {@code :w other.txt} and {@code vim.cmd.write()} all write through Eclipse. {@code v:cmdarg} passes {@code ++p} along.
      * {@code 'modified'} itself follows Eclipse's dirty flag ({@link #SET_MODIFIED}), so
      * {@code :update} asks for exactly the files Eclipse would save. Neovim pipes {@code :w !cmd}
-     * without these hooks.
+     * without these hooks (checked on Neovim 0.12.6).
      *
      * <h2>Which file: the editor's, or a copy</h2>
      * {@code BufWriteCmd} gets the name being written ({@code ev.match}), and the script compares it
@@ -2941,8 +2941,9 @@ final class LuaScripts {
      *       the buffer keeps its name and file, so a later {@code :w} is the editor's own save.</li>
      *   <li>The buffer's new name after {@code :saveas new.txt}, which renames the buffer and then
      *       writes it: Eclipse saves the document as that file and moves the editor there (kind
-     *       {@code "saveas"}); then {@code b:neovim4eclipse_file} is the new file. (Before, Eclipse
-     *       saved the editor's old file while Neovim called the buffer by the new name: a bug since fixed.)</li>
+     *       {@code "saveas"}); then {@code b:neovim4eclipse_file} is the new file. (Without it,
+     *       Eclipse would save the editor's old file while Neovim called the buffer by the new
+     *       name.)</li>
      * </ul>
      * The buffer must keep its editor's name, so {@code BufFilePost} checks it once the command is
      * over ({@code vim.schedule}) and puts the old name back after {@code :file new.txt} (with a
@@ -2989,7 +2990,7 @@ final class LuaScripts {
      * ({@link #HOST_COMMANDS}), which closes the editor. One Neovim runs itself ({@code <Cmd>bd<CR>},
      * {@code vim.cmd.bdelete()}, {@code :bufdo bd}) deletes the buffer first; its {@code BufDelete}
      * or {@code BufWipeout} then sends {@code eclipse_buffer_closed}, and Eclipse closes the editor
-     * showing it, asking about changes as usual. When Eclipse
+     * showing it, asking about changes as usual, so a buffer and its editor never outlive each other. When Eclipse
      * wipes a buffer itself (its last editor closed), no editor shows it any more and the notice is
      * ignored.
      *

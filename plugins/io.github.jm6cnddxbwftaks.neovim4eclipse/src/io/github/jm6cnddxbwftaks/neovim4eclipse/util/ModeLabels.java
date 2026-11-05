@@ -28,15 +28,15 @@ import java.util.Locale;
  * <p>Parentheses follow Vim's rule: they name the mode that comes back after one command.
  * {@code (INSERT)} is Normal mode for one command, then Insert again ({@code Ctrl-O} in Insert);
  * {@code (S) V-BLOCK} is Visual block for one command, then Select block again ({@code Ctrl-O} in
- * Select block). Lualine shows plain {@code V-BLOCK} there; the bar uses Vim's form. The labels and the parentheses were decided then, replacing the three styles (Full,
- * Short, Letters) of the 0.2.0 snapshots: see docs/design/STATUS_BAR.md.
+ * Select block). Lualine shows plain {@code V-BLOCK} there; the bar uses Vim's form, which says
+ * what the next command returns to. See docs/design/STATUS_BAR.md.
  *
  * <p>Neovim reports a mode more finely than these labels: all four operator-pending forms
  * ({@code no}, {@code nov}, {@code noV}, {@code no^V}) are {@code O-PENDING}, and the completion forms
  * of Insert ({@code ic}, {@code ix}) are Insert's. Two states Vim names cannot be told apart from the
  * mode string: Visual or Select entered with {@code Ctrl-O} from Insert mode report plain {@code v}
- * or {@code s}, so they show as plain Visual or Select (not worth tracking the
- * mode before them).
+ * or {@code s}, so they show as plain Visual or Select (tracking the mode before them is not worth
+ * its cost).
  *
  * <p>Pure Java; all mode strings are interpreted here or in {@link VimModes}.
  */
