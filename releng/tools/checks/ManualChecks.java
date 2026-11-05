@@ -381,7 +381,9 @@ public final class ManualChecks {
     /**
      * The cards as a JSON array of sections, {@code [{"title", "checks": [{"id", "on", "t", "s",
      * "e", "launch"}]}]}, with {@code s} and {@code e} as HTML: the shape a tick page renders. The
-     * launch command is put first in {@code s}, so the page says how to start each card.
+     * launch command is put first in {@code s}, so the page says how to start each card. It is a
+     * code block of its own ({@code <div class="snip"><pre>...</pre></div>}, as the Markdown's code
+     * blocks are), so the page can give it a Copy button like the other commands.
      */
     static String json(List<Card> cards) {
         Map<String, List<Card>> sections = new LinkedHashMap<>();
@@ -396,7 +398,7 @@ public final class ManualChecks {
             int c = 0;
             for (Card card : section.getValue()) {
                 String launch = card.launch().equals("none") ? ""
-                        : "<p>Launch: <code>java releng/tools/checks/ManualChecks.java launch " + card.id() + "</code></p>";
+                        : "<div class=\"snip\"><pre>java releng/tools/checks/ManualChecks.java launch " + card.id() + "</pre></div>";
                 out.append(c++ == 0 ? "" : ",\n").append("  {\"id\": ").append(quote(card.id()))
                         .append(", \"on\": [").append(String.join(", ", card.on().stream().map(ManualChecks::quote).toList()))
                         .append("], \"launch\": ").append(quote(card.launch()))
