@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -135,9 +136,10 @@ public final class NvimExecutable {
         // that install, checked before every start like the dedicated Neovim and called dedicated by
         // the notes, not run unchecked. That very install, not the first verified one: on Apple
         // silicon, naming neovim/mx/bin/nvim (to try the x86_64 build) runs mx, not ma.
-        for (Path home : pluginHomes) {
+        Path named = asPath(file);
+        for (Path home : named == null ? List.<Path>of() : pluginHomes) {
             Path program = PluginNeovim.program(home, windows).toAbsolutePath();
-            if (FilePaths.same(file.toPath().toAbsolutePath(), program)) {
+            if (FilePaths.same(named, program)) {
                 return verified.test(home) && versionOf.apply(program) != null
                         ? new Resolved(program.toString(), Kind.DEDICATED)
                         : new Resolved(program.toString(), Kind.NO_DEDICATED);
@@ -147,6 +149,22 @@ public final class NvimExecutable {
             return new Resolved(file.getAbsolutePath(), Kind.PROGRAM);
         }
         return new Resolved(name, file.isDirectory() ? Kind.FOLDER : Kind.MISSING);
+    }
+
+    /**
+     * {@code file} as an absolute {@link Path}, or {@code null} for a name the file system cannot
+     * hold: {@code File} takes any text, {@code Path} refuses a character the system forbids
+     * ({@code <}, {@code >}, {@code |}, {@code "}, {@code ?}, {@code *} on Windows, a NUL byte
+     * everywhere) with an {@code InvalidPathException}. Such a name is no dedicated install; the
+     * caller goes on to say it is missing (seen on Windows 2026-11-05: {@code C:\no\<a>such</a>\nvim.exe}
+     * threw instead of giving the note "No Neovim program at").
+     */
+    private static Path asPath(File file) {
+        try {
+            return file.toPath().toAbsolutePath();
+        } catch (InvalidPathException e) {
+            return null;
+        }
     }
 
     /** {@code ~} or {@code ~/x} ({@code ~\x}) with the home folder in place of the {@code ~}. */
@@ -267,7 +285,7 @@ public final class NvimExecutable {
         if (resolved == null || !new File(resolved).isAbsolute()) {
             return null;
         }
-        Path path = Path.of(resolved);
-        return Files.isRegularFile(path) ? path : null;
+        Path path = asPath(new File(resolved)); // null for a name the file system cannot hold
+        return path != null && Files.isRegularFile(path) ? path : null;
     }
 }

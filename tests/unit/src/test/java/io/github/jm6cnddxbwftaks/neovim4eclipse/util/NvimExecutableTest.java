@@ -81,6 +81,18 @@ class NvimExecutableTest {
                 ALL_VERIFIED).kind(), "any other program is still the user's own");
     }
 
+    /**
+     * A name the file system cannot hold is a missing program, not an exception: on Windows
+     * {@code <}, {@code >} and the like, here a NUL byte, which every system refuses in a path.
+     */
+    @Test
+    void aNameTheFileSystemCannotHoldIsMissing() throws IOException {
+        Path la = install("la");
+        String bad = "/no/<a>such\0</a>/nvim";
+        assertEquals(NvimExecutable.Kind.MISSING, find(bad, List.of(la), ALL_VERIFIED).kind());
+        assertEquals(null, NvimExecutable.locate(bad), "Get Neovim's done note asks this too: no exception");
+    }
+
     /** Naming the second processor's install runs that one, not the first verified home. */
     @Test
     void theNamedDedicatedInstallIsTheOneThatRuns() throws IOException {
