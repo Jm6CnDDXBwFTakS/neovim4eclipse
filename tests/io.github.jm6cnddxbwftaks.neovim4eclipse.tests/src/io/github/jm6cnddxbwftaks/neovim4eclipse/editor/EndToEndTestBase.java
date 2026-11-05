@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,6 +49,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 
 /**
@@ -130,6 +132,27 @@ abstract class EndToEndTestBase {
         session.inputAsync("<Esc>");
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
         settle(); // let the initial document push and cursor placement finish
+        waitForNeovimIn(file);
+    }
+
+    /**
+     * Waits until Neovim's current buffer is {@code file}'s. The attach queues the switch to the
+     * editor's window and buffer on the session, and {@link #settle} waits for that queue; but a
+     * check that asks Neovim directly ({@link SessionProbe#lua}) does not wait in it. On one core the
+     * switch could still be pending, and a script such as {@code vim.cmd('edit!')} then ran in the
+     * unnamed start buffer and failed with E32 "No file name". Keys typed into the editor cannot
+     * meet this: they wait in the same queue as the switch.
+     *
+     * <p>The names are compared with the one rule for paths ({@link FilePaths#same}): Neovim may
+     * spell {@code C:\ws\e2e\test.txt} as {@code C:/ws/e2e/test.txt} or in another case.
+     */
+    void waitForNeovimIn(IFile file) {
+        Path expected = Path.of(file.getLocation().toOSString());
+        String[] current = { "" };
+        waitUntil("Neovim's current buffer to be " + file.getName(), TIMEOUT_MS, () -> {
+            current[0] = String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0)"));
+            return !current[0].isEmpty() && FilePaths.same(Path.of(current[0]), expected);
+        }, () -> "; it is '" + current[0] + "'");
     }
 
     /**
