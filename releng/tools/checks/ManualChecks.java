@@ -620,7 +620,9 @@ public final class ManualChecks {
         String eclipse = options.ownEclipse() ? yours
                 : ChecksEclipse.prepare(root, ChecksEclipse.program(yours), options.zip(), options.yes()).toString();
         List<String> command = List.of(eclipse, "-data", workspace.toString());
-        ProcessBuilder builder = new ProcessBuilder(command);
+        // Eclipse's working folder is the root, not the repository: a JVM crash file (hs_err_pid*.log)
+        // or anything else written by a relative path lands with the checks, not as an untracked file.
+        ProcessBuilder builder = new ProcessBuilder(command).directory(root.toFile());
         if (!card.launch().equals("normal")) {
             builder.environment().put("XDG_DATA_HOME", xdg.toString());
         }
@@ -932,7 +934,8 @@ public final class ManualChecks {
 
         /** Runs a command to its end; returns its output, also kept in {@code log}. */
         private static String run(List<String> command, Path log) throws IOException, InterruptedException {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            Process process = new ProcessBuilder(command).directory(log.getParent().toFile()) // the root, as for Eclipse
+                    .redirectErrorStream(true).start();
             String output;
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 output = String.join("\n", reader.lines().toList());
