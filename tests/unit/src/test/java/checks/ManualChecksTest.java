@@ -9,10 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
@@ -222,6 +225,20 @@ class ManualChecksTest {
         assertFalse(first.contains("-uninstallIU"));
         List<String> again = ManualChecks.ChecksEclipse.installArguments(zip, true);
         assertTrue(again.indexOf("-uninstallIU") < again.indexOf("-installIU"));
+    }
+
+    /** A workspace whose lock someone holds is in use; without a lock file, or once released, it is not. */
+    @Test
+    void aHeldWorkspaceLockMeansAnEclipseRunsThere(@TempDir Path workspace) throws IOException {
+        assertFalse(ManualChecks.ChecksEclipse.inUse(workspace), "no lock file");
+        Path lock = workspace.resolve(".metadata/.lock");
+        Files.createDirectories(lock.getParent());
+        Files.createFile(lock);
+        assertFalse(ManualChecks.ChecksEclipse.inUse(workspace), "a lock file nobody holds: Eclipse was closed");
+        try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.WRITE); FileLock held = channel.lock()) {
+            assertTrue(ManualChecks.ChecksEclipse.inUse(workspace));
+        }
+        assertFalse(ManualChecks.ChecksEclipse.inUse(workspace), "released");
     }
 
     /** The feature and the update site module the tool names exist under those names. */

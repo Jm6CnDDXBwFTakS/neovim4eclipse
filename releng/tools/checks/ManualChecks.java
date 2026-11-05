@@ -598,10 +598,16 @@ public final class ManualChecks {
             setup(root);
         }
         Path xdg = root.resolve("xdg");
+        Path workspace = root.resolve(options.workspace());
+        if (ChecksEclipse.inUse(workspace)) {
+            // Eclipse would only say "workspace in use"; say it here, before anything changes.
+            fail("an Eclipse already runs in " + workspace + "; close it, or use --workspace ws2");
+        }
         if (card.launch().equals("fresh") && isNotEmpty(xdg)) {
             if (!options.yes() && !confirm("Empty " + xdg + " (the checks' own plug-in folder) for a fresh start?")) {
                 fail("stopped; nothing was changed (--yes answers yes)");
             }
+            ChecksEclipse.refuseWhileRunning(root); // its Neovim may run from xdg
             try {
                 deleteContents(xdg);
             } catch (UncheckedIOException e) {
@@ -613,7 +619,7 @@ public final class ManualChecks {
         String yours = options.eclipse() != null ? options.eclipse() : defaultEclipse();
         String eclipse = options.ownEclipse() ? yours
                 : ChecksEclipse.prepare(root, ChecksEclipse.program(yours), options.zip(), options.yes()).toString();
-        List<String> command = List.of(eclipse, "-data", root.resolve(options.workspace()).toString());
+        List<String> command = List.of(eclipse, "-data", workspace.toString());
         ProcessBuilder builder = new ProcessBuilder(command);
         if (!card.launch().equals("normal")) {
             builder.environment().put("XDG_DATA_HOME", xdg.toString());
@@ -847,26 +853,39 @@ public final class ManualChecks {
         }
 
         /**
-         * Stops when an Eclipse started by {@code launch} still runs: p2 must not change an
-         * installation in use, nor may its files be deleted. Eclipse holds a lock on
-         * {@code <workspace>/.metadata/.lock} while it runs, so each workspace under the root is tried.
+         * Stops when an Eclipse started by {@code launch} still runs in any workspace under the root:
+         * p2 must not change an installation in use, nor may its files be deleted, and a Neovim it
+         * started may run from the {@code xdg} folder a {@code fresh} card empties (on macOS and
+         * Linux that delete succeeds under the running program's feet).
          */
-        private static void refuseWhileRunning(Path root) throws IOException {
+        static void refuseWhileRunning(Path root) throws IOException {
+            if (!Files.isDirectory(root)) {
+                return;
+            }
             try (Stream<Path> folders = Files.list(root)) {
                 for (Path workspace : folders.filter(Files::isDirectory).toList()) {
-                    Path lock = workspace.resolve(".metadata/.lock");
-                    if (!Files.isRegularFile(lock)) {
-                        continue;
-                    }
-                    try (var channel = java.nio.channels.FileChannel.open(lock, java.nio.file.StandardOpenOption.WRITE);
-                            var held = channel.tryLock()) {
-                        if (held == null) {
-                            fail("an Eclipse still runs in " + workspace + "; close it, then launch again");
-                        }
-                    } catch (java.nio.channels.OverlappingFileLockException | IOException e) {
-                        fail("an Eclipse still runs in " + workspace + " (" + e + "); close it, then launch again");
+                    if (inUse(workspace)) {
+                        fail("an Eclipse still runs in " + workspace + "; close it, then launch again");
                     }
                 }
+            }
+        }
+
+        /**
+         * Whether an Eclipse runs in {@code workspace}: Eclipse holds an operating-system lock on
+         * {@code <workspace>/.metadata/.lock} while it runs, so a lock this program cannot take means
+         * one does. No lock file, no Eclipse.
+         */
+        static boolean inUse(Path workspace) {
+            Path lock = workspace.resolve(".metadata/.lock");
+            if (!Files.isRegularFile(lock)) {
+                return false;
+            }
+            try (var channel = java.nio.channels.FileChannel.open(lock, java.nio.file.StandardOpenOption.WRITE);
+                    var held = channel.tryLock()) {
+                return held == null;
+            } catch (java.nio.channels.OverlappingFileLockException | IOException e) {
+                return true; // held in this very program (a test), or not even writable: treat as in use
             }
         }
 
