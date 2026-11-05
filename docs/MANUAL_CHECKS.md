@@ -52,7 +52,9 @@ Build the version under test first: `./mvnw verify -DskipTests` makes the update
   the platform: `eclipse` on `PATH`, `/Applications/Eclipse.app`, `C:\eclipse\eclipse.exe`) is
   copied to `~/var/n4e-checks/eclipse/` the first time. Its `plugins/` and `features/` are hard links
   to yours (the same bytes under a second name), so the copy takes a few hundred MB at most, not the 1 GB or
-  more of a whole Eclipse, and a few seconds. On another disk than your Eclipse, the files are
+  more of a whole Eclipse, and a few seconds. Most of what is copied is what lies outside those
+  two folders, such as a Node.js that a plug-in unpacked into the Eclipse (about 200 MB), and
+  `configuration/`, which Eclipse writes to. On another disk than your Eclipse, the files are
   copied instead. An Eclipse at another place (another `--eclipse`) replaces the copy, after a
   question.
 - **The install.** p2's *director*, Eclipse's installer without a window, installs the newest ZIP
@@ -60,8 +62,10 @@ Build the version under test first: `./mvnw verify -DskipTests` makes the update
   Archive…*, in about two seconds. `--zip <file>` names another ZIP. A ZIP already installed (the
   same SHA-256) is not installed again. `launch` warns when the ZIP is older than the last commit
   to `plugins/` or `features/`, or those folders have uncommitted changes.
-- **While a checks' Eclipse runs,** `launch` will not change the copy: close it first (`launch`
-  finds it by the lock Eclipse keeps in each workspace under `~/var/n4e-checks`).
+- **While a checks' Eclipse runs,** `launch` changes nothing it uses: it will not install into
+  the copy, empty `xdg` for a `fresh` card (its Neovim may run from there), or start a second
+  Eclipse in the same workspace. Close it first. (`launch` finds it by the lock Eclipse keeps in
+  each workspace under `~/var/n4e-checks`.)
 - **`--own-eclipse`** starts your Eclipse as it is, with whatever plug-in you installed in it.
 - **To start over,** delete `~/var/n4e-checks/eclipse` and `~/var/n4e-checks/eclipse-copy.properties`.
   Deleting the hard links leaves your Eclipse's files alone.
