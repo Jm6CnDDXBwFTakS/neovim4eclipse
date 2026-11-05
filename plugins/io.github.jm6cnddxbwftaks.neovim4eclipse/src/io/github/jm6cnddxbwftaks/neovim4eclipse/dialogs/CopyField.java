@@ -50,6 +50,16 @@ public final class CopyField {
         Text field = new Text(row, SWT.READ_ONLY | SWT.SINGLE | SWT.BORDER);
         field.setText(value);
         field.setFont(JFaceResources.getTextFont());
+        // No selection when the field gains focus. A page gives its first control focus when it
+        // opens, and on macOS (where links and buttons take no focus by default) that is this field,
+        // whose text the system then selects whole: it looked selected by accident. The select-all
+        // comes after the focus event, so the selection is cleared once the event loop has run it.
+        // Copy is the button's job; a mouse can still select part of the text.
+        field.addListener(SWT.FocusIn, e -> field.getDisplay().asyncExec(() -> {
+            if (!field.isDisposed()) {
+                field.setSelection(0);
+            }
+        }));
         GridDataFactory.fillDefaults().grab(true, false).align(SWT.FILL, SWT.CENTER).applyTo(field);
         Button copy = new Button(row, SWT.PUSH);
         copy.setText(COPY);
