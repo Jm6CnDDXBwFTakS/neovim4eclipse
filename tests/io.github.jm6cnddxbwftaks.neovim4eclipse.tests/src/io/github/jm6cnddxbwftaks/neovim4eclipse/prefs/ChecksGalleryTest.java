@@ -51,7 +51,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 /**
  * The screenshot gallery for the manual checks: the dialogs and preference-page notes that a
  * person must look at before a release (layout, spacing, wording on screen, the error color), drawn
- * by the plug-in's own code, so looking at the pictures replaces opening each dialog by hand. The pictures are grouped by topic, one heading per topic on the page.
+ * by the plug-in's own code, so looking at the pictures replaces opening each dialog by hand. The
+ * pictures are grouped by topic (a short name such as {@code gn-download}, "gn" for Get Neovim), one
+ * heading per topic on the page.
  *
  * <p>Not a test, though named like one (Surefire runs only classes named *Test): it asserts only
  * what it needs to reach each state, and writes PNG files plus an {@code index.html} that shows

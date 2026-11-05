@@ -327,7 +327,7 @@
     </profile>
     <!-- ./mvnw verify -Pgallery: runs only ChecksGalleryTest (tagged "gallery"), which draws the
          dialogs and preference-page notes the manual checks look at into target/gallery/*.png, with an
-         index.html that names each picture's topic. No Java tools
+         index.html that groups the pictures by topic and says what to look for in each. No Java tools
          needed. CONTRIBUTING.md, under "Build and test". -->
     <profile>
       <id>gallery</id>
