@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -80,8 +81,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  *
  * <p>Either way a picture of one color is refused ({@link #blank}): a window that drew nothing must
  * fail the run, not give a gallery of empty pictures. (A screen read without the permission shows
- * the desktop instead of the window, which this cannot tell: the person looking sees it.) Reading the screen is retried until the picture is not blank, at
- * most {@link TestWait#millis()}, since the last paint may not have reached the screen yet.
+ * the desktop instead of the window, which this cannot tell: the person looking sees it.) The screen
+ * is read again, at most {@link TestWait#millis()}, until the window is in front and two reads
+ * {@link #READ_INTERVAL_MS} apart are the same: the last paint may not have reached the screen yet,
+ * and Windows fades a new window in over the workbench.
  *
  * <h2>The states shown</h2>
  * Dialogs are built from the same texts the plug-in shows ({@link GetNeovimText},
@@ -103,6 +106,12 @@ class ChecksGalleryTest {
      * Whether a picture is read from the screen rather than drawn by the window: on macOS and
      * Windows, where {@link Control#print(GC)} draws nothing (see the class comment).
      */
+    /**
+     * How long apart two reads of the screen are, at least: long enough for a fade-in to change the
+     * picture between them, so two equal reads mean the window has settled.
+     */
+    private static final long READ_INTERVAL_MS = 200;
+
     private static final boolean FROM_SCREEN = !System.getProperty("os.name").startsWith("Linux");
 
     /** One picture: the topic it belongs to, its file name, and what the person checks in it. */
@@ -185,7 +194,9 @@ class ChecksGalleryTest {
         // Leftovers in the plug-in's folder, listed under the note. Given, not found: most machines have
         // none, so every platform shows the same two, under an error (missing program) to show the colors.
         Path neovim = NvimExecutable.dedicatedFolder();
-        String leftovers = NvimProbe.unusedLines(List.of("current", "nvim-" + platform.code() + "_0.12.6"), neovim);
+        // Named as real leftovers are: the archive's name and the version, as 0.2.0 extracted them.
+        String extracted = archive.asset().replaceFirst("\\.(tar\\.gz|zip)$", "") + "_" + release.version();
+        String leftovers = NvimProbe.unusedLines(List.of("current", extracted), neovim);
         group("gn-leftovers", "Preference page, with leftovers in the Neovim folder", missing.toString(),
                 value -> NvimProbe.describe(value).withUnused(leftovers),
                 "The note in the error color; under it, in the normal color, \"Not used by the plug-in, you can "
@@ -251,6 +262,10 @@ class ChecksGalleryTest {
             // Fit the height to the wrapped text: computeSize takes the inside's width, so the note and the
             // help wrap as at GROUP_WIDTH (pack() would measure them unwrapped, one long line each).
             window.setSize(GROUP_WIDTH, window.computeSize(window.getClientArea().width, SWT.DEFAULT).y);
+            // Focus on the window itself, not its first link: a focused link draws a focus rectangle,
+            // which the screen read on macOS and Windows would picture (forceActive gives it focus).
+            window.forceActive();
+            window.forceFocus();
             save(window, topic, title, lookFor);
         } finally {
             window.dispose();
@@ -298,20 +313,35 @@ class ChecksGalleryTest {
      */
     private static ImageData fromScreen(Shell shell, Image image, String title) {
         Display display = shell.getDisplay();
-        shell.forceActive();
+        if (display.getActiveShell() != shell) {
+            shell.forceActive(); // not again when active: it would move the focus to the first link
+        }
         Rectangle client = display.map(shell, null, shell.getClientArea());
-        ImageData[] data = new ImageData[1];
-        waitUntil("a picture of " + title + " on the screen (on macOS: Screen Recording permitted for Java?)", () -> {
-            GC gc = new GC(display);
-            try {
-                gc.copyArea(image, client.x, client.y);
-            } finally {
-                gc.dispose();
-            }
-            data[0] = image.getImageData();
-            return !blank(data[0]);
-        });
-        return data[0];
+        ImageData[] previous = new ImageData[1];
+        long[] lastRead = { 0 };
+        waitUntil("a settled picture of " + title + " on the screen (on macOS: Screen Recording permitted for Java?)",
+                () -> {
+                    // Read only once the window is in front, and at most every READ_INTERVAL_MS: Windows
+                    // fades a new window in, and until then the screen holds the workbench behind it,
+                    // which is not blank either (seen 2026-11-05: empty workbenches, half-faded dialogs).
+                    long now = System.currentTimeMillis();
+                    if (display.getActiveShell() != shell || now - lastRead[0] < READ_INTERVAL_MS) {
+                        return false;
+                    }
+                    lastRead[0] = now;
+                    GC gc = new GC(display);
+                    try {
+                        gc.copyArea(image, client.x, client.y);
+                    } finally {
+                        gc.dispose();
+                    }
+                    ImageData read = image.getImageData();
+                    // Settled: two reads in a row the same, and not blank (a fade changes every pixel).
+                    boolean settled = previous[0] != null && !blank(read) && Arrays.equals(read.data, previous[0].data);
+                    previous[0] = read;
+                    return settled;
+                });
+        return previous[0];
     }
 
     /** Whether every pixel of {@code data} is the same: a picture of nothing. */
