@@ -71,7 +71,7 @@ does not depend on JDT and still starts without it.
 (`docs/design/MARKETPLACE.md`, *Images*). Only `-Pscreenshots` runs it; `-Pui` leaves it out.
 
 `ChecksGalleryTest`, tagged `gallery`, is not a check either: it draws the dialogs and the
-preference page's Neovim notes that the manual checks before a release look at (the Get Neovim
+preference page's Neovim notes that the [manual checks](docs/MANUAL_CHECKS.md) before a release look at (the Get Neovim
 dialog at a fresh start, the "Neovim not started" notice for each value `-Dneovim4eclipse.nvim`
 refuses, the old-preference note, ...) into `target/gallery/*.png`, with an `index.html` that puts
 each picture under its topic and says what to look for. Looking at the pictures replaces opening
@@ -421,6 +421,9 @@ text that tests do not always catch.
   [docs/design/](docs/design/README.md), or adds to an existing one, in the same branch: how it
   works and why, not how it was planned (that page says what goes in a note and what does not).
 - Update the documentation (README, `docs/`, Javadoc) when behavior changes.
+- Something only a person can check (a real download, a system dialog, an input method) gets a
+  card in [docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md), in the same commit, with the files it
+  depends on; anything a test can check gets the test instead.
 - Add a line to [CHANGELOG.md](CHANGELOG.md), under *Unreleased*, for every change a user of the
   plug-in would notice (a feature, a fix, a changed default). Internal changes (refactoring, tests,
   build) need none.
@@ -516,7 +519,8 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    `## [Unreleased]` above it. That section becomes the release notes;
    `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
    the README's status line. Check Neovim's branches for security fixes the pinned Neovim lacks
-   ([docs/UPGRADING.md](docs/UPGRADING.md), "Security fixes on Neovim's branches"). Run every test on your machine, those CI leaves out included (the Java
+   ([docs/UPGRADING.md](docs/UPGRADING.md), "Security fixes on Neovim's branches"). Run the manual checks this release needs: `java releng/tools/checks/ManualChecks.java due` lists
+   them ([docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md)). Run every test on your machine, those CI leaves out included (the Java
    editor and the timeout-reliant ones; see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
 
    ```bash
