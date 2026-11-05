@@ -173,12 +173,14 @@
                on one machine and fail on another. NVIM_APPNAME makes Neovim look for all of that
                under another name, where there is nothing; the XDG folders put what Neovim writes
                (and any config it would look for) under target/. XDG_DATA_HOME stays as it is: the
-               plug-in finds its own Neovim there (util/PluginFolders). The whole test Eclipse sees
-               these variables, not only Neovim: on Linux, GTK and font caches land under target/ too,
-               which costs a little start-up time and nothing else. See CONTRIBUTING.md, "Your Neovim
-               config and the UI tests". -->
+               plug-in finds its own Neovim there (util/PluginFolders). So Neovim makes an empty data
+               folder named after NVIM_APPNAME there; the name's slash puts it inside the plug-in's own
+               folder (~/.local/share/neovim4eclipse-plugin/tests) rather than beside it. The whole test
+               Eclipse sees these variables, not only Neovim: on Linux, GTK and font caches land under
+               target/ too, which costs a little start-up time and nothing else. See CONTRIBUTING.md,
+               "Your Neovim config and the UI tests". -->
           <environmentVariables>
-            <NVIM_APPNAME>neovim4eclipse-tests</NVIM_APPNAME>
+            <NVIM_APPNAME>neovim4eclipse-plugin/tests</NVIM_APPNAME>
             <XDG_CONFIG_HOME>${project.build.directory}/neovim-home/config</XDG_CONFIG_HOME>
             <XDG_STATE_HOME>${project.build.directory}/neovim-home/state</XDG_STATE_HOME>
             <XDG_CACHE_HOME>${project.build.directory}/neovim-home/cache</XDG_CACHE_HOME>

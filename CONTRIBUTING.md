@@ -107,17 +107,19 @@ unit and integration tests start Neovim with `--clean`. The UI tests start it as
 for real use, with no flags, so their build sets these variables for the test Eclipse instead (in
 `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/pom.xml`), and Neovim inherits them:
 
-- `NVIM_APPNAME=neovim4eclipse-tests`: Neovim looks for its config and data under that name instead
-  of `nvim`, where there is nothing.
+- `NVIM_APPNAME=neovim4eclipse-plugin/tests`: Neovim looks for its config and data under that name
+  instead of `nvim`, where there is nothing. A name may contain a slash: it is a relative path.
 - `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`: folders under the module's
   `target/neovim-home/`, so nothing is written to your home folder either. The whole test Eclipse
   sees them, not only Neovim: on Linux, GTK and font caches land there too, which only costs a
   little start-up time.
 
 `XDG_DATA_HOME` is left alone: the plug-in finds its own Neovim there (see `util/PluginFolders`).
-So Neovim makes one empty data folder of its own, next to its usual one: `neovim4eclipse-tests` next
-to `nvim` (on Linux and macOS under `~/.local/share`), or on Windows `neovim4eclipse-tests-data`
-next to `nvim-data`.
+So Neovim makes one empty data folder of its own there, inside the plug-in's folder on Linux and
+macOS: `~/.local/share/neovim4eclipse-plugin/tests`. On Windows, where Neovim keeps its data in
+`%LOCALAPPDATA%` and the plug-in does not, it is `%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data`,
+next to `nvim-data`. (Earlier builds made `neovim4eclipse-tests` next to `nvim`, or
+`neovim4eclipse-tests-data` on Windows; such a folder is empty and safe to delete.)
 `NeovimHomeEndToEndTest` checks that the isolation holds. A test about how the plug-in behaves with
 a given setting sets it in the test itself (for example `session.commandAsync("set shortmess-=F")`),
 so it runs the same everywhere. To try the plug-in with your own config, run it from Eclipse (see
