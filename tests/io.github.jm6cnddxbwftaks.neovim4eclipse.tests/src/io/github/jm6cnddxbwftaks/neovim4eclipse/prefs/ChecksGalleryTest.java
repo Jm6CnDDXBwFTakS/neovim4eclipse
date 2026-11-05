@@ -65,15 +65,18 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * spacing, so the gallery is taken once on each.
  *
  * <h2>How a picture is taken</h2>
- * On Linux and Windows, {@link Control#print(GC)} asks the window to draw itself into an image, which
+ * On Linux, {@link Control#print(GC)} asks the window to draw itself into an image, which
  * {@link ImageLoader} saves as PNG. Unlike reading the screen (ScreenshotCaptureTest), it works on
  * Wayland and does not need the window in front; it shows the window's inside, without the title bar.
  *
- * <p>On macOS {@code print} draws nothing: Cocoa's views are layer-backed, and SWT's
- * {@code displayRectIgnoringOpacity} into an image's context leaves it white (seen 2026-11-05, SWT
- * 3.128). There the window's inside is read from the screen instead ({@link GC#copyArea(Image, int, int)}
- * on a {@code GC} of the display), as ScreenshotCaptureTest does, which needs the window in front and
- * macOS's Screen Recording permission for the test's Java (System Settings, Privacy &amp; Security).
+ * <p>On macOS and Windows {@code print} draws nothing: the pictures came out white (both seen
+ * 2026-11-05). On macOS Cocoa's views are layer-backed, and SWT's {@code displayRectIgnoringOpacity}
+ * into an image's context leaves it white (SWT 3.128); on Windows SWT's {@code PrintWindow} call
+ * lacks {@code PW_RENDERFULLCONTENT}, which today's themed windows need. There the window's inside is
+ * read from the screen instead ({@link GC#copyArea(Image, int, int)} on a {@code GC} of the display), as
+ * ScreenshotCaptureTest does, which needs the window in front, and on macOS the Screen Recording
+ * permission for the test's Java (System Settings, Privacy &amp; Security). The window is then active,
+ * so a link may show a focus rectangle.
  *
  * <p>Either way a picture of one color is refused ({@link #blank}): a window that drew nothing must
  * fail the run, not give a gallery of empty pictures. (A screen read without the permission shows
@@ -96,7 +99,11 @@ class ChecksGalleryTest {
     private static final int GROUP_WIDTH = 640;
 
     private static final boolean WINDOWS = System.getProperty("os.name").startsWith("Windows");
-    private static final boolean MAC = System.getProperty("os.name").startsWith("Mac");
+    /**
+     * Whether a picture is read from the screen rather than drawn by the window: on macOS and
+     * Windows, where {@link Control#print(GC)} draws nothing (see the class comment).
+     */
+    private static final boolean FROM_SCREEN = !System.getProperty("os.name").startsWith("Linux");
 
     /** One picture: the topic it belongs to, its file name, and what the person checks in it. */
     private record Shot(String topic, String file, String title, String lookFor) {
@@ -251,7 +258,7 @@ class ChecksGalleryTest {
         Rectangle area = shell.getClientArea();
         Image image = new Image(shell.getDisplay(), area.width, area.height);
         try {
-            ImageData data = MAC ? fromScreen(shell, image, title) : printed(shell, image);
+            ImageData data = FROM_SCREEN ? fromScreen(shell, image, title) : printed(shell, image);
             if (blank(data)) {
                 throw new AssertionError("the picture of " + title + " is one color: nothing was drawn");
             }
@@ -265,7 +272,7 @@ class ChecksGalleryTest {
         }
     }
 
-    /** {@code shell}'s inside, drawn by the window itself into {@code image} (Linux, Windows). */
+    /** {@code shell}'s inside, drawn by the window itself into {@code image} (Linux). */
     private static ImageData printed(Shell shell, Image image) {
         GC gc = new GC(image);
         try {
@@ -277,7 +284,7 @@ class ChecksGalleryTest {
     }
 
     /**
-     * {@code shell}'s inside as the screen shows it (macOS), read again until it is not blank: the
+     * {@code shell}'s inside as the screen shows it (macOS, Windows), read again until it is not blank: the
      * window is brought to the front first, and its last paint may reach the screen a moment later.
      */
     private static ImageData fromScreen(Shell shell, Image image, String title) {
@@ -285,7 +292,7 @@ class ChecksGalleryTest {
         shell.forceActive();
         Rectangle client = display.map(shell, null, shell.getClientArea());
         ImageData[] data = new ImageData[1];
-        waitUntil("a picture of " + title + " on the screen (Screen Recording permitted for Java?)", () -> {
+        waitUntil("a picture of " + title + " on the screen (on macOS: Screen Recording permitted for Java?)", () -> {
             GC gc = new GC(display);
             try {
                 gc.copyArea(image, client.x, client.y);
