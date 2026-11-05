@@ -520,8 +520,8 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    `## [0.1.2] - 2026-11-02` (the release date, in ISO form) and add a new, empty
    `## [Unreleased]` above it. That section becomes the release notes;
    `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
-   the README's status line. Check Neovim's branches for security fixes the pinned Neovim lacks
-   ([docs/UPGRADING.md](docs/UPGRADING.md), "Security fixes on Neovim's branches"). Run the manual checks this release needs: `java releng/tools/checks/ManualChecks.java due` lists
+   the README's status line. Check that the pinned Neovim is Neovim's newest release that is a week old or more,
+   and move it if not ([docs/UPGRADING.md](docs/UPGRADING.md), "Following Neovim's releases"). Run the manual checks this release needs: `java releng/tools/checks/ManualChecks.java due` lists
    them ([docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md)). Run every test on your machine, those CI leaves out included (the Java
    editor and the timeout-reliant ones; see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
 
