@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,7 +18,6 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -30,14 +30,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.EarlyStartup;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OldNeovimProgram;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 
 /**
  * What Eclipse's start shows about Neovim, run the way {@code EarlyStartup} runs it: first the
@@ -54,13 +53,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  *
  * <p>How a dialog is seen without stalling the test: a dialog runs its own event loop, so a test
  * waiting for it would wait inside it. A timer ({@code Display.timerExec}, which also runs inside
- * that loop) notes each start dialog's title, and what was true at that moment, then closes it.
+ * that loop) notes each modal dialog's title, and what was true at that moment, then closes it.
+ * Every modal dialog, not only the start's: while this watch runs, {@code UiTestSupport}'s
+ * error-dialog watch stays out of its way, so an unexpected error dialog must be closed (and
+ * fail the test by its title) here, or it would stall the whole run.
  */
 class StartNoticesEndToEndTest extends EndToEndTestBase {
-
-    /** The dialogs a start may open about Neovim. */
-    private static final Set<String> START_DIALOGS = Set.of(GetNeovimText.TITLE, StartFailureReport.TITLE,
-            OldNeovimProgram.TITLE);
 
     /** A folder of the test's own (the fragment cannot use JUnit's {@code @TempDir}: its package is not imported). */
     private Path tmp;
@@ -86,26 +84,29 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * With a Neovim that checks out, the start opens no dialog: the user's everyday start. Asked for
-     * the option the test Eclipse runs with and, if the dedicated Neovim is installed and checked,
-     * for no option at all (what most users have).
+     * With a Neovim that checks out, the start opens no dialog: the user's everyday start. Runs the
+     * real start step, {@link EarlyStartup#earlyStartup}, off the UI thread as the workbench does:
+     * the dedicated Neovim's check, the old-preference note, then Get Neovim's offer when no
+     * {@code -Dneovim4eclipse.nvim} is given. Without {@code -Dnvim.path} the test Eclipse runs
+     * exactly that way (no option, the dedicated Neovim); with it, the offer is skipped as for a
+     * user who names their own Neovim.
      */
     @Test
     void aStartWithACheckedNeovimOpensNoDialog() {
-        List<String> values = new ArrayList<>();
         String configured = Activator.getDefault().getNvimExecutable();
-        if (NvimExecutable.find(configured).kind() != NvimExecutable.Kind.NO_DEDICATED) {
-            values.add(configured);
-        }
-        if (NvimExecutable.find("").kind() == NvimExecutable.Kind.DEDICATED) {
-            values.add("");
-        }
-        assumeFalse(values.isEmpty(), "no Neovim that checks out here");
-        for (String value : values) {
-            List<String> seen = watchStartDialogs(() -> null);
-            runTheStart(value);
-            assertEquals(List.of(), seen, "dialogs at a start with " + (value.isBlank() ? "no option" : value));
-        }
+        assumeTrue(NvimExecutable.find(configured).kind() != NvimExecutable.Kind.NO_DEDICATED,
+                "no Neovim that checks out here, so a start would offer Get Neovim");
+        List<String> seen = watchStartDialogs(() -> null);
+        AtomicBoolean finished = new AtomicBoolean();
+        CompletableFuture.runAsync(() -> {
+            new EarlyStartup().earlyStartup();
+            // Queued after whatever the start queued for the UI thread, so once it runs, any
+            // dialog the start asked for has been opened (and noted).
+            Display.getDefault().asyncExec(() -> finished.set(true));
+        });
+        waitUntil("the start's steps", TIMEOUT_MS, finished::get);
+        assertEquals(List.of(), seen, "dialogs at a start with " + (configured == null || configured.isBlank()
+                ? "no option" : configured));
     }
 
     /**
@@ -128,8 +129,8 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
         seen.clear();
         thenRan.set(false);
         OldNeovimProgramNotice.showOnce(() -> thenRan.set(true));
+        // Nothing stored: the next step ran at once, on this thread, and nothing was queued to show.
         assertTrue(thenRan.get(), "nothing stored: the next step runs at once");
-        UiTestSupport.spin(300);
         assertEquals(List.of(), seen, "the next start shows no note");
     }
 
@@ -186,19 +187,8 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
         assertFalse(Files.exists(marker), "showing the value runs nothing either");
     }
 
-    /** Runs the start's Neovim steps as {@code EarlyStartup} does, off the UI thread, and waits for them. */
-    private static void runTheStart(String configured) {
-        AtomicBoolean queued = new AtomicBoolean();
-        CompletableFuture.runAsync(() -> OldNeovimProgramNotice.showOnce(() -> {
-            EditorAttachManager.offerGetNeovimAtStart(configured);
-            // Queued after whatever the offer queued, so once it runs, any dialog has been opened.
-            Display.getDefault().asyncExec(() -> queued.set(true));
-        }));
-        waitUntil("the start's steps", TIMEOUT_MS, queued::get);
-    }
-
     /**
-     * Until the test ends, notes each start dialog that opens (its title, plus {@code state} at that
+     * Until the test ends, notes each modal dialog that opens (its title, plus {@code state} at that
      * moment in brackets when it gives one) and closes it.
      */
     private List<String> watchStartDialogs(java.util.function.Supplier<String> state) {
@@ -216,7 +206,7 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
                     return;
                 }
                 for (Shell shell : display.getShells()) {
-                    if (shell.isVisible() && (shell.getStyle() & modal) != 0 && START_DIALOGS.contains(shell.getText())) {
+                    if (shell.isVisible() && (shell.getStyle() & modal) != 0) {
                         String now = state.get();
                         seen.add(now == null ? shell.getText() : shell.getText() + " [" + now + "]");
                         shell.close();

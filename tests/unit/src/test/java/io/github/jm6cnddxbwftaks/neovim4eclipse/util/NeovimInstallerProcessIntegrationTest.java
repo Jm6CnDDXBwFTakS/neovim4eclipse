@@ -13,6 +13,7 @@ import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
@@ -62,6 +63,7 @@ class NeovimInstallerProcessIntegrationTest {
         Path program = NvimExecutable.locate(NvimExecutable.resolve(TestNeovim.PATH));
         assumeTrue(program != null, "nvim not available");
         Path realHome = program.getParent().getParent(); // <home>/bin/nvim
+        assumeTrue(isReleaseFolder(realHome), "the tests' Neovim is not in a folder of its own: " + program);
         Path folder = tmp.resolve("neovim");
         Path la = folder.resolve("la");
         copyTree(realHome, la);
@@ -108,6 +110,23 @@ class NeovimInstallerProcessIntegrationTest {
         while (!condition.getAsBoolean()) {
             assertTrue(System.currentTimeMillis() < deadline, "timed out waiting: " + what);
             Thread.sleep(20);
+        }
+    }
+
+    /**
+     * Whether {@code home} is a Neovim release's own folder, safe to copy whole: an install
+     * ({@code bin/nvim} with {@code share/nvim/runtime}) holding nothing but {@code bin}, {@code lib}
+     * and {@code share}, with only Neovim's few files in {@code bin}. A system Neovim fails it: for
+     * {@code /usr/bin/nvim} the folder is {@code /usr}, which has an install's layout too, but also
+     * {@code include}, {@code libexec} and thousands of programs in {@code bin}.
+     */
+    private static boolean isReleaseFolder(Path home) throws IOException {
+        if (!PluginNeovim.isInstall(home, FilePaths.Platform.current().windows())) {
+            return false;
+        }
+        try (Stream<Path> top = Files.list(home); Stream<Path> bin = Files.list(home.resolve("bin"))) {
+            return top.allMatch(p -> List.of("bin", "lib", "share").contains(String.valueOf(p.getFileName())))
+                    && bin.count() <= 10;
         }
     }
 

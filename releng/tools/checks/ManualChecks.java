@@ -101,11 +101,13 @@ public final class ManualChecks {
 
     /**
      * The cards of a checklist, in order. A {@code ###} heading of the form {@code ### `id` Title}
-     * starts a card; the next {@code ##} or {@code ###} heading ends it. Other {@code ###} headings,
-     * and everything before the first card, are prose for people and ignored here.
+     * starts a card; the next {@code ##} or {@code ###} heading ends it. Other {@code ###} headings
+     * (not starting with a backtick), and everything before the first card, are prose for people and
+     * ignored here.
      *
      * @throws FormatException for a card without one of its three facts, an unknown platform or
-     *         launch, a missing {@code **Expect:**}, or an id used twice
+     *         launch, a missing {@code **Expect:**}, an id used twice, or a {@code ### `} heading that
+     *         is not a card's
      */
     static List<Card> parse(String markdown) {
         List<Card> cards = new ArrayList<>();
@@ -122,6 +124,11 @@ public final class ManualChecks {
             }
             Matcher card = CARD.matcher(line);
             if (!card.matches()) {
+                if (line.startsWith("### `")) {
+                    // Meant as a card, but not one: dropping it quietly would take it out of due.
+                    throw new FormatException(i + 1, "a card heading is ### `id` Title, the id in lowercase"
+                            + " letters, digits and -: " + line);
+                }
                 i++;
                 continue;
             }
@@ -571,6 +578,10 @@ public final class ManualChecks {
             System.out.println(card.id() + " needs no Eclipse: see its steps in " + CHECKLIST + ".");
             return;
         }
+        String here = currentPlatform();
+        if (!card.on().contains("any") && !card.on().contains(here)) {
+            fail(card.id() + " is a check for " + String.join(", ", card.on()) + ", not " + here);
+        }
         Path root = options.root();
         if (!Files.isDirectory(root.resolve("projects/n4e-alpha"))) {
             setup(root);
@@ -580,7 +591,13 @@ public final class ManualChecks {
             if (!options.yes() && !confirm("Empty " + xdg + " (the checks' own plug-in folder) for a fresh start?")) {
                 fail("stopped; nothing was changed (--yes answers yes)");
             }
-            deleteContents(xdg);
+            try {
+                deleteContents(xdg);
+            } catch (UncheckedIOException e) {
+                // Typically Windows: a Neovim from an earlier launch still runs from the folder.
+                fail("could not empty " + xdg + " (" + e.getCause().getMessage() + "). Close the Eclipse that"
+                        + " uses it (and its Neovim), then launch again; the folder may be partly emptied.");
+            }
         }
         String eclipse = options.eclipse() != null ? options.eclipse() : defaultEclipse();
         List<String> command = List.of(eclipse, "-data", root.resolve(options.workspace()).toString());
@@ -601,11 +618,17 @@ public final class ManualChecks {
     }
 
     private static String defaultEclipse() {
+        return switch (currentPlatform()) {
+            case "macos" -> "/Applications/Eclipse.app/Contents/MacOS/eclipse";
+            case "windows" -> "C:\\eclipse\\eclipse.exe";
+            default -> "eclipse";
+        };
+    }
+
+    /** This machine as an {@code On:} word: linux, macos or windows. */
+    static String currentPlatform() {
         String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        if (os.startsWith("mac")) {
-            return "/Applications/Eclipse.app/Contents/MacOS/eclipse";
-        }
-        return os.startsWith("windows") ? "C:\\eclipse\\eclipse.exe" : "eclipse";
+        return os.startsWith("mac") ? "macos" : os.startsWith("windows") ? "windows" : "linux";
     }
 
     private static boolean isNotEmpty(Path folder) throws IOException {

@@ -9,15 +9,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -96,6 +98,8 @@ class ManualChecksTest {
         assertThrows(ManualChecks.FormatException.class, () -> ManualChecks.parse(SAMPLE.replace("**Expect:** passes.", "")));
         assertThrows(ManualChecks.FormatException.class, () -> ManualChecks.parse(SAMPLE.replace("`rl-one`", "`gn-one`")),
                 "an id used twice");
+        assertThrows(ManualChecks.FormatException.class, () -> ManualChecks.parse(SAMPLE.replace("`rl-one`", "`rl_one`")),
+                "a card heading with a bad id is refused, not skipped");
     }
 
     @Test
@@ -177,17 +181,22 @@ class ManualChecksTest {
     void everyAreaOfTheChecklistNamesAFileThatExists() throws IOException {
         Path root = repositoryRoot();
         List<String> files = new ArrayList<>();
+        // Build output, Git's own files and other sessions' worktrees are not entered at all: a built
+        // tree has hundreds of thousands of files under target/.
         Set<String> skipped = Set.of(".git", "target", "node_modules", ".claude");
-        try (Stream<Path> paths = Files.walk(root)) {
-            paths.filter(p -> {
-                for (Path part : root.relativize(p)) {
-                    if (skipped.contains(part.toString())) {
-                        return false;
-                    }
-                }
-                return Files.isRegularFile(p);
-            }).forEach(p -> files.add(root.relativize(p).toString().replace('\\', '/')));
-        }
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) {
+                return skipped.contains(String.valueOf(dir.getFileName())) ? FileVisitResult.SKIP_SUBTREE
+                        : FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                files.add(root.relativize(file).toString().replace('\\', '/'));
+                return FileVisitResult.CONTINUE;
+            }
+        });
         assertEquals(List.of(), ManualChecks.unmatchedAreas(ManualChecks.parse(checklist()), files));
     }
 
