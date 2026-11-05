@@ -116,11 +116,14 @@ class NeovimPreferencePageTest {
         Button copy = find(row, Button.class, b -> b.getText().equals(CopyField.COPY));
         assertTrue(copy != null, "a Copy button beside the command");
         waitUntil("the help to be laid out", () -> tail.getBounds().height > 0 && row.getBounds().height > 0);
-        // In the group's coordinates: the field's row and the link sit in a block of their own.
-        Rectangle above = inGroup(group, lead);
-        Rectangle line = inGroup(group, row);
-        Rectangle link = inGroup(group, help);
-        Rectangle below = inGroup(group, tail);
+        // On the screen: the field's row and the link sit in a block of their own, and a group's own
+        // children are placed in its client area, whose origin is not where Display.map puts the
+        // group's coordinates on every platform (12 px lower on macOS, below its title). The screen
+        // is one frame for all four.
+        Rectangle above = onScreen(lead);
+        Rectangle line = onScreen(row);
+        Rectangle link = onScreen(help);
+        Rectangle below = onScreen(tail);
         assertTrue(line.y >= above.y + above.height + 2, "room above the command: " + above + ", " + line);
         assertTrue(link.y >= line.y + line.height - 1 && link.y <= line.y + line.height + 1 && link.x == line.x,
                 "the link right under the field, no gap, in line: " + line + ", " + link);
@@ -262,9 +265,9 @@ class NeovimPreferencePageTest {
         return group;
     }
 
-    /** {@code control}'s bounds in {@code group}'s coordinates, however deep in it the control is. */
-    private static Rectangle inGroup(Group group, Control control) {
-        return control.getDisplay().map(control.getParent(), group, control.getBounds());
+    /** {@code control}'s bounds on the screen, however deep in its window it is. */
+    private static Rectangle onScreen(Control control) {
+        return control.getDisplay().map(control.getParent(), null, control.getBounds());
     }
 
     /** Waits for {@code condition} while the display runs (the note's probe answers through it). */
