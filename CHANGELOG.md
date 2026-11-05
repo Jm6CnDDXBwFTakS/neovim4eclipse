@@ -49,8 +49,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - **A Neovim of your own is a startup option now, not a preference.** For a system with no official
   build (Alpine, NixOS, FreeBSD), or a security fix in a newer Neovim before *Get Neovim* offers it,
   start Eclipse with `-vmargs -Dneovim4eclipse.nvim=/path/to/nvim`, or add
-  `-Dneovim4eclipse.nvim=/path/to/nvim` after `-vmargs` in `eclipse.ini`. The program is run
-  unchecked and unsupported. The *Neovim folder or program* preference is gone, with its field and
+  `-Dneovim4eclipse.nvim=/path/to/nvim` after `-vmargs` in `eclipse.ini` (the dialogs show
+  `C:\path\to\nvim.exe` on Windows, where a path needs its drive letter). The program is run
+  unchecked and unsupported. While it names a program and the dedicated Neovim checks out, the
+  preference page offers no *Get Neovim* button: removing the option is the fix. Entries of the
+  plug-in's folder it no longer uses are listed under the note in the normal color, apart from an
+  error. The *Neovim folder or program* preference is gone, with its field and
   *Browse…*: *Window → Preferences → Neovim* shows which Neovim runs, and a value still stored from
   0.2.0 is shown once, with the line to use instead, and then removed. A startup option cannot come
   in with a preferences file imported from elsewhere, which could name any program to run. See the

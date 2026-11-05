@@ -43,6 +43,21 @@ public final class NeovimOption {
     private NeovimOption() {
     }
 
+    /**
+     * The placeholder program the dialogs and the preference page show in the line to copy:
+     * {@code /path/to/nvim}, or on Windows {@code C:\path\to\nvim.exe}. Windows needs its own: a
+     * path there is absolute only with a drive letter, so {@code /path/to/nvim}, edited in place,
+     * was refused as "not an absolute path" (seen 2026-11-05 in the Windows checks gallery).
+     */
+    public static String exampleProgram() {
+        return exampleProgram(PlatformUtil.isWindows());
+    }
+
+    /** Testable core of {@link #exampleProgram()}. */
+    static String exampleProgram(boolean windows) {
+        return windows ? "C:\\path\\to\\nvim.exe" : "/path/to/nvim";
+    }
+
     /** The program this Eclipse was started with, stripped; {@code ""} when unset (the dedicated Neovim). */
     public static String value() {
         return of(System.getProperty(PROPERTY));

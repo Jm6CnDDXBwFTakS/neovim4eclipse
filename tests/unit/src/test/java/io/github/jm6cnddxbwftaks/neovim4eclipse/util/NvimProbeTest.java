@@ -95,6 +95,33 @@ class NvimProbeTest {
                 note(new NvimExecutable.Resolved("nvim", NvimExecutable.Kind.NOT_ABSOLUTE), null));
     }
 
+    /**
+     * The Get Neovim button follows the notice's rule: for a program the option names, only while the
+     * dedicated Neovim does not check out; never beside Reinstall.
+     */
+    @Test
+    void getNeovimIsOfferedForANamedProgramOnlyWithoutAVerifiedDedicatedNeovim() {
+        NvimExecutable.Resolved folder = resolved(Path.of("/opt/nvim"), NvimExecutable.Kind.FOLDER);
+        Note refused = note(folder, null);
+        assertTrue(NvimProbe.offering(refused, folder, false).getNeovim(), "install it, then remove the option");
+        assertFalse(NvimProbe.offering(refused, folder, true).getNeovim(), "it is installed: remove the option");
+        NvimExecutable.Resolved dedicated = resolved(OWN, NvimExecutable.Kind.DEDICATED);
+        assertFalse(NvimProbe.offering(note(dedicated, null), dedicated, true).getNeovim(), "Reinstall instead");
+        NvimExecutable.Resolved none = resolved(OWN, NvimExecutable.Kind.NO_DEDICATED);
+        assertTrue(note(none, null).getNeovim(), "nothing installed yet");
+    }
+
+    /** The unused entries travel apart from the note's text, so the page can show them in the normal color. */
+    @Test
+    void theUnusedLinesAreKeptApartFromTheNote() {
+        Note note = note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null);
+        assertNull(note.unused());
+        Note with = note.withUnused("lines");
+        assertEquals(note.text(), with.text());
+        assertEquals("lines", with.unused());
+        assertTrue(with.problem(), "the note keeps its color; the lines are shown apart");
+    }
+
     @Test
     void unusedEntriesAreListedOneFullPathALine() {
         assertNull(NvimProbe.unusedLines(List.of(), DEDICATED));

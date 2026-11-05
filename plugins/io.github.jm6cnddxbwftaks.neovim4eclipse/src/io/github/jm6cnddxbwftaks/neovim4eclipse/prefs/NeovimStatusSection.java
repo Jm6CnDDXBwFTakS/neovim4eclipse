@@ -81,7 +81,7 @@ final class NeovimStatusSection {
     static final String HELP = "Neovim for Eclipse runs the dedicated Neovim, which \"Get Neovim\" installs and the "
             + "plug-in checks at every start. Where it cannot run (a system with no official build), or when a newer "
             + "Neovim has a security fix that \"Get Neovim\" does not offer yet, start Eclipse with:\n"
-            + "    " + NeovimOption.commandLine("/path/to/nvim") + "\n"
+            + "    " + NeovimOption.commandLine(NeovimOption.exampleProgram()) + "\n"
             + "to run another Neovim program: it is run unchecked and unsupported, so be sure it is Neovim. "
             + "<a>How Neovim for Eclipse finds Neovim</a>";
 
@@ -92,6 +92,12 @@ final class NeovimStatusSection {
      * its own ({@link #reinstall}).
      */
     private final Label note;
+    /**
+     * The entries of the plug-in's Neovim folder it no longer uses ({@link NvimProbe.Note#unused}), a
+     * Label of its own under the note: always in the normal color, as they are no part of the
+     * problem the note may report (before, one Label held both, all in the error color).
+     */
+    private final Label unused;
     /** {@code <a>Reinstall...</a>} under the note, shown only while the dedicated Neovim is current. */
     private final Link reinstall;
     private final Button getNeovim;
@@ -125,6 +131,9 @@ final class NeovimStatusSection {
         this.describe = describe;
         note = new Label(parent, SWT.WRAP); // wraps at its width hint, as the help below does
         note.setLayoutData(fullRow(WRAP_WIDTH));
+        unused = new Label(parent, SWT.WRAP);
+        unused.setLayoutData(fullRow(WRAP_WIDTH));
+        setVisible(unused, false);
 
         reinstall = new Link(parent, SWT.NONE);
         reinstall.setText("<a>" + REINSTALL + "</a>");
@@ -133,7 +142,8 @@ final class NeovimStatusSection {
         reinstall.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(parent.getShell())));
         setVisible(reinstall, false);
 
-        // Hidden while the note offers Reinstall instead (show); after an install the note probes again.
+        // Shown only when the note offers it (show): not with Reinstall, and not while the option names
+        // another program and the dedicated Neovim checks out. After an install the note probes again.
         getNeovim = new Button(parent, SWT.PUSH);
         getNeovim.setText(GetNeovim.label());
         getNeovim.setToolTipText("Install the dedicated Neovim the plug-in needs, downloaded or from a file, "
@@ -163,12 +173,15 @@ final class NeovimStatusSection {
     }
 
     /**
-     * Shows a note: its text, in the error color if it reports a problem; and the Get Neovim button,
-     * or the Reinstall link instead when the dedicated Neovim is current.
+     * Shows a note: its text, in the error color if it reports a problem; the unused entries under
+     * it, if any; and the Get Neovim button when the note offers it ({@link NvimProbe.Note#getNeovim}),
+     * or the Reinstall link when the dedicated Neovim is current.
      */
     private void show(NvimProbe.Note shown) {
         note.setText(labelText(shown));
-        setVisible(getNeovim, !shown.current());
+        unused.setText(shown.unused() == null ? "" : LabelText.literal(shown.unused()));
+        setVisible(unused, shown.unused() != null);
+        setVisible(getNeovim, shown.getNeovim());
         setVisible(reinstall, shown.current());
         note.setForeground(shown.problem() ? errorColor() : null); // null: the theme's normal color
         // The note may now wrap to more or fewer lines. requestLayout lays out the note's parent and

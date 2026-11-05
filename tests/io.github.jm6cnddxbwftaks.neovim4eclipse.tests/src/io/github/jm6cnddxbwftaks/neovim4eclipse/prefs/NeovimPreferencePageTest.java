@@ -15,6 +15,7 @@ import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
@@ -94,6 +95,20 @@ class NeovimPreferencePageTest {
             Rectangle link = help.getBounds();
             return link.height > 0 && link.y + link.height <= area.y + area.height;
         });
+    }
+
+    /**
+     * With the option naming a program that is missing while the dedicated Neovim checks out (this
+     * test Eclipse runs it), the fix is to remove the option: the page offers no Get Neovim button,
+     * as the "Neovim not started" notice offers none then either.
+     */
+    @Test
+    void aRefusedProgramWithTheDedicatedNeovimInstalledOffersNoGetNeovim() {
+        Group group = sectionFor(WINDOWS ? "C:\\no\\such\\nvim.exe" : "/no/such/nvim");
+        waitUntil("the note to report the missing program", () -> find(group, Label.class,
+                label -> label.getText().startsWith("No Neovim program at")) != null);
+        Button getNeovim = find(group, Button.class, b -> b.getText().equals(GetNeovim.label()));
+        assertTrue(getNeovim != null && !getNeovim.getVisible(), "the Get Neovim button is hidden");
     }
 
     /**

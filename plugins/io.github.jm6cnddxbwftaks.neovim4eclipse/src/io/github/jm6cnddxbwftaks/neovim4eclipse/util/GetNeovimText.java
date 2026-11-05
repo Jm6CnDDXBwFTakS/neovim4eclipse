@@ -116,7 +116,7 @@ public final class GetNeovimText {
             // The command in a Copy field of its own, as in the old-setting note: wrapped in the
             // sentence it broke at the "/" of its path.
             points.addAll(NeovimOption.rows("Instead", "To use a Neovim of your own, cancel and start Eclipse with:",
-                    "/path/to/nvim", UNCHECKED));
+                    NeovimOption.exampleProgram(), UNCHECKED));
         }
         return new HeadedMessage(
                 "Install the dedicated Neovim " + release.version() + " for " + archive.platform().describe() + "?",

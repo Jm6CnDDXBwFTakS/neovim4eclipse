@@ -35,11 +35,12 @@ import java.util.Optional;
  *
  * <p>When the note finds the verified dedicated Neovim, the page has nothing to get: it hides its
  * <em>Get Neovim</em> button and offers a small <em>Reinstall...</em> link instead
- * ({@link Note#current}).
+ * ({@link Note#current}). It also hides the button while the option names another program and the
+ * dedicated Neovim checks out ({@link #offering}): installing the same files again would change nothing.
  *
  * <p>If the plug-in's folder holds anything it no longer uses ({@link PluginNeovim#unusedEntries}),
- * such as an archive extracted there by hand before 0.2.1, the lines after say so, one full path a
- * line, so each stands apart and can be copied whole ({@link #unusedLines}):
+ * such as an archive extracted there by hand before 0.2.1, the note carries lines that say so
+ * ({@link Note#unused}, shown under it in the normal color), one full path a line, so each stands apart and can be copied whole ({@link #unusedLines}):
  *
  * <pre>
  *   Not used by the plug-in, you can delete:
@@ -74,12 +75,34 @@ public final class NvimProbe {
      * @param problem whether starting Neovim with this value would fail
      * @param current whether it is the verified dedicated Neovim: then there is nothing to get, and
      *                the page offers only a reinstall
+     * @param getNeovim whether the page shows the <em>Get Neovim</em> button: not when the note is
+     *                {@code current}, and not when the option names another program while the
+     *                dedicated Neovim checks out, since the fix is then to remove the option and
+     *                installing the same files again changes nothing
+     *                ({@link StartFailureReport#offersGetNeovim}, the notice's same rule)
+     * @param unused  the {@link #unusedLines} about the plug-in's folder, or {@code null}: shown apart
+     *                from the note, in the normal color, as they are no part of a problem
      */
-    public record Note(String text, boolean problem, boolean current) {
+    public record Note(String text, boolean problem, boolean current, boolean getNeovim, String unused) {
+
+        /** A note with the button offered unless it is {@code current}, and no unused lines. */
+        public Note(String text, boolean problem, boolean current) {
+            this(text, problem, current, !current, null);
+        }
 
         /** A note that does not find the verified dedicated Neovim (all but one kind). */
         public Note(String text, boolean problem) {
             this(text, problem, false);
+        }
+
+        /** This note with the button offered or not. */
+        public Note withGetNeovim(boolean offered) {
+            return new Note(text, problem, current, offered, unused);
+        }
+
+        /** This note with the unused lines, or {@code null} for none. */
+        public Note withUnused(String lines) {
+            return new Note(text, problem, current, getNeovim, lines);
         }
     }
 
@@ -98,8 +121,14 @@ public final class NvimProbe {
                 ? PluginNeovim.unverified(PluginNeovim.searchHomes(), PlatformUtil.isWindows(), NeovimRelease.bundled())
                 : Optional.empty();
         Note note = note(resolved, version, unverified, folder, NeovimRelease.bundled().version());
-        String unused = unusedLines(PluginNeovim.unusedEntries(folder), folder);
-        return unused == null ? note : new Note(note.text() + "\n" + unused, note.problem(), note.current());
+        boolean named = resolved.kind() != NvimExecutable.Kind.DEDICATED
+                && resolved.kind() != NvimExecutable.Kind.NO_DEDICATED;
+        if (named) { // only then does the answer depend on the dedicated Neovim checking out
+            boolean windows = PlatformUtil.isWindows();
+            boolean verified = PluginNeovim.searchHomes().stream().anyMatch(h -> PluginNeovim.verified(h, windows));
+            note = offering(note, resolved, verified);
+        }
+        return note.withUnused(unusedLines(PluginNeovim.unusedEntries(folder), folder));
     }
 
     /**
@@ -169,6 +198,16 @@ public final class NvimProbe {
             case NOT_ABSOLUTE -> problem("-D" + NeovimOption.PROPERTY + " must name the absolute path of a Neovim "
                     + "program (a leading ~ is fine): " + program + ". Remove the option to use the dedicated Neovim.");
         };
+    }
+
+    /**
+     * {@code note} with the Get Neovim button offered as the "Neovim not started" notice offers it
+     * ({@link StartFailureReport#offersGetNeovim}): for a program the option names, only while the
+     * dedicated Neovim is missing or fails the check. Example: {@code -Dneovim4eclipse.nvim=/opt/nvim}
+     * (a folder) with the dedicated Neovim installed gives no button: removing the option is the fix.
+     */
+    static Note offering(Note note, NvimExecutable.Resolved resolved, boolean dedicatedVerified) {
+        return note.withGetNeovim(!note.current() && StartFailureReport.offersGetNeovim(resolved, dedicatedVerified));
     }
 
     private static Note problem(String text) {

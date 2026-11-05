@@ -37,10 +37,10 @@ class GetNeovimTextTest {
                 + "Eclipse will only run with the dedicated Neovim; until it is installed or replaced, editors keep "
                 + "their normal Eclipse keys.", point(m, "Why").text());
         assertEquals("To use a Neovim of your own, cancel and start Eclipse with:", point(m, "Instead").text());
-        assertEquals("-vmargs -Dneovim4eclipse.nvim=/path/to/nvim", point(m, "Instead").copy(), "to copy, unwrapped");
+        assertEquals(NeovimOption.commandLine(NeovimOption.exampleProgram()), point(m, "Instead").copy(), "to copy, unwrapped");
         Point ini = m.points().get(m.points().size() - 2);
         assertEquals("or add this line after -vmargs in eclipse.ini:", ini.text());
-        assertEquals("-Dneovim4eclipse.nvim=/path/to/nvim", ini.copy());
+        assertEquals(NeovimOption.iniLine(NeovimOption.exampleProgram()), ini.copy());
         assertEquals("It is run unchecked, so be sure it is Neovim.", m.points().get(m.points().size() - 1).text());
     }
 

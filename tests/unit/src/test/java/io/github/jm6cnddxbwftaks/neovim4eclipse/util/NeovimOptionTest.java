@@ -44,6 +44,18 @@ class NeovimOptionTest {
         assertEquals(2, NeovimOption.rows("Instead", "x", "/n", null).size());
     }
 
+    /**
+     * The placeholder program in the lines to copy is absolute on its platform: on Windows with a
+     * drive letter, since {@code /path/to/nvim} there is refused as not absolute.
+     */
+    @Test
+    void theExampleProgramIsAnAbsolutePathOnEachPlatform() {
+        assertEquals("/path/to/nvim", NeovimOption.exampleProgram(false));
+        assertEquals("C:\\path\\to\\nvim.exe", NeovimOption.exampleProgram(true));
+        assertEquals("-vmargs -Dneovim4eclipse.nvim=C:\\path\\to\\nvim.exe", NeovimOption.commandLine(
+                NeovimOption.exampleProgram(true)), "no space, so no quotes");
+    }
+
     /** A path with a space is one argument on the command line, quoted; eclipse.ini takes it as it is. */
     @Test
     void aPathWithASpaceIsQuotedOnTheCommandLineOnly() {
