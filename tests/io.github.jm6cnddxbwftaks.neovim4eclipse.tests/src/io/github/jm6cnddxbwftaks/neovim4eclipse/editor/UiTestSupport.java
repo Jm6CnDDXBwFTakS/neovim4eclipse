@@ -168,12 +168,23 @@ final class UiTestSupport {
     /** As {@link #waitUntil(String, long, BooleanSupplier)}, adding {@code actual} to the failure message. */
     static void waitUntil(String what, long timeoutMs, BooleanSupplier condition,
             java.util.function.Supplier<String> actual) {
+        if (!waitUntilOrGiveUp(timeoutMs, condition)) {
+            fail("Timed out after " + timeoutMs + " ms waiting for: " + what + actual.get());
+        }
+    }
+
+    /**
+     * As {@link #waitUntil(String, long, BooleanSupplier)}, but returns {@code false} after
+     * {@code timeoutMs} instead of failing: for a cleanup step that should go on when the wait is not
+     * met (the Java tests' wait for Eclipse's background jobs). An error dialog still fails the test.
+     */
+    static boolean waitUntilOrGiveUp(long timeoutMs, BooleanSupplier condition) {
         Display display = Display.getCurrent();
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (!condition.getAsBoolean()) {
             failOnErrorDialog();
             if (System.currentTimeMillis() > deadline) {
-                fail("Timed out after " + timeoutMs + " ms waiting for: " + what + actual.get());
+                return false;
             }
             if (!display.readAndDispatch()) {
                 try {
@@ -184,6 +195,7 @@ final class UiTestSupport {
                 }
             }
         }
+        return true;
     }
 
     /** How many empty event-loop turns in a row count as "the UI thread has nothing left to do". */
