@@ -24,6 +24,8 @@ import org.eclipse.core.resources.IncrementalProjectBuilder;
 import org.eclipse.core.runtime.ILogListener;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.jobs.IJobManager;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jface.text.ITextSelection;
@@ -115,11 +117,27 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         waitForAttach(javaEditor, name);
     }
 
+    /**
+     * Closes every editor, then waits until Eclipse's background jobs are done, before the base
+     * deletes project e2e (JUnit runs this class's {@code @AfterEach} first).
+     *
+     * <p>Why every editor: a test may open more than its Java file, such as {@code grt} opening
+     * String's class-file editor. An editor left open on e2e's Java elements outlives the project:
+     * JDT's jobs for it log "e2e does not exist", and its AST is never built, so
+     * {@code CoreASTProvider.getAST} asked again and again until a {@code StackOverflowError} (seen in
+     * every pinned one-core run on Windows, in {@code formattingALargeFileTwiceLogsNothing}). Why the
+     * jobs: the editors' jobs (reconcile, AST, decorations) and the build may still be running after
+     * the close; the project must not vanish under them.
+     */
     @AfterEach
-    void closeJavaEditor() {
-        if (javaEditor != null && page().findEditor(javaEditor.getEditorInput()) != null) {
-            page().closeEditor(javaEditor, false);
-        }
+    void closeEveryEditorAndLetJdtFinish() {
+        page().closeAllEditors(false);
+        editor = null; // closed too: the base must not close it again
+        IJobManager jobs = Job.getJobManager();
+        waitUntil("Eclipse's background jobs to finish", TIMEOUT_MS, jobs::isIdle,
+                () -> "; still running or waiting: " + Arrays.stream(jobs.find(null))
+                        .filter(job -> job.getState() == Job.RUNNING || job.getState() == Job.WAITING)
+                        .map(Job::getName).toList());
     }
 
     private String javaText() {
