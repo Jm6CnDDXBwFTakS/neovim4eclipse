@@ -930,6 +930,15 @@ public final class ManualChecks {
 
         /** Copies the tree, hard-linking the {@link #shared} files; returns {linked, copied, bytes copied}. */
         static long[] copyTree(Path source, Path target, Path inner) throws IOException {
+            return copyTree(source, target, inner, true);
+        }
+
+        /**
+         * {@link #copyTree}, with {@code symlinks} false acting as a Windows account that may not make
+         * symbolic links: each link of the source is then copied as what it points to, a file or a
+         * whole folder (tested on every platform this way).
+         */
+        static long[] copyTree(Path source, Path target, Path inner, boolean symlinks) throws IOException {
             long[] counts = new long[3];
             Files.walkFileTree(source, new java.nio.file.SimpleFileVisitor<>() {
                 @Override
@@ -952,13 +961,19 @@ public final class ManualChecks {
                         return java.nio.file.FileVisitResult.CONTINUE;
                     }
                     if (attrs.isSymbolicLink()) {
-                        try {
-                            Files.createSymbolicLink(to, linkTarget(Files.readSymbolicLink(file), source, target));
-                            counts[1]++;
-                            return java.nio.file.FileVisitResult.CONTINUE;
-                        } catch (IOException | UnsupportedOperationException e) {
-                            // Windows without the right to make links: copy what it points to instead.
+                        if (symlinks) {
+                            try {
+                                Files.createSymbolicLink(to, linkTarget(Files.readSymbolicLink(file), source, target));
+                                counts[1]++;
+                                return java.nio.file.FileVisitResult.CONTINUE;
+                            } catch (IOException | UnsupportedOperationException e) {
+                                // Windows without the right to make links: copy what it points to instead.
+                            }
                         }
+                        // Never a hard link here, even under plugins/: a hard link to a symbolic link is
+                        // that same link, still pointing into your Eclipse.
+                        copyResolved(file, to, counts);
+                        return java.nio.file.FileVisitResult.CONTINUE;
                     }
                     if (shared(relative, inner)) {
                         try {
@@ -976,6 +991,30 @@ public final class ManualChecks {
                 }
             });
             return counts;
+        }
+
+        /**
+         * Copies what the symbolic link {@code link} points to into {@code to}: a file as a file, a
+         * folder with all it holds (a plain {@code Files.copy} would make an empty folder). A link to
+         * nothing is left out: there is nothing to copy, and Eclipse cannot have used it.
+         */
+        private static void copyResolved(Path link, Path to, long[] counts) throws IOException {
+            if (!Files.exists(link)) {
+                return;
+            }
+            Path resolved = link.toRealPath();
+            try (Stream<Path> paths = Files.walk(resolved)) { // a file walks as itself alone
+                for (Path from : paths.toList()) {
+                    Path into = to.resolve(resolved.relativize(from).toString());
+                    if (Files.isDirectory(from)) {
+                        Files.createDirectories(into);
+                    } else {
+                        Files.copy(from, into, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+                        counts[1]++;
+                        counts[2] += Files.size(from);
+                    }
+                }
+            }
         }
 
         /**
