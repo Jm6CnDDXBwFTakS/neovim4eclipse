@@ -19,7 +19,7 @@ from the repository's root with the JDK the build uses):
 ```bash
 java releng/tools/checks/ManualChecks.java due              # the cards this release needs, and why
 java releng/tools/checks/ManualChecks.java setup            # make the test project and folders
-java releng/tools/checks/ManualChecks.java launch gn-download   # prepare the folders, start Eclipse for a card
+java releng/tools/checks/ManualChecks.java launch gn-download   # prepare the folders, start Eclipse for a card with the plug-in just built
 java releng/tools/checks/ManualChecks.java list             # every card
 java releng/tools/checks/ManualChecks.java json             # the cards as JSON, for a page that keeps ticks
 ```
@@ -27,11 +27,11 @@ java releng/tools/checks/ManualChecks.java json             # the cards as JSON,
 - **`due`** lists the cards whose source files changed since the last release tag (`v*`), and the
   cards marked `always`. A card about macOS's input method does not come up in a release that did
   not touch the `:` box. `--since <ref>` compares with another commit; `--all` lists every card.
-- **`setup`** creates the folders under `~/n4e-checks` (`--root <folder>` for another place): a
+- **`setup`** creates the folders under `~/var/n4e-checks` (`--root <folder>` for another place): a
   project `n4e-alpha` to import into Eclipse, the workspaces `ws1` and `ws2`, and `xdg`, a plug-in
   folder of the checks' own.
-- **`launch <card>`** starts Eclipse (from `--eclipse <program>`, else `$ECLIPSE`, else the usual
-  place for the platform) in the state the card's **Launch** line names:
+- **`launch <card>`** starts *the checks' Eclipse* with the plug-in just built (see below), in
+  the state the card's **Launch** line names:
   - `fresh`: `XDG_DATA_HOME` pointing to an *empty* `xdg` folder, so the plug-in sees no dedicated
     Neovim, as on a new machine. It asks before emptying the folder.
   - `checks`: the same `xdg` folder as it is (after a `fresh` card installed Neovim there).
@@ -42,11 +42,32 @@ java releng/tools/checks/ManualChecks.java json             # the cards as JSON,
   manager are missing in an Eclipse started `fresh` or `checks`. Your real dedicated Neovim is not
   touched.
 
-Install the version under test first: build the update site ZIP (`./mvnw verify -DskipTests`; it is
-`releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-<version>-SNAPSHOT.zip`)
-and install it in Eclipse with *Help → Install New Software → Add… → Archive…*. After `setup`,
-import `n4e-alpha` once in each workspace you use: *File → Import → General → Existing Projects
-into Workspace*, root `~/n4e-checks/projects`.
+### The checks' Eclipse
+
+Build the version under test first: `./mvnw verify -DskipTests` makes the update site ZIP
+(`releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-<version>-SNAPSHOT.zip`).
+`launch` then installs it for you, into a copy of your Eclipse, never into your Eclipse itself:
+
+- **The copy.** Your Eclipse (`--eclipse <program>`, else `$ECLIPSE`, else the usual place for
+  the platform: `eclipse` on `PATH`, `/Applications/Eclipse.app`, `C:\eclipse\eclipse.exe`) is
+  copied to `~/var/n4e-checks/eclipse/` the first time. Its `plugins/` and `features/` are hard links
+  to yours (the same bytes under a second name), so the copy takes a few hundred MB at most, not the 1 GB or
+  more of a whole Eclipse, and a few seconds. On another disk than your Eclipse, the files are
+  copied instead. An Eclipse at another place (another `--eclipse`) replaces the copy, after a
+  question.
+- **The install.** p2's *director*, Eclipse's installer without a window, installs the newest ZIP
+  into the copy, replacing the build it had: the same as *Help → Install New Software → Add… →
+  Archive…*, in about two seconds. `--zip <file>` names another ZIP. A ZIP already installed (the
+  same SHA-256) is not installed again. `launch` warns when the ZIP is older than the last commit
+  to `plugins/` or `features/`, or those folders have uncommitted changes.
+- **While a checks' Eclipse runs,** `launch` will not change the copy: close it first (`launch`
+  finds it by the lock Eclipse keeps in each workspace under `~/var/n4e-checks`).
+- **`--own-eclipse`** starts your Eclipse as it is, with whatever plug-in you installed in it.
+- **To start over,** delete `~/var/n4e-checks/eclipse` and `~/var/n4e-checks/eclipse-copy.properties`.
+  Deleting the hard links leaves your Eclipse's files alone.
+
+After `setup`, import `n4e-alpha` once in each workspace you use: *File → Import → General →
+Existing Projects into Workspace*, root `~/var/n4e-checks/projects`.
 
 ## The format
 
@@ -138,7 +159,7 @@ plug-in's own download must not leave that mark on Neovim.
 1. After `gn-download`, open any file so that Neovim starts.
 
 ```sh macos
-xattr -l ~/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
+xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 ```
 
 **Expect:** no "cannot be opened" dialog; `xattr` lists no `com.apple.quarantine` (`mx` in place of

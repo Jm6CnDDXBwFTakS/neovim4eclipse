@@ -161,6 +161,78 @@ class ManualChecksTest {
         assertEquals("changed", Files.readString(notes), "a second setup leaves the files alone");
     }
 
+    // ---- The checks' own Eclipse ----
+
+    /** The folder to copy is the program's, or on macOS the app bundle around it. */
+    @Test
+    void theInstallationIsTheProgramsFolderOrTheMacApp() {
+        assertEquals(Path.of("/opt/eclipse"), ManualChecks.ChecksEclipse.installation(Path.of("/opt/eclipse/eclipse")));
+        assertEquals(Path.of("/Applications/Eclipse.app"),
+                ManualChecks.ChecksEclipse.installation(Path.of("/Applications/Eclipse.app/Contents/MacOS/eclipse")));
+    }
+
+    /** Only bundles and features are hard links; what p2 and Eclipse write is a copy of its own. */
+    @Test
+    void onlyPluginsAndFeaturesAreShared() {
+        Path top = Path.of("");
+        assertTrue(ManualChecks.ChecksEclipse.shared(Path.of("plugins/org.eclipse.swt.jar"), top));
+        assertTrue(ManualChecks.ChecksEclipse.shared(Path.of("features/f_1/feature.xml"), top));
+        assertFalse(ManualChecks.ChecksEclipse.shared(Path.of("configuration/config.ini"), top));
+        assertFalse(ManualChecks.ChecksEclipse.shared(Path.of("p2/org.eclipse.equinox.p2.engine/x.profile.gz"), top));
+        assertFalse(ManualChecks.ChecksEclipse.shared(Path.of("eclipse.ini"), top));
+        Path mac = Path.of("Contents/Eclipse");
+        assertTrue(ManualChecks.ChecksEclipse.shared(Path.of("Contents/Eclipse/plugins/a.jar"), mac));
+        assertFalse(ManualChecks.ChecksEclipse.shared(Path.of("Contents/Eclipse/eclipse.ini"), mac));
+        assertFalse(ManualChecks.ChecksEclipse.shared(Path.of("configuration/plugins/a"), top), "only the top plugins/");
+    }
+
+    @Test
+    void copyTreeLinksTheSharedFilesAndCopiesTheRest(@TempDir Path dir) throws IOException {
+        Path source = dir.resolve("eclipse");
+        Files.createDirectories(source.resolve("plugins/b_1"));
+        Files.createDirectories(source.resolve("configuration"));
+        Files.writeString(source.resolve("plugins/a.jar"), "a");
+        Files.writeString(source.resolve("plugins/b_1/b.txt"), "b");
+        Files.writeString(source.resolve("configuration/config.ini"), "c");
+        Path copy = dir.resolve("copy/eclipse");
+        long[] counts = ManualChecks.ChecksEclipse.copyTree(source, copy, Path.of(""));
+        assertEquals(3, counts[0] + counts[1], "three files in all");
+        assertEquals("b", Files.readString(copy.resolve("plugins/b_1/b.txt")));
+        Files.writeString(copy.resolve("configuration/config.ini"), "changed");
+        assertEquals("c", Files.readString(source.resolve("configuration/config.ini")), "a copy, not a link");
+        if (counts[0] == 2) { // a file system with hard links (all the developer machines)
+            assertTrue(Files.isSameFile(source.resolve("plugins/a.jar"), copy.resolve("plugins/a.jar")));
+        }
+    }
+
+    @Test
+    void theInstalledVersionIsReadFromTheDirectorsListing() {
+        String feature = ManualChecks.ChecksEclipse.FEATURE;
+        assertEquals("0.2.1.202611051917", ManualChecks.ChecksEclipse.installedVersion(
+                "INFO: noise\norg.eclipse.jdt.feature.group/3.20\n" + feature + "/0.2.1.202611051917\n").orElseThrow());
+        assertTrue(ManualChecks.ChecksEclipse.installedVersion("org.eclipse.jdt.feature.group/3.20").isEmpty());
+    }
+
+    /** A new ZIP replaces the installed feature in one step; a first install has nothing to remove. */
+    @Test
+    void theDirectorReplacesAnInstalledFeature() {
+        Path zip = Path.of("/r/site.zip").toAbsolutePath();
+        List<String> first = ManualChecks.ChecksEclipse.installArguments(zip, false);
+        assertTrue(first.contains("jar:" + zip.toUri() + "!/"));
+        assertFalse(first.contains("-uninstallIU"));
+        List<String> again = ManualChecks.ChecksEclipse.installArguments(zip, true);
+        assertTrue(again.indexOf("-uninstallIU") < again.indexOf("-installIU"));
+    }
+
+    /** The feature and the update site module the tool names exist under those names. */
+    @Test
+    void theFeatureAndTheSiteAreTheBuildsOwn() throws IOException {
+        Path repository = repositoryRoot();
+        String feature = ManualChecks.ChecksEclipse.FEATURE.replace(".feature.group", "");
+        assertTrue(Files.readString(repository.resolve("features/" + feature + "/feature.xml")).contains("id=\"" + feature + "\""));
+        assertTrue(Files.isRegularFile(repository.resolve(ManualChecks.ChecksEclipse.SITE_TARGET.getParent()).resolve("pom.xml")));
+    }
+
     // ---- The repository's own checklist ----
 
     @Test
@@ -204,7 +276,7 @@ class ManualChecksTest {
      * The checklist is public, so it holds nothing about one person or machine: no home folder of a
      * real user, no e-mail address, no link to a private page. Examples it refuses:
      * {@code /home/pat/...}, {@code C:\Users\pat\...}, {@code pat@example.org}. Placeholders such as
-     * {@code ~/n4e-checks} and {@code $HOME} are fine.
+     * {@code ~/var/n4e-checks} and {@code $HOME} are fine.
      */
     @Test
     void theChecklistHoldsNothingPersonal() throws IOException {
