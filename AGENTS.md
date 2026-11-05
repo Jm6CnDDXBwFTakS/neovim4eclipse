@@ -111,6 +111,11 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - Comments and docs in an explanatory style: say why, give an example, link the concept.
 - Add or update tests with every behavior change; update README and `docs/` when behavior changes,
   and add a user-visible change to `CHANGELOG.md` under *Unreleased*.
+- The repository is public: docs, comments and commit messages say how the code works and why,
+  never how it was discussed. No "decided with the maintainer", numbered questions, plan status,
+  phases, dates of decisions, "review fix" labels, or pointers to private notes, checklists,
+  artifacts or chats (see `docs/design/README.md`, "What goes in a note"). Plans stay outside the
+  repository until built.
 - One commit per logical change. Do not push, and never to `main`, unless the maintainer asks.
 - Branches (CONTRIBUTING.md, "Branches"): work on `fix/<name>` or `feature/<name>` cut from the
   current release branch (`release/<next version>`, e.g. `release/0.1.2`), merge it back into that

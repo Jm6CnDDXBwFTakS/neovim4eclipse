@@ -371,7 +371,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/update-site.sh` | builds the permanent update site (a composite p2 repository) from the release ZIPs |
 | `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
-| `docs/design/` | design notes: one per larger change, planned or built ([index](docs/design/README.md)) |
+| `docs/design/` | design notes: how each larger part works and why ([index](docs/design/README.md)) |
 
 The project has two names. People see **Neovim for Eclipse** (feature, bundle name, preference
 page, release titles); everything a machine reads uses **neovim4eclipse**: the repository, the
@@ -417,8 +417,9 @@ text that tests do not always catch.
   `about.html`.
 - [docs/LEARNING.md](docs/LEARNING.md), part 4, has recipes: adding a preference, a Neovim event, an
   Eclipse-side `:` command.
-- Plan a larger change (several commits, a new subsystem, a release process) in a design note in
-  [docs/design/](docs/design/README.md) first, and keep its status current as it is built.
+- A larger change (several commits, a new subsystem, a release process) gets a design note in
+  [docs/design/](docs/design/README.md), or adds to an existing one, in the same branch: how it
+  works and why, not how it was planned (that page says what goes in a note and what does not).
 - Update the documentation (README, `docs/`, Javadoc) when behavior changes.
 - Add a line to [CHANGELOG.md](CHANGELOG.md), under *Unreleased*, for every change a user of the
   plug-in would notice (a feature, a fix, a changed default). Internal changes (refactoring, tests,

@@ -24,10 +24,9 @@ edges, see [Known limitations](#known-limitations).
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
   [docs/PLATFORM.md](docs/PLATFORM.md): building, running from the IDE, platform notes.
 - [docs/UPGRADING.md](docs/UPGRADING.md): moving to a newer JDK, Eclipse, library, tool or Neovim.
-- [docs/design/](docs/design/README.md): design notes, one per larger change, each with its status
-  (planned or built), the experiments behind it and the decisions made. For example how Tab
-  completion in the `:` command line works, the plan for folding with `zo` and `zc`, and the plan
-  for the Eclipse Marketplace listing.
+- [docs/design/](docs/design/README.md): design notes, one per larger part of the plug-in, each
+  with how it works, the experiments behind it, and why it is built that way. For example folding
+  with `zo` and `zc`, one Neovim window per editor, and the update site and Marketplace listing.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [SECURITY.md](SECURITY.md): how to report a vulnerability privately.
 
@@ -189,8 +188,8 @@ plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/
 tests/unit/   JUnit 5 tests for util + core (sources come from the plug-in; no copies)
 features/     feature project (Tycho eclipse-feature)
 releng/       p2 category / update-site (Tycho eclipse-repository), release-notes.sh, formatter
-docs/         LEARNING, ARCHITECTURE, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING, RPC_CLIENT,
-              TAB_COMPLETION, LOG_LEVEL, FOLDING, NEW_FILE
+docs/         LEARNING, ARCHITECTURE, KEYBOARD, HOWTO_ECLIPSE, PACKAGING, PLATFORM, UPGRADING;
+              design/ holds the design notes (its README lists them)
 .github/      GitHub Actions workflows (build, release), Dependabot, issue templates
 pom.xml       Maven/Tycho parent (aggregator)
 ```
