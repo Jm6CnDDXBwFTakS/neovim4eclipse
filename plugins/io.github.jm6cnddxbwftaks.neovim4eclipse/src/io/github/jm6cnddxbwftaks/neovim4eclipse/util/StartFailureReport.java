@@ -64,13 +64,14 @@ public final class StartFailureReport {
     /**
      * The fix when the preference names a program: the dedicated Neovim (installed, or Get Neovim
      * installs it), or a working Neovim of the user's own, with the warning that the plug-in runs that
-     * program ({@code --version}, then {@code --embed}) without checking what it is.
+     * program ({@code --version}, then {@code --embed}) without checking what it is. "Unchecked", as
+     * the Get Neovim dialogs say of a Neovim of the user's own: no tree hash, unlike the dedicated one.
      */
     static String programFix(boolean dedicatedVerified) {
         return "Clear the Neovim program preference to use the dedicated Neovim, which "
                 + (dedicatedVerified ? "is installed." : "can be installed with Get Neovim.")
                 + " Otherwise, point the preference to a working Neovim " + NeovimVersion.MINIMUM + " or newer. The "
-                + "plug-in runs that program to check for Neovim, so be sure it is Neovim.";
+                + "plug-in runs that program unchecked, so be sure it is Neovim.";
     }
 
     /** The fix when the dedicated Neovim matches the release and still did not start. */
@@ -149,8 +150,7 @@ public final class StartFailureReport {
      *   Reason   It is Neovim 0.11.2. Neovim for Eclipse needs 0.12.6 or newer.
      *   Fix      Clear the Neovim program preference to use the dedicated Neovim, which can be
      *            installed with Get Neovim. Otherwise, point the preference to a working Neovim
-     *            0.12.6 or newer. The plug-in runs that program to check for Neovim, so be sure it
-     *            is Neovim.
+     *            0.12.6 or newer. The plug-in runs that program unchecked, so be sure it is Neovim.
      * </pre>
      *
      * Before, the notice was one block of text, in which the folder and the error ran into the advice,

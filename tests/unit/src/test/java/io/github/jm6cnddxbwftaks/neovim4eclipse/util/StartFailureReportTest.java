@@ -165,7 +165,7 @@ class StartFailureReportTest {
         Point fix = message.point("Fix").orElseThrow();
         assertEquals("Clear the Neovim program preference to use the dedicated Neovim, which can be installed with "
                 + "Get Neovim. Otherwise, point the preference to a working Neovim " + NeovimVersion.MINIMUM + " or "
-                + "newer. The plug-in runs that program to check for Neovim, so be sure it is Neovim.", fix.text());
+                + "newer. The plug-in runs that program unchecked, so be sure it is Neovim.", fix.text());
         assertFalse(fix.hasCopy());
     }
 
