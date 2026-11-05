@@ -12,18 +12,13 @@ public final class PreferenceConstants {
     }
 
     /**
-     * Which Neovim runs: blank for the dedicated Neovim (the plug-in's own, checked before every
-     * start), or the absolute path of one Neovim program, run unchecked (see
-     * {@code util/NvimExecutable}). Nothing is searched: no {@code PATH}, and a folder is refused.
-     * The key keeps its old name so existing settings still apply.
+     * The removed "Neovim program" preference (0.2.0 and the 0.2.1 builds before the change): which
+     * Neovim ran. Since 0.2.1 that is the startup option {@code -Dneovim4eclipse.nvim}
+     * ({@code util/NeovimOption}), and this key is only read once, so that a value still stored in
+     * a workspace is shown to the user and then removed ({@code editor/OldNeovimProgramNotice}). No
+     * default: an unset key reads as blank.
      */
-    public static final String NVIM_EXECUTABLE = "nvimExecutable";
-
-    /**
-     * Default: blank, the dedicated Neovim
-     * ({@code ~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim}, which Get Neovim installs).
-     */
-    public static final String NVIM_EXECUTABLE_DEFAULT = "";
+    public static final String REMOVED_NVIM_PROGRAM = "nvimExecutable";
 
     /** Whether the Neovim toolbar button (the logo) is visible. */
     public static final String SHOW_TOOLBAR = "showToolbar";

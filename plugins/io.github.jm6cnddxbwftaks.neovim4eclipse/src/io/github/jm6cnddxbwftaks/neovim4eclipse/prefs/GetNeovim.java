@@ -54,8 +54,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  *       ({@code util/NeovimDownload}, through Eclipse's proxy settings, {@link EclipseProxies}) or
  *       takes the chosen file, and installs it ({@code util/NeovimInstaller}). Nothing of this runs
  *       on the UI thread.</li>
- *   <li>The done note says where Neovim went and offers what is still needed: <em>Use Dedicated
- *       Neovim</em> when the preference names another Neovim, <em>Restart Neovim</em> when one runs.
+ *   <li>The done note says where Neovim went and what is still needed: <em>Restart Neovim</em>
+ *       when one runs, and, when the startup option {@code -Dneovim4eclipse.nvim} names another
+ *       Neovim, that the option must go (a restart of Eclipse; no button can remove it).
  *       Without a running Neovim the active editor attaches at once. The failure dialog offers
  *       <em>Retry</em>, <em>Install from File…</em> and the release page.</li>
  * </ol>
@@ -200,7 +201,7 @@ public final class GetNeovim {
                 result = NeovimInstaller.install(file, release, archive.platform(), folder, gate,
                         InstalledVersions::of, progress);
             }
-            // The preference as it is now, after the install (the user may have changed it meanwhile).
+            // The startup option -Dneovim4eclipse.nvim (NeovimOption), fixed for this Eclipse's run.
             boolean otherInUse = namesAnotherNeovim(activator.getNvimExecutable(), home);
             asyncExec(() -> done(shell, release, result, otherInUse));
         } catch (NeovimInstallException e) {
@@ -218,8 +219,8 @@ public final class GetNeovim {
     }
 
     /**
-     * Whether the preference names a Neovim outside {@code home}, so the dedicated one is not used
-     * until it is cleared. Runs nothing; off the UI thread, since a blank value hashes the dedicated
+     * Whether the startup option names a Neovim outside {@code home}, so the dedicated one is not
+     * used until the option is removed and Eclipse restarted. Runs nothing; off the UI thread, since a blank value hashes the dedicated
      * Neovim the first time ({@code NvimExecutable.resolve}).
      */
     private static boolean namesAnotherNeovim(String configured, Path home) {
@@ -246,9 +247,6 @@ public final class GetNeovim {
         LISTENERS.forEach(Runnable::run);
         boolean waits = result.outcome() == NeovimInstaller.Outcome.WAITS_FOR_RESTART;
         List<String> buttons = new ArrayList<>();
-        if (otherInUse) {
-            buttons.add(GetNeovimText.USE_DEDICATED_BUTTON);
-        }
         if (running) {
             buttons.add("&Restart Neovim...");
         }
@@ -256,10 +254,7 @@ public final class GetNeovim {
         int pressed = show(liveShell(shell), MessageDialog.INFORMATION,
                 GetNeovimText.done(release.version(), result.program(), result.sha256(), waits, otherInUse), buttons);
         String choice = pressed >= 0 && pressed < buttons.size() ? buttons.get(pressed) : "Close";
-        if (choice.equals(GetNeovimText.USE_DEDICATED_BUTTON)) {
-            // The Activator restarts Neovim on this change, and attaches the active editor.
-            Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, "");
-        } else if (choice.startsWith("&Restart")) {
+        if (choice.startsWith("&Restart")) {
             restart();
         } else if (!running && !otherInUse) {
             Activator.getDefault().restartNeovim(); // nothing runs: attach the active editor now

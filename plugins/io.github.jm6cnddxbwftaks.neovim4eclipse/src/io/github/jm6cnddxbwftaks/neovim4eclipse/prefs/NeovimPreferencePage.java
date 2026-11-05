@@ -26,28 +26,19 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
  * are nested under it with a {@code category}.
  *
  * <h2>Two group boxes</h2>
- * The page has two parts: <em>Neovim program</em> (the field, the note saying which Neovim it finds,
- * and the help) and <em>Workbench</em> (the check boxes). Each is a {@link Group}, whose border shows
- * which lines belong together; before, only an empty row separated the help from the check boxes.
- * A field editor is created on the group instead of {@link #getFieldEditorParent()}, which then holds
- * just the two groups. See {@link #adjustGridLayout} for the one catch.
+ * The page has two parts: <em>Neovim</em> (the note saying which Neovim runs, Get Neovim, and the
+ * help: {@link NeovimStatusSection}) and <em>Workbench</em> (the check boxes). Each is a
+ * {@link Group}, whose border shows which lines belong together. A field editor is created on the
+ * group instead of {@link #getFieldEditorParent()}, which then holds just the two groups. See
+ * {@link #adjustGridLayout} for the one catch.
+ *
+ * <p>The Neovim group has no field: until 0.2.1 it held the "Neovim program" field, and the
+ * program is now the startup option {@code -Dneovim4eclipse.nvim} ({@code util/NeovimOption}).
  */
 public class NeovimPreferencePage extends FieldEditorPreferencePage implements IWorkbenchPreferencePage {
 
-    /** The README section on where the plug-in looks for Neovim, opened by the link in the field's help. */
-    public static final String FINDING_NEOVIM_URL = "https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#finding-neovim";
-
-    /**
-     * The help under the Neovim field, after the note: what the field takes, then a link to the
-     * README section on it. {@code <a>} marks the clickable part.
-     */
-    public static final String NEOVIM_FIELD_HELP = "Leave blank to use the dedicated Neovim, which Get Neovim "
-            + "installs and the plug-in checks at every start. Only where it cannot run (a system with no official "
-            + "build), enter the absolute path of another Neovim program: it is run unchecked and unsupported. "
-            + "<a>How Neovim for Eclipse finds Neovim</a>";
-
-    /** The field's label. */
-    public static final String NEOVIM_FIELD_LABEL = "Neovim program:";
+    /** The help in the Neovim group, after the note: for tests ({@link NeovimStatusSection#HELP}). */
+    public static final String NEOVIM_HELP = NeovimStatusSection.HELP;
 
     private Group program;
     private Group workbench;
@@ -65,13 +56,9 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
 
     @Override
     protected void createFieldEditors() {
-        program = group("Neovim program");
-        // Blank for the dedicated Neovim, or the absolute path of one program. Under it: the note
-        // saying which Neovim that is, then the help (NeovimLocationFieldEditor).
-        addField(new NeovimLocationFieldEditor(
-                PreferenceConstants.NVIM_EXECUTABLE,
-                NEOVIM_FIELD_LABEL,
-                program));
+        program = group("Neovim");
+        program.setLayout(new GridLayout()); // no field editor sets one here; adjustGridLayout fills it in
+        new NeovimStatusSection(program); // which Neovim runs, Get Neovim, and the help
 
         workbench = group("Workbench");
         addField(new BooleanFieldEditor(
@@ -113,10 +100,10 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
      * <p>The catch: a field editor sets a fresh {@link GridLayout} on its parent when it is created
      * ({@code FieldEditor.createControl}), with no margins and as many columns as it has controls, and
      * {@link FieldEditorPreferencePage} adjusts the columns only on {@link #getFieldEditorParent()}. So
-     * {@code super} first gives every field editor the widest field's column count (3: label, text,
-     * Browse); then the page gets one column (the groups, one under the other), and each group gets
-     * those columns back, with SWT's usual margins so the fields do not touch the border, and the row
-     * spacing. Spacing in dialog units follows the dialog font, as the rest of the dialog does.
+     * {@code super} first gives every field editor the widest field's column count; then the page
+     * gets one column (the groups, one under the other), and the Workbench group gets those columns
+     * back. Both groups get SWT's usual margins so their lines do not touch the border, and the row
+     * spacing; the Neovim group keeps its one column, as it holds no field editor. Spacing in dialog units follows the dialog font, as the rest of the dialog does.
      */
     @Override
     protected void adjustGridLayout() {
@@ -130,7 +117,7 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
         GridLayout usual = new GridLayout(); // SWT's default margins
         for (Group group : new Group[] { program, workbench }) {
             if (group.getLayout() instanceof GridLayout layout) {
-                layout.numColumns = columns;
+                layout.numColumns = group == program ? 1 : columns;
                 layout.marginWidth = usual.marginWidth;
                 layout.marginHeight = usual.marginHeight;
                 layout.verticalSpacing = convertVerticalDLUsToPixels(PageLayout.ROW_SPACING_DLUS);

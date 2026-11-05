@@ -64,15 +64,17 @@ class OpenPreferencesHandlerTest {
         }
     }
 
+    /**
+     * The page shows which Neovim runs, with nothing to type: since 0.2.1 the program is the startup
+     * option {@code -Dneovim4eclipse.nvim} (util/NeovimOption), so there is no field and no Browse.
+     */
     @Test
-    void showsTheNeovimPageWithTheLocationField() {
+    void showsTheNeovimPageWithWhichNeovimRuns() {
         assertTrue(dialog.getSelectedPage() instanceof NeovimPreferencePage, String.valueOf(dialog.getSelectedPage()));
         Control page = ((NeovimPreferencePage) dialog.getSelectedPage()).getControl();
-        Label label = find(page, Label.class).stream()
-                .filter(l -> l.getText().startsWith("Neovim program")).findFirst().orElse(null);
-        assertNotNull(label, "no 'Neovim program' label");
-        assertTrue(find(page, Button.class).stream().anyMatch(b -> b.getText().equals("Browse...")), "no Browse... button");
-        // The note under the field names what the field finds (NvimProbe), after a short delay.
+        assertTrue(find(page, Text.class).isEmpty(), "a text field, but the program is a startup option now");
+        assertTrue(find(page, Button.class).stream().noneMatch(b -> b.getText().equals("Browse...")), "a Browse... button");
+        // The note names which Neovim runs (NvimProbe), once the probe has answered.
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
         // Get Neovim is offered on the page, with the version it installs (GetNeovim): as a button, or,
         // when the note finds the dedicated Neovim current, as the note's Reinstall link instead.
@@ -85,34 +87,33 @@ class OpenPreferencesHandlerTest {
         boolean reinstall = reinstallLink.isVisible();
         assertEquals(!reinstall, getNeovim.isEnabled() && getNeovim.isVisible(),
                 "the button is usable unless Reinstall is offered: " + note(page).getText());
-        Text field = find(page, Text.class).stream().findFirst().orElse(null);
-        assertNotNull(field, "no text field");
-        assertTrue(field.isVisible(), "field hidden (its window is not the dialog's)");
-        assertTrue(field.getSize().x > 50 && field.getSize().y > 5, "field size " + field.getSize());
-        assertTrue(field.getShell() == dialog.getShell(), "the page is shown in another window");
+        Label note = note(page);
+        assertTrue(note.isVisible(), "note hidden (its window is not the dialog's)");
+        assertTrue(note.getShell() == dialog.getShell(), "the page is shown in another window");
     }
 
     @Test
-    void underTheNoteTheHelpSaysWhatTheFieldTakesAndLinksToHowNeovimIsFound() {
+    void underTheNoteTheHelpSaysHowToRunAnotherNeovimAndLinksToHowNeovimIsFound() {
         NeovimPreferencePage neovimPage = (NeovimPreferencePage) dialog.getSelectedPage();
         assertEquals("Configure Neovim for Eclipse integration.", neovimPage.getDescription());
         Control page = neovimPage.getControl();
         Link help = find(page, Link.class).stream()
-                .filter(l -> l.getText().equals(NeovimPreferencePage.NEOVIM_FIELD_HELP)).findFirst().orElse(null);
+                .filter(l -> l.getText().equals(NeovimPreferencePage.NEOVIM_HELP)).findFirst().orElse(null);
         assertNotNull(help, "no help with a link to how Neovim is found");
         assertTrue(help.isVisible(), "help hidden");
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
         Label note = note(page);
         assertTrue(note.getParent() == help.getParent() && note.getBounds().y < help.getBounds().y,
-                "the note (what the field finds) comes before the help (what it takes): note " + note.getBounds()
+                "the note (which Neovim runs) comes before the help (how to run another): note " + note.getBounds()
                         + ", help " + help.getBounds());
     }
 
-    /** The note under the Neovim field (a Label), once it says what the field finds; {@code null} before. */
+    /** The note in the Neovim group (a Label), once it says which Neovim runs; {@code null} before. */
     private static Label note(Control page) {
         return find(page, Label.class).stream()
                 .filter(l -> l.getText().startsWith("Found: ") || l.getText().startsWith("No dedicated Neovim")
-                        || l.getText().startsWith("The dedicated Neovim's files"))
+                        || l.getText().startsWith("The dedicated Neovim's files")
+                        || l.getText().contains("-Dneovim4eclipse.nvim"))
                 .findFirst().orElse(null);
     }
 

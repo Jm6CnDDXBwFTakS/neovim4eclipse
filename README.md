@@ -58,8 +58,9 @@ To use the plug-in in your own Eclipse, without building it.
 - **Nothing else**: the plug-in installs the Neovim it runs, its *dedicated Neovim* (0.12.6), with
   **Get Neovim 0.12.6…**: offered in the "Neovim not started" notice, on
   *Window → Preferences → Neovim* and in the *Neovim* menu. It checks that Neovim's files at every
-  start, and runs no other Neovim unless you name one. A Neovim of your own, from your system's
-  packages or `PATH`, is not used. See [Get Neovim](#get-neovim) and [Finding Neovim](#finding-neovim).
+  start, and runs no other Neovim unless you name one when Eclipse starts
+  ([Using a Neovim of your own](#using-a-neovim-of-your-own)). A Neovim from your system's packages
+  or `PATH` is not used by itself. See [Get Neovim](#get-neovim) and [Finding Neovim](#finding-neovim).
 
 **Steps**
 
@@ -790,12 +791,11 @@ narrowly as it can, and it is listed here.
 ## Preferences
 
 *Window → Preferences → Neovim* (also *Neovim → Preferences...*, which opens it with its sub-pages
-expanded): where Neovim is (blank to search, its folder, or the program; see
-[Finding Neovim](#finding-neovim)), whether to show the toolbar toggle, and
+expanded): which Neovim runs, with *Get Neovim* (see [Finding Neovim](#finding-neovim); a Neovim of
+your own is a startup option, not a preference), whether to show the toolbar toggle, and
 whether to show the *Neovim* menu in the menu bar (`Alt+V` opens it on Linux and Windows). With the menu hidden, its entries stay reachable:
 the toggle through `Ctrl+Shift+M`, the toolbar button or Quick Access (`Ctrl+3`), the preferences
 through *Window → Preferences*.
-Changing the executable restarts Neovim and re-attaches the active editor.
 
 The *Neovim* menu, top to bottom: *Neovim Mode* (the toggle, `Ctrl+Shift+M`); *Attach Neovim*,
 for an editor that did not attach by itself, which also starts a new Neovim if
@@ -831,14 +831,14 @@ every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, and the Insert boxes of `C
 `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (Windows:
 `%LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>`; see [Finding Neovim](#finding-neovim) for the
 folder and the code). The dialogs and the preference page call it the **dedicated Neovim**: it is
-for Eclipse alone, and no other Neovim on the machine is changed. With the preference blank, while
-the dedicated Neovim is missing or fails the start check (older, or damaged), the dialog opens by
-itself: once when Eclipse starts, or when an editor first needs Neovim, with a *Why* line saying
-which, and a last *Instead* line: to use a Neovim of your own, cancel and enter its program in the
-*Neovim program* preference. Cancel it and nothing more appears; editors keep their normal Eclipse
-keys. It is also under
-the field on *Window → Preferences → Neovim* and in the *Neovim* menu while it is needed. When the
-dedicated Neovim checks out, the preference note has a *Reinstall…* link under it instead. A dialog first says where it goes and what it downloads, and offers two ways:
+for Eclipse alone, and no other Neovim on the machine is changed. While the dedicated Neovim is
+missing or fails the start check (older, or damaged), and no
+[Neovim of your own](#using-a-neovim-of-your-own) is named, the dialog opens by itself: once when
+Eclipse starts, or when an editor first needs Neovim, with a *Why* line saying which, and a last
+*Instead* line on how to use a Neovim of your own. Cancel it and nothing more appears; editors keep
+their normal Eclipse keys. It is also in the *Neovim* group of *Window → Preferences → Neovim* and in
+the *Neovim* menu while it is needed. When the dedicated Neovim checks out, the page's note has a
+*Reinstall…* link under it instead. A dialog first says where it goes and what it downloads, and offers two ways:
 
 - **Download**: from Neovim's GitHub release, which redirects to
   `release-assets.githubusercontent.com`; about 10 to 13 MB. The download goes through Eclipse's
@@ -854,7 +854,8 @@ dialog shows it, with *Copy*, and links to the GitHub release page and the Virus
 that hash), unpacks it, checks that it runs and reports the right version, and only then puts it in
 place. Nothing changes if any step fails. Without a running Neovim the active editor attaches at
 once; otherwise the note offers *Restart Neovim*, and a Neovim running from the same folder is
-replaced when it restarts. If the preference names another Neovim, *Use Dedicated Neovim* clears it.
+replaced when it restarts. If Eclipse was started with `-Dneovim4eclipse.nvim`, the note says to
+remove that option and restart Eclipse, since the dedicated Neovim is not used until then.
 
 **A proxy that asks for a password**: Java does not send a proxy password through an HTTPS
 connection unless Eclipse starts with this line in `eclipse.ini`, after `-vmargs` (Eclipse's own
@@ -880,8 +881,8 @@ What works: *New…* on that page, with any name, the location `/usr/bin/open` a
 `-a Safari %URL%` (or `-a Firefox %URL%`, ...); then select it. `open` hands the link to that app.
 
 **By hand**, without the plug-in's help: extract the archive and rename its folder to the code, so
-that `neovim/<code>/bin/nvim` exists; or extract it anywhere and choose that folder in the
-preference. On macOS an archive downloaded with a browser is quarantined, and macOS then refuses to
+that `neovim/<code>/bin/nvim` exists; or extract it anywhere and name its `bin/nvim` with
+`-Dneovim4eclipse.nvim` ([below](#using-a-neovim-of-your-own)). On macOS an archive downloaded with a browser is quarantined, and macOS then refuses to
 run Neovim; remove the flag after extracting (files the plug-in unpacks have none):
 
 ```bash
@@ -893,13 +894,12 @@ Uninstalling the plug-in leaves this folder (about 40 MB per platform); delete i
 ### Finding Neovim
 
 The plug-in runs exactly one Neovim, and looks nowhere else for it: not on `PATH`, not in the usual
-install folders. The *Neovim program* field on *Window → Preferences → Neovim* says which, and the
-note under it shows what that is, for example
+install folders. The note in the *Neovim* group of *Window → Preferences → Neovim* shows which, for
+example
 `Found: dedicated Neovim 0.12.6, checked, /home/you/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim`.
-When Neovim would not start with it, the note is in the theme's error color and the field gets an
-error mark.
+When Neovim would not start with it, the note is in the theme's error color.
 
-- **Blank** (the default): the **dedicated Neovim**, the one *Get Neovim* installs, at
+- **Normally** (the default): the **dedicated Neovim**, the one *Get Neovim* installs, at
   `<code>/bin/nvim` in the plug-in's Neovim folder, where `<code>` names the platform (below). The
   folder is the first of these whose variable is set (to an absolute path):
   - Linux and macOS: `$XDG_DATA_HOME/neovim4eclipse-plugin/neovim`, then
@@ -926,15 +926,11 @@ error mark.
   *Get Neovim* replaces it. Anything else in the plug-in's Neovim folder, such as an archive
   extracted there by hand before 0.2.1, is not used; the page and the notice list each such
   entry's full path, and you can delete it.
-- **The absolute path of a Neovim program** (`/usr/bin/nvim`, `C:\tools\nvim\bin\nvim.exe`; a
-  leading `~` stands for the home folder): that program, run as it is. It is **not checked and not
-  supported**: for a system Neovim publishes no build for, or where the official one does not run
-  (Alpine and other musl-based Linux, NixOS without nix-ld, FreeBSD), or for a Neovim you built
-  yourself. *Browse…* picks a file. A folder is refused (the note names the program to enter
-  instead, such as `<folder>/bin/nvim`), as are a command name (`nvim`) and a relative path:
-  nothing is looked up or searched.
+- **A Neovim of your own**, named when Eclipse starts with `-Dneovim4eclipse.nvim`
+  ([below](#using-a-neovim-of-your-own)): that program, run as it is. It is **not checked and not
+  supported**.
 
-**Why so strict.** Until 0.2.1 a blank field also searched `PATH` and the usual install folders, and
+**Why so strict.** Until 0.2.1 a blank preference also searched `PATH` and the usual install folders, and
 a folder was searched four levels deep, running `nvim --version` on every `bin/nvim` it found. That
 ran programs nobody chose: picking `~/src` by mistake would run a `bin/nvim` planted in a cloned
 repository below it. It also depended on how Eclipse was started, since Eclipse started from the
@@ -943,6 +939,41 @@ installed and checked, or the one program you named. Eclipse sees only the envir
 (`XDG_DATA_HOME`, `HOME`) of whatever started it: set in a shell's startup file, they are missing
 when Eclipse starts from the Dock, a desktop menu or the Start menu.
 [docs/PLATFORM.md](docs/PLATFORM.md#neovim-executable) has the details.
+
+### Using a Neovim of your own
+
+Where the dedicated Neovim cannot run (a system Neovim publishes no build for, or where the official
+one does not run: Alpine and other musl-based Linux, NixOS without nix-ld, FreeBSD), or when a newer
+Neovim has a security fix that *Get Neovim* does not offer yet, name another Neovim program when
+Eclipse starts, with the Java system property `neovim4eclipse.nvim`. The value is the program's
+absolute path (`/usr/bin/nvim`, `C:\tools\nvim\bin\nvim.exe`; a leading `~` stands for the home
+folder). That program is **run unchecked and unsupported**, so be sure it is Neovim, 0.12.6 or newer.
+A folder is refused (the note names the program inside it, such as `<folder>/bin/nvim`), as are a
+command name (`nvim`) and a relative path: nothing is looked up or searched. Naming a dedicated
+Neovim's own `bin/nvim` runs that install as the dedicated Neovim: checked before every start.
+
+For one start, on the command line:
+
+```bash
+eclipse -vmargs -Dneovim4eclipse.nvim=/usr/local/bin/nvim
+```
+
+On macOS, `/Applications/Eclipse.app/Contents/MacOS/eclipse -vmargs -D…` or
+`open -a Eclipse --args -vmargs -D…`; on Windows, `eclipse.exe -vmargs -D…`. To keep it, add the line
+`-Dneovim4eclipse.nvim=/usr/local/bin/nvim` after `-vmargs` in `eclipse.ini` (on macOS inside
+`Eclipse.app/Contents/Eclipse/`). The note on *Window → Preferences → Neovim* then names the program,
+"from -Dneovim4eclipse.nvim"; remove the option, and restart Eclipse, to go back to the dedicated
+Neovim.
+
+A `-vmargs` on the command line adds to `eclipse.ini`'s own only if `eclipse.ini` has the line
+`--launcher.appendVmargs`, which the Eclipse packages have (checked on Linux, macOS and Windows).
+Without it, the command line replaces them (on macOS, Eclipse then does not start); put the option
+in `eclipse.ini` instead.
+
+Before 0.2.1 this was the *Neovim program* preference. It is no longer read: a value still stored
+there is shown once, with the line to use instead, and then removed. A startup option cannot arrive
+in a preferences file imported from elsewhere (*File → Import → Preferences*), which could have
+named any program for the plug-in to run.
 
 ## Known limitations
 

@@ -80,7 +80,7 @@ class StartFailureReportTest {
         assertEquals("The dedicated Neovim is not installed.", reason.text());
         assertFalse(reason.hasCopy(), "no program to name");
         Point fix = message.point("Fix").orElseThrow();
-        assertEquals("Get Neovim installs Neovim " + NeovimVersion.MINIMUM + " into the plug-in's folder. It "
+        assertEquals("\"Get Neovim\" installs Neovim " + NeovimVersion.MINIMUM + " into the plug-in's folder. It "
                 + "downloads the release from github.com, or takes a release archive file.", fix.text());
         assertEquals(NvimExecutable.dedicatedFolder().toString(), fix.copy());
         assertFalse(message.hasFooter(), message.footer());
@@ -96,7 +96,7 @@ class StartFailureReportTest {
         assertEquals("The dedicated Neovim's files differ from Neovim " + NeovimVersion.MINIMUM + "'s release. The "
                 + "install may be damaged.", message.point("Reason").orElseThrow().text(),
                 "no version: such an install is not run");
-        assertEquals("Get Neovim replaces it with Neovim " + NeovimVersion.MINIMUM + ".",
+        assertEquals("\"Get Neovim\" replaces it with Neovim " + NeovimVersion.MINIMUM + ".",
                 message.point("Fix").orElseThrow().text());
     }
 
@@ -113,7 +113,7 @@ class StartFailureReportTest {
                 + "not start.", message.point("Reason").orElseThrow().text());
         assertEquals("TimeoutException", message.point("Error").orElseThrow().text());
         Point fix = message.point("Fix").orElseThrow();
-        assertEquals("Get Neovim reinstalls Neovim " + NeovimVersion.MINIMUM + ". The Eclipse Error Log (Window > "
+        assertEquals("\"Get Neovim\" reinstalls Neovim " + NeovimVersion.MINIMUM + ". The Eclipse Error Log (Window > "
                 + "Show View > Error Log) has the full error.", fix.text());
         assertEquals(NvimExecutable.dedicatedFolder().toString(), fix.copy());
     }
@@ -163,16 +163,17 @@ class StartFailureReportTest {
         assertEquals("The file is missing.", reason.text());
         assertFalse(reason.hasCopy(), "the path is on the Program row");
         Point fix = message.point("Fix").orElseThrow();
-        assertEquals("Clear the Neovim program preference to use the dedicated Neovim, which can be installed with "
-                + "Get Neovim. Otherwise, point the preference to a working Neovim " + NeovimVersion.MINIMUM + " or "
-                + "newer. The plug-in runs that program unchecked, so be sure it is Neovim.", fix.text());
+        assertEquals("Remove -Dneovim4eclipse.nvim (from the command line or eclipse.ini) and restart Eclipse to use "
+                + "the dedicated Neovim, which can be installed with \"Get Neovim\". Otherwise, set it to a working "
+                + "Neovim " + NeovimVersion.MINIMUM + " or newer. The plug-in runs that program unchecked, so be sure "
+                + "it is Neovim.", fix.text());
         assertFalse(fix.hasCopy());
     }
 
     @Test
     void theProgramFixSaysTheDedicatedNeovimIsInstalledWhenItChecksOut() {
-        assertTrue(StartFailureReport.programFix(true).startsWith("Clear the Neovim program preference to use the "
-                + "dedicated Neovim, which is installed. Otherwise, point the preference to "),
+        assertTrue(StartFailureReport.programFix(true).startsWith("Remove -Dneovim4eclipse.nvim (from the command line or "
+                + "eclipse.ini) and restart Eclipse to use the dedicated Neovim, which is installed. Otherwise, set it to "),
                 StartFailureReport.programFix(true));
     }
 

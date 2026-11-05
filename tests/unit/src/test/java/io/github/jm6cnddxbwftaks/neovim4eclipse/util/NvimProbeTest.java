@@ -37,8 +37,11 @@ class NvimProbeTest {
     }
 
     private static Note note(NvimExecutable.Resolved r, NeovimVersion version) {
-        return NvimProbe.note(r, version, true, Optional.empty(), DEDICATED, MIN);
+        return NvimProbe.note(r, version, Optional.empty(), DEDICATED, MIN);
     }
+
+    /** Every note about a named program says where the name came from: the startup option. */
+    private static final String FROM = "from -Dneovim4eclipse.nvim";
 
     /** The verified dedicated Neovim: "checked", and the page offers only a reinstall. */
     @Test
@@ -49,57 +52,47 @@ class NvimProbeTest {
 
     @Test
     void noDedicatedNeovimPointsToGetNeovim() {
-        assertEquals(new Note("No dedicated Neovim yet. Get Neovim " + MIN + " installs it into " + DEDICATED, true),
-                note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null));
+        assertEquals(new Note("No dedicated Neovim yet. \"Get Neovim " + MIN + "\" installs it into " + DEDICATED,
+                true), note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null));
     }
 
     @Test
     void anUnverifiedDedicatedNeovimSaysGetNeovimReplacesIt() {
-        Note n = NvimProbe.note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null, true,
+        Note n = NvimProbe.note(resolved(OWN, NvimExecutable.Kind.NO_DEDICATED), null,
                 Optional.of(new PluginNeovim.Unverified(OWN)), DEDICATED, MIN);
         assertEquals(new Note("The dedicated Neovim's files differ from Neovim " + MIN + "'s release (an older one, "
-                + "or damaged): Get Neovim replaces it (" + OWN + ")", true), n);
+                + "or damaged): \"Get Neovim\" replaces it (" + OWN + ")", true), n);
     }
 
-    /** A program the user names runs unchecked, and the note says so; it is not a problem. */
+    /** A program the option names runs unchecked, and the note says so; it is not a problem. */
     @Test
     void aNamedProgramIsUncheckedAndUnsupported() {
         Note n = note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), NEWER);
-        assertEquals(new Note("Found: Neovim " + NEWER + ", " + PROGRAM + ". Not the dedicated Neovim: not checked "
-                + "by the plug-in, and unsupported. Clear the field to use the dedicated one.", false), n);
+        assertEquals(new Note("Found: Neovim " + NEWER + ", " + PROGRAM + ", " + FROM + ". Not the dedicated Neovim: "
+                + "not checked by the plug-in, and unsupported. Remove the option to use the dedicated one.", false), n);
         assertFalse(note(resolved(OWN, NvimExecutable.Kind.PROGRAM), MIN).current(),
-                "the dedicated program named in the field is not checked either");
-    }
-
-    /**
-     * While its path is being typed, a program is not run (a half-typed path may name another
-     * user's file): the note names it and says its version shows after Apply.
-     */
-    @Test
-    void aProgramBeingTypedIsNotRunAndTheNoteSaysWhen() {
-        Note n = NvimProbe.note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), null, false, Optional.empty(),
-                DEDICATED, MIN);
-        assertEquals(new Note("Program: " + PROGRAM + ". Not the dedicated Neovim: not checked by the plug-in, "
-                + "and unsupported. Its version shows after Apply.", false), n);
+                "the dedicated program named by the option is not checked either");
     }
 
     @Test
     void aNamedProgramThatIsOldOrNotNeovimIsAProblem() {
         assertEquals(new Note("Found: Neovim " + OLD + " (too old: Neovim for Eclipse needs " + MIN + " or newer), "
-                + PROGRAM, true), note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), OLD));
-        assertEquals(new Note("Not a working Neovim (no answer to --version): " + PROGRAM, true),
+                + PROGRAM + ", " + FROM, true), note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), OLD));
+        assertEquals(new Note("Not a working Neovim (no answer to --version): " + PROGRAM + ", " + FROM, true),
                 note(resolved(PROGRAM, NvimExecutable.Kind.PROGRAM), null));
     }
 
     @Test
-    void aFolderMissingOrRelativeValueSaysWhatToEnter() {
+    void aFolderMissingOrRelativeValueSaysWhatToName() {
         Path folder = Path.of("/opt/nvim");
-        assertEquals(new Note(folder + " is a folder: enter the Neovim program inside it, such as "
+        assertEquals(new Note(folder + " (" + FROM + ") is a folder: name the Neovim program inside it, such as "
                 + folder.resolve("bin").resolve(NvimExecutable.defaultCommandName()), true),
                 note(resolved(folder, NvimExecutable.Kind.FOLDER), null));
-        assertEquals(new Note("No Neovim program at " + PROGRAM + ". Clear the field to use the dedicated Neovim.",
-                true), note(resolved(PROGRAM, NvimExecutable.Kind.MISSING), null));
-        assertTrue(note(new NvimExecutable.Resolved("nvim", NvimExecutable.Kind.NOT_ABSOLUTE), null).problem());
+        assertEquals(new Note("No Neovim program at " + PROGRAM + " (" + FROM + "). Remove the option to use the "
+                + "dedicated Neovim.", true), note(resolved(PROGRAM, NvimExecutable.Kind.MISSING), null));
+        assertEquals(new Note("-Dneovim4eclipse.nvim must name the absolute path of a Neovim program (a leading ~ is "
+                + "fine): nvim. Remove the option to use the dedicated Neovim.", true),
+                note(new NvimExecutable.Resolved("nvim", NvimExecutable.Kind.NOT_ABSOLUTE), null));
     }
 
     @Test

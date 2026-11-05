@@ -14,7 +14,7 @@
    <description url="https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse">Vim mode for Eclipse, powered by a real Neovim: motions, operators, text objects, macros, registers and : commands, with your own init.lua, in Eclipse's text editors.
 
 Requires:
-- Neovim 0.12.6. After installing, a "Get Neovim" dialog opens when starting Eclipse, which can download the official release into the plug-in's dedicated folder and check it. A Neovim of your own, 0.12.6 or newer, can be named in "Window > Preferences > Neovim" instead; the program named there runs unchecked, so be sure it is Neovim.
+- Neovim 0.12.6. After installing, a "Get Neovim" dialog opens when starting Eclipse, which can download the official release into the plug-in's dedicated folder and check it. A Neovim of your own, 0.12.6 or newer, can be named by starting Eclipse with -vmargs -Dneovim4eclipse.nvim=/path/to/nvim instead; the program named there runs unchecked, so be sure it is Neovim.
 - Eclipse 2024-12 (4.34) or newer, on Java 21 or newer
 
 https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse</description>

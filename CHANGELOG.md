@@ -21,7 +21,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - **Get Neovim 0.12.6…** installs the Neovim the plug-in needs into its own folder (the *dedicated
   Neovim*; no other Neovim is changed), from the "Neovim not started" notice (the default button), or
   from the Neovim preference page and the *Neovim* menu while the dedicated Neovim is missing or old
-  (when it is current, the preference note offers *Reinstall…*). It downloads the official release archive
+  (when it is current, the page's note offers *Reinstall…*). It downloads the official release archive
   from GitHub, through Eclipse's proxy settings, or installs one you already have (*Install from
   File…*, for when Eclipse cannot download). Either way the archive must match the SHA-256 pinned in
   the plug-in, which the dialog shows with links to the GitHub release and VirusTotal; then it is
@@ -40,18 +40,24 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
-- **The plug-in runs only its own Neovim, checked at every start.** With the preference blank (the
-  default) it uses the dedicated Neovim that *Get Neovim* installs, and only if every file in it
-  matches Neovim 0.12.6's release, by a hash pinned in the plug-in; a damaged, changed or older copy
-  is not run, and *Get Neovim* opens by itself to install or replace it (once at Eclipse's start, or
-  when an editor first needs Neovim; cancelling it shows nothing more). That dialog ends with an
-  *Instead* line, for using a Neovim of your own through the preference. The preference, now *Neovim program*,
-  takes the absolute path of one Neovim program for a system with no official build (Alpine,
-  NixOS): it is run unchecked and unsupported, and *Browse…* picks a file. See the README, "Finding
-  Neovim".
+- **The plug-in runs only its own Neovim, checked at every start.** It uses the dedicated Neovim
+  that *Get Neovim* installs, and only if every file in it matches Neovim 0.12.6's release, by a
+  hash pinned in the plug-in; a damaged, changed or older copy is not run, and *Get Neovim* opens by
+  itself to install or replace it (once at Eclipse's start, or when an editor first needs Neovim;
+  cancelling it shows nothing more). That dialog ends with an *Instead* line, for using a Neovim of
+  your own. See the README, "Finding Neovim".
+- **A Neovim of your own is a startup option now, not a preference.** For a system with no official
+  build (Alpine, NixOS, FreeBSD), or a security fix in a newer Neovim before *Get Neovim* offers it,
+  start Eclipse with `-vmargs -Dneovim4eclipse.nvim=/path/to/nvim`, or add
+  `-Dneovim4eclipse.nvim=/path/to/nvim` after `-vmargs` in `eclipse.ini`. The program is run
+  unchecked and unsupported. The *Neovim folder or program* preference is gone, with its field and
+  *Browse…*: *Window → Preferences → Neovim* shows which Neovim runs, and a value still stored from
+  0.2.0 is shown once, with the line to use instead, and then removed. A startup option cannot come
+  in with a preferences file imported from elsewhere, which could name any program to run. See the
+  README, "Using a Neovim of your own".
 - The plug-in's own Neovim now lives in one folder per platform,
-  `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (`lx`, `la`, `mx`, `ma`, `wx`, `wa`), and a blank
-  preference uses only that exact place there. A Neovim extracted into
+  `~/.local/share/neovim4eclipse-plugin/neovim/<code>` (`lx`, `la`, `mx`, `ma`, `wx`, `wa`), and the
+  plug-in uses only that exact place there. A Neovim extracted into
   `~/.local/share/neovim4eclipse-plugin/neovim` by hand before is no longer found: use *Get Neovim*,
   or rename its folder to the code. The preference page and the notice name what is no longer used.
 - **On Windows the plug-in's folder moved to `%LOCALAPPDATA%\neovim4eclipse-plugin`** (usually
@@ -63,8 +69,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - The "Neovim not started" notice is laid out as the welcome and the *Get Neovim* dialogs are:
   the reason, the error where it adds something, and the fix, each under a heading. For the dedicated
   Neovim it says whether it is missing, not the release (an older one, or damaged), or checked and
-  still failed; for a program named in the preference, whether the file is missing or a folder, and
-  which Neovim version it is. Paths are in fields with *Copy*. When a program in the preference
+  still failed; for a program named with `-Dneovim4eclipse.nvim`, whether the file is missing or a
+  folder, and which Neovim version it is. Paths are in fields with *Copy*. When such a program
   fails and the dedicated Neovim is installed, it does not offer *Get Neovim*.
 - CI tests exactly the archive *Get Neovim* installs, and checks its SHA-256.
 - `Esc` after typing in a large file (over 10,000 lines) is quicker: only the lines typed are
@@ -78,7 +84,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - Neovim is no longer searched for: not on `PATH`, not in the usual install folders (Homebrew,
   `/usr/local`, `%ProgramFiles%\Neovim`, Scoop, ...), and a folder in the preference is no longer
-  searched four levels down. A Neovim of your own is used only if the preference names its program.
+  searched four levels down. A Neovim of your own is used only if `-Dneovim4eclipse.nvim` names its
+  program.
   The search ran `nvim --version` on programs nobody chose (0.2.1 security review).
 
 ### Fixed
@@ -105,8 +112,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   ApplePressAndHoldEnabled -bool false`, or for Eclipse alone with its application id in place of
   `-g`), a held letter repeats as before. Clicking an accent works
   only when quick, because of an SWT bug: use the digit or the arrows.
-- The preference note for a program that does not answer `--version` reads `Not a working Neovim
-  (no answer to --version): <path>`; it began with "Found:" although nothing usable was found.
+- The preference page's note for a program that does not answer `--version` reads `Not a working
+  Neovim (no answer to --version): <path>, from -Dneovim4eclipse.nvim`; it began with "Found:"
+  although nothing usable was found.
 - A `&` in a file name shows in Neovim's message line, the status bar and the startup error
   notice: `R&D.txt` showed as `RD.txt`, with the `D` underlined.
 - A file of more than about 33,000 lines opens in Neovim mode: it stayed empty in Neovim, and
@@ -161,10 +169,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   guards future ones.
 - Get Neovim runs `reg.exe` (Windows) and `sysctl` (macOS) by their full paths, so a program of that
   name in the folder Eclipse was started from cannot run instead.
-- Typing a path into the *Neovim program* field no longer runs the file it names to ask its
-  version, which a pause at a half-typed path such as `/tmp/nvim` did. The version is asked once
-  the program is chosen: picked with *Browse…*, or saved with *Apply*.
-- The note under *Neovim folder or program* shows paths as plain text, so a folder named with
+- The note on the Neovim preference page shows paths as plain text, so a folder named with
   `<a>…</a>` no longer shows as a link. *Reinstall…* is now a link of its own under the note.
 
 ## [0.2.0] - 2026-11-02

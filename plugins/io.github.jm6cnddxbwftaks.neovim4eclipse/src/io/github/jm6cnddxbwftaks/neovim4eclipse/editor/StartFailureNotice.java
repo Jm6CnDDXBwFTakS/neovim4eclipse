@@ -25,14 +25,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 
 /**
  * Tells the user, once, that Neovim could not be started, and offers <i>Get Neovim</i> (the default
- * button, {@link GetNeovim}; not when a program in the preference failed and the dedicated Neovim
- * checks out), and the preference page where a program can be named. With a blank preference and
- * no verified dedicated Neovim it opens Get Neovim's own dialog instead, saying why
+ * button, {@link GetNeovim}; not when a program named by {@code -Dneovim4eclipse.nvim} failed and the
+ * dedicated Neovim checks out), and the preference page, which shows which Neovim runs. With the
+ * option unset and no verified dedicated Neovim it opens Get Neovim's own dialog instead, saying why
  * ({@link StartFailureReport#getNeovimInstead}); nothing follows a cancel there.
  *
  * <p>Attaching is attempted every time a text editor is activated, so without a guard a missing
  * {@code nvim} would raise a dialog on every editor switch. The notice is shown once per configured
- * executable: again only after the preference changes, or after a start succeeded and a later one
+ * executable: again only after a start succeeded and a later one
  * failed. Before this class, the failure only reached the log, and the plug-in silently did nothing.
  *
  * <p>That decision and the text are in {@link StartFailureReport} (unit-tested, no Eclipse); this
@@ -58,7 +58,7 @@ final class StartFailureNotice {
     /**
      * Shows the notice unless it was already shown for this executable. Safe to call from any thread.
      *
-     * @param configured the preference value (blank, or a program's path)
+     * @param configured the option's value (blank, or a program's path)
      * @param error      why the start failed
      */
     static void report(String configured, Throwable error) {

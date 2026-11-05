@@ -26,18 +26,22 @@ class GetNeovimTextTest {
 
     /**
      * Opened by the plug-in (no verified dedicated Neovim): a first Why point says so, and a last
-     * Instead point names the preference, for a reader who has a Neovim of their own.
+     * Instead point names the startup option, for a reader who has a Neovim of their own.
      */
     @Test
     void theConfirmationThePlugInOpensSaysWhyAndWhatInstead() {
         Path home = Path.of("/n/la");
         HeadedMessage m = GetNeovimText.confirm(RELEASE, LA, home, "The dedicated Neovim is not installed.");
-        assertEquals(List.of("Why", "Folder", "Download", "From File", "SHA-256", "Instead"), headings(m));
-        assertEquals("The dedicated Neovim is not installed. With the Neovim program preference blank, Neovim for "
+        assertEquals(List.of("Why", "Folder", "Download", "From File", "SHA-256", "Instead", "", ""), headings(m));
+        assertEquals("The dedicated Neovim is not installed. Neovim for "
                 + "Eclipse will only run with the dedicated Neovim; until it is installed or replaced, editors keep "
                 + "their normal Eclipse keys.", point(m, "Why").text());
-        assertEquals("To use a Neovim of your own, cancel and enter its program on the Neovim preference page "
-                + "(Window > Preferences > Neovim). It is run unchecked.", point(m, "Instead").text());
+        assertEquals("To use a Neovim of your own, cancel and start Eclipse with:", point(m, "Instead").text());
+        assertEquals("-vmargs -Dneovim4eclipse.nvim=/path/to/nvim", point(m, "Instead").copy(), "to copy, unwrapped");
+        Point ini = m.points().get(m.points().size() - 2);
+        assertEquals("or add this line after -vmargs in eclipse.ini:", ini.text());
+        assertEquals("-Dneovim4eclipse.nvim=/path/to/nvim", ini.copy());
+        assertEquals("It is run unchecked, so be sure it is Neovim.", m.points().get(m.points().size() - 1).text());
     }
 
     /** Opened by the user (menu, preference page): no Why, and no Instead nudging away from the default. */
@@ -83,10 +87,9 @@ class GetNeovimTextTest {
         assertEquals("The new dedicated Neovim replaces the one running now from the same folder, in this Eclipse or "
                 + "another. Restart Neovim to finish, once no other Eclipse runs it.", point(waits, "Restart").text());
         HeadedMessage other = GetNeovimText.done(RELEASE.version(), program, LA.sha256(), false, true);
-        assertEquals("The \"Neovim program\" preference names another Neovim. Use Dedicated Neovim clears "
-                + "it, so the dedicated Neovim is used.", point(other, "Preference").text(),
-                "names the button, without its mnemonic");
-        assertEquals("&Use Dedicated Neovim", GetNeovimText.USE_DEDICATED_BUTTON);
+        assertEquals("Eclipse was started with -Dneovim4eclipse.nvim, which names another Neovim. Remove it (from "
+                + "the command line or eclipse.ini) and restart Eclipse to use the dedicated Neovim.",
+                point(other, "Option").text(), "a startup option: no button can remove it");
         assertFalse(headings(other).contains("Restart"));
     }
 
@@ -106,7 +109,10 @@ class GetNeovimTextTest {
         assertEquals("Cannot find github.com.", point(network, "Why").text());
         assertEquals(List.of("Why", "Instead"), headings(network));
         // The same archive from a browser would not run either, and a busy folder needs only a retry.
-        assertEquals(List.of("Why"), headings(failed(Reason.DOES_NOT_RUN, "x")));
+        // A Neovim that does not run here: the way left is the system's own, named with the option.
+        HeadedMessage doesNotRun = failed(Reason.DOES_NOT_RUN, "x");
+        assertEquals(List.of("Why", "Instead", "", ""), headings(doesNotRun));
+        assertEquals("-vmargs -Dneovim4eclipse.nvim=/usr/bin/nvim", point(doesNotRun, "Instead").copy());
         assertEquals(List.of("Why"), headings(failed(Reason.BUSY, "x")));
     }
 
@@ -132,7 +138,11 @@ class GetNeovimTextTest {
     void aMachineWithoutAnArchiveIsToldWhatToDoInstead() {
         HeadedMessage m = GetNeovimText.noArchive(RELEASE.version(), "Linux", "arm");
         assertEquals("Neovim publishes no release archive for Linux on arm.", m.intro());
-        assertTrue(point(m, "Instead").text().startsWith("Install Neovim " + RELEASE.version() + " or newer"));
+        assertEquals("Install Neovim " + RELEASE.version() + " or newer from your system's packages, and start Eclipse "
+                + "with:", point(m, "Instead").text());
+        assertEquals("-vmargs -Dneovim4eclipse.nvim=/usr/bin/nvim", point(m, "Instead").copy());
+        assertEquals("-Dneovim4eclipse.nvim=/usr/bin/nvim", m.points().get(1).copy(), "the eclipse.ini line");
+        assertEquals("It is run unchecked, so be sure it is Neovim.", m.points().get(2).text());
     }
 
     @Test

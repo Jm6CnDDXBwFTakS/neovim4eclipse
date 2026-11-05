@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import org.eclipse.ui.IStartup;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.OldNeovimProgramNotice;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
@@ -41,7 +42,13 @@ public class EarlyStartup implements IStartup {
             for (Path home : PluginNeovim.searchHomes()) {
                 PluginNeovim.verified(home, windows);
             }
-            EditorAttachManager.offerGetNeovimAtStart(configured); // missing or failing the check
         }
+        // A "Neovim program" preference from before 0.2.1 is shown once and removed; then, with no
+        // -Dneovim4eclipse.nvim, Get Neovim opens if the dedicated Neovim is missing or fails the check.
+        OldNeovimProgramNotice.showOnce(() -> {
+            if (configured == null || configured.isBlank()) {
+                EditorAttachManager.offerGetNeovimAtStart(configured);
+            }
+        });
     }
 }

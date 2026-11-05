@@ -26,10 +26,11 @@
        (so a broken test still fails the build) but starts no Eclipse, so no window opens; the UI
        tests are the only ones that open one. CI always passes -Pui. -Pui -DskipTests skips them
        again. The end-to-end tests also need nvim (they are skipped without it). Without
-       -Dnvim.path they use the dedicated Neovim as a blank preference does (~/.local/share/neovim4eclipse-plugin/
-       neovim/<code>, on Windows %LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>, checked against the
-       pinned release; Get Neovim installs it); -Dnvim.path=/path/to/bin/nvim
-       (the program itself, not a folder) selects another.
+       -Dnvim.path they use the dedicated Neovim, as Eclipse does without -Dneovim4eclipse.nvim
+       (~/.local/share/neovim4eclipse-plugin/neovim/<code>, on Windows
+       %LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>, checked against the pinned release; Get
+       Neovim installs it); -Dnvim.path=/path/to/bin/nvim (the program itself, not a folder) selects
+       another, passed on as -Dneovim4eclipse.nvim (the nvim-path profile below).
 
        The tests tagged "heavyJava" need the Java development tools (a Java editor, Format, Rename,
        Open Declaration) in the test Eclipse. They are left out of -Pui and run only with
@@ -200,7 +201,8 @@
   </build>
 
   <properties>
-    <!-- Empty: use the plug-in's own default (nvim on PATH or in the usual install folders). -->
+    <!-- Empty: the test Eclipse runs the dedicated Neovim, as Eclipse does without the startup
+         option -Dneovim4eclipse.nvim (see the nvim-path profile). -->
     <nvim.path></nvim.path>
     <!-- -DskipTests sets it to true; the ui profile passes it on to ui.skip. -->
     <skipTests>false</skipTests>
@@ -212,6 +214,36 @@
   </properties>
 
   <profiles>
+    <!-- -Dnvim.path=/path/to/nvim given: the test Eclipse starts with the plug-in's startup option
+         -Dneovim4eclipse.nvim set to it (util/NeovimOption), as a user's Eclipse started with
+         "-vmargs -Dneovim4eclipse.nvim=..." does. A system property, read before the plug-in starts,
+         so no test window sees the dedicated Neovim first (with none installed, Get Neovim then
+         opened by itself at the test Eclipse's start). Only when nvim.path is given on the command
+         line, and not empty: Maven activates a profile by a property only from -D, not from
+         <properties> above, and only for a non-empty value (an empty -Dnvim.path= leaves it off,
+         checked with help:active-profiles). An empty value would reach the test Eclipse as the text
+         "null". -->
+    <profile>
+      <id>nvim-path</id>
+      <activation>
+        <property>
+          <name>nvim.path</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>tycho-surefire-plugin</artifactId>
+            <configuration>
+              <systemProperties combine.children="append">
+                <neovim4eclipse.nvim>${nvim.path}</neovim4eclipse.nvim>
+              </systemProperties>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <!-- ./mvnw verify -Pui: start the test Eclipse and run the UI tests (unless -DskipTests). -->
     <profile>
       <id>ui</id>

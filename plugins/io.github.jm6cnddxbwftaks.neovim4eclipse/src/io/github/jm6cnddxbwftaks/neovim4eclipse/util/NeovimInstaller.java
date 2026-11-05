@@ -205,8 +205,7 @@ public final class NeovimInstaller {
                 throw new NeovimInstallException(NeovimInstallException.Reason.DOES_NOT_RUN,
                         "The unpacked Neovim does not run on this machine (" + program + " --version failed). "
                                 + "The official Linux builds need glibc; on a musl system such as Alpine, "
-                                + "install Neovim from the system's packages and enter its program "
-                                + "(/usr/bin/nvim) in the preferences.");
+                                + "use a Neovim from the system's packages instead.");
             }
             if (!version.equals(release.version())) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.DOES_NOT_RUN,

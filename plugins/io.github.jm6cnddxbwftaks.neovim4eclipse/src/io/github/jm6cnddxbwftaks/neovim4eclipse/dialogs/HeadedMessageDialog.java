@@ -78,6 +78,13 @@ public class HeadedMessageDialog extends MessageDialog {
     private static final int WIDTH_DLUS = 340;
     /** The space between a point's rows, and between the parts of a point's cell, in dialog units. */
     private static final int ROW_DLUS = 3;
+    /**
+     * The extra space above each point after the first, in dialog units, so that the points read as
+     * paragraphs (2026-11-05; with {@link #ROW_DLUS} alone the rows ran together). A row with no
+     * heading continues the point above it (the Unused list's paths, a line after a Copy field) and
+     * gets none.
+     */
+    private static final int POINT_DLUS = 3;
     /** The extra space between the groups (intro, points, footer), in dialog units. */
     private static final int GROUP_DLUS = 6;
     /** The space between a heading and its text, in dialog units. */
@@ -123,6 +130,7 @@ public class HeadedMessageDialog extends MessageDialog {
         int gap = convertHorizontalDLUsToPixels(GAP_DLUS);
         int row = convertVerticalDLUsToPixels(ROW_DLUS);
         int groupGap = convertVerticalDLUsToPixels(GROUP_DLUS);
+        int pointGap = convertVerticalDLUsToPixels(POINT_DLUS);
         Composite body = new Composite(composite, SWT.NONE);
         GridLayoutFactory.fillDefaults().numColumns(2).spacing(gap, row).applyTo(body);
         GridDataFactory.fillDefaults().grab(true, false).applyTo(body);
@@ -133,7 +141,7 @@ public class HeadedMessageDialog extends MessageDialog {
         int widestValue = 0;
         boolean first = true;
         for (HeadedMessage.Point point : message.points()) {
-            int above = first ? groupGap : 0;
+            int above = first ? groupGap : point.heading().isEmpty() ? 0 : pointGap;
             Label heading = new Label(body, SWT.NONE);
             heading.setText(literal(point.heading()));
             heading.setFont(bold);

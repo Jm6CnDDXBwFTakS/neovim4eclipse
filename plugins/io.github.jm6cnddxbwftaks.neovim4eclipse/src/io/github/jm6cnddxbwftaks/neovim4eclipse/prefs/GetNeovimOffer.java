@@ -23,7 +23,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  * ({@code neovim/<code>/}) has no Neovim, or one that fails the check ({@link PluginNeovim#verified}:
  * an older release, or damaged). (The preference page and the "Neovim not started" notice always
  * offer it; the page as its <i>Reinstall...</i> link when the dedicated Neovim is verified,
- * {@code NeovimLocationFieldEditor}.)
+ * {@code NeovimStatusSection}.)
  *
  * <h2>Why cached</h2>
  * The answer hashes the install's files (about 0.2 s), and the menu asks while it is being shown, on the UI

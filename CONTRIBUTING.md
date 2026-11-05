@@ -8,11 +8,13 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 
 - **JDK 21** or newer.
 - **Neovim 0.12.6**, the oldest supported version and the one CI tests, for the integration and
-  end-to-end tests. Without `-Dnvim.path` the tests use what the plug-in uses with a blank
-  preference: the dedicated Neovim, `~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim`
+  end-to-end tests. Without `-Dnvim.path` the tests use what the plug-in uses without its startup
+  option `-Dneovim4eclipse.nvim`: the dedicated Neovim, `~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim`
   (Windows: `%LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>`; *Get Neovim* puts
   it there, README "Get Neovim"), and only if its files match the pinned release. Nothing else is
-  searched. `-Dnvim.path=...` (the absolute path of the program, not a folder) picks another. A newer
+  searched. `-Dnvim.path=...` (the absolute path of the program, not a folder) picks another; the UI
+  tests pass it on to the test Eclipse as `-Dneovim4eclipse.nvim` (the `nvim-path` profile in their
+  `pom.xml`), so it is set before the plug-in starts, as for a user's Eclipse started with it. A newer
   Neovim works too, but only 0.12.6 is what CI checks. Tests that find none are skipped, not failed:
   check the "Skipped" count.
 - **Eclipse IDE for Eclipse Committers** (it includes PDE, the plug-in development tools), 2024-12 or

@@ -15,9 +15,11 @@ import java.util.function.Predicate;
 /**
  * Says which Neovim the plug-in runs, and builds the {@code --embed} command line.
  *
- * <h2>What the preference may hold</h2>
+ * <h2>What the option may hold</h2>
+ * The value comes from the startup option {@code -Dneovim4eclipse.nvim} ({@link NeovimOption}; the
+ * "Neovim program" preference until 0.2.1).
  * <ul>
- *   <li><b>Blank</b> (the default): the dedicated Neovim, the one <i>Get Neovim</i> installs
+ *   <li><b>Unset or blank</b> (the default): the dedicated Neovim, the one <i>Get Neovim</i> installs
  *       ({@link PluginNeovim}: {@code ~/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim} on
  *       Linux arm64), and only if it is {@link PluginNeovim#verified verified}: every file matches
  *       the release the plug-in pins. Nothing else is looked for: not {@code PATH}, not the usual
@@ -27,12 +29,13 @@ import java.util.function.Predicate;
  *       nix-ld, FreeBSD), a Neovim built by hand, or the tests' own. A leading {@code ~} stands for
  *       the home folder ({@code ~/opt/nvim/bin/nvim}).</li>
  * </ul>
- * Anything else is refused when Neovim starts ({@link NeovimNotFoundException}): a folder (the
+ * A dedicated Neovim's own program, named by the option, is that install: checked like the
+ * dedicated Neovim, not run unchecked. Anything else is refused when Neovim starts ({@link NeovimNotFoundException}): a folder (the
  * program inside it must be named), a command name ({@code nvim}) or a relative path
  * ({@code bin/nvim}).
  *
  * <h2>Why nothing is searched</h2>
- * Until 0.2.1 a blank preference also searched {@code PATH} and the usual install folders, and a
+ * Until 0.2.1 a blank value also searched {@code PATH} and the usual install folders, and a
  * folder was searched up to four levels down, running {@code nvim --version} on every
  * {@code bin/nvim} it found there. The 0.2.1 security review found that this ran programs the user
  * never named: choosing {@code ~/src} by mistake would run a {@code bin/nvim} planted in a cloned
@@ -46,7 +49,7 @@ public final class NvimExecutable {
     private NvimExecutable() {
     }
 
-    /** What a preference value names, as {@link #find(String)} sees it. */
+    /** What the option's value names, as {@link #find(String)} sees it. */
     public enum Kind {
         /** Blank, and the dedicated Neovim is installed and verified. */
         DEDICATED,
@@ -80,12 +83,12 @@ public final class NvimExecutable {
     }
 
     /**
-     * Turns the configured preference value into the program to start.
+     * Turns the option's value into the program to start.
      *
      * <p>Verifying the dedicated Neovim hashes its files the first time (about 0.2 s,
      * {@link PluginNeovim#verified}), so call this off the SWT UI thread where possible.
      *
-     * @param configured preference value: blank, or the absolute path of a Neovim program
+     * @param configured the option's value ({@link NeovimOption#value}): blank, or the absolute path of a Neovim program
      * @return the absolute path of the program; if there is none, what was looked for (see
      *         {@link Resolved#command})
      */
@@ -127,6 +130,18 @@ public final class NvimExecutable {
         File file = new File(name);
         if (!file.isAbsolute()) {
             return new Resolved(name, Kind.NOT_ABSOLUTE);
+        }
+        // A dedicated Neovim's own program, named by the option (the tests' -Dnvim.path often is):
+        // that install, checked before every start like the dedicated Neovim and called dedicated by
+        // the notes, not run unchecked. That very install, not the first verified one: on Apple
+        // silicon, naming neovim/mx/bin/nvim (to try the x86_64 build) runs mx, not ma.
+        for (Path home : pluginHomes) {
+            Path program = PluginNeovim.program(home, windows).toAbsolutePath();
+            if (FilePaths.same(file.toPath().toAbsolutePath(), program)) {
+                return verified.test(home) && versionOf.apply(program) != null
+                        ? new Resolved(program.toString(), Kind.DEDICATED)
+                        : new Resolved(program.toString(), Kind.NO_DEDICATED);
+            }
         }
         if (file.isFile()) {
             return new Resolved(file.getAbsolutePath(), Kind.PROGRAM);
@@ -173,7 +188,7 @@ public final class NvimExecutable {
      * argument with a space in it; {@link ProcessBuilder} quotes it on Windows, and
      * {@code NeovimSessionIntegrationTest} checks that Neovim receives it whole.
      *
-     * @param configured preference value: blank, or the absolute path of a Neovim program
+     * @param configured the option's value ({@link NeovimOption#value}): blank, or the absolute path of a Neovim program
      * @param extraArgs  optional extra arguments, e.g. {@code --clean}; may be {@code null}
      * @throws NeovimNotFoundException if the value names no program to start ({@link Resolved#startable})
      */
@@ -219,8 +234,9 @@ public final class NvimExecutable {
     }
 
     /**
-     * Why {@link #embedCommand} refuses {@code configured}. Example: {@code /opt/nvim is a folder:
-     * enter the Neovim program inside it, such as /opt/nvim/bin/nvim}.
+     * Why {@link #embedCommand} refuses {@code configured} (the {@link NeovimOption} value). Example:
+     * {@code /opt/nvim (from -Dneovim4eclipse.nvim) is a folder: name the Neovim program inside it,
+     * such as /opt/nvim/bin/nvim}.
      */
     static NeovimNotFoundException notFound(Resolved resolved, String configured) {
         String value = configured == null ? "" : configured.strip();
@@ -228,10 +244,12 @@ public final class NvimExecutable {
         return new NeovimNotFoundException(switch (resolved.kind()) {
             case NO_DEDICATED -> "The dedicated Neovim is missing, or its files differ from Neovim "
                     + NeovimRelease.bundled().version() + "'s release (" + resolved.command() + ")";
-            case FOLDER -> value + " is a folder: enter the Neovim program inside it, such as "
+            case FOLDER -> value + " (from -D" + NeovimOption.PROPERTY + ") is a folder: name the Neovim program "
+                    + "inside it, such as "
                     + Path.of(resolved.command()).resolve("bin").resolve(program);
-            case MISSING -> "No Neovim program at " + value;
-            case NOT_ABSOLUTE -> "The Neovim program must be an absolute path (a leading ~ is fine): " + value;
+            case MISSING -> "No Neovim program at " + value + " (from -D" + NeovimOption.PROPERTY + ")";
+            case NOT_ABSOLUTE -> "-D" + NeovimOption.PROPERTY + " must name the absolute path of a Neovim program "
+                    + "(a leading ~ is fine): " + value;
             case DEDICATED, PROGRAM -> throw new IllegalArgumentException("startable: " + resolved);
         });
     }
@@ -243,7 +261,7 @@ public final class NvimExecutable {
 
     /**
      * {@code resolved} as a path if it is an absolute path to a file, else {@code null}: which
-     * {@code nvim} {@link #resolve(String)} found, e.g. for the preference page.
+     * {@code nvim} {@link #resolve(String)} found, e.g. for the preference page's note.
      */
     public static Path locate(String resolved) {
         if (resolved == null || !new File(resolved).isAbsolute()) {

@@ -29,6 +29,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ContributionVisibility;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
@@ -82,8 +83,6 @@ public class Activator extends AbstractUIPlugin {
             String property = event.getProperty();
             if (PreferenceConstants.SHOW_TOOLBAR.equals(property) || PreferenceConstants.SHOW_MENU.equals(property)) {
                 ContributionVisibility.refresh();
-            } else if (PreferenceConstants.NVIM_EXECUTABLE.equals(property)) {
-                resetSession();
             } else if (PreferenceConstants.isStatusItemKey(property)) {
                 applyStatusItems();
             } else if (PreferenceConstants.isCtrlKeyKey(property)) {
@@ -134,12 +133,13 @@ public class Activator extends AbstractUIPlugin {
     }
 
     /**
-     * The configured Neovim: blank for the dedicated one, or the absolute path of a Neovim program;
-     * {@code util/NvimExecutable.resolve} turns it into the program to start.
+     * The configured Neovim: blank for the dedicated one, or the absolute path of a Neovim program
+     * from the startup option {@code -Dneovim4eclipse.nvim} ({@link NeovimOption}; the "Neovim
+     * program" preference until 0.2.1); {@code util/NvimExecutable.resolve} turns it into the program
+     * to start. Fixed for the run of this Eclipse.
      */
     public String getNvimExecutable() {
-        String path = getPreferenceStore().getString(PreferenceConstants.NVIM_EXECUTABLE);
-        return path == null ? "" : path.strip();
+        return NeovimOption.value();
     }
 
     /** Which parts of the Vim status information the user chose to show in the status bar. */
@@ -236,8 +236,7 @@ public class Activator extends AbstractUIPlugin {
 
     /**
      * Stops Neovim and starts a new one attached to the active editor: <em>Neovim → Restart
-     * Neovim...</em> ({@code editor/RestartNeovimHandler}, which asks first). The same as changing
-     * the executable in the preferences. UI thread.
+     * Neovim...</em> ({@code editor/RestartNeovimHandler}, which asks first). UI thread.
      */
     public void restartNeovim() {
         resetSession();
@@ -245,7 +244,7 @@ public class Activator extends AbstractUIPlugin {
 
     /**
      * Stops the current session and detaches the editor so the next attach starts a fresh
-     * {@code nvim} with the current preferences (and a fresh read of {@code init.lua}), then
+     * {@code nvim} (and a fresh read of {@code init.lua}), then
      * re-attaches the active editor.
      */
     private synchronized void resetSession() {

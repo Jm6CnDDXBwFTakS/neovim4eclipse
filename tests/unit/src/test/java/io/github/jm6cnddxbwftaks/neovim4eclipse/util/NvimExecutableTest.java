@@ -66,6 +66,34 @@ class NvimExecutableTest {
         assertTrue(r.startable());
     }
 
+    /**
+     * The option naming the dedicated Neovim's own program is that install: the dedicated Neovim,
+     * checked like it, and not run unchecked when its check fails.
+     */
+    @Test
+    void theDedicatedProgramNamedByTheOptionIsTheDedicatedNeovim() throws IOException {
+        Path la = install("la");
+        String own = la.resolve("bin/nvim").toAbsolutePath().toString();
+        assertEquals(NvimExecutable.Kind.DEDICATED, find(own, List.of(la), ALL_VERIFIED).kind());
+        assertEquals(NvimExecutable.Kind.NO_DEDICATED, find(own, List.of(la), NONE_VERIFIED).kind(),
+                "a copy that fails the check is not run as a program of the user's");
+        assertEquals(NvimExecutable.Kind.PROGRAM, find(file("elsewhere/bin/nvim").toString(), List.of(la),
+                ALL_VERIFIED).kind(), "any other program is still the user's own");
+    }
+
+    /** Naming the second processor's install runs that one, not the first verified home. */
+    @Test
+    void theNamedDedicatedInstallIsTheOneThatRuns() throws IOException {
+        Path ma = install("ma");
+        Path mx = install("mx");
+        String x86 = mx.resolve("bin/nvim").toAbsolutePath().toString();
+        NvimExecutable.Resolved r = find(x86, List.of(ma, mx), ALL_VERIFIED);
+        assertEquals(NvimExecutable.Kind.DEDICATED, r.kind());
+        assertEquals(x86, r.command());
+        assertEquals(NvimExecutable.Kind.NO_DEDICATED, find(x86, List.of(ma, mx), home -> home.equals(ma)).kind(),
+                "mx fails its check: not run, though ma passes");
+    }
+
     /** An older plug-in's Neovim, a damaged copy or a changed file: never run, not even --version. */
     @Test
     void anUnverifiedDedicatedNeovimIsNotRunAtAll() throws IOException {
@@ -154,13 +182,14 @@ class NvimExecutableTest {
     @Test
     void eachRefusalSaysWhatToDo() {
         String folder = tmp.toString();
-        assertEquals(folder + " is a folder: enter the Neovim program inside it, such as "
+        assertEquals(folder + " (from -Dneovim4eclipse.nvim) is a folder: name the Neovim program inside it, such as "
                 + tmp.resolve("bin").resolve(NvimExecutable.defaultCommandName()),
                 NvimExecutable.notFound(new NvimExecutable.Resolved(folder, NvimExecutable.Kind.FOLDER), folder)
                         .getMessage());
-        assertEquals("No Neovim program at /no/nvim", NvimExecutable.notFound(
+        assertEquals("No Neovim program at /no/nvim (from -Dneovim4eclipse.nvim)", NvimExecutable.notFound(
                 new NvimExecutable.Resolved("/no/nvim", NvimExecutable.Kind.MISSING), " /no/nvim ").getMessage());
-        assertEquals("The Neovim program must be an absolute path (a leading ~ is fine): nvim", NvimExecutable
+        assertEquals("-Dneovim4eclipse.nvim must name the absolute path of a Neovim program (a leading ~ is fine): "
+                + "nvim", NvimExecutable
                 .notFound(new NvimExecutable.Resolved("nvim", NvimExecutable.Kind.NOT_ABSOLUTE), "nvim").getMessage());
         assertTrue(NvimExecutable.notFound(new NvimExecutable.Resolved("/d/la/bin/nvim", NvimExecutable.Kind.NO_DEDICATED),
                 "").getMessage().startsWith("The dedicated Neovim is missing, or its files differ from Neovim "));

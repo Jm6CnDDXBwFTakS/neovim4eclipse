@@ -47,7 +47,6 @@ import org.junit.jupiter.api.BeforeEach;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -93,10 +92,8 @@ abstract class EndToEndTestBase {
     void openEditor() throws Exception {
         // An error dialog fails the test instead of stalling the run (UiTestSupport.watchForErrorDialogs).
         UiTestSupport.watchForErrorDialogs();
-        String nvimPath = nvimPathProperty();
-        if (!nvimPath.isBlank()) {
-            Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, nvimPath);
-        }
+        // -Dnvim.path reaches the plug-in as its startup option -Dneovim4eclipse.nvim (the test pom's
+        // nvim-path profile), set before the test Eclipse started; without it, the dedicated Neovim.
         assumeTrue(NvimExecutable.looksAvailable(Activator.getDefault().getNvimExecutable()),
                 "nvim not found; set -Dnvim.path");
 
@@ -155,16 +152,6 @@ abstract class EndToEndTestBase {
             current[0] = String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0)"));
             return !current[0].isEmpty() && FilePaths.same(Path.of(current[0]), expected);
         }, () -> "; it is '" + current[0] + "'");
-    }
-
-    /**
-     * {@code -Dnvim.path}, or "" when it was not given. Without it the pom.xml passes an empty value,
-     * which tycho-surefire turns into the text {@code "null"}; taken as a path, that made every test
-     * here skip ("nvim not found") although nvim was on the PATH.
-     */
-    private static String nvimPathProperty() {
-        String value = System.getProperty("nvim.path", "");
-        return "null".equals(value) ? "" : value;
     }
 
     @AfterEach
