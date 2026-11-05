@@ -168,7 +168,7 @@ class ChecksGalleryTest {
                 "Note in the error color: no dedicated Neovim yet, \"Get Neovim\" installs it into the folder. "
                         + "The Get Neovim button, then the help with the -vmargs command on a line of its own. "
                         + "No field, no Browse.");
-        group("gn-download", "Preference page, dedicated Neovim checked", NeovimOption.value(), NvimProbe::describe,
+        group("gn-download", "Preference page, dedicated Neovim checked", NeovimOption.value(), ChecksGalleryTest::withoutLeftovers,
                 "Note in the normal color: Found: dedicated Neovim, checked, with its path; a Reinstall... link "
                         + "under it; no Get Neovim button.");
         // Get Neovim's done note, without and with the option (prefs/GetNeovim). A topic's pictures stay
@@ -177,7 +177,7 @@ class ChecksGalleryTest {
                 GetNeovimText.done(release.version(), program, archive.sha256(), false, false), List.of("Close"),
                 "The program's path and the SHA-256, each with Copy; the VirusTotal report link.");
         Path own = fakeNeovim(release);
-        group("gn-option-program", "Preference page, a program of your own", own.toString(), NvimProbe::describe,
+        group("gn-option-program", "Preference page, a program of your own", own.toString(), ChecksGalleryTest::withoutLeftovers,
                 "Note in the normal color: the program, from -Dneovim4eclipse.nvim, unchecked and unsupported.");
         dialog("gn-option-done", "Get Neovim done, with the option set", GetNeovimText.TITLE,
                 MessageDialog.INFORMATION,
@@ -226,7 +226,7 @@ class ChecksGalleryTest {
                         List.of(), Optional.empty(), true, path -> null),
                 List.of("Open Preferences", "Close"),
                 "Program row with the value to copy; Reason: " + reason + "; Fix: remove -Dneovim4eclipse.nvim.");
-        group("gn-option-refused", "Preference page: " + name, value, NvimProbe::describe,
+        group("gn-option-refused", "Preference page: " + name, value, ChecksGalleryTest::withoutLeftovers,
                 "Note in the error color: " + reason + ".");
     }
 
@@ -385,6 +385,16 @@ class ChecksGalleryTest {
 
     private static String platformName() {
         return System.getProperty("os.name") + " " + System.getProperty("os.arch");
+    }
+
+    /**
+     * The note as the page finds it, without this machine's leftovers in the plug-in's folder: they
+     * differ from machine to machine, so only the gn-leftovers picture lists them, and it lists the
+     * same two on every machine (seen 2026-11-05: on a machine with leftovers, every page picture
+     * listed them and the leftovers picture matched another one byte for byte).
+     */
+    private static NvimProbe.Note withoutLeftovers(String configured) {
+        return NvimProbe.describe(configured).withUnused(null);
     }
 
     /** Whether a note still says it is looking (its probe has not answered). */
