@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="title">
+  <!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+  <!-- SPDX-License-Identifier: EPL-2.0 -->
+  <!--
+    The Neovim for Eclipse logo: one letter N on a pale tile.
+    - Left stem: a colon (two green dots), the start of every Vim command line.
+    - Diagonal: a green stroke from the top dot, which with the dots also reads as "V".
+    - Right stem: Eclipse's I-beam text caret in indigo, which reads as "I" (so "VI"), and whose
+      three bars hint at an "E" for Eclipse.
+    Green #3c8f3f stands for Neovim, indigo #35327a for Eclipse. It deliberately borrows nothing from
+    either project's logo (both are their owners' marks).
+  -->
+  <title id="title">Neovim for Eclipse</title>
+  <rect width="128" height="128" rx="28" fill="#eef1ea"/>
+  <rect x="2" y="2" width="124" height="124" rx="26" fill="none" stroke="#c9cfc2" stroke-width="3"/>
+  <line x1="36" y1="38" x2="84" y2="92" stroke="#3c8f3f" stroke-width="15" stroke-linecap="round"/>
+  <circle cx="36" cy="38" r="11" fill="#3c8f3f"/>
+  <circle cx="36" cy="92" r="11" fill="#3c8f3f"/>
+  <rect x="82" y="28" width="13" height="72" rx="3" fill="#35327a"/>
+  <rect x="74" y="28" width="29" height="10" rx="3" fill="#35327a"/>
+  <rect x="74" y="90" width="29" height="10" rx="3" fill="#35327a"/>
+  <rect x="78" y="59" width="21" height="7" rx="2" fill="#35327a"/>
+</svg>
