@@ -1128,29 +1128,8 @@ class EditorEndToEndTest extends EndToEndTestBase {
     void ctrlXCtrlOWhileEclipseTypesRunsContentAssist() {
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
         store.setValue(PreferenceConstants.ctrlKeyInInsert('x'), true);
-        ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
-        List<String> run = new CopyOnWriteArrayList<>();
-        IExecutionListener listener = new IExecutionListener() {
-            @Override
-            public void preExecute(String commandId, ExecutionEvent event) {
-                run.add(commandId);
-            }
-
-            @Override
-            public void notHandled(String commandId, NotHandledException exception) {
-                run.add(commandId); // asked for, though no handler took it
-            }
-
-            @Override
-            public void postExecuteFailure(String commandId, ExecutionException exception) {
-            }
-
-            @Override
-            public void postExecuteSuccess(String commandId, Object returnValue) {
-            }
-        };
-        commands.addExecutionListener(listener);
-        try {
+        try (CommandLog log = new CommandLog()) {
+            List<String> run = log.run;
             type(widget, 'A');
             waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
             ctrlKey(widget, 'x');
@@ -1161,7 +1140,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
             escape(widget);
             waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
         } finally {
-            commands.removeExecutionListener(listener);
             store.setToDefault(PreferenceConstants.ctrlKeyInInsert('x'));
         }
     }
@@ -1175,29 +1153,8 @@ class EditorEndToEndTest extends EndToEndTestBase {
      */
     @Test
     void eclipsesPasteSaveAndContentAssistKeysWorkWhileEclipseTypes() {
-        ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
-        List<String> run = new CopyOnWriteArrayList<>();
-        IExecutionListener listener = new IExecutionListener() {
-            @Override
-            public void preExecute(String commandId, ExecutionEvent event) {
-                run.add(commandId);
-            }
-
-            @Override
-            public void notHandled(String commandId, NotHandledException exception) {
-                run.add(commandId);
-            }
-
-            @Override
-            public void postExecuteFailure(String commandId, ExecutionException exception) {
-            }
-
-            @Override
-            public void postExecuteSuccess(String commandId, Object returnValue) {
-            }
-        };
-        commands.addExecutionListener(listener);
-        try {
+        try (CommandLog log = new CommandLog()) {
+            List<String> run = log.run;
             setSystemClipboard(" pasted");
             type(widget, "gg");
             type(widget, 'A');
@@ -1223,8 +1180,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
             escape(widget);
             waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
             expectText("alpha pasted\nbeta\ngamma\n");
-        } finally {
-            commands.removeExecutionListener(listener);
         }
     }
 
@@ -1742,5 +1697,43 @@ class EditorEndToEndTest extends EndToEndTestBase {
         event.y = at.y;
         event.stateMask = stateMask;
         return event;
+    }
+
+    /**
+     * The workbench commands run while it is open, by id, in order: for a test that checks a key ran
+     * Eclipse's command (Content Assist, for example). Use it in try-with-resources, which removes the
+     * listener again. A command asked for that no handler took counts too.
+     */
+    private static final class CommandLog implements AutoCloseable {
+        final List<String> run = new CopyOnWriteArrayList<>();
+        private final ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
+        private final IExecutionListener listener = new IExecutionListener() {
+            @Override
+            public void preExecute(String commandId, ExecutionEvent event) {
+                run.add(commandId);
+            }
+
+            @Override
+            public void notHandled(String commandId, NotHandledException exception) {
+                run.add(commandId);
+            }
+
+            @Override
+            public void postExecuteFailure(String commandId, ExecutionException exception) {
+            }
+
+            @Override
+            public void postExecuteSuccess(String commandId, Object returnValue) {
+            }
+        };
+
+        CommandLog() {
+            commands.addExecutionListener(listener);
+        }
+
+        @Override
+        public void close() {
+            commands.removeExecutionListener(listener);
+        }
     }
 }
