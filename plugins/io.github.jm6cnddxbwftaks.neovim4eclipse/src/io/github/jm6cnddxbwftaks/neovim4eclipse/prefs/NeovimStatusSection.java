@@ -78,10 +78,19 @@ final class NeovimStatusSection {
     static final String OWN_NEOVIM_URL = "https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#using-a-neovim-of-your-own";
 
     /**
-     * The help under the note, in three rows: {@link #HELP_LEAD}, the command ({@link #HELP_COMMAND}),
-     * and {@link #HELP}. Each is whole on its own: what runs and how to name another program, the
-     * command, then when to (the two cases the option is for: no official build to run, and a
-     * security fix you need in a newer Neovim before Get Neovim offers it) and what it costs.
+     * The help under the note, in four rows: {@link #HELP_LEAD}, the command ({@link #HELP_COMMAND}),
+     * the link {@link #HELP} right under it, and {@link #HELP_TAIL}. Each is whole on its own: what
+     * runs and how to name another program, the command, where it is explained in full, then when
+     * to use it (the two cases the option is for: no official build to run, and a security fix you
+     * need in a newer Neovim before Get Neovim offers it) and what it costs.
+     *
+     * <p>The link is a row of its own, under the command it explains (the README section says how to
+     * put the line in {@code eclipse.ini}, or pass it on macOS), and never at the end of a paragraph:
+     * a Link that wraps is measured wrong on Windows. Its size comes from the system's
+     * {@code LM_GETIDEALSIZE}, which breaks lines anywhere, while the control itself moves a link that
+     * does not fit to the next line whole; with the link at the end of a three-line paragraph the
+     * group was laid out a line too short and cut it off. A one-line Link and a wrapping Label are
+     * both measured right everywhere.
      *
      * <p>The command is a row of its own, a little apart from the text above and below (a few DLUs,
      * {@link #COMMAND_ROOM_DLUS}), in a field with a Copy button ({@link CopyField}, as in the
@@ -95,10 +104,13 @@ final class NeovimStatusSection {
     /** The command line in the help: {@code -vmargs -Dneovim4eclipse.nvim=/path/to/nvim}, a Windows path on Windows. */
     static final String HELP_COMMAND = NeovimOption.commandLine(NeovimOption.exampleProgram());
 
-    /** The help's last row, with the one link ({@code <a>}, to the README's {@link #OWN_NEOVIM_URL}). */
-    static final String HELP = "Use it only where the dedicated Neovim cannot run (a system with no official build), "
-            + "or for a newer Neovim with a security fix you need that \"Get Neovim\" does not offer yet. That program runs "
-            + "unchecked and unsupported, so be sure it is Neovim. <a>Using a Neovim of your own</a>";
+    /** The help's one link, under the command: the README's {@link #OWN_NEOVIM_URL}. */
+    static final String HELP = "<a>Using a Neovim of your own</a>";
+
+    /** The help's last row: when to name another program, and what it costs. */
+    static final String HELP_TAIL = "Use it only where the dedicated Neovim cannot run (a system with no official "
+            + "build), or for a newer Neovim with a security fix you need that \"Get Neovim\" does not offer yet. That "
+            + "program runs unchecked and unsupported, so be sure it is Neovim.";
 
     /** The room above and below the help's command, and its indent, in dialog units (about 2 px each). */
     private static final int COMMAND_ROOM_DLUS = 3;
@@ -189,10 +201,15 @@ final class NeovimStatusSection {
         command.setLayoutData(commandData);
         Link help = new Link(parent, SWT.NONE);
         help.setText(HELP);
-        GridData helpData = fullRow(WRAP_WIDTH);
-        helpData.verticalIndent = room;
+        GridData helpData = new GridData(SWT.BEGINNING, SWT.TOP, false, false); // one line: never wraps
+        helpData.horizontalIndent = commandData.horizontalIndent; // in line with the field it explains
         help.setLayoutData(helpData);
         help.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> ExternalBrowser.open(OWN_NEOVIM_URL)));
+        Label tail = new Label(parent, SWT.WRAP);
+        tail.setText(LabelText.literal(HELP_TAIL));
+        GridData tailData = fullRow(WRAP_WIDTH);
+        tailData.verticalIndent = room;
+        tail.setLayoutData(tailData);
         probe();
     }
 

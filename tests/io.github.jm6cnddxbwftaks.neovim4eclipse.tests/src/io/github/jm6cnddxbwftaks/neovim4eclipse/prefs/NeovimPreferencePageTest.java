@@ -99,25 +99,31 @@ class NeovimPreferencePageTest {
 
     /**
      * The help's command line is a row of its own, a field with a Copy button as in the dialogs, a
-     * little apart from the sentence above it and the one below (NeovimStatusSection, HELP_LEAD).
+     * little apart from the sentence above it; the link to the README's section on it right under
+     * it, one line, in line with the field; then the last paragraph, a little apart again
+     * (NeovimStatusSection, HELP_LEAD).
      */
     @Test
-    void theHelpsCommandIsACopyFieldApartFromTheTextAroundIt() {
+    void theHelpsCommandIsACopyFieldWithItsLinkUnderIt() {
         Group group = page.groups()[0];
         Label lead = find(group, Label.class, l -> l.getText().equals(NeovimStatusSection.HELP_LEAD));
         Text command = find(group, Text.class, t -> t.getText().equals(NeovimStatusSection.HELP_COMMAND));
         Link help = find(group, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP));
-        assertTrue(lead != null && command != null && help != null, "the help's three rows");
+        Label tail = find(group, Label.class, l -> l.getText().equals(NeovimStatusSection.HELP_TAIL));
+        assertTrue(lead != null && command != null && help != null && tail != null, "the help's four rows");
         assertTrue(command.getText().startsWith("-vmargs -Dneovim4eclipse.nvim="), command.getText());
         Composite row = command.getParent();
         Button copy = find(row, Button.class, b -> b.getText().equals(CopyField.COPY));
         assertTrue(copy != null, "a Copy button beside the command");
-        waitUntil("the help to be laid out", () -> help.getBounds().height > 0 && row.getBounds().height > 0);
+        waitUntil("the help to be laid out", () -> tail.getBounds().height > 0 && row.getBounds().height > 0);
         Rectangle above = lead.getBounds();
         Rectangle line = row.getBounds();
-        Rectangle below = help.getBounds();
+        Rectangle link = help.getBounds();
+        Rectangle below = tail.getBounds();
         assertTrue(line.y >= above.y + above.height + 2, "room above the command: " + above + ", " + line);
-        assertTrue(below.y >= line.y + line.height + 2, "room below the command: " + line + ", " + below);
+        assertTrue(link.y >= line.y + line.height && link.x == line.x, "the link under the field, in line: " + line
+                + ", " + link);
+        assertTrue(below.y >= link.y + link.height + 2, "room above the last paragraph: " + link + ", " + below);
         assertTrue(line.x > above.x, "the command is indented");
         copy.notifyListeners(SWT.Selection, new Event());
         assertEquals(CopyField.COPIED, copy.getText());
@@ -134,8 +140,8 @@ class NeovimPreferencePageTest {
     void aLongNoteGrowsTheGroupAndKeepsTheHelpVisible() {
         String path = "/no/such/folder/with/a/rather/long/name/so/that/the/note/wraps/onto/several/lines/nvim";
         Group group = sectionFor(WINDOWS ? "C:" + path.replace('/', '\\') + ".exe" : path);
-        // The help is a Link (to the README); the note a Label, as it shows paths (NeovimStatusSection).
-        Link help = find(group, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP));
+        // The help's last row, the bottom of the group; the note a Label too, as it shows paths.
+        Label help = find(group, Label.class, l -> l.getText().equals(NeovimStatusSection.HELP_TAIL));
         waitUntil("the note to report the missing program", () -> find(group, Label.class,
                 label -> label.getText().startsWith("No Neovim program at")) != null);
         waitUntil("the help to lie inside its group", () -> {

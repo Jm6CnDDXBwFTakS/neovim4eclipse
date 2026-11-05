@@ -178,8 +178,9 @@ class ChecksGalleryTest {
         group("no-dedicated", "Preference page, no dedicated Neovim", "", value -> none,
                 "Note in the error color: no dedicated Neovim yet, \"Get Neovim\" installs it into the folder. "
                         + "The Get Neovim button, then the help: the -vmargs command on a row of its own, in a "
-                        + "read-only field with Copy, a little apart from the text above and below; the link "
-                        + "\"Using a Neovim of your own\" at the end. No field for the program, no Browse.");
+                        + "read-only field with Copy, a little apart from the text above; the link "
+                        + "\"Using a Neovim of your own\" right under it, in line with the field; then the last "
+                        + "paragraph. No field for the program, no Browse.");
         group("dedicated", "Preference page, dedicated Neovim checked", NeovimOption.value(), ChecksGalleryTest::withoutLeftovers,
                 "Note in the normal color: Found: dedicated Neovim, checked, with its path; a Reinstall... link "
                         + "under it; no Get Neovim button.");
