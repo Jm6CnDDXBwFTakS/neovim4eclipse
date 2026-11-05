@@ -8,11 +8,16 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
+import org.eclipse.jface.dialogs.ErrorDialog;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Link;
 import org.eclipse.swt.widgets.Shell;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
@@ -29,6 +34,124 @@ final class UiTestSupport {
     private UiTestSupport() {
     }
 
+    /** How often {@link #watchForErrorDialogs} looks for an error dialog. */
+    private static final int ERROR_DIALOG_CHECK_MS = 200;
+
+    /** Whether {@link #watchForErrorDialogs} is on. UI thread only, as are the fields below. */
+    private static boolean watchingErrorDialogs;
+
+    /** How many {@code closeModalDialogsWhile} watches are on: they close every modal dialog themselves. */
+    private static int dialogWatches;
+
+    /** The error dialog the watch closed and no wait has reported yet: "title: text", or {@code null}. */
+    private static String closedErrorDialog;
+
+    /**
+     * Closes an error dialog that opens during a test and makes the test's next wait fail with its
+     * title and text. Without this, such a dialog stalls the whole run: a dialog runs its own event
+     * loop, so the test waits inside it and never times out. Example: when a background job of
+     * Eclipse throws a {@code StackOverflowError} (seen in the Java tests on one core: JDT's
+     * {@code CoreASTProvider.getAST} recursing), Eclipse asks "Internal Error ... Do you want to exit
+     * the workbench?", and the run hung until someone answered.
+     *
+     * <p>A timer ({@code Display.timerExec}) does the looking, because timers also run inside a
+     * dialog's event loop. Closing the dialog is its Cancel, so the workbench is never exited (Yes
+     * would exit it). Error dialogs only: Eclipse's internal-error question, {@link ErrorDialog}, and
+     * a {@link MessageDialog} with the error icon. A dialog a test opens on purpose is left alone, and
+     * {@code closeModalDialogsWhile} closes every dialog itself while it watches.
+     */
+    static void watchForErrorDialogs() {
+        if (watchingErrorDialogs) {
+            return;
+        }
+        watchingErrorDialogs = true;
+        Display display = Display.getCurrent();
+        display.timerExec(ERROR_DIALOG_CHECK_MS, new Runnable() {
+            @Override
+            public void run() {
+                if (!watchingErrorDialogs || display.isDisposed()) {
+                    return;
+                }
+                if (dialogWatches == 0) {
+                    for (Shell shell : display.getShells()) {
+                        if (!shell.isDisposed() && shell.isVisible() && isErrorDialog(shell)) {
+                            String seen = "'" + shell.getText() + "': " + textsOf(shell);
+                            closedErrorDialog = closedErrorDialog == null ? seen : closedErrorDialog + "; then " + seen;
+                            shell.close();
+                        }
+                    }
+                }
+                display.timerExec(ERROR_DIALOG_CHECK_MS, this);
+            }
+        });
+    }
+
+    /** Stops {@link #watchForErrorDialogs}, and returns what it closed and no wait reported, or {@code null}. */
+    static String stopWatchingForErrorDialogs() {
+        watchingErrorDialogs = false;
+        return takeClosedErrorDialog();
+    }
+
+    /** {@code closeModalDialogsWhile} has started a watch; {@code ended} when it ends. */
+    static Runnable dialogWatchStarted() {
+        dialogWatches++;
+        return () -> dialogWatches--;
+    }
+
+    /** What {@link #watchForErrorDialogs} closed since the last check, or {@code null}; clears it. */
+    static String takeClosedErrorDialog() {
+        String closed = closedErrorDialog;
+        closedErrorDialog = null;
+        return closed;
+    }
+
+    /** Fails the test if {@link #watchForErrorDialogs} closed an error dialog since the last check. */
+    static void failOnErrorDialog() {
+        String closed = takeClosedErrorDialog();
+        if (closed != null) {
+            fail("An error dialog opened and was closed (not answered): " + closed
+                    + ". See the test Eclipse's .metadata/.log for the error.");
+        }
+    }
+
+    private static boolean isErrorDialog(Shell shell) {
+        int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
+        if ((shell.getStyle() & modal) == 0) {
+            return false;
+        }
+        Object window = shell.getData();
+        if (window instanceof ErrorDialog) {
+            return true;
+        }
+        // The IDE's InternalErrorDialog is internal (org.eclipse.ui.internal.ide.dialogs): known by name.
+        for (Class<?> type = window == null ? null : window.getClass(); type != null; type = type.getSuperclass()) {
+            if (type.getName().endsWith(".InternalErrorDialog")) {
+                return true;
+            }
+        }
+        return window instanceof MessageDialog dialog && dialog.getImage() != null
+                && dialog.getImage() == shell.getDisplay().getSystemImage(SWT.ICON_ERROR);
+    }
+
+    /** The texts of {@code parent}'s labels, for a failure message. */
+    private static String textsOf(Composite parent) {
+        StringBuilder texts = new StringBuilder();
+        for (Control child : parent.getChildren()) {
+            String text = child instanceof Label label ? label.getText()
+                    : child instanceof Link link ? link.getText() : null;
+            if (text != null && !text.isBlank()) {
+                texts.append(texts.isEmpty() ? "" : " ").append(text.replace('\n', ' ').strip());
+            }
+            if (child instanceof Composite composite) {
+                String inner = textsOf(composite);
+                if (!inner.isEmpty()) {
+                    texts.append(texts.isEmpty() ? "" : " ").append(inner);
+                }
+            }
+        }
+        return texts.toString();
+    }
+
     /** Runs the event loop until {@code condition} holds; fails after {@code timeoutMs}. */
     static void waitUntil(String what, long timeoutMs, BooleanSupplier condition) {
         waitUntil(what, timeoutMs, condition, () -> "");
@@ -40,6 +163,7 @@ final class UiTestSupport {
         Display display = Display.getCurrent();
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (!condition.getAsBoolean()) {
+            failOnErrorDialog();
             if (System.currentTimeMillis() > deadline) {
                 fail("Timed out after " + timeoutMs + " ms waiting for: " + what + actual.get());
             }
@@ -84,6 +208,7 @@ final class UiTestSupport {
         long deadline = System.currentTimeMillis() + timeoutMs;
         int quiet = 0;
         while (quiet < QUIET_TURNS) {
+            failOnErrorDialog();
             if (System.currentTimeMillis() > deadline) {
                 fail("Timed out after " + timeoutMs + " ms waiting for the UI thread to become idle");
             }
@@ -131,6 +256,7 @@ final class UiTestSupport {
         long deadline = System.currentTimeMillis() + timeoutMs;
         long nextRequest = 0;
         while (!control.isFocusControl()) {
+            failOnErrorDialog();
             long now = System.currentTimeMillis();
             if (now > deadline) {
                 fail("Timed out after " + timeoutMs + " ms: " + describe(control) + " lost keyboard focus and did not get it back; "

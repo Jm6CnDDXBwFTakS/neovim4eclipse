@@ -91,6 +91,8 @@ abstract class EndToEndTestBase {
 
     @BeforeEach
     void openEditor() throws Exception {
+        // An error dialog fails the test instead of stalling the run (UiTestSupport.watchForErrorDialogs).
+        UiTestSupport.watchForErrorDialogs();
         String nvimPath = nvimPathProperty();
         if (!nvimPath.isBlank()) {
             Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.NVIM_EXECUTABLE, nvimPath);
@@ -167,12 +169,21 @@ abstract class EndToEndTestBase {
 
     @AfterEach
     void closeEditor() throws Exception {
+        // An error dialog the test's own waits did not report (it opened after the last one) fails
+        // the test, but only after the cleanup, so the next test starts clean.
+        String unreported = UiTestSupport.takeClosedErrorDialog();
         if (editor != null) {
             editor.getSite().getPage().closeEditor(editor, false);
         }
         forgetClosedFilesBuffers();
         if (project != null && project.exists()) {
             project.delete(true, true, null);
+        }
+        String duringCleanup = UiTestSupport.stopWatchingForErrorDialogs();
+        if (unreported != null || duringCleanup != null) {
+            fail("An error dialog opened and was closed (not answered): "
+                    + (unreported != null ? unreported : duringCleanup)
+                    + ". See the test Eclipse's .metadata/.log for the error.");
         }
     }
 
@@ -447,6 +458,10 @@ abstract class EndToEndTestBase {
         Shell owner = control.getShell();
         Display display = Display.getCurrent();
         List<String> titles = new ArrayList<>();
+        // This watch closes every dialog, error dialogs too, and the test checks the titles itself;
+        // UiTestSupport's error-dialog watch stays out of its way until the control is gone.
+        Runnable ended = UiTestSupport.dialogWatchStarted();
+        control.addDisposeListener(e -> ended.run());
         int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
         Runnable check = new Runnable() {
             @Override
