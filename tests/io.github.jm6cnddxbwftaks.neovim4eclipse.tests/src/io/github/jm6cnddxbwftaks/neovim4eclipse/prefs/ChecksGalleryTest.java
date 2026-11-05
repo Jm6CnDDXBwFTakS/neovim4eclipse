@@ -182,6 +182,15 @@ class ChecksGalleryTest {
         refused("bare-name", "nvim", Kind.NOT_ABSOLUTE, "not an absolute path");
         refused("missing", missing.toString(), Kind.MISSING, "no program at that path, with it to copy");
 
+        // Leftovers in the plug-in's folder, listed under the note. Given, not found: most machines have
+        // none, so every platform shows the same two, under an error (missing program) to show the colors.
+        Path neovim = NvimExecutable.dedicatedFolder();
+        String leftovers = NvimProbe.unusedLines(List.of("current", "nvim-" + platform.code() + "_0.12.6"), neovim);
+        group("gn-leftovers", "Preference page, with leftovers in the Neovim folder", missing.toString(),
+                value -> NvimProbe.describe(value).withUnused(leftovers),
+                "The note in the error color; under it, in the normal color, \"Not used by the plug-in, you can "
+                        + "delete:\" and the two entries, one full path a line.");
+
         // The note about the removed preference (editor/OldNeovimProgramNotice).
         dialog("gn-old-setting", "Old preference note", OldNeovimProgram.TITLE, MessageDialog.INFORMATION,
                 OldNeovimProgram.message("/usr/local/bin/nvim", "", false).orElseThrow(), OldNeovimProgram.BUTTONS,
