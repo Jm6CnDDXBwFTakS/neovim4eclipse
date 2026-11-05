@@ -208,8 +208,8 @@ fast one less so that a hang fails sooner, pass `-Dtest.wait.seconds=N` to any t
 
 To reproduce CI's conditions, run the tests on fewer cores rather than next to a CPU hog: the run
 then behaves the same way each time, and the JVM, the test Eclipse and Neovim all see the small
-machine (the JVM sizes its thread pools and garbage collector by the cores it may use). Child
-processes inherit the restriction:
+machine (on Linux the JVM sizes its thread pools and garbage collector by the cores it may use; on
+Windows it must be told, see below). Child processes inherit the restriction:
 
 **Linux.** `taskset -c` takes the list of cores the command may use (`0` is core 0 alone, `0,1`
 the first two). Put it in front of any build command; with `xvfb-run`, in front of that:
@@ -223,27 +223,41 @@ taskset -c 0,1 ./mvnw verify -PtimeoutReliant -Dnvim.path=/path/to/nvim         
 
 **Windows.** `start /affinity` takes a hexadecimal bit mask of cores: `1` is core 0 alone, `3`
 cores 0 and 1 (binary 11). `/wait` waits for the build to end, `/b` keeps it in the same console,
-and the empty `""` is the window title `start` expects first. From `cmd`:
+and the empty `""` is the window title `start` expects first.
+
+Unlike on Linux, a JVM on Windows does not count the cores in its mask, so also tell every JVM how
+many there are with `JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=N` (N: the number of cores in the
+mask). Without it, a JVM pinned to one core of a ten-core machine still sizes itself for ten: nine
+garbage-collector threads, which then take turns on that one core with Eclipse's UI thread. In
+`-Pall` runs pinned to one core on such a machine, a busy collector thread (`G1 Refine#0`) held the
+UI thread up long enough for 15 s test waits to run out; with the setting, the same run took half
+the time (5½ minutes instead of 10) and passed. From `cmd`:
 
 ```bat
+set JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=2
 start "" /affinity 3 /wait /b mvnw.cmd verify -Pui -Dnvim.path=C:\path\to\nvim
+set JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=1
 start "" /affinity 1 /wait /b mvnw.cmd test -f tests\unit\pom.xml -Pintegration -Dnvim.path=C:\path\to\nvim
 ```
 
-From PowerShell, pin the shell itself, with the same mask, then build: the shell's
-`ProcessorAffinity` is passed on to every program it starts. (`start` is not available here: in
-PowerShell it names `Start-Process`, and passing a `start` line through `cmd /c` can fail without a
-sign, ending with status 0 although no build ran.) Quote a `-D` argument, or PowerShell splits it at
-the dot:
+From PowerShell, pin the shell itself, with the same mask, and set the variable, then build: the
+shell's `ProcessorAffinity` and environment are passed on to every program it starts. (`start` is
+not available here: in PowerShell it names `Start-Process`, and passing a `start` line through
+`cmd /c` can fail without a sign, ending with status 0 although no build ran.) Quote every `-D`
+argument whose name has a dot, or PowerShell splits it at the dot:
 
 ```powershell
-(Get-Process -Id $PID).ProcessorAffinity = 3; .\mvnw.cmd verify -Pall "-Dnvim.path=C:\path\to\nvim"
+(Get-Process -Id $PID).ProcessorAffinity = 3; $env:JAVA_TOOL_OPTIONS = '-XX:ActiveProcessorCount=2'
+.\mvnw.cmd verify -Pall "-Dnvim.path=C:\path\to\nvim"
 ```
 
-The pin lasts as long as that PowerShell window; open a new window to use every core again.
+The pin and the variable last as long as that PowerShell window; open a new window to use every core
+again.
 
 To check that the mask took effect, open Task Manager, *Details*, right-click a `java.exe` or
-`nvim.exe` process and choose *Set affinity*: only the chosen cores are ticked.
+`nvim.exe` process and choose *Set affinity*: only the chosen cores are ticked. To check the JVM's
+count, run `jcmd <pid> VM.flags -all | findstr ActiveProcessorCount` on a running `java.exe`: it
+shows the number you set, where `-1` means the JVM counted the cores itself.
 
 **macOS** cannot pin a process to cores. The nearest substitute makes every JVM size itself as if the
 machine had two cores (thread pools, garbage collector), though they still run on all of them, and
