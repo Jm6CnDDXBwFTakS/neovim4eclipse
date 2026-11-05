@@ -24,16 +24,30 @@ class GetNeovimTextTest {
     private static final NeovimRelease.Archive LA = RELEASE.forPlatform(NeovimPlatform.byCode("la").orElseThrow())
             .orElseThrow();
 
-    /** Opened by the plug-in (no verified dedicated Neovim): a first Why point says so. */
+    /**
+     * Opened by the plug-in (no verified dedicated Neovim): a first Why point says so, and a last
+     * Instead point names the preference, for a reader who has a Neovim of their own.
+     */
     @Test
-    void theConfirmationThePlugInOpensSaysWhy() {
+    void theConfirmationThePlugInOpensSaysWhyAndWhatInstead() {
         Path home = Path.of("/n/la");
         HeadedMessage m = GetNeovimText.confirm(RELEASE, LA, home, "The dedicated Neovim is not installed.");
-        assertEquals(List.of("Why", "Folder", "Download", "From File", "SHA-256"), headings(m));
-        assertEquals("The dedicated Neovim is not installed. Neovim for Eclipse runs only this Neovim; until it is "
-                + "installed, editors keep their normal Eclipse keys.", point(m, "Why").text());
-        assertEquals(headings(GetNeovimText.confirm(RELEASE, LA, home)),
-                headings(GetNeovimText.confirm(RELEASE, LA, home, null)), "no Why when the user opened it");
+        assertEquals(List.of("Why", "Folder", "Download", "From File", "SHA-256", "Instead"), headings(m));
+        assertEquals("The dedicated Neovim is not installed. With the Neovim program preference blank, Neovim for "
+                + "Eclipse will only run with the dedicated Neovim; until it is installed or replaced, editors keep "
+                + "their normal Eclipse keys.", point(m, "Why").text());
+        assertEquals("To use a Neovim of your own, cancel and enter its program on the Neovim preference page "
+                + "(Window > Preferences > Neovim). It is run unchecked.", point(m, "Instead").text());
+    }
+
+    /** Opened by the user (menu, preference page): no Why, and no Instead nudging away from the default. */
+    @Test
+    void theConfirmationTheUserOpensHasNeitherWhyNorInstead() {
+        Path home = Path.of("/n/la");
+        List<String> expected = List.of("Folder", "Download", "From File", "SHA-256");
+        assertEquals(expected, headings(GetNeovimText.confirm(RELEASE, LA, home)));
+        assertEquals(expected, headings(GetNeovimText.confirm(RELEASE, LA, home, null)));
+        assertEquals(expected, headings(GetNeovimText.confirm(RELEASE, LA, home, " ")), "a blank why is none");
     }
 
     @Test

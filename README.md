@@ -832,7 +832,9 @@ folder and the code). The dialogs and the preference page call it the **dedicate
 for Eclipse alone, and no other Neovim on the machine is changed. With the preference blank, while
 the dedicated Neovim is missing or fails the start check (older, or damaged), the dialog opens by
 itself: once when Eclipse starts, or when an editor first needs Neovim, with a *Why* line saying
-which. Cancel it and nothing more appears; editors keep their normal Eclipse keys. It is also under
+which, and a last *Instead* line: to use a Neovim of your own, cancel and enter its program in the
+*Neovim program* preference. Cancel it and nothing more appears; editors keep their normal Eclipse
+keys. It is also under
 the field on *Window → Preferences → Neovim* and in the *Neovim* menu while it is needed. When the
 dedicated Neovim checks out, the preference note has a *Reinstall…* link under it instead. A dialog first says where it goes and what it downloads, and offers two ways:
 

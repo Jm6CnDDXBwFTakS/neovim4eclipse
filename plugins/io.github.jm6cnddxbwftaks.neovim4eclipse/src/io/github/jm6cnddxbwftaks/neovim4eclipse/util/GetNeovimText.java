@@ -72,18 +72,35 @@ public final class GetNeovimText {
     }
 
     /**
-     * {@link #confirm(NeovimRelease, NeovimRelease.Archive, Path)} with a first <i>Why</i> point, when
-     * the plug-in opened the dialog itself (at Eclipse's start, or an editor could not start the
-     * dedicated Neovim). Example: {@code Why   The dedicated Neovim is not installed. Neovim for
-     * Eclipse runs only this Neovim; until it is installed, editors keep their normal Eclipse keys.}
+     * {@link #confirm(NeovimRelease, NeovimRelease.Archive, Path)} with a first <i>Why</i> point and a
+     * last <i>Instead</i> point, when the plug-in opened the dialog itself (at Eclipse's start, or an
+     * editor could not start the dedicated Neovim). Example:
+     *
+     * <pre>
+     *   Why      The dedicated Neovim is not installed. With the Neovim program preference blank,
+     *            Neovim for Eclipse will only run with the dedicated Neovim; until it is installed
+     *            or replaced, editors keep their normal Eclipse keys.
+     *   ...
+     *   Instead  To use a Neovim of your own, cancel and enter its program on the Neovim preference
+     *            page (Window &gt; Preferences &gt; Neovim). It is run unchecked.
+     * </pre>
+     *
+     * <p>Why "only run with the dedicated Neovim": a blank preference no longer searches the PATH, so
+     * a Neovim already installed (say {@code /usr/bin/nvim}) is not picked up; nothing found by
+     * searching runs. "Or replaced" fits the other first sentence, the files differ from the release.
+     * <i>Instead</i> is the way to that installed Neovim. It shows only here, the one time the reader
+     * did not choose to install: opened from the menu or the preference page, the dialog keeps to the
+     * dedicated Neovim, the default. The no-archive dialog ({@link #noArchive}) says the same for a
+     * machine Neovim publishes no archive for.
      *
      * @param why the reason, or {@code null} when the user opened the dialog
      */
     public static HeadedMessage confirm(NeovimRelease release, NeovimRelease.Archive archive, Path home, String why) {
         List<Point> points = new ArrayList<>();
         if (why != null && !why.isBlank()) {
-            points.add(new Point("Why", why + " Neovim for Eclipse runs only this Neovim; until it is installed, "
-                    + "editors keep their normal Eclipse keys."));
+            points.add(new Point("Why", why + " With the Neovim program preference blank, Neovim for Eclipse will "
+                    + "only run with the dedicated Neovim; until it is installed or replaced, editors keep their "
+                    + "normal Eclipse keys."));
         }
         points.addAll(List.of(new Point("Folder", "Dedicated to the plug-in; no other Neovim is changed.")
                                 .withCopy(home.toString()),
@@ -94,6 +111,10 @@ public final class GetNeovimText {
                         new Point("SHA-256", "Either way, the plug-in checks the archive against this before "
                                 + "unpacking.").withCopy(archive.sha256())
                                 .withLinks(releasePage(release), virusTotalLink(archive.sha256()))));
+        if (why != null && !why.isBlank()) {
+            points.add(new Point("Instead", "To use a Neovim of your own, cancel and enter its program on the Neovim "
+                    + "preference page (Window > Preferences > Neovim). It is run unchecked."));
+        }
         return new HeadedMessage(
                 "Install the dedicated Neovim " + release.version() + " for " + archive.platform().describe() + "?",
                 points, "");
