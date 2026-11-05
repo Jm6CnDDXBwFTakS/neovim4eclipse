@@ -197,9 +197,12 @@ class ManualChecksTest {
         Files.writeString(source.resolve("plugins/a.jar"), "a");
         Files.writeString(source.resolve("plugins/b_1/b.txt"), "b");
         Files.writeString(source.resolve("configuration/config.ini"), "c");
+        Files.createDirectories(source.resolve("configuration/org.eclipse.osgi/1"));
+        Files.writeString(source.resolve("configuration/org.eclipse.osgi/1/cache"), "rebuilt by Eclipse");
         Path copy = dir.resolve("copy/eclipse");
         long[] counts = ManualChecks.ChecksEclipse.copyTree(source, copy, Path.of(""));
-        assertEquals(3, counts[0] + counts[1], "three files in all");
+        assertEquals(3, counts[0] + counts[1], "three files in all: the OSGi cache is left out");
+        assertFalse(Files.exists(copy.resolve("configuration/org.eclipse.osgi")));
         assertEquals("b", Files.readString(copy.resolve("plugins/b_1/b.txt")));
         Files.writeString(copy.resolve("configuration/config.ini"), "changed");
         assertEquals("c", Files.readString(source.resolve("configuration/config.ini")), "a copy, not a link");
@@ -239,6 +242,71 @@ class ManualChecksTest {
             assertTrue(ManualChecks.ChecksEclipse.inUse(workspace));
         }
         assertFalse(ManualChecks.ChecksEclipse.inUse(workspace), "released");
+    }
+
+    /** A folder is copied only if it is an Eclipse: eclipse.ini and plugins/, also inside a macOS app. */
+    @Test
+    void onlyAnEclipseInstallationIsCopied(@TempDir Path dir) throws IOException {
+        Path bin = dir.resolve("bin"); // the folder of a wrapper script named eclipse on PATH
+        Files.createDirectories(bin);
+        Files.writeString(bin.resolve("eclipse"), "#!/bin/sh");
+        assertFalse(ManualChecks.ChecksEclipse.isEclipse(bin));
+        Path linux = dir.resolve("eclipse");
+        Files.createDirectories(linux.resolve("plugins"));
+        Files.writeString(linux.resolve("eclipse.ini"), "-vmargs");
+        assertTrue(ManualChecks.ChecksEclipse.isEclipse(linux));
+        assertEquals(Path.of(""), ManualChecks.ChecksEclipse.inner(linux));
+        Path app = dir.resolve("Eclipse.app");
+        Files.createDirectories(app.resolve("Contents/Eclipse/plugins"));
+        Files.writeString(app.resolve("Contents/Eclipse/eclipse.ini"), "-vmargs");
+        assertTrue(ManualChecks.ChecksEclipse.isEclipse(app));
+        assertEquals(Path.of("Contents", "Eclipse"), ManualChecks.ChecksEclipse.inner(app));
+    }
+
+    @Test
+    void theOsgiCacheIsLeftOutOfTheCopy() {
+        Path top = Path.of("");
+        assertTrue(ManualChecks.ChecksEclipse.skipped(Path.of("configuration/org.eclipse.osgi/1/data"), top));
+        assertFalse(ManualChecks.ChecksEclipse.skipped(Path.of("configuration/config.ini"), top));
+        assertTrue(ManualChecks.ChecksEclipse.skipped(Path.of("Contents/Eclipse/configuration/org.eclipse.osgi"),
+                Path.of("Contents", "Eclipse")));
+    }
+
+    /** An absolute link into your Eclipse points into the copy instead; other links stay as they are. */
+    @Test
+    void absoluteLinksIntoTheSourcePointIntoTheCopy() {
+        Path source = Path.of("/opt/eclipse").toAbsolutePath();
+        Path copy = Path.of("/home/you/c").toAbsolutePath();
+        assertEquals(copy.resolve("plugins/x"),
+                ManualChecks.ChecksEclipse.linkTarget(source.resolve("plugins/x"), source, copy));
+        assertEquals(Path.of("../lib/y"), ManualChecks.ChecksEclipse.linkTarget(Path.of("../lib/y"), source, copy));
+        Path elsewhere = Path.of("/usr/lib/z").toAbsolutePath();
+        assertEquals(elsewhere, ManualChecks.ChecksEclipse.linkTarget(elsewhere, source, copy));
+    }
+
+    /** A file changed after the ZIP was built makes it stale, whatever the commits' dates; a missing one is skipped. */
+    @Test
+    void theZipIsStaleWhenAFileChangedAfterItWasBuilt(@TempDir Path dir) throws IOException {
+        Path a = Files.writeString(dir.resolve("A.java"), "a");
+        Files.setLastModifiedTime(a, java.nio.file.attribute.FileTime.fromMillis(1_000_000));
+        Path deleted = dir.resolve("Gone.java");
+        assertTrue(ManualChecks.ChecksEclipse.newerThan(2_000_000, List.of(a, deleted)).isEmpty(), "built after A");
+        assertEquals(a, ManualChecks.ChecksEclipse.newerThan(500_000, List.of(deleted, a)).orElseThrow());
+    }
+
+    /** Nothing a running checks' Eclipse uses changes before the check that none runs. */
+    @Test
+    void launchChecksForARunningEclipseBeforeItChangesAnything() {
+        List<ManualChecks.Step> fresh = ManualChecks.plan("fresh", true, false);
+        assertEquals(List.of(ManualChecks.Step.WORKSPACE_FREE, ManualChecks.Step.ASK_TO_EMPTY_XDG,
+                ManualChecks.Step.NONE_RUNNING, ManualChecks.Step.EMPTY_XDG, ManualChecks.Step.PREPARE_COPY,
+                ManualChecks.Step.START), fresh);
+        assertTrue(ManualChecks.plan("fresh", true, true).indexOf(ManualChecks.Step.NONE_RUNNING)
+                < ManualChecks.plan("fresh", true, true).indexOf(ManualChecks.Step.EMPTY_XDG), "--own-eclipse too");
+        assertEquals(List.of(ManualChecks.Step.WORKSPACE_FREE, ManualChecks.Step.PREPARE_COPY, ManualChecks.Step.START),
+                ManualChecks.plan("checks", true, false), "xdg is kept");
+        assertEquals(List.of(ManualChecks.Step.WORKSPACE_FREE, ManualChecks.Step.START),
+                ManualChecks.plan("fresh", false, true), "nothing to empty, nothing to install");
     }
 
     /** The feature and the update site module the tool names exist under those names. */
