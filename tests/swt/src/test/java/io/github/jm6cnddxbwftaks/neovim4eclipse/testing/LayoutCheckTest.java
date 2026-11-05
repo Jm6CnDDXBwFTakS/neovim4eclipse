@@ -4,11 +4,13 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.testing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
@@ -30,6 +32,20 @@ class LayoutCheckTest {
     @AfterEach
     void close() {
         shell.dispose();
+    }
+
+    /**
+     * A client area that does not start at 0, as a Windows Group's (below its title): a child is
+     * inside when it lies within the area from the area's own origin. The numbers are a Windows
+     * group's, where the last row once read as 10 px outside.
+     */
+    @Test
+    void aClientAreaIsTakenFromItsOwnOrigin() {
+        Rectangle group = new Rectangle(3, 15, 608, 217); // y runs from 15 to 232
+        assertTrue(LayoutCheck.inside(new Rectangle(8, 182, 598, 45), group), "bottom 227, inside 232");
+        assertFalse(LayoutCheck.inside(new Rectangle(8, 190, 598, 45), group), "bottom 235, past 232");
+        assertFalse(LayoutCheck.inside(new Rectangle(8, 10, 598, 20), group), "top 10, above the area's 15");
+        assertTrue(LayoutCheck.inside(new Rectangle(0, 0, 100, 20), new Rectangle(0, 0, 100, 20)), "an area at 0");
     }
 
     @Test
