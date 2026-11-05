@@ -211,6 +211,47 @@ class ManualChecksTest {
         }
     }
 
+    /**
+     * The symbolic links of a real copy: an absolute one into the source points into the copy, a
+     * relative one stays relative; without the right to make links (Windows), each is copied as
+     * what it points to, a file or a whole folder, and never as a hard link to the source's link.
+     * Skipped where the test itself may not make links.
+     */
+    @Test
+    void symbolicLinksNeverLeadBackIntoTheSource(@TempDir Path dir) throws IOException {
+        Path source = dir.resolve("eclipse").toAbsolutePath();
+        Files.createDirectories(source.resolve("plugins/lib"));
+        Files.writeString(source.resolve("plugins/lib/real.txt"), "real");
+        Files.writeString(source.resolve("eclipse.ini"), "-vmargs");
+        try {
+            Files.createSymbolicLink(source.resolve("plugins/abs.txt"), source.resolve("plugins/lib/real.txt"));
+        } catch (IOException | UnsupportedOperationException e) {
+            org.junit.jupiter.api.Assumptions.abort("this account may not make symbolic links: " + e);
+        }
+        Files.createSymbolicLink(source.resolve("plugins/rel.txt"), Path.of("lib", "real.txt"));
+        Files.createSymbolicLink(source.resolve("folder"), source.resolve("plugins/lib"));
+        Files.createSymbolicLink(source.resolve("dangling"), source.resolve("gone"));
+
+        Path linked = dir.resolve("linked").toAbsolutePath();
+        ManualChecks.ChecksEclipse.copyTree(source, linked, Path.of(""));
+        assertEquals(linked.resolve("plugins/lib/real.txt"), Files.readSymbolicLink(linked.resolve("plugins/abs.txt")));
+        assertEquals(Path.of("lib", "real.txt"), Files.readSymbolicLink(linked.resolve("plugins/rel.txt")));
+        assertEquals(linked.resolve("plugins/lib"), Files.readSymbolicLink(linked.resolve("folder")));
+
+        Path copied = dir.resolve("copied").toAbsolutePath();
+        ManualChecks.ChecksEclipse.copyTree(source, copied, Path.of(""), false);
+        for (String name : List.of("plugins/abs.txt", "plugins/rel.txt")) {
+            Path file = copied.resolve(name);
+            assertFalse(Files.isSymbolicLink(file), name);
+            assertEquals("real", Files.readString(file));
+            assertFalse(Files.isSameFile(file, source.resolve("plugins/lib/real.txt")), name + ": not a hard link");
+        }
+        assertEquals("real", Files.readString(copied.resolve("folder/real.txt")), "a folder link is copied with its files");
+        assertFalse(Files.exists(copied.resolve("dangling"), java.nio.file.LinkOption.NOFOLLOW_LINKS), "a link to nothing");
+        Files.writeString(copied.resolve("plugins/abs.txt"), "changed");
+        assertEquals("real", Files.readString(source.resolve("plugins/lib/real.txt")), "writing the copy leaves the source");
+    }
+
     @Test
     void theInstalledVersionIsReadFromTheDirectorsListing() {
         String feature = ManualChecks.ChecksEclipse.FEATURE;
