@@ -224,23 +224,20 @@ refused, as above.)
 4. Add a *Changed* entry to `CHANGELOG.md` saying the new minimum, so users see it before updating.
 5. Remove the workarounds the new version makes unnecessary, each as its own commit after this one.
 
-**Security fixes on Neovim's branches**: the plug-in runs only the Neovim it
-pins, so its users get a Neovim security fix only when the pin moves. Before each plug-in release,
-look for fixes not yet in the pinned release:
+**Following Neovim's releases**: the plug-in runs only the Neovim it pins, so its users get a
+Neovim fix, a security fix included, only when the pin moves. Neovim ships those fixes as releases,
+patch releases (0.12.x) included, and *Get Neovim* installs only a published release, checked
+against its hash; a fix that waits on one of Neovim's branches is out of the plug-in's reach until
+Neovim releases it. So there is no separate security check: follow each Neovim release about a week
+after it appears (the updater's own wait, above), moving the pin and, where the release calls for
+it, the minimum, with the steps above. For a release that fixes something urgent, `--allow-young`
+moves sooner.
 
-```bash
-git clone --filter=blob:none https://github.com/neovim/neovim && cd neovim
-git log --oneline v0.12.6..origin/release-0.12      # backports waiting for the next patch release
-git log --oneline v0.12.6..origin/master | grep -i -e security -e 'vim-patch:9'
-```
-
-Vim's security patches arrive in Neovim as `vim-patch:9.x.y` commits; check each patch number
-against [Vim's advisories](https://github.com/vim/vim/security/advisories). Move to a patch release
-that has the fix as soon as there is one (`--allow-young` above), and meanwhile guard what the
-plug-in can in `LuaScripts.SETUP`. Example: Neovim 0.12.6 runs a crafted R Markdown chunk header's
-backticks in a shell (Vim 9.2.1178, GHSA-x2w5-pj55-7hpc; fixed on master, not in release-0.12
-when 0.12.6 was pinned), so SETUP turns `g:rmd_dynamic_fenced_languages` off; remove that guard, and the
-`setup_spec.lua` test for it, once the pinned Neovim has the fix.
+Where the plug-in can guard against a known issue in the pinned Neovim, it does so in
+`LuaScripts.SETUP` until a release fixes it. Example: Neovim 0.12.6 runs a crafted R Markdown chunk
+header's backticks in a shell (Vim 9.2.1178, GHSA-x2w5-pj55-7hpc; fixed on master, not in
+release-0.12 when 0.12.6 was pinned), so SETUP turns `g:rmd_dynamic_fenced_languages` off; remove
+that guard, and the `setup_spec.lua` test for it, once the pinned Neovim has the fix.
 
 **Downloads in CI**: every job installs Neovim with `releng/install-neovim.sh <code> <folder>`,
 which takes the archive from the data file and checks its size and SHA-256: code `lx` in the Linux
