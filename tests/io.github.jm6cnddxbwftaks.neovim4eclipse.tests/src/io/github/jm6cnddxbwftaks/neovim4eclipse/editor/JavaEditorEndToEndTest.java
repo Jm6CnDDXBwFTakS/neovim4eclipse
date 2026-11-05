@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.ctrlKey;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.escape;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
@@ -460,6 +461,73 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         escape(javaWidget); // one Esc: Eclipse leaves the template's linked mode, Neovim leaves insert mode
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
         expectNeovimHasTheDocument();
+    }
+
+    /**
+     * Ctrl-O in insert mode runs one normal-mode command in a Java editor too: there Ctrl+O is also
+     * Eclipse's Quick Outline, and the Insert column of the Ctrl Keys page gives it to Neovim (the
+     * manual check ck-o). Example: {@code <C-o>0} moves to the line's start and the insert goes on,
+     * with no outline popup.
+     */
+    @Test
+    void ctrlOInsertingInJavaRunsOneNormalCommandNotQuickOutline() throws Exception {
+        openJava("A.java", """
+                package p;
+                class A {
+                }
+                """);
+        type(javaWidget, "2GA");
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        List<Shell> before = visibleShells();
+        ctrlKey(javaWidget, 'o');
+        waitUntil("one normal-mode command", TIMEOUT_MS, () -> "niI".equals(session.getMode()));
+        type(javaWidget, '0');
+        waitUntil("insert mode again", TIMEOUT_MS, session::isEclipseTypingReady);
+        assertEquals(List.of(), newShells(before), "no Quick Outline popup");
+        type(javaWidget, "X");
+        waitUntil("X at the line's start", TIMEOUT_MS, () -> javaText().contains("\nXclass A {"),
+                () -> "; the document is " + javaText());
+        escape(javaWidget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        expectNeovimHasTheDocument();
+    }
+
+    /**
+     * Ctrl-O during a visual-block insert ({@code <C-v>jI}) reaches Neovim as well, not Eclipse's Quick
+     * Outline (the manual check ck-block-java): Neovim reports the one-command mode {@code niI}.
+     */
+    @Test
+    void ctrlOInABlockInsertInJavaReachesNeovim() throws Exception {
+        openJava("A.java", """
+                package p;
+                class A {
+                	int a;
+                	int b;
+                }
+                """);
+        type(javaWidget, "3G");
+        ctrlKey(javaWidget, 'v');
+        type(javaWidget, "jI");
+        waitUntil("the block insert", TIMEOUT_MS, () -> session.getMode() != null && session.getMode().startsWith("i"));
+        List<Shell> before = visibleShells();
+        ctrlKey(javaWidget, 'o');
+        waitUntil("one normal-mode command", TIMEOUT_MS, () -> "niI".equals(session.getMode()),
+                () -> "; the mode is " + session.getMode());
+        assertEquals(List.of(), newShells(before), "no Quick Outline popup");
+        escape(javaWidget);
+        escape(javaWidget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+    }
+
+    /** The visible windows that were not open {@code before}, by title. */
+    private static List<String> newShells(List<Shell> before) {
+        List<String> opened = new ArrayList<>();
+        for (Shell shell : visibleShells()) {
+            if (!before.contains(shell)) {
+                opened.add("'" + shell.getText() + "'");
+            }
+        }
+        return opened;
     }
 
     /** The items of the proposal list (a {@link Table}) in a window that was not open {@code before}. */

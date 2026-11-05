@@ -1166,6 +1166,105 @@ class EditorEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * Eclipse's own shortcuts still work while Eclipse types for Neovim's insert mode (the manual
+     * check ck-eclipse-keys): Paste (M1+V) inserts the clipboard, Save (M1+S) saves, Content Assist
+     * (Ctrl+Space) is asked for, and the insert goes on throughout. The keys go through the
+     * workbench's key bindings ({@code UiTestSupport.m1Key}): Ctrl on Linux and Windows, Command on
+     * macOS.
+     */
+    @Test
+    void eclipsesPasteSaveAndContentAssistKeysWorkWhileEclipseTypes() {
+        ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
+        List<String> run = new CopyOnWriteArrayList<>();
+        IExecutionListener listener = new IExecutionListener() {
+            @Override
+            public void preExecute(String commandId, ExecutionEvent event) {
+                run.add(commandId);
+            }
+
+            @Override
+            public void notHandled(String commandId, NotHandledException exception) {
+                run.add(commandId);
+            }
+
+            @Override
+            public void postExecuteFailure(String commandId, ExecutionException exception) {
+            }
+
+            @Override
+            public void postExecuteSuccess(String commandId, Object returnValue) {
+            }
+        };
+        commands.addExecutionListener(listener);
+        try {
+            setSystemClipboard(" pasted");
+            type(widget, "gg");
+            type(widget, 'A');
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            UiTestSupport.m1Key(widget, 'v');
+            expectText("alpha pasted\nbeta\ngamma\n");
+            assertTrue(session.isTypingMode(), "still in the insert after the paste");
+
+            UiTestSupport.m1Key(widget, 's');
+            waitUntil("the save", TIMEOUT_MS, () -> !editor.isDirty());
+            assertTrue(session.isTypingMode(), "still in the insert after the save");
+
+            Event space = new Event();
+            space.keyCode = ' ';
+            space.character = ' ';
+            space.stateMask = SWT.CTRL;
+            space.doit = true;
+            widget.notifyListeners(SWT.KeyDown, space);
+            waitUntil("Content Assist", TIMEOUT_MS,
+                    () -> run.contains(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS), run::toString);
+            assertTrue(session.isTypingMode(), "still in the insert after Content Assist");
+            escape(widget); // closes Content Assist's popup if one opened
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            expectText("alpha pasted\nbeta\ngamma\n");
+        } finally {
+            commands.removeExecutionListener(listener);
+        }
+    }
+
+    /**
+     * Fast typing with Ctrl-W mixed in loses nothing (the manual check ck-fast): every key goes at
+     * once, with no wait between them, as a quick typist sends them. Eclipse and Neovim then hold the
+     * same line, and {@code u} then Ctrl-R gives the same text back. Example: " one two three",
+     * Ctrl-W, " four five", Ctrl-W, Ctrl-W, " six" leaves {@code alpha one two   six}. ({@code u}
+     * takes back only the part after the last Ctrl-W: Neovim's default mappings start a new undo
+     * step at each Ctrl-W and Ctrl-U, {@code :h default-mappings}.)
+     * It checks the outcome only (no time limit of its own), so a slow machine just takes longer.
+     */
+    @Test
+    void fastTypingWithCtrlWMixedInLosesNothing() {
+        type(widget, "gg");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, " one two three");
+        ctrlKey(widget, 'w');
+        type(widget, " four five");
+        ctrlKey(widget, 'w');
+        ctrlKey(widget, 'w');
+        type(widget, " six");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        String typed = "alpha one two   six";
+        expectText(typed + "\nbeta\ngamma\n");
+        waitUntil("Neovim's line is Eclipse's", TIMEOUT_MS,
+                () -> typed.equals(io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session,
+                        "return vim.fn.getline(1)")));
+        type(widget, 'u');
+        waitUntil("the undo, in Eclipse and Neovim alike", TIMEOUT_MS, () -> {
+            String line = document.get().split("\n", -1)[0];
+            return !typed.equals(line) && line.equals(io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe
+                    .lua(session, "return vim.fn.getline(1)"));
+        }, () -> "; the document is " + document.get());
+        ctrlKey(widget, 'r');
+        expectText(typed + "\nbeta\ngamma\n");
+    }
+
     /** Ctrl-C, when ticked for insert mode, ends the insert as Esc does: {@code .} repeats the typed text. */
     @Test
     void ctrlCEndsAnInsertAsEscDoes() {
