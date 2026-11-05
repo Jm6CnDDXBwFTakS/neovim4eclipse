@@ -7,7 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.eclipse.swt.SWT;
@@ -29,7 +35,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.LayoutCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 
 /**
@@ -137,6 +147,57 @@ class NeovimPreferencePageTest {
         assertTrue(note.getText().contains("<a>such</a>"), note.getText());
         assertTrue(find(group, Link.class, link -> link.getText().contains("such")) == null,
                 "no Link shows the path");
+    }
+
+    /**
+     * Each note the checks gallery pictures fits its group: no text cut off, over the window's edge or
+     * on top of another ({@link LayoutCheck}), at the page's width, with the window as tall as its
+     * text. This takes over the gallery card's "nothing cut off" for the page, on every platform the
+     * tests run on. The notes: no dedicated Neovim (error color, with the Get Neovim button), the Neovim
+     * this Eclipse runs, and the three values the option refuses.
+     */
+    @Test
+    void everyNoteTheGalleryShowsFitsItsGroup() throws Exception {
+        NeovimRelease release = NeovimRelease.bundled();
+        Path program = NvimExecutable.dedicatedFolder().resolve("la").resolve("bin").resolve(WINDOWS ? "nvim.exe" : "nvim");
+        NvimProbe.Note none = NvimProbe.note(new NvimExecutable.Resolved(program.toString(), NvimExecutable.Kind.NO_DEDICATED),
+                null, Optional.empty(), NvimExecutable.dedicatedFolder(), release.version());
+        Path folder = Files.createTempDirectory("n4e-layout");
+        try {
+            Function<String, NvimProbe.Note> probe = NvimProbe::describe;
+            // A list, not a map: without -Dnvim.path this Eclipse's own value is blank too.
+            List<Map.Entry<String, Function<String, NvimProbe.Note>>> notes = List.of(Map.entry("", value -> none),
+                    Map.entry(NeovimOption.value(), probe), Map.entry(folder.toString(), probe), Map.entry("nvim", probe),
+                    Map.entry(folder.resolve("missing").resolve("bin").resolve(WINDOWS ? "nvim.exe" : "nvim").toString(),
+                            probe));
+            for (Map.Entry<String, Function<String, NvimProbe.Note>> note : notes) {
+                Shell window = new Shell(shell);
+                try {
+                    window.setLayout(new GridLayout());
+                    Group group = new Group(window, SWT.NONE);
+                    group.setText("Neovim");
+                    group.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
+                    group.setLayout(new GridLayout());
+                    new NeovimStatusSection(group, note::getKey, note.getValue());
+                    window.setSize(640, 600); // the gallery's width
+                    window.open(); // wrapped text is measured right only once it is shown (GTK)
+                    waitUntil("the note for '" + note.getKey() + "'", () -> find(group, Label.class,
+                            label -> label.getText().startsWith("Looking for")) == null);
+                    // As tall as the wrapped text, as the page grows its group (computeSize at the inside's width).
+                    window.setSize(640, window.computeSize(window.getClientArea().width, SWT.DEFAULT).y);
+                    window.layout(true, true);
+                    Display display = window.getDisplay();
+                    while (display.readAndDispatch()) {
+                        // the note's requestLayout, and the resize, run before the check
+                    }
+                    assertEquals(List.of(), LayoutCheck.problems(window), "the note for '" + note.getKey() + "'");
+                } finally {
+                    window.dispose();
+                }
+            }
+        } finally {
+            Files.delete(folder);
+        }
     }
 
     /**

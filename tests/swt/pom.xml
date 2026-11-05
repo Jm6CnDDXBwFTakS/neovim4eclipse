@@ -115,6 +115,8 @@
             <configuration>
               <sources>
                 <source>${project.basedir}/../io.github.jm6cnddxbwftaks.neovim4eclipse.tests/shared</source>
+                <!-- The helpers that need SWT (LayoutCheck), shared with the UI tests only. -->
+                <source>${project.basedir}/../io.github.jm6cnddxbwftaks.neovim4eclipse.tests/shared-swt</source>
               </sources>
             </configuration>
           </execution>
