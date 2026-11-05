@@ -670,7 +670,7 @@ public final class ManualChecks {
         try {
             builder.start();
         } catch (IOException e) {
-            fail("could not start " + eclipse + " (" + e.getMessage() + "); name it with --eclipse or $ECLIPSE");
+            fail("could not start " + eclipse + " (" + e.getMessage() + "); name it with --eclipse or the ECLIPSE environment variable");
         }
         System.out.println("Started for " + card.id() + ": " + String.join(" ", command)
                 + (card.launch().equals("normal") ? "" : "\n  with XDG_DATA_HOME=" + xdg)
@@ -722,6 +722,14 @@ public final class ManualChecks {
 
         private static final String STATE = "eclipse-copy.properties";
 
+        /** The command that builds the update site ZIP, as typed on this platform's shell. */
+        static final String BUILD = build(currentPlatform());
+
+        /** Testable core of {@link #BUILD}: {@code .\mvnw.cmd} in PowerShell or cmd, else {@code ./mvnw}. */
+        static String build(String platform) {
+            return (platform.equals("windows") ? ".\\mvnw.cmd" : "./mvnw") + " verify -DskipTests";
+        }
+
         private ChecksEclipse() {
         }
 
@@ -733,7 +741,7 @@ public final class ManualChecks {
             Path given = Path.of(name);
             if (given.getNameCount() > 1 || Files.isRegularFile(given)) {
                 if (!Files.isRegularFile(given)) {
-                    fail("no Eclipse program at " + given + "; name it with --eclipse or $ECLIPSE");
+                    fail("no Eclipse program at " + given + "; name it with --eclipse or the ECLIPSE environment variable");
                 }
                 return given.toAbsolutePath();
             }
@@ -742,7 +750,7 @@ public final class ManualChecks {
                     return Path.of(folder, name);
                 }
             }
-            fail("no Eclipse program " + name + " on PATH; name it with --eclipse or $ECLIPSE");
+            fail("no Eclipse program " + name + " on PATH; name it with --eclipse or the ECLIPSE environment variable");
             return null;
         }
 
@@ -843,7 +851,7 @@ public final class ManualChecks {
             Path source = installation(real);
             if (!isEclipse(source)) {
                 fail(source + " (the folder of " + yours + ") is not an Eclipse installation: no eclipse.ini and"
-                        + " plugins/ there. Name the eclipse program itself with --eclipse or $ECLIPSE, not a"
+                        + " plugins/ there. Name the eclipse program itself with --eclipse or the ECLIPSE environment variable, not a"
                         + " script that starts it");
             }
             Path copies = root.resolve("eclipse");
@@ -887,7 +895,8 @@ public final class ManualChecks {
             }
             refuseWhileRunning(root);
             Path director = director(program);
-            Path log = root.resolve("director.log");
+            Path log = root.resolve("director.log"); // this install's director runs, each appended
+            Files.deleteIfExists(log);
             List<String> list = new ArrayList<>(List.of(director.toString(), "--launcher.suppressErrors", "-nosplash",
                     "-application", "org.eclipse.equinox.p2.director", "-listInstalledRoots", "-data", "@none"));
             // Asked only after a new copy, which may have the feature from your Eclipse; then remembered.
@@ -1022,7 +1031,7 @@ public final class ManualChecks {
                     }
                 }
             }
-            fail("no update site ZIP in " + SITE_TARGET + ": build it with ./mvnw verify -DskipTests (or name one with --zip)");
+            fail("no update site ZIP in " + SITE_TARGET + ": build it with " + BUILD + " (or name one with --zip)");
             return null;
         }
 
@@ -1039,7 +1048,7 @@ public final class ManualChecks {
                     .lines().filter(l -> !l.isBlank()).map(Path::of).toList();
             Optional<Path> newer = newerThan(Files.getLastModifiedTime(zip).toMillis(), files);
             newer.ifPresent(file -> System.out.println("Warning: " + zip.getFileName() + " may not hold the code"
-                    + " under test (" + file + " changed after it was built). Rebuild it with ./mvnw verify -DskipTests."));
+                    + " under test (" + file + " changed after it was built). Rebuild it with " + BUILD + "."));
         }
 
         /** The first of {@code files} changed after {@code built} (milliseconds), if any; missing files are skipped. */
@@ -1061,7 +1070,7 @@ public final class ManualChecks {
             }
         }
 
-        /** Runs a command to its end; returns its output, also kept in {@code log}. */
+        /** Runs a command to its end; returns its output, also appended to {@code log}. */
         private static String run(List<String> command, Path log) throws IOException, InterruptedException {
             Process process = new ProcessBuilder(command).directory(log.getParent().toFile()) // the root, as for Eclipse
                     .redirectErrorStream(true).start();
@@ -1070,7 +1079,8 @@ public final class ManualChecks {
                 output = String.join("\n", reader.lines().toList());
             }
             process.waitFor();
-            Files.writeString(log, String.join(" ", command) + "\n" + output + "\n");
+            Files.writeString(log, String.join(" ", command) + "\n" + output + "\n\n",
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
             return output;
         }
 

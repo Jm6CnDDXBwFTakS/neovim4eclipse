@@ -48,7 +48,7 @@ Build the version under test first: `./mvnw verify -DskipTests` makes the update
 (`releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/target/neovim4eclipse-<version>-SNAPSHOT.zip`).
 `launch` then installs it for you, into a copy of your Eclipse, never into your Eclipse itself:
 
-- **The copy.** Your Eclipse (`--eclipse <program>`, else `$ECLIPSE`, else the usual place for
+- **The copy.** Your Eclipse (`--eclipse <program>`, else the `ECLIPSE` environment variable, else the usual place for
   the platform: `eclipse` on `PATH`, `/Applications/Eclipse.app`, `C:\eclipse\eclipse.exe`) is
   copied to `~/var/n4e-checks/eclipse/` the first time. Its `plugins/` and `features/` are hard links
   to yours (the same bytes under a second name), so the copy takes a few hundred MB at most, not the 1 GB or
