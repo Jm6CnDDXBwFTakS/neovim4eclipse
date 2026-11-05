@@ -85,6 +85,13 @@ public class HeadedMessageDialog extends MessageDialog {
      * gets none.
      */
     private static final int POINT_DLUS = 3;
+
+    /**
+     * Room left after the text of a Copy field, in horizontal dialog units. A field is sized to its
+     * text, and without this a long value (a folder, a quoted -vmargs line) touched the field's right
+     * border on Windows (seen 2026-11-05 in the checks gallery). 4 DLUs is about one character.
+     */
+    private static final int VALUE_ROOM_DLUS = 4;
     /** The extra space between the groups (intro, points, footer), in dialog units. */
     private static final int GROUP_DLUS = 6;
     /** The space between a heading and its text, in dialog units. */
@@ -164,7 +171,8 @@ public class HeadedMessageDialog extends MessageDialog {
             }
             if (point.hasCopy()) {
                 Composite value = valueRow(cell, point.copy());
-                widestValue = Math.max(widestValue, value.computeSize(SWT.DEFAULT, SWT.DEFAULT).x);
+                widestValue = Math.max(widestValue, value.computeSize(SWT.DEFAULT, SWT.DEFAULT).x
+                        + convertHorizontalDLUsToPixels(VALUE_ROOM_DLUS));
                 if (point.text().isEmpty()) { // the heading beside the field's middle, not above it
                     int lift = value.computeSize(SWT.DEFAULT, SWT.DEFAULT).y - heading.computeSize(SWT.DEFAULT,
                             SWT.DEFAULT).y;
