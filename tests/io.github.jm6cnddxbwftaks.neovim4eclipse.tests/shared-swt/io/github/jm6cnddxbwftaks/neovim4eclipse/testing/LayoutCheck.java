@@ -52,6 +52,19 @@ public final class LayoutCheck {
         return problems;
     }
 
+    /**
+     * Whether a child's bounds lie inside its parent's client area, within {@link #SLACK}. Both are in
+     * the parent's coordinates, and the area need not start at 0: on Windows a Group's client area
+     * starts below its title and inside its border ({@code {3, 15, 608, 217}}), and its children are
+     * placed from there. Comparing a child's bottom with the area's height alone reported every last
+     * row of a Windows group 15 - 5 = 10 px "outside" (the title's offset less the layout's margin).
+     */
+    public static boolean inside(Rectangle child, Rectangle area) {
+        return child.x >= area.x - SLACK && child.y >= area.y - SLACK
+                && child.x + child.width <= area.x + area.width + SLACK
+                && child.y + child.height <= area.y + area.height + SLACK;
+    }
+
     private static void check(Composite parent, List<String> problems) {
         Rectangle area = parent.getClientArea();
         List<Control> shown = new ArrayList<>();
@@ -65,8 +78,7 @@ public final class LayoutCheck {
             if (b.width <= 0 || b.height <= 0) {
                 continue; // a control laid out to nothing (an empty row) shows no text either
             }
-            if (b.x < -SLACK || b.y < -SLACK || b.x + b.width > area.width + SLACK
-                    || b.y + b.height > area.height + SLACK) {
+            if (!inside(b, area)) {
                 problems.add(describe(child) + " reaches outside its parent: " + b + " in " + area);
             }
             for (Control other : shown) {
