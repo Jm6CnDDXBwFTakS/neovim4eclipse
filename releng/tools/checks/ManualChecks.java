@@ -599,26 +599,65 @@ public final class ManualChecks {
         }
         Path xdg = root.resolve("xdg");
         Path workspace = root.resolve(options.workspace());
-        if (ChecksEclipse.inUse(workspace)) {
-            // Eclipse would only say "workspace in use"; say it here, before anything changes.
-            fail("an Eclipse already runs in " + workspace + "; close it, or use --workspace ws2");
-        }
-        if (card.launch().equals("fresh") && isNotEmpty(xdg)) {
-            if (!options.yes() && !confirm("Empty " + xdg + " (the checks' own plug-in folder) for a fresh start?")) {
-                fail("stopped; nothing was changed (--yes answers yes)");
+        String eclipse = null;
+        for (Step step : plan(card.launch(), isNotEmpty(xdg), options.ownEclipse())) {
+            switch (step) {
+                case WORKSPACE_FREE -> {
+                    if (ChecksEclipse.inUse(workspace)) {
+                        // Eclipse would only say "workspace in use"; say it here, before anything changes.
+                        fail("an Eclipse already runs in " + workspace + "; close it, or use --workspace ws2");
+                    }
+                }
+                case ASK_TO_EMPTY_XDG -> {
+                    if (!options.yes() && !confirm("Empty " + xdg + " (the checks' own plug-in folder) for a fresh start?")) {
+                        fail("stopped; nothing was changed (--yes answers yes)");
+                    }
+                }
+                case NONE_RUNNING -> ChecksEclipse.refuseWhileRunning(root);
+                case EMPTY_XDG -> {
+                    try {
+                        deleteContents(xdg);
+                    } catch (UncheckedIOException e) {
+                        // Typically Windows: a Neovim from an earlier launch still runs from the folder.
+                        fail("could not empty " + xdg + " (" + e.getCause().getMessage() + "). Close the Eclipse that"
+                                + " uses it (and its Neovim), then launch again; the folder may be partly emptied.");
+                    }
+                }
+                case PREPARE_COPY -> eclipse = ChecksEclipse.prepare(root, ChecksEclipse.program(yours(options)),
+                        options.zip(), options.yes()).toString();
+                case START -> start(card, root, workspace, xdg, eclipse != null ? eclipse : yours(options));
             }
-            ChecksEclipse.refuseWhileRunning(root); // its Neovim may run from xdg
-            try {
-                deleteContents(xdg);
-            } catch (UncheckedIOException e) {
-                // Typically Windows: a Neovim from an earlier launch still runs from the folder.
-                fail("could not empty " + xdg + " (" + e.getCause().getMessage() + "). Close the Eclipse that"
-                        + " uses it (and its Neovim), then launch again; the folder may be partly emptied.");
-            }
         }
-        String yours = options.eclipse() != null ? options.eclipse() : defaultEclipse();
-        String eclipse = options.ownEclipse() ? yours
-                : ChecksEclipse.prepare(root, ChecksEclipse.program(yours), options.zip(), options.yes()).toString();
+    }
+
+    /**
+     * The steps of {@code launch}, in order. The order is the point: nothing that changes what a
+     * running checks' Eclipse uses ({@code xdg}, where its Neovim may run, or the copy) comes before
+     * the check that none runs. Example: a {@code fresh} card with a filled {@code xdg} is
+     * WORKSPACE_FREE, ASK_TO_EMPTY_XDG, NONE_RUNNING, EMPTY_XDG, PREPARE_COPY, START. (PREPARE_COPY
+     * checks again before it changes the copy, as it may be called with nothing to empty.)
+     */
+    enum Step { WORKSPACE_FREE, ASK_TO_EMPTY_XDG, NONE_RUNNING, EMPTY_XDG, PREPARE_COPY, START }
+
+    /** Testable core of {@code launch}: its steps for a card's {@code Launch} kind. */
+    static List<Step> plan(String launch, boolean xdgFilled, boolean ownEclipse) {
+        List<Step> steps = new ArrayList<>(List.of(Step.WORKSPACE_FREE));
+        if (launch.equals("fresh") && xdgFilled) {
+            steps.addAll(List.of(Step.ASK_TO_EMPTY_XDG, Step.NONE_RUNNING, Step.EMPTY_XDG));
+        }
+        if (!ownEclipse) {
+            steps.add(Step.PREPARE_COPY);
+        }
+        steps.add(Step.START);
+        return steps;
+    }
+
+    private static String yours(Options options) {
+        return options.eclipse() != null ? options.eclipse() : defaultEclipse();
+    }
+
+    /** Starts {@code eclipse} on the card's workspace, its output in a log under the root. */
+    private static void start(Card card, Path root, Path workspace, Path xdg, String eclipse) {
         List<String> command = List.of(eclipse, "-data", workspace.toString());
         // Eclipse's working folder is the root, not the repository: a JVM crash file (hs_err_pid*.log)
         // or anything else written by a relative path lands with the checks, not as an untracked file.
@@ -653,6 +692,10 @@ public final class ManualChecks {
      * deletes old ones, and deleting a link leaves your file alone. Everything p2 and Eclipse do
      * write ({@code configuration/}, {@code p2/}, {@code eclipse.ini}, {@code artifacts.xml}) is a
      * real copy. Where a link cannot be made (the root on another disk), the file is copied.
+     * Two things are not copied as they are: the OSGi framework's cache
+     * ({@code configuration/org.eclipse.osgi}, about 30 MB, which a running Eclipse rewrites and the
+     * copy rebuilds at its first start), and an absolute symbolic link into your Eclipse, which
+     * would let the copy write through it into yours: it is pointed at the same place in the copy.
      * Example, on Linux: {@code /opt/eclipse/eclipse-committers-2026-09-R-linux-gtk-aarch64} becomes
      * {@code ~/var/n4e-checks/eclipse/eclipse-committers-2026-09-R-linux-gtk-aarch64}; on macOS
      * {@code /Applications/Eclipse.app} becomes {@code ~/var/n4e-checks/eclipse/Eclipse.app}.
@@ -665,7 +708,9 @@ public final class ManualChecks {
      * from the copied profile). A ZIP already installed (same SHA-256, kept in
      * {@code <root>/eclipse-copy.properties}) is not installed again. A new one replaces the old
      * feature in one step ({@code -uninstallIU} and {@code -installIU} together), as a newer build
-     * of the same bundle could not sit beside it.
+     * of the same bundle could not sit beside it. Whether the copy has the feature at all is asked
+     * once ({@code -listInstalledRoots}, a second Eclipse start), after a new copy: your Eclipse may
+     * have it installed, and the copy then too. After that the state file remembers it.
      */
     static final class ChecksEclipse {
 
@@ -687,6 +732,9 @@ public final class ManualChecks {
         static Path program(String name) {
             Path given = Path.of(name);
             if (given.getNameCount() > 1 || Files.isRegularFile(given)) {
+                if (!Files.isRegularFile(given)) {
+                    fail("no Eclipse program at " + given + "; name it with --eclipse or $ECLIPSE");
+                }
                 return given.toAbsolutePath();
             }
             for (String folder : System.getenv().getOrDefault("PATH", "").split(java.io.File.pathSeparator)) {
@@ -722,6 +770,45 @@ public final class ManualChecks {
             return relative.startsWith(inner.resolve("plugins")) || relative.startsWith(inner.resolve("features"));
         }
 
+        /**
+         * The folder inside an installation that holds {@code eclipse.ini}, {@code plugins/} and
+         * {@code configuration/}: {@code Contents/Eclipse} in a macOS app, else the installation itself.
+         */
+        static Path inner(Path installation) {
+            Path mac = Path.of("Contents", "Eclipse");
+            return Files.isRegularFile(installation.resolve(mac).resolve("eclipse.ini")) ? mac : Path.of("");
+        }
+
+        /**
+         * Whether {@code installation} is an Eclipse: an {@code eclipse.ini} and a {@code plugins/}
+         * folder where {@link #inner} says. Example: {@code /usr/bin}, the folder of a wrapper script
+         * named {@code eclipse} on {@code PATH}, is not, and must not be copied.
+         */
+        static boolean isEclipse(Path installation) {
+            Path inner = installation.resolve(inner(installation));
+            return Files.isRegularFile(inner.resolve("eclipse.ini")) && Files.isDirectory(inner.resolve("plugins"));
+        }
+
+        /**
+         * Whether a file of the installation is left out of the copy: the OSGi framework's cache,
+         * {@code configuration/org.eclipse.osgi}, which a running Eclipse rewrites (a copy could catch
+         * it half written) and an Eclipse rebuilds when it is missing.
+         */
+        static boolean skipped(Path relative, Path inner) {
+            return relative.startsWith(inner.resolve("configuration").resolve("org.eclipse.osgi"));
+        }
+
+        /**
+         * Where a symbolic link of the copy points: an absolute link into the installation is turned
+         * to the same place in the copy, so nothing written through it reaches yours; any other link
+         * is kept as it is. Example: {@code /opt/eclipse/plugins/x} in {@code /opt/eclipse} copied to
+         * {@code ~/c} becomes {@code ~/c/plugins/x}; {@code ../lib/y} stays {@code ../lib/y}.
+         */
+        static Path linkTarget(Path target, Path source, Path copy) {
+            return target.isAbsolute() && target.startsWith(source)
+                    ? copy.resolve(source.relativize(target).toString()) : target;
+        }
+
         /** The feature's version in the director's {@code -listInstalledRoots} output, if installed. */
         static Optional<String> installedVersion(String listing) {
             return listing.lines().map(String::strip).filter(l -> l.startsWith(FEATURE + "/"))
@@ -754,6 +841,11 @@ public final class ManualChecks {
         static Path prepare(Path root, Path yours, Path zip, boolean yes) throws IOException, InterruptedException {
             Path real = yours.toRealPath();
             Path source = installation(real);
+            if (!isEclipse(source)) {
+                fail(source + " (the folder of " + yours + ") is not an Eclipse installation: no eclipse.ini and"
+                        + " plugins/ there. Name the eclipse program itself with --eclipse or $ECLIPSE, not a"
+                        + " script that starts it");
+            }
             Path copies = root.resolve("eclipse");
             Path copy = copies.resolve(source.getFileName().toString());
             Path stateFile = root.resolve(STATE);
@@ -770,12 +862,15 @@ public final class ManualChecks {
                         fail("stopped; nothing was changed (--yes answers yes, --own-eclipse starts yours as it is)");
                     }
                     refuseWhileRunning(root);
-                    deleteContents(copies); // links and copies only: your Eclipse keeps its files
+                    try {
+                        deleteContents(copies); // links and copies only: your Eclipse keeps its files
+                    } catch (UncheckedIOException e) {
+                        fail("could not empty " + copies + " (" + e.getCause().getMessage() + "). Close whatever"
+                                + " still uses a file there, then launch again; the old copy may be partly deleted.");
+                    }
                 }
                 System.out.println("Copying " + source + " to " + copy + " ...");
-                Path inner = Files.isRegularFile(source.resolve("Contents/Eclipse/eclipse.ini"))
-                        ? Path.of("Contents", "Eclipse") : Path.of("");
-                long[] counts = copyTree(source, copy, inner);
+                long[] counts = copyTree(source, copy, inner(source));
                 System.out.println("  " + counts[0] + " files linked, " + counts[1] + " copied ("
                         + counts[2] / (1024 * 1024) + " MB of new space)");
                 state.clear();
@@ -795,16 +890,21 @@ public final class ManualChecks {
             Path log = root.resolve("director.log");
             List<String> list = new ArrayList<>(List.of(director.toString(), "--launcher.suppressErrors", "-nosplash",
                     "-application", "org.eclipse.equinox.p2.director", "-listInstalledRoots", "-data", "@none"));
-            Optional<String> installed = installedVersion(run(list, log));
+            // Asked only after a new copy, which may have the feature from your Eclipse; then remembered.
+            String known = state.getProperty("installed");
+            boolean installed = known != null ? known.equals("true") : installedVersion(run(list, log)).isPresent();
             List<String> install = new ArrayList<>(List.of(director.toString()));
-            install.addAll(installArguments(site, installed.isPresent()));
+            install.addAll(installArguments(site, installed));
             String output = run(install, log);
             if (!output.contains("Operation completed")) {
+                state.remove("installed"); // ask again next time: the failure may have been a wrong guess
+                save(state, stateFile);
                 fail("installing " + site + " into " + copy + " failed:\n" + output + "\n(output in " + log + ")");
             }
             System.out.println("Installed " + site.getFileName() + " into the checks' Eclipse"
-                    + installed.map(v -> " (it had " + v + ")").orElse("") + ".");
+                    + (installed ? ", replacing the build it had" : "") + ".");
             state.setProperty("zip", sum);
+            state.setProperty("installed", "true");
             save(state, stateFile);
             return program;
         }
@@ -826,7 +926,11 @@ public final class ManualChecks {
                 @Override
                 public java.nio.file.FileVisitResult preVisitDirectory(Path dir,
                         java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
-                    Files.createDirectories(target.resolve(source.relativize(dir).toString()));
+                    Path relative = source.relativize(dir);
+                    if (skipped(relative, inner)) {
+                        return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+                    }
+                    Files.createDirectories(target.resolve(relative.toString()));
                     return java.nio.file.FileVisitResult.CONTINUE;
                 }
 
@@ -835,7 +939,19 @@ public final class ManualChecks {
                         java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
                     Path relative = source.relativize(file);
                     Path to = target.resolve(relative.toString());
-                    if (!attrs.isSymbolicLink() && shared(relative, inner)) {
+                    if (skipped(relative, inner)) {
+                        return java.nio.file.FileVisitResult.CONTINUE;
+                    }
+                    if (attrs.isSymbolicLink()) {
+                        try {
+                            Files.createSymbolicLink(to, linkTarget(Files.readSymbolicLink(file), source, target));
+                            counts[1]++;
+                            return java.nio.file.FileVisitResult.CONTINUE;
+                        } catch (IOException | UnsupportedOperationException e) {
+                            // Windows without the right to make links: copy what it points to instead.
+                        }
+                    }
+                    if (shared(relative, inner)) {
                         try {
                             Files.createLink(to, file);
                             counts[0]++;
@@ -844,8 +960,7 @@ public final class ManualChecks {
                             // Another disk, or a file system without hard links: copy instead.
                         }
                     }
-                    Files.copy(file, to, java.nio.file.LinkOption.NOFOLLOW_LINKS,
-                            java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+                    Files.copy(file, to, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
                     counts[1]++;
                     counts[2] += attrs.size();
                     return java.nio.file.FileVisitResult.CONTINUE;
@@ -886,8 +1001,13 @@ public final class ManualChecks {
             try (var channel = java.nio.channels.FileChannel.open(lock, java.nio.file.StandardOpenOption.WRITE);
                     var held = channel.tryLock()) {
                 return held == null;
-            } catch (java.nio.channels.OverlappingFileLockException | IOException e) {
-                return true; // held in this very program (a test), or not even writable: treat as in use
+            } catch (java.nio.channels.OverlappingFileLockException e) {
+                return true; // held by this very program (a test)
+            } catch (IOException e) {
+                // Not an Eclipse at work but a lock file this program may not open: say so, not "close it".
+                fail("cannot check whether an Eclipse runs in " + workspace + ": " + lock + " cannot be opened ("
+                        + e.getMessage() + "). Fix its permissions, or delete it if no Eclipse uses the workspace");
+                return true;
             }
         }
 
@@ -907,20 +1027,29 @@ public final class ManualChecks {
         }
 
         /**
-         * Warns when the ZIP may not hold the code under test: it is older than the last commit that
-         * changed the plug-in or the feature, or those folders have changes not committed. A warning,
+         * Warns when the ZIP may not hold the code under test: a file of the plug-in or the feature
+         * changed after it was built. The files are what git knows there, committed or not, minus what
+         * it ignores (such as {@code target/}): {@code git ls-files --cached --others --exclude-standard}.
+         * File times, not commit times, are compared, since a rebase moves commit times forward and an
+         * amend can keep them back, while an edit or a checkout always sets the file's time. A warning,
          * not a stop: a card about something else can run on an older build.
          */
         private static void warnIfStale(Path zip) throws IOException, InterruptedException {
-            String[] built = { "plugins", "features" };
-            String last = git("log", "-1", "--format=%ct", "--", built[0], built[1]).strip();
-            boolean older = !last.isEmpty() && Files.getLastModifiedTime(zip).toMillis() / 1000 < Long.parseLong(last);
-            boolean uncommitted = !git("status", "--porcelain", "--", built[0], built[1]).isBlank();
-            if (older || uncommitted) {
-                System.out.println("Warning: " + zip.getFileName() + " may not hold the code under test ("
-                        + (older ? "older than the last commit to plugins/ or features/" : "uncommitted changes")
-                        + "). Rebuild it with ./mvnw verify -DskipTests.");
+            List<Path> files = git("ls-files", "--cached", "--others", "--exclude-standard", "--", "plugins", "features")
+                    .lines().filter(l -> !l.isBlank()).map(Path::of).toList();
+            Optional<Path> newer = newerThan(Files.getLastModifiedTime(zip).toMillis(), files);
+            newer.ifPresent(file -> System.out.println("Warning: " + zip.getFileName() + " may not hold the code"
+                    + " under test (" + file + " changed after it was built). Rebuild it with ./mvnw verify -DskipTests."));
+        }
+
+        /** The first of {@code files} changed after {@code built} (milliseconds), if any; missing files are skipped. */
+        static Optional<Path> newerThan(long built, List<Path> files) throws IOException {
+            for (Path file : files) {
+                if (Files.isRegularFile(file) && Files.getLastModifiedTime(file).toMillis() > built) {
+                    return Optional.of(file);
+                }
             }
+            return Optional.empty();
         }
 
         private static String sha256(Path file) throws IOException {

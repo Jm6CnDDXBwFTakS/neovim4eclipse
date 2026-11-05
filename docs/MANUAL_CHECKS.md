@@ -54,14 +54,16 @@ Build the version under test first: `./mvnw verify -DskipTests` makes the update
   to yours (the same bytes under a second name), so the copy takes a few hundred MB at most, not the 1 GB or
   more of a whole Eclipse, and a few seconds. Most of what is copied is what lies outside those
   two folders, such as a Node.js that a plug-in unpacked into the Eclipse (about 200 MB), and
-  `configuration/`, which Eclipse writes to. On another disk than your Eclipse, the files are
-  copied instead. An Eclipse at another place (another `--eclipse`) replaces the copy, after a
-  question.
+  `configuration/`, which Eclipse writes to (without its OSGi cache, which the copy rebuilds).
+  On another disk than your Eclipse, the files are copied instead. The folder copied must be an
+  Eclipse (an `eclipse.ini` and `plugins/`): if `eclipse` on `PATH` is a script that starts one,
+  name the real program with `--eclipse`. An Eclipse at another place (another `--eclipse`)
+  replaces the copy, after a question.
 - **The install.** p2's *director*, Eclipse's installer without a window, installs the newest ZIP
   into the copy, replacing the build it had: the same as *Help → Install New Software → Add… →
   Archive…*, in about two seconds. `--zip <file>` names another ZIP. A ZIP already installed (the
-  same SHA-256) is not installed again. `launch` warns when the ZIP is older than the last commit
-  to `plugins/` or `features/`, or those folders have uncommitted changes.
+  same SHA-256) is not installed again. `launch` warns when a file in `plugins/` or `features/`,
+  committed or not, changed after the ZIP was built.
 - **While a checks' Eclipse runs,** `launch` changes nothing it uses: it will not install into
   the copy, empty `xdg` for a `fresh` card (its Neovim may run from there), or start a second
   Eclipse in the same workspace. Close it first. (`launch` finds it by the lock Eclipse keeps in
