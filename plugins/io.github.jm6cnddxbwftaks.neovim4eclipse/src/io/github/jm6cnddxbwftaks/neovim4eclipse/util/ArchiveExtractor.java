@@ -115,14 +115,28 @@ public final class ArchiveExtractor {
             long size = octal(header, 124, 12);
             int mode = (int) octal(header, 100, 8);
             char type = (char) header[156];
+            // Headers that describe the next entry. Some tar writers give one entry both a GNU "L"
+            // and a PAX "x" header, one after the other; the name waits for the entry itself, so
+            // neither header takes the other's. A PAX path wins, as in GNU tar; a PAX header
+            // without one keeps an earlier "L" name.
+            if (type == 'x') {
+                String path = paxPath(readData(in, size));
+                longName = path != null ? path : longName;
+                continue;
+            }
+            if (type == 'L') {
+                longName = string(readData(in, size), 0, (int) size);
+                continue;
+            }
+            if (type == 'g') {
+                skip(in, size); // global PAX header: nothing the extractor needs
+                continue;
+            }
             if (longName != null) {
                 name = longName;
                 longName = null;
             }
             switch (type) {
-                case 'x' -> longName = paxPath(readData(in, size));
-                case 'L' -> longName = string(readData(in, size), 0, (int) size);
-                case 'g' -> skip(in, size); // global PAX header: nothing the extractor needs
                 case '5' -> {
                     unpacker.folder(name);
                     skip(in, size);

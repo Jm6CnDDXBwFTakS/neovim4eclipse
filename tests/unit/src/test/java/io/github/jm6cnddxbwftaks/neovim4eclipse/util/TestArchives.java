@@ -52,6 +52,16 @@ final class TestArchives {
             return entry("ignored-short-name", '0', 0644, text.getBytes(StandardCharsets.UTF_8), null);
         }
 
+        /**
+         * A file with a GNU long-name header ({@code L}, the name as its data) and then a PAX header
+         * ({@code x}) holding only an mtime, as some tar writers give one entry both.
+         */
+        Tar gnuLongNameThenPaxFile(String name, String text) throws IOException {
+            entry("././@LongLink", 'L', 0644, (name + "\0").getBytes(StandardCharsets.UTF_8), null);
+            entry("PaxHeaders/x", 'x', 0644, "20 mtime=1700000000\n".getBytes(StandardCharsets.UTF_8), null);
+            return entry("ignored-short-name", '0', 0644, text.getBytes(StandardCharsets.UTF_8), null);
+        }
+
         private Tar entry(String name, char type, int mode, byte[] data, String link) throws IOException {
             byte[] h = new byte[512];
             put(h, 0, 100, name);
