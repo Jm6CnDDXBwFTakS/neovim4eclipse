@@ -3,6 +3,7 @@
 
 package neovim;
 
+import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -32,8 +33,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimVersion;
  * start, the version {@code nvim --version} reports, the swap into place. Calling the installer
  * itself, not a copy of its steps, means a step it gains later is checked here too.
  *
- * <p>A Neovim of another platform cannot run here, so for those its version is taken from the
- * data file and the rest is checked; all six archives are installed, on any machine.
+ * <h2>Which archives, on which machine</h2>
+ * A Neovim of another platform cannot run here, so its version is taken from the data file and
+ * the rest is checked. Unpacking is faithful only on a file system like the archive's own:
+ * macOS and Windows ignore case in file names, and Windows limits a path to 260 characters, so a
+ * Linux archive could fail there for a reason its users never meet. On Linux all six archives are
+ * installed; on macOS or Windows only those of the same system, and the others are only hashed,
+ * with a note to run the tool on Linux (or trust CI's install) for them.
  *
  * <p>A separate program, run with its own class path, because the tool itself runs from source
  * without the plug-in (see {@code release/Release.java}). Exit status 0 when every check passed.
@@ -60,7 +66,12 @@ public final class ArchiveCheck {
             NeovimPlatform platform = archive.platform();
             Path file = archives.resolve(archive.asset());
             String name = platform.code() + " " + archive.asset();
-            ok &= install(file, release, platform, work, here.filter(platform::equals).isPresent(), name);
+            boolean sameSystem = here.isPresent() && here.get().os().equals(platform.os());
+            if (!sameSystem && here.isPresent() && !here.get().os().equals("Linux")) {
+                ok &= hashOnly(archive, file, name);
+            } else {
+                ok &= install(file, release, platform, work, here.filter(platform::equals).isPresent(), name);
+            }
         }
         System.exit(ok ? 0 : 1);
     }
@@ -86,6 +97,19 @@ public final class ArchiveCheck {
         } catch (RuntimeException e) {
             return fail(name + ": Get Neovim's installer refuses it: " + e.getMessage());
         }
+    }
+
+    /** For an archive unpacked faithfully only on its own system: its size and SHA-256 against the data file. */
+    private static boolean hashOnly(NeovimRelease.Archive archive, Path file, String name) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            return fail(name + ": not downloaded (" + file + ")");
+        }
+        if (Files.size(file) != archive.size() || !archive.sha256().equals(NeovimInstaller.sha256(file, InstallProgress.NONE))) {
+            return fail(name + ": its size or SHA-256 differs from the data file");
+        }
+        System.out.println("ok: " + name + ": size and SHA-256 as in the data file; unpacked only on its own system"
+                + " (run the tool on Linux to install every archive, or trust CI's install of it)");
+        return true;
     }
 
     private static boolean fail(String message) {
