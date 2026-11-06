@@ -163,6 +163,8 @@ public final class LikeCi {
     /**
      * Whether {@code program} is on {@code PATH}, as the shell would find it: on Windows also with
      * each of {@code PATHEXT}'s extensions ({@code shellcheck} is {@code shellcheck.exe} there).
+     * {@code releng/tools/common/Shell.java} has a copy (this file runs alone, on Java 21, and
+     * cannot use it); a fix to one belongs in both.
      */
     private static boolean onPath(String program) {
         List<String> names = new ArrayList<>(List.of(program));
