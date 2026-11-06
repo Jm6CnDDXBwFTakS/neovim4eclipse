@@ -65,6 +65,15 @@ class RepositoryFilesTest {
     }
 
     @Test
+    void aTreeInsideAnotherRepositoryIsWalked(@TempDir Path dir) throws Exception {
+        assumeTrue(git(dir, "init", "-q"), "git is not installed");
+        Path tree = dir.resolve("unpacked");
+        checkout(tree); // a source tree without .git of its own, inside the repository at dir
+        assertEquals(Optional.empty(), RepositoryFiles.fromGit(tree), "git would answer for the outer repository");
+        assertEquals(RepositoryFiles.walk(tree), RepositoryFiles.list(tree));
+    }
+
+    @Test
     void withoutGitTheFoldersAreWalkedWithoutBuildOutputOrCopies(@TempDir Path dir) throws Exception {
         checkout(dir);
         Files.delete(dir.resolve("gone.md"));
