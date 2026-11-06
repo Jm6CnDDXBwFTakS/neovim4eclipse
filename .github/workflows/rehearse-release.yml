@@ -5,7 +5,8 @@
 # the steps that otherwise run only when a v* tag is pushed (release.yml, update-site.yml), on the
 # branch's own commit. Every earlier release failure was in those steps (zip(1) reading $ZIP, a
 # downloaded artifact unpacked, an artifact name taken twice), and they only show at the tag. Run
-# it once before each release, after the branch's Build passed (CONTRIBUTING.md, "Releasing"),
+# it once before each release, after the local tests passed (the Release tool's promote step does;
+# CONTRIBUTING.md, "Releasing"),
 # by pushing the release branch's commit to a rehearse/ branch, then deleting that branch:
 #   git push origin release/0.2.2:rehearse/0.2.2
 #   git push origin --delete rehearse/0.2.2
@@ -15,9 +16,11 @@
 #
 # What it rehearses, job by job, and what differs from the release:
 #   1. version:  the version from the root pom.xml (0.2.2-SNAPSHOT gives 0.2.2), the CHANGELOG
-#                section it will have (here the Unreleased one, which is renamed at the release),
+#                section it will have (the version's own once it is dated, as the Release tool's
+#                prepare step does before it rehearses; before that, the Unreleased one),
 #                and the pinned Neovim archives (UpdateNeovimDownloads --check), as release.yml.
-#   2. build:    build.yml at that version, the tests skipped (the branch's Build ran them).
+#   2. build:    build.yml at that version, the tests skipped (they ran on the developer's machine,
+#                and run again in the Build on main that comes next).
 #   3. sign:     releng/sign.sh with a throwaway key made in the job, in place of the project's,
 #                then the publish job's checks and the release notes. Nothing is published.
 #   4. site:     the update site twice, as update-site.yml builds it: from every published release
@@ -54,6 +57,7 @@ jobs:
       contents: read   # for the checkout
     outputs:
       version: ${{ steps.version.outputs.version }}
+      notes: ${{ steps.notes.outputs.section }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: version
@@ -66,10 +70,18 @@ jobs:
           fi
           echo "Rehearsing the release of $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-      # The release reads the section named after the version; before the release it is still
-      # "Unreleased" (CONTRIBUTING.md, "Releasing", step 1), so that one must not be empty.
-      - name: Check that CHANGELOG.md has notes for it
-        run: releng/release-notes.sh Unreleased > /dev/null
+      # The release reads the section named after the version. Rehearsed after the changelog is
+      # dated (the Release tool's prepare step comes before its rehearsal), that section exists;
+      # before, it is still "Unreleased". Whichever it is must not be empty.
+      - id: notes
+        name: Check that CHANGELOG.md has notes for it
+        env:
+          VERSION: ${{ steps.version.outputs.version }}   # through env, never pasted into the script
+        run: |
+          if releng/release-notes.sh "$VERSION" > /dev/null 2>&1; then section=$VERSION; else section=Unreleased; fi
+          releng/release-notes.sh "$section" > /dev/null
+          echo "The release notes are the section $section"
+          echo "section=$section" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -87,7 +99,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.version.outputs.version }}
-      skip-tests: true   # the branch's own Build ran them; this rehearses what follows
+      skip-tests: true   # the Build on main tests this commit next; this rehearses what follows it
 
   sign:
     name: Sign with a throwaway key
@@ -128,6 +140,8 @@ jobs:
             releng/sign.sh "unsigned/$SITE_ZIP" "signed/$SITE_ZIP" signed/rehearsal-public.asc
       # The checks the release's publish job makes before it creates the release.
       - name: Check it as the publish job would
+        env:
+          NOTES: ${{ needs.version.outputs.notes }}
         run: |
           zip="signed/$SITE_ZIP"
           unzip -l "$zip" | grep -c 'content\.jar$' > /dev/null || { echo "::error::$zip is not the update site"; exit 1; }
@@ -135,7 +149,7 @@ jobs:
           unzip -p "$RUNNER_TEMP/artifacts.jar" artifacts.xml | grep -c "name='pgp.signatures'" > /dev/null \
             || { echo "::error::$zip is not signed"; exit 1; }
           releng/verify-zip.sh "$zip" signed/rehearsal-public.asc
-          releng/release-notes.sh Unreleased > "$RUNNER_TEMP/notes.md"
+          releng/release-notes.sh "$NOTES" > "$RUNNER_TEMP/notes.md"
           echo "The release notes would be:"; cat "$RUNNER_TEMP/notes.md"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
