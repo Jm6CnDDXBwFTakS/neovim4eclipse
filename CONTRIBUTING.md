@@ -566,7 +566,8 @@ waits for an answer: it stops before the first side effect and prints the comman
 release 0.2.3, on `release/0.2.3`:
 
 1. **check**: the branch is clean and not behind origin, *Unreleased* in
-   [CHANGELOG.md](CHANGELOG.md) lists the changes, the six pinned Neovim archives still match
+   [CHANGELOG.md](CHANGELOG.md) lists the changes, the six pinned Neovim archives still match (downloaded in
+   full, so at most once a day for the same pins)
    (and a line when Neovim has a newer release: move the pin once it is a week old,
    [docs/UPGRADING.md](docs/UPGRADING.md), "Following Neovim's releases"). It lists the manual
    checks this release needs ([docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md)); do them. Then it

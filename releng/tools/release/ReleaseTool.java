@@ -12,11 +12,15 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -221,10 +225,7 @@ public final class ReleaseTool {
         ok("CHANGELOG.md has the release's changes");
 
         System.out.println();
-        if (shell.show(Shell.java("releng/UpdateNeovimDownloads.java", "--check")) != 0) {
-            throw new ToolFailure("the pinned Neovim archives do not match their hashes (see above); docs/UPGRADING.md, \"Neovim\"");
-        }
-        ok("the pinned Neovim archives match");
+        checkNeovimPins();
         newerNeovim();
 
         System.out.println();
@@ -251,6 +252,50 @@ public final class ReleaseTool {
         System.out.println("On macOS and Windows, test the same commit once it is pushed (CI's macOS and Windows jobs are the gate):");
         System.out.println("  git fetch origin && git switch --detach " + head.substring(0, 12));
         System.out.println("  java releng/tools/ci/LikeCi.java " + tests);
+    }
+
+    /** How long a passed check of the pinned archives counts for the same pins. */
+    private static final Duration PINS_CHECK_VALID = Duration.ofHours(24);
+
+    /**
+     * Checks that the six pinned Neovim archives on GitHub still match their sizes and hashes
+     * ({@code UpdateNeovimDownloads.java --check}, which downloads each one in full), unless that
+     * check passed for the same pins in the last day: {@code check} is often run several times
+     * for one release, after each fix, and the archives of one pin do not change. The record is
+     * {@code target/release-tool/neovim-checked} (the pins file's SHA-256 and the time); delete it
+     * to check again. The Release workflow's first job checks the archives anew at the tag anyway.
+     */
+    private void checkNeovimPins() {
+        Path record = root.resolve("target/release-tool/neovim-checked");
+        String pins;
+        try {
+            pins = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(NEOVIM_PINS))));
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new ToolFailure("cannot read " + NEOVIM_PINS + ": " + e.getMessage());
+        }
+        try {
+            String[] last = Files.isRegularFile(record) ? Files.readString(record).strip().split(" ") : new String[0];
+            if (last.length == 2 && last[0].equals(pins) && last[1].matches("\\d+")) {
+                Instant when = Instant.ofEpochSecond(Long.parseLong(last[1]));
+                if (Duration.between(when, Instant.now()).compareTo(PINS_CHECK_VALID) < 0) {
+                    ok("the pinned Neovim archives matched at " + when + ", and the pins are unchanged (delete " + root.relativize(record)
+                            + " to check again)");
+                    return;
+                }
+            }
+        } catch (IOException e) {
+            // no usable record: check
+        }
+        if (shell.show(Shell.java("releng/UpdateNeovimDownloads.java", "--check")) != 0) {
+            throw new ToolFailure("the pinned Neovim archives do not match their hashes (see above); docs/UPGRADING.md, \"Neovim\"");
+        }
+        try {
+            Files.createDirectories(record.getParent());
+            Files.writeString(record, pins + " " + Instant.now().getEpochSecond() + "\n");
+        } catch (IOException e) {
+            System.out.println("note: could not record the check in " + record + ": " + e.getMessage());
+        }
+        ok("the pinned Neovim archives match");
     }
 
     /** Prints a line when Neovim has a release newer than the pinned one (docs/UPGRADING.md, "Following Neovim's releases"). */
