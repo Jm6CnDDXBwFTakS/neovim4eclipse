@@ -33,6 +33,7 @@ class LikeCiTest {
     @Test
     void theWorkflowRunsLikeCisCommands() throws IOException {
         String build = buildYml();
+        assertTrue(build.contains(LikeCi.SHELLCHECK), "build.yml no longer runs: " + LikeCi.SHELLCHECK);
         assertTrue(build.contains(LikeCi.INSTALL), "build.yml no longer installs Neovim with: " + LikeCi.INSTALL);
         assertTrue(build.contains("./mvnw " + LikeCi.UI), "build.yml no longer runs: ./mvnw " + LikeCi.UI);
         assertTrue(build.contains("./mvnw " + LikeCi.INTEGRATION), "build.yml no longer runs: ./mvnw " + LikeCi.INTEGRATION);

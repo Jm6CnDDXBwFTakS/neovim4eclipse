@@ -100,6 +100,11 @@ jobs:
       # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
       # test"); -Pui adds the UI tests, which are off by default because they open a window. They
       # need an X display: xvfb-run provides a virtual one.
+      # The release scripts run only at a tag (signing, the update site), so a mistake in one shows
+      # up late; shellcheck (on the runner image) reads them for the usual shell traps in a second:
+      # unquoted variables, bash syntax under #!/bin/sh, GNU-only flags. LikeCi runs the same.
+      - name: Lint the shell scripts
+        run: shellcheck releng/*.sh mvnw
       # xvfb-run comes with the runner image today; installed if a new image drops it. Its screen is
       # given, not left to the xvfb-run script's default, which differs between versions and decides
       # how much room the UI tests' windows get. java releng/tools/ci/LikeCi.java uses the same.
