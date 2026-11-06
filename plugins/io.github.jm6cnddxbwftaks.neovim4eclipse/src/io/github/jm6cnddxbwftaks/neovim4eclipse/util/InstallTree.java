@@ -50,7 +50,7 @@ import java.util.TreeMap;
  *       | sed 's|^\./||' | LC_ALL=C sort | tr '\n' '\0' | xargs -0 sha256sum | sha256sum
  * </pre>
  * ({@code shasum -a 256} in place of both {@code sha256sum} on macOS; in Git Bash on Windows,
- * whose {@code sha256sum} writes {@code <hash> *<path>}, add {@code | sed 's/ \*/  /'} before the
+ * whose {@code sha256sum} writes {@code <hash> *<path>}, add {@code | sed 's/ [*]/  /'} before the
  * last {@code sha256sum}, as {@code releng/install-neovim.sh} does). The four {@code !} tests
  * skip the files of point 1 that a file manager may have added since the plug-in last deleted them
  * (Finder writes a {@code .DS_Store} as soon as it shows the folder).
