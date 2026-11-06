@@ -26,7 +26,8 @@ java releng/tools/checks/ManualChecks.java json             # the cards as JSON,
 
 - **`due`** lists the cards whose source files changed since the last release tag (`v*`), and the
   cards marked `always`. A card about macOS's input method does not come up in a release that did
-  not touch the `:` box. `--since <ref>` compares with another commit; `--all` lists every card.
+  not touch the `:` box. A POM, manifest or feature whose only change is the version number (each
+  release branch starts by setting it) counts for no card. `--since <ref>` compares with another commit; `--all` lists every card.
 - **`setup`** creates the folders under `~/var/n4e-checks` (`--root <folder>` for another place): a
   project `n4e-alpha` to import into Eclipse, the workspaces `ws1` and `ws2`, and `xdg`, a plug-in
   folder of the checks' own.

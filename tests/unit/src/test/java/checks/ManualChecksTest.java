@@ -72,6 +72,24 @@ class ManualChecksTest {
             """;
 
     @Test
+    void aBuildFileThatOnlyChangedItsVersionCountsForNoCard() {
+        String bump = """
+                --- a/pom.xml
+                +++ b/pom.xml
+                @@ -11 +11 @@
+                -  <version>0.2.2-SNAPSHOT</version>
+                +  <version>0.2.3-SNAPSHOT</version>
+                """;
+        assertTrue(ManualChecks.onlyTheVersionChanged(bump));
+        assertTrue(ManualChecks.onlyTheVersionChanged("-Bundle-Version: 0.2.2.qualifier\n+Bundle-Version: 0.2.3.qualifier\n"));
+        assertFalse(ManualChecks.onlyTheVersionChanged(bump + "+  <tycho.version>5.0.1</tycho.version>\n"), "a line added");
+        assertFalse(ManualChecks.onlyTheVersionChanged("-  <eclipse-repo.url>…/2024-12</eclipse-repo.url>\n"
+                + "+  <eclipse-repo.url>…/2025-03</eclipse-repo.url>\n"), "not a version number");
+        assertFalse(ManualChecks.onlyTheVersionChanged(""), "no change at all is not a version change");
+        assertTrue(ManualChecks.VERSIONED_FILES.containsAll(List.of("pom.xml", "MANIFEST.MF", "feature.xml")));
+    }
+
+    @Test
     void cardsAreReadWithTheirFactsStepsAndExpectedResult() {
         List<Card> cards = ManualChecks.parse(SAMPLE);
         assertEquals(List.of("gn-one", "rl-one"), cards.stream().map(Card::id).toList());
