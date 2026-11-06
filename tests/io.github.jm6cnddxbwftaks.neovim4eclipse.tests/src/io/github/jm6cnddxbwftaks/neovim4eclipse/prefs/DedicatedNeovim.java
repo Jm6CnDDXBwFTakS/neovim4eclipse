@@ -27,7 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProcessorProbe;
  * only one case, and a test written on one failed on the other.
  *
  * <p>"Installed" is a copy of the release folder that {@code -Dnvim.path} points into
- * ({@code <release>/bin/nvim}): in CI and with {@code java releng/tools/LikeCi.java}, the pinned
+ * ({@code <release>/bin/nvim}): in CI and with {@code java releng/tools/ci/LikeCi.java}, the pinned
  * release, whose files pass the plug-in's check ({@link PluginNeovim#verified}). The copy goes to
  * {@code neovim/<code>/} of {@link PluginFolders#neovimFolder()}, which the test pom points under
  * {@code target/} (XDG_DATA_HOME). Nothing is changed outside {@code test.isolated.root}: the

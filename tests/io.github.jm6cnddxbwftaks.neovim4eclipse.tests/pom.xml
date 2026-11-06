@@ -104,7 +104,7 @@
                 <requireProperty>
                   <property>nvim.path</property>
                   <regex>.+</regex>
-                  <regexMessage>The UI tests need -Dnvim.path=/path/to/bin/nvim (the program, e.g. a pinned release from java releng/tools/LikeCi.java): they use a data folder of their own, without the dedicated Neovim. See CONTRIBUTING.md, "Your Neovim config and the UI tests".</regexMessage>
+                  <regexMessage>The UI tests need -Dnvim.path=/path/to/bin/nvim (the program, e.g. a pinned release from java releng/tools/ci/LikeCi.java): they use a data folder of their own, without the dedicated Neovim. See CONTRIBUTING.md, "Your Neovim config and the UI tests".</regexMessage>
                 </requireProperty>
               </rules>
             </configuration>

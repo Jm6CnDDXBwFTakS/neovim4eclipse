@@ -181,7 +181,7 @@
                 <requireProperty>
                   <property>nvim.path</property>
                   <regex>.+</regex>
-                  <regexMessage>The integration tests need -Dnvim.path=/path/to/bin/nvim (the program, e.g. a pinned release from java releng/tools/LikeCi.java): this module uses a data folder of its own, without the dedicated Neovim.</regexMessage>
+                  <regexMessage>The integration tests need -Dnvim.path=/path/to/bin/nvim (the program, e.g. a pinned release from java releng/tools/ci/LikeCi.java): this module uses a data folder of its own, without the dedicated Neovim.</regexMessage>
                 </requireProperty>
               </rules>
             </configuration>
