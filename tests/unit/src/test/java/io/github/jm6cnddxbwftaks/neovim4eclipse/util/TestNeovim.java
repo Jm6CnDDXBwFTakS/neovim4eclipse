@@ -4,16 +4,14 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
- * The Neovim the integration tests start: {@code -Dnvim.path=...} if given (a folder or the
- * absolute path of the program, as in the preference; a command name is refused), else blank.
- * Blank is searched exactly as the plug-in searches an empty preference
- * ({@link NvimExecutable#resolve}): the plug-in's own Neovim first
- * ({@code ~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim}), then {@code PATH}, then the
- * usual install folders. So a Neovim installed with Get Neovim needs no {@code -D}.
+ * The Neovim the integration tests start: {@code -Dnvim.path=...}, the absolute path of the program
+ * ({@code <release>/bin/nvim}). The integration, timeoutReliant and all profiles require it (the
+ * enforcer rule in this module's {@code pom.xml}): these tests run in a data folder of their own
+ * under {@code target/}, without the dedicated Neovim a developer's machine has, as on a CI runner.
  *
- * <p>Example: {@code ./mvnw test -f tests/unit/pom.xml -Pintegration} finds
- * {@code ~/.local/share/neovim4eclipse-plugin/neovim/lx/bin/nvim}; with
- * {@code -Dnvim.path=/opt/nvim-0.13.0} that one is used instead.
+ * <p>Example: {@code ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/opt/nvim/bin/nvim},
+ * or {@code java releng/tools/LikeCi.java}, which installs the pinned release under
+ * {@code target/} and passes it.
  */
 public final class TestNeovim {
 
@@ -21,6 +19,18 @@ public final class TestNeovim {
     public static final String PATH = configured(System.getProperty("nvim.path"));
 
     private TestNeovim() {
+    }
+
+    /**
+     * Stops the test if there is no Neovim to start: a failure, not a skip, when {@code -Dnvim.path}
+     * names one that is not there (a typo or a missing download would otherwise give a green run
+     * with nothing tested); a skip, with the reason, only when it is not set at all (an IDE run of
+     * one test class).
+     */
+    public static void require() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(!PATH.isEmpty(), "no -Dnvim.path given");
+        org.junit.jupiter.api.Assertions.assertTrue(NvimExecutable.looksAvailable(PATH),
+                "no Neovim program at -Dnvim.path=" + PATH);
     }
 
     /**

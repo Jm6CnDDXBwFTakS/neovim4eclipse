@@ -6,7 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,7 +23,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
@@ -56,7 +54,7 @@ class NeovimSessionIntegrationTest {
     }
 
     private static NeovimSession start(List<String> args) throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        TestNeovim.require();
         return NeovimSession.start(NVIM, args);
     }
 
@@ -638,7 +636,7 @@ class NeovimSessionIntegrationTest {
      */
     @Test
     void theConfigCanTellItRunsInsideEclipse() throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        TestNeovim.require();
         Path config = Files.createTempFile("init", ".lua");
         try {
             Files.writeString(config,

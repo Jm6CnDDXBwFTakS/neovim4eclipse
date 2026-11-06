@@ -61,7 +61,7 @@ class NeovimInstallerProcessIntegrationTest {
     @Test
     void aNeovimAnotherProgramRunsFromTheFolderHoldsTheSwapUntilItEnds() throws Exception {
         Path program = NvimExecutable.locate(NvimExecutable.resolve(TestNeovim.PATH));
-        assumeTrue(program != null, "nvim not available");
+        assertTrue(program != null, "no Neovim program at -Dnvim.path=" + TestNeovim.PATH);
         Path realHome = program.getParent().getParent(); // <home>/bin/nvim
         assumeTrue(isReleaseFolder(realHome), "the tests' Neovim is not in a folder of its own: " + program);
         Path folder = tmp.resolve("neovim");

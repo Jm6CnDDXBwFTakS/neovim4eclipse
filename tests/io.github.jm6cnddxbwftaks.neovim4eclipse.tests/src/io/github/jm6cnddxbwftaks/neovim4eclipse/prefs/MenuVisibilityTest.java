@@ -106,14 +106,52 @@ class MenuVisibilityTest {
         } finally {
             neovim.notifyListeners(SWT.Hide, new Event()); // closed again, also after a failure
         }
-        // Get Neovim shows only while the plug-in's own Neovim is missing or old (GetNeovimOffer),
-        // which depends on the machine's data folder: checked when it is there, not required.
+        // Get Neovim shows only while the plug-in's own Neovim is missing or old (GetNeovimOffer);
+        // getNeovimIsInTheMenuOnlyWhileTheDedicatedNeovimIsMissing tests both cases. Here only its letter.
         Character getNeovim = letters.remove("Get Neovim...");
         if (getNeovim != null) {
             assertEquals('g', getNeovim, "Get Neovim's letter");
         }
         assertEquals(Map.of("Neovim Mode", 'v', "Attach Neovim", 'a', "Restart Neovim...", 'r',
                 "Welcome...", 'w', "Preferences...", 'n'), letters);
+    }
+
+    /**
+     * Get Neovim is in the menu only while the plug-in's own Neovim is missing or fails its check
+     * ({@code GetNeovimOffer}). Both cases on every machine: the tests' data folder is their own,
+     * and {@link DedicatedNeovim} puts the dedicated Neovim there or takes it away.
+     */
+    @Test
+    void getNeovimIsInTheMenuOnlyWhileTheDedicatedNeovimIsMissing() {
+        waitUntil("the Neovim menu is shown", this::neovimMenuShown);
+        DedicatedNeovim.remove();
+        waitUntil("Get Neovim in the menu, with no dedicated Neovim", () -> menuLabels().contains("Get Neovim..."));
+        DedicatedNeovim.install();
+        try {
+            waitUntil("no Get Neovim in the menu, with the dedicated Neovim installed",
+                    () -> !menuLabels().contains("Get Neovim..."));
+        } finally {
+            DedicatedNeovim.remove();
+        }
+    }
+
+    /** The Neovim menu's entries, without mnemonic marks and key bindings, as the menu shows them now. */
+    private static List<String> menuLabels() {
+        MenuItem item = neovimMenuItem(menuBar());
+        assertNotNull(item, "the Neovim menu in the bar");
+        Menu neovim = item.getMenu();
+        neovim.notifyListeners(SWT.Show, new Event()); // fills the menu, as opening it does
+        List<String> labels = new ArrayList<>();
+        try {
+            for (MenuItem entry : neovim.getItems()) {
+                if ((entry.getStyle() & SWT.SEPARATOR) == 0) {
+                    labels.add(entry.getText().split("\t")[0].replace("&", ""));
+                }
+            }
+        } finally {
+            neovim.notifyListeners(SWT.Hide, new Event());
+        }
+        return labels;
     }
 
     /** The active workbench window's menu bar. */

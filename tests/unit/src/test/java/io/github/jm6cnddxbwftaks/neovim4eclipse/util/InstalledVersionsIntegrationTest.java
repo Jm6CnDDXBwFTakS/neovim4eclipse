@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,7 +28,7 @@ class InstalledVersionsIntegrationTest {
     @Test
     void readsTheVersionOfTheTestNeovim() {
         Path program = NvimExecutable.locate(NvimExecutable.resolve(NVIM));
-        assumeTrue(program != null, "nvim not available");
+        assertTrue(program != null, "no Neovim program at -Dnvim.path=" + TestNeovim.PATH);
         NeovimVersion version = InstalledVersions.of(program);
         assertNotNull(version, "no version from " + program + " --version");
         assertTrue(version.isSupported(), "the tests' Neovim " + version + " is older than " + NeovimVersion.MINIMUM);

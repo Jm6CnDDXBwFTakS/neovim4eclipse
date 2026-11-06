@@ -86,6 +86,31 @@
           </execution>
         </executions>
       </plugin>
+      <!-- The UI tests run in a data folder of their own (see environmentVariables below), where no
+           dedicated Neovim is installed, so a run without -Dnvim.path would start no Neovim and
+           skip every end-to-end test while reporting success. Stop it at once instead. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>nvim-path-given</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <skip>${nvim.optional}</skip>
+              <rules>
+                <requireProperty>
+                  <property>nvim.path</property>
+                  <regex>.+</regex>
+                  <regexMessage>The UI tests need -Dnvim.path=/path/to/bin/nvim (the program, e.g. a pinned release from java releng/tools/LikeCi.java): they use a data folder of their own, without the dedicated Neovim. See CONTRIBUTING.md, "Your Neovim config and the UI tests".</regexMessage>
+                </requireProperty>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <!-- The report. jacoco:report only knows its own module's classes, and the classes under test
            here are the plug-in's (this module only holds the tests), so the JaCoCo Ant task is used:
            it takes the plug-in's class and source folders explicitly. The report is
@@ -166,28 +191,36 @@
             <nvim.path>${nvim.path}</nvim.path>
             <!-- How long a test waits (EndToEndTestBase.TIMEOUT_MS); see testing/TestWait. -->
             <test.wait.seconds>${test.wait.seconds}</test.wait.seconds>
+            <!-- The folder no test may write outside of (testing/TestIsolation checks the data home
+                 against it, and DedicatedNeovim refuses to change a folder elsewhere). -->
+            <test.isolated.root>${project.build.directory}</test.isolated.root>
             <!-- Where ScreenshotCaptureTest writes its PNG files. -->
             <screenshots.dir>${project.build.directory}/screenshots</screenshots.dir>
           </systemProperties>
-          <!-- The test Eclipse starts Neovim as the plug-in does for real use, with no clean flag, so
-               Neovim would read the config of whoever runs the build (~/.config/nvim/init.lua, its
-               plug-ins, its saved registers and marks), and a personal setting could make a test pass
-               on one machine and fail on another. NVIM_APPNAME makes Neovim look for all of that
-               under another name, where there is nothing; the XDG folders put what Neovim writes
-               (and any config it would look for) under target/. XDG_DATA_HOME stays as it is: the
-               plug-in finds its own Neovim there (util/PluginFolders: the plug-in uses Neovim's data
-               home). So Neovim makes an empty data folder named after NVIM_APPNAME there; the name's
-               slash puts it inside the plug-in's own folder rather than beside it:
-               ~/.local/share/neovim4eclipse-plugin/tests, on Windows (where Neovim adds "-data")
-               %LOCALAPPDATA%\neovim4eclipse-plugin\tests-data. The whole test
-               Eclipse sees these variables, not only Neovim: on Linux, GTK and font caches land under
-               target/ too, which costs a little start-up time and nothing else. See CONTRIBUTING.md,
-               "Your Neovim config and the UI tests". -->
+          <!-- The test Eclipse runs in folders of its own, so a run on a developer's machine sees what
+               a CI runner sees, and changes nothing outside target/ (CONTRIBUTING.md, "Your Neovim
+               config and the UI tests"):
+               - NVIM_APPNAME: Neovim looks for its config under another name, where there is none,
+                 so no init.lua, plug-ins, saved registers or marks of whoever runs the build.
+               - XDG_CONFIG_HOME, XDG_STATE_HOME, XDG_CACHE_HOME: what Neovim writes (and any config
+                 it would look for) goes under target/.
+               - XDG_DATA_HOME: the plug-in's own folder too (util/PluginFolders follows Neovim's data
+                 home on every system, Windows included), so the dedicated Neovim the tests see is the
+                 one a test put there (prefs/DedicatedNeovim), never the developer's: a runner has none,
+                 and a test that read the real folder passed on one and failed on the other. The plug-in
+                 also cleans that folder up at every Neovim start (NeovimInstaller), which must not
+                 touch the real one. Hence -Dnvim.path is required (the enforcer rule below).
+               - LC_MESSAGES=C: Neovim's messages in English, which tests compare, whatever language
+                 the machine uses.
+               The whole test Eclipse sees these variables, not only Neovim: on Linux, GTK and font
+               caches land under target/ too, which costs a little start-up time and nothing else. -->
           <environmentVariables>
             <NVIM_APPNAME>neovim4eclipse-plugin/tests</NVIM_APPNAME>
             <XDG_CONFIG_HOME>${project.build.directory}/neovim-home/config</XDG_CONFIG_HOME>
             <XDG_STATE_HOME>${project.build.directory}/neovim-home/state</XDG_STATE_HOME>
             <XDG_CACHE_HOME>${project.build.directory}/neovim-home/cache</XDG_CACHE_HOME>
+            <XDG_DATA_HOME>${project.build.directory}/neovim-home/data</XDG_DATA_HOME>
+            <LC_MESSAGES>C</LC_MESSAGES>
           </environmentVariables>
           <!-- Which tests run, by JUnit tag: all but the "heavyJava" ones, unless the uiHeavyJava
                profile swaps the two properties (see the comment at the top). -->
@@ -204,6 +237,9 @@
     <!-- Empty: the test Eclipse runs the dedicated Neovim, as Eclipse does without the startup
          option -Dneovim4eclipse.nvim (see the nvim-path profile). -->
     <nvim.path></nvim.path>
+    <!-- Whether the run may go without -Dnvim.path: yes, unless a profile that starts Neovim is on
+         (ui, uiHeavyJava, timeoutReliant, screenshots, all), which sets it to ${skipTests}. -->
+    <nvim.optional>true</nvim.optional>
     <!-- -DskipTests sets it to true; the ui profile passes it on to ui.skip. -->
     <skipTests>false</skipTests>
     <!-- Whether the UI tests and their coverage report are skipped: yes, unless the ui profile is on. -->
@@ -249,6 +285,7 @@
       <id>ui</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
+        <nvim.optional>${skipTests}</nvim.optional>
       </properties>
     </profile>
     <!-- ./mvnw verify -PuiHeavyJava: the test Eclipse also gets the Java development tools (the
@@ -260,6 +297,7 @@
       <id>uiHeavyJava</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
+        <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups>heavyJava</ui.groups>
         <ui.excludedGroups></ui.excludedGroups>
       </properties>
@@ -291,6 +329,7 @@
       <id>timeoutReliant</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
+        <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups>timeoutReliant</ui.groups>
         <ui.excludedGroups></ui.excludedGroups>
         <failIfNoTests>false</failIfNoTests>
@@ -302,6 +341,7 @@
       <id>screenshots</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
+        <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups>screenshots</ui.groups>
         <ui.excludedGroups></ui.excludedGroups>
       </properties>
@@ -347,6 +387,7 @@
       <id>all</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
+        <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups></ui.groups>
         <ui.excludedGroups>gallery,screenshots</ui.excludedGroups>
       </properties>

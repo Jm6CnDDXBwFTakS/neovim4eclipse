@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -67,7 +66,7 @@ class LuaScriptsInNeovimTest {
 
     @BeforeAll
     static void writeTheScripts() throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(TestNeovim.PATH), "nvim not available");
+        TestNeovim.require();
         nvim = NvimExecutable.resolve(TestNeovim.PATH);
         Files.createDirectories(WORK);
         module = WORK.resolve("scripts.lua");
