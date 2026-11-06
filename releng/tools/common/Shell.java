@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -123,6 +124,11 @@ public final class Shell {
      * anyway, LikeCi can use this class instead.
      */
     public static boolean onPath(String program) {
+        return which(program).isPresent();
+    }
+
+    /** The file {@link #onPath} finds for {@code program}, or empty. */
+    public static Optional<Path> which(String program) {
         List<String> names = new ArrayList<>(List.of(program));
         if (WINDOWS) {
             for (String ext : System.getenv().getOrDefault("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")) {
@@ -134,11 +140,37 @@ public final class Shell {
         for (String dir : System.getenv().getOrDefault("PATH", "").split(File.pathSeparator)) {
             for (String name : names) {
                 if (!dir.isEmpty() && Files.isRegularFile(Path.of(dir, name)) && Files.isExecutable(Path.of(dir, name))) {
-                    return true;
+                    return Optional.of(Path.of(dir, name).toAbsolutePath());
                 }
             }
         }
-        return false;
+        return Optional.empty();
+    }
+
+    /**
+     * The bash that runs the {@code releng} scripts, as an absolute path, or empty when there is
+     * none. On Linux and macOS the first {@code bash} on {@code PATH}. On Windows Git for Windows'
+     * own ({@code <Git>\bin\bash.exe}, found from {@code git --exec-path}), never a plain
+     * {@code bash}: Windows looks in {@code System32} before {@code PATH}, and with WSL installed
+     * that is WSL's {@code bash.exe}, which starts Linux and cannot read the Windows paths the
+     * scripts are given ({@code C:\...\neovim4eclipse-0.2.3.zip}).
+     */
+    public Optional<Path> bash() {
+        if (!WINDOWS) {
+            return which("bash");
+        }
+        Result exec = capture(List.of("git", "--exec-path")); // e.g. C:/Program Files/Git/mingw64/libexec/git-core
+        if (!exec.ok() || exec.out().isBlank()) {
+            return Optional.empty();
+        }
+        // git-core -> libexec -> mingw64 -> the Git folder
+        for (Path dir = Path.of(exec.out().strip()); dir != null; dir = dir.getParent()) {
+            Path candidate = dir.resolve("bin").resolve("bash.exe");
+            if (Files.isRegularFile(candidate)) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
     }
 
     /** A command as a person would type it: words with a space or quote in single quotes. */
