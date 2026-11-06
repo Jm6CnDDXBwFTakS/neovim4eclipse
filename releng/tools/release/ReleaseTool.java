@@ -721,8 +721,8 @@ public final class ReleaseTool {
         }
         System.err.println();
         System.err.println(what + " failed: " + run.url());
-        System.err.println("---- the failed jobs' last " + LOG_LINES + " log lines");
-        System.err.println(gh.failedLogTail(run, LOG_LINES));
+        System.err.println("---- what failed, from the failed jobs' logs (" + run.url() + " has all of them)");
+        System.err.println(gh.failedLogSummary(run, LOG_LINES));
         System.err.println("----");
         System.err.println("To recover:");
         System.err.println("  gh run rerun " + run.id() + " --failed      (" + recovery.get(0) + ")");

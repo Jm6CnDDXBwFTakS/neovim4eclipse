@@ -8,6 +8,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * GitHub Actions and Releases through the {@code gh} command (signed in with {@code gh auth login}).
@@ -144,11 +146,75 @@ public final class GitHub {
                 + " running: run the same step again to follow it");
     }
 
-    /** The last {@code lines} lines of the failed jobs' logs, for a report after a failed run. */
-    public String failedLogTail(Run run, int lines) {
+    /** What failed in {@code run}, from its failed jobs' logs ({@link #failureSummary}), at most {@code lines} lines. */
+    public String failedLogSummary(Run run, int lines) {
         Shell.Result r = shell.capture(List.of("gh", "run", "view", Long.toString(run.id()), "--log-failed"));
-        List<String> all = r.out().lines().toList();
-        return String.join("\n", all.subList(Math.max(0, all.size() - lines), all.size()));
+        return failureSummary(r.out(), lines);
+    }
+
+    /** How many lines after a failed test's own line (its assertion message) {@link #failureSummary} keeps. */
+    private static final int MESSAGE_LINES = 6;
+
+    /** A log line's start as {@code gh run view --log} prints it: job, step, then a timestamp. */
+    private static final Pattern LOG_LINE = Pattern.compile("^([^\t]*)\t[^\t]*\t(?:\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z ?)?(.*)$");
+
+    /**
+     * The lines of {@code log} ({@code gh run view --log-failed}) that say what failed, each as
+     * {@code <job>: <text>}, at most {@code max}. A failed log ends with Maven's advice ("re-run
+     * with -e", "[Help 1]"), so its last lines name no test. Kept instead:
+     * <ul>
+     *   <li>each failed test, a line with {@code <<< FAILURE!} or {@code <<< ERROR!}, and its
+     *       assertion message, the lines after it up to the stack trace, e.g.
+     *       <pre>
+     *   All tests on Windows: [ERROR] checks.ReleaseToolTest.anEditThatFails…(Path) -- Time elapsed: 0.497 s <<< FAILURE!
+     *   All tests on Windows: org.opentest4j.AssertionFailedError:
+     *   All tests on Windows: expected: <one
+     *       </pre></li>
+     *   <li>Maven's summary of them ({@code [ERROR] Failures:} and the indented lines under it);</li>
+     *   <li>GitHub's own error lines ({@code ##[error]…}), but for "Process completed with exit code".</li>
+     * </ul>
+     * When nothing of that is there (a step that is not Maven's failed), the last {@code max}
+     * lines, as before.
+     */
+    public static String failureSummary(String log, int max) {
+        List<String> lines = log.lines().toList();
+        List<String> kept = new ArrayList<>();
+        boolean inSummary = false;
+        for (int i = 0; i < lines.size() && kept.size() < max; i++) {
+            String[] line = parts(lines.get(i));
+            String text = line[1];
+            if ((text.contains("<<< FAILURE!") || text.contains("<<< ERROR!")) && !text.contains("Tests run:")) {
+                kept.add(line[0] + ": " + text);
+                for (int j = i + 1; j < lines.size() && j <= i + MESSAGE_LINES && kept.size() < max; j++) {
+                    String[] next = parts(lines.get(j));
+                    if (next[1].strip().startsWith("at ") || next[1].contains("<<< ")) {
+                        break;
+                    }
+                    kept.add(next[0] + ": " + next[1]);
+                }
+                inSummary = false;
+            } else if (text.startsWith("[ERROR] Failures:") || text.startsWith("[ERROR] Errors:")) {
+                kept.add(line[0] + ": " + text);
+                inSummary = true;
+            } else if (inSummary && text.startsWith("[ERROR]   ")) {
+                kept.add(line[0] + ": " + text);
+            } else {
+                inSummary = false;
+                if (text.startsWith("##[error]") && !text.contains("Process completed with exit code")) {
+                    kept.add(line[0] + ": " + text);
+                }
+            }
+        }
+        if (kept.isEmpty()) {
+            return String.join("\n", lines.subList(Math.max(0, lines.size() - max), lines.size()));
+        }
+        return String.join("\n", kept.stream().distinct().toList());
+    }
+
+    /** A log line's job and text, without the step and the timestamp; a line of another form as it is. */
+    private static String[] parts(String line) {
+        Matcher m = LOG_LINE.matcher(line);
+        return m.matches() ? new String[] {m.group(1), m.group(2)} : new String[] {"", line};
     }
 
     /** The names of a run's jobs, as on its page (a called workflow's job as {@code build / Build (tested on main)}). */

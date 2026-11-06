@@ -300,6 +300,30 @@ class ReleaseToolTest {
     }
 
     @Test
+    void aFailedRunsReportNamesTheFailingTest() {
+        String job = "All tests on Windows\tBuild, unit and UI tests\t2026-11-06T18:21:22.2351960Z ";
+        String log = String.join("\n",
+                job + "[INFO] Tests run: 5, Failures: 0",
+                job + "[ERROR] Tests run: 19, Failures: 1, Errors: 0, Skipped: 0 <<< FAILURE! -- in checks.ReleaseToolTest",
+                job + "[ERROR] checks.ReleaseToolTest.anEdit(Path) -- Time elapsed: 0.497 s <<< FAILURE!",
+                job + "org.opentest4j.AssertionFailedError: ",
+                job + "expected: <one",
+                job + "\tat org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)",
+                job + "[ERROR] Failures: ",
+                job + "[ERROR]   ReleaseToolTest.anEdit:275 expected: <one",
+                job + "[ERROR] Tests run: 1086, Failures: 1, Errors: 0, Skipped: 3",
+                job + "[ERROR] -> [Help 1]",
+                job + "##[error]Process completed with exit code 1.");
+        assertEquals(String.join("\n",
+                "All tests on Windows: [ERROR] checks.ReleaseToolTest.anEdit(Path) -- Time elapsed: 0.497 s <<< FAILURE!",
+                "All tests on Windows: org.opentest4j.AssertionFailedError: ",
+                "All tests on Windows: expected: <one",
+                "All tests on Windows: [ERROR] Failures: ",
+                "All tests on Windows: [ERROR]   ReleaseToolTest.anEdit:275 expected: <one"), GitHub.failureSummary(log, 40));
+        assertEquals("b\nc", GitHub.failureSummary("a\nb\nc", 2), "no test named: the last lines, as before");
+    }
+
+    @Test
     void theRunFollowedIsTheOneThePushStarted() {
         GitHub.Run failed = new GitHub.Run(41, "completed", "failure", "u41", "push", "rehearse/0.2.3");
         GitHub.Run fresh = new GitHub.Run(42, "queued", "", "u42", "push", "rehearse/0.2.3");
