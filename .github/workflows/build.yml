@@ -136,8 +136,9 @@ jobs:
   # Each runner builds everything again (the plug-in is pure Java, so the jar is the same on every
   # OS; only the Linux job uploads the ZIP). No xvfb-run: Windows and macOS runners have a real
   # desktop session. On macOS the test POMs add -XstartOnFirstThread themselves (Cocoa runs the
-  # UI only on the first thread). Runner images: windows-latest is x86_64, macos-latest is
-  # Apple silicon (arm64), so the Neovim platform codes below are wx and ma.
+  # UI only on the first thread). Each job installs the Neovim for its runner's platform
+  # (install auto: windows-latest is x86_64 today, macos-latest Apple silicon), so a runner image
+  # that changes processor needs no change here.
   platforms:
     name: All tests on ${{ matrix.name }}
     if: ${{ !inputs.skip-tests }}   # see the build job

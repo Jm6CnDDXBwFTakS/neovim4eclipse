@@ -10,7 +10,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * under {@code target/}, without the dedicated Neovim a developer's machine has, as on a CI runner.
  *
  * <p>Example: {@code ./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=/opt/nvim/bin/nvim},
- * or {@code java releng/tools/LikeCi.java}, which installs the pinned release under
+ * or {@code java releng/tools/ci/LikeCi.java}, which installs the pinned release under
  * {@code target/} and passes it.
  */
 public final class TestNeovim {
