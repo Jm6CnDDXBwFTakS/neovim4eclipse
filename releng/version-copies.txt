@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# Where a version number is copied by hand into text that Maven cannot fill in: the docs, the
+# feature's description, the update site's category. Each version has one source of truth (for
+# Neovim: version= in the plug-in's util/neovim-downloads.properties); this list names its copies.
+#
+#   [neovim]                         a section: one version's copies
+#   README.md  Get Neovim (\S+)…    a file, then a Java regular expression whose first group is
+#                                    the version, at every place it matches
+#
+# java releng/tools/neovim/NeovimUpgrade.java rewrites every match of a section's patterns, and
+# VersionConsistencyTest fails unless each pattern matches at least once and every match holds
+# the source's version. A pattern names the version where it is a requirement or what the plug-in
+# installs; history ("as Neovim 0.12.6 sends it", "checked on 0.12.6"), the changelog and the
+# design notes are left alone, since they stay true for the version they name.
+
+[neovim]
+README.md  \bNeovim (\d+\.\d+\.\d+)
+README.md  dedicated Neovim\* \((\d+\.\d+\.\d+)\)
+README.md  \b(\d+\.\d+\.\d+) or newer
+CONTRIBUTING.md  \bNeovim (\d+\.\d+\.\d+)
+CONTRIBUTING.md  only (\d+\.\d+\.\d+) is what CI checks
+docs/LEARNING.md  Get Neovim (\d+\.\d+\.\d+)
+docs/LEARNING.md  \b(\d+\.\d+\.\d+) or newer
+docs/PACKAGING.md  \bNeovim (\d+\.\d+\.\d+)
+features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  \bNeovim (\d+\.\d+\.\d+)
+features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  \b(\d+\.\d+\.\d+) or newer
+releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml  \bNeovim (\d+\.\d+\.\d+)

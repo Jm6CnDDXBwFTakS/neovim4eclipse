@@ -395,7 +395,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
-| `releng/tools/` | developer tools run with `java`: `release/Release.java` (a release, step by step), `ci/LikeCi.java` (the tests as CI runs them), `checks/ManualChecks.java` (the manual checks); `common/` holds what they share |
+| `releng/tools/` | developer tools run with `java`: `release/Release.java` (a release, step by step), `neovim/NeovimUpgrade.java` (a move to a new Neovim release), `ci/LikeCi.java` (the tests as CI runs them), `checks/ManualChecks.java` (the manual checks); `common/` holds what they share |
 | `releng/render-icon.py` | renders `docs/images/logo.svg` to the toolbar icon PNGs (`plugins/.../icons/`), with headless Firefox |
 | `releng/update-site.sh` | builds the permanent update site (a composite p2 repository) from the release ZIPs |
 | `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version |

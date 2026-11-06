@@ -105,6 +105,33 @@
           </execution>
         </executions>
       </plugin>
+      <!-- The data files the util/ classes read from beside themselves, as in tests/unit's POM (its
+           comment says why they are copied rather than added as a resource folder):
+           NeovimVersion.MINIMUM is read from neovim-downloads.properties. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-plugin-data-files</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../../plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src</directory>
+                  <includes>
+                    <include>io/github/jm6cnddxbwftaks/neovim4eclipse/util/*.properties</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>

@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: moving to a new Neovim release, which then is the one
+  *Get Neovim* installs and the oldest the plug-in runs, is now one tool, which also checks that
+  *Get Neovim* can unpack the new archives on every platform.
+
 ## [0.2.3] - 2026-11-06
 
 ### Changed
