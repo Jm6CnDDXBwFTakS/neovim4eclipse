@@ -139,7 +139,10 @@ public final class LikeCi {
     private static int run(Path root, String arguments, String nvim) throws Exception {
         List<String> command = new ArrayList<>();
         if (WINDOWS) {
-            command.addAll(List.of("cmd", "/c", "mvnw.cmd"));
+            // .\ as in a shell: cmd does not look in the current folder when
+            // NoDefaultCurrentDirectoryInExePath is set, as some shells and tools set it (Claude
+            // Code's does). Not root.resolve("mvnw.cmd"): cmd would quote it once the path has a space.
+            command.addAll(List.of("cmd", "/c", ".\\mvnw.cmd"));
         } else {
             // As the Linux build job: the UI tests (and -Pall, which has them) under xvfb-run; the
             // integration job has no display and needs none.
