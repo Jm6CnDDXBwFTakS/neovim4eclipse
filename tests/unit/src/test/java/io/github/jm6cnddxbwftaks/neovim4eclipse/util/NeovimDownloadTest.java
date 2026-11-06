@@ -135,9 +135,13 @@ class NeovimDownloadTest {
 
     @Test
     void aConnectionThatStopsSendingIsGivenUp() throws IOException {
+        // The stall clock starts with the request and is looked at every 250 ms (POLL_MILLIS), so
+        // the stall must leave room for the connection and the first 3 bytes, even when this is the
+        // run's first HTTP use (class loading, thread start). 300 ms once failed on Windows
+        // "after 0 of 10 bytes": the first look came after the stall, before any byte had arrived.
         NeovimInstallException e = assertThrows(NeovimInstallException.class,
                 () -> NeovimDownload.download(archive("/stall"), NeovimDownload.client(ProxySelector.of(null), null),
-                        tmp, InstallProgress.NONE, Duration.ofMillis(300)));
+                        tmp, InstallProgress.NONE, Duration.ofSeconds(1)));
         assertEquals(NeovimInstallException.Reason.NETWORK, e.reason());
         assertTrue(e.getMessage().contains("stalled"), e.getMessage());
         assertTrue(e.getMessage().contains("after 3 of " + body.length + " bytes"), e.getMessage());
