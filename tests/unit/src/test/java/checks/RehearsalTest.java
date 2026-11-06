@@ -18,12 +18,13 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The release rehearsal ({@code .github/workflows/rehearse-release.yml}) is worth only as much as
- * it stays like the release it rehearses: the same Eclipses for the install test as the update
- * site's smoke job, the build at the release's version with the tests skipped, and no secrets.
+ * it stays like the release it rehearses: the same Eclipses (and pinned SHA-512s) for the install
+ * test as the update site's smoke job, the build at the release's version with the tests skipped, and no secrets.
  */
 class RehearsalTest {
 
-    private static final Pattern PLATFORM_URL = Pattern.compile("platform-url: (\\S+)");
+    /** A smoke matrix entry's Eclipse download and its pinned SHA-512, one after the other. */
+    private static final Pattern PLATFORM = Pattern.compile("platform-url: (\\S+)\\s+platform-sha512: ([0-9a-f]{128})\\s");
 
     private static String workflow(String name) throws IOException {
         Path dir = Path.of("").toAbsolutePath();
@@ -34,17 +35,21 @@ class RehearsalTest {
         return Files.readString(dir.resolve(".github/workflows/" + name));
     }
 
-    private static List<String> platformUrls(String yml) {
-        Matcher m = PLATFORM_URL.matcher(yml);
-        return m.results().map(r -> r.group(1)).toList();
+    /** Each smoke matrix entry as "url sha512", in order. */
+    private static List<String> platforms(String yml) {
+        Matcher m = PLATFORM.matcher(yml);
+        return m.results().map(r -> r.group(1) + " " + r.group(2)).toList();
     }
 
     @Test
     void theRehearsalInstallsIntoTheSameEclipsesAsTheUpdateSite() throws IOException {
-        List<String> site = platformUrls(workflow("update-site.yml"));
+        String siteYml = workflow("update-site.yml");
+        List<String> site = platforms(siteYml);
         assertFalse(site.isEmpty(), "update-site.yml names no Eclipse to install into");
-        assertEquals(site, platformUrls(workflow("rehearse-release.yml")),
-                "rehearse-release.yml's smoke matrix differs from update-site.yml's: move both together");
+        assertEquals(siteYml.split("platform-url:", -1).length - 1, site.size(),
+                "update-site.yml: every platform-url needs a platform-sha512 on the next line");
+        assertEquals(site, platforms(workflow("rehearse-release.yml")),
+                "rehearse-release.yml's smoke matrix (URLs, SHA-512s) differs from update-site.yml's: move both together");
     }
 
     @Test
@@ -52,7 +57,9 @@ class RehearsalTest {
         String rehearsal = workflow("rehearse-release.yml");
         assertFalse(rehearsal.contains("secrets."), "the rehearsal reads a secret");
         assertFalse(rehearsal.contains("environment:"), "the rehearsal names an environment (release holds the key)");
-        assertFalse(rehearsal.matches("(?s).*\\b(contents|pages|id-token): write.*"), "the rehearsal asks for write access");
+        // Any scope (contents, actions, packages, ...) at write, or write-all.
+        assertFalse(Pattern.compile("(?m)^\\s*[\\w-]+:\\s*write\\b|write-all").matcher(rehearsal).find(),
+                "the rehearsal asks for write access");
         assertFalse(rehearsal.contains("gh release create"), "the rehearsal creates a release");
         assertTrue(rehearsal.contains("uses: ./.github/workflows/build.yml"), "the rehearsal no longer builds with build.yml");
     }
