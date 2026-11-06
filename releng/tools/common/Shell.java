@@ -8,12 +8,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Runs other programs (git, gh, the Maven wrapper, the {@code releng} scripts) from the repository's
@@ -64,6 +66,30 @@ public final class Shell {
             CompletableFuture<String> err = CompletableFuture.supplyAsync(() -> read(p.getErrorStream()));
             String out = read(p.getInputStream());
             return new Result(p.waitFor(), out.stripTrailing(), err.join().strip());
+        } catch (IOException e) {
+            return new Result(127, "", command.get(0) + ": " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ToolFailure("interrupted while running " + String.join(" ", command));
+        }
+    }
+
+    /**
+     * {@link #capture(List)} that gives up after {@code limit}: the program is stopped and the
+     * result has status 124, as {@code timeout(1)} reports it. For a question that should take
+     * moments, where a hung program (a lock, a credential prompt) must not hang the caller.
+     */
+    public Result capture(List<String> command, Duration limit) {
+        try {
+            Process p = new ProcessBuilder(command).directory(root.toFile()).start();
+            p.getOutputStream().close();
+            CompletableFuture<String> out = CompletableFuture.supplyAsync(() -> read(p.getInputStream()));
+            CompletableFuture<String> err = CompletableFuture.supplyAsync(() -> read(p.getErrorStream()));
+            if (!p.waitFor(limit.toMillis(), TimeUnit.MILLISECONDS)) {
+                p.destroyForcibly();
+                return new Result(124, "", command.get(0) + ": no answer within " + limit.toSeconds() + " s");
+            }
+            return new Result(p.exitValue(), out.join().stripTrailing(), err.join().strip());
         } catch (IOException e) {
             return new Result(127, "", command.get(0) + ": " + e.getMessage());
         } catch (InterruptedException e) {
