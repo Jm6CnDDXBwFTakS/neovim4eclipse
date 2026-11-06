@@ -55,6 +55,12 @@ public record NeovimVersion(int major, int minor, int patch) implements Comparab
      * <p>Declared after {@link #VERSION_LINE} on purpose: reading the data file parses its version
      * with {@link #fromVersionOutput}, which needs that pattern, and static fields are set in the
      * order they are written.
+     *
+     * <p>A missing or broken data file stops this class from loading at all (the cause names the
+     * file, {@link NeovimRelease#bundled}), where it once failed only <i>Get Neovim</i>. That is
+     * deliberate: the plug-in cannot know which Neovim it supports without it, and the file ships
+     * inside the plug-in. {@code VersionConsistencyTest} and {@code NeovimReleaseTest} read the
+     * shipped file in every build, so a broken one never leaves the repository.
      */
     public static final NeovimVersion MINIMUM = NeovimRelease.bundled().version();
 
