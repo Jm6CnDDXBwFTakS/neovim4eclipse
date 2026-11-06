@@ -67,7 +67,7 @@ class NeovimUpgradeTest {
         for (String line : changelog.lines().toList()) {
             assertTrue(line.length() <= 100, "longer than 100: " + line);
         }
-        assertTrue(changelog.startsWith("## [Unreleased]\n\n### Changed\n\n- Get Neovim installs Neovim 0.13.0"), changelog);
+        assertTrue(changelog.startsWith("## [Unreleased]\n\n### Changed\n\n- *Get Neovim* installs Neovim 0.13.0"), changelog);
         assertTrue(changelog.contains("\n  "), "continued with two spaces: " + changelog);
         assertTrue(changelog.endsWith("start.\n\n## [0.2.3] - 2026-11-06\n"), changelog);
     }
