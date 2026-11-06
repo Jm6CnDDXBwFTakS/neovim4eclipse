@@ -85,15 +85,24 @@ public final class Git {
         details.add("git commit: " + message);
         details.addAll(shell.out(command("diff", "--stat", "HEAD", "--")).lines().toList());
         if (ask.confirm("Commit " + String.join(", ", files), details)) {
-            List<String> add = new ArrayList<>(List.of("add", "--"));
-            add.addAll(files);
-            out(add.toArray(String[]::new));
-            Shell.Result r = shell.capture(command("commit", "-q", "-m", full), Map.of("TZ", "UTC"));
-            if (!r.ok()) {
-                throw new ToolFailure("git commit failed: " + r.err());
-            }
-            System.out.println("committed " + out("log", "-1", "--format=%h %s"));
+            commitNow(full, files);
         }
+    }
+
+    /**
+     * Commits {@code files} with {@code message} in UTC, without asking: for a step that asked once,
+     * before its first local edit, about all it does (the {@code next} step: cut, set the version,
+     * commit), so that a no leaves nothing half done.
+     */
+    public void commitNow(String message, List<String> files) {
+        List<String> add = new ArrayList<>(List.of("add", "--"));
+        add.addAll(files);
+        out(add.toArray(String[]::new));
+        Shell.Result r = shell.capture(command("commit", "-q", "-m", message), Map.of("TZ", "UTC"));
+        if (!r.ok()) {
+            throw new ToolFailure("git commit failed: " + r.err());
+        }
+        System.out.println("committed " + out("log", "-1", "--format=%h %s"));
     }
 
     /**
