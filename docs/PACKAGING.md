@@ -143,6 +143,15 @@ and `releng/verify-zip.sh <zip> <public key>` a ZIP with its `.asc` beside it.
 The design, the key and the experiments behind it are in
 [design/MARKETPLACE.md](design/MARKETPLACE.md), phase 4.
 
+### Rehearsing a release
+
+`.github/workflows/rehearse-release.yml`, started by hand on a branch, runs these steps without
+the key and without publishing: the build at the release's version, `releng/sign.sh` with a key
+made in the job, the publish job's checks, `releng/update-site.sh` from the published releases
+(with the project's key) and from the rehearsed ZIP (with the throwaway one), and
+`releng/smoke-install.sh` from that second site. CONTRIBUTING.md, "Releasing", runs it before
+each tag; `RehearsalTest` keeps it like the real jobs and free of secrets.
+
 ## PDE (optional, for interactive development)
 
 You can still import the projects into Eclipse PDE and launch from `MANIFEST.MF`
