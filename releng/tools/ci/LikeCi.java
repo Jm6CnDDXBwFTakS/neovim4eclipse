@@ -27,6 +27,8 @@ import java.util.stream.Stream;
  *
  * <h2>What it does, and why each step</h2>
  * <ol>
+ *   <li><b>Lints the shell scripts</b> with {@link #SHELLCHECK}, as the build job does, if shellcheck
+ *       is installed (it runs on Linux CI; the scripts run only there).</li>
  *   <li><b>Installs the pinned Neovim into {@code target/like-ci/}</b> with
  *       {@code java releng/UpdateNeovimDownloads.java install auto}, the command CI uses: the release
  *       Get Neovim installs, checked. Not the developer's own dedicated Neovim, whose path the
@@ -60,6 +62,9 @@ public final class LikeCi {
     /** The Linux build job's virtual screen ({@code xvfb-run -s}), given rather than left to the script's default. */
     public static final String SCREEN = "-screen 0 1280x1024x24";
 
+    /** The build job's lint of the shell scripts (the glob as the shell expands it: every {@code releng/*.sh}). */
+    public static final String SHELLCHECK = "shellcheck releng/*.sh mvnw";
+
     /** Every test group, for {@code --all}. */
     public static final String ALL = "-B -ntp verify -Pall";
 
@@ -78,9 +83,12 @@ public final class LikeCi {
         if (!Files.isRegularFile(root.resolve("releng/UpdateNeovimDownloads.java"))) {
             fail("run this from the repository's root folder");
         }
+        List<String> failed = new ArrayList<>();
+        if (lint(root) != 0) {
+            failed.add(SHELLCHECK);
+        }
         String nvim = installNeovim(root.resolve("target/like-ci"));
         long started = System.currentTimeMillis();
-        List<String> failed = new ArrayList<>();
         for (String maven : all ? List.of(ALL) : List.of(UI, INTEGRATION)) {
             if (run(root, maven, nvim) != 0) {
                 failed.add(maven);
@@ -91,6 +99,24 @@ public final class LikeCi {
             fail("failed: " + String.join("; ", failed));
         }
         System.out.println("LikeCi: everything passed, as CI would run it.");
+    }
+
+    /**
+     * Runs {@link #SHELLCHECK} as the build job does, if shellcheck is installed (CI has it; on
+     * Windows and macOS the scripts are not run, so it is not needed there); its exit status.
+     */
+    private static int lint(Path root) throws Exception {
+        if (!onPath("shellcheck")) {
+            System.out.println("LikeCi: no shellcheck here, so the shell scripts are not linted (CI lints them)");
+            return 0;
+        }
+        List<String> command = new ArrayList<>(List.of("shellcheck"));
+        try (Stream<Path> files = Files.list(root.resolve("releng"))) {
+            files.map(f -> "releng/" + f.getFileName()).filter(n -> n.endsWith(".sh")).sorted().forEach(command::add);
+        }
+        command.add("mvnw");
+        System.out.println("LikeCi: " + String.join(" ", command));
+        return new ProcessBuilder(command).directory(root.toFile()).inheritIO().start().waitFor();
     }
 
     /** Runs {@link #INSTALL}; the program's path it prints. */
