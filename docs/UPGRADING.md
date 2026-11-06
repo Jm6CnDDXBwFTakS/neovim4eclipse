@@ -193,11 +193,16 @@ The plug-in refuses an older Neovim at start, with a message naming both version
 (`Neovim 0.12.4 is too old: Neovim for Eclipse needs 0.12.6 or newer.`), so users never meet a
 half-working plug-in.
 
-**When to raise it**: readily, whenever a new release
+**When it moves**: with every Neovim release, about a week after it appears (see *Following
+Neovim's releases* below). The pin and the minimum are one setting, so each move also raises the
+oldest Neovim the plug-in accepts, even for a patch release: a program named with
+`-Dneovim4eclipse.nvim` that is older than the new pin is refused from then on. Moving is what lets
+the plug-in
 
-- lets Neovim do something the plug-in would otherwise work around (a new API, option, event or
-  default; for example `vim.diagnostic.jump`'s `on_jump` instead of a `CursorMoved` check), or
-- fixes a security issue.
+- rely on what a new release adds instead of working around its absence (a new API, option,
+  event or default; for example `vim.diagnostic.jump`'s `on_jump` instead of a `CursorMoved`
+  check), and
+- give users each Neovim fix, security fixes included.
 
 The project's goal is that Neovim handles as much as possible itself; supporting old versions
 would mean keeping the workarounds. Users need no Neovim of their own: the plug-in
@@ -231,10 +236,13 @@ put back as it was. It needs a JDK of release 22 or newer, as the Release tool d
    listed pattern still finds the version: a reworded sentence needs its pattern changed with it.
 3. **The changelog**: a *Changed* entry under *Unreleased* naming the new minimum, so users see it
    before updating.
-4. **The archives as *Get Neovim* installs them**: the plug-in is compiled, and all six archives
-   are unpacked with its own extractor (`util/ArchiveExtractor`, whose tar reader refuses links,
-   which Neovim's archives have not had so far) and checked against their tree hashes; then this
-   machine's Neovim must run. This replaces running *Get Neovim* once in a development Eclipse.
+4. **The archives as *Get Neovim* installs them**: the plug-in is compiled, and each archive the
+   updater kept (one download serves both) is installed into a scratch folder by its own
+   `util/NeovimInstaller`: size, SHA-256, unpacking (the tar reader refuses links, which Neovim's
+   archives have not had so far), tree hash, and for this machine's archive, that Neovim runs. On
+   Linux all six are installed; on macOS or Windows, whose file names ignore case, only that
+   system's, and the others are hashed. This replaces running *Get Neovim* once in a development
+   Eclipse.
 5. **Every test** with the new Neovim: `java releng/tools/ci/LikeCi.java --all`. Run it on macOS and
    Windows too.
 
@@ -252,9 +260,9 @@ Neovim fix, a security fix included, only when the pin moves. Neovim ships those
 patch releases (0.12.x) included, and *Get Neovim* installs only a published release, checked
 against its hash; a fix that waits on one of Neovim's branches is out of the plug-in's reach until
 Neovim releases it. So there is no separate security check: follow each Neovim release about a week
-after it appears (the updater's own wait, above), moving the pin and, where the release calls for
-it, the minimum, with the steps above. For a release that fixes something urgent, `--allow-young`
-moves sooner.
+after it appears (the updater's own wait, above), with the steps above; each move raises the minimum
+too, as they are one setting. For a release that fixes something urgent, `--allow-young` moves
+sooner.
 
 Where the plug-in can guard against a known issue in the pinned Neovim, it does so in
 `LuaScripts.SETUP` until a release fixes it. Example: Neovim 0.12.6 runs a crafted R Markdown chunk
