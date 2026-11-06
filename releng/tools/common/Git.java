@@ -100,7 +100,12 @@ public final class Git {
         out(add.toArray(String[]::new));
         Shell.Result r = shell.capture(command("commit", "-q", "-m", message), Map.of("TZ", "UTC"));
         if (!r.ok()) {
-            throw new ToolFailure("git commit failed: " + r.err());
+            // Unstaged again, so that a caller who puts the files back leaves a clean tree (a commit
+            // hook refused, or git has no user.email yet).
+            List<String> reset = new ArrayList<>(List.of("reset", "-q", "--"));
+            reset.addAll(files);
+            ok(reset.toArray(String[]::new));
+            throw new ToolFailure("git commit failed: " + (r.err().isEmpty() ? r.out() : r.err()));
         }
         System.out.println("committed " + out("log", "-1", "--format=%h %s"));
     }
