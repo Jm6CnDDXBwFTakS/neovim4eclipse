@@ -167,8 +167,8 @@ public final class ReleaseTool {
         row("changelog", s.prepared() ? "section " + v + " dated"
                 : ReleaseFiles.unreleasedHasEntries(changelog) ? "changes under Unreleased, not dated" : "nothing under Unreleased");
         String tested = testedCommit();
-        row("local tests", s.tested() ? "passed (LikeCi " + settings.get("tests") + ") at " + tested.substring(0, 7)
-                : tested.isEmpty() ? "not run for this release" : "passed at " + tested.substring(0, 7) + ", not this commit");
+        row("local tests", s.tested() ? "passed (LikeCi " + settings.get("tests") + ") at " + short7(tested)
+                : tested.isEmpty() ? "not run for this release" : "passed at " + short7(tested) + ", not this commit");
         row("main", s.onMain() ? "at this commit" : "not at this commit");
         row(v.tag(), s.tagged() ? "on origin" : "not made");
         row("GitHub Release", s.released() ? "has the ZIP and its signature" : "none yet");
@@ -706,9 +706,11 @@ public final class ReleaseTool {
         return root.resolve("target/release-tool/tested");
     }
 
+    /** The commit {@code check} recorded, or the empty string when there is none or the file holds anything but a commit id. */
     private String testedCommit() {
         try {
-            return Files.isRegularFile(testedFile()) ? Files.readString(testedFile()).strip() : "";
+            String text = Files.isRegularFile(testedFile()) ? Files.readString(testedFile()).strip() : "";
+            return text.matches("[0-9a-f]{40}") ? text : "";
         } catch (IOException e) {
             return "";
         }
