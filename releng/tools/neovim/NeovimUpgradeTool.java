@@ -4,16 +4,9 @@
 package neovim;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.StringReader;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -50,8 +43,9 @@ import common.VersionCopies;
  *   <li><b>The copies</b> in {@code releng/version-copies.txt}, section {@code [neovim]}: the
  *       docs, the feature's description, the update site's category ({@link VersionCopies}).</li>
  *   <li><b>The changelog</b>: an entry under <i>Unreleased</i>, <i>Changed</i> ({@link NeovimFiles}).</li>
- *   <li><b>The archives, as Get Neovim installs them</b>: the plug-in is compiled, the six archives
- *       are downloaded into {@code target/neovim-upgrade/<version>/}, and {@link ArchiveCheck}
+ *   <li><b>The archives, as Get Neovim installs them</b>: the plug-in is compiled, and
+ *       {@link ArchiveCheck}, from the six archives the updater kept in
+ *       {@code target/neovim-upgrade/<version>/archives} (one download serves both),
  *       unpacks each with the plug-in's own extractor and checks its tree hash; then this
  *       machine's Neovim must run.</li>
  *   <li><b>Every test</b> with the new Neovim: {@code java releng/tools/ci/LikeCi.java --all},
@@ -143,7 +137,10 @@ public final class NeovimUpgradeTool {
         List<VersionCopies.Copy> copies = sections.getOrDefault("neovim", List.of());
         TreeSet<String> copyFiles = new TreeSet<>();
         copies.forEach(c -> copyFiles.add(c.file()));
-        List<String> updater = new ArrayList<>(List.of("releng/UpdateNeovimDownloads.java", target.toString()));
+        // The updater downloads all six archives to measure them; --keep leaves them in archives()
+        // for checkArchives, so one download serves both.
+        List<String> updater = new ArrayList<>(List.of("releng/UpdateNeovimDownloads.java", target.toString(),
+                "--keep", root.relativize(archives()).toString()));
         if (allowYoung) {
             updater.add("--allow-young");
         }
@@ -168,6 +165,7 @@ public final class NeovimUpgradeTool {
     /** Every step but the commit; a failure stops with a {@link ToolFailure} (and the tree is put back). */
     private void move(Version from, List<String> updater, List<VersionCopies.Copy> copies) {
         System.out.println();
+        Folders.deleteTree(archives()); // only what this run's updater keeps is checked
         if (shell.show(Shell.java(updater.get(0), updater.subList(1, updater.size()).toArray(String[]::new))) != 0) {
             throw new ToolFailure("UpdateNeovimDownloads did not rewrite the data file (see above)");
         }
@@ -198,58 +196,24 @@ public final class NeovimUpgradeTool {
         }
     }
 
-    /** Downloads the six archives and lets {@link ArchiveCheck} unpack them with the plug-in's classes. */
+    /** Where the updater keeps this move's archives: {@code target/neovim-upgrade/<version>/archives}. */
+    private Path archives() {
+        return root.resolve("target/neovim-upgrade/" + target + "/archives");
+    }
+
+    /** Lets {@link ArchiveCheck} install the kept archives with the plug-in's classes. */
     private void checkArchives() {
-        Path folder = root.resolve("target/neovim-upgrade/" + target);
-        Path archives = folder.resolve("archives");
-        Path work = folder.resolve("unpacked");
+        Path work = root.resolve("target/neovim-upgrade/" + target + "/unpacked");
         Folders.deleteTree(work);
-        Properties pins = pins();
-        String template = pins.getProperty("url", "");
-        for (String key : new TreeSet<>(pins.stringPropertyNames())) {
-            if (key.endsWith(".asset")) {
-                String asset = pins.getProperty(key).strip();
-                long size = Long.parseLong(pins.getProperty(key.replace(".asset", ".size"), "-1").strip());
-                download(template.replace("{version}", target.toString()).replace("{asset}", asset), archives.resolve(asset), size);
-            }
-        }
         System.out.println(Shell.display(Shell.maven("-q", "-B", "-ntp", "-pl", PLUGIN, "compile")));
         if (shell.show(Shell.maven("-q", "-B", "-ntp", "-pl", PLUGIN, "compile")) != 0) {
             throw new ToolFailure("the plug-in did not compile (see above)");
         }
         List<String> check = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--class-path", root.resolve(PLUGIN + "/target/classes").toString(), "releng/tools/neovim/ArchiveCheck.java",
-                root.resolve(PINS).toString(), archives.toString(), work.toString()));
+                root.resolve(PINS).toString(), archives().toString(), work.toString()));
         if (shell.show(check) != 0) {
             throw new ToolFailure("Get Neovim could not install the new archives as they are (see above)");
-        }
-    }
-
-    /** Downloads {@code url} to {@code file}, unless it is there with {@code size} bytes already (ArchiveCheck checks the hash). */
-    private static void download(String url, Path file, long size) {
-        try {
-            if (Files.isRegularFile(file) && Files.size(file) == size) {
-                return;
-            }
-            Files.createDirectories(file.getParent());
-            System.out.println("downloading " + url);
-            HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
-                    .connectTimeout(Duration.ofSeconds(30)).build();
-            HttpResponse<InputStream> r = client.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(10)).build(),
-                    HttpResponse.BodyHandlers.ofInputStream());
-            if (r.statusCode() != 200) {
-                throw new ToolFailure(url + ": HTTP " + r.statusCode());
-            }
-            Path part = file.resolveSibling(file.getFileName() + ".part");
-            try (InputStream in = r.body()) {
-                Files.copy(in, part, StandardCopyOption.REPLACE_EXISTING);
-            }
-            Files.move(part, file, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new ToolFailure("cannot download " + url + ": " + e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ToolFailure("interrupted");
         }
     }
 

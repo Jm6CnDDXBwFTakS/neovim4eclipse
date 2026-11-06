@@ -45,6 +45,9 @@ import java.util.zip.ZipInputStream;
  * <pre>
  *   java releng/UpdateNeovimDownloads.java 0.13.0     rewrite the file for Neovim 0.13.0
  *   java releng/UpdateNeovimDownloads.java 0.13.0 --allow-young   the same for a release under 7 days old
+ *   java releng/UpdateNeovimDownloads.java 0.13.0 --keep target/archives
+ *                                                    the same, keeping the six archives there (the Neovim
+ *                                                    tool checks them next, without downloading them again)
  *   java releng/UpdateNeovimDownloads.java --check    verify the file as it is; writes nothing
  *   java releng/UpdateNeovimDownloads.java --virustotal   ask VirusTotal about each hash (needs VT_API_KEY)
  *   java releng/UpdateNeovimDownloads.java install auto target/ci-neovim
@@ -148,6 +151,16 @@ public final class UpdateNeovimDownloads {
 
     static final String ALLOW_YOUNG = "--allow-young";
 
+    /**
+     * {@code --keep <folder>}: a rewrite also writes each archive it downloads there, as
+     * {@code <folder>/<asset>}, for {@code releng/tools/neovim/NeovimUpgrade.java} to unpack next.
+     * Without it nothing is written: the bytes only pass through the hashes.
+     */
+    static final String KEEP = "--keep";
+
+    /** The folder of {@link #KEEP}, or {@code null}. */
+    private static Path keep;
+
     private static final HttpClient HTTP = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30)).build();
 
@@ -169,9 +182,21 @@ public final class UpdateNeovimDownloads {
             }
             return;
         }
-        boolean allowYoung = args.length == 2 && args[1].equals(ALLOW_YOUNG);
-        if (args.length != 1 && !allowYoung) {
+        if (args.length == 0) {
             usage();
+        }
+        boolean allowYoung = false;
+        for (int i = 1; i < args.length; i++) {
+            if (args[i].equals(ALLOW_YOUNG)) {
+                allowYoung = true;
+            } else if (args[i].equals(KEEP) && i + 1 < args.length) {
+                keep = Path.of(args[++i]);
+            } else {
+                usage();
+            }
+        }
+        if (args.length > 1 && !VERSION.matcher(args[0]).matches()) {
+            usage(); // the flags belong to a rewrite only
         }
         Properties current = load();
         String arg = args[0];
@@ -193,8 +218,8 @@ public final class UpdateNeovimDownloads {
     }
 
     private static void usage() {
-        System.err.println("Usage: java releng/UpdateNeovimDownloads.java <version> [" + ALLOW_YOUNG
-                + "] | --check | --virustotal | install <code|auto> <folder>");
+        System.err.println("Usage: java releng/UpdateNeovimDownloads.java <version> [" + ALLOW_YOUNG + "] [" + KEEP
+                + " <folder>] | --check | --virustotal | install <code|auto> <folder>");
         System.exit(2);
     }
 
@@ -295,7 +320,7 @@ public final class UpdateNeovimDownloads {
         return result;
     }
 
-    /** Streams {@code url} through SHA-256 without keeping it. */
+    /** Streams {@code url} through SHA-256, keeping a copy in {@link #keep}'s folder if one is set. */
     static Entry download(String code, String asset, String url) throws Exception {
         HttpResponse<InputStream> response = HTTP.send(
                 HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(5)).build(),
@@ -305,12 +330,47 @@ public final class UpdateNeovimDownloads {
             throw new Failure(url + ": HTTP " + response.statusCode()
                     + (response.statusCode() == 404 ? " (was the asset renamed? fix " + code + ".asset by hand)" : ""));
         }
+        if (keep == null) {
+            return measured(code, asset, response.body());
+        }
+        // A copy on its way through: written as <asset>.part and renamed once whole, so a file
+        // named <asset> is never a cut-off download. Its hash is the one measured here.
+        Files.createDirectories(keep);
+        Path part = keep.resolve(asset + ".part");
+        Entry entry;
+        try (OutputStream copy = Files.newOutputStream(part); InputStream body = response.body()) {
+            entry = measured(code, asset, new FilterInputStream(body) {
+                @Override
+                public int read() throws IOException {
+                    int b = super.read();
+                    if (b >= 0) {
+                        copy.write(b);
+                    }
+                    return b;
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    int n = super.read(b, off, len);
+                    if (n > 0) {
+                        copy.write(b, off, n);
+                    }
+                    return n;
+                }
+            });
+        }
+        Files.move(part, keep.resolve(asset), StandardCopyOption.REPLACE_EXISTING);
+        return entry;
+    }
+
+    /** The size, SHA-256 and tree hash of the archive {@code body} holds, read once to its end. */
+    private static Entry measured(String code, String asset, InputStream body) throws Exception {
         MessageDigest sha = sha256();
         long[] size = { 0 };
         String tree;
         // One pass: the bytes go through the archive's SHA-256 (and size) on their way to the reader
         // of its entries, so nothing is written to disk.
-        try (InputStream in = new FilterInputStream(response.body()) {
+        try (InputStream in = new FilterInputStream(body) {
             @Override
             public int read() throws IOException {
                 int b = super.read();
