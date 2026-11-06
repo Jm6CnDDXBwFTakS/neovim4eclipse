@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -15,9 +16,9 @@ import java.net.ProxySelector;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.sun.net.httpserver.HttpServer;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * {@link NeovimDownload} against a local HTTP server (the JDK's own), so no test touches GitHub: the
@@ -135,15 +138,44 @@ class NeovimDownloadTest {
 
     @Test
     void aConnectionThatStopsSendingIsGivenUp() throws IOException {
-        // The stall clock starts with the request and is looked at every 250 ms (POLL_MILLIS), so
-        // the stall must leave room for the connection and the first 3 bytes, even when this is the
-        // run's first HTTP use (class loading, thread start). 300 ms once failed on Windows
-        // "after 0 of 10 bytes": the first look came after the stall, before any byte had arrived.
-        NeovimInstallException e = assertThrows(NeovimInstallException.class,
+        // A fake stall clock instead of real time, so the outcome does not depend on the machine's
+        // speed. It stands still until the server's 3 bytes are in the file (however long the
+        // connection and the first bytes take, even as the run's first HTTP use), then jumps one
+        // full stall ahead. The next look finds no new byte and a stall on the clock, and gives up.
+        // NeovimDownload reads the clock before it calls worked, so the jump counts from there.
+        // With a real clock a short stall once failed on Windows "after 0 of 10 bytes": the first
+        // look came after the stall, before any byte had arrived.
+        AtomicLong clock = new AtomicLong();
+        InstallProgress stallOnceTheBytesAreIn = new InstallProgress() {
+            private long received;
+
+            @Override
+            public void step(String name, long total) {
+            }
+
+            @Override
+            public void worked(long amount) {
+                long before = received;
+                received += amount;
+                if (before < 3 && received >= 3) { // the server sends 3 bytes, then holds the connection
+                    clock.addAndGet(NeovimDownload.STALL.toNanos() + 1);
+                }
+            }
+
+            @Override
+            public boolean cancelled() {
+                return false;
+            }
+        };
+        // If the clock never jumped (the bytes never arrived), only the request's 10-minute timeout
+        // would end the download: fail after TestWait instead.
+        NeovimInstallException e = assertTimeoutPreemptively(TestWait.duration(), () -> assertThrows(
+                NeovimInstallException.class,
                 () -> NeovimDownload.download(archive("/stall"), NeovimDownload.client(ProxySelector.of(null), null),
-                        tmp, InstallProgress.NONE, Duration.ofSeconds(1)));
+                        tmp, stallOnceTheBytesAreIn, clock::get)));
         assertEquals(NeovimInstallException.Reason.NETWORK, e.reason());
         assertTrue(e.getMessage().contains("stalled"), e.getMessage());
+        assertTrue(e.getMessage().contains("nothing arrived for 60 seconds"), e.getMessage());
         assertTrue(e.getMessage().contains("after 3 of " + body.length + " bytes"), e.getMessage());
         assertNoLeftovers();
     }

@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
 /**
@@ -44,6 +45,16 @@ import java.util.regex.Pattern;
  * Example: GitHub sends 4 MB of the 10.8 MB, then nothing; after a minute the download fails with
  * "nothing arrived for 60 seconds", and Retry starts over.
  *
+ * <h2>The stall clock, and how a test sets it</h2>
+ * The stall is measured on a clock read once per look ({@code System::nanoTime} in the product),
+ * from the moment the request is sent, not from the response: a server that accepts the connection
+ * but never answers is given up after {@link #STALL} too, not only after the request's 10-minute
+ * timeout. A test passes a clock of its own (the package-private {@code download} overload) and
+ * moves it forward itself, so the outcome does not depend on how fast the machine is. Example:
+ * {@code NeovimDownloadTest} moves its clock a full stall forward only once the server's first 3
+ * bytes are in the file, and the next look gives up "after 3 of 10 bytes", however long the
+ * connection took.
+ *
  * <h2>A proxy that wants a password</h2>
  * Java refuses to send a Basic proxy password through an HTTPS tunnel unless
  * {@code jdk.http.auth.tunneling.disabledSchemes} is changed for the whole JVM, so behind such a
@@ -60,7 +71,7 @@ public final class NeovimDownload {
     /** How long the download may go without a byte before it is given up as stalled. */
     static final Duration STALL = Duration.ofSeconds(60);
 
-    /** How often the calling thread looks at the file, Cancel and the stall clock. */
+    /** How often the calling thread looks at the file, Cancel and the stall clock (real time, not that clock). */
     private static final long POLL_MILLIS = 250;
 
     private NeovimDownload() {
@@ -85,12 +96,17 @@ public final class NeovimDownload {
      */
     public static Path download(NeovimRelease.Archive archive, HttpClient client, Path folder,
             InstallProgress progress) {
-        return download(archive, client, folder, progress, STALL);
+        return download(archive, client, folder, progress, System::nanoTime);
     }
 
-    /** {@link #download(NeovimRelease.Archive, HttpClient, Path, InstallProgress)} with the stall time a test chooses. */
+    /**
+     * {@link #download(NeovimRelease.Archive, HttpClient, Path, InstallProgress)} with the stall clock a
+     * test chooses: {@code nanoTime} returns nanoseconds, like {@link System#nanoTime()}, and only its
+     * differences count. The download is given up when two of its readings, the second at a look that
+     * found no new byte, are more than {@link #STALL} apart.
+     */
     static Path download(NeovimRelease.Archive archive, HttpClient client, Path folder, InstallProgress progress,
-            Duration stall) {
+            LongSupplier nanoTime) {
         Path file;
         try {
             Files.createDirectories(folder);
@@ -113,7 +129,7 @@ public final class NeovimDownload {
                 return subscriber;
             });
             progress.step("Downloading " + archive.asset(), archive.size());
-            HttpResponse<Path> response = watch(future, file, archive, progress, stall);
+            HttpResponse<Path> response = watch(future, file, archive, progress, nanoTime);
             int status = response.statusCode();
             if (status == 407) {
                 throw proxyPassword();
@@ -172,11 +188,15 @@ public final class NeovimDownload {
      * Waits for the response and its whole body, looking every {@value #POLL_MILLIS} ms at Cancel, the
      * file's growth (for the progress bar and the stall clock) and its size. The caller cancels the
      * request when this throws.
+     *
+     * <p>The clock is read once per look, before {@code progress} hears of new bytes, so the time of
+     * the last growth is the look's own time, whatever the listener does (a test's listener moves its
+     * clock forward there).
      */
     private static HttpResponse<Path> watch(CompletableFuture<HttpResponse<Path>> future, Path file,
-            NeovimRelease.Archive archive, InstallProgress progress, Duration stall) {
+            NeovimRelease.Archive archive, InstallProgress progress, LongSupplier nanoTime) {
         long seen = 0;
-        long lastGrowth = System.nanoTime();
+        long lastGrowth = nanoTime.getAsLong(); // the request is already sent: a silent server stalls too
         while (true) {
             try {
                 return future.get(POLL_MILLIS, TimeUnit.MILLISECONDS);
@@ -189,14 +209,15 @@ public final class NeovimDownload {
                 throw failure(archive, e.getCause());
             }
             progress.checkCancelled();
+            long now = nanoTime.getAsLong();
             long size = checkSize(file, archive);
             if (size > seen) {
+                lastGrowth = now;
                 progress.worked(size - seen);
                 seen = size;
-                lastGrowth = System.nanoTime();
-            } else if (System.nanoTime() - lastGrowth > stall.toNanos()) {
+            } else if (now - lastGrowth > STALL.toNanos()) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.NETWORK, "The download of "
-                        + archive.asset() + " stalled: nothing arrived for " + stall.toSeconds() + " seconds, after "
+                        + archive.asset() + " stalled: nothing arrived for " + STALL.toSeconds() + " seconds, after "
                         + size + " of " + archive.size() + " bytes. Check the network connection, and try again.");
             }
         }

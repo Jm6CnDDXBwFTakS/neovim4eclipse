@@ -250,6 +250,13 @@ waiting longer:
 - **Neovim settings that count real time.** `'mousetime'` (500 ms) decides whether two clicks are a
   double click; on a loaded machine two clicks sent at once can arrive further apart. The mouse
   tests set it to 10 s for themselves.
+- **A clock in the code under test.** When the code itself measures time (Get Neovim gives up a
+  download after 60 s without a byte), let it take the clock as a parameter and give the test a
+  fake one that moves only when the test says. `NeovimDownloadTest` moves its clock a full stall
+  ahead once the server's first bytes are in, so "after 3 of 10 bytes" holds however slow the
+  connection is; with a real 300 ms stall it once failed "after 0 of 10 bytes" on Windows. The same
+  idea, in its simplest form: pass the time as a value (`CmdlineWatcher.expectOwn(keys, now)`,
+  `NeovimInstaller.deleteReplaced(..., now)`).
 
 **Checking that something did not happen** needs care too: "sleep 200 ms, then check nothing
 arrived" passes on a loaded machine even when the bug is there, because the stray event comes later.

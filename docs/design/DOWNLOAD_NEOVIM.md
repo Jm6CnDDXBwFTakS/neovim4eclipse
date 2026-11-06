@@ -92,7 +92,8 @@ A background `Job` (status bar and Progress view, cancellable, never on the UI t
 1. **Get the archive.** *Download*: Java's `HttpClient` (redirects followed; proxy as in section 4)
    into a temporary file in `neovim/`. The client's threads write the body; the Job's thread looks
    every 250 ms and stops the download on Cancel, after 60 s without a byte (a stalled connection,
-   which the request timeout does not cover), or when the file grows past the pinned size.
+   which the request timeout does not cover; counted from the request, so a server that never
+   answers stalls too), or when the file grows past the pinned size.
    *Install from File*: the chosen file, only read.
 2. **Copy and check**: the archive is copied into a temporary file in `neovim/` while its SHA-256 is
    computed, and size and hash are compared with the data file's entry for this platform; the copy

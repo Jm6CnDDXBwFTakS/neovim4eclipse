@@ -790,6 +790,9 @@ The user presses *Get Neovim 0.12.6…* in the "Neovim not started" notice and c
    blocking read could not see it: the body is written by the client's own threads
    (`sendAsync` with `BodySubscribers.ofFile`), and the Job's thread only watches, every 250 ms, for
    Cancel, a stalled connection (60 s without a byte) and a body larger than the pinned size.
+   The stall is counted on a clock passed in (`System::nanoTime` in the product), so the test can
+   move a fake clock itself instead of waiting for real seconds; see "Tests on a loaded machine" in
+   CONTRIBUTING.md.
 4. `util/NeovimInstaller` locks `neovim/.install.lock` (a `FileChannel` lock: no two Eclipses at once),
    copies the file while hashing it (`MessageDigest`), and refuses anything but the pinned archive.
    The copy is what is unpacked: checking a file and then opening it again is a **time-of-check to
