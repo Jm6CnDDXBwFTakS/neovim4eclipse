@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -59,11 +60,40 @@ public final class RepositoryFiles {
         return list(root).stream().map(root::resolve).toList();
     }
 
-    /** Git's list for {@code root}, or empty when git cannot give one (no git, not a repository). */
+    /**
+     * Git's list for {@code root}, or empty when git cannot give one: no git, or {@code root} is not
+     * the top of a repository of its own. The second case matters for a source tree without
+     * {@code .git} that lies inside some other repository (an unpacked ZIP in a home folder kept in
+     * git): git would answer for that other repository, whose rules ignore neither {@code target/}
+     * nor anything else of this one.
+     */
     static Optional<List<String>> fromGit(Path root) {
+        Optional<String> top = git(root, "rev-parse", "--show-toplevel");
+        try {
+            if (top.isEmpty() || !Path.of(top.get().strip()).toRealPath().equals(root.toRealPath())) {
+                return Optional.empty();
+            }
+        } catch (IOException | InvalidPathException e) {
+            return Optional.empty();
+        }
         // -z: names end with NUL and are never quoted, so a name with a space or an umlaut reads as it is.
-        ProcessBuilder pb = new ProcessBuilder("git", "-C", root.toString(), "ls-files", "-z", "--cached", "--others",
-                "--exclude-standard");
+        return git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard").map(out -> {
+            List<String> files = new ArrayList<>();
+            for (String name : out.split("\0")) {
+                // A tracked file deleted on disk is still listed until the deletion is committed.
+                if (!name.isEmpty() && Files.isRegularFile(root.resolve(name))) {
+                    files.add(name);
+                }
+            }
+            return files.stream().distinct().sorted().toList();
+        });
+    }
+
+    /** What {@code git -C root <args>} prints, or empty when it fails or git is missing. */
+    private static Optional<String> git(Path root, String... args) {
+        List<String> command = new ArrayList<>(List.of("git", "-C", root.toString()));
+        command.addAll(List.of(args));
+        ProcessBuilder pb = new ProcessBuilder(command);
         try {
             Process git = pb.start();
             git.getOutputStream().close();
@@ -80,17 +110,7 @@ public final class RepositoryFiles {
                 return Optional.empty();
             }
             err.join();
-            if (git.exitValue() != 0) {
-                return Optional.empty();
-            }
-            List<String> files = new ArrayList<>();
-            for (String name : out.split("\0")) {
-                // A tracked file deleted on disk is still listed until the deletion is committed.
-                if (!name.isEmpty() && Files.isRegularFile(root.resolve(name))) {
-                    files.add(name);
-                }
-            }
-            return Optional.of(files.stream().distinct().sorted().toList());
+            return git.exitValue() == 0 ? Optional.of(out) : Optional.empty();
         } catch (IOException e) {
             return Optional.empty(); // no git on PATH
         } catch (InterruptedException e) {
