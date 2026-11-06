@@ -378,13 +378,23 @@ public final class ReleaseTool {
         if (there != null && !there.equals(head)) {
             git.push(ask, "Delete " + branch + " on origin, left from an earlier rehearsal of another commit", "--delete", branch);
             there = null;
+        } else if (there != null) {
+            // The branch stays when a rehearsal fails (the tool stops there). Its run of this commit
+            // ended and failed, and nobody reran it (a rerun would be in progress): rehearse anew,
+            // as running promote again promises, instead of reporting the same failure.
+            List<GitHub.Run> runs = gh.runs(workflow, head, "push", branch);
+            if (!runs.isEmpty() && runs.get(0).completed() && !runs.get(0).passed()) {
+                git.push(ask, "Delete " + branch + " on origin, whose rehearsal of " + head.substring(0, 7) + " failed, to rehearse it again",
+                        "--delete", branch);
+                there = null;
+            }
         }
         // The runs of this commit before the push: after a failed rehearsal, the same commit pushed
         // again starts a new run, and the old, failed one must not be the one followed.
         Set<Long> older = Set.of();
         if (there == null) {
             List<GitHub.Run> runs = gh.runs(workflow, head, "push", branch);
-            if (runs.stream().anyMatch(GitHub.Run::passed)) {
+            if (!runs.isEmpty() && runs.get(0).passed()) {
                 ok("the Release rehearsal passed on " + head.substring(0, 7) + " already");
                 return;
             }
