@@ -67,11 +67,15 @@ public final class DedicatedNeovim {
         Path release = release();
         remove();
         copyTree(release, home);
+        if (!PluginNeovim.verified(home, platform().windows())) {
+            // Taken away again before the skip, so no later test finds an unverified copy there:
+            // a test that skips here may not reach its own remove() (one outside its try).
+            remove();
+            assumeTrue(false, "-Dnvim.path is not in the pinned release's folder (" + release
+                    + "), so the dedicated Neovim cannot be installed for this test");
+        }
         PluginNeovim.forget();
         GetNeovimOffer.recheck();
-        assumeTrue(PluginNeovim.verified(home, platform().windows()),
-                "-Dnvim.path is not in the pinned release's folder (" + release + "), so the dedicated "
-                        + "Neovim cannot be installed for this test");
     }
 
     /** Removes the dedicated Neovim, if a test installed one. */
