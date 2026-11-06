@@ -206,15 +206,29 @@ public final class GitHub {
             }
         }
         if (kept.isEmpty()) {
-            return String.join("\n", lines.subList(Math.max(0, lines.size() - max), lines.size()));
+            return String.join("\n", lines.subList(Math.max(0, lines.size() - max), lines.size()).stream().map(GitHub::printable).toList());
         }
         return String.join("\n", kept.stream().distinct().toList());
     }
 
     /** A log line's job and text, without the step and the timestamp; a line of another form as it is. */
     private static String[] parts(String line) {
-        Matcher m = LOG_LINE.matcher(line);
-        return m.matches() ? new String[] {m.group(1), m.group(2)} : new String[] {"", line};
+        String l = printable(line);
+        Matcher m = LOG_LINE.matcher(l);
+        return m.matches() ? new String[] {m.group(1), m.group(2)} : new String[] {"", l};
+    }
+
+    /** A terminal's escape sequence: ESC, then {@code [} and its parameters, or one more character. */
+    private static final Pattern ESCAPE = Pattern.compile("\u001B(?:\\[[0-?]*[ -/]*[@-~]|[@-_])");
+
+    /**
+     * {@code line} without terminal escape sequences and other control characters (tabs kept). A CI
+     * log holds what the job's programs wrote, colour codes included, and a test can print
+     * anything; printed raw, a sequence could move the cursor or rewrite earlier lines of this
+     * terminal, so that the report shows something else than the log says.
+     */
+    static String printable(String line) {
+        return ESCAPE.matcher(line).replaceAll("").replaceAll("[\\p{Cntrl}&&[^\t]]", "");
     }
 
     /** The names of a run's jobs, as on its page (a called workflow's job as {@code build / Build (tested on main)}). */

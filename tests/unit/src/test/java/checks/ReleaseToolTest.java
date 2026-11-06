@@ -326,6 +326,10 @@ class ReleaseToolTest {
                 "All tests on Windows: [ERROR] Failures: ",
                 "All tests on Windows: [ERROR]   ReleaseToolTest.anEdit:275 expected: <one"), GitHub.failureSummary(log, 40));
         assertEquals("b\nc", GitHub.failureSummary("a\nb\nc", 2), "no test named: the last lines, as before");
+        assertEquals("job: [ERROR] red <<< FAILURE!", GitHub.failureSummary("job\tstep\t2026-11-06T18:21:22.1Z "
+                + "[\u001B[1;31mERROR\u001B[m] red\u001B[2K <<< FAILURE!", 5),
+                "colour codes and other control sequences are dropped");
+        assertEquals("a\tb", GitHub.failureSummary("a\u0008\tb", 5), "control characters but tabs dropped, in the plain tail too");
     }
 
     @Test
