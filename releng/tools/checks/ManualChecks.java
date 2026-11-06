@@ -995,7 +995,7 @@ public final class ManualChecks {
          * {@code eclipse.exe}, the console launcher, since {@code eclipse.exe} detaches from the
          * terminal and its output is lost.
          */
-        private static Path director(Path program) {
+        static Path director(Path program) {
             Path console = program.resolveSibling("eclipsec.exe");
             return Files.isRegularFile(console) ? console : program;
         }
@@ -1182,7 +1182,7 @@ public final class ManualChecks {
         }
 
         /** Runs a command to its end; returns its output, also appended to {@code log}. */
-        private static String run(List<String> command, Path log) throws IOException, InterruptedException {
+        static String run(List<String> command, Path log) throws IOException, InterruptedException {
             Process process = new ProcessBuilder(command).directory(log.getParent().toFile()) // the root, as for Eclipse
                     .redirectErrorStream(true).start();
             String output;
@@ -1202,7 +1202,7 @@ public final class ManualChecks {
         }
     }
 
-    private static String defaultEclipse() {
+    static String defaultEclipse() {
         return switch (currentPlatform()) {
             case "macos" -> "/Applications/Eclipse.app/Contents/MacOS/eclipse";
             case "windows" -> "C:\\eclipse\\eclipse.exe";
@@ -1247,8 +1247,14 @@ public final class ManualChecks {
         return answer != null && answer.trim().equalsIgnoreCase("y");
     }
 
+    /**
+     * The name {@link #fail} prints before a message: {@code InstallCheck} sets its own, since it
+     * calls the Eclipse copy's code here and a stop there should name the program that was run.
+     */
+    static String programName = "ManualChecks";
+
     private static void fail(String message) {
-        System.err.println("ManualChecks: " + message);
+        System.err.println(programName + ": " + message);
         System.exit(1);
     }
 }

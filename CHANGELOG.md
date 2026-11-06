@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Nothing changes in the plug-in itself: a new check installs a release from the public update
+  site into a copy of an Eclipse, trusting only the project's signing key and no unsigned file, as
+  a careful user does in Eclipse's trust dialog. The release steps offer it after each release.
+
 ## [0.2.4] - 2026-11-06
 
 ### Changed

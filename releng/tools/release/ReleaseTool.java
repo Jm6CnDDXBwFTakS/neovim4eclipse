@@ -29,6 +29,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import checks.InstallCheckTool;
+
 import common.Ask;
 import common.Folders;
 import common.Git;
@@ -82,6 +84,7 @@ import common.Version;
 public final class ReleaseTool {
 
     static final String TOOL = "releng/tools/release/Release.java";
+    static final String INSTALL_CHECK = "releng/tools/checks/InstallCheck.java";
     static final String NEOVIM_PINS = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src/io/github/jm6cnddxbwftaks/neovim4eclipse/util/neovim-downloads.properties";
     private static final Pattern POM_VERSION = Pattern.compile("<artifactId>neovim4eclipse</artifactId>\\s*<version>([^<]+)</version>");
     private static final int LOG_LINES = 40;
@@ -165,6 +168,16 @@ public final class ReleaseTool {
                 git.commitOf("origin/" + nextVersion(v).branch()) != null);
     }
 
+    /** Whether {@code InstallCheck} passed for {@code v} on this machine ({@code checks.InstallCheckTool.RECORD}). */
+    private boolean installChecked(Version v) {
+        Path record = root.resolve(InstallCheckTool.RECORD);
+        try {
+            return Files.isRegularFile(record) && InstallCheckTool.recorded(Files.readString(record)).equals(Optional.of(v));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private void status() {
         Version v = pomVersion();
         ReleaseState s = state(v);
@@ -186,6 +199,8 @@ public final class ReleaseTool {
         row("main", s.onMain() ? "at this commit" : "not at this commit");
         row(v.tag(), s.tagged() ? "on origin" : "not made");
         row("GitHub Release", s.released() ? "has the ZIP and its signature" : "none yet");
+        row("install check", installChecked(v) ? "passed for " + v + " (InstallCheck)"
+                : s.released() ? "not run for " + v + ": java " + INSTALL_CHECK + " " + v + " (recommended, not required)" : "after tag");
         row("next branch", nextVersion(v).branch() + (s.nextCut() ? " exists" : " not cut"));
         System.out.println();
         System.out.println(s.nextLine(TOOL) + (s.nextStep().equals("done") ? "" : "   (or go: every step from there)"));
@@ -571,6 +586,22 @@ public final class ReleaseTool {
         awaitSite(v);
         System.out.println();
         System.out.println("Release " + v + " is out.");
+        offerInstallCheck(v);
+    }
+
+    /**
+     * Offers {@code InstallCheck}: the release installed from the live update site into a copy of
+     * your Eclipse, as a user installs it. Recommended, never required: {@code next} does not wait
+     * for it (a fix for a release that fails it ships from the branch {@code next} cuts), and it
+     * can fail for reasons of this machine's Eclipse. The status shows whether it passed.
+     */
+    private void offerInstallCheck(Version v) {
+        List<String> command = Shell.java(INSTALL_CHECK, v.toString());
+        if (ask.offer("Install " + v + " from the update site into a copy of your Eclipse (InstallCheck)", "java " + INSTALL_CHECK + " " + v)
+                && shell.show(command) != 0) {
+            System.out.println("note: InstallCheck failed (see above); the release itself is out. Run it again with: java "
+                    + INSTALL_CHECK + " " + v);
+        }
     }
 
     /** How often and how long {@link #awaitSite} asks the update site before it gives up. */
