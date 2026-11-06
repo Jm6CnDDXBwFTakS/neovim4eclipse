@@ -46,8 +46,8 @@ import common.VersionCopies;
  *   <li><b>The archives, as Get Neovim installs them</b>: the plug-in is compiled, and
  *       {@link ArchiveCheck}, from the six archives the updater kept in
  *       {@code target/neovim-upgrade/<version>/archives} (one download serves both),
- *       unpacks each with the plug-in's own extractor and checks its tree hash; then this
- *       machine's Neovim must run.</li>
+ *       installs each with the plug-in's own {@code util/NeovimInstaller} into a scratch folder,
+ *       as Get Neovim does; this machine's Neovim must run.</li>
  *   <li><b>Every test</b> with the new Neovim: {@code java releng/tools/ci/LikeCi.java --all},
  *       which installs exactly the Neovim of the data file, as CI does.</li>
  *   <li><b>The commit</b>, {@code Move to Neovim 0.13.0}, in UTC.</li>
@@ -210,7 +210,9 @@ public final class NeovimUpgradeTool {
             throw new ToolFailure("the plug-in did not compile (see above)");
         }
         List<String> check = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "--class-path", root.resolve(PLUGIN + "/target/classes").toString(), "releng/tools/neovim/ArchiveCheck.java",
+                "--class-path", root.resolve(PLUGIN + "/target/classes").toString(),
+                // By its full path: the program run is then this repository's, whatever the working folder.
+                root.resolve("releng/tools/neovim/ArchiveCheck.java").toString(),
                 root.resolve(PINS).toString(), archives().toString(), work.toString()));
         if (shell.show(check) != 0) {
             throw new ToolFailure("Get Neovim could not install the new archives as they are (see above)");
