@@ -163,6 +163,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the SVG's script; such files now open in the Text Editor, as Vim shows them.
 - The update site checks every release's signatures each time it is rebuilt, and holds only signed
   releases (0.1.4 and later), so Eclipse never asks to trust unsigned content from it.
+- The dedicated Neovim's check no longer skips files named `.DS_Store`, `._*`, `Thumbs.db` or
+  `desktop.ini` (the names Finder and Explorer add): it deletes them, and fails while one is left.
+  Neovim could have run such a file unchecked, as a Lua module named `._x`, say.
 - A change Neovim made that Eclipse could not apply is logged without its text: the log entry
   in Eclipse's Error Log held the new lines, for a full sync the whole document.
 - A key that took long to process is no longer written to Eclipse's Error Log, where it could have

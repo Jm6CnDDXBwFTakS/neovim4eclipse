@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -11,6 +12,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -60,13 +62,39 @@ class InstallTreeTest {
         assertNotEquals(before, InstallTree.of(home).orElseThrow(), "an added file, such as a planted DLL");
     }
 
+    /**
+     * Files named like Finder's and Explorer's are deleted, any case, at any depth, so the hash is
+     * the release's again; until then the install counts as none. Not skipped: Neovim would load
+     * {@code ._x.lua} for a {@code require("._x")}, unchecked.
+     */
     @Test
-    void filesTheSystemAddsAreLeftOut() throws IOException {
+    void filesTheSystemAddsAreDeletedNotSkipped() throws IOException {
         Path home = home();
         String before = InstallTree.of(home).orElseThrow();
-        Files.writeString(home.resolve(".DS_Store"), "finder");
-        Files.writeString(home.resolve("share/Thumbs.db"), "explorer");
+        List<Path> added = List.of(home.resolve(".DS_Store"), home.resolve("share/THUMBS.DB"),
+                home.resolve("share/nvim/runtime/Desktop.ini"), home.resolve("share/nvim/runtime/._x.lua"));
+        for (Path file : added) {
+            Files.writeString(file, "added");
+        }
+        assertEquals(Optional.empty(), InstallTree.of(home), "counted as no install while they are there");
+        assertTrue(InstallTree.removeSystemFiles(home));
+        for (Path file : added) {
+            assertFalse(Files.exists(file), file + " left");
+        }
         assertEquals(before, InstallTree.of(home).orElseThrow());
+        assertTrue(Files.exists(home.resolve("share/nvim/runtime/filetype.lua")), "other files kept");
+    }
+
+    /** A read-only one (Explorer marks desktop.ini so) is deleted too. */
+    @Test
+    void aReadOnlySystemFileIsDeletedToo() throws IOException {
+        Path home = home();
+        Path ini = Files.writeString(home.resolve("desktop.ini"), "[.ShellClassInfo]");
+        if (!ini.toFile().setWritable(false)) {
+            assumeTrue(false, "cannot make a file read-only here");
+        }
+        assertTrue(InstallTree.removeSystemFiles(home));
+        assertFalse(Files.exists(ini));
     }
 
     @Test

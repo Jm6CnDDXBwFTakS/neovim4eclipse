@@ -24,7 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   &lt;data home&gt;/neovim4eclipse-plugin/neovim/     {@link PluginFolders#neovimFolder()}
  *     la/          the one Neovim for Linux arm64: bin/nvim, lib/, share/nvim/runtime/
  *     lx/          another platform's (the same home folder on an x86_64 machine)
- *     la.new/      a checked archive, unpacked, waiting to replace la/ ({@link NeovimInstaller})
+ *     la.unpacking/  an archive being unpacked and checked ({@link NeovimInstaller})
+ *     la.new/      a checked archive, unpacked, waiting to replace la/
  *     .install.lock  held while an Eclipse installs, so two do not at once
  * </pre>
  * One Neovim per {@link NeovimPlatform} code, in a folder named after the code: no version folders,
@@ -51,7 +52,14 @@ public final class PluginNeovim {
     /** The lock file's name in {@code neovim/}. */
     public static final String LOCK = ".install.lock";
 
-    /** Suffix of the folder a checked archive is unpacked into before it replaces the install. */
+    /**
+     * Suffix of the folder an archive is unpacked into and checked. Only a folder that passed every
+     * check is renamed to {@link #NEW}, so an unpack cut short (Eclipse killed halfway) is never
+     * taken for a waiting Neovim; the next install or clean-up deletes it.
+     */
+    public static final String UNPACKING = ".unpacking";
+
+    /** Suffix of the folder a checked, unpacked archive waits in until it replaces the install. */
     public static final String NEW = ".new";
 
     /** Suffix of the folder the previous install moves to during the swap, then deleted. */
@@ -131,7 +139,9 @@ public final class PluginNeovim {
         if (known != null && known.stamp().equals(stamp)) {
             return known.matches();
         }
-        boolean matches = InstallTree.of(home).map(expected.get()::equals).orElse(false);
+        // A Finder or Explorer file is deleted, not skipped (InstallTree, point 1).
+        boolean matches = InstallTree.removeSystemFiles(home)
+                && InstallTree.of(home).map(expected.get()::equals).orElse(false);
         VERDICTS.put(key, new Verdict(stamp, matches));
         return matches;
     }
@@ -206,6 +216,7 @@ public final class PluginNeovim {
         known.add(LOCK);
         for (NeovimPlatform p : NeovimPlatform.ALL) {
             known.add(p.code());
+            known.add(p.code() + UNPACKING);
             known.add(p.code() + NEW);
             known.add(p.code() + OLD);
         }
@@ -225,9 +236,13 @@ public final class PluginNeovim {
         return unused;
     }
 
-    /** A replaced Neovim set aside for deleting ({@code la.old-123}, {@code NeovimInstaller.swap}). */
-    private static boolean isReplaced(String name) {
-        return NeovimPlatform.ALL.stream().anyMatch(p -> name.startsWith(p.code() + OLD + "-"));
+    /**
+     * A replaced Neovim waiting to be deleted: {@code la.old}, or one set aside by
+     * {@code NeovimInstaller.swap} ({@code la.old-123}).
+     */
+    static boolean isReplaced(String name) {
+        return NeovimPlatform.ALL.stream()
+                .anyMatch(p -> name.equals(p.code() + OLD) || name.startsWith(p.code() + OLD + "-"));
     }
 
     /**

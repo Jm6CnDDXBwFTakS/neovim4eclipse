@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -187,6 +188,24 @@ class NeovimInstallerTest {
         assertFalse(Files.exists(folder.resolve("la.old")));
     }
 
+    /**
+     * An unpack cut short (Eclipse killed halfway) stays in {@code la.unpacking}, which is never
+     * swapped in, however complete it looks: the good install stays, and the clean-up deletes it.
+     */
+    @Test
+    void anUnpackCutShortIsNeverSwappedInAndIsCleanedUp() throws IOException {
+        install(archive, false, RUNS);
+        Files.writeString(folder.resolve("la/marker"), "the good one");
+        Files.createDirectories(folder.resolve("la.unpacking/bin"));
+        Files.writeString(folder.resolve("la.unpacking/bin/nvim"), "half");
+        Files.createDirectories(folder.resolve("la.unpacking/share/nvim/runtime"));
+        NeovimInstaller.finishPending(folder, NOTHING_RUNS);
+        assertTrue(Files.exists(folder.resolve("la/marker")), "the installed Neovim stays");
+        NeovimInstaller.deleteReplaced(folder, NOTHING_RUNS, Instant.now());
+        assertFalse(Files.exists(folder.resolve("la.unpacking")));
+        assertEquals(List.of(), PluginNeovim.unusedEntries(folder), "not listed as the user's leftover");
+    }
+
     /** Downloads left by an Eclipse killed in the middle go; one that may still be written stays. */
     @Test
     void staleDownloadsAreDeletedAndFreshOnesKept() throws IOException {
@@ -252,6 +271,7 @@ class NeovimInstallerTest {
         assertEquals(NeovimInstallException.Reason.DOES_NOT_RUN, e.reason());
         assertTrue(Files.exists(folder.resolve("la/marker")), "the installed Neovim stays");
         assertFalse(Files.exists(folder.resolve("la.new")), "the unpacked one is removed");
+        assertFalse(Files.exists(folder.resolve("la.unpacking")));
 
         e = assertThrows(NeovimInstallException.class, () -> install(archive, false, p -> new NeovimVersion(0, 11, 0)));
         assertTrue(e.getMessage().contains("0.11.0"), e.getMessage());
@@ -279,6 +299,7 @@ class NeovimInstallerTest {
         assertEquals(NeovimInstallException.Reason.CANCELLED, e.reason());
         assertFalse(Files.exists(folder.resolve("la")));
         assertFalse(Files.exists(folder.resolve("la.new")));
+        assertFalse(Files.exists(folder.resolve("la.unpacking")));
     }
 
     @Test

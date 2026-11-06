@@ -12,6 +12,7 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
@@ -45,11 +46,14 @@ import java.util.function.Predicate;
  *       unpacked is exactly what was checked. Reading the user's file twice, to hash and then to unpack,
  *       would unpack whatever it holds by then (a browser still writing it, say). A file of the wrong
  *       size is only hashed, for the message, never copied.</li>
- *   <li><b>Unpack</b> the copy into {@code neovim/<code>.new/} ({@link ArchiveExtractor}), replacing
- *       any leftover from an earlier attempt.</li>
+ *   <li><b>Unpack</b> the copy into {@code neovim/<code>.unpacking/} ({@link ArchiveExtractor}),
+ *       replacing any leftover from an earlier attempt, and check the unpacked files against the
+ *       release's tree hash ({@link InstallTree}).</li>
  *   <li><b>Run</b> its {@code bin/nvim --version} and require exactly the release's version: a Linux
  *       build that cannot run here (on a musl system) fails now, with a clear message, instead of at
- *       the next start.</li>
+ *       the next start. Then {@code <code>.unpacking} is renamed {@code <code>.new}: a {@code .new}
+ *       folder is always one that passed these checks, never an unpack that a killed Eclipse left
+ *       halfway.</li>
  *   <li><b>Swap</b>: {@code <code>} becomes {@code <code>.old}, {@code <code>.new} becomes
  *       {@code <code>}, then {@code .old} is deleted. Unless a Neovim runs from {@code <code>} right
  *       now, in this Eclipse or in any other process ({@link NeovimProcesses}: every Eclipse of the
@@ -61,8 +65,8 @@ import java.util.function.Predicate;
  *       starting during the two moves: a Neovim started while the archive downloaded counts too.</li>
  * </ol>
  * The archive itself is only read: a downloaded one is the caller's temporary file, and a picked one
- * the user's, never moved or deleted. On any failure the {@code .new} folder is removed and the
- * installed Neovim stays as it was.
+ * the user's, never moved or deleted. On any failure the {@code .unpacking} folder is removed and
+ * the installed Neovim stays as it was.
  *
  * <p>Example: {@code install(archive, release, la, folder, SwapGate.FREE, InstalledVersions::of, progress)}
  * leaves {@code folder/la/bin/nvim} answering {@code NVIM v0.12.6} and returns
@@ -176,27 +180,30 @@ public final class NeovimInstaller {
             NeovimRelease release, NeovimPlatform platform, Path folder, SwapGate gate,
             Function<Path, NeovimVersion> versionOf, InstallProgress progress, Predicate<Path> inUse) {
         Path home = PluginNeovim.home(folder, platform);
+        Path unpacking = folder.resolve(platform.code() + PluginNeovim.UNPACKING);
         Path staging = folder.resolve(platform.code() + PluginNeovim.NEW);
         Path old = folder.resolve(platform.code() + PluginNeovim.OLD);
-        boolean keep = false;
         try {
-            deleteTree(staging);
+            deleteTree(unpacking);
             progress.step("Unpacking " + name, -1);
-            ArchiveExtractor.extract(copy, expected.kind(), staging, progress);
+            ArchiveExtractor.extract(copy, expected.kind(), unpacking, progress);
             progress.checkCancelled();
-            Path program = PluginNeovim.program(staging, platform.windows());
-            if (!PluginNeovim.isInstall(staging, platform.windows())) {
+            Path program = PluginNeovim.program(unpacking, platform.windows());
+            if (!PluginNeovim.isInstall(unpacking, platform.windows())) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.WRONG_ARCHIVE,
                         "The archive holds no bin/nvim with its runtime files.");
             }
             // The unpacked files must be the pinned ones, as the start check (PluginNeovim.verified)
             // will want them: the archive's SHA-256 matched, so a difference here is a full disk or a
-            // file another program changed meanwhile, not a different Neovim.
+            // file another program changed meanwhile, not a different Neovim. A macOS archive may
+            // hold ._name files (AppleDouble, from the tar that made it), which the pin leaves out;
+            // they are deleted as at every start.
             progress.step("Checking the unpacked files", -1);
-            String tree = InstallTree.of(staging).orElse("none");
+            InstallTree.removeSystemFiles(unpacking);
+            String tree = InstallTree.of(unpacking).orElse("none");
             if (!tree.equals(expected.tree())) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.FILES, "The unpacked files in "
-                        + staging + " differ from Neovim's release (tree hash " + tree + ", expected "
+                        + unpacking + " differ from Neovim's release (tree hash " + tree + ", expected "
                         + expected.tree() + "). Check the free disk space, and try again.");
             }
             progress.step("Checking that Neovim runs", -1);
@@ -211,7 +218,9 @@ public final class NeovimInstaller {
                 throw new NeovimInstallException(NeovimInstallException.Reason.DOES_NOT_RUN,
                         "The unpacked Neovim reports version " + version + ", not " + release.version() + ".");
             }
-            keep = true;
+            // Checked: it becomes the waiting Neovim, replacing one an earlier install left waiting.
+            deleteTree(staging);
+            Files.move(unpacking, staging);
             Path finalProgram = PluginNeovim.program(home, platform.windows());
             // A leftover of an earlier swap whose delete failed; here, before the gate, so the
             // gate (which keeps Neovim from starting) is held only for the two moves.
@@ -223,11 +232,9 @@ public final class NeovimInstaller {
             deleteTreeQuietly(old);
             return new Result(Outcome.INSTALLED, finalProgram, sha);
         } catch (IOException e) {
-            throw files("Cannot unpack into " + staging + ": " + e.getMessage(), e);
+            throw files("Cannot unpack into " + unpacking + ": " + e.getMessage(), e);
         } finally {
-            if (!keep) {
-                deleteTreeQuietly(staging);
-            }
+            deleteTreeQuietly(unpacking); // gone already after the rename; a failed attempt's otherwise
         }
     }
 
@@ -334,15 +341,20 @@ public final class NeovimInstaller {
 
     /**
      * Swaps a waiting {@code <code>.new} in for every platform that has one: called before a Neovim
-     * starts, so a download made while Neovim ran is used after <i>Restart Neovim</i>. A folder that
-     * is not a complete install (an interrupted unpack) is left for the next install to replace.
-     * Failures are ignored: the old Neovim stays, and the swap is tried again at the next start.
+     * starts, so a download made while Neovim ran is used after <i>Restart Neovim</i>. A
+     * {@code .new} folder passed every check of the install (it is renamed so only then), and the
+     * start checks the swapped-in Neovim's files again ({@link PluginNeovim#verified}). Failures are
+     * ignored: the old Neovim stays, and the swap is tried again at the next start.
      *
      * <p>Only moves happen here, as the caller is about to start Neovim and may be on the UI thread;
      * the replaced {@code <code>.old} (thousands of runtime files) is left for
      * {@link #deleteReplaced}, which the caller runs in the background. Not while another process
      * runs a Neovim from {@code <code>} (another Eclipse's, {@link NeovimProcesses}): the swap would
      * take its runtime files away, so it waits for a start when none does.
+     *
+     * <p>Cost when nothing waits, the usual case: one listing of {@code folder}. The lock and the
+     * look at every process ({@link NeovimProcesses}, some 100 ms on Windows) happen only for a
+     * platform whose {@code .new} is there.
      *
      * @return whether a {@code <code>.old} is there for {@link #deleteReplaced} to delete
      */
@@ -352,37 +364,48 @@ public final class NeovimInstaller {
 
     /** {@link #finishPending}, with the question whether a process runs from a folder given (tests). */
     static boolean finishPending(Path folder, Predicate<Path> inUse) {
-        boolean replaced = false;
+        List<String> names = names(folder);
+        boolean swapped = false;
         for (NeovimPlatform platform : NeovimPlatform.ALL) {
             Path staging = folder.resolve(platform.code() + PluginNeovim.NEW);
-            if (Files.isDirectory(staging) && PluginNeovim.isInstall(staging, platform.windows())) {
+            if (names.contains(platform.code() + PluginNeovim.NEW)
+                    && PluginNeovim.isInstall(staging, platform.windows())) {
                 try (FileChannel channel = FileChannel.open(folder.resolve(PluginNeovim.LOCK),
                         StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock lock = tryLock(channel)) {
                     if (lock != null && !inUse.test(PluginNeovim.home(folder, platform))) {
-                        swap(folder, platform);
+                        swapped |= swap(folder, platform);
                     }
                 } catch (IOException e) {
                     // next start
                 }
             }
-            replaced |= !replacedFolders(folder, platform).isEmpty();
         }
-        return replaced;
+        return swapped ? !replacedFolders(folder).isEmpty() : names.stream().anyMatch(PluginNeovim::isReplaced);
     }
 
-    /** {@code <code>.old}, and any {@code <code>.old-<n>} set aside by {@link #swap}, in {@code folder}. */
-    private static List<Path> replacedFolders(Path folder, NeovimPlatform platform) {
-        String old = platform.code() + PluginNeovim.OLD;
-        List<Path> found = new ArrayList<>();
+    /** The names in {@code folder}; none if it does not exist or cannot be read. */
+    private static List<String> names(Path folder) {
+        List<String> names = new ArrayList<>();
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(folder)) {
             for (Path entry : entries) {
-                String name = String.valueOf(entry.getFileName());
-                if (name.equals(old) || name.startsWith(old + "-")) {
-                    found.add(entry);
-                }
+                names.add(String.valueOf(entry.getFileName()));
             }
         } catch (IOException | SecurityException e) {
-            // none found
+            // none
+        }
+        return names;
+    }
+
+    /**
+     * Every platform's {@code <code>.old}, and any {@code <code>.old-<n>} set aside by {@link #swap},
+     * in {@code folder}.
+     */
+    private static List<Path> replacedFolders(Path folder) {
+        List<Path> found = new ArrayList<>();
+        for (String name : names(folder)) {
+            if (PluginNeovim.isReplaced(name)) {
+                found.add(folder.resolve(name));
+            }
         }
         return found;
     }
@@ -398,7 +421,8 @@ public final class NeovimInstaller {
     /**
      * Cleans the folder up, under the lock, off the UI thread (a whole Neovim to delete): every
      * replaced {@code <code>.old} that {@link #finishPending} or an install left, unless a process
-     * still runs from it (another Eclipse's Neovim), and every download or install copy older than
+     * still runs from it (another Eclipse's Neovim), every {@code <code>.unpacking} (an install holds
+     * the lock while it unpacks, so one found here was cut short), and every download or install copy older than
      * {@link #STALE_DOWNLOAD} (an Eclipse killed in the middle: about 10 MB each). Skipped while an
      * install holds the lock; the caller runs it at each Neovim start.
      */
@@ -414,11 +438,15 @@ public final class NeovimInstaller {
         try (FileChannel channel = FileChannel.open(folder.resolve(PluginNeovim.LOCK), StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE); FileLock lock = tryLock(channel)) {
             if (lock != null) {
+                for (Path old : replacedFolders(folder)) {
+                    if (!inUse.test(old)) {
+                        deleteTreeQuietly(old);
+                    }
+                }
                 for (NeovimPlatform platform : NeovimPlatform.ALL) {
-                    for (Path old : replacedFolders(folder, platform)) {
-                        if (!inUse.test(old)) {
-                            deleteTreeQuietly(old);
-                        }
+                    Path unpacking = folder.resolve(platform.code() + PluginNeovim.UNPACKING);
+                    if (Files.isDirectory(unpacking, LinkOption.NOFOLLOW_LINKS)) {
+                        deleteTreeQuietly(unpacking);
                     }
                 }
                 deleteStaleDownloads(folder, now);
