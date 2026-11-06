@@ -12,7 +12,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-11-05
+## [0.2.1] - 2026-11-06
 
 ### Added
 
