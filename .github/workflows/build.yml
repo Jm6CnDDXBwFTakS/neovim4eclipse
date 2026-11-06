@@ -73,15 +73,16 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
       # Ubuntu's packaged Neovim is too old, so use the official release archive: exactly the one
-      # Get Neovim installs (util/neovim-downloads.properties, util/NeovimVersion.MINIMUM), its
-      # SHA-256 checked. The script prints the program's path, kept in NVIM for the next steps.
+      # Get Neovim installs (util/neovim-downloads.properties, util/NeovimVersion.MINIMUM), for the
+      # runner's platform (auto), its size, SHA-256 and tree hash checked, in Java so no runner
+      # tool's output format matters. It prints the program's path, kept in NVIM for the next steps.
       # Only for the tests. "!inputs.skip-tests": an absent input (push, pull request) is false.
       - name: Install Neovim
         if: ${{ !inputs.skip-tests }}
         # The assignment on its own line, so a failed check fails the step (set -e does not see a
         # failure inside an echo's arguments).
         run: |
-          nvim=$(releng/install-neovim.sh lx "$RUNNER_TEMP")
+          nvim=$(java releng/UpdateNeovimDownloads.java install auto "$RUNNER_TEMP")
           echo "NVIM=$nvim" >> "$GITHUB_ENV"
       # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
       # test"); -Pui adds the UI tests, which are off by default because they open a window. They
@@ -120,7 +121,7 @@ jobs:
         # The assignment on its own line, so a failed check fails the step (set -e does not see a
         # failure inside an echo's arguments).
         run: |
-          nvim=$(releng/install-neovim.sh lx "$RUNNER_TEMP")
+          nvim=$(java releng/UpdateNeovimDownloads.java install auto "$RUNNER_TEMP")
           echo "NVIM=$nvim" >> "$GITHUB_ENV"
       - run: >
           ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration
@@ -150,10 +151,8 @@ jobs:
         include:
           - name: Windows
             os: windows-latest
-            nvim-code: wx
           - name: macOS
             os: macos-latest
-            nvim-code: ma
     defaults:
       run:
         # Git Bash on Windows, so ./mvnw and the steps below are the same script on every OS.
@@ -172,12 +171,10 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
-      # As in the build job: the archive Get Neovim installs on this platform, its SHA-256 checked.
+      # As in the build job: the archive Get Neovim installs on this runner's platform, checked.
       - name: Install Neovim
-        env:
-          CODE: ${{ matrix.nvim-code }}
         run: |
-          nvim=$(releng/install-neovim.sh "$CODE" "$RUNNER_TEMP")
+          nvim=$(java releng/UpdateNeovimDownloads.java install auto "$RUNNER_TEMP")
           echo "NVIM=$nvim" >> "$GITHUB_ENV"
       # The same as the Linux build job: compile, unit, text-model, SWT and UI tests, feature, ZIP.
       - name: Build, unit and UI tests

@@ -41,7 +41,7 @@ class InstallTreeTest {
     /**
      * The value {@code sha256sum} gives for the same two lines, computed in a shell:
      * {@code printf '%s  bin/nvim\n%s  share/nvim/runtime/filetype.lua\n' $A $B | sha256sum}. The
-     * update tool (releng) and install-neovim.sh use that same rule, so this pins it.
+     * update tool (releng/UpdateNeovimDownloads.java, which also installs CI's Neovim) uses that same rule, so this pins it.
      */
     @Test
     void theHashIsSha256sumsOutputHashed() throws IOException {

@@ -148,17 +148,22 @@ class VersionConsistencyTest {
 
     /**
      * CI tests exactly the oldest supported Neovim, so the minimum is never an untested claim. Every
-     * CI job installs Neovim through {@code releng/install-neovim.sh}, which takes the version from
-     * {@code neovim-downloads.properties}; {@link #getNeovimInstallsTheMinimumNeovim} ties that to
-     * {@link NeovimVersion#MINIMUM}. A download of its own in a workflow would bypass both.
+     * CI job installs Neovim with {@code java releng/UpdateNeovimDownloads.java install}, which takes
+     * the version from {@code neovim-downloads.properties}; {@link #getNeovimInstallsTheMinimumNeovim}
+     * ties that to {@link NeovimVersion#MINIMUM}. A download of its own in a workflow would bypass both.
+     * The shell script that did this until 0.2.2 ({@code releng/install-neovim.sh}) must not come back:
+     * its tree hash depended on the output format of the runner's {@code sha256sum}, which changed.
      */
     @Test
     void ciInstallsNeovimFromTheDataFile() throws Exception {
         String build = read(".github/workflows/build.yml");
         assertFalse(build.contains("releases/download"),
-                "build.yml downloads Neovim itself: use releng/install-neovim.sh <code> <folder>");
-        assertEquals(3, build.split("releng/install-neovim.sh", -1).length - 1,
-                "build.yml: the build, integration and platforms jobs each install Neovim with releng/install-neovim.sh");
+                "build.yml downloads Neovim itself: use java releng/UpdateNeovimDownloads.java install auto <folder>");
+        assertEquals(3, build.split("java releng/UpdateNeovimDownloads.java install ", -1).length - 1,
+                "build.yml: the build, integration and platforms jobs each install Neovim with "
+                        + "java releng/UpdateNeovimDownloads.java install");
+        assertFalse(new File(repoFile("releng/UpdateNeovimDownloads.java").getParentFile(), "install-neovim.sh").exists(),
+                "releng/install-neovim.sh is back: CI installs Neovim with UpdateNeovimDownloads.java install");
     }
 
     /**

@@ -51,10 +51,11 @@ import java.util.TreeMap;
  * </pre>
  * ({@code shasum -a 256} in place of both {@code sha256sum} on macOS; in Git Bash on Windows,
  * whose {@code sha256sum} writes {@code <hash> *<path>}, add {@code | sed 's/ [*]/  /'} before the
- * last {@code sha256sum}, as {@code releng/install-neovim.sh} does). The four {@code !} tests
+ * last {@code sha256sum}). The four {@code !} tests
  * skip the files of point 1 that a file manager may have added since the plug-in last deleted them
  * (Finder writes a {@code .DS_Store} as soon as it shows the folder).
- * {@code releng/install-neovim.sh} checks every CI run's Neovim that way, and {@code releng/UpdateNeovimDownloads.java} computes the
+ * {@code java releng/UpdateNeovimDownloads.java install} checks every CI run's Neovim by this rule (in Java,
+ * not with these commands, whose output formats differ between systems), and the same program computes the
  * same hash from the archive's entries, with the archive's top folder ({@code nvim-linux-arm64/})
  * left out, and pins it as {@code <code>.tree} in {@code neovim-downloads.properties}.
  *

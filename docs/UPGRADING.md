@@ -239,9 +239,9 @@ header's backticks in a shell (Vim 9.2.1178, GHSA-x2w5-pj55-7hpc; fixed on maste
 release-0.12 when 0.12.6 was pinned), so SETUP turns `g:rmd_dynamic_fenced_languages` off; remove
 that guard, and the `setup_spec.lua` test for it, once the pinned Neovim has the fix.
 
-**Downloads in CI**: every job installs Neovim with `releng/install-neovim.sh <code> <folder>`,
-which takes the archive from the data file and checks its size and SHA-256: code `lx` in the Linux
-jobs, `wx` (Windows) and `ma` (macOS, Apple silicon) in the `platforms` job. So CI needs no change of
+**Downloads in CI**: every job installs Neovim with
+`java releng/UpdateNeovimDownloads.java install auto <folder>`, which takes the archive for the
+runner's platform from the data file and checks its size, SHA-256 and tree hash. So CI needs no change of
 its own; the release workflow also runs `java releng/UpdateNeovimDownloads.java --check`, which
 compares all six archives with the file before anything is published.
 
