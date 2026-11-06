@@ -3,44 +3,37 @@
 
 package neovim;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
-import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ArchiveExtractor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstallProgress;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstallTree;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstalledVersions;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimPlatform;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimVersion;
 
 /**
- * Unpacks each archive of a Neovim release the way <i>Get Neovim</i> does, with the plug-in's own
- * classes, and runs this machine's Neovim. Part of {@code NeovimUpgrade.java}, which starts it with
- * the plug-in's compiled classes on the class path:
+ * Installs each archive of a Neovim release as <i>Get Neovim</i> does, with the plug-in's own
+ * {@code util/NeovimInstaller}, into a scratch folder. Part of {@code NeovimUpgrade.java}, which
+ * starts it with the plug-in's compiled classes on the class path:
  * <pre>
  *   java --class-path plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/target/classes \
  *       releng/tools/neovim/ArchiveCheck.java &lt;data file&gt; &lt;archives folder&gt; &lt;work folder&gt;
  * </pre>
  * For each archive of the data file ({@code neovim-downloads.properties}), from the archives
- * folder (the tool downloaded them there): its size and SHA-256 against the file, then
- * {@code util/ArchiveExtractor} unpacks it into {@code <work>/<code>}, and {@code util/InstallTree}
- * must give the file's tree hash, which the plug-in checks before every start. Then this
- * machine's {@code bin/nvim --version} must print the release's version.
+ * folder (the updater kept them there), {@code NeovimInstaller.install} does what <i>Get Neovim</i>
+ * does after its download: size and SHA-256 against the file, unpacking (its tar reader refuses
+ * links and any entry outside the top folder), the tree hash the plug-in checks before every
+ * start, the version {@code nvim --version} reports, the swap into place. Calling the installer
+ * itself, not a copy of its steps, means a step it gains later is checked here too.
  *
- * <p>Why the plug-in's classes and not a copy: what matters is whether <i>Get Neovim</i> can
- * install the new archives. Its tar reader refuses links and any entry outside the top folder,
- * which Neovim's archives have not had so far; a new release that adds one would otherwise be
- * found only by the first user who presses <i>Get Neovim</i>. All six are checked, so a macOS or
- * Windows archive is checked on Linux too.
+ * <p>A Neovim of another platform cannot run here, so for those its version is taken from the
+ * data file and the rest is checked; all six archives are installed, on any machine.
  *
  * <p>A separate program, run with its own class path, because the tool itself runs from source
  * without the plug-in (see {@code release/Release.java}). Exit status 0 when every check passed.
@@ -59,75 +52,40 @@ public final class ArchiveCheck {
         try (Reader in = Files.newBufferedReader(Path.of(args[0]), StandardCharsets.UTF_8)) {
             release = NeovimRelease.parse(in);
         }
-        Path archives = Path.of(args[1]);
-        Path work = Path.of(args[2]);
+        Path archives = Path.of(args[1]).toAbsolutePath();
+        Path work = Path.of(args[2]).toAbsolutePath();
+        Optional<NeovimPlatform> here = NeovimPlatform.current();
         boolean ok = true;
         for (NeovimRelease.Archive archive : release.downloads().values()) {
-            ok &= check(archive, archives.resolve(archive.asset()), work.resolve(archive.platform().code()));
-        }
-        Optional<NeovimPlatform> here = NeovimPlatform.current();
-        if (ok && here.isPresent() && release.forPlatform(here.get()).isPresent()) {
-            ok = runs(PluginNeovim.program(work.resolve(here.get().code()), here.get().windows()), release.version().toString());
-        } else if (here.isEmpty()) {
-            System.out.println("note: this machine is none of Neovim's platforms, so no Neovim was run");
+            NeovimPlatform platform = archive.platform();
+            Path file = archives.resolve(archive.asset());
+            String name = platform.code() + " " + archive.asset();
+            ok &= install(file, release, platform, work, here.filter(platform::equals).isPresent(), name);
         }
         System.exit(ok ? 0 : 1);
     }
 
-    /** One archive: size, SHA-256, unpacked by the plug-in, its tree hash. */
-    private static boolean check(NeovimRelease.Archive archive, Path file, Path home) throws Exception {
-        String name = archive.platform().code() + " " + archive.asset();
+    /**
+     * {@code NeovimInstaller.install} for one archive into {@code work}. The version check runs
+     * the unpacked {@code nvim --version} when {@code runsHere} (with the plug-in's own time
+     * limits, {@code InstalledVersions}); for another platform's Neovim it takes the data file's.
+     */
+    private static boolean install(Path file, NeovimRelease release, NeovimPlatform platform, Path work, boolean runsHere,
+            String name) {
         if (!Files.isRegularFile(file)) {
             return fail(name + ": not downloaded (" + file + ")");
         }
-        if (Files.size(file) != archive.size() || !archive.sha256().equals(sha256(file))) {
-            return fail(name + ": its size or SHA-256 differs from the data file");
-        }
+        Function<Path, NeovimVersion> versionOf = runsHere ? InstalledVersions::of : program -> release.version();
         try {
-            ArchiveExtractor.extract(file, archive.kind(), home, InstallProgress.NONE);
-        } catch (IOException | RuntimeException e) {
-            return fail(name + ": Get Neovim's extractor refuses it: " + e.getMessage());
+            NeovimInstaller.Result r = NeovimInstaller.install(file, release, platform, work, NeovimInstaller.SwapGate.FREE,
+                    versionOf, InstallProgress.NONE);
+            System.out.println("ok: " + name + ": Get Neovim's installer installs it (size, SHA-256, unpacking, tree hash"
+                    + (runsHere ? ", and it runs: Neovim " + release.version() : "; another platform's, so not run here") + ") into "
+                    + r.program());
+            return true;
+        } catch (RuntimeException e) {
+            return fail(name + ": Get Neovim's installer refuses it: " + e.getMessage());
         }
-        Optional<String> tree = InstallTree.of(home);
-        if (tree.isEmpty()) {
-            return fail(name + ": unpacked, but it holds a link or another special file, which the plug-in refuses to run");
-        }
-        if (!tree.get().equals(archive.tree())) {
-            return fail(name + ": unpacked, but its tree hash " + tree.get() + " is not the data file's " + archive.tree());
-        }
-        System.out.println("ok: " + name + ": Get Neovim's extractor unpacks it, tree hash as in the data file");
-        return true;
-    }
-
-    /** Whether {@code program --version} prints {@code NVIM v<version>} within a minute. */
-    private static boolean runs(Path program, String version) throws Exception {
-        Process p = new ProcessBuilder(List.of(program.toString(), "--version")).redirectErrorStream(true).start();
-        p.getOutputStream().close();
-        String out;
-        try (InputStream in = p.getInputStream()) {
-            out = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        if (!p.waitFor(60, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-            return fail(program + " --version gave no answer within a minute");
-        }
-        String first = out.lines().findFirst().orElse("");
-        if (!first.startsWith("NVIM v" + version)) {
-            return fail(program + " --version printed \"" + first + "\", not NVIM v" + version);
-        }
-        System.out.println("ok: this machine's Neovim runs: " + first);
-        return true;
-    }
-
-    private static String sha256(Path file) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        try (InputStream in = Files.newInputStream(file)) {
-            byte[] buffer = new byte[1 << 16];
-            for (int n; (n = in.read(buffer)) > 0;) {
-                digest.update(buffer, 0, n);
-            }
-        }
-        return HexFormat.of().formatHex(digest.digest());
     }
 
     private static boolean fail(String message) {
