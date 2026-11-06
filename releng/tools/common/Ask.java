@@ -139,11 +139,35 @@ public final class Ask {
     }
 
     /**
-     * Whether standard input and output are a terminal. Up to Java 21 {@link System#console} is
-     * {@code null} otherwise; from Java 22 it always returns a console, and
-     * {@code Console.isTerminal()} (22+, called by reflection so this compiles for 21) tells.
+     * Whether a person can answer: standard input is a terminal. Only the input counts, so output
+     * kept in a log ({@code Release.java go | tee release.log}) still gets its questions.
+     *
+     * <p>Java cannot ask that of its own standard input, so on Linux and macOS a shell is asked
+     * with the same input ({@code sh -c 'test -t 0'}, exit status 0 for a terminal). On Windows,
+     * which has no {@code sh} of its own, the console decides ({@link #consoleIsTerminal}), which
+     * also wants standard output to be the terminal.
      */
     static boolean hasTerminal() {
+        if (!Shell.WINDOWS) {
+            try {
+                return new ProcessBuilder("sh", "-c", "test -t 0").redirectInput(ProcessBuilder.Redirect.INHERIT)
+                        .start().waitFor() == 0;
+            } catch (IOException e) {
+                return consoleIsTerminal(); // no sh: the console's answer
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return consoleIsTerminal();
+    }
+
+    /**
+     * Whether standard input and output are both a terminal. Up to Java 21 {@link System#console}
+     * is {@code null} otherwise; from Java 22 it always returns a console, and
+     * {@code Console.isTerminal()} (22+, called by reflection so this compiles for 21) tells.
+     */
+    private static boolean consoleIsTerminal() {
         java.io.Console console = System.console();
         if (console == null) {
             return false;
