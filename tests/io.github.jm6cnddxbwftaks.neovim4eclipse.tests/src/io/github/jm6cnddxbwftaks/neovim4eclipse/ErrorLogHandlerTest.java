@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
 import java.util.logging.Logger;
 
 import org.eclipse.core.runtime.ILogListener;
@@ -28,15 +30,31 @@ class ErrorLogHandlerTest {
         }
     };
 
+    /**
+     * The console handlers of the root logger, taken off while a test logs its probe records: they
+     * would print the probe error's stack trace into the build's output, where it reads as a real
+     * failure. The plug-in's handler, which this tests, is not one of them.
+     */
+    private final List<Handler> console = new CopyOnWriteArrayList<>();
+
     @BeforeEach
     void listen() {
         assertNotNull(Activator.getDefault(), "the plug-in must be started");
         Platform.addLogListener(listener);
+        Logger root = Logger.getLogger("");
+        for (Handler h : root.getHandlers()) {
+            if (h instanceof ConsoleHandler) {
+                console.add(h);
+                root.removeHandler(h);
+            }
+        }
     }
 
     @AfterEach
     void stopListening() {
         Platform.removeLogListener(listener);
+        console.forEach(Logger.getLogger("")::addHandler);
+        console.clear();
     }
 
     @Test
