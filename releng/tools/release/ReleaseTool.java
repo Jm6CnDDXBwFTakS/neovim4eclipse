@@ -499,17 +499,49 @@ public final class ReleaseTool {
             System.out.println("note: no bash or gpg here, so the signatures were not checked (releng/verify-zip.sh)");
         }
 
-        String site = settings.get("site.url");
-        String composite = httpGet(site + "compositeContent.xml");
-        if (composite == null || !composite.contains("'releases/" + v + "'")) {
-            throw new ToolFailure("the update site " + site + " does not list releases/" + v + " (compositeContent.xml); look at the Release run's Update site jobs");
-        }
-        if (httpGet(site + "releases/" + v + "/content.jar") == null) {
-            throw new ToolFailure("the update site lists " + v + " but does not serve " + site + "releases/" + v + "/content.jar");
-        }
-        ok("the update site " + site + " lists and serves " + v);
+        awaitSite(v);
         System.out.println();
         System.out.println("Release " + v + " is out. Next: java " + TOOL + " next");
+    }
+
+    /** How often and how long {@link #awaitSite} asks the update site before it gives up. */
+    private static final int SITE_LOOK_SECONDS = 30;
+    private static final int SITE_LOOK_TIMES = 20;
+
+    /**
+     * Waits until the public update site lists {@code v} and serves its {@code content.jar}.
+     * GitHub Pages answers through a cache that keeps a file up to ten minutes
+     * ({@code Cache-Control: max-age=600}): {@code compositeContent.xml} fetched by anyone shortly
+     * before the deployment comes back without the new release. Each request therefore carries a
+     * query of its own ({@code ?fresh=<time>}), which the cache has never seen, so it asks GitHub;
+     * and the check is repeated for a while, as a deployment takes a moment to reach every server.
+     */
+    private void awaitSite(Version v) {
+        String site = settings.get("site.url");
+        for (int i = 0; i < SITE_LOOK_TIMES; i++) {
+            String fresh = "?fresh=" + System.currentTimeMillis();
+            String composite = httpGet(site + "compositeContent.xml" + fresh);
+            boolean listed = composite != null && composite.contains("'releases/" + v + "'");
+            if (listed && httpGet(site + "releases/" + v + "/content.jar" + fresh) != null) {
+                ok("the update site " + site + " lists and serves " + v);
+                return;
+            }
+            if (i == 0) {
+                System.out.println("waiting for the update site to list and serve " + v + " …");
+            }
+            sleepSeconds(SITE_LOOK_SECONDS);
+        }
+        throw new ToolFailure("the update site " + site + " does not list or serve releases/" + v + " after "
+                + (SITE_LOOK_SECONDS * SITE_LOOK_TIMES / 60) + " minutes; look at the Release run's Update site jobs");
+    }
+
+    private static void sleepSeconds(int seconds) {
+        try {
+            Thread.sleep(seconds * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ToolFailure("interrupted");
+        }
     }
 
     // ---------------------------------------------------------------- next
