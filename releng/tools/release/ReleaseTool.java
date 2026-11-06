@@ -570,15 +570,15 @@ public final class ReleaseTool {
         Version next = nextVersion(v);
         String branch = next.branch();
         String main = git.commitOf("origin/main");
+        if (main == null) {
+            throw new ToolFailure("origin has no main branch to cut " + branch + " from, or to tell finished branches by");
+        }
         if (git.commitOf("origin/" + branch) != null) {
             ok(branch + " is on origin already");
         } else if (options.mode() == Ask.Mode.DRY_RUN) {
             System.out.println("[dry run] would cut " + branch + " from origin/main, set the version to " + next.snapshot() + ", commit and push it");
         } else {
             requireClean();
-            if (main == null) {
-                throw new ToolFailure("no origin/main to cut " + branch + " from");
-            }
             boolean exists = git.commitOf("refs/heads/" + branch) != null;
             if (!(exists && branchVersion(branch).equals(next.snapshot()))) {
                 cutNextBranch(next, branch, main, exists);
