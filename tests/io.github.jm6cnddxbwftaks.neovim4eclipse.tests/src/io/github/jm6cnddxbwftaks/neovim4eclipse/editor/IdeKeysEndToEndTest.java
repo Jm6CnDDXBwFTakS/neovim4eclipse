@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
 
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeKeys;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 
 /**
  * The IDE keys of {@link IdeKeys} in the plain Text Editor (no Java tooling): what each finds to run
@@ -154,9 +156,12 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
     void aCommandThatFailsWhileRunningSaysSo() {
         IdeActions.EclipseEditor failing = new IdeActions.EclipseEditor(editor, editor.getAdapter(ITextViewer.class),
                 widget.getCaretOffset(), IdeAction.REFERENCES, IdeKeys.COMMANDS.get(IdeAction.REFERENCES));
-        assertTrue(failing.execute(TestFailingHandler.COMMAND), "it ran (and failed): no next way");
-        waitUntil("the message", TIMEOUT_MS, () -> "grr: References failed: boom".equals(messageText(editor)),
-                () -> "; the message line shows \"" + messageText(editor) + "\"");
+        try (ExpectedLog log = ExpectedLog.of(IdeActions.class)) {
+            assertTrue(failing.execute(TestFailingHandler.COMMAND), "it ran (and failed): no next way");
+            waitUntil("the message", TIMEOUT_MS, () -> "grr: References failed: boom".equals(messageText(editor)),
+                    () -> "; the message line shows \"" + messageText(editor) + "\"");
+            log.assertLogged(Level.WARNING, "grr: running " + TestFailingHandler.COMMAND + " failed");
+        }
     }
 
     /** A link that throws when opened says so in the message line, and counts as opened. */
@@ -166,10 +171,13 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         IdeActions.EclipseEditor failing = new IdeActions.EclipseEditor(links, links.getAdapter(ITextViewer.class), 1,
                 IdeAction.TYPE_DEFINITION, IdeKeys.COMMANDS.get(IdeAction.TYPE_DEFINITION));
         assertTrue(failing.linkAt(TestHyperlinkDetector.ID));
-        assertTrue(failing.openLink(TestHyperlinkDetector.ID), "found, and failed: no next way");
-        waitUntil("the message", TIMEOUT_MS,
-                () -> "grt: Open Declared Type failed: cannot open FAILME".equals(messageText(links)),
-                () -> "; the message line shows \"" + messageText(links) + "\"");
+        try (ExpectedLog log = ExpectedLog.of(IdeActions.class)) {
+            assertTrue(failing.openLink(TestHyperlinkDetector.ID), "found, and failed: no next way");
+            waitUntil("the message", TIMEOUT_MS,
+                    () -> "grt: Open Declared Type failed: cannot open FAILME".equals(messageText(links)),
+                    () -> "; the message line shows \"" + messageText(links) + "\"");
+            log.assertLogged(Level.WARNING, "grt: opening the link of " + TestHyperlinkDetector.ID + " failed");
+        }
         page().closeEditor(links, false);
     }
 

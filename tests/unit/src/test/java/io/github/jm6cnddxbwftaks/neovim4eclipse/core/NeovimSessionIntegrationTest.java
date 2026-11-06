@@ -69,8 +69,10 @@ class NeovimSessionIntegrationTest {
     void aSyntaxErrorInTheConfigurationIsReportedAndNeovimStartsAnyway(@TempDir Path dir) throws Exception {
         Path init = dir.resolve("init.lua");
         Files.writeString(init, "vim.g.before = 1\nnnoremap ; :\n");
-        try (NeovimSession s = start(List.of("-u", init.toString()))) {
+        try (ExpectedLog log = ExpectedLog.of(NeovimConnection.class);
+                NeovimSession s = start(List.of("-u", init.toString()))) {
             assertTrue(s.startupErrors().contains("E5112"), s.startupErrors());
+            log.assertLogged(Level.WARNING, "Neovim's configuration reported errors while starting");
             s.setBufferLines(List.of("one", "two"));
             keys(s, "d", "d");
             assertEquals(List.of("two"), s.getBufferLines(), "Neovim works after the error");
@@ -82,9 +84,11 @@ class NeovimSessionIntegrationTest {
     @Test
     void aRuntimeErrorKeepsWhatRanBeforeIt(@TempDir Path dir) throws Exception {
         Path init = dir.resolve("init.lua");
-        Files.writeString(init, "vim.g.before = 1\nerror('boom from init')\nvim.g.after = 1\n");
-        try (NeovimSession s = start(List.of("-u", init.toString()))) {
+        Files.writeString(init, "vim.g.before = 1\nerror('boom from init (expected by the test)')\nvim.g.after = 1\n");
+        try (ExpectedLog log = ExpectedLog.of(NeovimConnection.class);
+                NeovimSession s = start(List.of("-u", init.toString()))) {
             assertTrue(s.startupErrors().contains("boom from init"), s.startupErrors());
+            log.assertLogged(Level.WARNING, "Neovim's configuration reported errors while starting");
             assertEquals(1L, ((Number) s.lua("return vim.g.before or 0")).longValue());
             assertEquals(0L, ((Number) s.lua("return vim.g.after or 0")).longValue());
         }
