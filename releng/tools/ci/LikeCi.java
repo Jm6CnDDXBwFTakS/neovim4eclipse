@@ -57,6 +57,9 @@ public final class LikeCi {
     /** The integration job's Maven arguments. */
     public static final String INTEGRATION = "-B -ntp test -f tests/unit/pom.xml -Pintegration";
 
+    /** The Linux build job's virtual screen ({@code xvfb-run -s}), given rather than left to the script's default. */
+    public static final String SCREEN = "-screen 0 1280x1024x24";
+
     /** Every test group, for {@code --all}. */
     public static final String ALL = "-B -ntp verify -Pall";
 
@@ -114,7 +117,7 @@ public final class LikeCi {
             // integration job has no display and needs none.
             boolean ui = !arguments.equals(INTEGRATION);
             if (ui && System.getProperty("os.name").startsWith("Linux") && onPath("xvfb-run")) {
-                command.addAll(List.of("xvfb-run", "-a"));
+                command.addAll(List.of("xvfb-run", "-a", "-s", SCREEN));
             } else if (ui && System.getProperty("os.name").startsWith("Linux")) {
                 System.err.println("LikeCi: no xvfb-run, so the UI tests use this desktop (CI uses xvfb-run)");
             }

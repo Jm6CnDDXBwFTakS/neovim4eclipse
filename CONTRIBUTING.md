@@ -49,6 +49,12 @@ xvfb-run -a ./mvnw verify -Pall -Dnvim.path=...   # every test of every group in
 taskset -c 0,1 ./mvnw verify -Pui               # any of these on two cores, as a CI runner (Linux; Windows and macOS below)
 ```
 
+**Downloads during a build.** `.mvn/maven.config` (it can hold no comments, so the reason is here)
+raises Maven's retries of a failed artifact download from 3 to 5
+(`aether.transport.http.retryHandler.count`): one dropped connection to Maven Central should not
+fail a build, locally or on a CI runner. The workflows retry the Maven wrapper's own download of
+Maven, and `UpdateNeovimDownloads.java install` retries Neovim's.
+
 **Running every test.** `-Pall` runs every test in one build: the unit, text, SWT and UI tests as
 `-Pui` does, the integration tests (`-Pintegration`), the Java editor tests (`-PuiHeavyJava`, so the
 test Eclipse gets the Java development tools) and the `timeoutReliant` ones. Only the screenshots

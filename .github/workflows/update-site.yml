@@ -42,6 +42,14 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# One shell for every step on every runner: bash, which GitHub then runs as `bash -e -o pipefail`
+# (a failure anywhere in a pipeline fails the step). Without this, Linux and macOS steps ran in
+# `bash -e` without pipefail and Windows steps in PowerShell, so the same line could pass on one
+# runner and fail on another. On Windows it is Git for Windows' bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     name: Build the site from the releases
@@ -61,8 +69,13 @@ jobs:
           mkdir dist
           for tag in $(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases \
                          --json tagName --jq '.[].tagName'); do
-            gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --pattern 'neovim4eclipse-*.zip.asc' \
-              --dir dist
+            # Retried: one failed download would otherwise fail the whole site build.
+            for try in 1 2 3; do
+              gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --pattern 'neovim4eclipse-*.zip.asc' \
+                --dir dist --clobber && break
+              [ "$try" = 3 ] && exit 1
+              sleep 15
+            done
           done
           ls -l dist
       - id: site
@@ -130,8 +143,12 @@ jobs:
       - name: Download Eclipse Platform ${{ matrix.eclipse }}
         env:
           PLATFORM_URL: ${{ matrix.platform-url }}
+        # Eclipse moves older drops from download.eclipse.org to archive.eclipse.org, so a pinned
+        # URL there stops working one day; archive.eclipse.org keeps every drop, so it is the fallback.
         run: |
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/platform.tar.gz" "$PLATFORM_URL"
+          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/platform.tar.gz" "$PLATFORM_URL" \
+            || curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/platform.tar.gz" \
+                 "${PLATFORM_URL/download.eclipse.org/archive.eclipse.org}"
           tar -xzf "$RUNNER_TEMP/platform.tar.gz" -C "$RUNNER_TEMP"
       # Pages can take a moment to serve a new deployment; wait until the newest release answers.
       - name: Wait for the new site

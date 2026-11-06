@@ -39,6 +39,14 @@ on:
 # Each job asks for what it needs; nothing by default.
 permissions: {}
 
+# One shell for every step on every runner: bash, which GitHub then runs as `bash -e -o pipefail`
+# (a failure anywhere in a pipeline fails the step). Without this, Linux and macOS steps ran in
+# `bash -e` without pipefail and Windows steps in PowerShell, so the same line could pass on one
+# runner and fail on another. On Windows it is Git for Windows' bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   version:
     name: Tag on main, version from the tag
@@ -160,6 +168,9 @@ jobs:
         with:
           distribution: temurin
           java-version-file: .java-version
+      # As in build.yml: the wrapper's own download of Maven, retried.
+      - name: Download Maven (retried)
+        run: for try in 1 2 3; do ./mvnw -B -q --version && break; [ "$try" = 3 ] && exit 1; sleep 15; done
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ env.SITE_ZIP }}
@@ -232,11 +243,13 @@ jobs:
           fi
           # The signature covers the bytes, not the name, so it still verifies after the renames.
           releng/verify-zip.sh "$zip" releng/signing-key.asc
-          unzip -l "$zip" | grep -q 'content\.jar$' || { echo "::error::$zip is not the update site"; exit 1; }
+          # grep -c reads all of unzip's output: grep -q would stop at the first match, and
+          # under pipefail unzip's broken pipe would then fail the step.
+          unzip -l "$zip" | grep -c 'content\.jar$' > /dev/null || { echo "::error::$zip is not the update site"; exit 1; }
           # The sign job checked every signature; this only guards against publishing the
           # unsigned ZIP if the jobs are ever rewired.
           unzip -p "$zip" artifacts.jar > "$RUNNER_TEMP/artifacts.jar"
-          unzip -p "$RUNNER_TEMP/artifacts.jar" artifacts.xml | grep -q "name='pgp.signatures'" \
+          unzip -p "$RUNNER_TEMP/artifacts.jar" artifacts.xml | grep -c "name='pgp.signatures'" > /dev/null \
             || { echo "::error::$zip is not signed"; exit 1; }
           releng/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" \
