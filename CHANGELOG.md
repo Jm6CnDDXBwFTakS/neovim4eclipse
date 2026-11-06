@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-06
+
 ### Changed
 
 - Nothing changes in the plug-in itself: releases are now made with a tool that checks each step
