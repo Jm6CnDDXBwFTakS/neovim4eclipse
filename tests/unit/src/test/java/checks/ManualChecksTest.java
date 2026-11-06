@@ -11,16 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import checks.ManualChecks.Card;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.RepositoryFiles;
 
 /**
  * {@link ManualChecks}: the checklist in {@code docs/MANUAL_CHECKS.md} follows its format, names
@@ -402,23 +399,8 @@ class ManualChecksTest {
     @Test
     void everyAreaOfTheChecklistNamesAFileThatExists() throws IOException {
         Path root = repositoryRoot();
-        List<String> files = new ArrayList<>();
-        // Build output, Git's own files and other sessions' worktrees are not entered at all: a built
-        // tree has hundreds of thousands of files under target/.
-        Set<String> skipped = Set.of(".git", "target", "node_modules", ".claude");
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) {
-                return skipped.contains(String.valueOf(dir.getFileName())) ? FileVisitResult.SKIP_SUBTREE
-                        : FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
-                files.add(root.relativize(file).toString().replace('\\', '/'));
-                return FileVisitResult.CONTINUE;
-            }
-        });
+        // Git's list (RepositoryFiles): no build output, and no copies such as other tools' worktrees.
+        List<String> files = RepositoryFiles.list(root);
         assertEquals(List.of(), ManualChecks.unmatchedAreas(ManualChecks.parse(checklist()), files));
     }
 

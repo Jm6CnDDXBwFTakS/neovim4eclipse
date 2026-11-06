@@ -14,13 +14,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.RepositoryFiles;
 
 /**
  * Keeps the repository importable into Eclipse: <em>File → Import → Maven → Existing Maven
@@ -56,24 +57,11 @@ class ProjectLayoutTest {
         throw new IllegalStateException("repository root not found above " + System.getProperty("user.dir"));
     }
 
-    /** Files named {@code name} in the repository, outside build output and Git's own folder. */
+    /** Files named {@code name} in the repository ({@link RepositoryFiles}: git's list, no build output or copies). */
     private static List<Path> filesNamed(String name) throws IOException {
-        try (Stream<Path> files = Files.walk(repo())) {
-            return files.filter(p -> p.getFileName().toString().equals(name))
-                    .filter(p -> !isIgnored(repo().relativize(p)))
-                    .sorted()
-                    .toList();
-        }
-    }
-
-    private static boolean isIgnored(Path relative) {
-        for (Path part : relative) {
-            String name = part.toString();
-            if (name.equals("target") || name.equals(".git") || name.equals("bin") || name.equals("node_modules")) {
-                return true;
-            }
-        }
-        return false;
+        return RepositoryFiles.paths(repo()).stream()
+                .filter(p -> p.getFileName().toString().equals(name))
+                .toList();
     }
 
     /** The comma-separated entries of a {@code build.properties} key, trimmed; empty when the key is absent. */
