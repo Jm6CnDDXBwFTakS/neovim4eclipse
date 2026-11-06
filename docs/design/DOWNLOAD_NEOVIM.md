@@ -248,7 +248,7 @@ URL, asset name or hash. Asset names do change: 0.10.4 renamed `nvim-linux64` to
 - **Trust on first use**: GitHub's digest only catches a download damaged on its way, since GitHub
   computes it from whatever was uploaded. Neovim publishes no checksum file, signature or build
   attestation (checked for v0.12.6), so nothing independent exists to compare with; the week's wait,
-  the VirusTotal pages and the later checks (`--check` at each release, `install-neovim.sh` in every
+  the VirusTotal pages and the later checks (`--check` at each release, `UpdateNeovimDownloads.java install` in every
   CI run) are what narrow it. If Neovim starts signing its archives, verify that in the updater.
 - **`--check`**: verifies the six URLs and hashes, writes nothing. It runs in the release workflow
   on GitHub at the tag push, before anything is published; a mismatch stops the release.
@@ -257,7 +257,7 @@ URL, asset name or hash. Asset names do change: 0.10.4 renamed `nvim-linux64` to
   machine.
 - **Checks**: `VersionConsistencyTest` ties the file's version to `MINIMUM`; all six entries,
   64-hex hashes, https URLs on `github.com/neovim/neovim`.
-- **CI** installs through `releng/install-neovim.sh <code> <folder>`, which reads the same file and
+- **CI** installs through `java releng/UpdateNeovimDownloads.java install auto <folder>`, which reads the same file and
   checks size, SHA-256 and tree hash of the archive it downloads; there is no separate Neovim
   version or archive list in the workflows.
 - **UPGRADING.md**: set `MINIMUM`, run the updater, fix what `VersionConsistencyTest` lists.
@@ -297,7 +297,7 @@ never named (a planted layout in a cloned repository below a folder picked by mi
 install, `<sha256>  <path>` lines in UTF-8 byte order hashed again, which is exactly
 `find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum` and can be checked by hand. The
 updater computes it from the archive's entries while it downloads (`<code>.tree` in the data file),
-the installer checks the unpacked folder against it before the swap, `install-neovim.sh` checks it
+the installer checks the unpacked folder against it before the swap, `UpdateNeovimDownloads.java install` checks it
 in every CI run on all three systems, and the plug-in checks it at Eclipse's start (in the
 background, `EarlyStartup`, which decides whether Get Neovim opens at once) and again in full
 before every Neovim start, the first included (`Activator` forgets the kept answer). The first

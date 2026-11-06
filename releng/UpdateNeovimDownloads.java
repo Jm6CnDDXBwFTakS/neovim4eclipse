@@ -13,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -42,7 +43,29 @@ import java.util.zip.ZipInputStream;
  *   java releng/UpdateNeovimDownloads.java 0.13.0 --allow-young   the same for a release under 7 days old
  *   java releng/UpdateNeovimDownloads.java --check    verify the file as it is; writes nothing
  *   java releng/UpdateNeovimDownloads.java --virustotal   ask VirusTotal about each hash (needs VT_API_KEY)
+ *   java releng/UpdateNeovimDownloads.java install auto target/ci-neovim
+ *                                                    install the pinned Neovim there (CI, LikeCi)
  * </pre>
+ *
+ * <h2>{@code install <code> <folder>}</h2>
+ * Downloads the pinned archive for one platform ({@code lx la mx ma wx wa}, or {@code auto} for the
+ * machine it runs on), checks its size, its SHA-256 and the tree hash of the files inside it against
+ * the data file, unpacks it into {@code <folder>} and checks the unpacked files' tree hash again, runs
+ * {@code nvim --version}, and prints the program's path (and nothing else) on standard output. Every
+ * CI job gets its Neovim this way, so CI tests exactly the Neovim that <i>Get Neovim</i> installs
+ * and checks the files GitHub serves now against the pin. Example, in a workflow step:
+ * <pre>
+ *   nvim=$(java releng/UpdateNeovimDownloads.java install auto "$RUNNER_TEMP")
+ *   # /home/runner/work/_temp/nvim-linux-x86_64/bin/nvim
+ * </pre>
+ * Why Java and not a shell script (it was {@code releng/install-neovim.sh} until 0.2.2): the script
+ * computed the tree hash from the output of {@code find}, {@code sort}, {@code xargs} and
+ * {@code sha256sum}, whose formats differ between GNU, macOS and Git for Windows, and changed under
+ * the CI runner twice in one day (a backslash before the hash of a path holding one, then
+ * {@code <hash> *<path>} lines). Here the rule is {@link #treeHash}, the code that pinned the hashes.
+ * Downloads are retried ({@link #DOWNLOAD_ATTEMPTS}), as one dropped connection should not fail a
+ * build. Only unpacking a tar archive uses a program, {@code tar}, as Java's own classes cannot set
+ * the execute bit that {@code bin/nvim} needs.
  *
  * <h2>What a rewrite does</h2>
  * <ol>
@@ -52,7 +75,7 @@ import java.util.zip.ZipInputStream;
  *   <li>Downloads each of the six archives and computes its size, its SHA-256 and the <em>tree
  *       hash</em> of the files inside it: what the plug-in checks the unpacked Neovim against at
  *       every start (the plug-in's {@code util/InstallTree} has the rule; {@link #treeHash} here
- *       must give the same answer, which {@code releng/install-neovim.sh} confirms in every CI run).</li>
+ *       must give the same answer, which {@code install} confirms in every CI run, from the unpacked files).</li>
  *   <li>Reads the release's entry in GitHub's API and requires GitHub's own {@code digest} and size
  *       to match. That catches a download damaged or changed on its way (a proxy, a broken mirror),
  *       but it is not a second, independent source: GitHub computes the digest from whatever file
@@ -73,7 +96,7 @@ import java.util.zip.ZipInputStream;
  *       noticed and reported within days (Neovim's users download each release by the thousand).</li>
  *   <li>Looking: the VirusTotal pages printed after a rewrite, and {@code --virustotal}, show what
  *       the antivirus engines and the community say about exactly these files.</li>
- *   <li>Checking again: {@code --check} at every release, and CI's {@code install-neovim.sh} at
+ *   <li>Checking again: {@code --check} at every release, and CI's {@code install} at
  *       every run, compare the files GitHub serves now with the pinned hashes, so a file replaced
  *       after pinning is caught.</li>
  * </ul>
@@ -127,6 +150,15 @@ public final class UpdateNeovimDownloads {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 3 && args[0].equals("install")) {
+            try {
+                System.out.println(install(load(), args[1], Path.of(args[2])));
+            } catch (Failure f) {
+                System.err.println("FAILED: " + f.getMessage());
+                System.exit(1);
+            }
+            return;
+        }
         boolean allowYoung = args.length == 2 && args[1].equals(ALLOW_YOUNG);
         if (args.length != 1 && !allowYoung) {
             usage();
@@ -152,7 +184,7 @@ public final class UpdateNeovimDownloads {
 
     private static void usage() {
         System.err.println("Usage: java releng/UpdateNeovimDownloads.java <version> [" + ALLOW_YOUNG
-                + "] | --check | --virustotal");
+                + "] | --check | --virustotal | install <code|auto> <folder>");
         System.exit(2);
     }
 
@@ -292,6 +324,186 @@ public final class UpdateNeovimDownloads {
             in.transferTo(OutputStream.nullOutputStream()); // the rest (padding), for the whole SHA-256
         }
         return new Entry(code, asset, size[0], HexFormat.of().formatHex(sha.digest()), tree);
+    }
+
+    // ---- install: the pinned Neovim for one platform, checked, unpacked ---------------------------
+
+    /** How often a download is tried before the install fails, waiting 5, 10, then 20 s between tries. */
+    static final int DOWNLOAD_ATTEMPTS = 4;
+
+    /**
+     * The platform code of the machine this runs on: {@code lx} for Linux on x86_64, {@code ma} for
+     * macOS on arm64. The same letters as the data file (and the plug-in's {@code NeovimPlatform}).
+     */
+    static String codeHere() {
+        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        String arch = System.getProperty("os.arch").toLowerCase(Locale.ROOT);
+        String osLetter = os.startsWith("linux") ? "l" : os.startsWith("mac") ? "m" : os.startsWith("windows") ? "w" : null;
+        String archLetter = arch.equals("amd64") || arch.equals("x86_64") ? "x"
+                : arch.equals("aarch64") || arch.equals("arm64") ? "a" : null;
+        if (osLetter == null || archLetter == null) {
+            throw new Failure("no Neovim release for " + os + " on " + arch);
+        }
+        return osLetter + archLetter;
+    }
+
+    /**
+     * {@code install <code> <folder>} (see the class comment): the program's path,
+     * {@code <folder>/<archive's top folder>/bin/nvim} ({@code nvim.exe} on Windows).
+     */
+    static Path install(Properties current, String code, Path folder) throws Exception {
+        if (code.equals("auto")) {
+            code = codeHere();
+        }
+        if (!CODES.contains(code)) {
+            throw new Failure("unknown platform code " + code + " (one of " + CODES + ", or auto)");
+        }
+        String version = required(current, "version");
+        String asset = required(current, code + ".asset");
+        long size = Long.parseLong(required(current, code + ".size"));
+        String sha = required(current, code + ".sha256");
+        String tree = required(current, code + ".tree");
+        String url = URL_TEMPLATE.replace("{version}", version).replace("{asset}", asset);
+        Files.createDirectories(folder);
+        Path archive = folder.resolve(asset);
+        System.err.println("Neovim " + version + " for " + code + ": " + url);
+        String downloaded = downloadWithRetries(url, archive);
+        long actualSize = Files.size(archive);
+        if (actualSize != size || !downloaded.equalsIgnoreCase(sha)) {
+            throw new Failure(asset + " does not match " + FILE + ": expected " + size + " bytes, sha256 " + sha
+                    + "; got " + actualSize + " bytes, sha256 " + downloaded);
+        }
+        System.err.println("  " + size + " bytes, sha256 " + sha + " (matches)");
+        boolean zip = asset.endsWith(".zip");
+        String inArchive;
+        try (InputStream in = Files.newInputStream(archive)) {
+            inArchive = treeHash(zip ? zipFiles(in) : tarFiles(in));
+        }
+        if (!inArchive.equals(tree)) {
+            throw new Failure("the files in " + asset + " have tree hash " + inArchive + ", not the pinned " + tree);
+        }
+        String top = asset.substring(0, asset.length() - (zip ? ".zip".length() : ".tar.gz".length()));
+        Path home = folder.resolve(top);
+        if (zip) {
+            unzip(archive, folder);
+        } else {
+            untar(archive, folder);
+        }
+        String unpacked = treeHash(filesIn(home));
+        if (!unpacked.equals(tree)) {
+            throw new Failure("the unpacked files in " + home + " have tree hash " + unpacked + ", not the pinned "
+                    + tree + " (a full disk, or a file changed meanwhile?)");
+        }
+        System.err.println("  tree " + tree + " (matches, in the archive and unpacked)");
+        Path program = home.resolve("bin").resolve(code.startsWith("w") ? "nvim.exe" : "nvim");
+        System.err.println("  " + firstLine(program));
+        return program.toAbsolutePath();
+    }
+
+    /** Downloads {@code url} into {@code file}, tried {@link #DOWNLOAD_ATTEMPTS} times; its SHA-256. */
+    static String downloadWithRetries(String url, Path file) throws Exception {
+        long wait = 5;
+        for (int attempt = 1;; attempt++) {
+            try {
+                return downloadTo(url, file);
+            } catch (IOException e) {
+                if (attempt == DOWNLOAD_ATTEMPTS) {
+                    throw new Failure(url + ": " + e.getMessage() + " (" + attempt + " tries)");
+                }
+                System.err.println("  try " + attempt + " failed (" + e.getMessage() + "); again in " + wait + " s");
+                Thread.sleep(wait * 1000);
+                wait *= 2;
+            }
+        }
+    }
+
+    /** One download of {@code url} into {@code file}, hashing what is written; an HTTP error is an IOException (retried), a 404 a Failure (not). */
+    private static String downloadTo(String url, Path file) throws IOException, InterruptedException {
+        HttpResponse<InputStream> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(5)).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() == 404) {
+            response.body().close();
+            throw new Failure(url + ": HTTP 404 (was the asset renamed?)");
+        }
+        if (response.statusCode() != 200) {
+            response.body().close();
+            throw new IOException("HTTP " + response.statusCode());
+        }
+        MessageDigest sha = sha256();
+        try (InputStream in = response.body(); OutputStream out = Files.newOutputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            for (int n; (n = in.read(buffer)) > 0;) {
+                sha.update(buffer, 0, n);
+                out.write(buffer, 0, n);
+            }
+        }
+        return HexFormat.of().formatHex(sha.digest());
+    }
+
+    /** Unpacks a zip archive (Windows) into {@code folder}, refusing entries outside it. */
+    private static void unzip(Path archive, Path folder) throws IOException {
+        Path root = folder.toAbsolutePath().normalize();
+        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(archive), StandardCharsets.UTF_8)) {
+            for (ZipEntry entry; (entry = zip.getNextEntry()) != null;) {
+                Path target = root.resolve(entry.getName()).normalize();
+                if (!target.startsWith(root)) {
+                    throw new Failure("an archive entry outside its folder: " + entry.getName());
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    /** Unpacks a gzip-compressed tar archive (Linux, macOS) with {@code tar}, which keeps the execute bits. */
+    private static void untar(Path archive, Path folder) throws Exception {
+        Process tar = new ProcessBuilder("tar", "-xzf", archive.toString(), "-C", folder.toString()).inheritIO()
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+        if (tar.waitFor() != 0) {
+            throw new Failure("tar -xzf " + archive + " failed (exit " + tar.exitValue() + ")");
+        }
+    }
+
+    /**
+     * The files below {@code home}, each by its path relative to it with {@code /} between names, to
+     * its SHA-256, by the same rule as an archive's entries ({@link #addFile}). A link fails, as the
+     * plug-in counts an install with one as none.
+     */
+    static Map<String, String> filesIn(Path home) throws IOException {
+        Map<String, String> files = new LinkedHashMap<>();
+        try (var walk = Files.walk(home)) {
+            for (Path file : (Iterable<Path>) walk::iterator) {
+                if (Files.isSymbolicLink(file)) {
+                    throw new Failure("a link in the unpacked Neovim: " + file);
+                }
+                if (Files.isRegularFile(file)) {
+                    StringBuilder name = new StringBuilder("top");
+                    for (Path part : home.relativize(file)) {
+                        name.append('/').append(part);
+                    }
+                    try (InputStream in = Files.newInputStream(file)) {
+                        addFile(files, name.toString(), in);
+                    }
+                }
+            }
+        }
+        return files;
+    }
+
+    /** The first line {@code program --version} prints, as a check that it runs here. */
+    private static String firstLine(Path program) throws Exception {
+        Process p = new ProcessBuilder(program.toString(), "--version").redirectErrorStream(true).start();
+        p.getOutputStream().close();
+        String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (p.waitFor() != 0) {
+            throw new Failure(program + " --version failed: " + output.strip());
+        }
+        return output.lines().findFirst().orElse("");
     }
 
     /**
@@ -481,14 +693,22 @@ public final class UpdateNeovimDownloads {
             }
             long size = octal(header, 124, 12);
             char type = (char) header[156];
-            if (longName != null) {
+            long padding = (512 - size % 512) % 512;
+            // A GNU "L" and a PAX "x" header may both describe the next entry, one after the other:
+            // the name waits for the entry itself, so neither takes the other's (a PAX path wins), as
+            // in the plug-in's util/ArchiveExtractor.
+            if (type == 'x' || type == 'L') {
+                String given = type == 'x' ? paxPath(tar.readNBytes((int) size))
+                        : text(tar.readNBytes((int) size), 0, (int) size);
+                longName = given != null ? given : longName;
+                tar.skipNBytes(padding);
+                continue;
+            }
+            if (longName != null && type != 'g') {
                 name = longName;
                 longName = null;
             }
-            long padding = (512 - size % 512) % 512;
             switch (type) {
-                case 'x' -> longName = paxPath(tar.readNBytes((int) size));
-                case 'L' -> longName = text(tar.readNBytes((int) size), 0, (int) size);
                 case '0', '\0', '7' -> addFile(files, name, new ByteArrayInputStream(tar.readNBytes((int) size)));
                 case '1', '2' -> throw new Failure("the archive holds a link, which the plug-in refuses: " + name);
                 default -> tar.skipNBytes(size); // folders, global headers

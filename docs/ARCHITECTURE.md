@@ -829,7 +829,7 @@ reason is gone.
 | RPC notification parsing | `core/NotificationBridge` | `NotificationBridgeTest` |
 | Process and RPC stack | `core/NeovimConnection` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Command line that starts Neovim, with `vim.g.neovim4eclipse` for the user's config | `util/NvimExecutable` | `NvimExecutableTest`, `NeovimSessionIntegrationTest` |
-| Which Neovim runs: the dedicated one if its files match the pinned tree hash, or one named program | `util/NvimExecutable`, `util/PluginNeovim.verified`, `util/InstallTree` | `NvimExecutableTest`, `PluginNeovimTest`, `InstallTreeTest`; CI's `releng/install-neovim.sh` |
+| Which Neovim runs: the dedicated one if its files match the pinned tree hash, or one named program | `util/NvimExecutable`, `util/PluginNeovim.verified`, `util/InstallTree` | `NvimExecutableTest`, `PluginNeovimTest`, `InstallTreeTest`; CI's `releng/UpdateNeovimDownloads.java install` |
 | Per-key state snapshot | `core/StateSnapshot` | `StateSnapshotTest` |
 | A block's lines as document characters | `util/BlockSelection` | `BlockSelectionTest`, `NeovimSessionIntegrationTest` (needs nvim) |
 | Key-input pipeline: pending keys, insert replay, macro playback, host `:` on Enter | `core/KeyInput` (Neovim seen through `KeyInput.Neovim`; state through `StateSync`) | `KeyInputTest` (scripted fake Neovim: request order, suppressed events), `NeovimSessionIntegrationTest` (needs nvim) |
