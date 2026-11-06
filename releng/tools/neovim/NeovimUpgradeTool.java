@@ -186,7 +186,7 @@ public final class NeovimUpgradeTool {
             write(copy.file(), VersionCopies.rewrite(text, copy, target.toString()));
         }
         ok("the copies in " + VersionCopies.FILE + " name " + target);
-        write("CHANGELOG.md", NeovimFiles.withChangedEntry(read("CHANGELOG.md"), NeovimFiles.entry(from, target)));
+        write("CHANGELOG.md", NeovimFiles.withNeovimEntry(read("CHANGELOG.md"), from, target));
         ok("CHANGELOG.md: the entry under Unreleased, Changed");
 
         checkArchives();

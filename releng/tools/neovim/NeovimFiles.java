@@ -6,6 +6,8 @@ package neovim;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import common.ToolFailure;
 import common.Version;
@@ -99,6 +101,41 @@ public final class NeovimFiles {
             lines.addAll(at, block);
         }
         return String.join(nl, lines) + (changelog.endsWith("\n") ? nl : "");
+    }
+
+    /** How a Neovim move's entry starts ({@link #entry}), in its wording with and without the italics. */
+    private static final Pattern ENTRY_START = Pattern.compile("^- \\*?Get Neovim\\*? installs Neovim ");
+    private static final Pattern IT_WAS = Pattern.compile("\\(it was (\\d+\\.\\d+\\.\\d+)\\)");
+
+    /**
+     * {@code changelog} with the entry for a move to {@code to}. If <i>Unreleased</i> already has
+     * a Neovim move's entry (two moves between releases: 0.12.6 to 0.12.7, then to 0.12.8), that
+     * one is replaced, keeping its "it was": users go from the released Neovim straight to the new
+     * one, and never had the version in between. Otherwise as {@link #withChangedEntry}.
+     */
+    public static String withNeovimEntry(String changelog, Version from, Version to) {
+        String nl = changelog.contains("\r\n") ? "\r\n" : "\n";
+        List<String> lines = new ArrayList<>(changelog.lines().toList());
+        int start = lines.indexOf("## [Unreleased]");
+        Version released = from;
+        if (start >= 0) {
+            for (int i = start + 1; i < lines.size() && !lines.get(i).startsWith("## ["); i++) {
+                if (ENTRY_START.matcher(lines.get(i)).find()) {
+                    int end = i + 1; // the item's continuation lines start with two spaces
+                    while (end < lines.size() && lines.get(end).startsWith("  ")) {
+                        end++;
+                    }
+                    Matcher was = IT_WAS.matcher(String.join(" ", lines.subList(i, end)));
+                    if (was.find()) {
+                        released = Version.parse(was.group(1));
+                    }
+                    lines.subList(i, end).clear();
+                    break;
+                }
+            }
+        }
+        String rest = String.join(nl, lines) + (changelog.endsWith("\n") ? nl : "");
+        return withChangedEntry(rest, entry(released, to));
     }
 
     /** {@code text} as lines of at most {@link #WIDTH} characters, the later ones indented by two spaces. */
