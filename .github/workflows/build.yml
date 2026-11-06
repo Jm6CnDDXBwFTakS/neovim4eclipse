@@ -5,8 +5,8 @@
 # demand on any branch: Actions tab > Build > Run workflow, or
 #   gh workflow run build.yml --ref release/0.1.2
 # Release, fix/ and feature/ branches are not built automatically, to save Actions minutes: run the
-# workflow by hand when a change needs CI, and always on the release branch before main is moved
-# to it (CONTRIBUTING.md, "Releasing", step 1). The update-site ZIP is attached to the run as it is
+# workflow by hand when a change needs CI. At a release, the run on main is the test run, which the
+# Release workflow then reuses (CONTRIBUTING.md, "Releasing"). The update-site ZIP is attached to the run as it is
 # (neovim4eclipse-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software
 # > Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
 # included, inside a virtual X display (xvfb-run) with a pinned Neovim. The platforms job runs the

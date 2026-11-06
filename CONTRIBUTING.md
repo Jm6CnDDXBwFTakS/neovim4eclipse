@@ -395,6 +395,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
+| `releng/tools/` | developer tools run with `java`: `release/Release.java` (a release, step by step), `ci/LikeCi.java` (the tests as CI runs them), `checks/ManualChecks.java` (the manual checks); `common/` holds what they share |
 | `releng/render-icon.py` | renders `docs/images/logo.svg` to the toolbar icon PNGs (`plugins/.../icons/`), with headless Firefox |
 | `releng/update-site.sh` | builds the permanent update site (a composite p2 repository) from the release ZIPs |
 | `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version |
@@ -486,13 +487,14 @@ into the next one up (right away, or at a cleanup):
 fix/<name>, feature/<name>  ──►  release/<next version>  ──►  main  (tagged v<version>)
 ```
 
-- **`main`** holds released code only. It moves forward only at a release (step 2 of
+- **`main`** holds released code only. It moves forward only at a release (*promote* in
   "Releasing"), and every tag `v<version>` is on it.
 - **`release/<version>`**, for example `release/0.1.2`, collects the fixes and features of the
   next release. It is cut from `main` right after a release, and its first commit sets the version
-  in the POMs to `<version>-SNAPSHOT` (see "Releasing", step 4). The *Build* workflow does not run
-  on it automatically, to save Actions minutes: run it by hand when a change needs CI, and always
-  before `main` moves (step 1 of "Releasing"). If the scope grows, rename it (0.1.2 to 0.2.0)
+  in the POMs to `<version>-SNAPSHOT` (see "Releasing", the step *next*). The *Build* workflow does not run
+  on it automatically, to save Actions minutes: run it by hand when a change needs CI. At a
+  release, the *Build* on `main` is the test run, after the rehearsal on `rehearse/<version>`
+  ("Releasing"). If the scope grows, rename it (0.1.2 to 0.2.0)
   and set the version again.
 - **`fix/<name>`** and **`feature/<name>`** hold one piece of work, cut from the release branch and
   merged back into it, by pull request or directly. They are not built automatically; run the
@@ -536,39 +538,85 @@ Rerun the tests after a rebase that had conflicts. Three guards keep it so:
 ## Releasing
 
 A release is a `v<version>` tag on `main`; pushing it starts the *Release* workflow
-(`.github/workflows/release.yml`), which builds that version (and tests it, unless the *Build* on `main` already passed for that commit; step 2),
-signs the ZIP with the project's PGP key (see [docs/PACKAGING.md](docs/PACKAGING.md), "PGP
-signing of releases"), publishes a GitHub Release with it, and then rebuilds the update site on GitHub Pages
-(`.github/workflows/update-site.yml`, see [docs/PACKAGING.md](docs/PACKAGING.md)) with the new
-release in it. For 0.1.2, released from `release/0.1.2`:
+(`.github/workflows/release.yml`), which builds that version (and tests it, unless the *Build* on
+`main` already passed for that commit), signs the ZIP with the project's PGP key (see
+[docs/PACKAGING.md](docs/PACKAGING.md), "PGP signing of releases"), publishes a GitHub Release with
+it, and then rebuilds the update site on GitHub Pages (`.github/workflows/update-site.yml`, see
+[docs/PACKAGING.md](docs/PACKAGING.md)) with the new release in it.
 
-1. On `release/0.1.2`, in [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to
-   `## [0.1.2] - 2026-11-02` (the release date, in ISO form) and add a new, empty
-   `## [Unreleased]` above it. That section becomes the release notes;
-   `releng/release-notes.sh 0.1.2` prints them, exactly as they will appear. Update the version in
-   the README's status line. Check that the pinned Neovim is Neovim's newest release that is a week old or more,
-   and move it if not ([docs/UPGRADING.md](docs/UPGRADING.md), "Following Neovim's releases"). Run the manual checks this release needs: `java releng/tools/checks/ManualChecks.java due` lists
-   them ([docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md)). Run every test on your machine, those CI leaves out included (the Java
-   editor and the timeout-reliant ones; see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
+### With the Release tool
+
+`releng/tools/release/Release.java` runs the steps below, from the repository's root, on the
+release branch. It needs a JDK of release 22 or newer (it is several source files, which `java` runs
+without a build only from that release on; the plug-in itself stays on 21), `gh` signed in (`gh auth login`), and, for
+the signature checks, `bash` and `gpg`:
+
+```bash
+java releng/tools/release/Release.java            # where the release stands, and the next step
+java releng/tools/release/Release.java go         # every step from there to the end
+java releng/tools/release/Release.java promote    # one step
+```
+
+It checks before it acts, and asks `[y/N]` before every push, tag, commit, workflow run and branch
+delete, showing the command or diff first. `--dry-run` prints what a step would do; `--yes` does it
+without asking, for a step already approved. Without a terminal (a script, an AI's shell) it never
+waits for an answer: it stops before the first side effect and prints the command that does it with
+`--yes`. Every step reads git and GitHub afresh, so any step can be run again after a failure. For
+release 0.2.3, on `release/0.2.3`:
+
+1. **check**: the branch is clean and not behind origin, *Unreleased* in
+   [CHANGELOG.md](CHANGELOG.md) lists the changes, the six pinned Neovim archives still match
+   (and a line when Neovim has a newer release: move the pin once it is a week old,
+   [docs/UPGRADING.md](docs/UPGRADING.md), "Following Neovim's releases"). It lists the manual
+   checks this release needs ([docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md)); do them. Then it
+   runs every test on this machine, those CI leaves out included (`LikeCi.java --all`; see [Tests
+   on a loaded machine](#tests-on-a-loaded-machine)), and records the commit that passed. It prints
+   the same command for macOS and Windows: run it there too.
+2. **prepare**: renames `## [Unreleased]` to `## [0.2.3] - <today, UTC>` under a new, empty
+   `## [Unreleased]` (that section becomes the release notes; `releng/release-notes.sh 0.2.3`
+   prints them as they will appear), puts the version in the README's status line, and commits.
+3. **promote**: pushes the branch, and pushes it again to `rehearse/0.2.3`, which starts the
+   *Release rehearsal* (`.github/workflows/rehearse-release.yml`): what otherwise runs only at the
+   tag, the build at the release's version, signing (with a throwaway key), the publish job's checks
+   and notes, both update sites and the installs into the oldest and newest Eclipse, publishing
+   nothing. It watches the rehearsal, deletes that branch, fast-forwards `main` to the release
+   branch and watches the *Build* there. That run is the release's test run: the *Release*
+   workflow finds it and only builds the ZIP instead of running every test again, Windows and macOS
+   included. `promote` wants the local tests of `check` on this commit, or on one that differs only
+   in the changelog and README. With `--ci-on-branch` it also runs the *Build* on the release
+   branch first, for a change that should not reach `main` untested.
+4. **tag**: tags `main`, pushes the tag, and watches the *Release* workflow to the end (it publishes
+   the update site too). Then it checks the release as a user meets it: the run reused the *Build*
+   on `main`, the GitHub Release has `neovim4eclipse-0.2.3.zip` and its `.asc`, both kinds of
+   signature verify (`releng/verify-zip.sh`, `releng/verify-signatures.sh`), and the public update
+   site lists the version.
+5. **next**: cuts `release/0.2.4` from `main`, sets its version (`0.2.4-SNAPSHOT`), commits and
+   pushes it; then deletes `release/0.2.3` and the `fix/`, `feature/` and `rehearse/` branches that
+   `main` already has (`--next 0.3.0` starts another version).
+
+When a workflow run fails, the tool prints the failed jobs' last log lines and what to do: rerun the
+failed jobs for a runner hiccup, or fix the cause on the release branch and run `check` and
+`promote` again. It never forces a push or moves a tag; when a tag must move, it prints the
+commands. Its commits are in UTC; a `local.properties` beside its `settings.properties` (see
+`local.properties.example`) can add a last paragraph to them, or change the local test run.
+
+### By hand
+
+The same steps as commands, for when the tool cannot run. For 0.1.2, released from `release/0.1.2`:
+
+1. Check that the pinned Neovim matches (`java releng/UpdateNeovimDownloads.java --check`) and is
+   Neovim's newest release that is a week old or more. List the manual checks this release needs
+   (`java releng/tools/checks/ManualChecks.java due`) and do them. Run every test:
 
    ```bash
    java releng/tools/ci/LikeCi.java --all
    ```
 
-   Commit and push, then run the *Build* workflow on the branch by hand and wait for it to pass:
-
-   ```bash
-   gh workflow run build.yml --ref release/0.1.2
-   gh run watch   # pick the new run from the list; it can take a few seconds to appear
-   ```
-
-   Then rehearse the release on the branch and wait for it to pass. The *Release rehearsal*
-   workflow (`.github/workflows/rehearse-release.yml`) runs what otherwise runs only at the tag:
-   the build at the release's version, signing (with a throwaway key), the publish job's checks
-   and notes, both update sites, and the install into the oldest and newest Eclipse, publishing
-   nothing. A mistake in those steps then shows before the tag, not after it. It starts when a
-   commit is pushed to a `rehearse/` branch (GitHub's *Run workflow* button works only for a
-   workflow already on `main`), so push the release branch there, and delete it afterwards:
+   In [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to `## [0.1.2] - 2026-11-02` (the
+   release date, in ISO form) and add a new, empty `## [Unreleased]` above it. Update the version
+   in the README's status line. Commit and push. Rehearse the release, wait for it to pass, and
+   delete the branch (a push, since GitHub's *Run workflow* button works only for a workflow
+   already on `main`):
 
    ```bash
    git push origin release/0.1.2:rehearse/0.1.2
@@ -582,18 +630,18 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    git push origin release/0.1.2:main
    ```
 
-   This run is also the release's test run. When the *Release* workflow finds a successful *Build*
-   run on `main` for the tagged commit, it only builds the ZIP (the `skip-tests` input of
-   `build.yml`) instead of running every test again, Windows and macOS included, on a commit they
-   just passed. Only a push or *Run workflow* run of this repository counts: a pull request from a
-   fork's own `main` also runs on a branch named `main`, but tests something else. Tag before that
-   run has passed and the release runs every test itself, as it does for any commit without one;
-   the log of its first job says which it found.
+   When the *Release* workflow finds a successful *Build* run on `main` for the tagged commit, it
+   only builds the ZIP (the `skip-tests` input of `build.yml`). Only a push or *Run workflow* run of
+   this repository counts: a pull request from a fork's own `main` also runs on a branch named
+   `main`, but tests something else. Tag before that run has passed and the release runs every test
+   itself; the log of its first job says which it found.
 
-3. Tag the commit on `main` and push the tag:
+3. Tag the commit on `main` and push the tag, then check the GitHub Release's ZIP and signatures:
 
    ```bash
    git tag v0.1.2 origin/main && git push origin v0.1.2
+   gh release download v0.1.2 --pattern 'neovim4eclipse-*.zip*'
+   releng/verify-zip.sh neovim4eclipse-0.1.2.zip releng/signing-key.asc
    ```
 
 4. Start the next release: cut `release/0.1.3` from `main`, set its version, commit, and push it;
@@ -605,6 +653,8 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    git commit -am "Start 0.1.3: set the version to 0.1.3-SNAPSHOT" && git push -u origin release/0.1.3
    git push origin --delete release/0.1.2
    ```
+
+### What the Release workflow refuses
 
 The workflow stops before building anything if the tag is not `v<major>.<minor>.<patch>` (such as
 `v0.1.2`; Git allows `$` and `;` in a tag name, and the version reaches shell lines and file names),

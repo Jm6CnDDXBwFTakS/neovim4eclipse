@@ -4,7 +4,7 @@ Most of what the plug-in does is checked by its tests ([CONTRIBUTING.md](../CONT
 and test"). This file lists what is left: the few checks that need a person, because they depend on
 something a test cannot fake (a real download, macOS's Gatekeeper or input methods), or
 on eyes (the gallery of dialogs, for the overall look), or because they *are* the release (the full
-test runs, CI, the tag). Each is a *card* with an id, such as `gn-download`.
+test runs on each platform, the install from the update site). Each is a *card* with an id, such as `gn-download`.
 
 **Why so few.** A check stays here only while no test can do it. When a card can become a test, it
 should: a test runs on every change and on every platform, a card only when someone has the time.
@@ -261,11 +261,11 @@ that has the platform.
 - **Areas:** always
 
 ```sh
-xvfb-run -a ./mvnw verify -Pall -Dnvim.path=$HOME/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim
+java releng/tools/release/Release.java check
 ```
 
-**Expect:** every module passes, on the commit that will be released (`lx` in place of `la` on
-x86_64; without `xvfb-run` on a desktop session).
+**Expect:** every module passes, on the commit that will be released (the Release tool's `check`
+runs `LikeCi.java --all` and records the commit for `promote`).
 
 ### `rl-pall-macos` Every test on macOS
 
@@ -274,11 +274,10 @@ x86_64; without `xvfb-run` on a desktop session).
 - **Areas:** always
 
 ```sh
-./mvnw verify -Pall -Dnvim.path=$HOME/.local/share/neovim4eclipse-plugin/neovim/ma/bin/nvim
+java releng/tools/ci/LikeCi.java --all
 ```
 
-**Expect:** every module passes (`mx` in place of `ma` on an Intel Mac; the path names the program,
-never a folder).
+**Expect:** every module passes, on the commit `check` printed.
 
 ### `rl-pall-windows` Every test on Windows
 
@@ -287,11 +286,10 @@ never a folder).
 - **Areas:** always
 
 ```powershell
-.\mvnw.cmd verify -Pall "-Dnvim.path=$env:LOCALAPPDATA\neovim4eclipse-plugin\neovim\wx\bin\nvim.exe"
+java releng/tools/ci/LikeCi.java --all
 ```
 
-**Expect:** every module passes (`wa` on ARM Windows; with `XDG_DATA_HOME` set, the folder is
-under it).
+**Expect:** every module passes, on the commit `check` printed.
 
 ### `rl-pall-windows-1core` Every test on Windows, on one core
 
@@ -304,47 +302,19 @@ machine"); right before the release.
 
 ```powershell
 $env:JAVA_TOOL_OPTIONS = '-XX:ActiveProcessorCount=1'
-.\mvnw.cmd verify -Pall "-Dnvim.path=$env:LOCALAPPDATA\neovim4eclipse-plugin\neovim\wx\bin\nvim.exe"
+java releng/tools/ci/LikeCi.java --all
 ```
 
 **Expect:** every module passes.
 
-### `rl-build` Build workflow on the release branch
+### `rl-publish` Release installable
 
 - **On:** any
 - **Launch:** none
 - **Areas:** always
 
-1. Run the *Build* workflow by hand on the release branch (CONTRIBUTING.md, "Releasing", step 1).
-   ⇒ Green on all three platforms.
-2. Open the *Install Neovim* step's log of each platform job.
-   ⇒ It shows `tree … (matches)` for `lx`, `wx` and `ma`.
-
-**Expect:** each step's result, after its ⇒.
-
-### `rl-tag` The tag's Release run reuses the Build on main
-
-- **On:** any
-- **Launch:** none
-- **Areas:** always
-
-1. After `main` has the release and its *Build* passed, push the tag `v<version>` (CONTRIBUTING.md,
-   "Releasing", steps 2 and 3).
-   ⇒ The Release log says the commit was tested; the job is named "Build (tested on main)", with
-   no integration or platform jobs; the tag check passes.
-
-**Expect:** the result after step 1's ⇒.
-
-### `rl-publish` Release signed, published, installable
-
-- **On:** any
-- **Launch:** none
-- **Areas:** always
-
-1. Check the GitHub release's assets and signatures: download the ZIP and its `.asc`, then run
-   `releng/verify-zip.sh` on the ZIP and `releng/verify-signatures.sh` on it unzipped.
-   ⇒ Both verify.
-2. Install the release from the update site into a clean Eclipse.
+1. Install the release from the update site into a clean Eclipse (after the Release tool's `tag`
+   step, which checks the GitHub Release's files, both signatures and the site's listing).
    ⇒ The plug-in installs, opens Get Neovim at the first start, and attaches after it.
 
-**Expect:** each step's result, after its ⇒.
+**Expect:** the result after step 1's ⇒.

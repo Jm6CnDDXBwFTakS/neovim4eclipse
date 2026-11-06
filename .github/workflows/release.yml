@@ -14,7 +14,7 @@
 #   2. build:   the Build workflow itself (build.yml, called as a reusable workflow) with that
 #               version. It uploads neovim4eclipse-<version>.zip as an artifact of this run. The
 #               build is unsigned and sees no secrets, exactly as on main. When the Build on main
-#               passed for this commit (the usual case: CONTRIBUTING.md, "Releasing", step 2), it
+#               passed for this commit (the usual case: CONTRIBUTING.md, "Releasing", promote), it
 #               only builds the ZIP (skip-tests): the same tests on the same commit would only
 #               give the same answer, at a cost of about an hour of Windows and macOS minutes
 #               (counted 2x and 10x). Otherwise it runs every test, as every CI run does. It is
