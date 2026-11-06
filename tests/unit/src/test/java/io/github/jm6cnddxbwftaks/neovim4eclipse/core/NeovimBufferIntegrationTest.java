@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /** One Neovim buffer per Eclipse document, against a real {@code nvim} (skipped when none is found). */
@@ -409,7 +410,9 @@ class NeovimBufferIntegrationTest {
             waitFor(() -> asked.size() == 2, "the copy: " + asked);
             assertEquals(a.name() + " COPY " + copy, asked.get(1));
 
-            s.input(":w !cat >/dev/null<CR>");
+            // A filter command every system has: cmd has no cat, and /dev/null is nul there (a run
+            // from Git Bash finds its cat, a run from PowerShell does not).
+            s.input(PlatformUtil.isWindows() ? ":w !sort >nul<CR>" : ":w !cat >/dev/null<CR>");
             s.lua("return 0"); // the keys before it are done
             assertEquals(2, asked.size(), ":w !cmd is no write of the file: " + asked);
         }

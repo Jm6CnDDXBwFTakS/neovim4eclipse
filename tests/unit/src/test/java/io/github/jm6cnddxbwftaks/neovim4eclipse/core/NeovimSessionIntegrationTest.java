@@ -692,19 +692,27 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** The Neovim processes this JVM started that still run. */
+    private static List<ProcessHandle> nvimChildren() {
+        return ProcessHandle.current().children()
+                .filter(p -> p.info().command().map(c -> c.toLowerCase().contains("nvim")).orElse(false))
+                .toList();
+    }
+
     /**
      * The other side of {@link #aNormalCloseLogsNoWarning}: a Neovim that is killed (a crash, or
      * ending it in the Task Manager) is still reported as a warning, which reaches the Error Log.
-     * The process is found as a child of this JVM, the only Neovim this test started.
+     * The process is found as the child of this JVM that this test started: the Neovim children
+     * that were there before it started are left out, as another test's Neovim may still be exiting
+     * on a loaded machine (a CI runner), which made "exactly one child" fail with two.
      */
     @Test
     void aKilledNeovimIsLoggedAsAWarning() throws Exception {
         try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            List<Long> before = nvimChildren().stream().map(ProcessHandle::pid).toList();
             try (NeovimSession s = start()) {
                 s.command("echo 1");
-                List<ProcessHandle> nvims = ProcessHandle.current().children()
-                        .filter(p -> p.info().command().map(c -> c.toLowerCase().contains("nvim")).orElse(false))
-                        .toList();
+                List<ProcessHandle> nvims = nvimChildren().stream().filter(p -> !before.contains(p.pid())).toList();
                 assertEquals(1, nvims.size(), "this test's Neovim: " + nvims);
                 nvims.get(0).destroyForcibly();
                 nvims.get(0).onExit().get(WAIT_MS, TimeUnit.MILLISECONDS);

@@ -15,10 +15,12 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ## Commands
 
 ```bash
+java releng/tools/ci/LikeCi.java                  # BEFORE A PUSH: the tests as the Build workflow runs them (pinned Neovim, xvfb-run)
+java releng/tools/ci/LikeCi.java --all            # the same with every test group (-Pall)
 ./mvnw verify -Pall -Dnvim.path=/usr/bin/nvim     # every test of every group (integration, heavyJava, timeoutReliant; not screenshots); slow
 ./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # as CI: plug-in, unit, text, SWT and UI tests, feature, ZIP (not integration: add the -Pintegration line)
 ./mvnw verify                                     # the same without the UI tests (no Eclipse window)
-./mvnw verify -PuiHeavyJava                       # only the UI tests that need Java tooling (slow; not in CI)
+./mvnw verify -PuiHeavyJava -Dnvim.path=/usr/bin/nvim   # only the UI tests that need Java tooling (slow; not in CI)
 ./mvnw verify -PtimeoutReliant -Dnvim.path=/usr/bin/nvim   # only the tests tagged timeoutReliant (measure time; not in CI)
 ./mvnw verify -Pscreenshots                       # retake the Marketplace screenshots (see docs/design/MARKETPLACE.md)
 ./mvnw verify -Pgallery                           # draw the dialogs the manual checks look at (target/gallery; CONTRIBUTING.md)
@@ -33,7 +35,9 @@ taskset -c 0,1 ./mvnw verify -Pui                # as a two-core CI runner; Wind
 ```
 
 The UI tests need `-Pui` (off by default because they open a window); run them after changing
-editor or session code. Each test module writes a JaCoCo coverage report to `target/site/jacoco/index.html` (see
+editor or session code. Every run that starts Neovim needs `-Dnvim.path` (enforced): the tests use
+folders of their own under `target/`, without the dedicated Neovim (CONTRIBUTING.md, "Your Neovim
+config and the UI tests"). Run `LikeCi` before every push; compile at the least. Each test module writes a JaCoCo coverage report to `target/site/jacoco/index.html` (see
 CONTRIBUTING.md, "Code coverage"; one report per module, they cannot be merged).
 
 Use the Maven wrapper (`./mvnw`), not a system Maven.

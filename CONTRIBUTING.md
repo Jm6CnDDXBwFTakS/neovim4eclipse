@@ -23,20 +23,29 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 
 ## Build and test
 
+**Before a push, run `java releng/tools/ci/LikeCi.java`** (from the repository's root). It runs the
+tests as the *Build* workflow on GitHub does: it installs the pinned Neovim under `target/like-ci/`
+with CI's own command, runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
+lists what each module skipped. A failure that only CI would show shows up here first, a change
+that does not compile included. `--all` runs every test group (`-Pall`) the same way, for a
+release. `LikeCiTest` keeps its commands equal to the workflow's.
+
 ```bash
+java releng/tools/ci/LikeCi.java                # what CI runs, on this machine (before a push)
+java releng/tools/ci/LikeCi.java --all          # every test group, as for a release
 ./mvnw verify                                   # plug-in, unit/text/SWT tests, update-site ZIP
-./mvnw verify -Pui                              # ... and the UI tests (opens an Eclipse window)
-./mvnw verify -PuiHeavyJava                     # only the UI tests that need Java tooling (slow)
+./mvnw verify -Pui -Dnvim.path=...              # ... and the UI tests (opens an Eclipse window)
+./mvnw verify -PuiHeavyJava -Dnvim.path=...     # only the UI tests that need Java tooling (slow)
 xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake the listing screenshots
 xvfb-run -a ./mvnw verify -Pgallery              # draw the dialogs the manual checks look at (target/gallery)
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
 ./mvnw test -f tests/swt/pom.xml                # SWT widget tests: a display, but no workbench
-./mvnw test -f tests/unit/pom.xml -Pintegration # against a real Neovim (-Dnvim.path=... to choose)
-./mvnw verify -Pui -Dtest.wait.seconds=60       # any of these with more time per wait (default 15)
-xvfb-run -a ./mvnw verify -PtimeoutReliant       # only the tests that depend on the machine's speed
-xvfb-run -a ./mvnw verify -Pall                  # every test of every group in one run (see below)
+./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=...   # against a real Neovim
+./mvnw verify -Pui -Dnvim.path=... -Dtest.wait.seconds=60   # any of these with more time per wait (default 15)
+xvfb-run -a ./mvnw verify -PtimeoutReliant -Dnvim.path=...   # only the tests that depend on the machine's speed
+xvfb-run -a ./mvnw verify -Pall -Dnvim.path=...   # every test of every group in one run (see below)
 taskset -c 0,1 ./mvnw verify -Pui               # any of these on two cores, as a CI runner (Linux; Windows and macOS below)
 ```
 
@@ -121,30 +130,39 @@ model, SWT and JFace), so a class that starts using more no longer compiles ther
 
 ### Your Neovim config and the UI tests
 
-No test reads your own Neovim config (`init.lua` or `init.vim`, its plug-ins, your saved registers
-and marks), so a personal setting cannot make a test pass on your machine and fail on another. The
-unit and integration tests start Neovim with `--clean`. The UI tests start it as the plug-in does
-for real use, with no flags, so their build sets these variables for the test Eclipse instead (in
-`tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/pom.xml`), and Neovim inherits them:
+Every test runs in folders of its own under its module's `target/`, so it reads nothing of yours
+(your `init.lua` or `init.vim`, its plug-ins, your saved registers and marks, your dedicated Neovim)
+and writes nothing outside `target/`. A personal setting or a file on your machine then cannot make
+a test pass there and fail on another machine, a CI runner above all, which has none of them. The
+UI test Eclipse (`tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/pom.xml`) and every module
+surefire runs (the root `pom.xml`) get these variables, and Neovim inherits them:
 
-- `NVIM_APPNAME=neovim4eclipse-plugin/tests`: Neovim looks for its config and data under that name
-  instead of `nvim`, where there is nothing. A name may contain a slash: it is a relative path.
-- `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`: folders under the module's
-  `target/neovim-home/`, so nothing is written to your home folder either. The whole test Eclipse
-  sees them, not only Neovim: on Linux, GTK and font caches land there too, which only costs a
-  little start-up time.
+- `NVIM_APPNAME=neovim4eclipse-plugin/tests`: Neovim looks for its config under that name instead
+  of `nvim`, where there is nothing. A name may contain a slash: it is a relative path. (The unit
+  and integration tests also start Neovim with `--clean`; the UI tests start it as the plug-in does
+  for real use, with no flags.)
+- `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`: under `target/neovim-home/`, so Neovim's
+  swap files, logs and shada stay there. The whole test Eclipse sees them, not only Neovim: on Linux,
+  GTK and font caches land there too, which only costs a little start-up time.
+- `XDG_DATA_HOME`, also under `target/neovim-home/`: the plug-in's own folder follows Neovim's data
+  home (`util/PluginFolders`, on every system), so the tests see a plug-in folder with no dedicated
+  Neovim, as a CI runner does, and the plug-in's clean-up at each Neovim start touches nothing of
+  yours. A test about the dedicated Neovim puts one there itself (`prefs/DedicatedNeovim`, a copy of
+  the `-Dnvim.path` release) and checks both cases, installed and missing.
+- `LC_MESSAGES=C`: Neovim's messages in English, which tests compare, whatever your language.
 
-`XDG_DATA_HOME` is left alone: the plug-in finds its own Neovim there (see `util/PluginFolders`).
-The plug-in and Neovim use the same data home, so Neovim makes one empty data folder of its own
-inside the plug-in's folder: `~/.local/share/neovim4eclipse-plugin/tests` on Linux and macOS, and
-`%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data` on Windows, where Neovim adds `-data` to the name.
-(Earlier builds made `neovim4eclipse-tests` next to `nvim`, or `neovim4eclipse-tests-data` in
-`%LOCALAPPDATA%` on Windows, and on Windows kept the plug-in's folder at
-`C:\Users\you\.local\share\neovim4eclipse-plugin`; such folders are safe to delete.)
-`NeovimHomeEndToEndTest` checks that the isolation holds. A test about how the plug-in behaves with
-a given setting sets it in the test itself (for example `session.commandAsync("set shortmess-=F")`),
+So the test runs that start Neovim need `-Dnvim.path=/path/to/bin/nvim` (the program of a Neovim
+release folder; `LikeCi` passes the pinned release): an enforcer rule stops `-Pui`, `-Pintegration`,
+`-Pall` and the other such profiles without it, and a path with no Neovim fails the tests rather
+than skipping them. `TestIsolationTest` and `TestIsolationUiTest` fail if the isolation is lost;
+`NeovimHomeEndToEndTest` checks it from inside Neovim. A test about how the plug-in behaves with a
+given setting sets it in the test itself (for example `session.commandAsync("set shortmess-=F")`),
 so it runs the same everywhere. To try the plug-in with your own config, run it from Eclipse (see
 "Run it from Eclipse").
+
+Earlier builds left a test data folder in your real one: `~/.local/share/neovim4eclipse-plugin/tests`
+(on Windows `%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data`), and before that
+`neovim4eclipse-tests` next to `nvim`; such folders are safe to delete.
 
 ### Test helpers and fakes
 
@@ -528,7 +546,7 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    editor and the timeout-reliant ones; see [Tests on a loaded machine](#tests-on-a-loaded-machine)):
 
    ```bash
-   xvfb-run -a ./mvnw verify -Pall -Dnvim.path=/path/to/nvim
+   java releng/tools/ci/LikeCi.java --all
    ```
 
    Commit and push, then run the *Build* workflow on the branch by hand and wait for it to pass:
