@@ -52,6 +52,12 @@ public final class Ask {
         STOP
     }
 
+    /**
+     * One reader of standard input for every question. A {@link BufferedReader} reads ahead, so a
+     * reader made per question would take answers typed ahead for later questions with it.
+     */
+    private static BufferedReader input;
+
     private final Mode mode;
     private final boolean terminal;
     private final String rerun;
@@ -114,7 +120,7 @@ public final class Ask {
                 System.out.flush();
                 String answer;
                 try {
-                    answer = new BufferedReader(new InputStreamReader(System.in, Charset.defaultCharset())).readLine();
+                    answer = input().readLine();
                 } catch (IOException e) {
                     answer = null;
                 }
@@ -123,6 +129,13 @@ public final class Ask {
                 }
                 return true;
         }
+    }
+
+    private static synchronized BufferedReader input() {
+        if (input == null) {
+            input = new BufferedReader(new InputStreamReader(System.in, Charset.defaultCharset()));
+        }
+        return input;
     }
 
     /**
