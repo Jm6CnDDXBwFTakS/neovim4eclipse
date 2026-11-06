@@ -20,8 +20,8 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /** One Neovim buffer per Eclipse document, against a real {@code nvim} (skipped when none is found). */
