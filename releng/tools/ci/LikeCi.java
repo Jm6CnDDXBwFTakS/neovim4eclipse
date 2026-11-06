@@ -76,13 +76,14 @@ public final class LikeCi {
             fail("run this from the repository's root folder");
         }
         String nvim = installNeovim(root.resolve("target/like-ci"));
+        long started = System.currentTimeMillis();
         List<String> failed = new ArrayList<>();
         for (String maven : all ? List.of(ALL) : List.of(UI, INTEGRATION)) {
             if (run(root, maven, nvim) != 0) {
                 failed.add(maven);
             }
         }
-        printSkips(root);
+        printSkips(root, started);
         if (!failed.isEmpty()) {
             fail("failed: " + String.join("; ", failed));
         }
@@ -137,8 +138,12 @@ public final class LikeCi {
     private static final Pattern SUITE = Pattern.compile("<testsuite\\b[^>]*\\btests=\"(\\d+)\"[^>]*\\bskipped=\"(\\d+)\"");
     private static final Pattern SKIPPED = Pattern.compile("<testcase\\b[^>]*\\bname=\"([^\"]*)\"[^>]*\\bclassname=\"([^\"]*)\"[^>]*>\\s*<skipped");
 
-    /** One line per test module: tests run and skipped, and the skipped tests' names (at most 20). */
-    private static void printSkips(Path root) throws IOException {
+    /**
+     * One line per test module: tests run and skipped, and the skipped tests' names (at most 20).
+     * Only reports written by this run: a module's folder keeps those of earlier runs (another test
+     * group, a class since renamed) until {@code clean}.
+     */
+    private static void printSkips(Path root, long started) throws IOException {
         for (String module : List.of("tests/unit", "tests/text", "tests/swt", "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests")) {
             Path reports = root.resolve(module).resolve("target/surefire-reports");
             if (!Files.isDirectory(reports)) {
@@ -147,7 +152,8 @@ public final class LikeCi {
             int tests = 0;
             List<String> skipped = new ArrayList<>();
             try (Stream<Path> files = Files.list(reports)) {
-                for (Path report : files.filter(f -> f.getFileName().toString().matches("TEST-.*\\.xml")).toList()) {
+                for (Path report : files.filter(f -> f.getFileName().toString().matches("TEST-.*\\.xml"))
+                        .filter(f -> f.toFile().lastModified() >= started).toList()) {
                     String xml = Files.readString(report);
                     Matcher suite = SUITE.matcher(xml);
                     if (suite.find()) {
