@@ -49,7 +49,9 @@ of "--number <n>". JUnit passes the number, not the name, because a name may hol
 ('"+p asks Eclipse ...'), and Windows splits a command-line argument at such a quote: Java does not
 escape it when it builds the command line (Linux passes arguments one by one and has no such issue).
 A test passes when the process ends with status 0; a failed check prints "FAIL: ..." and a
-traceback, and ends with status 1. By hand, from tests/unit, after one JUnit run has written the
+traceback, and ends with status 1. A test that cannot run on this system calls t.skip(why), which
+prints "SKIP: <why>" and ends with status 0; JUnit reports it as skipped, with that reason. Such a
+test is declared on every system, so each one lists the same tests. By hand, from tests/unit, after one JUnit run has written the
 module to target/lua-tests/scripts.lua:
 
   nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l src/test/lua/harness.lua \
@@ -107,6 +109,18 @@ end
 --- Declares a test (called by the spec file).
 function t.test(name, fn)
   tests[#tests + 1] = { name, fn }
+end
+
+--- Marker of a skip: the error value t.skip raises, told apart from a failure after the run.
+local SKIP = {}
+
+--- Ends the running test as skipped, with the reason JUnit shows. For a test that cannot run on
+--- this system: declare it on every system and skip it here, so each one runs the same list of
+--- tests (the same count in every report) and the report says why one did not run, rather than
+--- leaving it out or letting it pass with nothing checked. Example:
+---   if vim.fn.has('win32') == 1 then t.skip('Windows names cannot hold a line break') end
+function t.skip(why)
+  error({ [SKIP] = why }, 0) -- a table, which debug.traceback passes on unchanged
 end
 
 --- Runs one of LuaScripts' scripts with its arguments, as nvim_exec_lua does, and returns its result.
@@ -255,6 +269,10 @@ end
 local ok, err = xpcall(test[2], debug.traceback)
 if ok then
   io.stdout:write('PASS\n')
+  os.exit(0)
+end
+if type(err) == 'table' and err[SKIP] then
+  io.stdout:write('SKIP: ', tostring(err[SKIP]), '\n')
   os.exit(0)
 end
 io.stdout:write('FAIL: ', test[1], ': ', tostring(err), '\n')

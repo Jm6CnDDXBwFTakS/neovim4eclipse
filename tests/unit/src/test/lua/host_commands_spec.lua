@@ -232,7 +232,7 @@ end
 for _, cmd in ipairs({ 'e', 'wq', 'x' }) do
   t.test(':' .. cmd .. ' of a completed name with a line break is refused, and nothing in it runs', function()
     if vim.fn.has('win32') == 1 then
-      return
+      t.skip('Windows names cannot hold a line break')
     end
     complete_into(cmd, 'notes\nlua=vim.g.ran=1', 'no')
     t.eq(nil, vim.g.ran, 'the Lua after the line break did not run')
@@ -247,7 +247,7 @@ end
 -- line. (Backslashes in names are a Linux and macOS thing: on Windows the name is not legal.)
 t.test('a completed name with a backslash and backticks reaches Eclipse literally; no shell runs', function()
   if vim.fn.has('win32') == 1 then
-    return
+    t.skip('Windows names cannot hold a backslash')
   end
   local name = 'notes\\`touch MARK\\`.txt'
   local app = complete_into('x', name, 'no')
@@ -264,11 +264,13 @@ t.test('a completed name with backticks reaches Eclipse literally; no shell runs
   t.eq(0, vim.fn.isdirectory(app .. '/MARK'), 'the shell command did not run')
 end)
 
--- Not x$HOME on Windows: there fnameescape() does not escape $, so completion writes :e x$HOME,
--- and Neovim's own :e opens xC:/Users/me/home as well; the plug-in does as Neovim does.
-local kept_names = vim.fn.has('win32') == 1 and { 'a%b', 'my file.txt' } or { 'x$HOME', 'a%b', 'my file.txt' }
-for _, name in ipairs(kept_names) do
+-- Skipped for x$HOME on Windows: there fnameescape() does not escape $, so completion writes
+-- :e x$HOME, and Neovim's own :e opens xC:/Users/me/home as well; the plug-in does as Neovim does.
+for _, name in ipairs({ 'x$HOME', 'a%b', 'my file.txt' }) do
   t.test('a completed name ' .. name .. ' keeps it: nothing is expanded a second time', function()
+    if name:find('$', 1, true) and vim.fn.has('win32') == 1 then
+      t.skip('on Windows fnameescape() leaves $ as it is, and :e expands it, as in Neovim')
+    end
     local app = complete_into('e', name, name:sub(1, 1))
     t.eq({ { 'edit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
   end)

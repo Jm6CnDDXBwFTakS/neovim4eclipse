@@ -144,10 +144,10 @@ t.test("the folder is set once with :lcd; without one the window keeps the folde
 end)
 
 -- A project folder named with backticks: :lcd would expand `...` as a shell command (0.2.1
--- security review); chdir() takes the name as it is. Not on Windows, whose names cannot hold `|`.
+-- security review); chdir() takes the name as it is.
 t.test('a folder name with backticks is used as it is, nothing runs', function()
   if vim.fn.has('win32') == 1 then
-    return
+    t.skip('the name holds the marker\'s full path, and a Windows one (C:\\...) cannot be part of a name')
   end
   start()
   local base = vim.fn.fnamemodify(vim.fn.tempname(), ':p')
