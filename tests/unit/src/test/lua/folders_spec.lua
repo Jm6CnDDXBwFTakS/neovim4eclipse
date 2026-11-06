@@ -59,7 +59,7 @@ end)
 -- command (0.2.1 security review).
 t.test('a parent folder named with backticks is moved to as it is, nothing runs', function()
   if vim.fn.has('win32') == 1 then
-    return
+    t.skip('the name holds the marker\'s full path, and a Windows one (C:\\...) cannot be part of a name')
   end
   local _, root = folder('x')
   local marker = vim.fs.joinpath(root, 'MARKER')
@@ -75,7 +75,7 @@ end)
 
 t.test('on Windows the folder is matched ignoring case and slashes', function()
   if vim.fn.has('win32') == 0 then
-    return
+    t.skip('only Windows ignores case and slashes in paths')
   end
   local project, root = folder('App')
   vim.cmd.cd(project)

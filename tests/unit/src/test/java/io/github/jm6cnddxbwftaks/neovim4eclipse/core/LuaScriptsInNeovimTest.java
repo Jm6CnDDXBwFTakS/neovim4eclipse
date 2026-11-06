@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DynamicContainer;
 import org.junit.jupiter.api.DynamicTest;
@@ -104,8 +105,17 @@ class LuaScriptsInNeovimTest {
         return names;
     }
 
+    /**
+     * Runs test {@code number} of {@code spec}. The harness's verdict is its last line: {@code PASS},
+     * {@code FAIL: ...}, or {@code SKIP: <why>} from {@code t.skip} (a test that cannot run on this
+     * system), which becomes a skipped JUnit test with that reason.
+     */
     private static void runOne(Path spec, int number) {
         Run run = nvim(spec, "--number", Integer.toString(number));
+        int skip = run.output().lastIndexOf("SKIP: ");
+        if (run.exit() == 0 && skip >= 0) {
+            Assumptions.abort(run.output().substring(skip + "SKIP: ".length()).strip());
+        }
         if (run.exit() != 0 || !run.output().contains("PASS")) {
             fail("Lua test failed (exit " + run.exit() + "; module " + module + "):\n" + run.output());
         }

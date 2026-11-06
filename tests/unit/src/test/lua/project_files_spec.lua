@@ -60,7 +60,7 @@ end)
 -- (0.2.1 security review). Now such a file is not read at all.
 t.test('a file name with a line break is not read, and nothing in it runs', function()
   if vim.fn.has('win32') == 1 then
-    return -- Windows names cannot hold a line break
+    t.skip('Windows names cannot hold a line break')
   end
   local root = project()
   vim.g.pwned = nil

@@ -218,7 +218,7 @@ end)
 
 t.test('the same file named through a link or with other slashes is its own name', function()
   if vim.fn.has('win32') == 1 then
-    return -- making a link needs rights a Windows runner may not have; the slashes are checked below
+    t.skip('making a link needs rights a Windows runner may not have; the slashes are checked below')
   end
   t.setup()
   local asked = eclipse()
@@ -275,7 +275,7 @@ end)
 
 t.test(':w !cmd pipes the text and asks Eclipse nothing', function()
   if vim.fn.has('win32') == 1 then
-    return -- no cat
+    t.skip('no cat on Windows')
   end
   t.setup()
   local asked = eclipse()
