@@ -599,8 +599,9 @@ release 0.2.3, on `release/0.2.3`:
 When a workflow run fails, the tool prints the failed jobs' last log lines and what to do: rerun the
 failed jobs for a runner hiccup, or fix the cause on the release branch and run `check` and
 `promote` again. It never forces a push or moves a tag; when a tag must move, it prints the
-commands. Its commits are in UTC; a `local.properties` beside its `settings.properties` (see
-`local.properties.example`) can add a last paragraph to them, or change the local test run.
+commands. Its commits are in UTC. A `local.properties` beside a `settings.properties` overrides it
+on one machine (each folder's `local.properties.example` lists the keys): in `releng/tools/common/`,
+a last paragraph for every tool's commits; in `releng/tools/release/`, the local test run.
 
 ### By hand
 

@@ -8,11 +8,14 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 /**
- * A tool's settings, in three layers, each overriding the one before:
+ * A tool's settings, in layers, each overriding the one before. Every tool starts with the ones
+ * all tools share, in {@code releng/tools/common/} (such as {@code commit.trailer}), then adds its
+ * own folder's ({@code releng/tools/release/} for the Release tool's workflows); in each folder:
  * <ol>
  *   <li>{@code settings.properties} beside the tool, tracked: what is the same for everyone (the
  *       repository, the workflow files, the update site's address).</li>
@@ -31,11 +34,25 @@ public final class Settings {
     private Settings() {
     }
 
+    /** The folder of the settings every tool shares, below the repository's root. */
+    public static final String COMMON = "releng/tools/common";
+
     /** The layers in {@code folder}, then {@code overrides}; a missing {@code local.properties} is fine. */
     public static Settings load(Path folder, Map<String, String> overrides) {
+        return load(List.of(folder), overrides);
+    }
+
+    /**
+     * The layers of each of {@code folders} in order (a later folder overrides an earlier one), then
+     * {@code overrides}. A tool's own folder comes after {@link #COMMON}'s:
+     * {@code load(List.of(root.resolve(Settings.COMMON), root.resolve("releng/tools/release")), Map.of())}.
+     */
+    public static Settings load(List<Path> folders, Map<String, String> overrides) {
         Settings s = new Settings();
-        s.read(folder.resolve("settings.properties"), true);
-        s.read(folder.resolve("local.properties"), false);
+        for (Path folder : folders) {
+            s.read(folder.resolve("settings.properties"), true);
+            s.read(folder.resolve("local.properties"), false);
+        }
         s.values.putAll(overrides);
         return s;
     }

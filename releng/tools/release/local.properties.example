@@ -6,5 +6,4 @@
 # LikeCi's arguments for the check step; empty runs only what CI runs (-Pui, then the integration tests).
 #tests=
 
-# A last paragraph for the tool's commits, e.g. when an assistant runs the tool for you:
-#commit.trailer=Co-Authored-By: Name <address>
+# The commits' last paragraph (commit.trailer) is a setting of every tool: releng/tools/common.

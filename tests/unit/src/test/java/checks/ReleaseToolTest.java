@@ -216,6 +216,10 @@ class ReleaseToolTest {
         Files.writeString(dir.resolve("local.properties"), "tests=\n");
         assertEquals("", Settings.load(dir, Map.of()).get("tests"));
         assertEquals("x", Settings.load(dir, Map.of("tests", "x")).get("tests"), "the command line wins");
+        Path tool = Files.createDirectories(dir.resolve("tool"));
+        Files.writeString(tool.resolve("settings.properties"), "tests=--tool\n");
+        assertEquals("--tool", Settings.load(List.of(dir, tool), Map.of()).get("tests"), "a tool's own folder after the common one");
+        assertEquals("", Settings.load(List.of(dir, tool), Map.of()).get("commit.trailer"), "the common one's keys stay");
         assertThrows(ToolFailure.class, () -> Settings.of("").get("missing"));
         assertEquals("fallback", Settings.of("").get("missing", "fallback"));
     }
@@ -223,7 +227,8 @@ class ReleaseToolTest {
     @Test
     void theSettingsNameWhatTheWorkflowsContain() throws IOException {
         Path repo = repo();
-        Settings s = Settings.load(repo.resolve("releng/tools/release"), Map.of());
+        Settings s = Settings.load(List.of(repo.resolve(Settings.COMMON), repo.resolve("releng/tools/release")), Map.of());
+        assertEquals("", Settings.load(List.of(repo.resolve(Settings.COMMON)), Map.of("commit.trailer", "")).get("commit.trailer"));
         for (String key : List.of("build.workflow", "release.workflow", "rehearsal.workflow")) {
             assertTrue(Files.isRegularFile(repo.resolve(".github/workflows").resolve(s.get(key))), key + " = " + s.get(key));
         }

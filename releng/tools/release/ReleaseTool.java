@@ -97,7 +97,7 @@ public final class ReleaseTool {
     ReleaseTool(Path root, Options options) {
         this.root = root;
         this.options = options;
-        this.settings = Settings.load(root.resolve("releng/tools/release"), Map.of());
+        this.settings = Settings.load(List.of(root.resolve(Settings.COMMON), root.resolve("releng/tools/release")), Map.of());
         this.shell = new Shell(root);
         this.git = new Git(shell);
         this.gh = new GitHub(shell);
