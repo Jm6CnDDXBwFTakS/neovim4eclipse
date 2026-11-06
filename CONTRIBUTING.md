@@ -592,10 +592,26 @@ release 0.2.3, on `release/0.2.3`:
    the update site too). Then it checks the release as a user meets it: the run reused the *Build*
    on `main`, the GitHub Release has `neovim4eclipse-0.2.3.zip` and its `.asc`, both kinds of
    signature verify (`releng/verify-zip.sh`, `releng/verify-signatures.sh`), and the public update
-   site lists the version.
+   site lists the version. Last, it offers `InstallCheck` (below): recommended, not required.
 5. **next**: cuts `release/0.2.4` from `main`, sets its version (`0.2.4-SNAPSHOT`), commits and
    pushes it; then deletes `release/0.2.3` and the `fix/`, `feature/` and `rehearse/` branches that
    `main` already has (`--next 0.3.0` starts another version).
+
+After `tag`, install the release as a user does (the status shows whether this passed):
+
+```bash
+java releng/tools/checks/InstallCheck.java          # the newest release on the update site
+java releng/tools/checks/InstallCheck.java 0.2.4    # a given one
+```
+
+It copies your Eclipse (with hard links, as `ManualChecks launch` does; `--eclipse` or `ECLIPSE`
+names it) to `~/var/n4e-checks/install-check/`, afresh each run, and installs the release there from
+the live update site with p2's director, trusting only the site's host and the release key (its
+fingerprint computed from `releng/signing-key.asc`), and no unsigned artifact: what a careful user
+accepts in Eclipse's trust dialog. Then it offers to start that Eclipse, with a new workspace and an
+empty Neovim folder, for the rest of the manual check `rl-publish`: *Get Neovim* opens, and a file
+attaches after it. Nothing waits for it: a release that fails it is fixed by the next one, from the
+branch `next` cuts. It is worth running at any time, too, such as after an Eclipse upgrade.
 
 When a workflow run fails, the tool prints the failed jobs' last log lines and what to do: rerun the
 failed jobs for a runner hiccup, or fix the cause on the release branch and run `check` and

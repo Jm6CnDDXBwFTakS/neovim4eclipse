@@ -131,6 +131,38 @@ public final class Ask {
         }
     }
 
+    /**
+     * Offers something worth doing that nothing depends on, such as the Release tool's offer to run
+     * {@code InstallCheck} after a release. Unlike {@link #confirm}, a no is an answer, not a stop:
+     * it returns {@code false} and the tool goes on. Without a terminal to ask on, or in a dry run,
+     * it prints {@code command}, the way to do it later, and returns {@code false}; with
+     * {@code --yes}, {@code true}.
+     */
+    public boolean offer(String what, String command) {
+        Decision d = decide(mode, terminal);
+        System.out.println();
+        switch (d) {
+            case DO:
+                System.out.println(what + ": " + command);
+                return true;
+            case SKIP:
+            case STOP:
+                System.out.println((d == Decision.SKIP ? "[dry run] would offer: " : "Recommended: ") + what + ":");
+                System.out.println("  " + command);
+                return false;
+            default:
+                System.out.println(what + "?");
+                System.out.println("  " + command);
+                System.out.print("[y/N] ");
+                System.out.flush();
+                try {
+                    return isYes(input().readLine());
+                } catch (IOException e) {
+                    return false;
+                }
+        }
+    }
+
     private static synchronized BufferedReader input() {
         if (input == null) {
             input = new BufferedReader(new InputStreamReader(System.in, Charset.defaultCharset()));

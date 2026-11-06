@@ -134,7 +134,9 @@ copy in the plug-in (`keys/release-signing-key.asc`), which `plugin.xml` declare
 (extension point `org.eclipse.equinox.p2.engine.pgp`), so that updates install without the trust
 dialog. `ReleaseSigningKeyTest` checks that the two are equal and that README, SECURITY.md and the
 update site's page print its fingerprint. To replace the key, change both files and the three
-fingerprints.
+fingerprints. `releng/tools/checks/InstallCheck.java`, which installs a release with only this key
+trusted, computes the fingerprint from `releng/signing-key.asc` (`releng/tools/common/PgpKey`), so
+it needs no change.
 
 The job fails at once while `releng/signing-key.asc` does not exist, rather than publish an
 unsigned release. To try it locally with a throwaway key, see the commands at the top of
