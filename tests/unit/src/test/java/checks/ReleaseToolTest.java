@@ -245,11 +245,16 @@ class ReleaseToolTest {
         assertTrue(GitHub.parseRun("not a run").isEmpty());
     }
 
-    /** A repository of one commit in {@code dir}, with a user of its own; false when git is not installed. */
+    /**
+     * A repository of one commit in {@code dir}, with a user of its own; false when git is not
+     * installed. Line ends are kept as written ({@code core.autocrlf false}): with git's Windows
+     * default, {@code true}, a file reset to its committed text comes back as {@code one\r\n}, and
+     * the tests compare texts, not line ends.
+     */
     private static boolean repository(Path dir) throws Exception {
         Shell shell = new Shell(dir);
         for (List<String> c : List.of(List.of("git", "init", "-q"), List.of("git", "config", "user.name", "Test"),
-                List.of("git", "config", "user.email", "test@example.invalid"))) {
+                List.of("git", "config", "user.email", "test@example.invalid"), List.of("git", "config", "core.autocrlf", "false"))) {
             if (!shell.capture(c).ok()) {
                 return false;
             }
