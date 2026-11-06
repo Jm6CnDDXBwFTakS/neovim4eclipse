@@ -14,6 +14,8 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -238,6 +240,15 @@ class ReleaseToolTest {
         assertTrue(run.passed());
         assertFalse(GitHub.parseRun("42\tin_progress\t\thttps://x\tpush\tmain").orElseThrow().passed());
         assertTrue(GitHub.parseRun("not a run").isEmpty());
+    }
+
+    @Test
+    void theRunFollowedIsTheOneThePushStarted() {
+        GitHub.Run failed = new GitHub.Run(41, "completed", "failure", "u41", "push", "rehearse/0.2.3");
+        GitHub.Run fresh = new GitHub.Run(42, "queued", "", "u42", "push", "rehearse/0.2.3");
+        assertEquals(Optional.empty(), GitHub.newestExcept(List.of(failed), Set.of(41L)), "not listed yet: wait, never the old run");
+        assertEquals(Optional.of(fresh), GitHub.newestExcept(List.of(fresh, failed), Set.of(41L)));
+        assertEquals(Optional.of(failed), GitHub.newestExcept(List.of(failed), Set.of()), "nothing started: the run that is there");
     }
 
     @Test

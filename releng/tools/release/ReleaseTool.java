@@ -16,9 +16,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -346,19 +348,22 @@ public final class ReleaseTool {
             if (done.stream().anyMatch(GitHub.Run::passed)) {
                 ok("Build passed on " + v.branch() + " already");
             } else if (ask.confirm("Run the Build workflow on " + v.branch(), List.of(Shell.display(dispatch)))) {
+                Set<Long> older = gh.runIds(settings.get("build.workflow"), head, "workflow_dispatch", v.branch());
                 shell.out(dispatch);
-                awaitAndWatch("the Build on " + v.branch(), settings.get("build.workflow"), head, "workflow_dispatch", v.branch(),
+                awaitAndWatch("the Build on " + v.branch(), settings.get("build.workflow"), head, "workflow_dispatch", v.branch(), older,
                         List.of("fix the cause on " + v.branch() + ", then run check and promote again"));
             }
         }
 
+        Set<Long> olderOnMain = Set.of(); // main already at this commit: follow the run that is there
         if (!head.equals(main)) {
+            olderOnMain = gh.runIds(settings.get("build.workflow"), head, "push", "main");
             git.push(ask, "Fast-forward main to " + v.branch() + " (" + head.substring(0, 7) + "); this starts the Build on main", head + ":refs/heads/main");
         } else {
             ok("main is at " + head.substring(0, 7));
         }
         if (options.mode() != Ask.Mode.DRY_RUN) {
-            awaitAndWatch("the Build on main", settings.get("build.workflow"), head, "push", "main",
+            awaitAndWatch("the Build on main", settings.get("build.workflow"), head, "push", "main", olderOnMain,
                     List.of("rerun only the failed jobs, for a runner hiccup", "or fix the cause on " + v.branch()
                             + ", then run check and promote again (main moves on by fast-forward)"));
             ok("the Build passed on main: the release's test run");
@@ -374,18 +379,23 @@ public final class ReleaseTool {
             git.push(ask, "Delete " + branch + " on origin, left from an earlier rehearsal of another commit", "--delete", branch);
             there = null;
         }
+        // The runs of this commit before the push: after a failed rehearsal, the same commit pushed
+        // again starts a new run, and the old, failed one must not be the one followed.
+        Set<Long> older = Set.of();
         if (there == null) {
-            if (gh.runs(workflow, head, "push", branch).stream().anyMatch(GitHub.Run::passed)) {
+            List<GitHub.Run> runs = gh.runs(workflow, head, "push", branch);
+            if (runs.stream().anyMatch(GitHub.Run::passed)) {
                 ok("the Release rehearsal passed on " + head.substring(0, 7) + " already");
                 return;
             }
+            older = new HashSet<>(runs.stream().map(GitHub.Run::id).toList());
             git.push(ask, "Push " + head.substring(0, 7) + " to " + branch + ", which starts the Release rehearsal", head + ":refs/heads/" + branch);
         }
         if (options.mode() == Ask.Mode.DRY_RUN) {
             System.out.println("[dry run] would watch the Release rehearsal, then delete " + branch);
             return;
         }
-        awaitAndWatch("the Release rehearsal", workflow, head, "push", branch,
+        awaitAndWatch("the Release rehearsal", workflow, head, "push", branch, older,
                 List.of("rerun only the failed jobs, for a runner hiccup",
                         "or fix the cause on " + v.branch() + ", then run check and promote again (it pushes " + branch + " anew)",
                         "afterwards: git push origin --delete " + branch));
@@ -413,7 +423,9 @@ public final class ReleaseTool {
                     + " && git push -f origin " + v.tag() + ". The tool never moves a tag itself.");
         }
         String workflow = settings.get("release.workflow");
+        Set<Long> older = Set.of(); // the tag on origin already: follow the run that is there
         if (tagged == null) {
+            older = gh.runIds(workflow, main, "push", v.tag());
             boolean tested = gh.runs(settings.get("build.workflow"), main, "push", "main").stream().anyMatch(GitHub.Run::passed);
             List<String> commands = List.of("git tag " + v.tag() + " " + main.substring(0, 12), "git push origin " + v.tag());
             if (!tested) {
@@ -434,7 +446,7 @@ public final class ReleaseTool {
             System.out.println("[dry run] would watch the Release workflow, then verify the release and the update site");
             return;
         }
-        GitHub.Run run = awaitAndWatch("the Release workflow", workflow, main, "push", v.tag(),
+        GitHub.Run run = awaitAndWatch("the Release workflow", workflow, main, "push", v.tag(), older,
                 List.of("rerun only the failed jobs, for a runner hiccup; if only the update site failed, the release is out:"
                         + " fix the cause and rebuild the site (Update site workflow, Run workflow)",
                         "a fault in the release itself: delete the GitHub Release if one was made, fix on " + v.branch()
@@ -567,8 +579,9 @@ public final class ReleaseTool {
      * Follows the run that a push or dispatch started; on failure, prints the failed jobs' last log
      * lines and {@code recovery}, then stops the tool.
      */
-    private GitHub.Run awaitAndWatch(String what, String workflow, String commit, String event, String branch, List<String> recovery) {
-        GitHub.Run run = gh.awaitRun(workflow, commit, event, branch);
+    private GitHub.Run awaitAndWatch(String what, String workflow, String commit, String event, String branch, Set<Long> older,
+            List<String> recovery) {
+        GitHub.Run run = gh.awaitRun(workflow, commit, event, branch, older);
         if (gh.watch(run)) {
             return run;
         }

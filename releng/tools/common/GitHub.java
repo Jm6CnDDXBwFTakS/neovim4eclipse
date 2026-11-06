@@ -4,8 +4,10 @@
 package common;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * GitHub Actions and Releases through the {@code gh} command (signed in with {@code gh auth login}).
@@ -72,15 +74,35 @@ public final class GitHub {
         return Optional.of(new Run(Long.parseLong(f[0]), f[1], f[2], f[3], f[4], f[5]));
     }
 
+    /** The ids of the runs {@link #runs} lists now: taken before a push, so that {@link #awaitRun} can tell the new run from older ones. */
+    public Set<Long> runIds(String workflow, String commit, String event, String branch) {
+        Set<Long> ids = new HashSet<>();
+        for (Run run : runs(workflow, commit, event, branch)) {
+            ids.add(run.id());
+        }
+        return ids;
+    }
+
     /**
-     * The newest run as in {@link #runs}, waiting up to three minutes for GitHub to list it: a run
-     * appears a few seconds after the push that starts it, sometimes later.
+     * The newest of {@code runs} (newest first, as gh lists them) that is not one of {@code older}.
+     * Example: a rehearsal of commit abc failed as run 41; the same commit pushed again starts run
+     * 42. With {@code older = {41}} this is 42, or empty until GitHub lists it, never the failed 41.
      */
-    public Run awaitRun(String workflow, String commit, String event, String branch) {
+    public static Optional<Run> newestExcept(List<Run> runs, Set<Long> older) {
+        return runs.stream().filter(r -> !older.contains(r.id())).findFirst();
+    }
+
+    /**
+     * The newest run as in {@link #runs} that is not one of {@code older}, waiting up to three
+     * minutes for GitHub to list it: a run appears a few seconds after the push that starts it,
+     * sometimes later. {@code older} holds the runs that existed before this tool's push or dispatch
+     * ({@link #runIds}); empty when the tool started nothing and follows the run that is there.
+     */
+    public Run awaitRun(String workflow, String commit, String event, String branch, Set<Long> older) {
         for (int i = 0; i < LOOK_TIMES; i++) {
-            List<Run> runs = runs(workflow, commit, event, branch);
-            if (!runs.isEmpty()) {
-                return runs.get(0);
+            Optional<Run> run = newestExcept(runs(workflow, commit, event, branch), older);
+            if (run.isPresent()) {
+                return run.get();
             }
             if (i == 0) {
                 System.out.println("waiting for GitHub to list the " + workflow + " run for " + branch + " …");
