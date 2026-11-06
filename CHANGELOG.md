@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: this release makes its builds more dependable. Each
+  release is now rehearsed before it is tagged (built, signed, and installed from an update site
+  into the oldest and newest supported Eclipse), and the automatic tests on Linux, Windows and
+  macOS no longer depend on details of GitHub's build machines, so a release is less likely to
+  fail or be held up on the way out.
+
 ## [0.2.1] - 2026-11-06
 
 ### Added
