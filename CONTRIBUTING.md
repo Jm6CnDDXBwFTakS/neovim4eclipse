@@ -561,6 +561,17 @@ release in it. For 0.1.2, released from `release/0.1.2`:
    gh workflow run build.yml --ref release/0.1.2
    gh run watch   # pick the new run from the list; it can take a few seconds to appear
    ```
+
+   Then rehearse the release on the branch and wait for it to pass. The *Release rehearsal*
+   workflow (`.github/workflows/rehearse-release.yml`) runs what otherwise runs only at the tag:
+   the build at the release's version, signing (with a throwaway key), the publish job's checks
+   and notes, both update sites, and the install into the oldest and newest Eclipse, publishing
+   nothing. A mistake in those steps then shows before the tag, not after it:
+
+   ```bash
+   gh workflow run rehearse-release.yml --ref release/0.1.2
+   gh run watch
+   ```
 2. Fast-forward `main` to the release branch (or merge a pull request from it), push `main`, and
    wait for the *Build* workflow on `main` to pass:
 

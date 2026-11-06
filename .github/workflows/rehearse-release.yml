@@ -1,0 +1,213 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# Rehearses a release on any branch, without publishing anything and without the signing key:
+# the steps that otherwise run only when a v* tag is pushed (release.yml, update-site.yml), on the
+# branch's own commit. Every earlier release failure was in those steps (zip(1) reading $ZIP, a
+# downloaded artifact unpacked, an artifact name taken twice), and they only show at the tag. Run
+# it once before each release, after the branch's Build passed (CONTRIBUTING.md, "Releasing"):
+# Actions tab > Release rehearsal > Run workflow, on the release branch.
+#
+# What it rehearses, job by job, and what differs from the release:
+#   1. version:  the version from the root pom.xml (0.2.2-SNAPSHOT gives 0.2.2), the CHANGELOG
+#                section it will have (here the Unreleased one, which is renamed at the release),
+#                and the pinned Neovim archives (UpdateNeovimDownloads --check), as release.yml.
+#   2. build:    build.yml at that version, the tests skipped (the branch's Build ran them).
+#   3. sign:     releng/sign.sh with a throwaway key made in the job, in place of the project's,
+#                then the publish job's checks and the release notes. Nothing is published.
+#   4. site:     the update site twice, as update-site.yml builds it: from every published release
+#                with the project's key (so a published ZIP that changed shows here too), and from
+#                the rehearsed ZIP alone with the throwaway key. Not deployed.
+#   5. smoke:    the director installs the rehearsed ZIP from that second site (a file: URL) into
+#                Eclipse 4.34 and the newest Eclipse, as update-site.yml does from the live site.
+# Left out: creating the GitHub Release and deploying GitHub Pages, which need write access.
+#
+# No secrets and no write permission anywhere: the release environment, which holds the signing
+# key, is never named here.
+name: Release rehearsal
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+# As in the other workflows: bash, with pipefail, on every runner.
+defaults:
+  run:
+    shell: bash
+
+# No concurrency group: build.yml, called below, has one named after the calling workflow and the
+# branch, and the same group here would make GitHub cancel the run as a deadlock.
+
+jobs:
+  version:
+    name: Version, changelog, Neovim archives
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: version
+        name: The version the release would have
+        run: |
+          version=$(grep -m 1 -oE '<version>[0-9]+\.[0-9]+\.[0-9]+-SNAPSHOT</version>' pom.xml \
+                      | sed -E 's|<version>(.*)-SNAPSHOT</version>|\1|')
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::pom.xml has no X.Y.Z-SNAPSHOT version"; exit 1
+          fi
+          echo "Rehearsing the release of $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # The release reads the section named after the version; before the release it is still
+      # "Unreleased" (CONTRIBUTING.md, "Releasing", step 1), so that one must not be empty.
+      - name: Check that CHANGELOG.md has notes for it
+        run: releng/release-notes.sh Unreleased > /dev/null
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+      - name: Check the pinned Neovim archives
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # GitHub's API, with this run's rate limit
+        run: java releng/UpdateNeovimDownloads.java --check
+
+  build:
+    name: Build
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      skip-tests: true   # the branch's own Build ran them; this rehearses what follows
+
+  sign:
+    name: Sign with a throwaway key
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout
+    env:
+      # Not named ZIP: zip(1) reads $ZIP as extra arguments (see releng/sign.sh).
+      SITE_ZIP: neovim4eclipse-${{ needs.version.outputs.version }}.zip
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+      - name: Download Maven (retried)
+        run: for try in 1 2 3; do ./mvnw -B -q --version && break; [ "$try" = 3 ] && exit 1; sleep 15; done
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.SITE_ZIP }}
+          path: unsigned
+          skip-decompress: true   # keep the ZIP itself, as release.yml does
+      # The key exists only in this step: made, used and gone with the runner. Its public half goes
+      # on to the site job, which checks the signatures with it as update-site.yml does with the
+      # project's key. The secret half is never written to $GITHUB_ENV, which the log would show.
+      - name: Sign and verify, as the release's sign job
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --pinentry-mode loopback --passphrase rehearsal \
+              --quick-generate-key "Release rehearsal <rehearsal@example.invalid>" ed25519 sign 1d
+          mkdir -p signed
+          gpg --armor --export > signed/rehearsal-public.asc
+          MAVEN_GPG_KEY=$(gpg --batch --pinentry-mode loopback --passphrase rehearsal --armor --export-secret-keys) \
+          MAVEN_GPG_PASSPHRASE=rehearsal \
+            releng/sign.sh "unsigned/$SITE_ZIP" "signed/$SITE_ZIP" signed/rehearsal-public.asc
+      # The checks the release's publish job makes before it creates the release.
+      - name: Check it as the publish job would
+        run: |
+          zip="signed/$SITE_ZIP"
+          unzip -l "$zip" | grep -c 'content\.jar$' > /dev/null || { echo "::error::$zip is not the update site"; exit 1; }
+          unzip -p "$zip" artifacts.jar > "$RUNNER_TEMP/artifacts.jar"
+          unzip -p "$RUNNER_TEMP/artifacts.jar" artifacts.xml | grep -c "name='pgp.signatures'" > /dev/null \
+            || { echo "::error::$zip is not signed"; exit 1; }
+          releng/verify-zip.sh "$zip" signed/rehearsal-public.asc
+          releng/release-notes.sh Unreleased > "$RUNNER_TEMP/notes.md"
+          echo "The release notes would be:"; cat "$RUNNER_TEMP/notes.md"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rehearsal-signed
+          path: signed/
+          if-no-files-found: error
+
+  site:
+    name: Build both update sites
+    needs: [version, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout and to download the releases
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rehearsal-signed
+          path: rehearsed
+      # The same download and site build as update-site.yml's build job.
+      - name: The site from every published release, with the project's key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir dist
+          for tag in $(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases \
+                         --json tagName --jq '.[].tagName'); do
+            for try in 1 2 3; do
+              gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --pattern 'neovim4eclipse-*.zip.asc' \
+                --dir dist --clobber && break
+              [ "$try" = 3 ] && exit 1
+              sleep 15
+            done
+          done
+          releng/update-site.sh dist published-site releng/signing-key.asc
+      - name: The site from the rehearsed ZIP, with the throwaway key
+        run: releng/update-site.sh rehearsed rehearsed-site rehearsed/rehearsal-public.asc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rehearsal-site
+          path: rehearsed-site/
+          if-no-files-found: error
+
+  smoke:
+    name: Install the rehearsed release into Eclipse ${{ matrix.eclipse }}
+    needs: [version, site]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for the checkout
+    strategy:
+      fail-fast: false
+      matrix:
+        # The same two Eclipses as update-site.yml's smoke job (RehearsalTest keeps the two lists
+        # equal): the oldest supported and the newest release.
+        include:
+          - eclipse: '4.34'
+            platform-url: https://download.eclipse.org/eclipse/downloads/drops4/R-4.34-202411201800/eclipse-platform-4.34-linux-gtk-x86_64.tar.gz
+          - eclipse: '4.41'
+            platform-url: https://download.eclipse.org/eclipse/downloads/drops4/R-4.41-202608281142/eclipse-platform-4.41-linux-gtk-x86_64.tar.gz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rehearsal-site
+          path: site
+      - name: Download Eclipse Platform ${{ matrix.eclipse }}
+        env:
+          PLATFORM_URL: ${{ matrix.platform-url }}
+        # As update-site.yml: archive.eclipse.org once a drop has moved there.
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/platform.tar.gz" "$PLATFORM_URL" \
+            || curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/platform.tar.gz" \
+                 "${PLATFORM_URL/download.eclipse.org/archive.eclipse.org}"
+          tar -xzf "$RUNNER_TEMP/platform.tar.gz" -C "$RUNNER_TEMP"
+      - name: Install with p2's director
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: releng/smoke-install.sh "$RUNNER_TEMP/eclipse" "file://$PWD/site" "$VERSION"
