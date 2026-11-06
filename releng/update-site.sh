@@ -56,9 +56,10 @@ older_than() {
   [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
 }
 
-# The SHA-256 of file $1: sha256sum on Linux, shasum on macOS.
+# The SHA-256 of file $1: sha256sum on Linux, shasum on macOS. Read from standard input, as GNU
+# sha256sum starts its line with a backslash for a name holding one (a Windows path).
 sha256_of() {
-  if command -v sha256sum > /dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d ' ' -f 1
+  if command -v sha256sum > /dev/null; then sha256sum < "$1"; else shasum -a 256 < "$1"; fi | cut -d ' ' -f 1
 }
 
 # Checks the whole ZIP of version $1 (see the top), or stops everything.
