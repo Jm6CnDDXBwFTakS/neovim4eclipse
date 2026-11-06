@@ -23,10 +23,12 @@ import java.util.regex.Pattern;
  *   NeovimVersion.fromLua(List.of(0, 13, 0)).isSupported()   true
  * </pre>
  *
- * <p>{@link #MINIMUM} is the single source of truth for the supported version: CI runs exactly that
- * Neovim (the release in {@code neovim-downloads.properties}, which <i>Get Neovim</i> installs and
- * {@code java releng/UpdateNeovimDownloads.java install} downloads for CI), and the docs name it;
- * {@code VersionConsistencyTest} checks both. A pre-release ({@code 0.13.0-dev}) counts as its
+ * <p>{@link #MINIMUM} is the release in {@code neovim-downloads.properties} ({@code version=}), the
+ * data file behind <i>Get Neovim</i>: the one place the version is written. So the Neovim the
+ * plug-in installs, the one CI runs ({@code java releng/UpdateNeovimDownloads.java install}
+ * downloads it), and the oldest it accepts are always the same. The docs' copies of the number are
+ * listed in {@code releng/version-copies.txt}, which {@code java releng/tools/neovim/NeovimUpgrade.java}
+ * rewrites and {@code VersionConsistencyTest} checks. A pre-release ({@code 0.13.0-dev}) counts as its
  * numbers, so a nightly build newer than the minimum is accepted.
  *
  * @param major the first number, 0 for every Neovim so far
@@ -34,12 +36,6 @@ import java.util.regex.Pattern;
  * @param patch the third number, the bug-fix release (0.12.6)
  */
 public record NeovimVersion(int major, int minor, int patch) implements Comparable<NeovimVersion> {
-
-    /**
-     * The oldest supported Neovim. Raise it whenever a newer release lets Neovim do something the
-     * plug-in would otherwise work around, or fixes a security issue (docs/UPGRADING.md).
-     */
-    public static final NeovimVersion MINIMUM = new NeovimVersion(0, 12, 6);
 
     /**
      * Lua that returns the running Neovim's version as three numbers, e.g. {@code {0, 12, 6}}.
@@ -50,6 +46,17 @@ public record NeovimVersion(int major, int minor, int patch) implements Comparab
 
     /** The start of {@code nvim --version}'s first line, {@code NVIM v0.12.6}; the numbers are groups. */
     private static final Pattern VERSION_LINE = Pattern.compile("^\\s*NVIM v(\\d+)\\.(\\d+)\\.(\\d+)");
+
+    /**
+     * The oldest supported Neovim, and the one <i>Get Neovim</i> installs: the version in
+     * {@code neovim-downloads.properties}. It moves with each Neovim release, a week or so after it
+     * appears ({@code java releng/tools/neovim/NeovimUpgrade.java}, docs/UPGRADING.md).
+     *
+     * <p>Declared after {@link #VERSION_LINE} on purpose: reading the data file parses its version
+     * with {@link #fromVersionOutput}, which needs that pattern, and static fields are set in the
+     * order they are written.
+     */
+    public static final NeovimVersion MINIMUM = NeovimRelease.bundled().version();
 
     /**
      * Reads the answer to {@link #LUA_QUERY}: a list of three numbers (msgpack integers arrive as

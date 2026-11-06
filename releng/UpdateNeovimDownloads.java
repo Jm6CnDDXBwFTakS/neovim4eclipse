@@ -108,8 +108,11 @@ import java.util.zip.ZipInputStream;
  *       after pinning is caught.</li>
  * </ul>
  * If Neovim starts publishing signatures or attestations, verify them here instead.
- * After a rewrite, set {@code NeovimVersion.MINIMUM} to the same version and run the tests:
- * {@code VersionConsistencyTest} lists what else still names the old one (docs/UPGRADING.md).
+ * {@code NeovimVersion.MINIMUM} is read from the file, so it moves with a rewrite. A rewrite is
+ * usually one step of {@code java releng/tools/neovim/NeovimUpgrade.java <version>}, which also
+ * rewrites the docs' copies of the number ({@code releng/version-copies.txt}), adds the changelog
+ * entry, unpacks the new archives with the plug-in's own extractor, and runs the tests
+ * (docs/UPGRADING.md, "Neovim").
  *
  * <h2>{@code --check}</h2>
  * The same downloads and comparisons for the version already in the file, without writing. The
@@ -210,8 +213,9 @@ public final class UpdateNeovimDownloads {
         for (Entry e : measured.values()) {
             System.out.println("  " + e.asset() + ": https://www.virustotal.com/gui/file/" + e.sha256());
         }
-        System.out.println("Next: set NeovimVersion.MINIMUM to " + version
-                + " and run the tests; VersionConsistencyTest lists what else names the old version.");
+        System.out.println("NeovimVersion.MINIMUM is now " + version + " (it is read from this file). The copies of the"
+                + " number in releng/version-copies.txt, the changelog and the tests are the rest of"
+                + " java releng/tools/neovim/NeovimUpgrade.java " + version + ".");
     }
 
     /** The version in the file, downloaded and compared again; fails on any difference. */

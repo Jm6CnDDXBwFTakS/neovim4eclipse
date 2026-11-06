@@ -315,8 +315,8 @@ public final class ReleaseTool {
         Version pinned = Version.parse(pins.getProperty("version", "").strip());
         Version latest = Version.parse(r.out().substring(1));
         if (latest.compareTo(pinned) > 0) {
-            System.out.println("  note: Neovim " + latest + " is out (pinned: " + pinned + "); move the pin once it is a week old"
-                    + " (docs/UPGRADING.md, \"Following Neovim's releases\"). Not a blocker.");
+            System.out.println("  note: Neovim " + latest + " is out (pinned: " + pinned + "); once it is a week old: java "
+                    + "releng/tools/neovim/NeovimUpgrade.java " + latest + " (docs/UPGRADING.md, \"Following Neovim's releases\"). Not a blocker.");
         } else {
             ok("Neovim " + pinned + " is Neovim's newest release");
         }

@@ -33,7 +33,7 @@ The safe loop for any upgrade:
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself | `distributionUrl` and `distributionSha256Sum` in `.mvn/wrapper/maven-wrapper.properties` | none |
-| Neovim (oldest supported, and the one CI tests) | `NeovimVersion.MINIMUM` in the plug-in's `util/NeovimVersion.java` | `util/neovim-downloads.properties` (written by `releng/UpdateNeovimDownloads.java`; *Get Neovim* and CI both install from it); "Neovim 0.12.6" in README, CONTRIBUTING and `feature.xml`, and the update site's `category.xml` |
+| Neovim (what *Get Neovim* installs, the oldest supported, and the one CI tests) | `version=` in the plug-in's `util/neovim-downloads.properties` (written by `releng/UpdateNeovimDownloads.java`; *Get Neovim* and CI both install from it; `NeovimVersion.MINIMUM` reads it) | the copies `releng/version-copies.txt` lists, section `[neovim]` (README, CONTRIBUTING, LEARNING, PACKAGING, `feature.xml`, the update site's `category.xml`); `java releng/tools/neovim/NeovimUpgrade.java` rewrites them |
 | GitHub Actions | `uses: ...@vN` lines in `.github/workflows/` | not checked; Dependabot proposes updates |
 | CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `platforms` job's matrix in `build.yml` adds `windows-latest` and `macos-latest` | not checked |
 
@@ -187,7 +187,8 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 
 ## Neovim
 
-One version is both the **oldest supported** Neovim and the one CI tests: `NeovimVersion.MINIMUM`.
+One version is what *Get Neovim* installs, the **oldest supported** Neovim, and the one CI tests:
+`version=` in `util/neovim-downloads.properties`, which `NeovimVersion.MINIMUM` reads.
 The plug-in refuses an older Neovim at start, with a message naming both versions
 (`Neovim 0.12.4 is too old: Neovim for Eclipse needs 0.12.6 or newer.`), so users never meet a
 half-working plug-in.
@@ -207,28 +208,44 @@ opens *Get Neovim* by itself at Eclipse's start. (A program named with the start
 `-Dneovim4eclipse.nvim` instead runs unchecked and unsupported; one older than the minimum is
 refused, as above.)
 
-**How** (example: 0.12.6 to 0.13.0):
+**How** (example: 0.12.6 to 0.13.0), on the release branch:
 
-1. Read the release notes (`:help news`, and each patch release's changelog on GitHub) for changes
-   to what the plug-in uses: the API calls in `core/rpc`, the Lua in `LuaScripts`, `ext_cmdline`,
-   autocommand events, options it sets. Note what can now be done by Neovim instead of the plug-in.
-2. Set `MINIMUM = new NeovimVersion(0, 13, 0)` in `util/NeovimVersion.java`, then run
-   `java releng/UpdateNeovimDownloads.java 0.13.0` from the repository's root. It rewrites
-   `util/neovim-downloads.properties`, the data file behind *Get Neovim* (asset names, sizes and
-   SHA-256 of the six release archives), after downloading each archive and comparing its hash with
-   GitHub's published digest; it writes nothing if a step fails. It refuses a release less than a
-   week old, so that an archive replaced on GitHub would likely have been noticed first (add
-   `--allow-young` after the version for an urgent fix), and then prints each archive's VirusTotal
-   page: open them before committing. If Neovim renamed an asset, the
-   updater stops with a 404: fix that `.asset` line by hand and run it again. Then set the version
-   in README, CONTRIBUTING, `feature.xml` and `category.xml`; `VersionConsistencyTest` lists any copy
-   you missed.
-3. Install that Neovim locally (the release archive is enough) and run everything with it:
-   `-Dnvim.path=/path/to/nvim-0.13.0/bin/nvim`. Also run *Neovim → Get Neovim...* once (a
-   development Eclipse is enough): its tar reader refuses archives with links, which Neovim's do not
-   have so far (`util/ArchiveExtractor`), and only this shows whether the new ones still do not.
-4. Add a *Changed* entry to `CHANGELOG.md` saying the new minimum, so users see it before updating.
-5. Remove the workarounds the new version makes unnecessary, each as its own commit after this one.
+```bash
+java releng/tools/neovim/NeovimUpgrade.java 0.13.0
+```
+
+It asks once, then does each step and commits *Move to Neovim 0.13.0*; if a step fails, the tree is
+put back as it was. It needs a JDK of release 22 or newer, as the Release tool does
+(CONTRIBUTING.md, "Releasing"); `--dry-run` shows the steps, `--yes` skips the question.
+
+1. **The data file**: `java releng/UpdateNeovimDownloads.java 0.13.0` rewrites
+   `util/neovim-downloads.properties` (asset names, sizes, SHA-256 and tree hashes of the six release
+   archives), after downloading each archive and comparing its hash with GitHub's published digest;
+   it writes nothing if a step fails. It refuses a release less than a week old, so that an archive
+   replaced on GitHub would likely have been noticed first (`--allow-young` after the version, for
+   an urgent fix), and prints each archive's VirusTotal page: the tool asks whether you looked. If
+   Neovim renamed an asset, the updater stops with a 404: fix that `.asset` line by hand and run the
+   tool again. `NeovimVersion.MINIMUM` reads the file, so it moves too.
+2. **The copies** of the number that `releng/version-copies.txt` lists (README, CONTRIBUTING,
+   LEARNING, PACKAGING, `feature.xml`, `category.xml`). `VersionConsistencyTest` checks that every
+   listed pattern still finds the version: a reworded sentence needs its pattern changed with it.
+3. **The changelog**: a *Changed* entry under *Unreleased* naming the new minimum, so users see it
+   before updating.
+4. **The archives as *Get Neovim* installs them**: the plug-in is compiled, and all six archives
+   are unpacked with its own extractor (`util/ArchiveExtractor`, whose tar reader refuses links,
+   which Neovim's archives have not had so far) and checked against their tree hashes; then this
+   machine's Neovim must run. This replaces running *Get Neovim* once in a development Eclipse.
+5. **Every test** with the new Neovim: `java releng/tools/ci/LikeCi.java --all`. Run it on macOS and
+   Windows too.
+
+What stays yours: read the release notes (`:help news`, and each patch release's changelog on
+GitHub) for changes to what the plug-in uses (the API calls in `core/rpc`, the Lua in `LuaScripts`,
+`ext_cmdline`, autocommand events, options it sets), then remove the workarounds the new version
+makes unnecessary, each as its own commit after the move.
+
+By hand, the same: run the updater, change each copy `releng/version-copies.txt` lists, add the
+changelog entry, run the tests with `-Dnvim.path=/path/to/nvim-0.13.0/bin/nvim` and *Get Neovim*
+once in a development Eclipse, and commit.
 
 **Following Neovim's releases**: the plug-in runs only the Neovim it pins, so its users get a
 Neovim fix, a security fix included, only when the pin moves. Neovim ships those fixes as releases,

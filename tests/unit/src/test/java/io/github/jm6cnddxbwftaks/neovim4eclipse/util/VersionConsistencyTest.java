@@ -28,6 +28,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import common.VersionCopies;
+
 /**
  * Keeps every copy of a version number in step with the root {@code pom.xml}.
  *
@@ -167,14 +169,39 @@ class VersionConsistencyTest {
     }
 
     /**
-     * The archives <i>Get Neovim</i> installs hold the minimum Neovim: after raising
-     * {@link NeovimVersion#MINIMUM}, run {@code java releng/UpdateNeovimDownloads.java <version>}.
+     * The minimum is the Neovim <i>Get Neovim</i> installs: {@link NeovimVersion#MINIMUM} is read
+     * from {@code neovim-downloads.properties}, never written as a number of its own.
      */
     @Test
-    void getNeovimInstallsTheMinimumNeovim() {
-        assertEquals(NeovimVersion.MINIMUM, NeovimRelease.bundled().version(),
-                "neovim-downloads.properties holds another Neovim than NeovimVersion.MINIMUM: run "
-                        + "java releng/UpdateNeovimDownloads.java " + NeovimVersion.MINIMUM);
+    void getNeovimInstallsTheMinimumNeovim() throws Exception {
+        assertEquals(NeovimVersion.MINIMUM, NeovimRelease.bundled().version());
+        assertFalse(read(PLUGIN + "src/io/github/jm6cnddxbwftaks/neovim4eclipse/util/NeovimVersion.java")
+                .contains("MINIMUM = new NeovimVersion("), "NeovimVersion.MINIMUM is a number of its own again: it must"
+                        + " be the data file's version (java releng/tools/neovim/NeovimUpgrade.java moves it)");
+    }
+
+    /**
+     * Every copy of the Neovim version that {@code releng/version-copies.txt} lists holds the
+     * minimum, and every listed pattern still finds one: a reworded sentence that no pattern
+     * matches would no longer be rewritten by {@code java releng/tools/neovim/NeovimUpgrade.java}.
+     */
+    @Test
+    void theListedCopiesNameTheMinimumNeovim() throws Exception {
+        List<String> wrong = new ArrayList<>();
+        List<VersionCopies.Copy> copies = VersionCopies.parse(read(VersionCopies.FILE)).get("neovim");
+        assertNotNull(copies, VersionCopies.FILE + " has no [neovim] section");
+        for (VersionCopies.Copy copy : copies) {
+            List<String> found = VersionCopies.versionsIn(read(copy.file()), copy);
+            if (found.isEmpty()) {
+                wrong.add(copy.file() + ": nothing matches " + copy.pattern());
+            }
+            for (String version : found) {
+                if (!version.equals(NeovimVersion.MINIMUM.toString())) {
+                    wrong.add(copy.file() + ": " + copy.pattern() + " finds " + version);
+                }
+            }
+        }
+        assertTrue(wrong.isEmpty(), "Neovim copies in " + VersionCopies.FILE + " differ from " + NeovimVersion.MINIMUM + ": " + wrong);
     }
 
     @Test
