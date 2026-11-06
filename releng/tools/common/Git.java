@@ -6,6 +6,7 @@ package common;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * The git questions and commands the tools need, on the repository at {@link Shell#root}. The
@@ -75,26 +76,49 @@ public final class Git {
     }
 
     /**
-     * Commits what is staged, after the gate, in UTC ({@code TZ=UTC}) so that the date does not tell
-     * the machine's time zone (AGENTS.md, "Conventions"). {@code trailer}, if not empty, is added as
-     * the message's last paragraph, for example a {@code Co-Authored-By:} line.
+     * The one way a step edits tracked files and commits them, so that a stop never leaves half an
+     * edit behind: on a clean tree, it asks once, before the first edit, showing {@code plan};
+     * then {@code edit} runs (it changes the files and returns those to commit) and the commit is
+     * made, in UTC. If {@code edit} or the commit fails, the tree is put back as it was
+     * ({@code git reset --hard}: it was clean, so only the step's own edits go) before the failure
+     * is reported. With no terminal to ask on, the question stops the step before any edit, so the
+     * printed {@code --yes} command finds the tree as clean as the first try did. In a dry run
+     * nothing is edited; the answer is {@code false} then, {@code true} after a commit.
+     *
+     * <p>Example, the Release tool's {@code prepare}:
+     * <pre>
+     *   git.editAndCommit(ask, "Date the changelog and name 0.2.3 in the README, then commit",
+     *           List.of("CHANGELOG.md: ## [0.2.3] - 2026-11-20 under a new ## [Unreleased]", …),
+     *           "Release 0.2.3: date its changelog section, name it in the README", () -&gt; {
+     *               write(…); return List.of("CHANGELOG.md", "README.md");
+     *           });
+     * </pre>
      */
-    public void commit(Ask ask, String message, String trailer, List<String> files) {
-        String full = trailer.isEmpty() ? message : message + "\n\n" + trailer;
-        List<String> details = new ArrayList<>();
-        details.add("git commit: " + message);
-        details.addAll(shell.out(command("diff", "--stat", "HEAD", "--")).lines().toList());
-        if (ask.confirm("Commit " + String.join(", ", files), details)) {
-            commitNow(full, files);
+    public boolean editAndCommit(Ask ask, String what, List<String> plan, String message, Supplier<List<String>> edit) {
+        if (!isClean()) {
+            throw new ToolFailure("the working tree has changes (git status); commit or stash them first");
+        }
+        List<String> details = new ArrayList<>(plan);
+        details.add("git commit -m \"" + message.lines().findFirst().orElse("") + "\"  (in UTC)");
+        if (!ask.confirm(what, details)) {
+            return false;
+        }
+        try {
+            commitNow(message, edit.get());
+            return true;
+        } catch (ToolFailure f) {
+            ok("reset", "-q", "--hard", "HEAD");
+            throw new ToolFailure(f.getMessage() + " The working tree is as it was before the step.");
         }
     }
 
     /**
-     * Commits {@code files} with {@code message} in UTC, without asking: for a step that asked once,
-     * before its first local edit, about all it does (the {@code next} step: cut, set the version,
-     * commit), so that a no leaves nothing half done.
+     * Commits {@code files} with {@code message}, without asking (the question came first, in
+     * {@link #editAndCommit}). In UTC ({@code TZ=UTC}), so that the date does not tell the
+     * machine's time zone (AGENTS.md, "Conventions"); a {@code Co-Authored-By:} line or any other
+     * last paragraph is part of {@code message}.
      */
-    public void commitNow(String message, List<String> files) {
+    private void commitNow(String message, List<String> files) {
         List<String> add = new ArrayList<>(List.of("add", "--"));
         add.addAll(files);
         out(add.toArray(String[]::new));
