@@ -96,6 +96,15 @@ class NeovimUpgradeTest {
     }
 
     @Test
+    void aSecondMoveBeforeTheReleaseReplacesTheFirstsEntry() {
+        String once = NeovimFiles.withNeovimEntry("## [Unreleased]\n\n## [0.2.4] - 2026-11-20\n", FROM, Version.parse("0.12.7"));
+        String twice = NeovimFiles.withNeovimEntry(once, Version.parse("0.12.7"), Version.parse("0.12.8"));
+        assertEquals(NeovimFiles.withChangedEntry("## [Unreleased]\n\n## [0.2.4] - 2026-11-20\n",
+                NeovimFiles.entry(FROM, Version.parse("0.12.8"))), twice, "one entry, from the released 0.12.6");
+        assertTrue(!twice.contains("0.12.7"), twice);
+    }
+
+    @Test
     void aNewChangedGroupGoesAfterAddedAndBeforeFixed() {
         String changelog = NeovimFiles.withChangedEntry("""
                 ## [Unreleased]
