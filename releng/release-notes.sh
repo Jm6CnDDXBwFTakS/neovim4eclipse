@@ -38,7 +38,12 @@ notes=$(awk -v heading="## [$version]" '
 # $(...) drops trailing blank lines; a section of only blank lines is empty here too.
 if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
     echo "$changelog has no section \"## [$version]\", or it is empty." >&2
-    echo "Rename \"## [Unreleased]\" to \"## [$version] - <date>\" before tagging (CONTRIBUTING.md, \"Releasing\")." >&2
+    if [ "$version" = Unreleased ]; then
+        # The rehearsal (and a local check) reads the section before it is renamed.
+        echo "Add the release's changes under \"## [Unreleased]\" (see the top of $changelog)." >&2
+    else
+        echo "Rename \"## [Unreleased]\" to \"## [$version] - <date>\" before tagging (CONTRIBUTING.md, \"Releasing\")." >&2
+    fi
     exit 1
 fi
 printf '%s\n' "$notes" | sed '/./,$!d'   # drop the blank lines right after the heading
