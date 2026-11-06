@@ -9,11 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +18,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.RepositoryFiles;
 
 /**
  * Keeps every written copy of the plug-in's own folders ({@link PluginFolders}) in step with the code.
@@ -44,8 +43,6 @@ class DedicatedFolderNameTest {
      * Neovim's data home there.
      */
     private static final Pattern OLD = Pattern.compile("\\.local[/\\\\]opt[/\\\\]|%(?:USERPROFILE|HOME)%[/\\\\]\\.local");
-    /** Build output and tool folders: copies of the sources, or not ours. */
-    private static final Set<String> SKIPPED_FOLDERS = Set.of(".git", "target", "bin", "node_modules");
     private static final Set<String> TEXT_SUFFIXES = Set.of(".java", ".md", ".xml", ".properties", ".yml",
             ".lua", ".txt", ".html");
 
@@ -77,27 +74,22 @@ class DedicatedFolderNameTest {
         assertEquals(List.of(), wrong, "these name another folder than " + PluginFolders.NAME);
     }
 
+    /**
+     * The repository's text files ({@link RepositoryFiles}: git's list, so a copy of the repository
+     * inside the checkout, such as another tool's worktree, is not read), without this file, whose
+     * comments quote the patterns.
+     */
     private static List<Path> textFiles(Path root) throws IOException {
-        List<Path> files = new ArrayList<>();
         Path self = root.resolve("tests/unit/src/test/java/io/github/jm6cnddxbwftaks/neovim4eclipse/util/"
                 + DedicatedFolderNameTest.class.getSimpleName() + ".java");
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                return SKIPPED_FOLDERS.contains(String.valueOf(dir.getFileName())) ? FileVisitResult.SKIP_SUBTREE
-                        : FileVisitResult.CONTINUE;
+        List<Path> files = new ArrayList<>();
+        for (Path file : RepositoryFiles.paths(root)) {
+            String name = file.getFileName().toString();
+            int dot = name.lastIndexOf('.');
+            if (dot >= 0 && TEXT_SUFFIXES.contains(name.substring(dot)) && !file.equals(self)) {
+                files.add(file);
             }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                String name = file.getFileName().toString();
-                int dot = name.lastIndexOf('.');
-                if (dot >= 0 && TEXT_SUFFIXES.contains(name.substring(dot)) && !file.equals(self)) {
-                    files.add(file);
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
+        }
         return files;
     }
 
