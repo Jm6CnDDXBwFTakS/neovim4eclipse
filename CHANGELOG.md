@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-06
+
 ### Changed
 
 - Nothing changes in the plug-in itself: moving to a new Neovim release, which then is the one
