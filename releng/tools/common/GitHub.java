@@ -113,17 +113,35 @@ public final class GitHub {
                 + (LOOK_SECONDS * LOOK_TIMES / 60) + " minutes; look at the repository's Actions page");
     }
 
+    /** How many times {@link #watch} starts {@code gh run watch} again when it ends before the run does. */
+    private static final int WATCH_TRIES = 5;
+
     /**
      * Follows {@code run} on this terminal until it ends ({@code gh run watch}); whether it passed.
-     * A run that ended already is only looked up.
+     * A run that ended already is only looked up. {@code gh run watch} can end before the run does
+     * (a dropped connection during an hour-long Build, an expired sign-in); its exit status says
+     * nothing about the run then, so the run's own status decides: still running means watch again,
+     * a few times, and then stop with a {@link ToolFailure} that says so, never "failed".
      */
     public boolean watch(Run run) {
         System.out.println("watching " + run.url());
-        if (!run.completed()) {
+        for (int i = 0; i <= WATCH_TRIES; i++) {
+            String[] state = shell.out(List.of("gh", "run", "view", Long.toString(run.id()), "--json", "status,conclusion",
+                    "--jq", ".status + \"\\t\" + .conclusion")).split("\t", -1);
+            if (state[0].equals("completed")) {
+                return state.length > 1 && state[1].equals("success");
+            }
+            if (i == WATCH_TRIES) {
+                break;
+            }
+            if (i > 0) {
+                System.out.println("gh run watch ended while the run is " + state[0] + "; watching again");
+                sleep(LOOK_SECONDS);
+            }
             shell.show(List.of("gh", "run", "watch", Long.toString(run.id()), "--compact", "--interval", "30"));
         }
-        String conclusion = shell.out(List.of("gh", "run", "view", Long.toString(run.id()), "--json", "conclusion", "--jq", ".conclusion"));
-        return conclusion.equals("success");
+        throw new ToolFailure("could not follow " + run.url() + " to its end (gh run watch kept stopping); it may still be"
+                + " running: run the same step again to follow it");
     }
 
     /** The last {@code lines} lines of the failed jobs' logs, for a report after a failed run. */
