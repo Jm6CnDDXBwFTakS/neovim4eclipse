@@ -16,6 +16,7 @@ import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 import org.eclipse.swt.widgets.Text;
@@ -102,17 +103,30 @@ class OpenPreferencesHandlerTest {
         assertEquals("Configure Neovim for Eclipse integration.", neovimPage.getDescription());
         Control page = neovimPage.getControl();
         Link help = find(page, Link.class).stream()
-                .filter(l -> l.getText().equals(NeovimPreferencePage.NEOVIM_HELP)).findFirst().orElse(null);
+                .filter(l -> l.getText().equals(NeovimPreferencePage.NEOVIM_HELP_LINK)).findFirst().orElse(null);
         assertNotNull(help, "no help with a link to how Neovim is found");
         assertTrue(help.isVisible(), "help hidden");
         UiTestSupport.waitUntil("the note saying which Neovim was found", EndToEndTestBase.TIMEOUT_MS, () -> note(page) != null);
         Label note = note(page);
-        // The link sits in a block with the command, inside the note's group: compare on the screen.
+        // Both in the Neovim group, however deep the help's own composites nest it; compared on
+        // the screen, as they lie in different composites.
         Rectangle noteOnScreen = note.getDisplay().map(note.getParent(), null, note.getBounds());
         Rectangle helpOnScreen = help.getDisplay().map(help.getParent(), null, help.getBounds());
-        assertTrue(help.getParent().getParent() == note.getParent() && noteOnScreen.y < helpOnScreen.y,
-                "the note (which Neovim runs) comes before the help (how to run another): note " + noteOnScreen
-                        + ", help " + helpOnScreen);
+        Group group = groupOf(note);
+        assertNotNull(group, "the note is in no group");
+        assertTrue(groupOf(help) == group, "the help is not in the note's group");
+        assertTrue(noteOnScreen.y < helpOnScreen.y, "the note (which Neovim runs) comes before the help (how to "
+                + "run another): note " + noteOnScreen + ", help " + helpOnScreen);
+    }
+
+    /** The nearest Group around {@code control}, or {@code null}. */
+    private static Group groupOf(Control control) {
+        for (Composite parent = control.getParent(); parent != null; parent = parent.getParent()) {
+            if (parent instanceof Group group) {
+                return group;
+            }
+        }
+        return null;
     }
 
     /** The note in the Neovim group (a Label), once it says which Neovim runs; {@code null} before. */

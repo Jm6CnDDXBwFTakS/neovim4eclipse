@@ -37,8 +37,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
  */
 public class NeovimPreferencePage extends FieldEditorPreferencePage implements IWorkbenchPreferencePage {
 
-    /** The help in the Neovim group, after the note: for tests ({@link NeovimStatusSection#HELP}). */
-    public static final String NEOVIM_HELP = NeovimStatusSection.HELP;
+    /**
+     * The text of the help's link, "Using a Neovim of your own", under the command in the Neovim
+     * group: for tests ({@link NeovimStatusSection#HELP}). Only the link; the help's prose is in
+     * the labels around it ({@code HELP_LEAD}, {@code HELP_TAIL}).
+     */
+    public static final String NEOVIM_HELP_LINK = NeovimStatusSection.HELP;
 
     private Group program;
     private Group workbench;

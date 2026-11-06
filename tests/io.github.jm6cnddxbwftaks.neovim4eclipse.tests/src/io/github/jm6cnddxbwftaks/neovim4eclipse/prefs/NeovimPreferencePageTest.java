@@ -87,7 +87,7 @@ class NeovimPreferencePageTest {
         assertEquals("Neovim", groups[0].getText());
         assertEquals("Workbench", groups[1].getText());
         assertTrue(find(groups[0], Label.class) != null && find(groups[0], Link.class,
-                link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP)) != null,
+                link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP_LINK)) != null,
                 "the note and the help in the first group");
         Text only = find(groups[0], Text.class);
         assertTrue(only != null && only.getText().equals(NeovimStatusSection.HELP_COMMAND)
@@ -108,7 +108,7 @@ class NeovimPreferencePageTest {
         Group group = page.groups()[0];
         Label lead = find(group, Label.class, l -> l.getText().equals(NeovimStatusSection.HELP_LEAD));
         Text command = find(group, Text.class, t -> t.getText().equals(NeovimStatusSection.HELP_COMMAND));
-        Link help = find(group, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP));
+        Link help = find(group, Link.class, link -> link.getText().equals(NeovimPreferencePage.NEOVIM_HELP_LINK));
         Label tail = find(group, Label.class, l -> l.getText().equals(NeovimStatusSection.HELP_TAIL));
         assertTrue(lead != null && command != null && help != null && tail != null, "the help's four rows");
         assertTrue(command.getText().startsWith("-vmargs -Dneovim4eclipse.nvim="), command.getText());
