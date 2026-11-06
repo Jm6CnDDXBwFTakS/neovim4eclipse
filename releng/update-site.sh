@@ -14,7 +14,10 @@
 #
 # With a public key, every release must carry valid PGP signatures by that key
 # (releng/verify-signatures.sh) or nothing is built, and releases from before signing began
-# (FIRST_SIGNED, 0.1.4) are left out. Why: the site is rebuilt from the release ZIPs on GitHub at
+# (FIRST_SIGNED, 0.1.4) are left out. The whole ZIP is checked too, before it is unpacked, as
+# the jar signatures do not cover content.jar (what p2 installs and how; releng/verify-zip.sh):
+# from FIRST_ZIP_SIGNED (0.2.1) by its signature neovim4eclipse-<version>.zip.asc, which must lie
+# beside it, and before that by the hash pinned in releng/release-zips.sha256. Why: the site is rebuilt from the release ZIPs on GitHub at
 # every release, and a ZIP replaced there later (by anyone holding a token that may write the
 # repository) would otherwise go out unchecked; the release workflow checks each ZIP only once,
 # before it publishes it (0.2.1 security review). Leaving out the unsigned 0.1.0 to 0.1.3 also
@@ -44,6 +47,35 @@ out=$2
 key=${3:-}
 # The first release signed with the project's key; older ones are left out when a key is given.
 FIRST_SIGNED=0.1.4
+# The first release whose whole ZIP is signed (neovim4eclipse-<version>.zip.asc).
+FIRST_ZIP_SIGNED=0.2.1
+here=$(cd "$(dirname "$0")" && pwd)
+
+# Whether version $1 comes before version $2 (sort -V puts the older one first).
+older_than() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
+}
+
+# The SHA-256 of file $1: sha256sum on Linux, shasum on macOS.
+sha256_of() {
+  if command -v sha256sum > /dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d ' ' -f 1
+}
+
+# Checks the whole ZIP of version $1 (see the top), or stops everything.
+check_zip() {
+  local file="$zips/neovim4eclipse-$1.zip" pinned actual
+  if older_than "$1" "$FIRST_ZIP_SIGNED"; then
+    pinned=$(awk -v name="neovim4eclipse-$1.zip" '$2 == name { print $1 }' "$here/release-zips.sha256")
+    actual=$(sha256_of "$file")
+    if [ -z "$pinned" ] || [ "$actual" != "$pinned" ]; then
+      echo "error: neovim4eclipse-$1.zip has SHA-256 $actual, not the ${pinned:-(none pinned)} in releng/release-zips.sha256" >&2
+      exit 1
+    fi
+    echo "ok: neovim4eclipse-$1.zip (pinned SHA-256)"
+  else
+    "$here/verify-zip.sh" "$file" "$key"
+  fi
+}
 
 # Versions from the file names, oldest first (sort -V knows that 0.1.10 comes after 0.1.9).
 # Written without mapfile and GNU find so that it also runs with macOS's bash 3.2.
@@ -83,6 +115,9 @@ for version in "${versions[@]}"; do
       exit 1 ;;
   esac
   dir="$out/releases/$version"
+  if [ -n "$key" ]; then
+    check_zip "$version"  # before unzip reads it
+  fi
   unzip -q "$zips/neovim4eclipse-$version.zip" -d "$dir"
   # The same check the Release workflow makes: a ZIP without content.jar is not an update site.
   if [ ! -f "$dir/content.jar" ] || [ ! -f "$dir/artifacts.jar" ]; then
@@ -90,7 +125,7 @@ for version in "${versions[@]}"; do
     exit 1
   fi
   if [ -n "$key" ]; then
-    "$(dirname "$0")/verify-signatures.sh" "$dir" "$key"  # fails the whole build on any bad jar
+    "$here/verify-signatures.sh" "$dir" "$key"  # fails the whole build on any bad jar or extra file
   fi
   echo "added $version"
 done

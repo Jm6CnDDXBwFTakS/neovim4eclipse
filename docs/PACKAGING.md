@@ -114,7 +114,20 @@ of its own, `sign`, which alone can read the secret key (a secret of the GitHub 
 3. checks every bundle's and feature's signature with `gpg` against `releng/signing-key.asc`
    (`releng/verify-signatures.sh`), so a missing or wrong signature stops the release;
 4. zips it again. The job uploads it as `neovim4eclipse-<version>.signed.zip`, a name of its own so
-   it cannot be confused with the unsigned build; publish renames it back for the release.
+   it cannot be confused with the unsigned build; publish renames it back for the release;
+5. signs that ZIP as a whole with `gpg --detach-sign` into `<zip>.asc`, checked with
+   `releng/verify-zip.sh`. The release carries it beside the ZIP. Why, with every jar signed
+   already: the jar signatures do not cover `content.jar`, which tells p2 what to install and how
+   (its "touchpoint" instructions, such as lines for `eclipse.ini`), and p2 follows it without
+   asking. The ZIP's signature covers every file.
+
+`releng/update-site.sh` checks each ZIP before it puts it on the update site again: by that
+signature from 0.2.1, and by the SHA-256 pinned in `releng/release-zips.sha256` for 0.1.4 to 0.2.0,
+which were released before the ZIPs were signed whole. Together with the jar signatures, nothing
+on the site can change without the project's key or a commit. `releng/verify-signatures.sh` also
+fails on anything a site of this project does not have (another kind of artifact, a file no
+artifact accounts for, a link), and on `.xml.xz` copies of the metadata, which p2 reads first,
+that differ from the XML in `artifacts.jar` and `content.jar`.
 
 The public key is in two places: `releng/signing-key.asc`, which the job checks against, and a
 copy in the plug-in (`keys/release-signing-key.asc`), which `plugin.xml` declares as trusted
@@ -125,7 +138,8 @@ fingerprints.
 
 The job fails at once while `releng/signing-key.asc` does not exist, rather than publish an
 unsigned release. To try it locally with a throwaway key, see the commands at the top of
-`releng/sign.sh`; `releng/verify-signatures.sh <site dir> <public key>` checks any unzipped site.
+`releng/sign.sh`; `releng/verify-signatures.sh <site dir> <public key>` checks any unzipped site,
+and `releng/verify-zip.sh <zip> <public key>` a ZIP with its `.asc` beside it.
 The design, the key and the experiments behind it are in
 [design/MARKETPLACE.md](design/MARKETPLACE.md), phase 4.
 

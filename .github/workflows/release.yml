@@ -19,8 +19,9 @@
 #               give the same answer, at a cost of about an hour of Windows and macOS minutes
 #               (counted 2x and 10x). Otherwise it runs every test, as every CI run does. It is
 #               rebuilt either way, since only this build stamps the release version into the ZIP.
-#   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh) and uploads the result
-#               as neovim4eclipse-<version>.signed.zip. Only this job can read the key: it is a secret of the
+#   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh): every jar inside, then
+#               the ZIP itself (a detached signature, .asc). Uploads the result as
+#               neovim4eclipse-<version>.signed.zip and its signature as ...signed.zip.asc. Only this job can read the key: it is a secret of the
 #               GitHub environment "release", which only v* tags may use. See
 #               docs/design/MARKETPLACE.md, "Phase 4".
 #   4. publish: downloads the signed ZIP and creates the GitHub Release with it, named
@@ -180,6 +181,13 @@ jobs:
           archive: false
           path: signed/${{ env.SIGNED_ZIP }}
           if-no-files-found: error
+      # The ZIP's own signature, which update-site.yml checks before it publishes the ZIP again
+      # (releng/verify-zip.sh: the jar signatures do not cover content.jar).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          archive: false
+          path: signed/${{ env.SIGNED_ZIP }}.asc
+          if-no-files-found: error
 
   publish:
     name: Publish the release
@@ -200,6 +208,10 @@ jobs:
           name: neovim4eclipse-${{ needs.version.outputs.version }}.signed.zip
           path: dist
           skip-decompress: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: neovim4eclipse-${{ needs.version.outputs.version }}.signed.zip.asc
+          path: dist
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -212,9 +224,14 @@ jobs:
           if [ -f "dist/neovim4eclipse-${VERSION}.signed.zip" ]; then
             mv "dist/neovim4eclipse-${VERSION}.signed.zip" "$zip"
           fi
-          if [ ! -f "$zip" ]; then
-            echo "::error::$zip not found; dist/ holds:"; ls -lR dist; exit 1
+          if [ -f "dist/neovim4eclipse-${VERSION}.signed.zip.asc" ]; then
+            mv "dist/neovim4eclipse-${VERSION}.signed.zip.asc" "$zip.asc"
           fi
+          if [ ! -f "$zip" ] || [ ! -f "$zip.asc" ]; then
+            echo "::error::$zip or $zip.asc not found; dist/ holds:"; ls -lR dist; exit 1
+          fi
+          # The signature covers the bytes, not the name, so it still verifies after the renames.
+          releng/verify-zip.sh "$zip" releng/signing-key.asc
           unzip -l "$zip" | grep -q 'content\.jar$' || { echo "::error::$zip is not the update site"; exit 1; }
           # The sign job checked every signature; this only guards against publishing the
           # unsigned ZIP if the jobs are ever rewired.
@@ -223,7 +240,7 @@ jobs:
             || { echo "::error::$zip is not signed"; exit 1; }
           releng/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" \
-            "$zip" \
+            "$zip" "$zip.asc" \
             --title "Neovim for Eclipse ${VERSION}" \
             --notes-file "$RUNNER_TEMP/notes.md"
 

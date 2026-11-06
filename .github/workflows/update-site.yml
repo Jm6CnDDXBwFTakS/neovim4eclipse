@@ -55,20 +55,23 @@ jobs:
       - name: Download every release's ZIP
         env:
           GH_TOKEN: ${{ github.token }}
-        # Drafts and pre-releases are left out: the site offers only published releases.
+        # Drafts and pre-releases are left out: the site offers only published releases. With each
+        # ZIP its signature (.zip.asc), which releases have from 0.2.1 (releng/update-site.sh).
         run: |
           mkdir dist
           for tag in $(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases \
                          --json tagName --jq '.[].tagName'); do
-            gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --dir dist
+            gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --pattern 'neovim4eclipse-*.zip.asc' \
+              --dir dist
           done
           ls -l dist
       - id: site
         name: Build the composite repository
         run: |
-          # With the project's key: every release's signatures are checked again here, as a ZIP
-          # on GitHub may have been replaced since it was released, and the unsigned 0.1.0-0.1.3
-          # are left out (releng/update-site.sh).
+          # With the project's key: every release's signatures are checked again here (the ZIP's
+          # own, or its pinned hash before 0.2.1, and each jar's), as a ZIP on GitHub may have been
+          # replaced since it was released, and the unsigned 0.1.0-0.1.3 are left out
+          # (releng/update-site.sh).
           releng/update-site.sh dist site releng/signing-key.asc
           latest=$(ls site/releases | sort -V | tail -n 1)
           echo "latest=$latest" >> "$GITHUB_OUTPUT"

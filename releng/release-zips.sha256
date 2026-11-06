@@ -1,0 +1,12 @@
+# SHA-256 of each release ZIP published before the ZIPs were signed whole (0.1.4 to 0.2.0),
+# as released on GitHub. releng/update-site.sh refuses any of these releases whose ZIP no longer
+# has this hash; later releases carry a signature of the ZIP instead (releng/verify-zip.sh).
+# 0.1.0 to 0.1.3 were never signed and are left out of the update site. Never changes: a
+# release's ZIP is not rebuilt. Format: sha256sum's, so 'sha256sum -c' checks it by hand.
+f9616b97c73b9e5d6ab8d04df7af1362c84bb416ffa6a8469a9c37a165f2b9fa  neovim4eclipse-0.1.4.zip
+7590b494e8a7d9ea015277dea76e99c47b178addea9bf24c5e8d0e0530453964  neovim4eclipse-0.1.5.zip
+e6bf803ba67b7004611dde3dead034b24ccd181864ff353b3a7143ec34e918e0  neovim4eclipse-0.1.6.zip
+28ded3fb51ba9c86ed4be2ff538f1a0f177958898c90b8b21ff74d2102fbe9dd  neovim4eclipse-0.1.7.zip
+48246373f9c38ce95f22c5acf1d7c76787d5313ca91d2003ca04dc362f54ddd7  neovim4eclipse-0.1.8.zip
+e712ad32b7e2c5ddbbf233910f0faac151b15f03f788ca8d467db7ee43711a95  neovim4eclipse-0.1.9.zip
+b6352bf4aa8f2d65758333fb52edbf85c3b4b0fc9c1f849d72ff5014fd6b776a  neovim4eclipse-0.2.0.zip
