@@ -116,6 +116,11 @@ public final class Shell {
     /**
      * Whether {@code program} is on {@code PATH}, as the shell would find it: on Windows also with
      * each of {@code PATHEXT}'s extensions ({@code gpg} is {@code gpg.exe} there).
+     *
+     * <p>{@code releng/tools/ci/LikeCi.java} has a copy of this and of {@link #maven}, on purpose:
+     * it is a single source file that runs on Java 21, which cannot load this class (see
+     * {@code release/Release.java}). A fix to one belongs in both; once the tools need Java 22
+     * anyway, LikeCi can use this class instead.
      */
     public static boolean onPath(String program) {
         List<String> names = new ArrayList<>(List.of(program));
