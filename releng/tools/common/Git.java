@@ -56,9 +56,16 @@ public final class Git {
         return ok("merge-base", "--is-ancestor", ancestor, commit);
     }
 
-    /** Fetches origin's branches and tags, dropping deleted ones; reads only, changes nothing shared. */
+    /**
+     * Fetches origin's branches, dropping those deleted there, and its tags; changes nothing shared.
+     * Two fetches, because {@code git fetch --prune --tags} would also delete every local tag that
+     * origin does not have (with {@code --tags}, tags are pruned like branches), and a tag made here
+     * on purpose is not the tool's to remove. A tag deleted on origin therefore stays here; the tools
+     * ask origin itself ({@code git ls-remote}) whether a tag exists.
+     */
     public void fetch() {
-        out("fetch", "--prune", "--tags", "origin");
+        out("fetch", "--prune", "origin");
+        out("fetch", "--tags", "origin");
     }
 
     /** The files that differ between two commits. */
