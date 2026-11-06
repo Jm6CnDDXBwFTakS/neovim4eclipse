@@ -242,7 +242,7 @@ public final class UpdateNeovimDownloads {
      * first one is the release's own). Example: {@code "published_at":"2026-10-20T14:03:11Z"}.
      */
     static Instant publishedAt(String json) {
-        Matcher m = Pattern.compile("\"published_at\":\"([^\"]+)\"").matcher(json);
+        Matcher m = Pattern.compile("\"published_at\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
         if (!m.find()) {
             throw new Failure("GitHub's release has no published_at (a draft?)");
         }
@@ -512,16 +512,19 @@ public final class UpdateNeovimDownloads {
      * {@code "size"} and {@code "digest":"sha256:…"} (GitHub has published digests since 2025).
      */
     static Entry fromApi(String json, String code, String asset) {
-        int at = json.indexOf("\"name\":\"" + asset + "\"");
-        if (at < 0) {
+        // Spaces around the colons are allowed (\\s*): GitHub sends compact JSON today, but a
+        // pretty-printed answer is the same JSON, and should not read as "no digest".
+        Matcher name = Pattern.compile("\"name\"\\s*:\\s*\"" + Pattern.quote(asset) + "\"").matcher(json);
+        if (!name.find()) {
             throw new Failure("GitHub's release has no asset named " + asset);
         }
+        int at = name.start();
         // Only this asset's own fields: up to the next asset's "name", or the end. Without the bound,
         // an asset with no digest would take the next asset's, and fail as a false mismatch.
-        int next = json.indexOf("\"name\":\"", at + 1);
-        int end = next < 0 ? json.length() : next;
-        Matcher size = Pattern.compile("\"size\":(\\d+)").matcher(json).region(at, end);
-        Matcher digest = Pattern.compile("\"digest\":\"sha256:([0-9a-f]{64})\"").matcher(json).region(at, end);
+        Matcher nextName = Pattern.compile("\"name\"\\s*:\\s*\"").matcher(json);
+        int end = nextName.find(name.end()) ? nextName.start() : json.length();
+        Matcher size = Pattern.compile("\"size\"\\s*:\\s*(\\d+)").matcher(json).region(at, end);
+        Matcher digest = Pattern.compile("\"digest\"\\s*:\\s*\"sha256:([0-9a-f]{64})\"").matcher(json).region(at, end);
         if (!size.find() || !digest.find()) {
             throw new Failure("GitHub's API gives no size or sha256 digest for " + asset);
         }

@@ -52,6 +52,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# One shell for every step on every runner: bash, which GitHub then runs as `bash -e -o pipefail`
+# (a failure anywhere in a pipeline fails the step). Without this, Linux and macOS steps ran in
+# `bash -e` without pipefail and Windows steps in PowerShell, so the same line could pass on one
+# runner and fail on another. On Windows it is Git for Windows' bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     name: ${{ inputs.skip-tests && 'Build (tested on main)' || 'Build, unit and UI tests' }}
@@ -63,6 +71,11 @@ jobs:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven   # caches ~/.m2/repository, keyed on the pom.xml files
+      # The Maven wrapper downloads Maven itself on a fresh runner (setup-java's cache holds
+      # ~/.m2/repository, not ~/.m2/wrapper), once, with no retry of its own; one dropped
+      # connection there failed the whole job. Tried up to three times here, so later steps find it.
+      - name: Download Maven (retried)
+        run: for try in 1 2 3; do ./mvnw -B -q --version && break; [ "$try" = 3 ] && exit 1; sleep 15; done
       # Only when release.yml passes a version. inputs.version is empty or absent otherwise, and an
       # empty string is false in an if: expression. Tycho's own goal rewrites 0.1.0-SNAPSHOT and
       # 0.1.0.qualifier to the release version in the POMs, MANIFEST.MF and feature.xml together,
@@ -87,10 +100,16 @@ jobs:
       # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
       # test"); -Pui adds the UI tests, which are off by default because they open a window. They
       # need an X display: xvfb-run provides a virtual one.
+      # xvfb-run comes with the runner image today; installed if a new image drops it. Its screen is
+      # given, not left to the xvfb-run script's default, which differs between versions and decides
+      # how much room the UI tests' windows get. java releng/tools/ci/LikeCi.java uses the same.
+      - name: Make sure xvfb-run is there
+        if: ${{ !inputs.skip-tests }}
+        run: command -v xvfb-run || { sudo apt-get update && sudo apt-get install -y xvfb; }
       - name: Build, unit and UI tests
         if: ${{ !inputs.skip-tests }}
         run: >
-          xvfb-run -a ./mvnw -B -ntp verify -Pui
+          xvfb-run -a -s "-screen 0 1280x1024x24" ./mvnw -B -ntp verify -Pui
           -Dnvim.path=$NVIM
       # The same build with every test left out (the test modules are still compiled): the ZIP
       # alone, at the version release.yml set above.
@@ -116,6 +135,11 @@ jobs:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven
+      # The Maven wrapper downloads Maven itself on a fresh runner (setup-java's cache holds
+      # ~/.m2/repository, not ~/.m2/wrapper), once, with no retry of its own; one dropped
+      # connection there failed the whole job. Tried up to three times here, so later steps find it.
+      - name: Download Maven (retried)
+        run: for try in 1 2 3; do ./mvnw -B -q --version && break; [ "$try" = 3 ] && exit 1; sleep 15; done
       # As in the build job: the archive Get Neovim installs, its SHA-256 checked.
       - name: Install Neovim
         # The assignment on its own line, so a failed check fails the step (set -e does not see a
@@ -154,11 +178,6 @@ jobs:
             os: windows-latest
           - name: macOS
             os: macos-latest
-    defaults:
-      run:
-        # Git Bash on Windows, so ./mvnw and the steps below are the same script on every OS.
-        # .gitattributes checks shell scripts out with LF endings, which bash needs.
-        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -166,6 +185,11 @@ jobs:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven
+      # The Maven wrapper downloads Maven itself on a fresh runner (setup-java's cache holds
+      # ~/.m2/repository, not ~/.m2/wrapper), once, with no retry of its own; one dropped
+      # connection there failed the whole job. Tried up to three times here, so later steps find it.
+      - name: Download Maven (retried)
+        run: for try in 1 2 3; do ./mvnw -B -q --version && break; [ "$try" = 3 ] && exit 1; sleep 15; done
       # As in the build job, so a release is tested at the version it ships with.
       - name: Set version ${{ inputs.version }}
         if: ${{ inputs.version }}
