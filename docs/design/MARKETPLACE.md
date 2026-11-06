@@ -337,7 +337,9 @@ version ──► build (unsigned, exactly as on main) ──► sign ──► 
                                                       │      signer bc, repository = the unzipped site,
                                                       │      the secret key from a temporary file)
                                                       │  3. releng/verify-signatures.sh
-                                                      │  4. zip it again, upload it for publish
+                                                      │  4. zip it again
+                                                      │  5. gpg --detach-sign the ZIP (.zip.asc),
+                                                      │     releng/verify-zip.sh; upload both
 ```
 
 - **The build stays the same.** `build.yml` gets no secrets and no signing profile, so `main`, pull
@@ -352,11 +354,18 @@ version ──► build (unsigned, exactly as on main) ──► sign ──► 
 - **`releng/verify-signatures.sh`**: fails unless every `osgi.bundle` and
   `org.eclipse.update.feature` artifact in `artifacts.jar` has a `pgp.signatures` property, and each
   signature verifies with `gpg --verify` against `releng/signing-key.asc` (the public key in the
-  repository). A release with a missing or wrong signature never reaches `publish`.
+  repository). A release with a missing or wrong signature never reaches `publish`. It also fails
+  on anything else in the site (another classifier, a file no artifact accounts for, a link) and on
+  `.xml.xz` metadata that differs from the XML in the jars, since p2 reads the `.xz` copies first.
+- **The ZIP's own signature** (`<zip>.asc`, from 0.2.1; `releng/verify-zip.sh`): the jar
+  signatures leave `content.jar` uncovered, which holds the install instructions p2 follows
+  without asking, so a ZIP replaced on GitHub could keep the signed jars and change it. A detached
+  signature over the ZIP covers every file. The releases before it (0.1.4–0.2.0) are pinned by
+  SHA-256 in `releng/release-zips.sha256` instead.
 - The `sign` job fails at once while `releng/signing-key.asc` is missing, rather than publish an
   unsigned release.
 - **The update site**: `releng/update-site.sh`, given the public key, checks every release's
-  signatures again each time it rebuilds the site (a release ZIP on GitHub could be replaced after
+  signatures (the ZIP's, or its pinned hash, and each jar's) again each time it rebuilds the site (a release ZIP on GitHub could be replaced after
   it was checked once at release) and leaves out the unsigned 0.1.0–0.1.3, so the site never
   prompts for unsigned content, a prompt users learn to accept. Re-signing those would change
   published artifacts; they stay on GitHub's release pages.

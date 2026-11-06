@@ -24,9 +24,13 @@
 #       /tmp/signed.zip /tmp/test-public.asc
 #
 # Steps: unzip into a temporary directory; sign it in place with releng/sign/pom.xml; check every
-# signature with releng/verify-signatures.sh; zip it again. The secret key is written to a file
-# only for the signer (Tycho's Bouncy Castle signer reads it from a file, not from the
-# environment), readable only by this user, and deleted on exit, also on failure.
+# signature with releng/verify-signatures.sh; zip it again; sign the whole ZIP with gpg into
+# <signed zip>.asc and check that with releng/verify-zip.sh. The release attaches the .asc beside
+# the ZIP: the jar signatures do not cover content.jar, which says what p2 installs and how. The
+# secret key is written to a file only for the signer (Tycho's Bouncy Castle signer reads it from
+# a file, not from the environment) and for gpg's import, readable only by this user, and deleted
+# on exit, also on failure. The passphrase reaches gpg on its standard input, never as an
+# argument (which other users could read in the process list).
 
 set -euo pipefail
 
@@ -55,6 +59,10 @@ unzip -q "$unsigned" -d "$site"
 (umask 077 && printf '%s\n' "$MAVEN_GPG_KEY" > "$work/secret-key.asc")
 "$repo/mvnw" -B -q -f "$repo/releng/sign/pom.xml" package \
   -Dsite="$site" -Dtycho.pgp.signer.bc.secretKeys="$work/secret-key.asc"
+# For step 5: gpg, in a keyring of its own, imports the same key while the file is there.
+export GNUPGHOME=$work/gnupg
+mkdir -m 700 "$GNUPGHOME"
+gpg --batch --quiet --import "$work/secret-key.asc"
 rm -f "$work/secret-key.asc"
 
 # 3. Check, with gpg and the public key, not with the signer that just wrote the signatures.
@@ -69,4 +77,10 @@ rm -f "$work/secret-key.asc"
 rm -f "$signed"
 (cd "$site" && env -u ZIP -u ZIPOPT zip -q -r -X "$signed" .)
 [ -s "$signed" ] || { echo "error: $signed was not written" >&2; exit 1; }
-echo "signed: $signed"
+
+# 5. Sign the ZIP itself, and check that signature with the public key alone.
+rm -f "$signed.asc"
+printf '%s' "$MAVEN_GPG_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
+  --armor --detach-sign --output "$signed.asc" "$signed"
+"$repo/releng/verify-zip.sh" "$signed" "$public_key"
+echo "signed: $signed and $signed.asc"

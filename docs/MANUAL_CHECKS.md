@@ -341,8 +341,9 @@ $env:JAVA_TOOL_OPTIONS = '-XX:ActiveProcessorCount=1'
 - **Launch:** none
 - **Areas:** always
 
-1. Check the GitHub release's assets and signatures (`releng/verify-signatures.sh`).
-   ⇒ The signatures verify.
+1. Check the GitHub release's assets and signatures: download the ZIP and its `.asc`, then run
+   `releng/verify-zip.sh` on the ZIP and `releng/verify-signatures.sh` on it unzipped.
+   ⇒ Both verify.
 2. Install the release from the update site into a clean Eclipse.
    ⇒ The plug-in installs, opens Get Neovim at the first start, and attaches after it.
 
