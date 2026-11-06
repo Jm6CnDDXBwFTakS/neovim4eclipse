@@ -14,10 +14,12 @@ import java.net.http.HttpTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Downloads a release archive into a temporary file, for {@link NeovimInstaller} to check and unpack.
@@ -97,13 +99,18 @@ public final class NeovimDownload {
                     "Cannot write in " + folder + ": " + e.getMessage(), e);
         }
         CompletableFuture<HttpResponse<Path>> future = null;
+        AtomicReference<HttpResponse.BodySubscriber<Path>> body = new AtomicReference<>();
         boolean done = false;
         try {
             HttpRequest request = HttpRequest.newBuilder(archive.url()).timeout(Duration.ofMinutes(10)).build();
             // Only a 200's body goes into the file; any other answer's body is dropped.
-            future = client.sendAsync(request, info -> info.statusCode() == 200
-                    ? HttpResponse.BodySubscribers.ofFile(file)
-                    : HttpResponse.BodySubscribers.replacing(file));
+            future = client.sendAsync(request, info -> {
+                HttpResponse.BodySubscriber<Path> subscriber = info.statusCode() == 200
+                        ? HttpResponse.BodySubscribers.ofFile(file)
+                        : HttpResponse.BodySubscribers.replacing(file);
+                body.set(subscriber);
+                return subscriber;
+            });
             progress.step("Downloading " + archive.asset(), archive.size());
             HttpResponse<Path> response = watch(future, file, archive, progress, stall);
             int status = response.statusCode();
@@ -122,7 +129,40 @@ public final class NeovimDownload {
                 if (future != null) {
                     future.cancel(true);
                 }
+                awaitClosed(body.get());
                 deleteQuietly(file);
+            }
+        }
+    }
+
+    /** How long a cancelled download may take to close its file; see {@link #awaitClosed}. */
+    private static final long CLOSE_MILLIS = 2000;
+
+    /**
+     * Waits, at most {@value #CLOSE_MILLIS} ms, until the body's file is closed. Why: the client
+     * writes the file from its own threads, and cancelling the request only asks them to stop.
+     * Windows refuses to delete a file that is still open, so a delete right after the cancel would
+     * fail and leave the partial download (tens of MB, not shown on the preference page) until
+     * {@link NeovimInstaller#deleteReplaced} takes it for stale an hour later. The file subscriber
+     * closes the file before it completes its body, also on an error such as the cancel, so a
+     * finished body means a closed file. If it does not finish in time, the delete is tried
+     * anyway. A Cancel that interrupted this thread does not cut the wait short; the interrupt is
+     * kept for the caller.
+     */
+    private static void awaitClosed(HttpResponse.BodySubscriber<Path> subscriber) {
+        if (subscriber == null) {
+            return; // no answer yet: the client never opened the file
+        }
+        boolean interrupted = Thread.interrupted();
+        try {
+            subscriber.getBody().toCompletableFuture().get(CLOSE_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException | TimeoutException | CancellationException e) {
+            // closed with an error (the cancel itself), or still not done: delete anyway
+        } catch (InterruptedException e) {
+            interrupted = true;
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
         }
     }
