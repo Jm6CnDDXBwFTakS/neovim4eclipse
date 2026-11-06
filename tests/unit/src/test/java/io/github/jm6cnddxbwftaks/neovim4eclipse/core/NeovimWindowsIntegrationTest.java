@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
@@ -35,7 +33,7 @@ class NeovimWindowsIntegrationTest {
     private static final String NVIM = TestNeovim.PATH;
 
     private static NeovimSession start() throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        TestNeovim.require();
         return NeovimSession.start(NVIM, List.of("--clean"));
     }
 

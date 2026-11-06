@@ -34,11 +34,12 @@ class NeovimHomeEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Neovim's data folder stays in the real data home, which the plug-in shares with Neovim
-     * ({@link PluginFolders}), so the name's slash puts it inside the plug-in's folder, not in a folder
-     * of its own beside it: {@code ~/.local/share/neovim4eclipse-plugin/tests} on Linux and macOS. On
-     * Windows Neovim adds {@code -data} to the name:
-     * {@code %LOCALAPPDATA%\neovim4eclipse-plugin\tests-data}.
+     * Neovim's data folder is inside the plug-in's folder, both under the tests' own data home
+     * ({@code target/neovim-home/data}, XDG_DATA_HOME in this module's {@code pom.xml}), which the
+     * plug-in shares with Neovim ({@link PluginFolders}): the name's slash puts it there,
+     * {@code target/neovim-home/data/neovim4eclipse-plugin/tests}. On Windows Neovim adds
+     * {@code -data} to the name ({@code ...\neovim4eclipse-plugin\tests-data}). Nothing of a test
+     * run lands in the developer's own data folder.
      */
     @Test
     void theTestNeovimsDataFolderIsInsideThePluginsFolder() {
@@ -46,5 +47,7 @@ class NeovimHomeEndToEndTest extends EndToEndTestBase {
         String expected = PlatformUtil.isWindows() ? "tests-data" : "tests";
         assertTrue(FilePaths.same(Path.of(data), PluginFolders.pluginFolder().resolve(expected)),
                 "the data folder is <plug-in folder>/" + expected + ": " + data);
+        assertTrue(Path.of(data).normalize().toString().contains(Path.of("target", "neovim-home", "data").toString()),
+                "the data folder is under target/: " + data);
     }
 }

@@ -45,7 +45,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 
 /**
  * The Neovim page's two group boxes: which Neovim runs (the note, Get Neovim and the help) in the
@@ -158,26 +157,38 @@ class NeovimPreferencePageTest {
     }
 
     /**
-     * With the option naming a program that is missing, the page offers Get Neovim only while the
-     * dedicated Neovim is missing or fails its check; with a verified one the fix is to remove the
-     * option, and the "Neovim not started" notice offers no button then either
-     * ({@code StartFailureReport.offersGetNeovim}, unit-tested for every case). Which case this
-     * run sees depends on the machine: a developer's usually has the dedicated Neovim (Get Neovim
-     * installed it), a CI runner has none (its Neovim is given by -Dnvim.path). So the test reads
-     * the machine's state and checks the button against it, and covers either case.
+     * With the option naming a program that is missing while the dedicated Neovim checks out, the
+     * fix is to remove the option: the page offers no Get Neovim button, as the "Neovim not started"
+     * notice offers none then either ({@code StartFailureReport.offersGetNeovim}). The dedicated
+     * Neovim is put into the tests' own data folder for this ({@link DedicatedNeovim}).
      */
     @Test
-    void aRefusedProgramOffersGetNeovimOnlyWithoutAVerifiedDedicatedNeovim() {
-        boolean dedicatedVerified = PluginNeovim.searchHomes().stream()
-                .anyMatch(home -> PluginNeovim.verified(home, WINDOWS));
+    void aRefusedProgramWithTheDedicatedNeovimInstalledOffersNoGetNeovim() {
+        DedicatedNeovim.install();
+        try {
+            Button getNeovim = getNeovimButtonForAMissingProgram();
+            assertTrue(!getNeovim.getVisible(), "the Get Neovim button is hidden");
+        } finally {
+            DedicatedNeovim.remove();
+        }
+    }
+
+    /** The same without the dedicated Neovim: installing it is a fix, so the button is offered. */
+    @Test
+    void aRefusedProgramWithoutTheDedicatedNeovimOffersGetNeovim() {
+        DedicatedNeovim.remove();
+        Button getNeovim = getNeovimButtonForAMissingProgram();
+        assertTrue(getNeovim.getVisible(), "the Get Neovim button is shown");
+    }
+
+    /** The section for a program that does not exist, once its note says so, and its Get Neovim button. */
+    private Button getNeovimButtonForAMissingProgram() {
         Group group = sectionFor(WINDOWS ? "C:\\no\\such\\nvim.exe" : "/no/such/nvim");
         waitUntil("the note to report the missing program", () -> find(group, Label.class,
                 label -> label.getText().startsWith("No Neovim program at")) != null);
         Button getNeovim = find(group, Button.class, b -> b.getText().equals(GetNeovim.label()));
         assertNotNull(getNeovim, "no Get Neovim button");
-        assertEquals(!dedicatedVerified, getNeovim.getVisible(), dedicatedVerified
-                ? "the dedicated Neovim checks out here: Get Neovim is hidden"
-                : "no verified dedicated Neovim here: Get Neovim is offered");
+        return getNeovim;
     }
 
     /**

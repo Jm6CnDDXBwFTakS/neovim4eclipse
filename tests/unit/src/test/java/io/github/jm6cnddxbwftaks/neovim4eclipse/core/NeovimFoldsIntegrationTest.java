@@ -6,7 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions.Region;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
@@ -39,7 +37,7 @@ class NeovimFoldsIntegrationTest {
             new Region(1, 20, false), new Region(3, 8, false), new Region(10, 15, false)));
 
     private static NeovimSession start(String... extraArgs) throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        TestNeovim.require();
         List<String> args = new ArrayList<>(List.of("--clean"));
         args.addAll(List.of(extraArgs));
         return NeovimSession.start(NVIM, args);

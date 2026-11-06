@@ -5,7 +5,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,7 +19,6 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ClipboardPort.Selection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
@@ -54,7 +52,7 @@ class ClipboardIntegrationTest {
     private final FakeClipboard system = new FakeClipboard();
 
     private NeovimSession start(String... extraArgs) throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(NVIM), "nvim not available");
+        TestNeovim.require();
         List<String> args = new ArrayList<>(List.of("--clean"));
         args.addAll(List.of(extraArgs));
         return NeovimSession.start(NVIM, args, system, "0.0.0");

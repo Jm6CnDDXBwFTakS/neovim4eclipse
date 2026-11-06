@@ -9,7 +9,6 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -93,9 +92,11 @@ abstract class EndToEndTestBase {
         // An error dialog fails the test instead of stalling the run (UiTestSupport.watchForErrorDialogs).
         UiTestSupport.watchForErrorDialogs();
         // -Dnvim.path reaches the plug-in as its startup option -Dneovim4eclipse.nvim (the test pom's
-        // nvim-path profile), set before the test Eclipse started; without it, the dedicated Neovim.
-        assumeTrue(NvimExecutable.looksAvailable(Activator.getDefault().getNvimExecutable()),
-                "nvim not found; set -Dnvim.path");
+        // nvim-path profile), set before the test Eclipse started; the pom requires it, as the tests'
+        // own data folder holds no dedicated Neovim. A failure, not a skip: a wrong path would
+        // otherwise give a green run with nothing tested.
+        assertTrue(NvimExecutable.looksAvailable(Activator.getDefault().getNvimExecutable()),
+                "no Neovim program at -Dnvim.path=" + System.getProperty("nvim.path"));
 
         project = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e");
         if (!project.exists()) {

@@ -290,6 +290,27 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${maven-surefire-plugin.version}</version>
+          <!-- Every test module that surefire runs (tests/unit, tests/text, tests/swt) gets folders
+               of its own under its target/, as the UI tests do (their pom.xml explains each
+               variable): a Neovim an integration or Lua test starts writes its swap files, logs
+               and shada there, not into the developer's ~/.local/state/nvim; the plug-in's own
+               folder (XDG_DATA_HOME, util/PluginFolders) holds no dedicated Neovim, as on a CI
+               runner; and Neovim's messages are English (LC_MESSAGES=C), which tests compare.
+               A module's own configuration adds to this one (Maven merges the two). -->
+          <configuration>
+            <environmentVariables>
+              <NVIM_APPNAME>neovim4eclipse-plugin/tests</NVIM_APPNAME>
+              <XDG_CONFIG_HOME>${project.build.directory}/neovim-home/config</XDG_CONFIG_HOME>
+              <XDG_STATE_HOME>${project.build.directory}/neovim-home/state</XDG_STATE_HOME>
+              <XDG_CACHE_HOME>${project.build.directory}/neovim-home/cache</XDG_CACHE_HOME>
+              <XDG_DATA_HOME>${project.build.directory}/neovim-home/data</XDG_DATA_HOME>
+              <LC_MESSAGES>C</LC_MESSAGES>
+            </environmentVariables>
+            <systemPropertyVariables>
+              <!-- The folder no test may write outside of (testing/TestIsolation). -->
+              <test.isolated.root>${project.build.directory}</test.isolated.root>
+            </systemPropertyVariables>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>

@@ -5,7 +5,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +12,6 @@ import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
@@ -27,7 +25,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 class NeovimProblemsIntegrationTest {
 
     private static NeovimSession start(String... extraArgs) throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(TestNeovim.PATH), "nvim not available");
+        TestNeovim.require();
         List<String> args = new ArrayList<>(List.of("--clean"));
         args.addAll(List.of(extraArgs));
         return NeovimSession.start(TestNeovim.PATH, args);

@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -20,7 +19,6 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
@@ -36,7 +34,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 class NeovimQuickfixIntegrationTest {
 
     private static NeovimSession start() throws Exception {
-        assumeTrue(NvimExecutable.looksAvailable(TestNeovim.PATH), "nvim not available");
+        TestNeovim.require();
         return NeovimSession.start(TestNeovim.PATH, List.of("--clean"));
     }
 
