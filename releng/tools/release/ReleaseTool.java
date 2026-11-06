@@ -529,27 +529,62 @@ public final class ReleaseTool {
             System.out.println("[dry run] would cut " + branch + " from origin/main, set the version to " + next.snapshot() + ", commit and push it");
         } else {
             requireClean();
-            if (git.commitOf("refs/heads/" + branch) == null) {
-                git.out("switch", "-q", "-c", branch, main);
-                ok("cut " + branch + " from origin/main (" + main.substring(0, 7) + "), on this machine only");
+            if (main == null) {
+                throw new ToolFailure("no origin/main to cut " + branch + " from");
+            }
+            boolean exists = git.commitOf("refs/heads/" + branch) != null;
+            if (!(exists && branchVersion(branch).equals(next.snapshot()))) {
+                cutNextBranch(next, branch, main, exists);
             } else if (!git.branch().equals(branch)) {
                 git.out("switch", "-q", branch);
-            }
-            if (!pomVersionText().equals(next.snapshot())) {
-                List<String> setVersion = Shell.maven("-q", "-B", "-ntp", "org.eclipse.tycho:tycho-versions-plugin:set-version",
-                        "-DnewVersion=" + next.snapshot());
-                System.out.println(Shell.display(setVersion));
-                if (shell.show(setVersion) != 0 || !pomVersionText().equals(next.snapshot())) {
-                    throw new ToolFailure("setting the version to " + next.snapshot() + " failed (see above)");
-                }
-                List<String> changed = git.out("diff", "--name-only").lines().toList();
-                git.commit(ask, "Start " + next + ": set the version to " + next.snapshot(), settings.get("commit.trailer", ""), changed);
             }
             git.push(ask, "Push " + branch + " to origin", "--set-upstream", branch);
         }
         deleteFinishedBranches(v, main);
         System.out.println();
         System.out.println("Release " + v + " is finished; " + branch + " is the branch for " + next + ".");
+    }
+
+    /**
+     * Cuts {@code branch} from {@code main} (or takes the local one left from an earlier try), sets
+     * its version and commits it, after one question for all three: they are local, but a stop in
+     * the middle would leave a branch and eleven edited files behind, and the printed rerun would
+     * then refuse the unclean tree. A failure after the question puts everything back.
+     */
+    private void cutNextBranch(Version next, String branch, String main, boolean exists) {
+        String message = "Start " + next + ": set the version to " + next.snapshot();
+        List<String> setVersion = Shell.maven("-q", "-B", "-ntp", "org.eclipse.tycho:tycho-versions-plugin:set-version",
+                "-DnewVersion=" + next.snapshot());
+        List<String> details = List.of(exists ? "git switch " + branch : "git switch -c " + branch + " " + short7(main),
+                Shell.display(setVersion), "git commit -m \"" + message + "\"  (in UTC)");
+        if (!ask.confirm("Cut " + branch + " from origin/main, set its version to " + next.snapshot() + " and commit", details)) {
+            return;
+        }
+        String before = git.branch();
+        try {
+            git.out(exists ? new String[] {"switch", "-q", branch} : new String[] {"switch", "-q", "-c", branch, main});
+            if (shell.show(setVersion) != 0 || !pomVersionText().equals(next.snapshot())) {
+                throw new ToolFailure("setting the version to " + next.snapshot() + " failed (see above)");
+            }
+            String trailer = settings.get("commit.trailer", "");
+            git.commitNow(trailer.isEmpty() ? message : message + "\n\n" + trailer, git.out("diff", "--name-only").lines().toList());
+        } catch (ToolFailure f) {
+            // The tree was clean before (requireClean), so a hard reset drops only this step's edits.
+            git.ok("reset", "-q", "--hard", "HEAD");
+            if (!before.isEmpty() && !before.equals(branch)) {
+                git.ok("switch", "-q", before);
+                if (!exists) {
+                    git.ok("branch", "-q", "-D", branch);
+                }
+            }
+            throw new ToolFailure(f.getMessage() + " Nothing of it was kept; back on " + (before.isEmpty() ? "the commit before" : before) + ".");
+        }
+    }
+
+    /** The POM version on the tip of local {@code branch}. */
+    private String branchVersion(String branch) {
+        Matcher m = POM_VERSION.matcher(git.out("show", branch + ":pom.xml"));
+        return m.find() ? m.group(1).strip() : "";
     }
 
     /** Deletes, each after asking, the old release branch and the branches {@code main} already has. */
