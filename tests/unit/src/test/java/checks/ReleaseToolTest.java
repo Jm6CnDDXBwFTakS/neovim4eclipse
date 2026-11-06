@@ -165,6 +165,8 @@ class ReleaseToolTest {
         assertEquals("tag", new ReleaseState(V, true, true, true, true, false, false).nextStep(), "tagged, the Release not out yet");
         assertEquals("next", new ReleaseState(V, true, true, true, true, true, false).nextStep());
         assertEquals("done", new ReleaseState(V, true, true, true, true, true, true).nextStep());
+        assertEquals("Next step: java releng/tools/release/Release.java promote", new ReleaseState(V, true, true, false, false, false, false).nextLine("releng/tools/release/Release.java"));
+        assertEquals("Release " + V + " is done.", new ReleaseState(V, true, true, true, true, true, true).nextLine("releng/tools/release/Release.java"));
     }
 
     // ------------------------------------------------------------ the command line and the gate

@@ -129,6 +129,7 @@ public final class ReleaseTool {
     private void step(String name) {
         ask = new Ask(options.mode(), options.rerunWithYes(name));
         System.out.println("== " + name + (options.mode() == Ask.Mode.DRY_RUN ? " (dry run)" : ""));
+        Version v = pomVersion(); // before the step: next switches to the next release's branch
         switch (name) {
             case "check" -> check();
             case "prepare" -> prepare();
@@ -137,7 +138,15 @@ public final class ReleaseTool {
             case "next" -> next();
             default -> throw new ToolFailure("unknown step " + name);
         }
+        // go goes on by itself; a dry run changed nothing, so its next step would be this one.
+        if (!inGo && options.mode() != Ask.Mode.DRY_RUN) {
+            System.out.println();
+            System.out.println(state(v).nextLine(TOOL));
+        }
     }
+
+    /** Set while {@link #go} runs the steps, which then do not each print the next one. */
+    private boolean inGo;
 
     // ---------------------------------------------------------------- status and go
 
@@ -178,10 +187,8 @@ public final class ReleaseTool {
         row(v.tag(), s.tagged() ? "on origin" : "not made");
         row("GitHub Release", s.released() ? "has the ZIP and its signature" : "none yet");
         row("next branch", nextVersion(v).branch() + (s.nextCut() ? " exists" : " not cut"));
-        String next = s.nextStep();
         System.out.println();
-        System.out.println(next.equals("done") ? "Release " + v + " is done."
-                : "Next step: java " + TOOL + " " + next + "   (or go: every step from there)");
+        System.out.println(s.nextLine(TOOL) + (s.nextStep().equals("done") ? "" : "   (or go: every step from there)"));
     }
 
     private void go() {
@@ -199,10 +206,13 @@ public final class ReleaseTool {
             System.out.println("[dry run] then: " + String.join(", ", steps.subList(1, steps.size())));
             return;
         }
+        inGo = true;
         for (String s : steps) {
             step(s);
             System.out.println();
         }
+        inGo = false;
+        System.out.println(state(v).nextLine(TOOL));
     }
 
     // ---------------------------------------------------------------- check
@@ -560,7 +570,7 @@ public final class ReleaseTool {
 
         awaitSite(v);
         System.out.println();
-        System.out.println("Release " + v + " is out. Next: java " + TOOL + " next");
+        System.out.println("Release " + v + " is out.");
     }
 
     /** How often and how long {@link #awaitSite} asks the update site before it gives up. */
@@ -633,7 +643,7 @@ public final class ReleaseTool {
         }
         deleteFinishedBranches(v, main);
         System.out.println();
-        System.out.println("Release " + v + " is finished; " + branch + " is the branch for " + next + ".");
+        System.out.println(branch + " is the branch for " + next + ".");
     }
 
     /**

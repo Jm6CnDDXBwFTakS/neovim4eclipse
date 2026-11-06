@@ -562,7 +562,8 @@ It checks before it acts, and asks `[y/N]` before every push, tag, commit, workf
 delete, showing the command or diff first. `--dry-run` prints what a step would do; `--yes` does it
 without asking, for a step already approved. Without a terminal (a script, an AI's shell) it never
 waits for an answer: it stops before the first side effect and prints the command that does it with
-`--yes`. Every step reads git and GitHub afresh, so any step can be run again after a failure. For
+`--yes`. Every step reads git and GitHub afresh, so any step can be run again after a failure, and
+ends with the step to run next (`go` only after the last). For
 release 0.2.3, on `release/0.2.3`:
 
 1. **check**: the branch is clean and not behind origin, *Unreleased* in
