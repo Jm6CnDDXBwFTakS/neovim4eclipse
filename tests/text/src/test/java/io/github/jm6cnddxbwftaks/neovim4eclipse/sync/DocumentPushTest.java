@@ -36,7 +36,7 @@ class DocumentPushTest {
         private void step(String name) throws Exception {
             calls.add(name);
             if (name.startsWith(failing) && !failing.isEmpty()) {
-                throw new Exception(name + " failed");
+                throw new Exception(name + " failed (expected by the test)");
             }
         }
 
@@ -87,7 +87,7 @@ class DocumentPushTest {
         public void pushDocumentToNeovim() {
             calls.add("push");
             if (failing.equals("push")) {
-                throw new IllegalStateException("push failed");
+                throw new IllegalStateException("push failed (expected by the test)");
             }
         }
 
@@ -156,13 +156,16 @@ class DocumentPushTest {
     /** If that fails, the caret's own place is used, as for any other file. */
     @Test
     void aReopenedFileWhoseLastPositionFailsKeepsTheCaret() {
-        fake.reopened = true;
-        fake.failing = "last position";
-        push.start(4, INDENT, 2, 3, false);
-        fake.runQueued();
+        try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) {
+            fake.reopened = true;
+            fake.failing = "last position";
+            push.start(4, INDENT, 2, 3, false);
+            fake.runQueued();
 
-        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
-                "start listening", "last position", "cursor 2:3", "follow cursor reports"), fake.calls);
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+                    "start listening", "last position", "cursor 2:3", "follow cursor reports"), fake.calls);
+            log.assertLogged(Level.WARNING, "Could not put Neovim's cursor where the reopened file was left");
+        }
     }
 
     /** Neither side changed since the editor was detached: the push is skipped, the rest is not. */

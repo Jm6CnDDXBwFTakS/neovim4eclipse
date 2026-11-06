@@ -11,12 +11,14 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
+import java.util.logging.Level;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Display;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ClipboardPort.Selection;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
@@ -49,13 +51,16 @@ class ClipboardBridgeTest {
     @Test
     void aPasteGivesUpWhenTheUiThreadIsBusy() throws Exception {
         ClipboardBridge impatient = new ClipboardBridge(200);
-        CompletableFuture<Optional<String>> pasted = CompletableFuture.supplyAsync(() -> impatient.paste(Selection.CLIPBOARD));
+        try (ExpectedLog log = ExpectedLog.of(ClipboardBridge.class)) {
+            CompletableFuture<Optional<String>> pasted = CompletableFuture.supplyAsync(() -> impatient.paste(Selection.CLIPBOARD));
 
-        // The UI thread does not run its event loop, as if it were waiting for Neovim itself.
-        Optional<String> result = pasted.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            // The UI thread does not run its event loop, as if it were waiting for Neovim itself.
+            Optional<String> result = pasted.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-        assertEquals(Optional.empty(), result, "nothing, instead of a Neovim that waits forever");
-        spin(100); // let the queued read run, so it does not leak into the next test
+            assertEquals(Optional.empty(), result, "nothing, instead of a Neovim that waits forever");
+            log.assertLogged(Level.WARNING, "The UI thread did not read the clipboard");
+            spin(100); // let the queued read run, so it does not leak into the next test
+        }
     }
 
     @Test

@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.DocumentEvent;
@@ -23,6 +24,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferChange;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.VimText;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 
 /**
@@ -310,10 +312,12 @@ class BufferSynchronizerTest {
     void afterAFailedPushNeovimsWholeBufferDoesNotReplaceTheDocument() {
         IDocument doc = new Document("keep\nthis\n");
         neovim.duringPush = () -> {
-            throw new IllegalStateException("Lua: stack overflow");
+            throw new IllegalStateException("Lua: stack overflow (expected by the test)");
         };
-        try (BufferSynchronizer sync = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+        try (BufferSynchronizer sync = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE);
+                ExpectedLog log = ExpectedLog.of(BufferSynchronizer.class)) {
             sync.pushDocumentToNeovim();
+            log.assertLogged(Level.SEVERE, "Failed to push document to Neovim");
             sync.startRemoteListening();
             neovim.neovimChanged(new BufferChange(0, -1, List.of(""))); // Neovim's empty buffer
             assertEquals("keep\nthis\n", doc.get(), "not emptied");
