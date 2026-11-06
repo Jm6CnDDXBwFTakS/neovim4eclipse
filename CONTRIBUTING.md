@@ -549,7 +549,8 @@ it, and then rebuilds the update site on GitHub Pages (`.github/workflows/update
 `releng/tools/release/Release.java` runs the steps below, from the repository's root, on the
 release branch. It needs a JDK of release 22 or newer (it is several source files, which `java` runs
 without a build only from that release on; the plug-in itself stays on 21), `gh` signed in (`gh auth login`), and, for
-the signature checks, `bash` and `gpg`:
+the signature checks, `bash` and `gpg` (the ZIP's signature) and `python3` (the jars' signatures;
+on Windows, Git for Windows' bash). Without them it says which check it skipped:
 
 ```bash
 java releng/tools/release/Release.java            # where the release stands, and the next step
