@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
@@ -36,8 +38,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * failed. Before this class, the failure only reached the log, and the plug-in silently did nothing.
  *
  * <p>That decision and the text are in {@link StartFailureReport} (unit-tested, no Eclipse); this
- * class only moves to the UI thread and shows the dialog, a {@link HeadedMessageDialog} laid out as
- * the welcome and Get Neovim's dialogs are. A link in it would open in Eclipse's external browser.
+ * class moves between threads and shows the dialog, a {@link HeadedMessageDialog} laid out as the
+ * welcome and Get Neovim's dialogs are. A link in it would open in Eclipse's external browser.
+ *
+ * <h2>Threads</h2>
+ * Three steps: the UI thread decides whether to report ({@link StartFailureReport#shouldReport},
+ * whose state only that thread touches); a background job gathers what the message says; the UI
+ * thread shows it. The middle step runs programs and reads files: the named program's
+ * {@code --version} (which may hang, {@link InstalledVersions}: up to 18 s) and the dedicated
+ * Neovim's check (hashing some 2,000 files), so on the UI thread it would freeze Eclipse.
  */
 final class StartFailureNotice {
 
@@ -68,32 +77,60 @@ final class StartFailureNotice {
         }
         display.asyncExec(() -> {
             if (REPORT.shouldReport(configured)) {
-                show(configured, error);
+                Job job = Job.create("Finding out why Neovim did not start", monitor -> {
+                    Notice notice = gather(configured, error);
+                    Display ui = Display.getDefault();
+                    if (ui != null && !ui.isDisposed()) {
+                        ui.asyncExec(() -> show(notice));
+                    }
+                    return Status.OK_STATUS;
+                });
+                job.setSystem(true); // a moment's work before a dialog: nothing to show in Progress
+                job.schedule();
             }
         });
     }
 
-    private static void show(String configured, Throwable error) {
-        Shell shell = PlatformUI.isWorkbenchRunning() && PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null
-                ? PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell()
-                : null;
-        // The dedicated Neovim's check and nvim --version of the program the preference names: each
-        // answer is kept (PluginNeovim.verified, InstalledVersions), and the start has just asked anyway.
+    /**
+     * What the notice shows, gathered off the UI thread.
+     *
+     * @param getNeovimInstead why Get Neovim's own dialog opens in place of the notice, if it does
+     * @param message          the notice's text; {@code null} when Get Neovim opens instead
+     * @param offersGetNeovim  whether the notice has a Get Neovim button
+     */
+    private record Notice(Optional<String> getNeovimInstead, HeadedMessage message, boolean offersGetNeovim) {
+    }
+
+    /** The middle step of "Threads": runs programs and hashes files, so never on the UI thread. */
+    private static Notice gather(String configured, Throwable error) {
+        // The dedicated Neovim's check and nvim --version of the program the option names.
         boolean windows = PlatformUtil.isWindows();
         List<Path> homes = PluginNeovim.searchHomes();
         NvimExecutable.Resolved resolved = NvimExecutable.find(configured);
         Optional<PluginNeovim.Unverified> unverified = PluginNeovim.unverified(homes, windows, NeovimRelease.bundled());
         Optional<String> why = StartFailureReport.getNeovimInstead(resolved, unverified);
         if (why.isPresent()) {
-            GetNeovim.open(shell, why.get()); // a cancel there ends it: no notice after it
-            return;
+            return new Notice(why, null, false);
         }
         boolean dedicatedVerified = homes.stream().anyMatch(home -> PluginNeovim.verified(home, windows));
         HeadedMessage message = StartFailureReport.message(resolved, error,
                 PluginNeovim.unusedEntries(NvimExecutable.dedicatedFolder()), unverified, dedicatedVerified,
                 InstalledVersions::of);
+        return new Notice(why, message, StartFailureReport.offersGetNeovim(resolved, dedicatedVerified));
+    }
+
+    /** The last step of "Threads", on the UI thread. */
+    private static void show(Notice notice) {
+        Shell shell = PlatformUI.isWorkbenchRunning() && PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null
+                ? PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell()
+                : null;
+        if (notice.getNeovimInstead().isPresent()) {
+            GetNeovim.open(shell, notice.getNeovimInstead().get()); // a cancel there ends it: no notice after it
+            return;
+        }
+        HeadedMessage message = notice.message();
+        boolean getNeovim = notice.offersGetNeovim();
         // Get Neovim, the default where it is offered: for a missing or older Neovim it is the simplest fix.
-        boolean getNeovim = StartFailureReport.offersGetNeovim(resolved, dedicatedVerified);
         String[] buttons = getNeovim ? new String[] { GetNeovim.label(), "Open Preferences", "Close" }
                 : new String[] { "Open Preferences", "Close" };
         MessageDialog dialog = new HeadedMessageDialog(shell, StartFailureReport.TITLE, MessageDialog.ERROR, message,
