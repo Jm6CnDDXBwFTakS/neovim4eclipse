@@ -58,6 +58,16 @@ class ArchiveExtractorTest {
         assertFalse(Files.exists(target().resolve("ignored-short-name")));
     }
 
+    /** A PAX header after a GNU long name does not take that name: the file still gets it. */
+    @Test
+    void aGnuLongNameSurvivesAPaxHeaderAfterIt() throws IOException {
+        String longName = "nvim/share/nvim/runtime/" + "very-long-folder-name/".repeat(8) + "file.lua";
+        untar(new TestArchives.Tar().folder("nvim/").gnuLongNameThenPaxFile(longName, "x")
+                .gzipTo(tmp.resolve("lx.tar.gz")));
+        assertEquals("x", Files.readString(target().resolve(longName.substring("nvim/".length()))));
+        assertFalse(Files.exists(target().resolve("ignored-short-name")));
+    }
+
     /** A link stops the unpacking: skipped, it would leave an install that lacks a file yet looks whole. */
     @Test
     void aLinkIsRefused() throws IOException {
