@@ -141,7 +141,7 @@ public final class ReleaseTool {
         git.fetch();
         String head = git.head();
         boolean released = false;
-        boolean tagged = git.commitOf("refs/tags/" + v.tag()) != null && remoteHasTag(v.tag());
+        boolean tagged = remoteTagCommit(v.tag()) != null;
         if (tagged && Shell.onPath("gh")) {
             List<String> assets = gh.releaseAssets(v.tag());
             released = assets.contains(zipName(v)) && assets.contains(zipName(v) + ".asc");
@@ -416,7 +416,14 @@ public final class ReleaseTool {
         if (!ReleaseFiles.hasRelease(gitShow(main, "CHANGELOG.md"), v)) {
             throw new ToolFailure("main's CHANGELOG.md has no section " + v + ": run prepare and promote first");
         }
-        String tagged = remoteHasTag(v.tag()) ? git.commitOf("refs/tags/" + v.tag()) : null;
+        String tagged = remoteTagCommit(v.tag());
+        String local = git.commitOf("refs/tags/" + v.tag());
+        if (tagged == null && local != null && !local.equals(main)) {
+            // A tag made here earlier and never pushed (an attempt stopped halfway, a test): pushing it
+            // would release that commit, not main.
+            throw new ToolFailure("the local tag " + v.tag() + " is on " + short7(local) + ", not on main (" + short7(main)
+                    + "), and origin has no such tag. Delete it if it is a leftover: git tag -d " + v.tag());
+        }
         if (tagged != null && !tagged.equals(main)) {
             throw new ToolFailure(v.tag() + " is on " + tagged.substring(0, 7) + ", not on main (" + main.substring(0, 7) + "). "
                     + "If it must move (after deleting its GitHub Release, if one was made): git tag -f " + v.tag() + " " + main.substring(0, 12)
@@ -432,7 +439,7 @@ public final class ReleaseTool {
                 System.out.println("note: no green Build on main for " + main.substring(0, 7) + ", so the Release workflow runs every test itself");
             }
             if (ask.confirm("Tag main (" + main.substring(0, 7) + ") as " + v.tag() + " and push the tag; this starts the Release workflow", commands)) {
-                if (git.commitOf("refs/tags/" + v.tag()) == null) {
+                if (local == null) {
                     git.out("tag", v.tag(), main);
                 }
                 if (shell.show(List.of("git", "push", "origin", "refs/tags/" + v.tag())) != 0) {
@@ -510,7 +517,7 @@ public final class ReleaseTool {
     private void next() {
         Version v = pomVersion();
         git.fetch();
-        if (!remoteHasTag(v.tag())) {
+        if (remoteTagCommit(v.tag()) == null) {
             throw new ToolFailure(v.tag() + " is not on origin: release " + v + " first (tag)");
         }
         Version next = nextVersion(v);
@@ -634,9 +641,21 @@ public final class ReleaseTool {
         return next;
     }
 
-    /** Whether origin has {@code tag}: asked of origin itself, as a fetch keeps local tags that were deleted there. */
-    private boolean remoteHasTag(String tag) {
-        return !shell.out(List.of("git", "ls-remote", "--tags", "origin", "refs/tags/" + tag)).isEmpty();
+    /**
+     * The commit origin's {@code tag} names, or {@code null} when origin has no such tag: asked of
+     * origin itself, not of the local tag, which may be a leftover. For an annotated tag, git lists
+     * the tag object and, as {@code refs/tags/v0.2.3^{}}, the commit; the commit is the one wanted.
+     */
+    private String remoteTagCommit(String tag) {
+        String ref = "refs/tags/" + tag;
+        String commit = null;
+        for (String line : shell.out(List.of("git", "ls-remote", "--tags", "origin", ref, ref + "^{}")).lines().toList()) {
+            String[] f = line.split("\\s+");
+            if (f.length == 2 && (f[1].equals(ref + "^{}") || f[1].equals(ref) && commit == null)) {
+                commit = f[0];
+            }
+        }
+        return commit;
     }
 
     private boolean testsCover(String head) {
@@ -674,6 +693,11 @@ public final class ReleaseTool {
         int behind = Integer.parseInt(counts[0]);
         int ahead = Integer.parseInt(counts[1]);
         return behind == 0 && ahead == 0 ? "in step with origin" : ahead + " ahead of origin, " + behind + " behind";
+    }
+
+    /** A commit id as git shortens it for people ({@code 9c7d0d2}); a shorter text as it is. */
+    static String short7(String commit) {
+        return commit.length() > 7 ? commit.substring(0, 7) : commit;
     }
 
     private static String zipName(Version v) {
