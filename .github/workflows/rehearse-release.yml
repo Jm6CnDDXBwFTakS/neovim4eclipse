@@ -5,8 +5,13 @@
 # the steps that otherwise run only when a v* tag is pushed (release.yml, update-site.yml), on the
 # branch's own commit. Every earlier release failure was in those steps (zip(1) reading $ZIP, a
 # downloaded artifact unpacked, an artifact name taken twice), and they only show at the tag. Run
-# it once before each release, after the branch's Build passed (CONTRIBUTING.md, "Releasing"):
-# Actions tab > Release rehearsal > Run workflow, on the release branch.
+# it once before each release, after the branch's Build passed (CONTRIBUTING.md, "Releasing"),
+# by pushing the release branch's commit to a rehearse/ branch, then deleting that branch:
+#   git push origin release/0.2.2:rehearse/0.2.2
+#   git push origin --delete rehearse/0.2.2
+# Why a push, not only Run workflow: GitHub starts a workflow_dispatch workflow only once its file
+# is on the default branch (main), so Run workflow is there for a branch only after the release
+# that brought this file to main. The rehearse/ branches work at any time, before that included.
 #
 # What it rehearses, job by job, and what differs from the release:
 #   1. version:  the version from the root pom.xml (0.2.2-SNAPSHOT gives 0.2.2), the CHANGELOG
@@ -28,6 +33,8 @@ name: Release rehearsal
 
 on:
   workflow_dispatch:
+  push:
+    branches: ['rehearse/**']
 
 permissions: {}
 

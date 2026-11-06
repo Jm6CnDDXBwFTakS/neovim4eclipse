@@ -145,7 +145,7 @@ The design, the key and the experiments behind it are in
 
 ### Rehearsing a release
 
-`.github/workflows/rehearse-release.yml`, started by hand on a branch, runs these steps without
+`.github/workflows/rehearse-release.yml`, started by a push to a `rehearse/` branch, runs these steps without
 the key and without publishing: the build at the release's version, `releng/sign.sh` with a key
 made in the job, the publish job's checks, `releng/update-site.sh` from the published releases
 (with the project's key) and from the rehearsed ZIP (with the throwaway one), and

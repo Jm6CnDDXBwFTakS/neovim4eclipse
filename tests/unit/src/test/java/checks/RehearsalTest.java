@@ -61,6 +61,10 @@ class RehearsalTest {
         assertFalse(Pattern.compile("(?m)^\\s*[\\w-]+:\\s*write\\b|write-all").matcher(rehearsal).find(),
                 "the rehearsal asks for write access");
         assertFalse(rehearsal.contains("gh release create"), "the rehearsal creates a release");
+        // Started by hand or by a push to rehearse/, never by a pull request or a tag: a fork's
+        // pull request must not run it, and a tag is the real release.
+        assertFalse(rehearsal.contains("pull_request") || rehearsal.contains("tags:"),
+                "the rehearsal runs on pull requests or tags");
         assertTrue(rehearsal.contains("uses: ./.github/workflows/build.yml"), "the rehearsal no longer builds with build.yml");
     }
 }
