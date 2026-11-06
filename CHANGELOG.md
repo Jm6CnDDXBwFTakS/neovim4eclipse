@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: releases are now made with a tool that checks each step
+  before it acts and asks before every push, tag and commit, so every release goes through the
+  same checks.
+
 ## [0.2.2] - 2026-11-06
 
 ### Changed

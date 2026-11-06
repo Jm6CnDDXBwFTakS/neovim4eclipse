@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# Copy to local.properties (ignored by git) to override settings.properties on this machine only.
+
+# LikeCi's arguments for the check step; empty runs only what CI runs (-Pui, then the integration tests).
+#tests=
+
+# A last paragraph for the tool's commits, e.g. when an assistant runs the tool for you:
+#commit.trailer=Co-Authored-By: Name <address>

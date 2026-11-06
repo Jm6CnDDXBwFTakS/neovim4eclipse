@@ -1,0 +1,712 @@
+// SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+// SPDX-License-Identifier: EPL-2.0
+
+package release;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import common.Ask;
+import common.Folders;
+import common.Git;
+import common.GitHub;
+import common.Settings;
+import common.Shell;
+import common.ToolFailure;
+import common.Version;
+
+/**
+ * The Release tool: CONTRIBUTING.md's "Releasing" as steps a person runs, each of which checks
+ * before it acts and asks before every side effect ({@link Ask}). Started through
+ * {@link Release} (which explains why); every step reads git and GitHub afresh, so any step can be
+ * run again after a failure, and {@code go} goes on from wherever the release stands.
+ *
+ * <h2>The steps, for release 0.2.3 on {@code release/0.2.3}</h2>
+ * <ol>
+ *   <li><b>check</b>: on {@code release/0.2.3}, clean, not behind origin, the POM at
+ *       {@code 0.2.3-SNAPSHOT}, changes listed under <i>Unreleased</i>. The six pinned Neovim
+ *       archives still match their hashes ({@code UpdateNeovimDownloads.java --check}, as the
+ *       Release workflow's first job), with a line when Neovim has a newer release; the manual
+ *       checks due ({@code ManualChecks.java due}). Then every test on this machine
+ *       ({@code LikeCi.java --all}): the commit that passes is written to
+ *       {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
+ *       command for macOS and Windows, a reminder only: CI's macOS and Windows jobs are the gate.</li>
+ *   <li><b>prepare</b>: dates the changelog section, names the version in the README's status line
+ *       ({@link ReleaseFiles}), and commits that.</li>
+ *   <li><b>promote</b>: pushes the branch; pushes it to {@code rehearse/0.2.3} as well, which starts
+ *       the Release rehearsal (build at the release version, signing with a throwaway key, both
+ *       update sites, installs into Eclipse), watches it, and deletes that branch. With
+ *       {@code --ci-on-branch}, also a Build run on the release branch. Then fast-forwards
+ *       {@code main} to the branch and watches the Build that starts there: that run is the
+ *       release's test run, which the Release workflow reuses instead of testing again.</li>
+ *   <li><b>tag</b>: tags {@code main} as {@code v0.2.3} and pushes the tag, which starts the Release
+ *       workflow, and watches it to the end (it publishes the update site too). Then checks the
+ *       outcome as a user would meet it: the run reused the Build on {@code main}, the GitHub
+ *       Release has the ZIP and its {@code .asc}, both signatures verify
+ *       ({@code releng/verify-zip.sh}, {@code releng/verify-signatures.sh}), and the public update
+ *       site lists the version.</li>
+ *   <li><b>next</b>: cuts {@code release/0.2.4} from {@code main}, sets its version
+ *       ({@code 0.2.4-SNAPSHOT}), commits and pushes it; deletes {@code release/0.2.3} and the
+ *       {@code fix/}, {@code feature/} and {@code rehearse/} branches already in {@code main}.</li>
+ * </ol>
+ *
+ * <h2>When a run fails</h2>
+ * The tool prints the failed jobs' last log lines and the commands that recover: rerun the failed
+ * jobs (a runner hiccup), or fix the cause on the release branch and run {@code promote} again.
+ * It never deletes a tag, a release or a branch that is not finished with, and never forces a
+ * push; when a tag must move, it prints the commands for a person to run.
+ */
+public final class ReleaseTool {
+
+    static final String TOOL = "releng/tools/release/Release.java";
+    static final String NEOVIM_PINS = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src/io/github/jm6cnddxbwftaks/neovim4eclipse/util/neovim-downloads.properties";
+    private static final Pattern POM_VERSION = Pattern.compile("<artifactId>neovim4eclipse</artifactId>\\s*<version>([^<]+)</version>");
+    private static final int LOG_LINES = 40;
+
+    private final Path root;
+    private final Options options;
+    private final Settings settings;
+    private final Shell shell;
+    private final Git git;
+    private final GitHub gh;
+    private Ask ask;
+
+    ReleaseTool(Path root, Options options) {
+        this.root = root;
+        this.options = options;
+        this.settings = Settings.load(root.resolve("releng/tools/release"), Map.of());
+        this.shell = new Shell(root);
+        this.git = new Git(shell);
+        this.gh = new GitHub(shell);
+        this.ask = new Ask(options.mode(), options.rerunWithYes(options.step()));
+    }
+
+    public static void main(String[] args) {
+        try {
+            Path root = Path.of("").toAbsolutePath();
+            if (!Files.isRegularFile(root.resolve(TOOL))) {
+                throw new ToolFailure("run this from the repository's root folder: java " + TOOL);
+            }
+            new ReleaseTool(root, Options.parse(args)).run();
+        } catch (ToolFailure f) {
+            System.err.println();
+            System.err.println("Release: " + f.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private void run() {
+        switch (options.step()) {
+            case "status" -> status();
+            case "go" -> go();
+            default -> step(options.step());
+        }
+    }
+
+    private void step(String name) {
+        ask = new Ask(options.mode(), options.rerunWithYes(name));
+        System.out.println("== " + name + (options.mode() == Ask.Mode.DRY_RUN ? " (dry run)" : ""));
+        switch (name) {
+            case "check" -> check();
+            case "prepare" -> prepare();
+            case "promote" -> promote();
+            case "tag" -> tag();
+            case "next" -> next();
+            default -> throw new ToolFailure("unknown step " + name);
+        }
+    }
+
+    // ---------------------------------------------------------------- status and go
+
+    /** The facts behind {@link ReleaseState}, read now. Fetches first, so that origin's side is current. */
+    private ReleaseState state(Version v) {
+        git.fetch();
+        String head = git.head();
+        boolean released = false;
+        boolean tagged = git.commitOf("refs/tags/" + v.tag()) != null && remoteHasTag(v.tag());
+        if (tagged && Shell.onPath("gh")) {
+            List<String> assets = gh.releaseAssets(v.tag());
+            released = assets.contains(zipName(v)) && assets.contains(zipName(v) + ".asc");
+        }
+        return new ReleaseState(v, testsCover(head), ReleaseFiles.hasRelease(read("CHANGELOG.md"), v),
+                head.equals(git.commitOf("origin/main")), tagged, released,
+                git.commitOf("origin/" + nextVersion(v).branch()) != null);
+    }
+
+    private void status() {
+        Version v = pomVersion();
+        ReleaseState s = state(v);
+        String head = git.head();
+        String branch = git.branch();
+        System.out.println("Release " + v + " on " + (branch.isEmpty() ? "a detached HEAD" : branch) + " at " + head.substring(0, 7));
+        if (!branch.equals(v.branch())) {
+            System.out.println("  note: the release is made from " + v.branch());
+        }
+        row("working tree", git.isClean() ? "clean" : "has changes");
+        String upstream = git.commitOf("origin/" + v.branch());
+        row("origin", upstream == null ? v.branch() + " not pushed" : aheadBehind(upstream, head));
+        String changelog = read("CHANGELOG.md");
+        row("changelog", s.prepared() ? "section " + v + " dated"
+                : ReleaseFiles.unreleasedHasEntries(changelog) ? "changes under Unreleased, not dated" : "nothing under Unreleased");
+        String tested = testedCommit();
+        row("local tests", s.tested() ? "passed (LikeCi " + settings.get("tests") + ") at " + tested.substring(0, 7)
+                : tested.isEmpty() ? "not run for this release" : "passed at " + tested.substring(0, 7) + ", not this commit");
+        row("main", s.onMain() ? "at this commit" : "not at this commit");
+        row(v.tag(), s.tagged() ? "on origin" : "not made");
+        row("GitHub Release", s.released() ? "has the ZIP and its signature" : "none yet");
+        row("next branch", nextVersion(v).branch() + (s.nextCut() ? " exists" : " not cut"));
+        String next = s.nextStep();
+        System.out.println();
+        System.out.println(next.equals("done") ? "Release " + v + " is done."
+                : "Next step: java " + TOOL + " " + next + "   (or go: every step from there)");
+    }
+
+    private void go() {
+        Version v = pomVersion();
+        String first = state(v).nextStep();
+        if (first.equals("done")) {
+            System.out.println("Release " + v + " is done.");
+            return;
+        }
+        List<String> steps = Options.STEPS.subList(Options.STEPS.indexOf(first), Options.STEPS.size());
+        if (options.mode() == Ask.Mode.DRY_RUN) {
+            // A dry run changes nothing, so the steps after the first would find their start missing.
+            step(first);
+            System.out.println();
+            System.out.println("[dry run] then: " + String.join(", ", steps.subList(1, steps.size())));
+            return;
+        }
+        for (String s : steps) {
+            step(s);
+            System.out.println();
+        }
+    }
+
+    // ---------------------------------------------------------------- check
+
+    private void check() {
+        Version v = requireReleaseBranch();
+        requireClean();
+        git.fetch();
+        String head = git.head();
+        String upstream = git.commitOf("origin/" + v.branch());
+        if (upstream != null && !git.isAncestor(upstream, head)) {
+            throw new ToolFailure("origin/" + v.branch() + " has commits this branch lacks: git merge --ff-only origin/" + v.branch());
+        }
+        ok("on " + v.branch() + ", clean, " + (upstream == null ? "not pushed yet" : aheadBehind(upstream, head)));
+
+        String changelog = read("CHANGELOG.md");
+        if (!ReleaseFiles.hasRelease(changelog, v) && !ReleaseFiles.unreleasedHasEntries(changelog)) {
+            throw new ToolFailure("CHANGELOG.md lists nothing under " + ReleaseFiles.UNRELEASED + "; add the release's changes there");
+        }
+        ok("CHANGELOG.md has the release's changes");
+
+        System.out.println();
+        if (shell.show(Shell.java("releng/UpdateNeovimDownloads.java", "--check")) != 0) {
+            throw new ToolFailure("the pinned Neovim archives do not match their hashes (see above); docs/UPGRADING.md, \"Neovim\"");
+        }
+        ok("the pinned Neovim archives match");
+        newerNeovim();
+
+        System.out.println();
+        System.out.println("Manual checks due for this release (docs/MANUAL_CHECKS.md):");
+        if (shell.show(Shell.java("releng/tools/checks/ManualChecks.java", "due")) != 0) {
+            throw new ToolFailure("ManualChecks.java due failed (see above)");
+        }
+
+        System.out.println();
+        String tests = settings.get("tests");
+        if (options.noTests()) {
+            System.out.println("Local tests skipped (--no-tests); promote will want them.");
+        } else if (options.mode() == Ask.Mode.DRY_RUN) {
+            System.out.println("[dry run] would run: java releng/tools/ci/LikeCi.java " + tests);
+        } else {
+            List<String> likeCi = Shell.java("releng/tools/ci/LikeCi.java", tests.isEmpty() ? new String[0] : tests.split("\\s+"));
+            if (shell.show(likeCi) != 0) {
+                throw new ToolFailure("the local tests failed (see above); fix them on " + v.branch() + " and run check again");
+            }
+            writeTested(head);
+            ok("the local tests passed at " + head.substring(0, 7) + " (recorded in target/release-tool/tested)");
+        }
+        System.out.println();
+        System.out.println("On macOS and Windows, test the same commit once it is pushed (CI's macOS and Windows jobs are the gate):");
+        System.out.println("  git fetch origin && git switch --detach " + head.substring(0, 12));
+        System.out.println("  java releng/tools/ci/LikeCi.java " + tests);
+    }
+
+    /** Prints a line when Neovim has a release newer than the pinned one (docs/UPGRADING.md, "Following Neovim's releases"). */
+    private void newerNeovim() {
+        Properties pins = new Properties();
+        try (InputStream in = Files.newInputStream(root.resolve(NEOVIM_PINS))) {
+            pins.load(in);
+        } catch (IOException e) {
+            throw new ToolFailure("cannot read " + NEOVIM_PINS + ": " + e.getMessage());
+        }
+        Shell.Result r = Shell.onPath("gh") ? shell.capture(List.of("gh", "api", "repos/neovim/neovim/releases/latest", "--jq", ".tag_name"))
+                : new Shell.Result(1, "", "");
+        if (!r.ok() || !r.out().matches("v\\d+\\.\\d+\\.\\d+")) {
+            System.out.println("  (could not ask GitHub for Neovim's newest release)");
+            return;
+        }
+        Version pinned = Version.parse(pins.getProperty("version", "").strip());
+        Version latest = Version.parse(r.out().substring(1));
+        if (latest.compareTo(pinned) > 0) {
+            System.out.println("  note: Neovim " + latest + " is out (pinned: " + pinned + "); move the pin once it is a week old"
+                    + " (docs/UPGRADING.md, \"Following Neovim's releases\"). Not a blocker.");
+        } else {
+            ok("Neovim " + pinned + " is Neovim's newest release");
+        }
+    }
+
+    // ---------------------------------------------------------------- prepare
+
+    private void prepare() {
+        Version v = requireReleaseBranch();
+        requireClean();
+        String changelog = read("CHANGELOG.md");
+        String readme = read("README.md");
+        if (ReleaseFiles.hasRelease(changelog, v) && ReleaseFiles.readmeVersion(readme).equals(v.toString())) {
+            ok("already prepared: CHANGELOG.md has " + v + ", the README names it");
+            return;
+        }
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        String newChangelog = ReleaseFiles.hasRelease(changelog, v) ? changelog : ReleaseFiles.datedChangelog(changelog, v, today);
+        String newReadme = ReleaseFiles.readmeWithVersion(readme, v);
+        if (options.mode() == Ask.Mode.DRY_RUN) {
+            System.out.println("[dry run] would date the changelog \"## [" + v + "] - " + today + "\", set the README's status to " + v + ", and commit");
+            return;
+        }
+        write("CHANGELOG.md", newChangelog);
+        write("README.md", newReadme);
+        shell.show(List.of("git", "--no-pager", "diff", "--", "CHANGELOG.md", "README.md"));
+        try {
+            git.commit(ask, "Release " + v + ": date its changelog section, name it in the README",
+                    settings.get("commit.trailer", ""), ReleaseFiles.RELEASE_NOTES_FILES);
+        } catch (ToolFailure f) {
+            // Back as they were, so that the step can simply be run again (it wants a clean tree).
+            write("CHANGELOG.md", changelog);
+            write("README.md", readme);
+            throw new ToolFailure(f.getMessage() + " CHANGELOG.md and README.md are as they were.");
+        }
+    }
+
+    // ---------------------------------------------------------------- promote
+
+    private void promote() {
+        Version v = requireReleaseBranch();
+        requireClean();
+        gh.requireReady();
+        git.fetch();
+        String head = git.head();
+        if (!ReleaseFiles.hasRelease(read("CHANGELOG.md"), v)) {
+            throw new ToolFailure("CHANGELOG.md has no dated section " + v + " yet: run prepare first");
+        }
+        if (!testsCover(head)) {
+            if (!options.skipLocalTests()) {
+                throw new ToolFailure("the local tests have not passed on this commit: run check first (or --skip-local-tests)");
+            }
+            System.out.println("note: no local test run of this commit (--skip-local-tests)");
+        }
+        String main = git.commitOf("origin/main");
+        if (main != null && !git.isAncestor(main, head)) {
+            throw new ToolFailure("origin/main has commits " + v.branch() + " lacks, so main cannot be fast-forwarded; rebase the branch on origin/main");
+        }
+
+        if (!head.equals(git.commitOf("origin/" + v.branch()))) {
+            git.push(ask, "Push " + v.branch() + " to origin", v.branch());
+        } else {
+            ok(v.branch() + " is on origin");
+        }
+
+        if (options.rehearse()) {
+            rehearse(v, head);
+        } else {
+            System.out.println("note: no rehearsal (--no-rehearsal)");
+        }
+
+        if (options.ciOnBranch()) {
+            List<String> dispatch = List.of("gh", "workflow", "run", settings.get("build.workflow"), "--ref", v.branch());
+            List<GitHub.Run> done = gh.runs(settings.get("build.workflow"), head, "workflow_dispatch", v.branch());
+            if (done.stream().anyMatch(GitHub.Run::passed)) {
+                ok("Build passed on " + v.branch() + " already");
+            } else if (ask.confirm("Run the Build workflow on " + v.branch(), List.of(Shell.display(dispatch)))) {
+                shell.out(dispatch);
+                awaitAndWatch("the Build on " + v.branch(), settings.get("build.workflow"), head, "workflow_dispatch", v.branch(),
+                        List.of("fix the cause on " + v.branch() + ", then run check and promote again"));
+            }
+        }
+
+        if (!head.equals(main)) {
+            git.push(ask, "Fast-forward main to " + v.branch() + " (" + head.substring(0, 7) + "); this starts the Build on main", head + ":refs/heads/main");
+        } else {
+            ok("main is at " + head.substring(0, 7));
+        }
+        if (options.mode() != Ask.Mode.DRY_RUN) {
+            awaitAndWatch("the Build on main", settings.get("build.workflow"), head, "push", "main",
+                    List.of("rerun only the failed jobs, for a runner hiccup", "or fix the cause on " + v.branch()
+                            + ", then run check and promote again (main moves on by fast-forward)"));
+            ok("the Build passed on main: the release's test run");
+        }
+    }
+
+    /** Pushes the commit to {@code rehearse/<v>}, watches the Release rehearsal, and deletes the branch. */
+    private void rehearse(Version v, String head) {
+        String branch = settings.get("rehearse.prefix") + v;
+        String workflow = settings.get("rehearsal.workflow");
+        String there = git.commitOf("origin/" + branch);
+        if (there != null && !there.equals(head)) {
+            git.push(ask, "Delete " + branch + " on origin, left from an earlier rehearsal of another commit", "--delete", branch);
+            there = null;
+        }
+        if (there == null) {
+            if (gh.runs(workflow, head, "push", branch).stream().anyMatch(GitHub.Run::passed)) {
+                ok("the Release rehearsal passed on " + head.substring(0, 7) + " already");
+                return;
+            }
+            git.push(ask, "Push " + head.substring(0, 7) + " to " + branch + ", which starts the Release rehearsal", head + ":refs/heads/" + branch);
+        }
+        if (options.mode() == Ask.Mode.DRY_RUN) {
+            System.out.println("[dry run] would watch the Release rehearsal, then delete " + branch);
+            return;
+        }
+        awaitAndWatch("the Release rehearsal", workflow, head, "push", branch,
+                List.of("rerun only the failed jobs, for a runner hiccup",
+                        "or fix the cause on " + v.branch() + ", then run check and promote again (it pushes " + branch + " anew)",
+                        "afterwards: git push origin --delete " + branch));
+        ok("the Release rehearsal passed");
+        git.push(ask, "Delete " + branch + " on origin (the rehearsal is done)", "--delete", branch);
+    }
+
+    // ---------------------------------------------------------------- tag
+
+    private void tag() {
+        Version v = pomVersion();
+        gh.requireReady();
+        git.fetch();
+        String main = git.commitOf("origin/main");
+        if (main == null) {
+            throw new ToolFailure("no origin/main");
+        }
+        if (!ReleaseFiles.hasRelease(gitShow(main, "CHANGELOG.md"), v)) {
+            throw new ToolFailure("main's CHANGELOG.md has no section " + v + ": run prepare and promote first");
+        }
+        String tagged = remoteHasTag(v.tag()) ? git.commitOf("refs/tags/" + v.tag()) : null;
+        if (tagged != null && !tagged.equals(main)) {
+            throw new ToolFailure(v.tag() + " is on " + tagged.substring(0, 7) + ", not on main (" + main.substring(0, 7) + "). "
+                    + "If it must move (after deleting its GitHub Release, if one was made): git tag -f " + v.tag() + " " + main.substring(0, 12)
+                    + " && git push -f origin " + v.tag() + ". The tool never moves a tag itself.");
+        }
+        String workflow = settings.get("release.workflow");
+        if (tagged == null) {
+            boolean tested = gh.runs(settings.get("build.workflow"), main, "push", "main").stream().anyMatch(GitHub.Run::passed);
+            List<String> commands = List.of("git tag " + v.tag() + " " + main.substring(0, 12), "git push origin " + v.tag());
+            if (!tested) {
+                System.out.println("note: no green Build on main for " + main.substring(0, 7) + ", so the Release workflow runs every test itself");
+            }
+            if (ask.confirm("Tag main (" + main.substring(0, 7) + ") as " + v.tag() + " and push the tag; this starts the Release workflow", commands)) {
+                if (git.commitOf("refs/tags/" + v.tag()) == null) {
+                    git.out("tag", v.tag(), main);
+                }
+                if (shell.show(List.of("git", "push", "origin", "refs/tags/" + v.tag())) != 0) {
+                    throw new ToolFailure("git push origin " + v.tag() + " failed (see above)");
+                }
+            }
+        } else {
+            ok(v.tag() + " is on main (" + main.substring(0, 7) + ")");
+        }
+        if (options.mode() == Ask.Mode.DRY_RUN) {
+            System.out.println("[dry run] would watch the Release workflow, then verify the release and the update site");
+            return;
+        }
+        GitHub.Run run = awaitAndWatch("the Release workflow", workflow, main, "push", v.tag(),
+                List.of("rerun only the failed jobs, for a runner hiccup; if only the update site failed, the release is out:"
+                        + " fix the cause and rebuild the site (Update site workflow, Run workflow)",
+                        "a fault in the release itself: delete the GitHub Release if one was made, fix on " + v.branch()
+                                + ", promote again, then move the tag: git tag -f " + v.tag() + " <commit> && git push -f origin " + v.tag()));
+        ok("the Release workflow passed");
+        String testedJob = settings.get("tested.job");
+        if (gh.jobNames(run).stream().anyMatch(n -> n.endsWith(testedJob))) {
+            ok("it reused the Build on main (job \"" + testedJob + "\")");
+        } else {
+            System.out.println("note: it ran every test itself (no job \"" + testedJob + "\"); the Build on main had not passed when the tag came");
+        }
+        verifyRelease(v);
+    }
+
+    /** The release as a user meets it: the GitHub Release's files, their signatures, the update site. */
+    private void verifyRelease(Version v) {
+        List<String> assets = gh.releaseAssets(v.tag());
+        String zip = zipName(v);
+        if (!assets.contains(zip) || !assets.contains(zip + ".asc")) {
+            throw new ToolFailure("the GitHub Release " + v.tag() + " lacks " + zip + " or " + zip + ".asc (it has " + assets + ")");
+        }
+        ok("the GitHub Release has " + zip + " and " + zip + ".asc");
+
+        Path folder = root.resolve("target/release-tool/" + v.tag());
+        Folders.deleteTree(folder);
+        shell.out(List.of("gh", "release", "download", v.tag(), "--pattern", zip, "--pattern", zip + ".asc", "--dir", folder.toString()));
+        String key = settings.get("signing.key");
+        if (Shell.onPath("bash") && Shell.onPath("gpg")) {
+            List<String> verifyZip = List.of("bash", "releng/verify-zip.sh", folder.resolve(zip).toString(), key);
+            if (shell.show(verifyZip) != 0) {
+                throw new ToolFailure("the ZIP's signature does not verify (see above); do not announce the release");
+            }
+            Path site = folder.resolve("site");
+            Folders.unzip(folder.resolve(zip), site);
+            if (Shell.onPath("python3")) {
+                if (shell.show(List.of("bash", "releng/verify-signatures.sh", site.toString(), key)) != 0) {
+                    throw new ToolFailure("the jar signatures in the ZIP do not verify (see above); do not announce the release");
+                }
+            } else {
+                System.out.println("note: no python3, so the jar signatures were not checked (releng/verify-signatures.sh)");
+            }
+        } else {
+            System.out.println("note: no bash or gpg here, so the signatures were not checked (releng/verify-zip.sh)");
+        }
+
+        String site = settings.get("site.url");
+        String composite = httpGet(site + "compositeContent.xml");
+        if (composite == null || !composite.contains("'releases/" + v + "'")) {
+            throw new ToolFailure("the update site " + site + " does not list releases/" + v + " (compositeContent.xml); look at the Release run's Update site jobs");
+        }
+        if (httpGet(site + "releases/" + v + "/content.jar") == null) {
+            throw new ToolFailure("the update site lists " + v + " but does not serve " + site + "releases/" + v + "/content.jar");
+        }
+        ok("the update site " + site + " lists and serves " + v);
+        System.out.println();
+        System.out.println("Release " + v + " is out. Next: java " + TOOL + " next");
+    }
+
+    // ---------------------------------------------------------------- next
+
+    private void next() {
+        Version v = pomVersion();
+        git.fetch();
+        if (!remoteHasTag(v.tag())) {
+            throw new ToolFailure(v.tag() + " is not on origin: release " + v + " first (tag)");
+        }
+        Version next = nextVersion(v);
+        String branch = next.branch();
+        String main = git.commitOf("origin/main");
+        if (git.commitOf("origin/" + branch) != null) {
+            ok(branch + " is on origin already");
+        } else if (options.mode() == Ask.Mode.DRY_RUN) {
+            System.out.println("[dry run] would cut " + branch + " from origin/main, set the version to " + next.snapshot() + ", commit and push it");
+        } else {
+            requireClean();
+            if (git.commitOf("refs/heads/" + branch) == null) {
+                git.out("switch", "-q", "-c", branch, main);
+                ok("cut " + branch + " from origin/main (" + main.substring(0, 7) + "), on this machine only");
+            } else if (!git.branch().equals(branch)) {
+                git.out("switch", "-q", branch);
+            }
+            if (!pomVersionText().equals(next.snapshot())) {
+                List<String> setVersion = Shell.maven("-q", "-B", "-ntp", "org.eclipse.tycho:tycho-versions-plugin:set-version",
+                        "-DnewVersion=" + next.snapshot());
+                System.out.println(Shell.display(setVersion));
+                if (shell.show(setVersion) != 0 || !pomVersionText().equals(next.snapshot())) {
+                    throw new ToolFailure("setting the version to " + next.snapshot() + " failed (see above)");
+                }
+                List<String> changed = git.out("diff", "--name-only").lines().toList();
+                git.commit(ask, "Start " + next + ": set the version to " + next.snapshot(), settings.get("commit.trailer", ""), changed);
+            }
+            git.push(ask, "Push " + branch + " to origin", "--set-upstream", branch);
+        }
+        deleteFinishedBranches(v, main);
+        System.out.println();
+        System.out.println("Release " + v + " is finished; " + branch + " is the branch for " + next + ".");
+    }
+
+    /** Deletes, each after asking, the old release branch and the branches {@code main} already has. */
+    private void deleteFinishedBranches(Version v, String main) {
+        List<String> remote = new ArrayList<>();
+        if (git.commitOf("origin/" + v.branch()) != null && git.isAncestor("origin/" + v.branch(), main)) {
+            remote.add(v.branch());
+        }
+        String rehearsePrefix = settings.get("rehearse.prefix");
+        for (String ref : git.out("branch", "-r", "--merged", main, "--format=%(refname:short)").lines().toList()) {
+            String name = ref.startsWith("origin/") ? ref.substring("origin/".length()) : null;
+            if (name != null && (name.startsWith("fix/") || name.startsWith("feature/") || name.startsWith(rehearsePrefix))) {
+                remote.add(name);
+            }
+        }
+        for (String name : remote) {
+            git.push(ask, "Delete " + name + " on origin (main has all of it)", "--delete", name);
+        }
+        String current = git.branch();
+        for (String name : git.out("branch", "--merged", main, "--format=%(refname:short)").lines().toList()) {
+            boolean finished = name.equals(v.branch()) || name.startsWith("fix/") || name.startsWith("feature/");
+            if (finished && !name.equals(current)) {
+                List<String> delete = List.of("git", "branch", "-d", name);
+                if (ask.confirm("Delete the local branch " + name + " (main has all of it)", List.of(Shell.display(delete)))) {
+                    shell.out(delete);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- shared
+
+    /**
+     * Follows the run that a push or dispatch started; on failure, prints the failed jobs' last log
+     * lines and {@code recovery}, then stops the tool.
+     */
+    private GitHub.Run awaitAndWatch(String what, String workflow, String commit, String event, String branch, List<String> recovery) {
+        GitHub.Run run = gh.awaitRun(workflow, commit, event, branch);
+        if (gh.watch(run)) {
+            return run;
+        }
+        System.err.println();
+        System.err.println(what + " failed: " + run.url());
+        System.err.println("---- the failed jobs' last " + LOG_LINES + " log lines");
+        System.err.println(gh.failedLogTail(run, LOG_LINES));
+        System.err.println("----");
+        System.err.println("To recover:");
+        System.err.println("  gh run rerun " + run.id() + " --failed      (" + recovery.get(0) + ")");
+        for (String line : recovery.subList(1, recovery.size())) {
+            System.err.println("  " + line);
+        }
+        throw new ToolFailure(what + " failed; nothing after it was done");
+    }
+
+    private Version pomVersion() {
+        return Version.ofSnapshot(pomVersionText());
+    }
+
+    private String pomVersionText() {
+        Matcher m = POM_VERSION.matcher(read("pom.xml"));
+        if (!m.find()) {
+            throw new ToolFailure("pom.xml has no project version");
+        }
+        return m.group(1).strip();
+    }
+
+    private Version requireReleaseBranch() {
+        Version v = pomVersion();
+        String branch = git.branch();
+        if (!branch.equals(v.branch())) {
+            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch) + "; release " + v + " is made on " + v.branch()
+                    + ": git switch " + v.branch());
+        }
+        return v;
+    }
+
+    private void requireClean() {
+        if (!git.isClean()) {
+            throw new ToolFailure("the working tree has changes (git status); commit or stash them first");
+        }
+    }
+
+    private Version nextVersion(Version v) {
+        Version next = options.next() != null ? options.next() : v.nextPatch();
+        if (next.compareTo(v) <= 0) {
+            throw new ToolFailure("--next " + next + " is not after " + v);
+        }
+        return next;
+    }
+
+    /** Whether origin has {@code tag}: asked of origin itself, as a fetch keeps local tags that were deleted there. */
+    private boolean remoteHasTag(String tag) {
+        return !shell.out(List.of("git", "ls-remote", "--tags", "origin", "refs/tags/" + tag)).isEmpty();
+    }
+
+    private boolean testsCover(String head) {
+        String tested = testedCommit();
+        if (tested.isEmpty() || git.commitOf(tested) == null) {
+            return false;
+        }
+        boolean ancestor = git.isAncestor(tested, head);
+        return ReleaseFiles.testsCover(tested, head, ancestor, ancestor ? git.changedFiles(tested, head) : List.of());
+    }
+
+    private Path testedFile() {
+        return root.resolve("target/release-tool/tested");
+    }
+
+    private String testedCommit() {
+        try {
+            return Files.isRegularFile(testedFile()) ? Files.readString(testedFile()).strip() : "";
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    private void writeTested(String commit) {
+        try {
+            Files.createDirectories(testedFile().getParent());
+            Files.writeString(testedFile(), commit + "\n");
+        } catch (IOException e) {
+            throw new ToolFailure("cannot write " + testedFile() + ": " + e.getMessage());
+        }
+    }
+
+    private String aheadBehind(String upstream, String head) {
+        String[] counts = git.out("rev-list", "--left-right", "--count", upstream + "..." + head).split("\\s+");
+        int behind = Integer.parseInt(counts[0]);
+        int ahead = Integer.parseInt(counts[1]);
+        return behind == 0 && ahead == 0 ? "in step with origin" : ahead + " ahead of origin, " + behind + " behind";
+    }
+
+    private static String zipName(Version v) {
+        return "neovim4eclipse-" + v + ".zip";
+    }
+
+    private String gitShow(String commit, String file) {
+        return git.out("show", commit + ":" + file);
+    }
+
+    private String read(String file) {
+        try {
+            return Files.readString(root.resolve(file));
+        } catch (IOException e) {
+            throw new ToolFailure("cannot read " + file + ": " + e.getMessage());
+        }
+    }
+
+    private void write(String file, String text) {
+        try {
+            Files.writeString(root.resolve(file), text);
+        } catch (IOException e) {
+            throw new ToolFailure("cannot write " + file + ": " + e.getMessage());
+        }
+    }
+
+    /** The body of a GET of {@code url}, or {@code null} unless the answer is 200. */
+    private static String httpGet(String url) {
+        try {
+            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NORMAL).build();
+            HttpResponse<byte[]> r = client.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            return r.statusCode() == 200 ? new String(r.body(), StandardCharsets.UTF_8) : null;
+        } catch (IOException e) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ToolFailure("interrupted");
+        }
+    }
+
+    private static void ok(String message) {
+        System.out.println("ok: " + message);
+    }
+
+    private static void row(String name, String value) {
+        System.out.printf("  %-15s %s%n", name, value);
+    }
+}
