@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
@@ -24,6 +25,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBufferPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizerTest.HeldUi;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 
 /**
  * {@link UnattachedDocumentSync} against a real JFace {@link Document} and a fake
@@ -182,8 +184,11 @@ class UnattachedDocumentSyncTest {
         neovim.runQueued();
         neovim.pushed.clear();
 
-        neovim.neovimChanged(buffer, new BufferChange(2, 3, List.of("GAMMA")));
-        neovim.runQueued();
+        try (ExpectedLog log = ExpectedLog.of(UnattachedDocumentSync.class)) {
+            neovim.neovimChanged(buffer, new BufferChange(2, 3, List.of("GAMMA")));
+            neovim.runQueued();
+            log.assertLogged(Level.WARNING, "does not fit the document");
+        }
 
         assertEquals("only\n", document.get());
         assertEquals(List.of(List.of("only")), neovim.pushed, "Neovim gets Eclipse's text, so they agree again");

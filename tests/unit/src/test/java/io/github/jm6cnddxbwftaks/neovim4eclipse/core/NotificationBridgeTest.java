@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 
@@ -60,7 +62,7 @@ class NotificationBridgeTest {
             @Override public Object onClipboardPaste(String register) {
                 events.add("paste" + register);
                 if ("!".equals(register)) {
-                    throw new IllegalStateException("the clipboard is gone");
+                    throw new IllegalStateException("the clipboard is gone (expected by the test)");
                 }
                 return List.of(List.of("pasted"), "v");
             }
@@ -69,7 +71,7 @@ class NotificationBridgeTest {
                         + (request.target().isEmpty() ? "" : " " + request.target())
                         + (request.first() > 0 ? " " + request.first() + "," + request.last() : "") + (request.force() ? "!" : ""));
                 if (bufnr == 13) {
-                    throw new IllegalStateException("workspace closed");
+                    throw new IllegalStateException("workspace closed (expected by the test)");
                 }
                 return bufnr == 7 ? DocumentWrite.Result.failed("read-only") : DocumentWrite.Result.saved("written");
             }
@@ -126,7 +128,10 @@ class NotificationBridgeTest {
     void hostCommandCarriesNameBangAndArguments() {
         notify("eclipse_command", "edit", false, List.of("my file.txt"));
         notify("eclipse_command", "quit", true, List.of());
-        notify("eclipse_command", "substitute", false, List.of()); // not Eclipse's: dropped
+        try (ExpectedLog log = ExpectedLog.of(NotificationBridge.class)) {
+            notify("eclipse_command", "substitute", false, List.of()); // not Eclipse's: dropped
+            log.assertLogged(Level.WARNING, "Eclipse cannot carry out :substitute");
+        }
         notify("eclipse_command", "quit");                          // malformed: dropped
         assertEquals(List.of("command:EDIT:[my file.txt]", "command:QUIT!:[]"), events);
     }
@@ -137,8 +142,12 @@ class NotificationBridgeTest {
         notify("eclipse_quickfix", "problems", "warning", true);
         notify("eclipse_quickfix", "tasks", "JM6,FIXME", false);
         notify("eclipse_quickfix", "problems");           // no argument, no bang
-        notify("eclipse_quickfix", "vimgrep", "", false); // not a kind of ours: dropped
-        notify("eclipse_quickfix");                       // malformed: dropped
+        try (ExpectedLog log = ExpectedLog.of(NotificationBridge.class)) {
+            notify("eclipse_quickfix", "vimgrep", "", false); // not a kind of ours: dropped
+            notify("eclipse_quickfix");                       // malformed: dropped
+            log.assertLogged(Level.WARNING, "Ignored eclipse_quickfix [vimgrep");
+            log.assertLogged(Level.WARNING, "Ignored eclipse_quickfix []");
+        }
         notify("eclipse_show_view", "tasks");
         notify("eclipse_show_view", "other");
         assertEquals(List.of("quickfix:PROBLEMS!:warning", "quickfix:TASKS:JM6,FIXME", "quickfix:PROBLEMS:",
@@ -292,7 +301,10 @@ class NotificationBridgeTest {
 
     @Test
     void aFailingClipboardPastesNothingInsteadOfThrowingAtNeovim() {
-        assertEquals(List.of(), paste("!"));
+        try (ExpectedLog log = ExpectedLog.of(NotificationBridge.class)) {
+            assertEquals(List.of(), paste("!"));
+            log.assertLogged(Level.WARNING, "Reading the system clipboard for Neovim failed");
+        }
     }
 
     @Test
@@ -307,7 +319,10 @@ class NotificationBridgeTest {
     void writeRequestsAnswerWithTheErrorOrTheMessage() {
         assertEquals(List.of("", "written", ""), request("eclipse_write", 3, " ++p"));
         assertEquals(List.of("read-only", "", ""), request("eclipse_write", 7L, ""));
-        assertEquals(List.of("Eclipse could not save the file: workspace closed", "", ""), request("eclipse_write", 13));
+        try (ExpectedLog log = ExpectedLog.of(NotificationBridge.class)) {
+            assertEquals(List.of("Eclipse could not save the file: workspace closed (expected by the test)", "", ""), request("eclipse_write", 13));
+            log.assertLogged(Level.WARNING, "Saving buffer 13 for Neovim failed");
+        }
         assertEquals(List.of("Eclipse got a write request without a buffer number", "", ""), request("eclipse_write"));
         assertEquals(List.of("", "written", ""), request("eclipse_write", 3, "", "copy", "/ws/p/other.txt"));
         assertEquals(List.of("", "written", ""), request("eclipse_write", 3, "", "append", "/ws/p/log.txt", 5L, 10L, true));
