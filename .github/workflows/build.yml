@@ -97,20 +97,26 @@ jobs:
         run: |
           nvim=$(java releng/UpdateNeovimDownloads.java install auto "$RUNNER_TEMP")
           echo "NVIM=$nvim" >> "$GITHUB_ENV"
-      # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
-      # test"); -Pui adds the UI tests, which are off by default because they open a window. They
-      # need an X display: xvfb-run provides a virtual one.
       # The release scripts run only at a tag (signing, the update site), so a mistake in one shows
-      # up late; shellcheck (on the runner image) reads them for the usual shell traps in a second:
-      # unquoted variables, bash syntax under #!/bin/sh, GNU-only flags. LikeCi runs the same.
+      # up late; shellcheck reads them for the usual shell traps in a second: unquoted variables,
+      # bash syntax under #!/bin/sh, GNU-only flags. LikeCi runs the same. It comes with the runner
+      # image today; installed if a new image drops it. Not at a release (skip-tests): the branch's
+      # Build linted this very commit, and a newer shellcheck in a new runner image, with a warning
+      # the old one did not have, must not stop a tagged release.
       - name: Lint the shell scripts
-        run: shellcheck releng/*.sh mvnw
+        if: ${{ !inputs.skip-tests }}
+        run: |
+          command -v shellcheck || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+          shellcheck releng/*.sh mvnw
       # xvfb-run comes with the runner image today; installed if a new image drops it. Its screen is
       # given, not left to the xvfb-run script's default, which differs between versions and decides
       # how much room the UI tests' windows get. java releng/tools/ci/LikeCi.java uses the same.
       - name: Make sure xvfb-run is there
         if: ${{ !inputs.skip-tests }}
         run: command -v xvfb-run || { sudo apt-get update && sudo apt-get install -y xvfb; }
+      # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
+      # test"); -Pui adds the UI tests, which are off by default because they open a window. They
+      # need an X display: xvfb-run provides a virtual one.
       - name: Build, unit and UI tests
         if: ${{ !inputs.skip-tests }}
         run: >
