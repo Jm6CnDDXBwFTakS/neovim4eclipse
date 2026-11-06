@@ -76,9 +76,13 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
     sum="shasum -a 256"   # macOS
 fi
+# The sed after the per-file sums: the lines must read "<hash><two spaces><path>". sha256sum in
+# Git for Windows (the CI runner's bash) defaults to binary mode and writes "<hash> *<path>",
+# which hashes to another value although every file's hash is right; the sed turns " *" back
+# into two spaces. --text would do it too, but GNU and macOS's shasum differ on it.
 actual_tree=$(cd "$folder/$top" && find . -type f ! -iname .DS_Store ! -iname Thumbs.db ! -iname desktop.ini ! -name '._*' \
     | sed 's|^\./||' | LC_ALL=C sort \
-    | tr '\n' '\0' | xargs -0 $sum | $sum | cut -d' ' -f1)
+    | tr '\n' '\0' | xargs -0 $sum | sed 's/^\([0-9a-f]\{64\}\) \*/\1  /' | $sum | cut -d' ' -f1)
 if [ "$actual_tree" != "$tree" ]; then
     echo "The unpacked $asset does not match its tree hash in the data file:" >&2
     echo "  expected $tree" >&2
