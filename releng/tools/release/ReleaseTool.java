@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -491,22 +492,23 @@ public final class ReleaseTool {
         Folders.deleteTree(folder);
         shell.out(List.of("gh", "release", "download", v.tag(), "--pattern", zip, "--pattern", zip + ".asc", "--dir", folder.toString()));
         String key = settings.get("signing.key");
-        if (Shell.onPath("bash") && Shell.onPath("gpg")) {
-            List<String> verifyZip = List.of("bash", "releng/verify-zip.sh", folder.resolve(zip).toString(), key);
+        Optional<Path> bash = shell.bash();
+        if (bash.isPresent() && Shell.onPath("gpg")) {
+            List<String> verifyZip = List.of(bash.get().toString(), "releng/verify-zip.sh", folder.resolve(zip).toString(), key);
             if (shell.show(verifyZip) != 0) {
                 throw new ToolFailure("the ZIP's signature does not verify (see above); do not announce the release");
             }
             Path site = folder.resolve("site");
             Folders.unzip(folder.resolve(zip), site);
             if (Shell.onPath("python3")) {
-                if (shell.show(List.of("bash", "releng/verify-signatures.sh", site.toString(), key)) != 0) {
+                if (shell.show(List.of(bash.get().toString(), "releng/verify-signatures.sh", site.toString(), key)) != 0) {
                     throw new ToolFailure("the jar signatures in the ZIP do not verify (see above); do not announce the release");
                 }
             } else {
                 System.out.println("note: no python3, so the jar signatures were not checked (releng/verify-signatures.sh)");
             }
         } else {
-            System.out.println("note: no bash or gpg here, so the signatures were not checked (releng/verify-zip.sh)");
+            System.out.println("note: no bash (on Windows: Git for Windows' bash) or gpg here, so the signatures were not checked (releng/verify-zip.sh)");
         }
 
         awaitSite(v);
