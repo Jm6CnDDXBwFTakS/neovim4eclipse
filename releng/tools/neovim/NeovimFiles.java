@@ -22,8 +22,8 @@ import common.Version;
  *
  *   ### Changed
  *
- *   - Get Neovim installs Neovim 0.13.0, which is also the oldest the plug-in runs (it was
- *     0.12.6). After updating the plug-in, Eclipse offers Get Neovim at its next start.
+ *   - *Get Neovim* installs Neovim 0.13.0, which is also the oldest the plug-in runs (it was
+ *     0.12.6). After updating the plug-in, Eclipse offers *Get Neovim* at its next start.
  * </pre>
  * What the new Neovim lets the plug-in drop or do better is added by hand, with those changes.
  */
@@ -49,8 +49,9 @@ public final class NeovimFiles {
 
     /** The changelog entry for a move from {@code from} to {@code to}, without its "- ". */
     public static String entry(Version from, Version to) {
-        return "Get Neovim installs Neovim " + to + ", which is also the oldest the plug-in runs (it was " + from
-                + "). After updating the plug-in, Eclipse offers Get Neovim at its next start.";
+        // *Get Neovim* in italics, as CHANGELOG.md and the README write the plug-in's menu entries.
+        return "*Get Neovim* installs Neovim " + to + ", which is also the oldest the plug-in runs (it was " + from
+                + "). After updating the plug-in, Eclipse offers *Get Neovim* at its next start.";
     }
 
     /**
