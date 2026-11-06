@@ -93,6 +93,10 @@ public record NeovimRelease(NeovimVersion version, Map<String, Archive> download
                 r = parse(new InputStreamReader(in, StandardCharsets.UTF_8));
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
+            } catch (IllegalArgumentException e) {
+                // Named, since NeovimVersion.MINIMUM is read from here when that class loads: the
+                // error then surfaces as "could not initialize class NeovimVersion".
+                throw new IllegalStateException("The plug-in's " + FILE + " is broken: " + e.getMessage(), e);
             }
             bundled = r;
         }
