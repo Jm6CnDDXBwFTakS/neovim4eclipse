@@ -49,10 +49,12 @@ echo "Neovim $version for $code: $url" >&2
 curl -fsSL -o "$archive" "$url"
 
 actual_size=$(wc -c < "$archive" | tr -d ' ')
+# From standard input, not by name: GNU sha256sum escapes a name holding a backslash and then
+# starts its line with a backslash too ("\4e12..."), and on Windows $RUNNER_TEMP is D:\a\_temp.
 if command -v sha256sum >/dev/null 2>&1; then
-    actual_sha=$(sha256sum "$archive" | cut -d' ' -f1)
+    actual_sha=$(sha256sum < "$archive" | cut -d' ' -f1)
 else
-    actual_sha=$(shasum -a 256 "$archive" | cut -d' ' -f1)   # macOS
+    actual_sha=$(shasum -a 256 < "$archive" | cut -d' ' -f1)   # macOS
 fi
 if [ "$actual_size" != "$size" ] || [ "$actual_sha" != "$sha" ]; then
     echo "$asset does not match the data file:" >&2
