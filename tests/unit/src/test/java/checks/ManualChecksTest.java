@@ -279,6 +279,16 @@ class ManualChecksTest {
         assertTrue(again.indexOf("-uninstallIU") < again.indexOf("-installIU"));
     }
 
+    /** --workspace names a folder under the root, so the running check sees an Eclipse there. */
+    @Test
+    void aWorkspaceIsAFolderNameUnderTheRoot() {
+        assertTrue(ManualChecks.Options.isWorkspaceName("ws2"));
+        assertTrue(ManualChecks.Options.isWorkspaceName("ws-3.b_c"));
+        for (String outside : new String[] { "/tmp/ws", "../ws", "a/b", "a\\b", "..", ".", "", "C:ws" }) {
+            assertFalse(ManualChecks.Options.isWorkspaceName(outside), outside);
+        }
+    }
+
     /** A workspace whose lock someone holds is in use; without a lock file, or once released, it is not. */
     @Test
     void aHeldWorkspaceLockMeansAnEclipseRunsThere(@TempDir Path workspace) throws IOException {

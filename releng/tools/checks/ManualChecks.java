@@ -526,7 +526,18 @@ public final class ManualChecks {
                     }
                 }
             }
+            if (!isWorkspaceName(workspace)) {
+                // A path elsewhere would escape the root, and with it the check that no Eclipse
+                // runs from the copy before it is replaced (ChecksEclipse.refuseWhileRunning
+                // looks only at the root's own folders).
+                fail("--workspace takes a folder name under the root, such as ws2, not " + workspace);
+            }
             return new Options(card, since, all, root.toAbsolutePath(), eclipse, zip, ownEclipse, workspace, yes);
+        }
+
+        /** A plain folder name: {@code ws2}, not {@code /tmp/ws}, {@code ../ws} or {@code a/b}. */
+        static boolean isWorkspaceName(String name) {
+            return name.matches("[A-Za-z0-9][A-Za-z0-9._-]*") && !name.contains("..");
         }
 
         private static String value(String[] args, int i) {
