@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import common.Shell;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 
 /**
  * The repository's own files, for the tests that read the whole repository (the folder name in
@@ -65,12 +66,14 @@ public final class RepositoryFiles {
      * nor anything else of this one.
      */
     static Optional<List<String>> fromGit(Path root) {
+        // The project's one rule for "the same folder" (util/FilePaths): git prints C:/Users/... on
+        // Windows, and /private/var/... for /var/... on macOS.
         Optional<String> top = git(root, "rev-parse", "--show-toplevel");
         try {
-            if (top.isEmpty() || !Path.of(top.get().strip()).toRealPath().equals(root.toRealPath())) {
+            if (top.isEmpty() || !FilePaths.same(Path.of(top.get().strip()), root)) {
                 return Optional.empty();
             }
-        } catch (IOException | InvalidPathException e) {
+        } catch (InvalidPathException e) {
             return Optional.empty();
         }
         // -z: names end with NUL and are never quoted, so a name with a space or an umlaut reads as it is.
