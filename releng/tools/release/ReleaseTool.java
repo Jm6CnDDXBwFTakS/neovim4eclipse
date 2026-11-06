@@ -334,24 +334,23 @@ public final class ReleaseTool {
             return;
         }
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        String newChangelog = ReleaseFiles.hasRelease(changelog, v) ? changelog : ReleaseFiles.datedChangelog(changelog, v, today);
+        boolean dated = ReleaseFiles.hasRelease(changelog, v);
+        String newChangelog = dated ? changelog : ReleaseFiles.datedChangelog(changelog, v, today);
         String newReadme = ReleaseFiles.readmeWithVersion(readme, v);
-        if (options.mode() == Ask.Mode.DRY_RUN) {
-            System.out.println("[dry run] would date the changelog \"## [" + v + "] - " + today + "\", set the README's status to " + v + ", and commit");
-            return;
+        List<String> plan = new ArrayList<>();
+        if (!dated) {
+            plan.add("CHANGELOG.md: ## [Unreleased] becomes ## [" + v + "] - " + today + ", under a new, empty ## [Unreleased]");
         }
-        write("CHANGELOG.md", newChangelog);
-        write("README.md", newReadme);
-        shell.show(List.of("git", "--no-pager", "diff", "--", "CHANGELOG.md", "README.md"));
-        try {
-            git.commit(ask, "Release " + v + ": date its changelog section, name it in the README",
-                    settings.get("commit.trailer", ""), ReleaseFiles.RELEASE_NOTES_FILES);
-        } catch (ToolFailure f) {
-            // Back as they were, so that the step can simply be run again (it wants a clean tree).
-            write("CHANGELOG.md", changelog);
-            write("README.md", readme);
-            throw new ToolFailure(f.getMessage() + " CHANGELOG.md and README.md are as they were.");
-        }
+        plan.add("README.md: **Status: " + ReleaseFiles.readmeVersion(readme) + ", … becomes **Status: " + v + ", …");
+        String trailer = settings.get("commit.trailer", "");
+        String message = "Release " + v + ": date its changelog section, name it in the README";
+        git.editAndCommit(ask, "Date the changelog section and name " + v + " in the README, then commit", plan,
+                trailer.isEmpty() ? message : message + "\n\n" + trailer, () -> {
+                    write("CHANGELOG.md", newChangelog);
+                    write("README.md", newReadme);
+                    shell.show(List.of("git", "--no-pager", "diff", "--stat", "--", "CHANGELOG.md", "README.md"));
+                    return ReleaseFiles.RELEASE_NOTES_FILES;
+                });
     }
 
     // ---------------------------------------------------------------- promote
@@ -645,31 +644,32 @@ public final class ReleaseTool {
      */
     private void cutNextBranch(Version next, String branch, String main, boolean exists) {
         String message = "Start " + next + ": set the version to " + next.snapshot();
+        String trailer = settings.get("commit.trailer", "");
         List<String> setVersion = Shell.maven("-q", "-B", "-ntp", "org.eclipse.tycho:tycho-versions-plugin:set-version",
                 "-DnewVersion=" + next.snapshot());
-        List<String> details = List.of(exists ? "git switch " + branch : "git switch -c " + branch + " " + short7(main),
-                Shell.display(setVersion), "git commit -m \"" + message + "\"  (in UTC)");
-        if (!ask.confirm("Cut " + branch + " from origin/main, set its version to " + next.snapshot() + " and commit", details)) {
-            return;
-        }
+        List<String> plan = List.of(exists ? "git switch " + branch : "git switch -c " + branch + " " + short7(main),
+                Shell.display(setVersion));
         String before = git.branch();
         try {
-            git.out(exists ? new String[] {"switch", "-q", branch} : new String[] {"switch", "-q", "-c", branch, main});
-            if (shell.show(setVersion) != 0 || !pomVersionText().equals(next.snapshot())) {
-                throw new ToolFailure("setting the version to " + next.snapshot() + " failed (see above)");
-            }
-            String trailer = settings.get("commit.trailer", "");
-            git.commitNow(trailer.isEmpty() ? message : message + "\n\n" + trailer, git.out("diff", "--name-only").lines().toList());
+            git.editAndCommit(ask, "Cut " + branch + " from origin/main, set its version to " + next.snapshot() + " and commit", plan,
+                    trailer.isEmpty() ? message : message + "\n\n" + trailer, () -> {
+                        git.out(exists ? new String[] {"switch", "-q", branch} : new String[] {"switch", "-q", "-c", branch, main});
+                        if (shell.show(setVersion) != 0 || !pomVersionText().equals(next.snapshot())) {
+                            throw new ToolFailure("setting the version to " + next.snapshot() + " failed (see above)");
+                        }
+                        return git.out("diff", "--name-only").lines().toList();
+                    });
         } catch (ToolFailure f) {
-            // The tree was clean before (requireClean), so a hard reset drops only this step's edits.
-            git.ok("reset", "-q", "--hard", "HEAD");
-            if (!before.isEmpty() && !before.equals(branch)) {
-                git.ok("switch", "-q", before);
-                if (!exists) {
-                    git.ok("branch", "-q", "-D", branch);
-                }
+            // editAndCommit put the files back; the branch switch is this step's own to undo. A stop
+            // at the question switched nothing, and its message stands as it is.
+            if (before.isEmpty() || git.branch().equals(before)) {
+                throw f;
             }
-            throw new ToolFailure(f.getMessage() + " Nothing of it was kept; back on " + (before.isEmpty() ? "the commit before" : before) + ".");
+            git.ok("switch", "-q", before);
+            if (!exists) {
+                git.ok("branch", "-q", "-D", branch);
+            }
+            throw new ToolFailure(f.getMessage() + " Back on " + before + (exists ? "." : ", and " + branch + " is deleted again."));
         }
     }
 

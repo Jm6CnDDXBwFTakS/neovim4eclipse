@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,8 +25,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import common.Ask;
 import common.Folders;
+import common.Git;
 import common.GitHub;
 import common.Settings;
+import common.Shell;
 import common.ToolFailure;
 import common.Version;
 import release.Options;
@@ -240,6 +243,55 @@ class ReleaseToolTest {
         assertTrue(run.passed());
         assertFalse(GitHub.parseRun("42\tin_progress\t\thttps://x\tpush\tmain").orElseThrow().passed());
         assertTrue(GitHub.parseRun("not a run").isEmpty());
+    }
+
+    /** A repository of one commit in {@code dir}, with a user of its own; false when git is not installed. */
+    private static boolean repository(Path dir) throws Exception {
+        Shell shell = new Shell(dir);
+        for (List<String> c : List.of(List.of("git", "init", "-q"), List.of("git", "config", "user.name", "Test"),
+                List.of("git", "config", "user.email", "test@example.invalid"))) {
+            if (!shell.capture(c).ok()) {
+                return false;
+            }
+        }
+        Files.writeString(dir.resolve("a.txt"), "one\n");
+        return shell.capture(List.of("git", "add", "a.txt")).ok() && shell.capture(List.of("git", "commit", "-q", "-m", "first")).ok();
+    }
+
+    @Test
+    void anEditThatFailsLeavesTheTreeAsItWas(@TempDir Path dir) throws Exception {
+        assumeTrue(repository(dir), "git is not installed");
+        Git git = new Git(new Shell(dir));
+        Ask yes = new Ask(Ask.Mode.YES, "rerun");
+        assertThrows(ToolFailure.class, () -> git.editAndCommit(yes, "Edit", List.of(), "second", () -> {
+            try {
+                Files.writeString(dir.resolve("a.txt"), "two\n");
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+            throw new ToolFailure("the edit failed halfway");
+        }));
+        assertTrue(git.isClean(), "the half edit is gone");
+        assertEquals("one\n", Files.readString(dir.resolve("a.txt")));
+    }
+
+    @Test
+    void anEditIsCommittedInUtc(@TempDir Path dir) throws Exception {
+        assumeTrue(repository(dir), "git is not installed");
+        Git git = new Git(new Shell(dir));
+        assertTrue(git.editAndCommit(new Ask(Ask.Mode.YES, "rerun"), "Edit", List.of(), "second", () -> {
+            try {
+                Files.writeString(dir.resolve("a.txt"), "two\n");
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+            return List.of("a.txt");
+        }));
+        assertTrue(git.isClean());
+        assertEquals("second +0000", git.out("log", "-1", "--format=%s %ad", "--date=format:%z"));
+        assertFalse(git.editAndCommit(new Ask(Ask.Mode.DRY_RUN, "rerun"), "Edit", List.of(), "third", () -> {
+            throw new AssertionError("a dry run edits nothing");
+        }));
     }
 
     @Test
