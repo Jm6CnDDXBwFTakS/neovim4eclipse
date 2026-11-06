@@ -125,6 +125,7 @@ jobs:
           # from below, since only the update site is given to p2.
           - eclipse: '4.34'
             platform-url: https://download.eclipse.org/eclipse/downloads/drops4/R-4.34-202411201800/eclipse-platform-4.34-linux-gtk-x86_64.tar.gz
+            platform-sha512: a3464f0b262625d5366d57307bccee3bddeffcf3f8655bdb9952df2ef8f64d75b5710110d017b3993558a5e3f002a7dc07d3620192c261971f0a18ca0b4d3038
           # The newest Eclipse release, the top of the range the Marketplace listing ticks. Pinned
           # rather than looked up, so a release never fails because Eclipse shipped that day; move
           # it to each new release (docs/UPGRADING.md, "Eclipse"), then tick that release in the
@@ -132,6 +133,7 @@ jobs:
           # ("releases", newest first).
           - eclipse: '4.41'
             platform-url: https://download.eclipse.org/eclipse/downloads/drops4/R-4.41-202608281142/eclipse-platform-4.41-linux-gtk-x86_64.tar.gz
+            platform-sha512: dd4e732816280fb596f1c279f355e2e531668f98c896845ab21d268e3cab30233980bfdd9e5de7b5757f7098194f5dfe8a63b43b9e7da506382a60ee9be84048
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Java 21 for both: the plug-in needs it, Eclipse 4.34's eclipse.ini does not start on Java
@@ -143,12 +145,19 @@ jobs:
       - name: Download Eclipse Platform ${{ matrix.eclipse }}
         env:
           PLATFORM_URL: ${{ matrix.platform-url }}
+          PLATFORM_SHA512: ${{ matrix.platform-sha512 }}
         # Eclipse moves older drops from download.eclipse.org to archive.eclipse.org, so a pinned
         # URL there stops working one day; archive.eclipse.org keeps every drop, so it is the fallback.
         run: |
           curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/platform.tar.gz" "$PLATFORM_URL" \
             || curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/platform.tar.gz" \
                  "${PLATFORM_URL/download.eclipse.org/archive.eclipse.org}"
+          # Pinned, as Eclipse publishes it (<drop>/eclipse-<version>-checksums, or checksum/ for
+          # older drops): the director then runs an Eclipse whose bytes are known, from either host.
+          actual=$(sha512sum "$RUNNER_TEMP/platform.tar.gz" | cut -d ' ' -f 1)
+          if [ "$actual" != "$PLATFORM_SHA512" ]; then
+            echo "::error::the Eclipse Platform download has SHA-512 $actual, not the pinned $PLATFORM_SHA512"; exit 1
+          fi
           tar -xzf "$RUNNER_TEMP/platform.tar.gz" -C "$RUNNER_TEMP"
       # Pages can take a moment to serve a new deployment; wait until the newest release answers.
       - name: Wait for the new site

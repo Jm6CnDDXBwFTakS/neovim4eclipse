@@ -25,7 +25,7 @@ The safe loop for any upgrade:
 | What | Source of truth | Copies (checked by `VersionConsistencyTest` unless noted) |
 |------|-----------------|-----------------------------------------------------------|
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
-| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and the 4.34 `platform-url` of the smoke test in `update-site.yml` |
+| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and the 4.34 `platform-url` and `platform-sha512` of the smoke test in `update-site.yml` |
 | Eclipse release (newest tested) | the second `platform-url` (4.41) in the `smoke` job of `.github/workflows/update-site.yml` | not checked; see "Eclipse release", *Newest release* |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
@@ -100,10 +100,12 @@ To raise it (example: 2024-12 to 2025-12):
    resolved, for example `3.14.200.v20240915-0736` means `3.14.200`; the same for `org.eclipse.swt`
    and the others), or open the release's `plugins/` folder on download.eclipse.org. Nothing checks
    this automatically: a mismatch only means these tests run against slightly different jars.
-5. Set the 4.34 entry of the `smoke` job's matrix in `.github/workflows/update-site.yml` (`eclipse`
-   and `platform-url`) to that release's Eclipse Platform download for Linux x86_64 (from
-   <https://download.eclipse.org/eclipse/downloads/>): the update site's smoke test installs into it,
-   so it must be the oldest supported release too.
+5. Set the 4.34 entry of the `smoke` job's matrix in `.github/workflows/update-site.yml` (`eclipse`,
+   `platform-url` and `platform-sha512`) to that release's Eclipse Platform download for Linux x86_64
+   (from <https://download.eclipse.org/eclipse/downloads/>): the update site's smoke test installs
+   into it, so it must be the oldest supported release too. The SHA-512 is the file's line in the
+   drop's `eclipse-<version>-checksums` (older drops: `checksum/eclipse-<version>-SUMSSHA512`). Set
+   the same three in `.github/workflows/rehearse-release.yml` (`RehearsalTest` checks they agree).
 6. Run everything, then try the ZIP in that Eclipse and in the newest one.
 
 **Newest release.** The smoke test's second entry is the newest Eclipse release, so a release of the
@@ -113,7 +115,11 @@ new Eclipse ships (every March, June, September and December), as its own commit
 1. Find the new drop in <https://download.eclipse.org/eclipse/downloads/data.json>: the first entry
    of `"releases"`, for example `drops4/R-4.41-202608281142`. The download is
    `<that path>/eclipse-platform-4.41-linux-gtk-x86_64.tar.gz`.
-2. Set `eclipse` and `platform-url` of the second matrix entry. Check that release's `eclipse.ini`
+2. Set `eclipse`, `platform-url` and `platform-sha512` of the second matrix entry, in
+   `update-site.yml` and `rehearse-release.yml`. The SHA-512 is the download's line in
+   `<that path>/eclipse-4.41-checksums`, for example
+   `curl -sSfL https://download.eclipse.org/eclipse/downloads/drops4/R-4.41-202608281142/eclipse-4.41-checksums | grep platform-4.41-linux-gtk-x86_64`.
+   Check that release's `eclipse.ini`
    still accepts the Java in `.java-version` (`-Dosgi.requiredJavaVersion`).
 3. Try it locally before the next release, with `releng/smoke-install.sh` against the live site
    (docs/PACKAGING.md), then tick the release in the Marketplace listing.
