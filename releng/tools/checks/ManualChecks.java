@@ -50,6 +50,10 @@ import java.util.stream.Stream;
  * when its areas say {@code always}. Example: a release that changed only {@code util/StatusLineFormat.java}
  * needs the release cards and nothing about Get Neovim or the {@code :} box. The changed files are
  * {@code git diff --name-only <tag>}: the commits since the tag and what is not committed yet.
+ * A build file whose only change is the version number does not count
+ * ({@link #onlyTheVersionChanged}): each release branch starts by setting it in eleven POMs,
+ * manifests and the feature, and cards that list {@code /pom.xml} (for an Eclipse or SWT upgrade)
+ * would otherwise come up at every release.
  *
  * <p>The parts that decide (parsing, globs, {@code due}, the HTML for {@code json}) are plain static
  * methods, tested in {@code tests/unit} ({@code ManualChecksTest}); {@link #main} only runs them.
@@ -243,6 +247,39 @@ public final class ManualChecks {
                     .findFirst().ifPresent(path -> due.put(card, path));
         }
         return due;
+    }
+
+    /** The build files whose version a release sets ({@code tycho-versions-plugin:set-version}). */
+    static final Set<String> VERSIONED_FILES = Set.of("pom.xml", "MANIFEST.MF", "feature.xml");
+
+    /** A version as the build files spell it: {@code 0.2.3}, {@code 0.2.3-SNAPSHOT}, {@code 0.2.3.qualifier}. */
+    private static final Pattern VERSION_TEXT = Pattern.compile("\\d+\\.\\d+\\.\\d+(?:-SNAPSHOT|\\.qualifier)?");
+
+    /**
+     * Whether {@code diff} ({@code git diff -U0} of one file) changes nothing but version numbers:
+     * the removed and the added lines are the same once every version is blanked out. Example,
+     * the start of a release branch:
+     * <pre>
+     *   -  &lt;version&gt;0.2.2-SNAPSHOT&lt;/version&gt;
+     *   +  &lt;version&gt;0.2.3-SNAPSHOT&lt;/version&gt;
+     * </pre>
+     * Only for {@link #VERSIONED_FILES}: in a source file, a changed version number (the minimum
+     * Neovim, say) is a change of behavior.
+     */
+    static boolean onlyTheVersionChanged(String diff) {
+        List<String> removed = new ArrayList<>();
+        List<String> added = new ArrayList<>();
+        for (String line : diff.lines().toList()) {
+            if (line.startsWith("---") || line.startsWith("+++")) {
+                continue;
+            }
+            if (line.startsWith("-")) {
+                removed.add(VERSION_TEXT.matcher(line.substring(1)).replaceAll("<version>"));
+            } else if (line.startsWith("+")) {
+                added.add(VERSION_TEXT.matcher(line.substring(1)).replaceAll("<version>"));
+            }
+        }
+        return !removed.isEmpty() && removed.equals(added);
     }
 
     /** Area globs that match none of {@code files}: a renamed or deleted file a card still names. */
@@ -555,10 +592,16 @@ public final class ManualChecks {
         }
         String since = options.since() != null ? options.since()
                 : git("describe", "--tags", "--abbrev=0", "--match", "v*", "HEAD").strip();
-        List<String> changed = git("diff", "--name-only", since).lines().filter(l -> !l.isBlank()).toList();
+        List<String> changed = new ArrayList<>();
+        List<String> versionOnly = new ArrayList<>();
+        for (String file : git("diff", "--name-only", since).lines().filter(l -> !l.isBlank()).toList()) {
+            boolean versioned = VERSIONED_FILES.contains(file.substring(file.lastIndexOf('/') + 1));
+            (versioned && onlyTheVersionChanged(git("diff", "-U0", since, "--", file)) ? versionOnly : changed).add(file);
+        }
         Map<Card, String> due = due(cards, changed);
         System.out.println(due.size() + " of " + cards.size() + " cards are due: " + changed.size()
-                + " files changed since " + since + ".\n");
+                + " files changed since " + since + (versionOnly.isEmpty() ? "" : " (and " + versionOnly.size()
+                        + " build files only in their version, which counts for no card)") + ".\n");
         due.forEach((card, why) -> System.out.println(line(card,
                 why.equals(ALWAYS) ? "every release" : why.replace(PLUGIN_SOURCES, "") + " changed")));
     }
