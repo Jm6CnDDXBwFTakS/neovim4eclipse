@@ -4,7 +4,6 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.testing;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -15,8 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+
+import common.Shell;
 
 /**
  * The repository's own files, for the tests that read the whole repository (the folder name in
@@ -43,8 +42,6 @@ public final class RepositoryFiles {
 
     /** The folders the walk without git leaves out: Git's own, build output, and tools' copies. */
     static final Set<String> SKIPPED_FOLDERS = Set.of(".git", "target", "bin", "node_modules", ".claude");
-
-    private static final long GIT_SECONDS = 60;
 
     private RepositoryFiles() {
     }
@@ -89,34 +86,16 @@ public final class RepositoryFiles {
         });
     }
 
-    /** What {@code git -C root <args>} prints, or empty when it fails or git is missing. */
+    /**
+     * What {@code git -C root <args>} prints, or empty when it fails, git is missing, or it gives no
+     * answer within {@link TestWait#duration} (a lock, a credential prompt). Run through the
+     * Release tool's {@code common.Shell}, which {@code tests/unit} compiles with its tests.
+     */
     private static Optional<String> git(Path root, String... args) {
         List<String> command = new ArrayList<>(List.of("git", "-C", root.toString()));
         command.addAll(List.of(args));
-        ProcessBuilder pb = new ProcessBuilder(command);
-        try {
-            Process git = pb.start();
-            git.getOutputStream().close();
-            CompletableFuture<byte[]> err = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return git.getErrorStream().readAllBytes(); // drained so git never blocks on it
-                } catch (IOException e) {
-                    return new byte[0];
-                }
-            });
-            String out = new String(git.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            if (!git.waitFor(GIT_SECONDS, TimeUnit.SECONDS)) {
-                git.destroyForcibly();
-                return Optional.empty();
-            }
-            err.join();
-            return git.exitValue() == 0 ? Optional.of(out) : Optional.empty();
-        } catch (IOException e) {
-            return Optional.empty(); // no git on PATH
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        }
+        Shell.Result r = new Shell(root).capture(command, TestWait.duration());
+        return r.ok() ? Optional.of(r.out()) : Optional.empty();
     }
 
     /** The files under {@code root}, outside {@link #SKIPPED_FOLDERS}. */
