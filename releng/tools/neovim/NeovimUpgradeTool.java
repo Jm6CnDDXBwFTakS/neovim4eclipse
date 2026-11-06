@@ -80,8 +80,8 @@ public final class NeovimUpgradeTool {
         this.root = root;
         this.shell = new Shell(root);
         this.git = new Git(shell);
-        // The commit trailer and the like are the Release tool's settings, shared by the tools.
-        this.settings = Settings.load(root.resolve("releng/tools/release"), Map.of());
+        // The settings every tool shares (commit.trailer); this tool has none of its own.
+        this.settings = Settings.load(List.of(root.resolve(Settings.COMMON)), Map.of());
         this.ask = ask;
         this.target = target;
         this.allowYoung = allowYoung;
