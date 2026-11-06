@@ -444,7 +444,10 @@ public final class ReleaseTool {
         Set<Long> older = Set.of(); // the tag on origin already: follow the run that is there
         if (tagged == null) {
             older = gh.runIds(workflow, main, "push", v.tag());
-            boolean tested = gh.runs(settings.get("build.workflow"), main, "push", "main").stream().anyMatch(GitHub.Run::passed);
+            // As the Release workflow counts them: a push or a Run workflow (workflow_dispatch) on main.
+            String build = settings.get("build.workflow");
+            boolean tested = gh.runs(build, main, "push", "main").stream().anyMatch(GitHub.Run::passed)
+                    || gh.runs(build, main, "workflow_dispatch", "main").stream().anyMatch(GitHub.Run::passed);
             List<String> commands = List.of("git tag " + v.tag() + " " + main.substring(0, 12), "git push origin " + v.tag());
             if (!tested) {
                 System.out.println("note: no green Build on main for " + main.substring(0, 7) + ", so the Release workflow runs every test itself");
