@@ -36,4 +36,13 @@ public record ReleaseState(Version version, boolean tested, boolean prepared, bo
         }
         return prepared ? "promote" : "prepare";
     }
+
+    /**
+     * The line that ends the status and every step: the command for {@link #nextStep}, or that the
+     * release is done. For example {@code Next step: java releng/tools/release/Release.java promote}.
+     */
+    public String nextLine(String tool) {
+        String step = nextStep();
+        return step.equals("done") ? "Release " + version + " is done." : "Next step: java " + tool + " " + step;
+    }
 }
