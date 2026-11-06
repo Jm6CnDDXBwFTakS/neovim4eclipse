@@ -11,9 +11,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -50,10 +54,13 @@ import java.util.zip.ZipInputStream;
  * <h2>{@code install <code> <folder>}</h2>
  * Downloads the pinned archive for one platform ({@code lx la mx ma wx wa}, or {@code auto} for the
  * machine it runs on), checks its size, its SHA-256 and the tree hash of the files inside it against
- * the data file, unpacks it into {@code <folder>} and checks the unpacked files' tree hash again, runs
+ * the data file, unpacks it into {@code <folder>} (through {@code <top>.unpacking}, replacing an older
+ * copy whole) and checks the unpacked files' tree hash again, runs
  * {@code nvim --version}, and prints the program's path (and nothing else) on standard output. Every
  * CI job gets its Neovim this way, so CI tests exactly the Neovim that <i>Get Neovim</i> installs
- * and checks the files GitHub serves now against the pin. Example, in a workflow step:
+ * and checks the files GitHub serves now against the pin. A copy already in {@code <folder>} whose
+ * files have the pinned tree hash (an earlier LikeCi run) is kept, with no download; a CI runner
+ * starts empty, so CI always downloads. Example, in a workflow step:
  * <pre>
  *   nvim=$(java releng/UpdateNeovimDownloads.java install auto "$RUNNER_TEMP")
  *   # /home/runner/work/_temp/nvim-linux-x86_64/bin/nvim
@@ -364,9 +371,21 @@ public final class UpdateNeovimDownloads {
         String sha = required(current, code + ".sha256");
         String tree = required(current, code + ".tree");
         String url = URL_TEMPLATE.replace("{version}", version).replace("{asset}", asset);
+        boolean zip = asset.endsWith(".zip");
+        String top = asset.substring(0, asset.length() - (zip ? ".zip".length() : ".tar.gz".length()));
         Files.createDirectories(folder);
-        Path archive = folder.resolve(asset);
+        Path home = folder.resolve(top);
+        Path program = home.resolve("bin").resolve(code.startsWith("w") ? "nvim.exe" : "nvim");
         System.err.println("Neovim " + version + " for " + code + ": " + url);
+        // Already there from an earlier run (LikeCi installs into the same target/like-ci each time):
+        // kept when its files have the pinned tree hash, so a local run needs no download. A CI runner
+        // starts empty, so CI always downloads, and checks what GitHub serves now against the pin.
+        if (treeHashOrNull(home) instanceof String there && there.equals(tree)) {
+            System.err.println("  already in " + home + ", tree " + tree + " (matches)");
+            System.err.println("  " + firstLine(program));
+            return program.toAbsolutePath();
+        }
+        Path archive = folder.resolve(asset);
         String downloaded = downloadWithRetries(url, archive);
         long actualSize = Files.size(archive);
         if (actualSize != size || !downloaded.equalsIgnoreCase(sha)) {
@@ -374,7 +393,6 @@ public final class UpdateNeovimDownloads {
                     + "; got " + actualSize + " bytes, sha256 " + downloaded);
         }
         System.err.println("  " + size + " bytes, sha256 " + sha + " (matches)");
-        boolean zip = asset.endsWith(".zip");
         String inArchive;
         try (InputStream in = Files.newInputStream(archive)) {
             inArchive = treeHash(zip ? zipFiles(in) : tarFiles(in));
@@ -382,22 +400,76 @@ public final class UpdateNeovimDownloads {
         if (!inArchive.equals(tree)) {
             throw new Failure("the files in " + asset + " have tree hash " + inArchive + ", not the pinned " + tree);
         }
-        String top = asset.substring(0, asset.length() - (zip ? ".zip".length() : ".tar.gz".length()));
-        Path home = folder.resolve(top);
+        // Unpacked into a folder of its own first, then moved into place: a copy left from an older
+        // release (a file the new one dropped, a running nvim.exe on Windows) is replaced whole, never
+        // mixed with the new files, and an entry outside the archive's top folder (an absolute name,
+        // another top folder) shows as a second entry in that folder and fails, instead of landing
+        // beside it unchecked.
+        Path staging = folder.resolve(top + ".unpacking");
+        deleteTree(staging);
+        Files.createDirectories(staging);
         if (zip) {
-            unzip(archive, folder);
+            unzip(archive, staging);
         } else {
-            untar(archive, folder);
+            untar(archive, staging);
         }
-        String unpacked = treeHash(filesIn(home));
+        List<String> unpackedNames;
+        try (var list = Files.list(staging)) {
+            unpackedNames = list.map(f -> f.getFileName().toString()).sorted().toList();
+        }
+        if (!unpackedNames.equals(List.of(top))) {
+            throw new Failure(asset + " unpacked to " + unpackedNames + ", not the one folder " + top);
+        }
+        String unpacked = treeHash(filesIn(staging.resolve(top)));
         if (!unpacked.equals(tree)) {
-            throw new Failure("the unpacked files in " + home + " have tree hash " + unpacked + ", not the pinned "
+            throw new Failure("the unpacked files of " + asset + " have tree hash " + unpacked + ", not the pinned "
                     + tree + " (a full disk, or a file changed meanwhile?)");
         }
+        deleteTree(home);
+        Files.move(staging.resolve(top), home);
+        deleteTree(staging);
+        Files.delete(archive);
         System.err.println("  tree " + tree + " (matches, in the archive and unpacked)");
-        Path program = home.resolve("bin").resolve(code.startsWith("w") ? "nvim.exe" : "nvim");
         System.err.println("  " + firstLine(program));
         return program.toAbsolutePath();
+    }
+
+    /** The tree hash of the files in {@code home}, or null when there is no such folder or it holds a link. */
+    private static String treeHashOrNull(Path home) throws IOException {
+        if (!Files.isDirectory(home, LinkOption.NOFOLLOW_LINKS)) {
+            return null;
+        }
+        try {
+            return treeHash(filesIn(home));
+        } catch (Failure linkInside) {
+            return null;
+        }
+    }
+
+    /**
+     * Deletes {@code root} and everything below it, if it is there. Links are deleted, never
+     * followed ({@link Files#walkFileTree} does not follow them), so nothing outside is touched.
+     */
+    private static void deleteTree(Path root) throws IOException {
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException e) throws IOException {
+                if (e != null) {
+                    throw e;
+                }
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     /** Downloads {@code url} into {@code file}, tried {@link #DOWNLOAD_ATTEMPTS} times; its SHA-256. */

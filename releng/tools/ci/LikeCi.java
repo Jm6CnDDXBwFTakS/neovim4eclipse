@@ -32,7 +32,9 @@ import java.util.stream.Stream;
  *   <li><b>Installs the pinned Neovim into {@code target/like-ci/}</b> with
  *       {@code java releng/UpdateNeovimDownloads.java install auto}, the command CI uses: the release
  *       Get Neovim installs, checked. Not the developer's own dedicated Neovim, whose path the
- *       plug-in would treat differently; CI's Neovim is a program outside the plug-in's folder.</li>
+ *       plug-in would treat differently; CI's Neovim is a program outside the plug-in's folder.
+ *       Kept between runs while its files have the pinned tree hash, so only the first run (and the
+ *       first after a Neovim upgrade) downloads it.</li>
  *   <li><b>Runs CI's Maven commands</b> ({@link #UI}, then {@link #INTEGRATION}) with
  *       {@code -Dnvim.path} set to it, from the repository's root, so everything is compiled first,
  *       as in CI (a change that does not compile fails here, not on GitHub). On Linux under
@@ -155,10 +157,24 @@ public final class LikeCi {
         return new ProcessBuilder(command).directory(root.toFile()).inheritIO().start().waitFor();
     }
 
+    /**
+     * Whether {@code program} is on {@code PATH}, as the shell would find it: on Windows also with
+     * each of {@code PATHEXT}'s extensions ({@code shellcheck} is {@code shellcheck.exe} there).
+     */
     private static boolean onPath(String program) {
+        List<String> names = new ArrayList<>(List.of(program));
+        if (WINDOWS) {
+            for (String ext : System.getenv().getOrDefault("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")) {
+                if (!ext.isBlank()) {
+                    names.add(program + ext.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
         for (String dir : System.getenv().getOrDefault("PATH", "").split(File.pathSeparator)) {
-            if (!dir.isEmpty() && Files.isExecutable(Path.of(dir, program))) {
-                return true;
+            for (String name : names) {
+                if (!dir.isEmpty() && Files.isRegularFile(Path.of(dir, name)) && Files.isExecutable(Path.of(dir, name))) {
+                    return true;
+                }
             }
         }
         return false;

@@ -25,7 +25,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 
 **Before a push, run `java releng/tools/ci/LikeCi.java`** (from the repository's root). It runs the
 tests as the *Build* workflow on GitHub does: it installs the pinned Neovim under `target/like-ci/`
-with CI's own command, runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
+with CI's own command (downloaded once, kept while its files match the pin), runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
 lists what each module skipped. A failure that only CI would show shows up here first, a change
 that does not compile included. `--all` runs every test group (`-Pall`) the same way, for a
 release. `LikeCiTest` keeps its commands equal to the workflow's.
