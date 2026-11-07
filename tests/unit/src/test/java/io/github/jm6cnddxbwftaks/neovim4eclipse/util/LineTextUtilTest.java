@@ -167,16 +167,6 @@ class LineTextUtilTest {
     }
 
     @Test
-    void aLineWithACarriageReturnOrNewlineHoldsALineBreak() {
-        assertTrue(LineTextUtil.holdsLineBreak(List.of("a", "\rb")), "Ctrl-V Ctrl-M");
-        assertTrue(LineTextUtil.holdsLineBreak(List.of("a\r")), "a carriage return at the end");
-        assertTrue(LineTextUtil.holdsLineBreak(List.of("a\nb")), "a newline");
-        assertFalse(LineTextUtil.holdsLineBreak(List.of("a\0b", "c")), "a NUL is no line break");
-        assertFalse(LineTextUtil.holdsLineBreak(List.of()));
-        assertFalse(LineTextUtil.holdsLineBreak(null));
-    }
-
-    @Test
     void platformLineDelimiterIsTheSystemOne() {
         assertEquals(System.lineSeparator(), LineTextUtil.platformLineDelimiter());
     }

@@ -32,7 +32,9 @@ import java.util.TreeMap;
  * split moves Neovim's cursor onto the right part, and Eclipse types again only after it.
  *
  * <p>Counted as Eclipse's default line tracker splits: at {@code \r\n}, {@code \r} and {@code \n}
- * ({@code \n} does not arrive in practice: see {@code LineTextUtil.holdsLineBreak}). Not
+ * ({@code \n} does not arrive in practice: Neovim stores a NUL byte as {@code \n} inside a line,
+ * but its API turns it back into a NUL, {@code "a\0b"}, for an RPC client, and a NUL is an
+ * ordinary character in Eclipse; it is counted all the same, as it would split the line). Not
  * thread-safe: the synchronizer uses it on the UI thread only.
  */
 final class SplitLines {

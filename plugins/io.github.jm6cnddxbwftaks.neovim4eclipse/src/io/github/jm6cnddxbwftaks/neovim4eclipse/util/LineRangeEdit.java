@@ -28,8 +28,8 @@ import java.util.List;
  *   <li>A new line that holds a {@code \r} (or {@code \n}) is inserted as it is, so Eclipse splits
  *       it into more lines than Neovim has: {@code "\ra"} becomes {@code ""} and {@code "a"}. The
  *       edit is right for the document (it keeps the characters Neovim has), but the lines below
- *       it no longer have Neovim's numbers, so the caller must push the lines back
- *       ({@link LineTextUtil#holdsLineBreak}).</li>
+ *       it no longer have Neovim's numbers, so the caller translates line numbers until Neovim splits the line
+ *       too ({@code sync/SplitLines}).</li>
  * </ul>
  *
  * <p>Why the caller says it, instead of this class reading it from the text: the text is

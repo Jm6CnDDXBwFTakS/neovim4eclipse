@@ -167,7 +167,7 @@ class NeovimBufferIntegrationTest {
      * does not.
      */
     /**
-     * What the synchronizer relies on (LineTextUtil.holdsLineBreak): a carriage return inside a line
+     * What the synchronizer relies on (sync/SplitLines): a carriage return inside a line
      * arrives as "\r" in the line event, a NUL byte as "\0" (Neovim keeps NUL as "\n" inside a line,
      * and its API turns it back for an RPC client), and lines pushed back come out as Eclipse split
      * them, with a NUL still a NUL.

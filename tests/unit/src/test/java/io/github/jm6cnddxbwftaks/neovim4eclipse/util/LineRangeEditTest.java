@@ -48,7 +48,7 @@ class LineRangeEditTest {
 
     /**
      * Neovim's one line "\ra" keeps its carriage return in the document, which then counts one
-     * line more than Neovim: the caller pushes the lines back (LineTextUtil.holdsLineBreak).
+     * line more than Neovim: the caller translates line numbers until Neovim splits it too (sync/SplitLines).
      */
     @Test
     void aCarriageReturnInsideALineIsKeptAndSplitsIt() {
