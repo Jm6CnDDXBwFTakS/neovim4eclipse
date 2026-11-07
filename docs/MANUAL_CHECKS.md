@@ -13,8 +13,9 @@ by hand, add a card here in the same commit, with the source files it depends on
 
 ## How to run them
 
-`releng/tools/checks/ManualChecks.java` reads this file. It is a single-file Java program (run it
-from the repository's root with the JDK the build uses):
+`releng/tools/checks/ManualChecks.java` reads this file. Run it from the repository's root with a
+JDK of release 22 or newer, as the Release tool (it is several source files, which `java` runs
+without a build only from that release on; the plug-in itself stays on 21):
 
 ```bash
 java releng/tools/checks/ManualChecks.java due              # the cards this release needs, and why
