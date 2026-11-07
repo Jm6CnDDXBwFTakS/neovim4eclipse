@@ -148,6 +148,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/InsertTracker.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/BlockHighlight.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/VisualSelectionView.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DanglingLinks.java</include>
           </includes>
         </configuration>
       </plugin>

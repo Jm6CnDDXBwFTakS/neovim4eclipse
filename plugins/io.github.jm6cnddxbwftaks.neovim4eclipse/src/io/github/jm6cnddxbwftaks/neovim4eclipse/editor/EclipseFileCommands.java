@@ -84,9 +84,18 @@ public final class EclipseFileCommands {
      * @return {@code true} if the editor is clean afterward
      */
     static boolean save(ITextEditor editor, boolean createFolders, boolean evenIfUnchanged) {
+        return save(editor, createFolders, evenIfUnchanged, false);
+    }
+
+    /**
+     * {@link #save(ITextEditor, boolean, boolean)}, for {@code :w!} with {@code force}: a new file
+     * that is a dangling symbolic link may then be written through it ({@link DanglingLinks}).
+     */
+    static boolean save(ITextEditor editor, boolean createFolders, boolean evenIfUnchanged, boolean force) {
         IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
         NewFiles.Missing missing = NewFiles.missingFileOf(editor);
-        return missing == null ? savePart(part) : NewFiles.save(editor, part, missing, createFolders, evenIfUnchanged);
+        return missing == null ? savePart(part)
+                : NewFiles.save(editor, part, missing, createFolders, evenIfUnchanged, force);
     }
 
     /**
@@ -121,6 +130,12 @@ public final class EclipseFileCommands {
         }
         if (!force && Files.exists(target)) {
             HostCommands.showError(editor, "E13: File exists (add ! to override)");
+            return false;
+        }
+        // Files.exists follows links: a link to a missing file is no file to it, and the copy
+        // would create the link's target, wherever it points (DanglingLinks). As an overwrite: !.
+        if (!force && DanglingLinks.isDangling(target)) {
+            HostCommands.showError(editor, DanglingLinks.refusal(name, target));
             return false;
         }
         // An untitled editor is saved as the file instead, so the close that follows has no unsaved
@@ -199,7 +214,7 @@ public final class EclipseFileCommands {
             for (IEditorPart part : dirty) {
                 ITextEditor text = EditorAttachManager.textEditorOf(part);
                 NewFiles.Missing missing = text == null ? null : NewFiles.missingFileOf(text);
-                if (missing != null && !NewFiles.save(text, part, missing, false, false)) {
+                if (missing != null && !NewFiles.save(text, part, missing, false, false, false)) {
                     failed.add(part);
                 }
             }
@@ -301,6 +316,8 @@ public final class EclipseFileCommands {
             return;
         }
         String shown = EditPath.shown(file, home, folder);
+        // A dangling symbolic link is missing too (Files.exists follows links): it opens as a new
+        // file, as in Vim, and its write needs ! (DanglingLinks, NewFiles.save).
         if (!Files.exists(file)) {
             NewFiles.open(editor.getEditorSite().getPage(), file, shown);
             return;

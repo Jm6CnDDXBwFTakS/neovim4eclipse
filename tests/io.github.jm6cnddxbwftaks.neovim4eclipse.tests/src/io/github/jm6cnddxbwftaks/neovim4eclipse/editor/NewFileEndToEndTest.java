@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -271,6 +272,45 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         assertFalse(opened.isDirty());
         assertEquals(List.of(), dialogs);
         closeAll();
+    }
+
+    /**
+     * A symbolic link to a file that does not exist opens as a new file, as in Vim, but {@code :w}
+     * does not write through it: that would create the link's target, wherever a cloned repository
+     * made it point ({@link DanglingLinks}). {@code :w!} does. Skipped where links cannot be made.
+     */
+    @Test
+    void aWriteThroughALinkToAMissingFileNeedsBang() throws Exception {
+        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+        Path gone = dir.resolve("gone.txt");
+        Path link = Path.of(project.getLocation().toOSString()).resolve("notes.local");
+        try {
+            try {
+                Files.createSymbolicLink(link, gone);
+            } catch (IOException | UnsupportedOperationException e) {
+                assumeTrue(false, "cannot make a symbolic link here: " + e);
+            }
+            List<String> dialogs = closeModalDialogsWhile(widget);
+            runInBox(widget, "e notes.local");
+            ITextEditor opened = activeEditorNamed("notes.local");
+            expectMessage(opened, "\"notes.local\" [New] " + DanglingLinks.newFileNote(link));
+            StyledText target = widgetOf(opened);
+            insert(target, "x");
+
+            runInBox(target, "w");
+            expectMessage(opened, DanglingLinks.refusal("notes.local", link));
+            assertFalse(Files.exists(gone), "nothing written through the link");
+            assertTrue(opened.isDirty());
+
+            runInBox(target, "w!");
+            waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
+            assertEquals("x", Files.readString(gone, StandardCharsets.UTF_8));
+            assertEquals(List.of(), dialogs);
+            closeAll();
+        } finally {
+            Files.deleteIfExists(link);
+            leaveAndDelete(dir, gone);
+        }
     }
 
     @Test

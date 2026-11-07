@@ -212,8 +212,11 @@ final class NewFiles {
             ITextEditor text = EditorAttachManager.textEditorOf(opened);
             if (text != null) {
                 useWorkspaceEncoding(text, workspaceFileAt(path));
+                // A dangling link opens as a new file, as in Vim, but says where :w! would write.
+                String message = "\"" + name + "\" [New]"
+                        + (DanglingLinks.isDangling(path) ? " " + DanglingLinks.newFileNote(path) : "");
                 // After the plug-in attaches, which the editor's activation has queued.
-                Display.getCurrent().asyncExec(() -> HostCommands.showMessage(text, "\"" + name + "\" [New]", false));
+                Display.getCurrent().asyncExec(() -> HostCommands.showMessage(text, message, false));
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not open a new editor on " + path, e);
@@ -352,14 +355,23 @@ final class NewFiles {
      * </ol>
      * Then Vim's message, such as {@code "new.txt" [New] 1L, 6B written}.
      *
-     * @param part the workbench editor ({@code editor} itself, or the multi-page editor around it)
+     * <p>A "missing" file that is a symbolic link to a file that does not exist is written only with
+     * {@code throughLink} ({@code :w!}): the write would create the link's target, which may be
+     * anywhere ({@link DanglingLinks}).
+     *
+     * @param part        the workbench editor ({@code editor} itself, or the multi-page editor around it)
+     * @param throughLink {@code :w!}: a dangling link may be written through
      * @return {@code true} if the editor is clean afterward
      */
     static boolean save(ITextEditor editor, IEditorPart part, Missing missing, boolean createFolders,
-            boolean evenIfUnchanged) {
+            boolean evenIfUnchanged, boolean throughLink) {
         boolean changed = part.isDirty();
         if (!changed && !evenIfUnchanged) {
             return true;
+        }
+        if (!throughLink && DanglingLinks.isDangling(missing.path())) {
+            HostCommands.showError(editor, DanglingLinks.refusal(editor.getEditorInput().getName(), missing.path()));
+            return false;
         }
         try {
             if (!parentExists(missing)) {

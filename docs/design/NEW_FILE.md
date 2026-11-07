@@ -142,6 +142,11 @@ location, a new file never meets it, so no workaround is needed
    missing file too). Example: in an ISO-8859-1 project, `é` is written as one byte, not two.
 6. **Message:** `"name" [New]` in the status line, through the same channel as other host command
    messages (`HostCommands`), after the plug-in attaches.
+7. **A dangling symbolic link:** a link whose target does not exist counts as missing
+   (`Files.exists` follows links), so it opens as a new file, as in Vim, with the target named in
+   the `[New]` message. Its write would create the target, wherever the link points, so `:w`
+   refuses it and `:w!` writes there (`editor/DanglingLinks`); the same goes for a copy onto one
+   (`:wq other.txt`, as E13 does for an existing file).
 
 ## 4. Writing (`:w`, `:wq`, `:x`, `ZZ`, `:wa`)
 
