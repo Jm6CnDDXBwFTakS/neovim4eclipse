@@ -11,11 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -24,6 +27,8 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * {@link NeovimInstaller} with a tiny Neovim-like archive whose hash the test pins in a release of its
@@ -309,5 +314,58 @@ class NeovimInstallerTest {
         NeovimInstaller.finishPending(folder);
         assertTrue(PluginNeovim.isInstall(folder.resolve("la"), false));
         assertTrue(Files.exists(folder.resolve("la.new")), "left for the next install to replace");
+    }
+
+    /**
+     * The start-up clean-up and swap of this Eclipse, run while its own install holds the lock, skip
+     * and leave the lock held: another process still cannot take it. On Linux and macOS the lock is
+     * a POSIX one, which a second channel to the lock file of the same process would release on
+     * closing ({@link NeovimInstaller.InstallLock}). Only another process can see that, so a second
+     * JVM asks ({@link #lockSeenFromAnotherProcess}).
+     */
+    @Test
+    void theCleanUpOfTheSameEclipseKeepsTheInstallsLock() throws Exception {
+        install(archive, false, RUNS); // so la.new is a swap candidate during the second install
+        List<String> seen = new ArrayList<>();
+        NeovimInstaller.Result r = NeovimInstaller.install(archive, release, LA, folder, swap -> {
+            try {
+                assertTrue(Files.isDirectory(folder.resolve("la.new")), "the waiting folder is there");
+                NeovimInstaller.deleteReplaced(folder);
+                NeovimInstaller.finishPending(folder);
+                assertTrue(Files.isDirectory(folder.resolve("la.new")), "finishPending skipped: the install holds the lock");
+                seen.add(lockSeenFromAnotherProcess());
+            } catch (IOException | InterruptedException e) {
+                throw new AssertionError(e);
+            }
+            return swap.getAsBoolean();
+        }, RUNS, InstallProgress.NONE);
+        assertEquals(NeovimInstaller.Outcome.INSTALLED, r.outcome());
+        assertEquals(List.of("held"), seen, "the install's lock survived the clean-up");
+        assertEquals("free", lockSeenFromAnotherProcess(), "released after the install");
+    }
+
+    /** Asks a second JVM whether it can lock {@code folder/.install.lock}: "held" or "free". */
+    private String lockSeenFromAnotherProcess() throws IOException, InterruptedException {
+        Path probe = tmp.resolve("LockProbe.java");
+        Files.writeString(probe, """
+                import java.nio.channels.FileChannel;
+                import java.nio.channels.FileLock;
+                import java.nio.file.Path;
+                import java.nio.file.StandardOpenOption;
+
+                public class LockProbe {
+                    public static void main(String[] args) throws Exception {
+                        try (FileChannel c = FileChannel.open(Path.of(args[0]), StandardOpenOption.WRITE);
+                                FileLock lock = c.tryLock()) {
+                            System.out.print(lock == null ? "held" : "free");
+                        }
+                    }
+                }
+                """);
+        String java = ProcessHandle.current().info().command().orElse("java");
+        Process p = new ProcessBuilder(java, probe.toString(), folder.resolve(PluginNeovim.LOCK).toString())
+                .redirectErrorStream(true).start();
+        assertTrue(p.waitFor(TestWait.millis(), TimeUnit.MILLISECONDS), "the probe JVM did not finish");
+        return new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
     }
 }

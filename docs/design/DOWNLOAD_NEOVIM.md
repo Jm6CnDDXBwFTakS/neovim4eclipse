@@ -126,7 +126,9 @@ A background `Job` (status bar and Progress view, cancellable, never on the UI t
    an Eclipse killed in the middle.
 6. Temporary files are always removed, also on error or cancel. A lock file in `neovim/` stops two
    Eclipses from installing at once; the empty file stays (the lock is on the open file, not on its
-   presence).
+   presence). Within one Eclipse only the holder opens the file (`NeovimInstaller.InstallLock`): on
+   Linux and macOS the lock is a POSIX one, which closing any other channel to the file in the same
+   process would release, so the start-up clean-up must not even open it while an install runs.
 
 Limits of the swap's "runs" check: another user's processes may not be visible (fine, the folder is
 the user's own), and a process another Eclipse starts in the few milliseconds of the two moves is

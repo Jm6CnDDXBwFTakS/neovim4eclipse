@@ -24,6 +24,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -37,7 +39,9 @@ import java.util.function.Predicate;
  *   <li><b>Lock</b> {@code neovim/.install.lock}, so two Eclipses (or two clicks) never install at
  *       once. The empty file stays after the install on purpose: the lock is the operating system's
  *       lock on the open file, not the file's presence, and deleting it could let a second Eclipse
- *       lock a new file while the first still holds the old one.</li>
+ *       lock a new file while the first still holds the old one. Within one Eclipse the file is
+ *       opened only by the caller holding the lock ({@link InstallLock}: on Linux and macOS,
+ *       closing any other channel to it would release the lock).</li>
  *   <li><b>Copy and check</b>: the archive is copied into a temporary file in {@code neovim/}
  *       (named {@link PluginNeovim#DOWNLOAD_PREFIX}{@code ...}) while its SHA-256 is computed, and the
  *       size and hash are compared with the pinned entry for this platform ({@link NeovimRelease}).
@@ -146,8 +150,7 @@ public final class NeovimInstaller {
         } catch (IOException e) {
             throw files("Cannot create " + folder, e);
         }
-        try (FileChannel channel = FileChannel.open(folder.resolve(PluginNeovim.LOCK), StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE); FileLock lock = tryLock(channel)) {
+        try (InstallLock lock = InstallLock.tryAcquire(folder)) {
             if (lock == null) {
                 throw new NeovimInstallException(NeovimInstallException.Reason.BUSY,
                         "Neovim is being installed into " + folder + " already, by this or another Eclipse. "
@@ -238,12 +241,96 @@ public final class NeovimInstaller {
         }
     }
 
-    /** The lock, or {@code null} if another process (or another thread of this one) holds it. */
-    private static FileLock tryLock(FileChannel channel) throws IOException {
-        try {
-            return channel.tryLock();
-        } catch (OverlappingFileLockException e) {
-            return null; // held by this Eclipse already
+    /**
+     * The install lock on {@code neovim/.install.lock}: held by at most one caller in this JVM, and
+     * by at most one process.
+     *
+     * <h2>Why not simply a {@code FileChannel} per caller</h2>
+     * The operating system's lock ({@link FileChannel#tryLock}) is per process. On Linux and macOS it
+     * is a POSIX {@code fcntl} lock, and POSIX releases every lock a process holds on a file as soon
+     * as the process closes <em>any</em> descriptor of that file (the warning in {@link FileLock}'s
+     * Javadoc). So while an install held the lock, a {@link #deleteReplaced} or {@link #finishPending}
+     * of the same Eclipse that opened its own channel to ask (its {@code tryLock} failing with
+     * {@link OverlappingFileLockException}) released the install's lock when it closed that channel.
+     * Another Eclipse could then take it and delete the {@code la.unpacking} being unpacked, or swap
+     * at the same time.
+     *
+     * <p>So the file is opened only by the caller that holds the lock: a caller first claims the
+     * lock file's path in {@link #HELD}, and only then opens the channel; a second caller in this
+     * JVM finds the path claimed and gets {@code null} without touching the file. Not a waiting lock:
+     * every caller skips when busy, as it did before (an install says "busy", the start-up clean-up
+     * waits for the next start). Not reentrant either: an install's own {@link SwapGate} that calls
+     * {@link #deleteReplaced} gets {@code null} too. The path is the folder's real path
+     * ({@link Path#toRealPath}), so two spellings of one folder ({@code /var} and {@code /private/var}
+     * on macOS, any case on Windows) are one lock.
+     *
+     * <p>Example: {@code try (InstallLock lock = InstallLock.tryAcquire(folder)) { if (lock != null) ... }}
+     */
+    static final class InstallLock implements AutoCloseable {
+
+        /** The lock files claimed in this JVM, each by the one {@link InstallLock} holding it. */
+        private static final Set<Path> HELD = ConcurrentHashMap.newKeySet();
+
+        private final Path file;
+        private final FileChannel channel;
+
+        private InstallLock(Path file, FileChannel channel) {
+            this.file = file;
+            this.channel = channel;
+        }
+
+        /**
+         * The lock, or {@code null} if it is held: by another caller in this JVM, or by another
+         * process. {@code folder} must exist.
+         *
+         * @throws IOException if the lock file cannot be opened
+         */
+        static InstallLock tryAcquire(Path folder) throws IOException {
+            Path file = folder.toRealPath().resolve(PluginNeovim.LOCK);
+            if (!HELD.add(file)) {
+                return null; // held in this JVM: the file is not opened, so its lock stays intact
+            }
+            FileChannel channel = null;
+            boolean keepChannel = false;
+            try {
+                channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                FileLock lock;
+                try {
+                    lock = channel.tryLock();
+                } catch (OverlappingFileLockException e) {
+                    // Another channel of this JVM holds it, past HELD (another class loader's copy
+                    // of this class). Closing this channel would release that lock, so it stays
+                    // open: one leaked descriptor, against a lost lock.
+                    keepChannel = true;
+                    HELD.remove(file);
+                    return null;
+                }
+                if (lock == null) {
+                    return null; // another process holds it
+                }
+                keepChannel = true;
+                return new InstallLock(file, channel);
+            } finally {
+                if (!keepChannel) {
+                    try {
+                        if (channel != null) {
+                            channel.close();
+                        }
+                    } finally {
+                        HELD.remove(file);
+                    }
+                }
+            }
+        }
+
+        /** Releases the lock: closing the channel releases it, then the claim in this JVM is freed. */
+        @Override
+        public void close() throws IOException {
+            try {
+                channel.close();
+            } finally {
+                HELD.remove(file);
+            }
         }
     }
 
@@ -370,8 +457,7 @@ public final class NeovimInstaller {
             Path staging = folder.resolve(platform.code() + PluginNeovim.NEW);
             if (names.contains(platform.code() + PluginNeovim.NEW)
                     && PluginNeovim.isInstall(staging, platform.windows())) {
-                try (FileChannel channel = FileChannel.open(folder.resolve(PluginNeovim.LOCK),
-                        StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock lock = tryLock(channel)) {
+                try (InstallLock lock = InstallLock.tryAcquire(folder)) {
                     if (lock != null && !inUse.test(PluginNeovim.home(folder, platform))) {
                         swapped |= swap(folder, platform);
                     }
@@ -435,8 +521,7 @@ public final class NeovimInstaller {
         if (!Files.isDirectory(folder)) {
             return; // no dedicated Neovim: nothing to clean, and no lock file to create
         }
-        try (FileChannel channel = FileChannel.open(folder.resolve(PluginNeovim.LOCK), StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE); FileLock lock = tryLock(channel)) {
+        try (InstallLock lock = InstallLock.tryAcquire(folder)) {
             if (lock != null) {
                 for (Path old : replacedFolders(folder)) {
                     if (!inUse.test(old)) {
