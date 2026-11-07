@@ -76,6 +76,45 @@ class SearchColorsTest {
         assertEquals(new RGB((dark >> 16) & 0xFF, (dark >> 8) & 0xFF, dark & 0xFF), match.get());
     }
 
+    /**
+     * An editor that sets its colors on the widget itself, without a preference (a TextMate theme
+     * in the Generic Editor), gets the amber for them at the next paint.
+     */
+    @Test
+    void colorsSetStraightOnTheWidgetAreSeenAtTheNextPaint() {
+        shell = new Shell(PlatformUI.getWorkbench().getDisplay());
+        shell.setSize(300, 200);
+        StyledText widget = new StyledText(shell, SWT.NONE);
+        widget.setBounds(0, 0, 300, 200);
+        widget.setText("fox");
+        shell.open();
+        AtomicReference<RGB> match = new AtomicReference<>();
+        searchColors = new SearchColors(widget, (m, b) -> match.set(m.getRGB()));
+        assertEquals(SearchColors.DEFAULT, match.get(), "a light widget: the light amber");
+
+        widget.setBackground(new Color(30, 30, 30));
+        int dark = OverlayColors.SEARCH_MATCH_DARK;
+        RGB darkAmber = new RGB((dark >> 16) & 0xFF, (dark >> 8) & 0xFF, dark & 0xFF);
+        waitUntil("the dark amber after the widget turned dark", TIMEOUT_MS, () -> darkAmber.equals(match.get()));
+    }
+
+    /** After dispose, an update already queued hands on nothing. */
+    @Test
+    void anUpdateQueuedBeforeDisposeDoesNothing() {
+        shell = new Shell(PlatformUI.getWorkbench().getDisplay());
+        StyledText widget = new StyledText(shell, SWT.NONE);
+        AtomicReference<Integer> calls = new AtomicReference<>(0);
+        searchColors = new SearchColors(widget, (m, b) -> calls.set(calls.get() + 1));
+        own = colors.getRGB(SearchColors.COLOR_ID);
+        colors.put(SearchColors.COLOR_ID, new RGB(170, 230, 200)); // queues an update (asyncExec)
+        searchColors.dispose();
+        searchColors = null;
+        while (widget.getDisplay().readAndDispatch()) {
+            // run the queued update, which must do nothing
+        }
+        assertEquals(1, calls.get(), "only the constructor's colors");
+    }
+
     /** A change in Colors and Fonts (the registry's new value) is handed on, with a box toward the text. */
     @Test
     void aChangeOfTheColorReachesTheHighlights() {
