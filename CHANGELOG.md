@@ -17,6 +17,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Nothing changes in the plug-in itself: the pictures the manual checks look at are taken only
   while the test's window is really in front. On Windows, another program's window could end up
   in them.
+- Nothing changes in the plug-in itself: the install check's command to start the installed
+  Eclipse now repeats `--eclipse` and `--root`, so it works where `eclipse` is not on the PATH.
 
 ## [0.2.5] - 2026-11-07
 

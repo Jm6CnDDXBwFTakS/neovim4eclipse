@@ -137,6 +137,25 @@ class InstallCheckTest {
         assertEquals(Optional.empty(), InstallCheckTool.recorded("v0.2.4 1794007146"));
     }
 
+    /** The printed command to start the copy repeats where this run found Eclipse and its folder. */
+    @Test
+    void theStartCommandKeepsTheEclipseAndTheFolder() {
+        assertEquals("java releng/tools/checks/InstallCheck.java 0.2.4 --yes",
+                InstallCheckTool.Options.parse(new String[] {"0.2.4"}).startCommand(V));
+        assertEquals("java releng/tools/checks/InstallCheck.java 0.2.4 --eclipse /opt/eclipse/current/eclipse --yes",
+                InstallCheckTool.Options.parse(new String[] {"--eclipse", "/opt/eclipse/current/eclipse", "0.2.4", "--yes"})
+                        .startCommand(V));
+        assertEquals("java releng/tools/checks/InstallCheck.java 0.2.4 --eclipse \"C:\\Program Files\\Eclipse\\eclipse.exe\""
+                + " --root /tmp/ic --yes",
+                InstallCheckTool.Options.parse(new String[] {"0.2.4", "--eclipse", "C:\\Program Files\\Eclipse\\eclipse.exe",
+                        "--root", "/tmp/ic"}).startCommand(V, true),
+                "on Windows a path with a space in double quotes");
+        assertEquals("java releng/tools/checks/InstallCheck.java 0.2.4 --root '/tmp/a$b c' --yes",
+                InstallCheckTool.Options.parse(new String[] {"0.2.4", "--root", "/tmp/a$b c"}).startCommand(V, false),
+                "in a POSIX shell single quotes, so $ does not expand");
+        assertEquals("'it'\\''s'", InstallCheckTool.Options.shellWord("it's", false));
+    }
+
     @Test
     void theCommandLineTakesOneVersion() {
         InstallCheckTool.Options o = InstallCheckTool.Options.parse(new String[] {"0.2.4", "--no-launch"});
