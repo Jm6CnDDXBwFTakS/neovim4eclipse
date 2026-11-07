@@ -44,8 +44,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
  * theme), and once started with Eclipse's dark theme ({@code -cssTheme
  * org.eclipse.e4.ui.css.theme.e4_dark}, the {@code gallery-dark} execution, system property
  * {@code gallery.theme=dark}). Starting dark gives what a user sees after choosing Dark and
- * restarting: the theme's CSS and its preference values (editor colors, syntax colors, the Search
- * Results color). Each run writes {@code search-<theme>-<picture>.png} into the gallery folder and
+ * restarting: the theme's CSS and its preference values (editor colors, syntax colors), and the
+ * dark value of the plug-in's own search match color, from its stylesheet for that theme. Each run writes {@code search-<theme>-<picture>.png} into the gallery folder and
  * {@code search.html}, which shows each picture in both themes side by side, as far as they are
  * there. The dark run refuses a light editor: a theme that did not apply must not pass for one.
  */

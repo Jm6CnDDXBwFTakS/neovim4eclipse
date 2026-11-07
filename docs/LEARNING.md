@@ -797,7 +797,20 @@ The editor shows the text `a foo b foo`, and the user types `/foo` and Enter.
 
 `n` moves Neovim's cursor to the next match. Neovim redraws, `M.update` finds the same matches and
 sends nothing; the caret moves (`eclipse_cursor`, as for any motion), and the highlighter's caret
-listener moves the box with it. `:noh` sends an empty list, which clears. Design:
+listener moves the box with it. `:noh` sends an empty list, which clears.
+
+Where the background color comes from (`editor/SearchColors`): a theme color the plug-in declares.
+A `colorDefinition` in `plugin.xml` (`org.eclipse.ui.themes`) gives it an id, a label and a default
+(255,214,102), and Eclipse lists it under *Colors and Fonts*, where users change it. Eclipse keeps
+its value in the current theme's `ColorRegistry`, in layers: the default from `plugin.xml`, then the
+theme's value, then the user's choice, each hiding the one before. The theme's value comes from
+CSS: a stylesheet the plug-in adds to Eclipse's dark theme (`org.eclipse.e4.ui.css.swt.theme`)
+sets `ColorDefinition#io-github-jm6cnddxbwftaks-neovim4eclipse-searchMatch { color: #6E5818; }`
+(the id with dashes for dots, as CSS ids cannot hold dots). The code only reads the registry, and
+listens to the theme manager for a change. Example: a user on the dark theme who picked green in
+*Colors and Fonts* gets green; one who picked nothing gets the stylesheet's dark amber. Where the
+registry still holds a default, the editor's own background has the last word
+(`OverlayColors.searchMatch`), for dark editors outside Eclipse's dark theme. Design:
 [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
 
 ### 3.3 Insert mode
@@ -898,6 +911,15 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `PreferenceInitializer`; add a field to a preference page; read it with
 `Activator.getDefault().getPreferenceStore()`; if it must apply at once, handle it in the
 `Activator`'s property-change listener.
+
+**Add a color users can change.** Declare it in `plugin.xml` (`org.eclipse.ui.themes`: a
+`themeElementCategory` to group it, a `colorDefinition` with id, label, `value="r,g,b"` and a
+description), give the dark theme its own value in a stylesheet (`css/`, listed in
+`build.properties`, added with `org.eclipse.e4.ui.css.swt.theme`), read it with
+`PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getColorRegistry().getRGB(id)`, and
+listen to the theme manager for the id and `IThemeManager.CHANGE_CURRENT_THEME`, hopping to the UI
+thread. Follow `editor/SearchColors`, and add a check like `SearchMatchColorFilesTest` that the
+values in `plugin.xml`, the stylesheet and the code agree.
 
 **Add a setting for `init.lua` instead.** A Neovim-side switch that is set once and forgotten
 (`vim.g.neovim4eclipse_folds`, `vim.g.neovim4eclipse_problems`) is better as a global variable than
