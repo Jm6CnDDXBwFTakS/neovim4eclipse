@@ -159,6 +159,7 @@ class SearchGalleryTest extends EndToEndTestBase {
             // An editor whose colors are the other way round from the theme, set on the widget itself.
             page().activate(text);
             settle();
+            waitForMatches(textWidget, 16); // the matches are there to compare against
             RGB textBefore = textWidgetBackground(textWidget, 16);
             Color oldBackground = textWidget.getBackground();
             Color oldForeground = textWidget.getForeground();
