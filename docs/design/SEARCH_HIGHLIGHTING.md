@@ -164,10 +164,21 @@ lists under *Window → Preferences → General → Appearance → Colors and Fo
 where users change it, as they change JDT's or Git's colors. Its default is an amber, 255,214,102,
 as Vim users know `'hlsearch'`. Eclipse's dark theme gets a darker amber, 110,88,24, from a
 stylesheet the plug-in adds to that theme (`css/e4-dark_neovim4eclipse.css`, the
-`org.eclipse.e4.ui.css.swt.theme` extension), as JDT gives its syntax colors a dark default. Other
-dark themes keep the light amber unless they set it too. `editor/SearchColors` reads the current
-theme's color registry and listens to the theme manager (a change of the color or of the theme),
-hopping to the UI thread, as either may come on another.
+`org.eclipse.e4.ui.css.swt.theme` extension, an optional dependency: an Eclipse without CSS themes
+ignores it), as JDT gives its syntax colors a dark default.
+
+A dark editor can come without Eclipse's dark theme: another dark theme, your own dark editor
+colors on the light theme, or a high-contrast system setting. So where the registry holds one of the
+two defaults, the editor's background picks between them (`OverlayColors.searchMatch`): a dark
+background gets the dark amber, a light one the light amber. A color you picked yourself stays,
+unless it is exactly one of the defaults, which the registry cannot tell apart.
+`SearchMatchColorFilesTest` checks that `plugin.xml`, the stylesheet and `OverlayColors` agree on
+both values, and that the stylesheet's selector names the color.
+
+`editor/SearchColors` reads the current theme's color registry and listens to the theme manager (a
+change of the color or of the theme) and to the editors' preferences (a change of the editor's
+background or text color), hopping to the UI thread, as any may come on another. While Eclipse shuts
+down there may be no workbench to ask; the highlights then take the default for the background.
 
 Until 0.2.6 the matches took Eclipse's *Search Results* annotation color. That made a change of the
 color recolor Eclipse's own search marks too, and its lavender default became a gray in the dark

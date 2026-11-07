@@ -1229,7 +1229,9 @@
    </extension>
 
    <!-- The dark theme's value of the color above, as JDT gives its syntax colors a dark default:
-        a stylesheet Eclipse adds to its dark theme (themeid). -->
+        a stylesheet Eclipse adds to its dark theme (themeid). The bundle that defines the extension
+        point is an optional Require-Bundle in MANIFEST.MF: an Eclipse without the CSS themes ignores
+        the stylesheet, and editor/SearchColors then picks the dark amber by the editor's background. -->
    <extension point="org.eclipse.e4.ui.css.swt.theme">
       <stylesheet uri="css/e4-dark_neovim4eclipse.css">
          <themeid refid="org.eclipse.e4.ui.css.theme.e4_dark"/>

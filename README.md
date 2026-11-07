@@ -457,7 +457,7 @@ instead.
 
 While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc goes back to where
 you were. The matches are highlighted as in Neovim: every match of what you type, then of the last
-search (`'hlsearch'`) until `:noh`, behind the text in an amber (darker in Eclipse's dark theme;
+search (`'hlsearch'`) until `:noh`, behind the text in an amber (darker in a dark editor;
 change it under *Window → Preferences → General → Appearance → Colors and Fonts → Neovim for
 Eclipse → Search match*), a box around the match under the caret. `vim.g.neovim4eclipse_search = 0` in `init.lua` turns this off
 ([design](docs/design/SEARCH_HIGHLIGHTING.md)). A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's live

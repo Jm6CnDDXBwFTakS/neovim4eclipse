@@ -22,7 +22,8 @@ Require-Bundle: org.eclipse.ui,
  org.eclipse.e4.core.services,
  org.eclipse.e4.core.commands,
  org.eclipse.e4.core.contexts,
- org.eclipse.core.net
+ org.eclipse.core.net,
+ org.eclipse.e4.ui.css.swt.theme;resolution:=optional
 Bundle-RequiredExecutionEnvironment: JavaSE-21
 Bundle-ActivationPolicy: lazy
 Automatic-Module-Name: io.github.jm6cnddxbwftaks.neovim4eclipse

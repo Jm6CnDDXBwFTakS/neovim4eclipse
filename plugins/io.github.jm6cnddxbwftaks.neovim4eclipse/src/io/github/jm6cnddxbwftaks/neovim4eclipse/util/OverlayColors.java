@@ -78,6 +78,45 @@ public final class OverlayColors {
         return blend(matchColor, editorForeground, SEARCH_BOX_STRENGTH);
     }
 
+    /**
+     * The search match color's default for light editors, an amber as Vim users know
+     * {@code hlsearch} (255,214,102): the value of the color definition in {@code plugin.xml}.
+     */
+    public static final int SEARCH_MATCH_LIGHT = 0xFFD666;
+
+    /**
+     * The search match color's default for dark editors, a darker amber (110,88,24) that light text
+     * stays readable on: the value of Eclipse's dark theme in {@code css/e4-dark_neovim4eclipse.css}.
+     */
+    public static final int SEARCH_MATCH_DARK = 0x6E5818;
+
+    /**
+     * The search match color for an editor: the color from <i>Colors and Fonts</i> ({@code chosen}),
+     * but where that is one of the two defaults, the default that suits the editor's background.
+     *
+     * <h4>Why</h4>
+     * Eclipse gives a color definition one value per theme, and only its own dark theme gets the
+     * dark amber, from the plug-in's stylesheet. A dark editor can come without it: another dark
+     * theme, the user's own dark editor colors on the light theme, or a high-contrast system
+     * setting (Windows: <i>High contrast</i>, a black editor). There the light amber would sit under
+     * light text. The other way round, a light editor in the dark theme would get dark text on the
+     * dark amber. A color the user picked themself stays as it is, unless it is exactly one of the
+     * defaults: the registry cannot tell those apart.
+     *
+     * <pre>
+     *   searchMatch(0xFFD666, 0xFFFFFF) = 0xFFD666   (light default, light editor: kept)
+     *   searchMatch(0xFFD666, 0x1E1E1E) = 0x6E5818   (light default, dark editor: the dark one)
+     *   searchMatch(0x6E5818, 0xFFFFFF) = 0xFFD666   (dark theme, light editor: the light one)
+     *   searchMatch(0xAAE6C8, 0x1E1E1E) = 0xAAE6C8   (the user's own green: kept)
+     * </pre>
+     */
+    public static int searchMatch(int chosen, int editorBackground) {
+        if (chosen != SEARCH_MATCH_LIGHT && chosen != SEARCH_MATCH_DARK) {
+            return chosen;
+        }
+        return isDark(editorBackground) ? SEARCH_MATCH_DARK : SEARCH_MATCH_LIGHT;
+    }
+
     /** Whether a color is dark: its perceived brightness (ITU-R BT.601 weights) is below half. */
     static boolean isDark(int rgb) {
         int r = (rgb >> 16) & 0xFF;

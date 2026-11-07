@@ -57,6 +57,26 @@ class OverlayColorsTest {
     }
 
     @Test
+    void theSearchMatchDefaultFollowsTheEditorsBackground() {
+        assertEquals(OverlayColors.SEARCH_MATCH_LIGHT, OverlayColors.searchMatch(OverlayColors.SEARCH_MATCH_LIGHT, 0xFFFFFF),
+                "light default, light editor");
+        assertEquals(OverlayColors.SEARCH_MATCH_DARK, OverlayColors.searchMatch(OverlayColors.SEARCH_MATCH_LIGHT, 0x1E1E1E),
+                "light default, dark editor (another dark theme)");
+        assertEquals(OverlayColors.SEARCH_MATCH_DARK, OverlayColors.searchMatch(OverlayColors.SEARCH_MATCH_LIGHT, 0x000000),
+                "light default, high contrast black");
+        assertEquals(OverlayColors.SEARCH_MATCH_LIGHT, OverlayColors.searchMatch(OverlayColors.SEARCH_MATCH_DARK, 0xFFFFFF),
+                "dark theme's default, light editor");
+        assertEquals(OverlayColors.SEARCH_MATCH_DARK, OverlayColors.searchMatch(OverlayColors.SEARCH_MATCH_DARK, 0x2F2F2F),
+                "dark theme's default, dark editor");
+    }
+
+    @Test
+    void aSearchMatchColorOfTheUsersOwnIsKept() {
+        assertEquals(0xAAE6C8, OverlayColors.searchMatch(0xAAE6C8, 0x1E1E1E));
+        assertEquals(0x285C46, OverlayColors.searchMatch(0x285C46, 0xFFFFFF));
+    }
+
+    @Test
     void darknessFollowsPerceivedBrightness() {
         assertTrue(OverlayColors.isDark(0x2F2F2F));
         assertTrue(OverlayColors.isDark(0x0000FF), "pure blue looks dark");
