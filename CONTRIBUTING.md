@@ -107,8 +107,8 @@ pictures (`gallery/GalleryCamera`; nothing is read from the screen), so another 
 cannot end up in one. The run never asks for the front itself: `-Pgallery` skips the unit, text
 and SWT tests (whose windows would), the camera activates a window only while the test Eclipse is
 already in front, and the search pictures take the editor's keyboard focus only then
-(`UiTestSupport.focusWithoutTakingTheFront`). Each test Eclipse still comes forward as it starts,
-the light one and the dark one, and on macOS a window it opens may too. Pictures taken while you
+(`UiTestSupport.focusWithoutTakingTheFront`). A test Eclipse may still come forward as it starts
+(on macOS the light one did, for about a second; the dark one and the dialogs did not). Pictures taken while you
 work elsewhere show the windows inactive (a plain default button, no caret): leave the run in
 front for a gallery to keep. With *Show borders* on (*System
 Settings → Accessibility → Display*), expect a frame around the links in the preference page's group:
