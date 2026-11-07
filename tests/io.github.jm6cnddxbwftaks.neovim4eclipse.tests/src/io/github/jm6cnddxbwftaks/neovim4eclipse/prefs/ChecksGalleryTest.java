@@ -71,9 +71,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * the plug-in.
  *
  * <h2>How a picture is taken</h2>
- * By {@link GalleryCamera}: the window draws itself into an image on Linux, and is read from the
- * screen on macOS and Windows, which needs it in front (and on macOS the Screen Recording
- * permission). A picture of one color fails the run.
+ * By {@link GalleryCamera}: the window draws itself into an image on every system, so nothing is
+ * read from the screen and the window need not be in front. A picture of one color fails the run.
  *
  * <h2>The states shown</h2>
  * Dialogs are built from the same texts the plug-in shows ({@link GetNeovimText},
@@ -262,8 +261,7 @@ class ChecksGalleryTest {
             GalleryCamera.drain(window.getDisplay());
             window.layout(true, true);
             // Focus on the window itself, not its first link: a focused link draws a focus rectangle,
-            // which the screen read on macOS and Windows would picture (forceActive gives it focus).
-            window.forceActive();
+            // which the picture would show.
             window.forceFocus();
             save(window, topic, title, lookFor);
         } finally {
