@@ -394,14 +394,33 @@ final class NavigationHistorySteps {
         return Arrays.asList(history.getLocations());
     }
 
+    /**
+     * {@code page}'s steps, made when it has none yet. A page that is closed already gets steps
+     * that are not kept: work posted before the close ({@link #afterSwitch}'s deferred check, a
+     * {@code Ctrl-O} queued behind it) may run after it, and keeping steps then would put the entry
+     * back, with a page listener on the closed window that never hears another close, and with them
+     * the page and its editors would stay reachable (see {@link #STEPS}).
+     */
     private static HistorySteps<INavigationLocation, Place> steps(IWorkbenchPage page) {
         HistorySteps<INavigationLocation, Place> steps = STEPS.get(page);
         if (steps == null) {
             steps = new HistorySteps<>();
-            STEPS.put(page, steps);
-            forgetWhenClosed(page);
+            if (isOpen(page)) {
+                STEPS.put(page, steps);
+                forgetWhenClosed(page);
+            }
         }
         return steps;
+    }
+
+    /**
+     * Whether {@code page} is still one of an open workbench window's pages. A closed window is no
+     * longer among the workbench's windows, and its page no longer among its pages.
+     */
+    private static boolean isOpen(IWorkbenchPage page) {
+        IWorkbenchWindow window = page.getWorkbenchWindow();
+        return window != null && Arrays.asList(window.getWorkbench().getWorkbenchWindows()).contains(window)
+                && Arrays.asList(window.getPages()).contains(page);
     }
 
     /**

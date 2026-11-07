@@ -12,6 +12,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
@@ -83,5 +84,26 @@ class NavigationHistoryStepsTest {
             window.close();
         }
         assertFalse(NavigationHistorySteps.hasStepsFor(page), "the closed page's steps are gone");
+
+        // Work posted before the close that runs after it (afterSwitch's deferred check, a Ctrl-O)
+        // makes no steps for the closed page again.
+        NavigationHistorySteps.afterSwitch(page, new NavigationHistorySteps.Trail() {
+            @Override
+            public void wentNowhere(long first, int steps) {
+                // not reached
+            }
+
+            @Override
+            public void forget() {
+                // nothing to forget
+            }
+        });
+        Display display = Display.getCurrent();
+        for (int i = 0; i < 3; i++) { // afterSwitch posts twice, one inside the other
+            while (display.readAndDispatch()) {
+                // run what is queued
+            }
+        }
+        assertFalse(NavigationHistorySteps.hasStepsFor(page), "no steps kept for a closed page");
     }
 }
