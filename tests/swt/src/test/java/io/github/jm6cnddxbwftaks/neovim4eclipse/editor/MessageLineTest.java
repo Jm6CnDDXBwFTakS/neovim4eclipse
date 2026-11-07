@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 
 /**
  * The line along the bottom of the editor that shows Neovim's latest message or error, on a real
@@ -176,6 +177,42 @@ class MessageLineTest {
 
         runUntil("the flash to end", () -> !line.isFlashing());
         assertEquals(before.getRGB(), host.getBackground().getRGB(), "back to the editor's own background");
+    }
+
+    /**
+     * A change of the editor's background during the flash (a switch to the dark theme) is the
+     * editor's own: the end of the flash keeps it instead of putting back the one from before.
+     */
+    @Test
+    void aBackgroundChangedDuringTheFlashStays() throws InterruptedException {
+        flash = true;
+        line.show("E1: x", true);
+        assertTrue(line.isFlashing());
+        Color dark = new Color(0x1E, 0x1E, 0x1E);
+        host.setBackground(dark);
+
+        runUntil("the flash to end", () -> !line.isFlashing());
+        assertEquals(dark.getRGB(), host.getBackground().getRGB(), "the new background stays");
+        assertNull(host.getData(OverlayFrame.BACKGROUND_UNDER_FLASH));
+    }
+
+    /** An overlay opened during the flash (an error, then : at once) takes the editor's colors, not the tint's. */
+    @Test
+    void anOverlayOpenedDuringTheFlashTakesTheEditorsColors() {
+        flash = true;
+        Color before = host.getBackground();
+        line.show("E1: x", true);
+        assertTrue(line.isFlashing());
+        OverlayFrame<CLabel> popup = new OverlayFrame<>(host, parent -> new CLabel(parent, SWT.LEFT));
+        try {
+            assertEquals(OverlayColors.background(rgb(before)), rgb(popup.content().getBackground()));
+        } finally {
+            popup.dispose();
+        }
+    }
+
+    private static int rgb(Color c) {
+        return (c.getRed() << 16) | (c.getGreen() << 8) | c.getBlue();
     }
 
     @Test

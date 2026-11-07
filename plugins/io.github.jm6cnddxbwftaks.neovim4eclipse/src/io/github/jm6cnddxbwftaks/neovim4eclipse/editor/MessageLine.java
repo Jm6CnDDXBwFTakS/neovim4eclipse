@@ -55,8 +55,8 @@ final class MessageLine {
     private OverlayFrame<CLabel> frame;
     private String text = "";
     private boolean error;
-    /** The editor's background while a flash shows; {@code null} when no flash is running. */
-    private Color backgroundBeforeFlash;
+    /** The tint the flash gave the editor's background; {@code null} when no flash is running. */
+    private Color flashTint;
     /** How many flashes have started; for tests (see {@link #flashCount}). */
     private int flashes;
     /** Space kept free below the line for the {@code :} box; 0 while the box is closed. */
@@ -204,29 +204,48 @@ final class MessageLine {
     /**
      * Tints the editor's background toward the error color for {@link #FLASH_MS}, then puts it back.
      * A flash that is still running is not restarted, so fast repeated errors give one flash.
+     *
+     * <p>The background under the tint is kept on the widget for the overlays
+     * ({@link OverlayFrame#BACKGROUND_UNDER_FLASH}), so that a popup opened now takes the editor's
+     * colors, not the tint's.
      */
     private void flash() {
-        if (backgroundBeforeFlash != null || host.isDisposed()) {
+        if (flashTint != null || host.isDisposed()) {
             return;
         }
         Color before = host.getBackground();
-        backgroundBeforeFlash = before;
+        Color tint = rgb(OverlayColors.blend(rgbOf(before), rgbOf(errorColor()), FLASH_STRENGTH));
+        flashTint = tint;
         flashes++;
-        host.setBackground(rgb(OverlayColors.blend(rgbOf(before), rgbOf(errorColor()), FLASH_STRENGTH)));
+        host.setData(OverlayFrame.BACKGROUND_UNDER_FLASH, before);
+        host.setBackground(tint);
         host.getDisplay().timerExec(FLASH_MS, this::endFlash);
     }
 
+    /**
+     * Ends the flash: the background under it comes back, unless the editor's background was changed
+     * during the flash. Then the new one is the editor's own and stays. Example: a switch to the dark
+     * theme 50 ms into a flash sets the dark background; putting back the light one from before the
+     * flash would leave a light editor in the dark theme until the next change.
+     */
     private void endFlash() {
-        Color before = backgroundBeforeFlash;
-        backgroundBeforeFlash = null;
-        if (before != null && !host.isDisposed()) {
-            host.setBackground(before);
+        Color tint = flashTint;
+        flashTint = null;
+        if (tint == null || host.isDisposed()) {
+            return;
+        }
+        Object before = host.getData(OverlayFrame.BACKGROUND_UNDER_FLASH);
+        host.setData(OverlayFrame.BACKGROUND_UNDER_FLASH, null);
+        if (before instanceof Color own && tint.getRGB().equals(host.getBackground().getRGB())) {
+            host.setBackground(own);
+        } else {
+            host.redraw(); // the background stays; the overlays look at it again at this paint
         }
     }
 
     /** Whether the flash is showing right now; for tests. */
     boolean isFlashing() {
-        return backgroundBeforeFlash != null;
+        return flashTint != null;
     }
 
     /**
@@ -244,7 +263,7 @@ final class MessageLine {
      */
     private Color errorColor() {
         Color themed = JFaceResources.getColorRegistry().get(JFacePreferences.ERROR_COLOR);
-        return themed != null ? themed : rgb(OverlayColors.errorText(rgbOf(host.getBackground())));
+        return themed != null ? themed : rgb(OverlayColors.errorText(rgbOf(OverlayFrame.intendedBackground(host))));
     }
 
     private static int rgbOf(Color color) {

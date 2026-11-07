@@ -453,7 +453,8 @@ one-line `CLabel` in an `OverlayFrame` along the bottom of the editor, where the
 theme's error color (`JFacePreferences.ERROR_COLOR`, or `OverlayColors.errorText` outside a theme) for
 errors. A message stays until the next key or click (the session says so at once, so the same error twice
 shows twice), never takes the focus, and with the `flashOnError` preference an error tints the editor's
-background for `FLASH_MS`. Host command errors (`HostCommands.showError`) go to the same line.
+background for `FLASH_MS`; a background set during the flash (a theme switch) stays at its end, and
+overlays read the background under the tint (`OverlayFrame.intendedBackground`). Host command errors (`HostCommands.showError`) go to the same line.
 
 With `ext_messages` Neovim never waits at a "Press ENTER" or "-- More --" prompt (checked on Neovim 0.12):
 there is no message area to fill. So nothing in the plug-in dismisses one any more, and
@@ -466,7 +467,8 @@ events are ignored, and are fewer per key than the old cell-by-cell drawing.
 `editor/CommandLineBox` shows a single-line `Text` as a child of the editor's `StyledText`, placed near the
 bottom edge (about half its height above it, clear of the scroll bar; width minus 3 px padding; editor font).
 `editor/OverlayFrame` gives it, and the output popup, a 1-pixel border and a background tinted slightly
-toward gray, both derived from the editor's colors (`util/OverlayColors`). The border is drawn by the
+toward gray, both derived from the editor's colors (`util/OverlayColors`) and made again when those
+change while it is open (a light/dark switch: looked at on each paint of the host). The border is drawn by the
 plug-in because native borders differ per platform (Windows 11 draws none). It is positioned by hand on resize
 *and on every paint* of the host, so scrolling cannot leave it behind. It is non-modal: opening it moves focus
 to the box. The message line moves up above the box while it is open (`MessageLine.makeRoomBelow`), so a
