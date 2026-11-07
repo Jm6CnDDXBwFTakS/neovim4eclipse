@@ -12,7 +12,9 @@ group.
   editor shows, while `v:hlsearch` is 1. That is, while `'hlsearch'` is on and no `:nohlsearch`
   came after the search.
 - **While a search is typed**, with `'incsearch'` on: the matches of what is typed so far, without a
-  search offset (`/foo/e` shows `foo`). Before the first character, the last search's, which
+  search offset (`/foo/e` shows `foo`). After `?`, and in `:s?a?b?`, an escaped `\?` is a plain
+  `?`, as Neovim reads it (`?what\?` shows `what?`, not `wha` and an optional `t`); after `/`,
+  `\/` is already a plain `/` to the regexp. Before the first character, the last search's, which
   Neovim still shows. The same for the pattern of a `:s`, `:g`, `:v`, `:smagic`
   or `:snomagic` line (`:%s/foo/bar` shows `foo`). A range with a pattern of its own
   (`:/x/s/y/`) is not read; the last search shows instead.

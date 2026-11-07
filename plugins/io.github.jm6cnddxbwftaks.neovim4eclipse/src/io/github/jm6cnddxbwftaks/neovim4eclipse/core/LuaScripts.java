@@ -2862,7 +2862,9 @@ final class LuaScripts {
      * <p><b>Which pattern.</b> What Neovim itself highlights:
      * <ul>
      *   <li>while a search is typed ({@code /} or {@code ?}) and {@code 'incsearch'} is on: the text
-     *       typed so far, without a search offset ({@code /foo/e} is {@code foo}); before the first
+     *       typed so far, without a search offset ({@code /foo/e} is {@code foo}; after {@code ?},
+     *       and in {@code :s?a?b?}, an escaped {@code \?} is a plain {@code ?}, as Neovim reads
+     *       it: {@code ?what\?} finds {@code what?}); before the first
      *       character, the last search, which Neovim still shows;</li>
      *   <li>while a {@code :s}, {@code :g}, {@code :v}, {@code :smagic} or {@code :snomagic} line is
      *       typed, with {@code 'incsearch'}: its pattern ({@code :%s/foo/bar} gives {@code foo});
@@ -3013,19 +3015,27 @@ final class LuaScripts {
             end
 
             -- The pattern typed so far, up to its unescaped delimiter: 'foo/e' typed after / is 'foo'.
+            -- With ? as the delimiter (a ? search, :s?a?b?), an escaped ? is a plain ?, as Neovim's
+            -- skip_regexp_ex makes it: ?what\\? looks for "what?", where the pattern what\\? would
+            -- be "wha" and an optional t. An escaped backslash stays one (?a\\\\? ends at the ?).
+            -- No other delimiter is changed: \\/ in a / search is already a plain / to the regexp.
             local function until_delimiter(line, delimiter)
+              local out = {}
               local i = 1
               while i <= #line do
                 local c = line:sub(i, i)
                 if c == '\\\\' then
+                  local escaped = line:sub(i + 1, i + 1)
+                  out[#out + 1] = (delimiter == '?' and escaped == '?') and '?' or line:sub(i, i + 1)
                   i = i + 2
                 elseif c == delimiter then
-                  return line:sub(1, i - 1)
+                  break
                 else
+                  out[#out + 1] = c
                   i = i + 1
                 end
               end
-              return line
+              return table.concat(out)
             end
 
             -- The commands whose pattern 'incsearch' shows while it is typed, by their shortest names.
