@@ -19,8 +19,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * {@link #updateForMode(String)} from the Neovim input thread; disposed widgets
  * are ignored safely.
  *
- * <p><b>Putting Eclipse's caret back.</b> The caret's width before the first change is remembered,
- * and {@link #dispose()} gives it back. Without that, an editor left by Neovim (Detach Neovim, a
+ * <p><b>Putting Eclipse's caret back.</b> The caret's width before the first change is remembered
+ * (again whenever Eclipse makes a new caret), and {@link #dispose()} gives it back, unless Eclipse
+ * has set a new caret since the last change, which then already has Eclipse's shape. Without that, an editor left by Neovim (Detach Neovim, a
  * restart of Neovim, a multi-page editor switching to another page) kept the block caret of
  * normal mode although its keys were Eclipse's again. Example: Eclipse's caret is 1 pixel wide;
  * Neovim's normal mode makes it one {@code M} wide; after Detach Neovim it is 1 pixel again.
@@ -35,12 +36,21 @@ public final class CursorStyleController {
     private volatile boolean block = true;
     private volatile boolean disposed;
     /**
-     * Eclipse's own caret, as it was before the first change: the caret and its width, for
-     * {@link #dispose()} to give back. {@code null} until then (the first change runs on the UI
+     * Eclipse's own caret, the latest one a change found, and its width then, for
+     * {@link #dispose()} to give back. {@code null} until the first change (which runs on the UI
      * thread, later than the constructor when that runs on another). UI thread.
+     *
+     * <p>Eclipse may replace the caret while Neovim has the editor: {@code AbstractTextEditor}
+     * makes a new one when insert and overwrite are toggled (the Insert key), or the caret
+     * preferences change. The next change then finds that one, and records it and its width here.
      */
-    private Caret originalCaret;
-    private int originalWidth = -1;
+    private Caret eclipseCaret;
+    private int eclipseWidth = -1;
+    /**
+     * The caret this controller made, when the widget had none; {@code null} if it never had to.
+     * UI thread.
+     */
+    private Caret ownCaret;
 
     public CursorStyleController(StyledText styledText) {
         this.styledText = styledText;
@@ -68,22 +78,38 @@ public final class CursorStyleController {
         }
     }
 
-    /** Puts {@link #originalCaret} back at its width, if the widget and caret are still there. UI thread. */
+    /**
+     * Gives Eclipse's caret back its width, if the widget still shows a caret this controller
+     * changed. UI thread. Three cases:
+     * <ul>
+     *   <li>The widget shows {@link #eclipseCaret}: back to {@link #eclipseWidth}.</li>
+     *   <li>It shows {@link #ownCaret}: Eclipse's caret goes back in its place, and this one goes.</li>
+     *   <li>It shows another caret: Eclipse set it after the last change (Insert toggled overwrite
+     *       mode, say), so it already has Eclipse's shape, and it stays. Putting the earlier caret
+     *       back would give the editor a caret of the wrong mode, and disposing the current one
+     *       would take it from Eclipse, which still holds it.</li>
+     * </ul>
+     */
     private void restoreOriginalCaret() {
-        if (originalWidth < 0 || isWidgetDisposed()) {
+        if (eclipseWidth < 0 || isWidgetDisposed()) {
             return;
         }
         Caret caret = styledText.getCaret();
-        if (originalCaret != null && !originalCaret.isDisposed() && caret != originalCaret) {
-            styledText.setCaret(originalCaret); // apply() made a caret of its own: drop it
-            if (caret != null && !caret.isDisposed()) {
-                caret.dispose();
+        if (caret == null || caret.isDisposed()) {
+            return;
+        }
+        if (caret == ownCaret) {
+            if (eclipseCaret == null || eclipseCaret.isDisposed()) {
+                return; // no caret of Eclipse's left to give back; this one keeps the editor's caret
             }
-            caret = originalCaret;
+            styledText.setCaret(eclipseCaret);
+            caret.dispose();
+            ownCaret = null;
+            caret = eclipseCaret;
+        } else if (caret != eclipseCaret) {
+            return; // Eclipse's own, set since the last change
         }
-        if (caret != null && !caret.isDisposed()) {
-            caret.setSize(originalWidth, styledText.getLineHeight());
-        }
+        caret.setSize(eclipseWidth, styledText.getLineHeight());
     }
 
     /**
@@ -108,13 +134,16 @@ public final class CursorStyleController {
         }
         measureCharWidth();
         Caret caret = styledText.getCaret();
-        if (originalWidth < 0 && caret != null && !caret.isDisposed()) {
-            originalCaret = caret;
-            originalWidth = caret.getSize().x;
+        if (caret != null && !caret.isDisposed() && caret != eclipseCaret && caret != ownCaret) {
+            // Eclipse's caret, seen for the first time: the one before Neovim, or one Eclipse made
+            // since. Its width now is Eclipse's choice, which dispose() gives back.
+            eclipseCaret = caret;
+            eclipseWidth = caret.getSize().x;
         }
         if (caret == null || caret.isDisposed()) {
             caret = new Caret(styledText, SWT.NONE);
             styledText.setCaret(caret);
+            ownCaret = caret;
         }
         int height = styledText.getLineHeight();
         int width = blockCaret ? charWidth : Math.max(2, charWidth / 6);

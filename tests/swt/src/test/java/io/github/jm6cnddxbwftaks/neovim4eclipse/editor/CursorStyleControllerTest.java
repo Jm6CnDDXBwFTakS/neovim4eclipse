@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.swt.SWT;
@@ -62,6 +64,40 @@ class CursorStyleControllerTest {
 
         style.updateForMode("n");
         assertEquals(eclipsesWidth, text.getCaret().getSize().x, "no change after dispose");
+    }
+
+    /**
+     * Eclipse replaces the caret while Neovim has the editor (AbstractTextEditor.updateCaret, on an
+     * insert/overwrite toggle): dispose leaves that caret, alive, instead of putting the stale first
+     * one back and disposing Eclipse's current one.
+     */
+    @Test
+    void disposeLeavesACaretEclipseSetAfterTheLastChange() {
+        CursorStyleController style = new CursorStyleController(text);
+        Caret replaced = new Caret(text, SWT.NONE);
+        replaced.setSize(3, text.getLineHeight());
+        text.setCaret(replaced);
+
+        style.dispose();
+        assertSame(replaced, text.getCaret(), "Eclipse's current caret stays");
+        assertFalse(replaced.isDisposed());
+        assertEquals(3, replaced.getSize().x, "with Eclipse's width");
+    }
+
+    /** A caret Eclipse set, then changed by Neovim's mode: dispose gives it back its own width. */
+    @Test
+    void disposeGivesAReplacedCaretBackItsWidth() {
+        CursorStyleController style = new CursorStyleController(text);
+        Caret replaced = new Caret(text, SWT.NONE);
+        replaced.setSize(3, text.getLineHeight());
+        text.setCaret(replaced);
+        style.updateForMode("n");
+        assertTrue(replaced.getSize().x > 3, "the block");
+
+        style.dispose();
+        assertSame(replaced, text.getCaret());
+        assertFalse(replaced.isDisposed());
+        assertEquals(3, replaced.getSize().x);
     }
 
     @Test
