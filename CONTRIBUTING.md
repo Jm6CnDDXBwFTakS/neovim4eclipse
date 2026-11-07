@@ -37,7 +37,7 @@ java releng/tools/ci/LikeCi.java --all          # every test group, as for a rel
 ./mvnw verify -Pui -Dnvim.path=...              # ... and the UI tests (opens an Eclipse window)
 ./mvnw verify -PuiHeavyJava -Dnvim.path=...     # only the UI tests that need Java tooling (slow)
 xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots   # retake the listing screenshots
-xvfb-run -a ./mvnw verify -Pgallery              # draw the dialogs the manual checks look at (target/gallery)
+xvfb-run -a ./mvnw verify -Pgallery -Dnvim.path=/usr/bin/nvim   # draw the dialogs and search highlights the manual checks look at (target/gallery)
 ./mvnw verify -DskipTests                       # build only
 ./mvnw test -f tests/unit/pom.xml               # fast unit tests, no Eclipse or Neovim
 ./mvnw test -f tests/text/pom.xml               # text-model tests (IDocument), no workbench or display
@@ -90,7 +90,11 @@ preference page's Neovim notes that the [manual checks](docs/MANUAL_CHECKS.md) b
 dialog at a fresh start, the "Neovim not started" notice for each value `-Dneovim4eclipse.nvim`
 refuses, the old-preference note, ...) into `target/gallery/*.png`, with an `index.html` that puts
 each picture under its topic and says what to look for. Looking at the pictures replaces opening
-each dialog by hand. Whether any text is cut off, overlaps or hangs over a window's edge is not left
+each dialog by hand. `SearchGalleryTest`, in the same profile, pictures the search highlights in a
+text file and the Java editor into `search.html`; the profile then starts a second test Eclipse
+with Eclipse's dark theme (`-cssTheme org.eclipse.e4.ui.css.theme.e4_dark`, as a user's Eclipse
+starts after choosing Dark), which takes those pictures again, so the page shows each in both
+themes. The profile adds the Java development tools and the theme plug-in to the test Eclipse. Whether any text is cut off, overlaps or hangs over a window's edge is not left
 to the eyes: `DialogLayoutTest` (`tests/swt`) and `NeovimPreferencePageTest` (UI tests) check the
 same dialogs and notes with `LayoutCheck` (the fragment's `shared-swt/` folder) on every run. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
 platform, since each draws its own fonts and spacing. On macOS run it from a terminal that has the Screen Recording

@@ -238,7 +238,7 @@
          option -Dneovim4eclipse.nvim (see the nvim-path profile). -->
     <nvim.path></nvim.path>
     <!-- Whether the run may go without -Dnvim.path: yes, unless a profile that starts Neovim is on
-         (ui, uiHeavyJava, timeoutReliant, screenshots, all), which sets it to ${skipTests}. -->
+         (ui, uiHeavyJava, timeoutReliant, screenshots, gallery, all), which sets it to ${skipTests}. -->
     <nvim.optional>true</nvim.optional>
     <!-- -DskipTests sets it to true; the ui profile passes it on to ui.skip. -->
     <skipTests>false</skipTests>
@@ -365,17 +365,69 @@
         </plugins>
       </build>
     </profile>
-    <!-- ./mvnw verify -Pgallery: runs only ChecksGalleryTest (tagged "gallery"), which draws the
-         dialogs and preference-page notes the manual checks look at into target/gallery/*.png, with an
-         index.html that groups the pictures by topic and says what to look for in each. No Java tools
-         needed. CONTRIBUTING.md, under "Build and test". -->
+    <!-- ./mvnw verify -Pgallery: runs only the tests tagged "gallery", which draw what the manual
+         checks look at into target/gallery/: ChecksGalleryTest the dialogs and preference-page notes
+         (index.html groups them by topic and says what to look for in each), SearchGalleryTest the
+         search highlights (search.html). Then a second test Eclipse, started with Eclipse's dark
+         theme (-cssTheme, as a user's Eclipse starts after choosing Dark), takes SearchGalleryTest's
+         pictures again ("galleryDark"), so search.html shows each in both themes. With the Java
+         development tools (the Java editor's syntax colors under the highlights) and
+         org.eclipse.ui.themes (the dark theme). CONTRIBUTING.md, under "Build and test". -->
     <profile>
       <id>gallery</id>
       <properties>
         <ui.skip>${skipTests}</ui.skip>
+        <!-- SearchGalleryTest starts Neovim: -Dnvim.path is required, as for -Pui. -->
+        <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups>gallery</ui.groups>
         <ui.excludedGroups></ui.excludedGroups>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>target-platform-configuration</artifactId>
+            <configuration>
+              <dependency-resolution>
+                <extraRequirements combine.children="append">
+                  <requirement>
+                    <type>eclipse-feature</type>
+                    <id>org.eclipse.jdt</id>
+                    <versionRange>0.0.0</versionRange>
+                  </requirement>
+                  <requirement>
+                    <type>eclipse-plugin</type>
+                    <id>org.eclipse.ui.themes</id>
+                    <versionRange>0.0.0</versionRange>
+                  </requirement>
+                </extraRequirements>
+              </dependency-resolution>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.eclipse.tycho</groupId>
+            <artifactId>tycho-surefire-plugin</artifactId>
+            <version>${tycho.version}</version>
+            <executions>
+              <execution>
+                <id>gallery-dark</id>
+                <goals>
+                  <goal>test</goal>
+                </goals>
+                <configuration>
+                  <appArgLine>-pluginCustomization ${project.basedir}/test-customization.ini -cssTheme org.eclipse.e4.ui.css.theme.e4_dark</appArgLine>
+                  <groups>galleryDark</groups>
+                  <excludedGroups></excludedGroups>
+                  <systemProperties combine.children="append">
+                    <gallery.theme>dark</gallery.theme>
+                  </systemProperties>
+                  <reportsDirectory>${project.build.directory}/surefire-reports-dark</reportsDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
     <!-- ./mvnw verify -Pall: every test of every group in one run, here and in tests/unit (there
          also the integration tests): the -Pui tests, heavyJava (so with the Java development tools,

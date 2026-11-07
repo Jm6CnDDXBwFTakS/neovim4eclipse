@@ -92,6 +92,14 @@ final class SearchColors {
         return (rgb.red << 16) | (rgb.green << 8) | rgb.blue;
     }
 
+    /**
+     * The preference key of the Search Results color, or {@code null} without the Search plug-in.
+     * Example: {@code searchResultIndicationColor}, in {@code org.eclipse.ui.editors}' preferences.
+     */
+    static String preferenceKey() {
+        return Key.VALUE;
+    }
+
     /** The key, looked up once: reading the annotation preferences reads every plug-in's declarations. */
     private static final class Key {
         static final String VALUE = colorKey();
