@@ -20,6 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import common.Ask;
+import common.EclipseCopy;
 import common.Folders;
 import common.PgpKey;
 import common.Settings;
@@ -57,7 +58,7 @@ import common.Version;
  *
  * <h2>A fresh copy of your Eclipse, each time</h2>
  * The Eclipse is a copy of yours under {@code ~/var/n4e-checks/install-check/eclipse}, made with
- * hard links as {@code ManualChecks launch} makes its copy ({@code ManualChecks.ChecksEclipse}),
+ * hard links as {@code ManualChecks launch} makes its copy (both use {@code common/EclipseCopy}),
  * and made anew each run, so nothing of an earlier run is left. If your Eclipse has the plug-in
  * installed, the copy has it too; the install then replaces it in the same step, as an update
  * would. The plug-in's Neovim folder ({@code XDG_DATA_HOME}) and the workspace are new and empty
@@ -149,7 +150,6 @@ public final class InstallCheckTool {
     }
 
     private static void run(Path repo, Options options) throws IOException, InterruptedException {
-        ManualChecks.programName = "InstallCheck"; // a stop in the Eclipse copy's code names this program
         Settings settings = Settings.load(List.of(repo.resolve(Settings.COMMON)), Map.of());
         String site = settings.get("site.url");
         String fingerprint = PgpKey.fingerprint(Files.readString(repo.resolve(settings.get("signing.key"))));
@@ -167,13 +167,13 @@ public final class InstallCheckTool {
         // A fresh copy of your Eclipse, with an empty workspace and Neovim folder.
         Path root = options.root();
         Path workspace = root.resolve("workspace");
-        if (ManualChecks.ChecksEclipse.inUse(workspace)) {
+        if (EclipseCopy.inUse(workspace)) {
             throw new ToolFailure("an Eclipse from an earlier InstallCheck still runs in " + workspace + "; close it, then run this again");
         }
-        Path yours = ManualChecks.ChecksEclipse.program(options.eclipse() != null ? options.eclipse() : ManualChecks.defaultEclipse())
+        Path yours = EclipseCopy.program(options.eclipse() != null ? options.eclipse() : EclipseCopy.defaultEclipse())
                 .toRealPath();
-        Path source = ManualChecks.ChecksEclipse.installation(yours);
-        if (!ManualChecks.ChecksEclipse.isEclipse(source)) {
+        Path source = EclipseCopy.installation(yours);
+        if (!EclipseCopy.isEclipse(source)) {
             throw new ToolFailure(source + " (the folder of " + yours + ") is not an Eclipse installation: no eclipse.ini and plugins/"
                     + " there. Name the eclipse program itself with --eclipse or the ECLIPSE environment variable");
         }
@@ -185,10 +185,10 @@ public final class InstallCheckTool {
         }
         Path copy = root.resolve("eclipse").resolve(source.getFileName().toString());
         System.out.println("Copying " + source + " to " + copy + " ...");
-        long[] counts = ManualChecks.ChecksEclipse.copyTree(source, copy, ManualChecks.ChecksEclipse.inner(source));
+        long[] counts = EclipseCopy.copyTree(source, copy, EclipseCopy.inner(source));
         System.out.println("  " + counts[0] + " files linked, " + counts[1] + " copied");
         Path program = copy.resolve(source.relativize(yours).toString());
-        Path director = ManualChecks.ChecksEclipse.director(program);
+        Path director = EclipseCopy.director(program);
         Path log = root.resolve("director.log");
 
         // Install, replacing the plug-in if the copy has it from your Eclipse.
@@ -197,7 +197,7 @@ public final class InstallCheckTool {
         install.addAll(installArguments(site, v, fingerprint, had));
         System.out.println("Installing with p2's director" + (had ? ", replacing the plug-in the copy has from your Eclipse" : "")
                 + " (output in " + log + "):");
-        String output = ManualChecks.ChecksEclipse.run(install, log);
+        String output = EclipseCopy.run(install, log);
         directorLines(output).forEach(line -> System.out.println("  " + line));
         if (!output.contains("Operation completed")) {
             throw new ToolFailure("the install from " + site + " failed (see above; all of it in " + log + ")");
@@ -221,7 +221,7 @@ public final class InstallCheckTool {
         List<String> list = new ArrayList<>(List.of(director.toString()));
         list.addAll(DIRECTOR);
         list.addAll(List.of("-listInstalledRoots", "-data", "@none"));
-        return ManualChecks.ChecksEclipse.installedVersion(ManualChecks.ChecksEclipse.run(list, log));
+        return EclipseCopy.installedVersion(EclipseCopy.run(list, log));
     }
 
     /**
@@ -235,9 +235,9 @@ public final class InstallCheckTool {
         List<String> args = new ArrayList<>(DIRECTOR);
         args.addAll(List.of("-repository", site + "releases/" + v + "/"));
         if (installed) {
-            args.addAll(List.of("-uninstallIU", ManualChecks.ChecksEclipse.FEATURE));
+            args.addAll(List.of("-uninstallIU", EclipseCopy.FEATURE));
         }
-        args.addAll(List.of("-installIU", ManualChecks.ChecksEclipse.FEATURE, "-trustSignedContentOnly",
+        args.addAll(List.of("-installIU", EclipseCopy.FEATURE, "-trustSignedContentOnly",
                 "-trustedPGPKeys", fingerprint.toLowerCase(java.util.Locale.ROOT), "-trustedAuthorities", authority(site),
                 "-verboseTrust", "-data", "@none"));
         return args;

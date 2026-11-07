@@ -25,7 +25,7 @@ java releng/tools/ci/LikeCi.java --all            # the same with every test gro
 ./mvnw verify -Pscreenshots                       # retake the Marketplace screenshots (see docs/design/MARKETPLACE.md)
 ./mvnw verify -Pgallery                           # draw the dialogs the manual checks look at (target/gallery; CONTRIBUTING.md)
 ./mvnw verify -DskipTests                         # build only
-java releng/tools/checks/ManualChecks.java due    # the manual checks a release needs (docs/MANUAL_CHECKS.md)
+java releng/tools/checks/ManualChecks.java due    # the manual checks a release needs (docs/MANUAL_CHECKS.md; JDK 22+)
 java releng/tools/checks/InstallCheck.java        # install the newest release from the update site into a copy of your Eclipse (JDK 22+)
 java releng/tools/neovim/NeovimUpgrade.java 0.13.0  # move to a new Neovim release (data file, copies, checks, tests; docs/UPGRADING.md)
 java releng/tools/release/Release.java            # a release, step by step: status and next step (a JDK of release 22 or newer; CONTRIBUTING.md, "Releasing")

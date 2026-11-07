@@ -69,8 +69,9 @@
             <configuration>
               <sources>
                 <source>${project.basedir}/../io.github.jm6cnddxbwftaks.neovim4eclipse.tests/shared</source>
-                <!-- The release tools' tested parts (releng/tools/checks/ManualChecks: the manual
-                     checks' parser and due filter). Test sources, since they are not the plug-in. -->
+                <!-- The developer tools' tested parts (releng/tools: ManualChecks' parser and due
+                     filter, common/EclipseCopy, the Release tool's decisions). Test sources, since
+                     they are not the plug-in. -->
                 <source>${project.basedir}/../../releng/tools</source>
               </sources>
             </configuration>

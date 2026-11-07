@@ -14,6 +14,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import common.Ask;
+import common.EclipseCopy;
 import common.ToolFailure;
 import common.Version;
 
@@ -50,7 +51,7 @@ class InstallCheckTest {
         assertEquals("a91f53d8931b7fd0d14686186cc9e446147b063c", after(args, "-trustedPGPKeys"), "in lower case, as p2 compares it");
         assertTrue(args.contains("-trustSignedContentOnly"));
         assertFalse(args.contains("-uninstallIU"), "nothing to replace");
-        assertEquals(ManualChecks.ChecksEclipse.FEATURE,
+        assertEquals(EclipseCopy.FEATURE,
                 after(InstallCheckTool.installArguments(SITE, V, "A91F", true), "-uninstallIU"), "replaces the copy's plug-in");
     }
 
