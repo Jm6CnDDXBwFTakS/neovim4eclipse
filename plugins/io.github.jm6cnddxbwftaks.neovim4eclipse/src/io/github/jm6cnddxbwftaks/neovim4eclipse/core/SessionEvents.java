@@ -150,11 +150,26 @@ final class SessionEvents implements StateSync.Listeners {
         ideActionListeners.remove(listener);
     }
 
-    void addInputHandledListener(Runnable listener) {
-        inputHandledListeners.add(inputHandledWrappers.computeIfAbsent(listener, l -> ignored -> l.run()));
+    /**
+     * Adds a listener once: adding the same {@code Runnable} again does nothing.
+     *
+     * <p>Why idempotent: the wrapper map holds one wrapper per {@code Runnable}. If a second add put
+     * the same wrapper into the list a second time, one remove would take the map entry and one
+     * copy out of the list, and the other copy would run forever with no way to remove it (the
+     * map no longer knows it). Example: an editor that adds its listener on attach and again on a
+     * re-attach, then removes it once on close. {@code synchronized} keeps the map and the list in
+     * step when two threads add or remove the same listener at once.
+     */
+    synchronized void addInputHandledListener(Runnable listener) {
+        if (inputHandledWrappers.containsKey(listener)) {
+            return;
+        }
+        Consumer<Void> wrapper = ignored -> listener.run();
+        inputHandledWrappers.put(listener, wrapper);
+        inputHandledListeners.add(wrapper);
     }
 
-    void removeInputHandledListener(Runnable listener) {
+    synchronized void removeInputHandledListener(Runnable listener) {
         Consumer<Void> wrapper = inputHandledWrappers.remove(listener);
         if (wrapper != null) {
             inputHandledListeners.remove(wrapper);

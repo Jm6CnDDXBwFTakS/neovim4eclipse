@@ -74,4 +74,23 @@ class SessionEventsTest {
 
         assertEquals(List.of(), heard);
     }
+
+    /**
+     * The same {@code Runnable} added twice is one listener: it runs once per event, and one
+     * remove silences it. (Before, the second add put a second copy in the list that no remove
+     * could reach.)
+     */
+    @Test
+    void anInputHandledListenerAddedTwiceRunsOnceAndOneRemoveStopsIt() {
+        Runnable handled = () -> heard.add("handled");
+        events.addInputHandledListener(handled);
+        events.addInputHandledListener(handled);
+
+        events.inputHandled();
+        assertEquals(List.of("handled"), heard);
+
+        events.removeInputHandledListener(handled);
+        events.inputHandled();
+        assertEquals(List.of("handled"), heard);
+    }
 }
