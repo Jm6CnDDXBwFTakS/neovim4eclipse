@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -43,7 +44,9 @@ import org.junit.jupiter.api.io.TempDir;
  *   <li>An {@code https} URL, as GitHub's: the client asks the proxy for a tunnel ({@code CONNECT
  *       neovim.invalid:443}). The test proxy refuses it (a real one would connect to GitHub, and a
  *       TLS server of the test's own would need a certificate the client trusts), so the download
- *       fails, but only after the proxy was asked: the request line proves the route.</li>
+ *       fails, but only after the proxy was asked: the request line proves the route. A tunnel to
+ *       {@code password.neovim.invalid} is refused with 407 instead, as a proxy that wants a
+ *       password does.</li>
  * </ul>
  */
 class NeovimDownloadProxyTest {
@@ -88,6 +91,9 @@ class NeovimDownloadProxyTest {
                     out.write(("HTTP/1.1 200 OK\r\nContent-Length: " + BODY.length + "\r\nConnection: close\r\n\r\n")
                             .getBytes(StandardCharsets.ISO_8859_1));
                     out.write(BODY);
+                } else if (requestLine.startsWith("CONNECT password.neovim.invalid:")) {
+                    out.write(("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"test\"\r\n"
+                            + "Content-Length: 0\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
                 } else {
                     out.write("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                             .getBytes(StandardCharsets.ISO_8859_1));
@@ -135,5 +141,19 @@ class NeovimDownloadProxyTest {
                 tmp, InstallProgress.NONE));
         assertEquals(NeovimInstallException.Reason.NETWORK, e.reason(), e.getMessage());
         assertEquals("CONNECT neovim.invalid:443 HTTP/1.1", requests.get(0), "the route is the proxy's tunnel");
+    }
+
+    /**
+     * A proxy that answers the tunnel with 407 (it wants a password, which Java does not send
+     * through a tunnel by default) is reported as such, naming the eclipse.ini line; a refused
+     * tunnel with another status (the 502 above) stays a network error.
+     */
+    @Test
+    void aTunnelRefusedWith407AsksForTheProxyPassword() {
+        NeovimInstallException e = assertThrows(NeovimInstallException.class, () -> NeovimDownload.download(
+                archive("https://password.neovim.invalid/nvim-linux-arm64.tar.gz"),
+                NeovimDownload.client(eclipsesSettings(), null), tmp, InstallProgress.NONE));
+        assertEquals(NeovimInstallException.Reason.PROXY_PASSWORD, e.reason(), e.getMessage());
+        assertTrue(e.getMessage().contains(NeovimDownload.TUNNEL_AUTH_LINE), e.getMessage());
     }
 }

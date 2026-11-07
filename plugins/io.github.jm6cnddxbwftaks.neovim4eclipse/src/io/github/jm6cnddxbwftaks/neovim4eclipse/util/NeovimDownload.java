@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * Downloads a release archive into a temporary file, for {@link NeovimInstaller} to check and unpack.
@@ -234,13 +235,22 @@ public final class NeovimDownload {
     }
 
     /**
-     * Why GitHub could not be reached, for the user. A proxy that wants a password makes Java's
-     * tunnel fail with an {@code IOException} whose message contains 407 (before any response), so
-     * that case is recognized here too.
+     * What {@code java.net.http} says when a proxy refuses the tunnel ({@code CONNECT}) with a
+     * status: {@code "Tunnel failed, got: 502"}. A 407 normally arrives as a response instead (the
+     * client hands the proxy's answer back with status 407, which {@link #download} checks), so this
+     * is a second line for a client version that reports it as an error.
+     */
+    private static final Pattern TUNNEL_407 = Pattern.compile("^Tunnel failed, got: 407\\b");
+
+    /**
+     * Why GitHub could not be reached, for the user. A tunnel the proxy refused with 407 means a
+     * proxy password ({@link #TUNNEL_407}); only that exact message counts. Any other message that
+     * happens to hold the digits ({@code "Connection reset after 14070 bytes"}, a host name with 407
+     * in it) is an ordinary network error, not a password problem.
      */
     static String networkMessage(NeovimRelease.Archive archive, IOException e) {
         String detail = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        if (detail.contains("407")) {
+        if (TUNNEL_407.matcher(detail).find()) {
             throw proxyPassword();
         }
         if (e instanceof UnknownHostException) {

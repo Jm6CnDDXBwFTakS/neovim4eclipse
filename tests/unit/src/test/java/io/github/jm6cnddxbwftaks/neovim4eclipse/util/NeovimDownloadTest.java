@@ -183,6 +183,23 @@ class NeovimDownloadTest {
         assertNoLeftovers();
     }
 
+    /**
+     * Only Java's own tunnel message for a 407 means a proxy password; any other error whose text
+     * happens to hold "407" stays a network error and keeps its own words.
+     */
+    @Test
+    void onlyTheTunnelsOwn407IsAProxyPassword() {
+        NeovimRelease.Archive a = archive("/asset");
+        NeovimInstallException e = assertThrows(NeovimInstallException.class,
+                () -> NeovimDownload.networkMessage(a, new IOException("Tunnel failed, got: 407")));
+        assertEquals(NeovimInstallException.Reason.PROXY_PASSWORD, e.reason());
+        for (String other : new String[] { "Connection reset after 14070 bytes", "Tunnel failed, got: 502",
+                "proxy-407.example.org: closed" }) {
+            String message = NeovimDownload.networkMessage(a, new IOException(other));
+            assertTrue(message.contains(other), message);
+        }
+    }
+
     private void assertNoLeftovers() throws IOException {
         try (Stream<Path> files = Files.list(tmp)) {
             assertEquals(0, files.count(), "the temporary file is deleted");
