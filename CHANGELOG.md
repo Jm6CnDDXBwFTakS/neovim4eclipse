@@ -44,7 +44,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   document.
 - Renaming or moving an open file (Refactor › Rename, the Project Explorer), or File › Save As, no
   longer cuts Neovim off from the editor, and keeps its Neovim buffer: undo history and marks
-  survive, in multi-page editors too.
+  survive, in multi-page editors too. An editor Eclipse reuses for another file gets a buffer of
+  its own, even when both files have the same text.
 - After `:wa` created a new file in the background, `:bufdo … | update` no longer changes Neovim but
   saves Eclipse's old text.
 - Get Neovim and the start-up clean-up no longer delete files inside a folder that a junction or
@@ -57,10 +58,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Security: `:e` and `gf` no longer open a file in a non-text editor (the Web Browser) when a
   project's own content-type settings map its name to an image type.
 - Security: a symbolic link to a file that does not exist is no longer written through by `:w`,
-  `:w other`, `:saveas`, `:wq` or `:wa` without `!`; `:w!` writes there, and `:wq!` writes and
-  closes.
-- macOS: a Cmd shortcut Eclipse has no binding for (Cmd+U, Cmd+P) no longer reaches Neovim as a
-  plain letter that changed the text.
+  `:w other`, `:saveas`, `:wq` or `:wa` without `!`; `:w!` and `:wa!` write there (`:w` says so in
+  its error), and `:wq!` writes and closes.
+- A Cmd shortcut (macOS) or Super shortcut (Linux) that Eclipse has no binding for (Cmd+U, Cmd+P)
+  no longer reaches Neovim as a plain letter that changed the text, and on Linux no longer types
+  it into the file.
 - Alt and Ctrl keys reach Neovim as pressed: Alt+Shift+A is `<A-A>` (was `<A-a>`), Alt+1 is
   `<A-1>`, Ctrl+2 is `<C-2>`, Ctrl+< and Alt+< are `<C-lt>` and `<A-lt>`. Option characters on
   macOS are typed as before.
@@ -70,7 +72,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - The status bar no longer loses a message such as E486 to an older status.
 - Switching to Eclipse mode with the `:` box open closes it; it stayed open and stuck.
 - After Detach Neovim, a restart of Neovim, or a multi-page editor's page switch, the editor gets
-  its normal caret back instead of the block.
+  its normal caret back instead of the block, and a caret Eclipse changed meanwhile (Insert
+  toggling overwrite) stays.
 - The command line, output popup and message line follow a light/dark theme switch while open; an
   error flash no longer undoes a background change made during it.
 - Folds Java's reconcile changes while Neovim opens or closes a fold now reach Neovim.
@@ -92,6 +95,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A network error whose message happens to contain 407 is no longer reported as a proxy password
   problem.
 - Opening or closing a project in a large workspace no longer scans every project again.
+- Neovim learns of a linked folder's new target at once, when the link is edited in place or its
+  path variable changes (Preferences › Linked Resources).
 
 ## [0.2.6] - 2026-11-07
 
