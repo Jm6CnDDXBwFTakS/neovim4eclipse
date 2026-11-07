@@ -159,12 +159,21 @@ every one; a box does not sit under the text at all.
 
 ### Colors
 
-The *Search Results* annotation color (*Window → Preferences → General → Editors → Text Editors →
-Annotations*), the color Eclipse's Search view marks its hits with. It follows the theme and the
-user's choice, and a change applies at once (`editor/SearchColors` listens to the preference
-store, and hops to the UI thread: a preference may be changed on any thread). The key is read from the Search plug-in's annotation declaration
-(`org.eclipse.search.results`), not written here. Without that plug-in, its default (206, 204,
-247) is used. The box is that color moved halfway toward the editor's text color
+A color of the plug-in's own, *Search match*: a `colorDefinition` in `plugin.xml`, which Eclipse
+lists under *Window → Preferences → General → Appearance → Colors and Fonts → Neovim for Eclipse*,
+where users change it, as they change JDT's or Git's colors. Its default is an amber, 255,214,102,
+as Vim users know `'hlsearch'`. Eclipse's dark theme gets a darker amber, 110,88,24, from a
+stylesheet the plug-in adds to that theme (`css/e4-dark_neovim4eclipse.css`, the
+`org.eclipse.e4.ui.css.swt.theme` extension), as JDT gives its syntax colors a dark default. Other
+dark themes keep the light amber unless they set it too. `editor/SearchColors` reads the current
+theme's color registry and listens to the theme manager (a change of the color or of the theme),
+hopping to the UI thread, as either may come on another.
+
+Until 0.2.6 the matches took Eclipse's *Search Results* annotation color. That made a change of the
+color recolor Eclipse's own search marks too, and its lavender default became a gray in the dark
+theme that matches barely showed on (the gallery's dark pictures).
+
+The box is the match color moved halfway toward the editor's text color
 (`util/OverlayColors.searchBox`): darker in a light theme, lighter in a dark one, so it shows on
 the match's background in both.
 Neovim's `Search` and `CurSearch` groups are not used: their colors suit Neovim's screen, not the

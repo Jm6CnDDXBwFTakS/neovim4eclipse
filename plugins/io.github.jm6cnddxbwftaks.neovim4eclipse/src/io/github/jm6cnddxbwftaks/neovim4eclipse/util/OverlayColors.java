@@ -70,7 +70,7 @@ public final class OverlayColors {
      * background: it does not sit under the text, so it can be this strong.
      *
      * <pre>
-     *   searchBox(0xCECCF7, 0x000000) = 0x67667C   (light theme: Eclipse's Search Results color, darker)
+     *   searchBox(0xCECCF7, 0x000000) = 0x67667C   (a light lavender match color, darker)
      *   searchBox(0x3E3E6E, 0xD4D4D4) = 0x8989A1   (dark theme: lighter)
      * </pre>
      */

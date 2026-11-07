@@ -14,14 +14,13 @@ import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.jobs.Job;
-import org.eclipse.jface.preference.IPreferenceStore;
-import org.eclipse.jface.preference.PreferenceConverter;
+import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
@@ -67,9 +66,9 @@ class SearchGalleryTest extends EndToEndTestBase {
                     "The comment, the class name, the string and the variables keep their syntax colors on the "
                             + "background, and stay readable; the match under the caret, in the comment, has a box "
                             + "and its text reads as well as the others."),
-            new Picture("color", "With another Search Results color",
+            new Picture("color", "With another search match color",
                     "The matches take the color set in Preferences > Editors > Text Editors > Annotations > "
-                            + "Search Results (an amber here); the box follows it."));
+                            + "Search match (a green here); the box follows it."));
 
     private static final String TEXT = """
             The quick brown fox jumps over the lazy dog.
@@ -135,17 +134,17 @@ class SearchGalleryTest extends EndToEndTestBase {
             waitForCaret(javaWidget, JAVA.indexOf("foxes")); // the search's first match, in the comment
             take(javaWidget, "java", 16);
 
-            IPreferenceStore store = EditorsUI.getPreferenceStore();
-            String key = SearchColors.preferenceKey();
-            assertTrue(key != null, "no Search Results annotation: is org.eclipse.search in the test Eclipse?");
+            // As a user sets it in Colors and Fonts: the theme's color registry takes the new value.
+            ColorRegistry colors = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getColorRegistry();
+            RGB own = colors.getRGB(SearchColors.COLOR_ID);
             RGB before = textWidgetBackground(javaWidget, JAVA.indexOf("foxes"));
             try {
-                PreferenceConverter.setValue(store, key, theme.equals("dark") ? new RGB(110, 88, 24) : new RGB(255, 214, 102));
-                waitUntil("the new Search Results color in the editor", TIMEOUT_MS,
+                colors.put(SearchColors.COLOR_ID, theme.equals("dark") ? new RGB(40, 92, 70) : new RGB(170, 230, 200));
+                waitUntil("the new search match color in the editor", TIMEOUT_MS,
                         () -> !before.equals(textWidgetBackground(javaWidget, JAVA.indexOf("foxes"))));
                 take(javaWidget, "color", 16);
             } finally {
-                store.setToDefault(key);
+                colors.put(SearchColors.COLOR_ID, own);
             }
         } finally {
             session.inputAsync("<Esc>:nohlsearch<CR>");

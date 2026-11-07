@@ -5,59 +5,66 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.function.BiConsumer;
 
-import org.eclipse.jface.preference.IPreferenceStore;
-import org.eclipse.jface.preference.PreferenceConverter;
+import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
-import org.eclipse.ui.editors.text.EditorsUI;
-import org.eclipse.ui.texteditor.AnnotationPreference;
-import org.eclipse.ui.texteditor.MarkerAnnotationPreferences;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.themes.IThemeManager;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 
 /**
- * The colors of the search highlights: Eclipse's own <i>Search Results</i> annotation color
- * (<i>Window &gt; Preferences &gt; General &gt; Editors &gt; Text Editors &gt; Annotations</i>), so
- * that they follow the theme and the user's choice, and for the box around the match under the
- * caret the same color halfway toward the text ({@link OverlayColors#searchBox}). Neovim's {@code Search}
- * highlight group is not used: its colors are made for Neovim's own screen, not for the editor's
- * theme.
+ * The colors of the search highlights: the plug-in's own <i>Search match</i> color, and for the
+ * box around the match under the caret the same color halfway toward the text
+ * ({@link OverlayColors#searchBox}).
  *
- * <p>The color's preference key is the one the Search plug-in declares for its annotation type
- * ({@code org.eclipse.search.results}), read from the annotation preferences rather than written
- * here; where that plug-in is missing, its default (206, 204, 247) is used. A change of the color
- * (or a theme that sets it) reaches the editor at once through the preference store's listener.
- * UI thread, but for that listener, which may be called on another.
+ * <h2>Where the color comes from</h2>
+ * A color definition in {@code plugin.xml} ({@value #COLOR_ID}), which Eclipse lists under
+ * <i>Window &gt; Preferences &gt; General &gt; Appearance &gt; Colors and Fonts &gt; Neovim for
+ * Eclipse &gt; Search match</i>, where a user changes it. Its default is an amber, 255,214,102, as
+ * Vim users know {@code hlsearch}; Eclipse's dark theme gets a darker amber, 110,88,24, from the
+ * plug-in's stylesheet for that theme ({@code css/e4-dark_neovim4eclipse.css}), the way JDT gives
+ * its syntax colors a dark default. The value is read from the current theme's
+ * {@link ColorRegistry}, which holds the default, the theme's value and the user's choice in that
+ * order. Neovim's {@code Search} highlight group is not used: its colors are made for Neovim's own
+ * screen, not for the editor's theme.
+ *
+ * <p>Before 0.2.7 the matches took Eclipse's <i>Search Results</i> annotation color. A color of
+ * its own changes the matches without changing Eclipse's own search marks, and its default could
+ * differ from that lavender, which a dark theme turns into a gray that matches barely show on.
+ *
+ * <p>A change of the color, or of the theme, reaches the editor at once through the theme
+ * manager's listener. UI thread, but for that listener, which may be called on another.
  */
 final class SearchColors {
 
-    /** The Search plug-in's annotation type for search results. */
-    static final String ANNOTATION_TYPE = "org.eclipse.search.results";
+    /** The color definition's id in {@code plugin.xml}, and the key of a user's choice. */
+    static final String COLOR_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch";
 
-    /** Its default color, when the Search plug-in is not installed. */
-    private static final RGB DEFAULT = new RGB(206, 204, 247);
+    /** The light default, as in {@code plugin.xml}: used where no theme registry answers. */
+    static final RGB DEFAULT = new RGB(255, 214, 102);
 
     private final StyledText widget;
     private final BiConsumer<Color, Color> apply;
-    private final IPreferenceStore store = EditorsUI.getPreferenceStore();
-    private final String key = Key.VALUE;
+    private final IThemeManager themes = PlatformUI.getWorkbench().getThemeManager();
     /**
-     * Hears the preference. A preference may be changed on any thread (an import, a Job), and the
-     * colors go to the widget, so the work hops to the widget's UI thread.
+     * Hears the theme: a change of this color, or another theme. Either may happen on any thread
+     * (a preference import, a Job), and the colors go to the widget, so the work hops to the
+     * widget's UI thread.
      */
-    private final IPropertyChangeListener listener = this::onPreferenceChange;
+    private final IPropertyChangeListener listener = this::onThemeChange;
 
     /**
-     * Hands {@code apply} the match and box colors now and after every change of the
-     * preference, until {@link #dispose}.
+     * Hands {@code apply} the match and box colors now and after every change of the color or the
+     * theme, until {@link #dispose}.
      */
     SearchColors(StyledText widget, BiConsumer<Color, Color> apply) {
         this.widget = widget;
         this.apply = apply;
-        store.addPropertyChangeListener(listener);
+        themes.addPropertyChangeListener(listener);
         update();
     }
 
@@ -73,14 +80,15 @@ final class SearchColors {
         return new Color((mixed >> 16) & 0xFF, (mixed >> 8) & 0xFF, mixed & 0xFF);
     }
 
-    private void onPreferenceChange(PropertyChangeEvent event) {
-        if (key != null && key.equals(event.getProperty()) && !widget.isDisposed()) {
+    private void onThemeChange(PropertyChangeEvent event) {
+        String property = event.getProperty();
+        if ((COLOR_ID.equals(property) || IThemeManager.CHANGE_CURRENT_THEME.equals(property)) && !widget.isDisposed()) {
             widget.getDisplay().asyncExec(this::update);
         }
     }
 
     void dispose() {
-        store.removePropertyChangeListener(listener);
+        themes.removePropertyChangeListener(listener);
     }
 
     private void update() {
@@ -92,33 +100,11 @@ final class SearchColors {
     }
 
     private RGB rgb() {
-        return key != null && store.contains(key) ? PreferenceConverter.getColor(store, key) : DEFAULT;
+        RGB rgb = themes.getCurrentTheme().getColorRegistry().getRGB(COLOR_ID);
+        return rgb != null ? rgb : DEFAULT;
     }
 
     private static int toInt(RGB rgb) {
         return (rgb.red << 16) | (rgb.green << 8) | rgb.blue;
-    }
-
-    /**
-     * The preference key of the Search Results color, or {@code null} without the Search plug-in.
-     * Example: {@code searchResultIndicationColor}, in {@code org.eclipse.ui.editors}' preferences.
-     */
-    static String preferenceKey() {
-        return Key.VALUE;
-    }
-
-    /** The key, looked up once: reading the annotation preferences reads every plug-in's declarations. */
-    private static final class Key {
-        static final String VALUE = colorKey();
-    }
-
-    /** The Search Results color's preference key, or {@code null} without the Search plug-in. */
-    private static String colorKey() {
-        for (Object o : new MarkerAnnotationPreferences().getAnnotationPreferences()) {
-            if (o instanceof AnnotationPreference preference && ANNOTATION_TYPE.equals(preference.getAnnotationType())) {
-                return preference.getColorPreferenceKey();
-            }
-        }
-        return null;
     }
 }

@@ -1,0 +1,12 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Neovim for Eclipse in Eclipse's dark theme (plugin.xml adds this stylesheet to the theme
+ * org.eclipse.e4.ui.css.theme.e4_dark). A color definition's id becomes its selector with the dots
+ * as dashes. The search match color (editor/SearchColors): a darker amber than the light themes'
+ * 255,214,102, so the editor's light text stays readable on it.
+ */
+ColorDefinition#io-github-jm6cnddxbwftaks-neovim4eclipse-searchMatch {
+	color: #6E5818;
+}
