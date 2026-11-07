@@ -149,9 +149,12 @@ class ChecksGalleryTest {
                         + "read-only field with Copy, a little apart from the text above; the link "
                         + "\"Using a Neovim of your own\" right under it, in line with the field; then the last "
                         + "paragraph. No field for the program, no Browse.");
-        group("dedicated", "Preference page, dedicated Neovim checked", NeovimOption.value(), ChecksGalleryTest::withoutLeftovers,
+        // The dedicated Neovim installed for this one picture (a copy of the -Dnvim.path release), with no
+        // option, as a user's Eclipse finds it; the option's value here would be -Dnvim.path itself.
+        DedicatedNeovim.withOnlyTheDedicatedNeovim(() -> group("dedicated", "Preference page, dedicated Neovim checked",
+                "", ChecksGalleryTest::withoutLeftovers,
                 "Note in the normal color: Found: dedicated Neovim, checked, with its path; a Reinstall... link "
-                        + "under it; no Get Neovim button.");
+                        + "under it; no Get Neovim button."));
         // Get Neovim's done note, without and with the option (prefs/GetNeovim). A topic's pictures stay
         // together: the page starts a new heading whenever the topic changes.
         dialog("dedicated", "Get Neovim done", GetNeovimText.TITLE, MessageDialog.INFORMATION,
@@ -246,9 +249,18 @@ class ChecksGalleryTest {
             window.open();
             // The note is probed off the UI thread; it reads "Looking for Neovim..." until it answers.
             GalleryCamera.waitUntil("the Neovim group's note for " + title, () -> !looking(group));
+            // The answer changed the note's text and hid or showed rows. GTK measures the new text only once
+            // its event loop has run (until then a label reports its old size), and the rows move only when
+            // the layout requested runs: run both first, then lay out afresh with the caches dropped
+            // (changed = true). Without this the window kept the height of "Looking for Neovim..." and the
+            // picture showed that note, its Get Neovim button and all.
+            GalleryCamera.drain(window.getDisplay());
+            window.layout(true, true);
             // Fit the height to the wrapped text: computeSize takes the inside's width, so the note and the
             // help wrap as at GROUP_WIDTH (pack() would measure them unwrapped, one long line each).
-            window.setSize(GROUP_WIDTH, window.computeSize(window.getClientArea().width, SWT.DEFAULT).y);
+            window.setSize(GROUP_WIDTH, window.computeSize(window.getClientArea().width, SWT.DEFAULT, true).y);
+            GalleryCamera.drain(window.getDisplay());
+            window.layout(true, true);
             // Focus on the window itself, not its first link: a focused link draws a focus rectangle,
             // which the screen read on macOS and Windows would picture (forceActive gives it focus).
             window.forceActive();
