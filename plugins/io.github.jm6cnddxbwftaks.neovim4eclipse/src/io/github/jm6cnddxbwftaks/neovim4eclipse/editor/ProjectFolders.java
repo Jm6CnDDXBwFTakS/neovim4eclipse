@@ -17,11 +17,14 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.resources.IPathVariableChangeListener;
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IResourceChangeEvent;
 import org.eclipse.core.resources.IResourceChangeListener;
 import org.eclipse.core.resources.IResourceDelta;
+import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
@@ -54,10 +57,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
  *
  * <h2>When</h2>
  * At the first attach of each Neovim ({@link #sendTo}), and again after a workspace change that adds,
- * removes, opens, closes or moves a project, or adds or removes a linked folder (a
- * {@link IResourceChangeEvent#POST_CHANGE} listener: {@link #install}). Changing a link's target in
- * place is not seen until one of those; the cost of watching every change for it would be a walk of
- * the whole workspace each time.
+ * removes, opens, closes or moves a project, adds or removes a linked folder, or changes a project's
+ * {@code .project} file (a {@link IResourceChangeEvent#POST_CHANGE} listener: {@link #install}). The
+ * {@code .project} file holds the links' targets and the project's path variables, so a link moved
+ * to another target in place (Properties &gt; Resource &gt; Edit) is seen too.
+ *
+ * <p>A link's target may also be given through a workspace path variable ({@code EXT/lib}, with
+ * {@code EXT} set in Preferences &gt; General &gt; Workspace &gt; Linked Resources). A change of
+ * that variable moves the target without any resource change at all; a path-variable listener
+ * ({@link IPathVariableChangeListener}) has every project walked again then. Such changes are
+ * rare, and any project's link may use the variable.
  *
  * <h2>One job sends them</h2>
  * Finding the linked folders walks each project's resources (Eclipse's in-memory tree, no disk
@@ -120,19 +129,31 @@ public final class ProjectFolders implements IResourceChangeListener {
      */
     private static volatile List<String> lastFolders = List.of();
 
+    /**
+     * A workspace path variable changed (see the class comment): every project is walked again, as
+     * a link anywhere may use it. Any thread.
+     */
+    private final IPathVariableChangeListener variables = event -> {
+        ALL_STALE.set(true);
+        sendToRunning();
+    };
+
     private ProjectFolders(Supplier<NeovimSession> session) {
         this.session = session;
     }
 
     /**
-     * Starts watching the workspace (from {@code Activator.start}); undo with {@link #uninstall}.
+     * Starts watching the workspace and its path variables (from {@code Activator.start}); undo with
+     * {@link #uninstall}.
      *
      * @return the listener, or {@code null} when there is no workspace (logged)
      */
     public static ProjectFolders install(Supplier<NeovimSession> session) {
         try {
             ProjectFolders listener = new ProjectFolders(session);
-            ResourcesPlugin.getWorkspace().addResourceChangeListener(listener, IResourceChangeEvent.POST_CHANGE);
+            IWorkspace workspace = ResourcesPlugin.getWorkspace();
+            workspace.addResourceChangeListener(listener, IResourceChangeEvent.POST_CHANGE);
+            workspace.getPathVariableManager().addChangeListener(listener.variables);
             return listener;
         } catch (IllegalStateException e) { // no workspace: Eclipse started without one
             LOG.log(Level.WARNING, "No workspace: Neovim will read project files itself", e);
@@ -146,7 +167,9 @@ public final class ProjectFolders implements IResourceChangeListener {
             return;
         }
         try {
-            ResourcesPlugin.getWorkspace().removeResourceChangeListener(listener);
+            IWorkspace workspace = ResourcesPlugin.getWorkspace();
+            workspace.removeResourceChangeListener(listener);
+            workspace.getPathVariableManager().removeChangeListener(listener.variables);
         } catch (IllegalStateException e) {
             LOG.log(Level.FINE, "The workspace is already gone", e);
         }
@@ -299,6 +322,11 @@ public final class ProjectFolders implements IResourceChangeListener {
             return;
         }
         STALE.addAll(touched);
+        sendToRunning();
+    }
+
+    /** Has the marked projects' folders sent to a running Neovim; with none, the marks wait for one. */
+    private void sendToRunning() {
         NeovimSession neovim = session.get();
         if (neovim != null && neovim.isAlive()) {
             SENDER.sendTo(neovim); // not sendTo: only the marked projects are walked again
@@ -307,8 +335,10 @@ public final class ProjectFolders implements IResourceChangeListener {
 
     /**
      * The names of the projects whose folders a change changes: one added, removed, opened, closed
-     * or moved (under its old and its new name), or one in which a linked folder was added or
-     * removed. Only folders are walked: a file's change cannot be one of those.
+     * or moved (under its old and its new name), one in which a linked folder was added or removed,
+     * or one whose {@code .project} file changed (a link's new target, a project path variable).
+     * Below the project only folders are walked, and its {@code .project} file: no other file's
+     * change can be one of those.
      */
     private static Set<String> projectsWithChangedFolders(IResourceDelta delta) {
         Set<String> touched = new HashSet<>();
@@ -336,6 +366,14 @@ public final class ProjectFolders implements IResourceChangeListener {
                             return false;
                         }
                         return true;
+                    }
+                    case IResource.FILE -> {
+                        // The project's description: its links and their targets, its path variables.
+                        if (resource.getParent().getType() == IResource.PROJECT
+                                && IProjectDescription.DESCRIPTION_FILE_NAME.equals(resource.getName())) {
+                            touched.add(resource.getProject().getName());
+                        }
+                        return false;
                     }
                     default -> {
                         return false;

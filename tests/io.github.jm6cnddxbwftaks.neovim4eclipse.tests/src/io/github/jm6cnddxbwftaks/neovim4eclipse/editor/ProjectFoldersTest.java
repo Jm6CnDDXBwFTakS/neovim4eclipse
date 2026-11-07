@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IPathVariableManager;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -91,6 +92,53 @@ class ProjectFoldersTest {
 
         link.delete(true, null);
         assertFalse(currentWalkingAtMost(1).contains(outside.toString()), "and no longer once removed");
+    }
+
+    /** A link given another target in place (Properties > Resource > Edit) changes only .project. */
+    @Test
+    void aLinkMovedToAnotherTargetIsSeenWalkingOnlyItsProject() throws Exception {
+        Path other = Files.createTempDirectory("project-folders-other").toRealPath();
+        try {
+            IFolder link = projects.get(0).getFolder("ext");
+            link.createLink(IPath.fromOSString(outside.toString()), IResource.NONE, null);
+            assertTrue(currentWalkingAtMost(1).contains(outside.toString()));
+
+            link.createLink(IPath.fromOSString(other.toString()), IResource.REPLACE, null);
+            List<String> folders = currentWalkingAtMost(1);
+            assertTrue(folders.contains(other.toString()), folders.toString());
+            assertFalse(folders.contains(outside.toString()), folders.toString());
+            link.delete(true, null);
+        } finally {
+            Files.deleteIfExists(other);
+        }
+    }
+
+    /**
+     * A link through a workspace path variable (Preferences > Linked Resources) moves when the
+     * variable changes, with no resource change at all: the path-variable listener has every project
+     * walked again.
+     */
+    @Test
+    void aPathVariableChangeMovesTheLinksThatUseIt() throws Exception {
+        Path other = Files.createTempDirectory("project-folders-other").toRealPath();
+        IPathVariableManager variables = ResourcesPlugin.getWorkspace().getPathVariableManager();
+        String name = "PROJECT_FOLDERS_TEST";
+        try {
+            variables.setURIValue(name, outside.toUri());
+            currentWalkingAtMost(Integer.MAX_VALUE); // a new variable: every project walked again
+            IFolder link = projects.get(1).getFolder("byvar");
+            link.createLink(IPath.fromOSString(name), IResource.NONE, null);
+            assertTrue(currentWalkingAtMost(1).contains(outside.toString()), "the variable's folder");
+
+            variables.setURIValue(name, other.toUri());
+            List<String> folders = currentWalkingAtMost(Integer.MAX_VALUE);
+            assertTrue(folders.contains(other.toString()), folders.toString());
+            assertFalse(folders.contains(outside.toString()), folders.toString());
+            link.delete(true, null);
+        } finally {
+            variables.setURIValue(name, null);
+            Files.deleteIfExists(other);
+        }
     }
 
     @Test
