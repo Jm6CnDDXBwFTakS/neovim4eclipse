@@ -898,29 +898,52 @@ public final class EditorAttachManager {
             }
             wasAttached = isAttachedTo(editor);
             if (wasAttached) {
-                // As any detach: the document's own sync takes over, so nothing is lost should
-                // the attach below fail.
-                detachQuietly();
+                // The controller goes, but the document's sync is not handed the document, as
+                // detachQuietly would: it would push the old document just before the buffer
+                // moves to the new one. The attach below takes over again; should anything on
+                // the way fail, the catch hands the document to its sync instead.
+                closeControllerQuietly();
+                attachedPart = null;
+                attachedBuffer = null;
             }
         }
-        reusable.setInput(input); // outside the lock: it notifies listeners
-        IDocument fresh = documentOf(editor);
-        synchronized (this) {
-            if (old != null && fresh != null && fresh != old) {
-                DocumentBuffer buffer = documents.move(old, fresh);
-                UnattachedDocumentSync sync = buffer == null ? null : unattachedSyncs.remove(buffer);
-                if (sync != null) {
-                    sync.close(); // listens to the old document; the attach below makes one for the new
-                }
-                if (buffer != null) {
-                    stopDiagnostics(buffer); // the same for its annotation model
+        try {
+            reusable.setInput(input); // outside the lock: it notifies listeners
+            IDocument fresh = documentOf(editor);
+            synchronized (this) {
+                if (old != null && fresh != null && fresh != old) {
+                    DocumentBuffer buffer = documents.move(old, fresh);
+                    UnattachedDocumentSync sync = buffer == null ? null : unattachedSyncs.remove(buffer);
+                    if (sync != null) {
+                        sync.close(); // listens to the old document; the attach below makes one for the new
+                    }
+                    if (buffer != null) {
+                        stopDiagnostics(buffer); // the same for its annotation model
+                    }
                 }
             }
-        }
-        if (wasAttached) {
-            attach(editor, false, true);
+            if (wasAttached) {
+                attach(editor, false, true);
+            }
+        } catch (Exception | Error e) {
+            if (wasAttached) {
+                handBackToSync(documentOf(editor));
+            }
+            throw e;
         }
         return true;
+    }
+
+    /**
+     * Gives {@code document}'s changes back to its own {@link UnattachedDocumentSync}, if it has one:
+     * no controller carries them any more. Nothing when the document has no buffer or no sync yet.
+     */
+    private synchronized void handBackToSync(IDocument document) {
+        DocumentBuffer buffer = document == null ? null : documents.bufferOf(document).orElse(null);
+        UnattachedDocumentSync sync = buffer == null ? null : unattachedSyncs.get(buffer);
+        if (sync != null && (activeController == null || attachedBuffer != buffer)) {
+            sync.setAttached(false);
+        }
     }
 
     /** Tells Neovim whether {@code part}'s document has unsaved changes. UI thread. */
@@ -1056,14 +1079,7 @@ public final class EditorAttachManager {
     }
 
     public synchronized void detachQuietly() {
-        if (activeController != null) {
-            try {
-                activeController.close();
-            } catch (Exception e) {
-                LOG.log(Level.FINE, "Error closing controller", e);
-            }
-            activeController = null;
-        }
+        closeControllerQuietly();
         attachedPart = null;
         if (attachedBuffer != null) {
             UnattachedDocumentSync sync = unattachedSyncs.get(attachedBuffer);
@@ -1071,6 +1087,18 @@ public final class EditorAttachManager {
                 sync.setAttached(false); // after the synchronizer closed: from now on this one pushes
             }
             attachedBuffer = null;
+        }
+    }
+
+    /** Closes the attached editor's controller, if any; a failure is only logged. Guarded by {@code this}. */
+    private void closeControllerQuietly() {
+        if (activeController != null) {
+            try {
+                activeController.close();
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "Error closing controller", e);
+            }
+            activeController = null;
         }
     }
 
