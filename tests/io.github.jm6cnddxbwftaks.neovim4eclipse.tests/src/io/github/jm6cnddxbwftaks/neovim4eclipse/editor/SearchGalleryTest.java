@@ -113,11 +113,16 @@ class SearchGalleryTest extends EndToEndTestBase {
             session.inputAsync("gg0/fox<CR>"); // from the start: the first fox is the current match
             settle();
             waitForMatches(textWidget, 16);
+            waitForCaret(textWidget, 16); // the box is drawn around the match under the caret
             take(textWidget, "text", 3);
 
             session.inputAsync("gg0/fo");
             settle();
             waitForMatches(textWidget, 16);
+            // fo's matches, not the fox ones the search before left (shown until something is typed):
+            // the x of the first fox, at 18, is no longer painted.
+            waitUntil("fo's matches", TIMEOUT_MS, () -> textWidgetBackground(textWidget, 18) == null);
+            waitForCaret(textWidget, 18); // while a search is typed, Neovim's cursor is after the match it jumped to
             take(textWidget, "typing", 3);
             session.inputAsync("<Esc>");
             settle();
@@ -127,6 +132,7 @@ class SearchGalleryTest extends EndToEndTestBase {
             session.inputAsync("gg0/fox<CR>");
             settle();
             waitForMatches(javaWidget, JAVA.indexOf("foxes"));
+            waitForCaret(javaWidget, JAVA.indexOf("foxes")); // the search's first match, in the comment
             take(javaWidget, "java", 16);
 
             IPreferenceStore store = EditorsUI.getPreferenceStore();
@@ -181,6 +187,12 @@ class SearchGalleryTest extends EndToEndTestBase {
     /** Waits until the widget paints a background at {@code offset}: Neovim's matches have arrived. */
     private static void waitForMatches(StyledText target, int offset) {
         waitUntil("a search highlight at offset " + offset, TIMEOUT_MS, () -> textWidgetBackground(target, offset) != null);
+    }
+
+    /** Waits until the caret is at {@code offset}: Neovim's cursor reached the match. */
+    private static void waitForCaret(StyledText target, int offset) {
+        waitUntil("the caret at offset " + offset, TIMEOUT_MS, () -> target.getCaretOffset() == offset,
+                () -> "; it is at " + target.getCaretOffset());
     }
 
     private static RGB textWidgetBackground(StyledText target, int offset) {

@@ -2819,8 +2819,9 @@ final class LuaScripts {
      *
      * <p><b>Upper and lower case.</b> {@code matchbufline()} follows {@code 'ignorecase'} but not
      * {@code 'smartcase'}, so the pattern gets an explicit {@code \c} or {@code \C} as Neovim's own
-     * search would: a {@code \c} or {@code \C} in it wins; then {@code 'noignorecase'} means exact
-     * case; then {@code 'smartcase'} with an upper-case letter (not one after a backslash, as in
+     * search would: a {@code \c} or {@code \C} in it wins (not a {@code c} after an escaped
+     * backslash: {@code C:\\Code} is a literal backslash and {@code Code}); then
+     * {@code 'noignorecase'} means exact case; then {@code 'smartcase'} with an upper-case letter (not one after a backslash, as in
      * {@code \S}, nor after {@code \_} or {@code \%}, as in {@code \_S} or {@code \%V}; an
      * accented capital such as {@code É} counts) means exact case, as Vim's
      * {@code pat_has_uppercase} decides. A search made with {@code *}, {@code #}, {@code g*} or

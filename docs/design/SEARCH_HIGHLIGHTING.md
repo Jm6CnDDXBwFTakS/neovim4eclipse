@@ -144,7 +144,8 @@ the buffer, and its matches are sent with the new change count.
 
 The match under the caret is the one whose range holds the caret's document offset (from its
 start, up to its end). After `n` Neovim's cursor is on a match's first character, so that match is
-the current one. It keeps the same background as the others and gets a box: a one-pixel rectangle
+the current one. While a search is typed, Neovim's cursor sits just after the match it jumped to
+(`'incsearch'`), so then the match that ends at the caret is the current one too. It keeps the same background as the others and gets a box: a one-pixel rectangle
 around each visual row's part of it (a wrapped line has several), drawn by a `PaintListener` after
 the text, at its place in the
 widget (`modelOffset2WidgetOffset`, so a match in a closed fold has none). A caret move repaints

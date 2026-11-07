@@ -118,6 +118,12 @@ final class SearchHighlighter implements ITextPresentationListener {
     private volatile List<IRegion> regions = List.of();
     /** The index in {@link #regions} of the match under the caret, or -1. Volatile, as {@link #regions}. */
     private volatile int current = -1;
+    /**
+     * Whether a search is being typed ({@code /} or {@code ?} open). Neovim then puts its cursor,
+     * and so the caret, at the end of the match it jumped to ({@code 'incsearch'}): that match is
+     * the current one too.
+     */
+    private volatile boolean searchTyped;
 
     /**
      * @param viewer       the editor's viewer; it must support presentation listeners and
@@ -168,7 +174,7 @@ final class SearchHighlighter implements ITextPresentationListener {
         List<IRegion> old = regions;
         redrawBoxes(); // the old box, while regions and current still describe it
         regions = next;
-        current = indexAt(next, caretOffset());
+        current = currentAt(next, caretOffset());
         repaint(old, next);
         redrawBoxes();
     }
@@ -185,6 +191,17 @@ final class SearchHighlighter implements ITextPresentationListener {
         repaint(regions, List.of());
         if (!widget.isDisposed()) {
             widget.redraw();
+        }
+    }
+
+    /**
+     * Whether a search is being typed: the match that ends at the caret is then the current one,
+     * as Neovim's cursor sits after the match it jumped to. UI thread.
+     */
+    void setSearchTyped(boolean typed) {
+        if (typed != searchTyped) {
+            searchTyped = typed;
+            onCaretMoved();
         }
     }
 
@@ -316,7 +333,7 @@ final class SearchHighlighter implements ITextPresentationListener {
         if (widget.isDisposed()) {
             return;
         }
-        int next = indexAt(regions, caretOffset());
+        int next = currentAt(regions, caretOffset());
         if (next != current) {
             redrawBoxes(); // the old box goes
             current = next;
@@ -423,6 +440,22 @@ final class SearchHighlighter implements ITextPresentationListener {
         }
         int caret = widget.getCaretOffset();
         return viewer instanceof ITextViewerExtension5 extension ? extension.widgetOffset2ModelOffset(caret) : caret;
+    }
+
+    /**
+     * The index of the current match for a caret at {@code offset}: the region that holds it, or,
+     * while a search is typed, the one that ends there ({@link #searchTyped}); -1 for none.
+     */
+    private int currentAt(List<IRegion> list, int offset) {
+        int index = indexAt(list, offset);
+        if (index < 0 && searchTyped) {
+            for (int i = 0; i < list.size(); i++) {
+                if (list.get(i).getOffset() + list.get(i).getLength() == offset) {
+                    return i;
+                }
+            }
+        }
+        return index;
     }
 
     /**
