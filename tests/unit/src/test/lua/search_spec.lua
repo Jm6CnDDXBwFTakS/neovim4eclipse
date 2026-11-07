@@ -320,3 +320,11 @@ t.test('a match across the lines between two searched ranges is sent once', func
   flush()
   t.eq({ { b, 0, b + 2, 3 } }, matches(m), 'found by both walks, kept once')
 end)
+
+t.test('an escaped backslash before c is not the case flag', function()
+  local m = start({ '' })
+  vim.o.ignorecase = true
+  vim.o.smartcase = true
+  t.eq('\\CC:\\\\Code', m.effective('C:\\\\Code', false), 'a literal backslash, then a capital C: exact case')
+  t.eq('a\\cB', m.effective('a\\cB', false), 'a real \\c is kept as it is')
+end)
