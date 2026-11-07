@@ -185,4 +185,16 @@
       </plugin>
     </plugins>
   </build>
+  <profiles>
+    <profile>
+      <!-- -Pgallery takes the pictures of the manual checks in the test Eclipse only
+           (tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests): this module's tests do not run
+           then. They are not what the pictures are for, and the SWT tests' windows would take
+           the front from the program the developer works in, and wait for keyboard focus. -->
+      <id>gallery</id>
+      <properties>
+        <skipTests>true</skipTests>
+      </properties>
+    </profile>
+  </profiles>
 </project>
