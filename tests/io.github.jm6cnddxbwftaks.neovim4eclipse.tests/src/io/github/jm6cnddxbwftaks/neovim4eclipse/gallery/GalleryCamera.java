@@ -58,10 +58,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  * {@link #img} writes into the page's {@code <img>}, so a page shows each picture at the window's
  * own size, as a user sees it, not twice that.
  *
- * <p>The window is made active before its picture ({@link #activate}) only while the test Eclipse
- * is the active program: an inactive window draws its default button and focus in a look users do
- * not see, but taking the front from another program would take the keyboard from whoever works in
- * it. Working in another program during a run is fine; the pictures then show the windows inactive.
+ * <p>On Windows and macOS the window is made active before its picture ({@link #activate}) only
+ * while the test Eclipse is the active program: an inactive window draws its default button and
+ * focus in a look users do not see, but taking the front from another program would take the
+ * keyboard from whoever works in it. The camera never takes the front; opening a new window (each
+ * dialog of the gallery) may still bring the test Eclipse forward, as the system decides. Working
+ * in another program during a run is possible, but the pictures may then show the windows
+ * inactive.
  *
  * <p>A picture of one color is refused ({@link #blank}): a window that drew nothing must fail the
  * run, not give a gallery of empty pictures. On Windows and macOS the window is drawn again, every
@@ -91,19 +94,26 @@ public final class GalleryCamera {
      * @throws AssertionError when the picture comes out one color
      */
     public static void save(Control control, Rectangle area, Path file, String title) {
-        activate(control.getShell());
+        if (WINDOWS || MAC) {
+            // Linux's pictures were always taken as the tests left the window; activating there could
+            // move the focus to a first link and draw its focus rectangle into them.
+            activate(control.getShell());
+        }
         drain(control.getDisplay());
         ImageData data = WINDOWS || MAC ? settled(control, area, title) : printed(control, area);
         if (blank(data)) {
             throw new AssertionError("the picture of " + title + " is one color: nothing was drawn");
         }
-        ImageLoader loader = new ImageLoader();
-        loader.data = new ImageData[] { data };
-        loader.save(file.toString(), SWT.IMAGE_PNG);
         try {
+            // The old size goes first: a picture written without its size shows at its own pixels
+            // ({@link #img}), never at an earlier run's size.
+            Files.deleteIfExists(sizeFile(file));
+            ImageLoader loader = new ImageLoader();
+            loader.data = new ImageData[] { data };
+            loader.save(file.toString(), SWT.IMAGE_PNG);
             Files.writeString(sizeFile(file), area.width + " " + area.height + "\n");
         } catch (IOException e) {
-            throw new java.io.UncheckedIOException("cannot write the size of " + file, e);
+            throw new java.io.UncheckedIOException("cannot write the picture " + file, e);
         }
     }
 
@@ -135,9 +145,12 @@ public final class GalleryCamera {
         StringBuilder tag = new StringBuilder("<img src=\"").append(dataUri(png)).append('"');
         Path size = sizeFile(png);
         if (Files.exists(size)) {
+            // Two numbers or nothing: a damaged file (a run cut off while writing it) leaves the
+            // picture at its own pixels rather than stop the page.
             String[] points = Files.readString(size).strip().split(" ");
-            tag.append(" width=\"").append(Integer.parseInt(points[0])).append("\" height=\"")
-                    .append(Integer.parseInt(points[1])).append('"');
+            if (points.length == 2 && points[0].matches("[0-9]{1,5}") && points[1].matches("[0-9]{1,5}")) {
+                tag.append(" width=\"").append(points[0]).append("\" height=\"").append(points[1]).append('"');
+            }
         }
         return tag.append(" alt=\"").append(alt).append("\">").toString();
     }
