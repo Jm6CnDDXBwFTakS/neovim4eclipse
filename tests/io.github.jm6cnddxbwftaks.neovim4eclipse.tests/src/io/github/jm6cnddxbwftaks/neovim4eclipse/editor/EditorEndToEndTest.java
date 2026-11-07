@@ -899,6 +899,41 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A Save As that is not the File &gt; Save As command keeps the buffer as well: the editor's
+     * {@code doSaveAs} called directly, as an editor's own Save As action or another plug-in calls
+     * it. The deleted-file prompt ({@code AbstractTextEditor.handleEditorInputChanged}) and Save of
+     * a deleted file reach the same {@code performSaveAs} without {@code doSaveAs}; there the old
+     * file is gone, which counts as a move as well. Told apart from a reused editor by the Save As
+     * methods on the call stack (util/SaveAsFrames).
+     */
+    @Test
+    void aSaveAsWithoutTheCommandKeepsTheBufferAndUndo() throws Exception {
+        IFile file = createFile("c.saveas", "one\n");
+        ITextEditor saving = (ITextEditor) IDE.openEditor(page(), file, true);
+        assertTrue(saving instanceof TestSaveAsEditor, "opened in " + saving);
+        waitForAttach(saving, "c.saveas");
+        try {
+            type(widgetOf(saving), 'x');
+            expectText(saving, "ne\n");
+            int bufnr = session.getAttachedBufnr();
+            IFile saved = project.getFile("d.saveas");
+            TestSaveAsEditor.target = saved;
+
+            saving.doSaveAs();
+            assertEquals(saved, saving.getEditorInput().getAdapter(IFile.class), "the editor shows d.saveas");
+            assertTrue(file.exists(), "the old file is still there, as for a reused editor");
+            waitForNeovimIn(saved);
+            waitForAttach(saving, "d.saveas");
+            assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
+
+            type(widgetOf(saving), 'u');
+            expectText(saving, "one\n");
+        } finally {
+            page().closeEditor(saving, false);
+        }
+    }
+
+    /**
      * Neovim refuses the new name when a loaded buffer has it already (E95; here one loaded with
      * {@code bufload()}): the editor's buffer is closed, and the attach that follows the rename shows
      * one under the new name with the document pushed into it, so the editor's keys still edit its

@@ -210,7 +210,12 @@ The new input alone does not tell why it came: File › Save As and an editor re
 look alike (the old file is still there, and two empty files even have the same text). The plug-in
 asks Eclipse instead: an `IExecutionListener` on the workbench's `ICommandService` hears every
 command start and end, and an input that comes while `org.eclipse.ui.file.saveAs` runs is the file
-saved under its new name (`editor/SaveAsWatch`).
+saved under its new name (`editor/SaveAsWatch`). Not every Save As runs that command: the prompt for
+a file deleted while open calls the editor's `performSaveAs` itself, and so does Save of a deleted
+file. Those all set the new input inside `doSaveAs` or `performSaveAs`, and `setInput` fires
+`PROP_INPUT` at once, so the listener also looks at its own call stack (`StackWalker`, in
+`util/SaveAsFrames`): one of those methods there means a Save As. A reused editor's input never
+comes from inside them.
 
 ### 1.5 SWT: one UI thread
 

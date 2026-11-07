@@ -10,16 +10,23 @@ import org.eclipse.core.commands.NotHandledException;
 import org.eclipse.ui.IWorkbenchCommandConstants;
 import org.eclipse.ui.commands.ICommandService;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SaveAsFrames;
+
 /**
- * Tells whether Eclipse's <em>File &gt; Save As</em> command is running, so that the editor input
- * it sets can be told from other new inputs ({@code EditorAttachManager.rebind}).
+ * Tells whether a Save As is running, so that the editor input it sets can be told from other new
+ * inputs ({@code EditorAttachManager.rebind}). Two signals, either one enough: Eclipse's
+ * <em>File &gt; Save As</em> command runs, or the input is set inside an editor's
+ * {@code doSaveAs} or {@code performSaveAs} ({@code util/SaveAsFrames}). The second covers the
+ * Save As paths without the command: the prompt for a file deleted while open, Save of a deleted
+ * file, an editor's own Save As action, another plug-in calling {@code doSaveAs}.
  *
  * <p>Why: after Save As the editor shows a new document for the new file, with the same text, and
  * the old file is still there. An editor Eclipse reuses for another file ("reuse editors", search
  * results) looks the same from the editor: a new document, the old file still there, and, for two
  * empty files or two copies, the same text. Only Save As moves the Neovim buffer (its undo
- * history) to the new file. The command is Eclipse's own signal for it: its handler calls the
- * editor's {@code doSaveAs}, which sets the new input before the command ends. Example: Save As of
+ * history) to the new file. The command's handler calls the editor's {@code doSaveAs}, which sets
+ * the new input before the command ends; every other path goes through {@code performSaveAs} or
+ * {@code doSaveAs} as well, and sets the input before it returns. Example: Save As of
  * {@code a.txt} as {@code b.txt}: {@code u} in {@code b.txt} undoes what was typed in {@code a.txt};
  * {@code b.txt} opened in a reused editor of an empty {@code a.txt} gets a buffer of its own.
  *
@@ -39,9 +46,13 @@ final class SaveAsWatch implements IExecutionListener {
         return watch;
     }
 
-    /** Whether Save As is running now: an input set now is the file saved under its new name. */
+    /**
+     * Whether Save As is running now: an input set now is the file saved under its new name. Read
+     * in the editor's {@code PROP_INPUT} listener, which runs inside the Save As (see the class
+     * comment), on the UI thread.
+     */
     boolean running() {
-        return running;
+        return running || SaveAsFrames.onStack();
     }
 
     @Override

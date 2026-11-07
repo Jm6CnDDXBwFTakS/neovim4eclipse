@@ -145,8 +145,9 @@ public final class EditorAttachManager {
      */
     private final Map<ITextEditor, Bound> boundDocuments = new HashMap<>();
     /**
-     * Guarded by {@code this}. The bound text editors whose new input came from File &gt; Save As
-     * ({@link SaveAsWatch}), until {@link #rebind} takes them: their buffer moves to the new file.
+     * Guarded by {@code this}. The bound text editors whose new input came from a Save As (File &gt;
+     * Save As, the deleted-file prompt, the editor's own action: {@link SaveAsWatch}), until
+     * {@link #rebind} takes them: their buffer moves to the new file.
      */
     private final Set<ITextEditor> savedAs = Collections.newSetFromMap(new IdentityHashMap<>());
     /** Eclipse's Save As command, watched from {@link #installWorkbenchListeners}; {@code null} before. UI thread. */
@@ -1127,8 +1128,9 @@ public final class EditorAttachManager {
      * later), when all of these hold:
      * <ul>
      *   <li>The editor moved with its file: the old file is gone (a rename or move: Eclipse moved
-     *       it, then gave the editor the new one), or the new input came while Eclipse's Save As
-     *       command ran ({@link SaveAsWatch}). Not an editor reused for another file (Eclipse
+     *       it, then gave the editor the new one), or the new input came during a Save As: the
+     *       command, or inside the editor's {@code doSaveAs} or {@code performSaveAs}, as from the
+     *       prompt for a deleted file ({@link SaveAsWatch}). Not an editor reused for another file (Eclipse
      *       reuses search results' editors), even one with the same text (two empty files): that
      *       file would get the old file's undo history, and {@code u} would turn it into the old
      *       file.</li>

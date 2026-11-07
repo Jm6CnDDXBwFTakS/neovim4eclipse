@@ -176,8 +176,9 @@ hears on the text editor itself (a multi-page editor's page moves to the renamed
 while the multi-page editor keeps its input), and `onInputChanged` binds the editor to its new
 document (`rebind`): the old document's controller and syncs stop, and the editor is attached again
 if it was attached. When the editor moved with its file (the old file is gone, or the new input
-came while Eclipse's Save As command ran: `editor/SaveAsWatch`, an execution listener on the command
-service) and every clone sharing the document moved too, the Neovim buffer moves to
+came during a Save As: `editor/SaveAsWatch`, an execution listener on the Save As command, or
+`util/SaveAsFrames`, which finds the editor's `doSaveAs` or `performSaveAs` on the call stack, for
+the Save As paths without the command, such as the prompt for a file deleted while open) and every clone sharing the document moved too, the Neovim buffer moves to
 the new document and is renamed after the new file (`NeovimSession.renameBufferAsync`,
 `LuaScripts.RENAME_DOCUMENT_BUFFER`): its number, undo history and marks stay. The new name is
 recorded in `DocumentBuffer` at once, so a Neovim started by Restart Neovim makes the buffer under
