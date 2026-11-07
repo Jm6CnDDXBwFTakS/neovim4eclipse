@@ -20,6 +20,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Change it under *Window → Preferences → General → Appearance → Colors and Fonts → Neovim for
   Eclipse → Search match*; a *Search Results* color set for 0.2.5 or 0.2.6 no longer applies to
   the matches.
+- Nothing changes in the plug-in itself: the pictures the manual checks look at are now drawn by
+  the windows themselves on Windows and macOS too, instead of read from the screen, so they cannot
+  show another program, need no Screen Recording permission on macOS, and come out at the screen's
+  full resolution.
 
 ## [0.2.6] - 2026-11-07
 
