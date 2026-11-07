@@ -394,8 +394,9 @@ public final class EclipseFileCommands {
         try {
             IFile candidate = NewFiles.workspaceFileAt(file);
             if (candidate != null && candidate.isAccessible()) {
+                // By the file's content type as its project has it, not by its name alone (NewFiles.internalOr).
                 IDE.openEditor(page, candidate, NewFiles.internalOr(IDE.getEditorDescriptor(candidate, true, false),
-                        candidate.getName()), true);
+                        candidate), true);
                 return;
             }
             page.openEditor(new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri())),

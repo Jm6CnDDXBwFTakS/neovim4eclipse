@@ -23,8 +23,13 @@ import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ProjectScope;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.content.IContentType;
+import org.eclipse.core.runtime.preferences.IEclipsePreferences;
+import org.eclipse.ui.IEditorDescriptor;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorRegistry;
 import org.eclipse.ui.IEditorReference;
@@ -176,6 +181,39 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             IEditorPart active = page().getActiveEditor();
             return active != null && active.getEditorInput() instanceof IFileEditorInput input
                     && input.getFile().equals(svg) && "org.eclipse.ui.DefaultTextEditor".equals(active.getSite().getId());
+        }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getSite().getId()));
+    }
+
+    /**
+     * A project's own content types (<i>Project Properties › Resource › Content types</i>, kept in
+     * its {@code .settings}, so a cloned repository can bring them) map {@code *.n4e} to the image
+     * content type, the Web Browser editor's: {@code :e x.n4e} still opens the Text Editor. Before,
+     * the check went by the name through the global content types only, where {@code x.n4e} is
+     * text, and the browser ran the SVG's script.
+     */
+    @Test
+    void eOfAFileItsProjectMapsToTheImageTypeOpensItAsText() throws Exception {
+        IContentType images = Platform.getContentTypeManager().getContentType("org.eclipse.ui.content-type.images");
+        assumeTrue(images != null, "no image content type in this Eclipse");
+        ProjectScope scope = new ProjectScope(project);
+        images.getSettings(scope).addFileSpec("n4e", IContentType.FILE_EXTENSION_SPEC);
+        // What the project's .settings/org.eclipse.core.runtime.prefs says to turn its own on.
+        IEclipsePreferences runtime = scope.getNode("org.eclipse.core.runtime");
+        runtime.node("content-types").putBoolean("enabled", true);
+        runtime.flush();
+        IFile svg = createFile("x.n4e", "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>1</script></svg>\n");
+        IEditorDescriptor eclipses = IDE.getEditorDescriptor(svg, true, false);
+        assertEquals("org.eclipse.ui.browser.editor", eclipses.getId(), "Eclipse itself would open it in the Web Browser editor");
+        assertEquals("org.eclipse.ui.browser.editor", NewFiles.internalOr(eclipses, svg.getName()),
+                "by its name alone it passed");
+        assertEquals(NewFiles.TEXT_EDITOR, NewFiles.internalOr(eclipses, svg));
+
+        session.inputAsync(":e x.n4e<CR>");
+
+        waitUntil("x.n4e in the Text Editor", TIMEOUT_MS, () -> {
+            IEditorPart active = page().getActiveEditor();
+            return active != null && active.getEditorInput() instanceof IFileEditorInput input
+                    && input.getFile().equals(svg) && NewFiles.TEXT_EDITOR.equals(active.getSite().getId());
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getSite().getId()));
     }
 

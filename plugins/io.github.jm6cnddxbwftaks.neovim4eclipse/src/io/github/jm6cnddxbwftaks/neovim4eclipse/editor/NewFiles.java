@@ -7,6 +7,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,6 +26,7 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.content.IContentDescription;
 import org.eclipse.core.runtime.content.IContentType;
 import org.eclipse.core.runtime.content.IContentTypeManager;
 import org.eclipse.jface.text.IDocument;
@@ -266,19 +269,72 @@ final class NewFiles {
      *       default editor treats it.</li>
      * </ul>
      *
+     * <p>This one is for a file outside the workspace (or one that does not exist yet), whose
+     * content type only its name gives; a workspace file's goes by {@link #internalOr(IEditorDescriptor, IFile)}.
+     *
      * @param fileName the file's name, for its content type ({@code logo.svg})
      */
     static String internalOr(IEditorDescriptor descriptor, String fileName) {
-        boolean inside = descriptor != null && descriptor.isInternal() && !descriptor.isOpenExternal()
+        return isInside(descriptor) && isText(fileName) ? descriptor.getId() : TEXT_EDITOR;
+    }
+
+    /**
+     * {@link #internalOr(IEditorDescriptor, String)} for a workspace file: its content type as the
+     * workspace has it, which is what chose {@code descriptor} ({@code IDE.getEditorDescriptor(IFile)}
+     * goes by {@code IFile.getContentDescription}).
+     *
+     * <p>Why not by the name: a project can map file names to content types of its own
+     * (<i>Project Properties › Resource › Content types</i>, stored in its
+     * {@code .settings/org.eclipse.core.runtime.prefs}, which a cloned repository brings along).
+     * Such a project could map {@code *.n4e} to the image content type, which the Web Browser editor
+     * is bound to, and ship an SVG named {@code x.n4e}: by the name alone (the global content types)
+     * {@code x.n4e} is text, the browser editor passed, and {@code :e x.n4e} ran the SVG's script.
+     * So every content type the workspace could give the file must be text: the one from its
+     * description (contents and the project's names), the project's for its name, and the global
+     * one for its name. Example: in that project {@code x.n4e} opens in the Text Editor.
+     */
+    static String internalOr(IEditorDescriptor descriptor, IFile file) {
+        return isInside(descriptor) && isText(file) ? descriptor.getId() : TEXT_EDITOR;
+    }
+
+    /** Whether {@code descriptor} is an editor inside Eclipse: not external, not in-place (OLE). */
+    private static boolean isInside(IEditorDescriptor descriptor) {
+        return descriptor != null && descriptor.isInternal() && !descriptor.isOpenExternal()
                 && !descriptor.isOpenInPlace();
-        return inside && isText(fileName) ? descriptor.getId() : TEXT_EDITOR;
     }
 
     /** Whether {@code fileName}'s content type is text, or it has none (see {@link #internalOr}). */
     static boolean isText(String fileName) {
-        IContentTypeManager types = Platform.getContentTypeManager();
-        IContentType type = types.findContentTypeFor(fileName);
-        IContentType text = types.getContentType(IContentTypeManager.CT_TEXT);
+        return isTextKind(Platform.getContentTypeManager().findContentTypeFor(fileName));
+    }
+
+    /**
+     * Whether every content type the workspace gives {@code file} is text, or it has none (see
+     * {@link #internalOr(IEditorDescriptor, IFile)}). A content type that cannot be read (the file
+     * is out of sync with the disk) is left out; the ones by name still count.
+     */
+    static boolean isText(IFile file) {
+        List<IContentType> types = new ArrayList<>(3);
+        try {
+            IContentDescription description = file.getContentDescription();
+            if (description != null) {
+                types.add(description.getContentType());
+            }
+        } catch (CoreException e) {
+            LOG.log(Level.FINE, "No content description for " + file.getFullPath(), e);
+        }
+        try {
+            types.add(file.getProject().getContentTypeMatcher().findContentTypeFor(file.getName()));
+        } catch (CoreException e) {
+            LOG.log(Level.FINE, "No project content types for " + file.getFullPath(), e);
+        }
+        types.add(Platform.getContentTypeManager().findContentTypeFor(file.getName()));
+        return types.stream().allMatch(NewFiles::isTextKind);
+    }
+
+    /** Whether {@code type} is text, or {@code null} (no content type: text, as Eclipse's default editor has it). */
+    private static boolean isTextKind(IContentType type) {
+        IContentType text = Platform.getContentTypeManager().getContentType(IContentTypeManager.CT_TEXT);
         return type == null || text == null || type.isKindOf(text);
     }
 

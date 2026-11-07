@@ -131,7 +131,9 @@ location, a new file never meets it, so no workaround is needed
    the Text Editor (`org.eclipse.ui.DefaultTextEditor`) when it is `null`, not internal
    (`isInternal()`), external (`isOpenExternal()`), in place (an OLE document on Windows,
    `isOpenInPlace()`), or for a content type that is not text. So `:e notes.unknownext` opens in
-   the Text Editor, never an external program.
+   the Text Editor, never an external program. (An existing workspace file goes by every content
+   type the workspace gives it, its project's own content types included: a cloned project can map
+   a name to the image type, which the Web Browser editor shows, scripts and all.)
 4. **Which input:** always a `FileStoreEditorInput` (section 2). `NewFiles.workspaceFileAt` finds
    the project from the location wherever the code needs it (`missingFileOf`, the project root for
    `:e` lookups).
