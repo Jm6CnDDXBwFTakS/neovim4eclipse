@@ -278,40 +278,49 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         NeovimSession session = new NeovimSession(connection, homeBuffer, ((Number) homeWin).intValue(), clipboard);
-        NotificationBridge bridge = new NotificationBridge(session.new EventSink());
-        connection.setIncoming(bridge);
+        // From here on the session exists, with its input thread and the bridge's routing: a step
+        // that fails (a script broken by the user's init.lua, a call that times out) closes it
+        // whole, not just the connection (which start() closes), or each failed start would leave
+        // one behind.
+        try {
+            NotificationBridge bridge = new NotificationBridge(session.new EventSink());
+            connection.setIncoming(bridge);
 
-        // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
-        int channel = await(api.getChannelId());
-        await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
-        await(api.execLua(LuaScripts.IDE_KEYS, IdeKeys.toLuaArgs())); // gd, K, gr*: after init.lua
-        // Before any document's buffer: each new buffer is checked against the project folders,
-        // which Eclipse sends at the first attach (docs/design/BUFFER_NUMBERS.md, 2.3).
-        await(api.execLua(LuaScripts.PROJECT_FILES, List.of()));
-        await(api.execLua(LuaScripts.HOST_COMMANDS, List.of(HostCommand.rulesForNeovim())));
-        await(api.execLua(LuaScripts.WINDOW_COMMANDS, List.of())); // after HOST_COMMANDS: its refuse hook
-        await(api.execLua(LuaScripts.QUICKFIX, List.of())); // :Eproblems, :Etasks; :copen through WINDOWS
-        // Once, here: the opt-out then costs nothing per key (docs/design/FOLDING.md, 3.6).
-        session.foldsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FOLDS, List.of())));
-        session.state.setFoldsEnabled(session.foldsEnabled);
-        LOG.info(() -> "folds " + (session.foldsEnabled ? "mirrored into Neovim" : "off (g:neovim4eclipse_folds)"));
-        // The same for the problems (docs/design/DIAGNOSTICS.md, "Turning it off").
-        session.problemsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.PROBLEMS, List.of())));
-        LOG.info(() -> "Eclipse's problems " + (session.problemsEnabled ? "sent to Neovim" : "off (g:neovim4eclipse_problems)"));
-        // And for the viewport (docs/design/VIEWPORT.md, D5): when off, the screen stays 120 × 40.
-        session.viewportEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.VIEWPORT, List.of())));
-        LOG.info(() -> "viewport " + (session.viewportEnabled ? "follows the editor" : "off (g:neovim4eclipse_viewport)"));
-        // And for search highlighting (docs/design/SEARCH_HIGHLIGHTING.md, "Turning it off").
-        session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
-        LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search)"));
-        Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
-        session.nvimManagesClipboard = managesSystemClipboard(
-                clipboardOption == null ? "" : String.valueOf(clipboardOption));
-        LOG.info(() -> "Neovim 'clipboard' option = '" + clipboardOption + "'; "
-                + (session.nvimManagesClipboard ? "Neovim manages the OS clipboard, bridge disabled"
-                        : "bridge copies yanks to the OS clipboard"));
+            // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
+            int channel = await(api.getChannelId());
+            await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
+            await(api.execLua(LuaScripts.IDE_KEYS, IdeKeys.toLuaArgs())); // gd, K, gr*: after init.lua
+            // Before any document's buffer: each new buffer is checked against the project folders,
+            // which Eclipse sends at the first attach (docs/design/BUFFER_NUMBERS.md, 2.3).
+            await(api.execLua(LuaScripts.PROJECT_FILES, List.of()));
+            await(api.execLua(LuaScripts.HOST_COMMANDS, List.of(HostCommand.rulesForNeovim())));
+            await(api.execLua(LuaScripts.WINDOW_COMMANDS, List.of())); // after HOST_COMMANDS: its refuse hook
+            await(api.execLua(LuaScripts.QUICKFIX, List.of())); // :Eproblems, :Etasks; :copen through WINDOWS
+            // Once, here: the opt-out then costs nothing per key (docs/design/FOLDING.md, 3.6).
+            session.foldsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FOLDS, List.of())));
+            session.state.setFoldsEnabled(session.foldsEnabled);
+            LOG.info(() -> "folds " + (session.foldsEnabled ? "mirrored into Neovim" : "off (g:neovim4eclipse_folds)"));
+            // The same for the problems (docs/design/DIAGNOSTICS.md, "Turning it off").
+            session.problemsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.PROBLEMS, List.of())));
+            LOG.info(() -> "Eclipse's problems " + (session.problemsEnabled ? "sent to Neovim" : "off (g:neovim4eclipse_problems)"));
+            // And for the viewport (docs/design/VIEWPORT.md, D5): when off, the screen stays 120 × 40.
+            session.viewportEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.VIEWPORT, List.of())));
+            LOG.info(() -> "viewport " + (session.viewportEnabled ? "follows the editor" : "off (g:neovim4eclipse_viewport)"));
+            // And for search highlighting (docs/design/SEARCH_HIGHLIGHTING.md, "Turning it off").
+            session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
+            LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search)"));
+            Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
+            session.nvimManagesClipboard = managesSystemClipboard(
+                    clipboardOption == null ? "" : String.valueOf(clipboardOption));
+            LOG.info(() -> "Neovim 'clipboard' option = '" + clipboardOption + "'; "
+                    + (session.nvimManagesClipboard ? "Neovim manages the OS clipboard, bridge disabled"
+                            : "bridge copies yanks to the OS clipboard"));
 
-        session.state.readMode();
+            session.state.readMode();
+        } catch (Exception | Error e) {
+            session.close();
+            throw e;
+        }
         LOG.info("NeovimSession ready");
         return session;
     }
