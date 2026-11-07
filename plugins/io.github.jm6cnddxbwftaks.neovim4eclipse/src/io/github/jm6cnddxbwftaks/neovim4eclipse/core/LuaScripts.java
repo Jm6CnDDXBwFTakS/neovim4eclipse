@@ -2864,7 +2864,8 @@ final class LuaScripts {
      *   <li>while a search is typed ({@code /} or {@code ?}) and {@code 'incsearch'} is on: the text
      *       typed so far, without a search offset ({@code /foo/e} is {@code foo}; after {@code ?},
      *       and in {@code :s?a?b?}, an escaped {@code \?} is a plain {@code ?}, as Neovim reads
-     *       it: {@code ?what\?} finds {@code what?}); before the first
+     *       it: {@code ?what\?} finds {@code what?}; a delimiter in a {@code []} collection does
+     *       not end it: {@code /[/]x} finds {@code /x}); before the first
      *       character, the last search, which Neovim still shows;</li>
      *   <li>while a {@code :s}, {@code :g}, {@code :v}, {@code :smagic} or {@code :snomagic} line is
      *       typed, with {@code 'incsearch'}: its pattern ({@code :%s/foo/bar} gives {@code foo});
@@ -3015,22 +3016,79 @@ final class LuaScripts {
               return false
             end
 
-            -- The pattern typed so far, up to its unescaped delimiter: 'foo/e' typed after / is 'foo'.
-            -- With ? as the delimiter (a ? search, :s?a?b?), an escaped ? is a plain ?, as Neovim's
-            -- skip_regexp_ex makes it: ?what\\? looks for "what?", where the pattern what\\? would
-            -- be "wha" and an optional t. An escaped backslash stays one (?a\\\\? ends at the ?).
-            -- No other delimiter is changed: \\/ in a / search is already a plain / to the regexp.
-            local function until_delimiter(line, delimiter)
+            -- The class names Neovim reads as [:name:] inside a [] collection (regexp.c, get_char_class).
+            local CHAR_CLASSES = {}
+            for name in ('alnum alpha blank cntrl digit graph lower print punct space upper xdigit'
+                .. ' tab return backspace escape ident keyword fname'):gmatch('%a+') do
+              CHAR_CLASSES[name] = true
+            end
+            local ONE_CHAR = '[%z\\1-\\127\\194-\\244][\\128-\\191]*' -- one UTF-8 sequence
+
+            -- Where the [] collection whose items start at s's index i (after the [ or [^) ends, as
+            -- Neovim's skip_anyof finds it: the index of its closing ], or #s + 1 when there is none
+            -- yet. Inside it a delimiter is an item, not the pattern's end: /[/]x looks for "/x".
+            -- A ] or - first is an item ([]a], [-a]); so is what follows a - unless it is a ]
+            -- ([a-/] is a to /, [a-] ends there), and what follows one of the backslashes a
+            -- collection knows ([\\]], [\\n], [\\d]); [:alpha:], [=a=] and [.a.] are skipped
+            -- whole, so their ] does not end it ([:nope:] is no class: its ] does).
+            local function collection_end(s, i)
+              if s:sub(i, i) == '^' then
+                i = i + 1
+              end
+              if s:sub(i, i) == ']' or s:sub(i, i) == '-' then
+                i = i + 1
+              end
+              -- After a backslash: REGEXP_INRANGE, and REGEXP_ABBR unless 'cpoptions' has l.
+              local escapes = ']^-n\\\\' .. (vim.o.cpoptions:find('l', 1, true) and '' or 'nrtebdoxuU')
+              while i <= #s and s:sub(i, i) ~= ']' do
+                local c, nxt = s:sub(i, i), s:sub(i + 1, i + 1)
+                if c == '-' then
+                  i = i + 1
+                  if i <= #s and s:sub(i, i) ~= ']' then
+                    i = i + #(s:match('^' .. ONE_CHAR, i) or c) -- c: a stray byte
+                  end
+                elseif c == '\\\\' and nxt ~= '' and escapes:find(nxt, 1, true) then
+                  i = i + 2
+                elseif c == '[' then
+                  local class = s:match('^%[:(%a+):%]', i)
+                  local whole = (class and CHAR_CLASSES[class] and '[:' .. class .. ':]')
+                    or s:match('^%[=' .. ONE_CHAR .. '=%]', i)
+                    or s:match('^%[%.' .. ONE_CHAR .. '%.%]', i)
+                  i = i + (whole and #whole or 1)
+                else
+                  i = i + 1
+                end
+              end
+              return i
+            end
+
+            -- The pattern typed so far, up to its delimiter, as Neovim's skip_regexp_ex reads it:
+            -- 'foo/e' typed after / is 'foo'. Not ended by an escaped delimiter (a\\/b) nor by one in a
+            -- [] collection (/[/]x is '[/]x'); the collection's [ is \\[ instead with 'nomagic' (magic
+            -- false) or after \\V, and [ again after \\v. With ? as the delimiter (a ? search,
+            -- :s?a?b?), an escaped ? is a plain ?, as skip_regexp_ex makes it: ?what\\? looks for
+            -- "what?", where the pattern what\\? would be "wha" and an optional t. An escaped
+            -- backslash stays one (?a\\\\? ends at the ?). No other delimiter is changed: \\/ in a /
+            -- search is already a plain / to the regexp.
+            local function until_delimiter(line, delimiter, magic)
               local out = {}
               local i = 1
               while i <= #line do
-                local c = line:sub(i, i)
-                if c == '\\\\' then
-                  local escaped = line:sub(i + 1, i + 1)
-                  out[#out + 1] = (delimiter == '?' and escaped == '?') and '?' or line:sub(i, i + 1)
-                  i = i + 2
-                elseif c == delimiter then
+                local c, nxt = line:sub(i, i), line:sub(i + 1, i + 1)
+                if c == delimiter then
                   break
+                elseif (c == '[' and magic) or (c == '\\\\' and nxt == '[' and not magic) then
+                  local close = collection_end(line, i + (c == '[' and 1 or 2))
+                  out[#out + 1] = line:sub(i, close) -- with its ], when it has one
+                  i = close + 1
+                elseif c == '\\\\' and nxt ~= '' then
+                  out[#out + 1] = (delimiter == '?' and nxt == '?') and '?' or c .. nxt
+                  if nxt == 'v' then
+                    magic = true
+                  elseif nxt == 'V' then
+                    magic = false
+                  end
+                  i = i + 2
                 else
                   out[#out + 1] = c
                   i = i + 1
@@ -3053,21 +3111,23 @@ final class LuaScripts {
               if not name then
                 return nil
               end
-              local known = false
+              local known
               for _, c in ipairs(PATTERN_COMMANDS) do
                 if #name >= #c[1] and c[2]:sub(1, #name) == name then
-                  known = true
+                  known = c[2]
                 end
               end
               if not known then
                 return nil
               end
+              -- :smagic and :snomagic read the pattern with 'magic' on and off, whatever it is.
+              local magic = (known == 'smagic') or (known ~= 'snomagic' and vim.o.magic)
               after = after:gsub('^%s*', '')
               local delimiter = after:sub(1, 1)
               if delimiter == '' or delimiter:match('[%w%s"|\\\\]') then
                 return nil
               end
-              local pat = until_delimiter(after:sub(2), delimiter)
+              local pat = until_delimiter(after:sub(2), delimiter, magic)
               return pat ~= '' and pat or nil
             end
 
@@ -3076,7 +3136,7 @@ final class LuaScripts {
               local kind = vim.fn.getcmdtype()
               if vim.o.incsearch then
                 if kind == '/' or kind == '?' then
-                  local typed = until_delimiter(vim.fn.getcmdline(), kind)
+                  local typed = until_delimiter(vim.fn.getcmdline(), kind, vim.o.magic)
                   if typed ~= '' then
                     return typed, false
                   end

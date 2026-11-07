@@ -14,7 +14,9 @@ group.
 - **While a search is typed**, with `'incsearch'` on: the matches of what is typed so far, without a
   search offset (`/foo/e` shows `foo`). After `?`, and in `:s?a?b?`, an escaped `\?` is a plain
   `?`, as Neovim reads it (`?what\?` shows `what?`, not `wha` and an optional `t`); after `/`,
-  `\/` is already a plain `/` to the regexp. Before the first character, the last search's, which
+  `\/` is already a plain `/` to the regexp. A delimiter inside a `[]` collection does not end
+  the pattern (`/[/]x` shows `/x`), as Neovim's `skip_anyof` reads it, with `'magic'`, `\v` and
+  `\V` deciding whether `[` or `\[` begins one. Before the first character, the last search's, which
   Neovim still shows. The same for the pattern of a `:s`, `:g`, `:v`, `:smagic`
   or `:snomagic` line (`:%s/foo/bar` shows `foo`). A range with a pattern of its own
   (`:/x/s/y/`) is not read; the last search shows instead.
