@@ -520,11 +520,30 @@ public final class NeovimInstaller {
         return true;
     }
 
+    /**
+     * Deletes {@code root} and everything below it, but never what a link points to: a symbolic
+     * link or a Windows junction, at the top or anywhere below, is deleted itself and not entered
+     * ({@link InstallTree#isLink}; on Windows, deleting a junction removes only the junction).
+     * Example: {@code neovim\wa} is a junction to {@code C:\tools\nvim}; after a swap it is
+     * {@code wa.old}, and deleting {@code wa.old} removes the junction while {@code C:\tools\nvim}
+     * keeps every file. Without the check the walk would enter the junction like a folder and empty
+     * the user's own Neovim. (A symbolic link to a folder is not entered by the walk anyway: it
+     * arrives in {@code visitFile}, which deletes the link.)
+     */
     static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                if (InstallTree.isLink(attrs)) {
+                    Files.delete(dir); // the link, not the folder it points to
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 Files.delete(file);

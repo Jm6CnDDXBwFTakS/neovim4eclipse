@@ -75,8 +75,10 @@ public final class InstallTree {
      * Deletes every file below {@code home} named like a file manager's own
      * ({@link PluginNeovim#isSystemFile}), so that {@link #of(Path)} can count the install. Example:
      * {@code la/.DS_Store} and {@code la/share/nvim/runtime/desktop.ini} are deleted, nothing else
-     * is touched. Links are not followed (the walk does not enter a linked folder, and {@link #of}
-     * refuses the install anyway). A read-only file (Explorer marks {@code desktop.ini} so) loses
+     * is touched. Links are not followed: the walk enters neither a symbolic link to a folder nor a
+     * Windows junction ({@link #isLink}), so a {@code desktop.ini} in the folder a link points to (a
+     * user's {@code C:\tools\nvim}) is never deleted, and {@link #of} refuses such an install anyway.
+     * A read-only file (Explorer marks {@code desktop.ini} so) loses
      * that mark first, as Windows refuses to delete it otherwise.
      *
      * @return whether none is left: {@code false} if one could not be deleted (held open, or no
@@ -86,6 +88,11 @@ public final class InstallTree {
         boolean[] left = { false };
         try {
             Files.walkFileTree(home.toAbsolutePath(), new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    return isLink(attrs) ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
+                }
+
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                     if (attrs.isRegularFile() && PluginNeovim.isSystemFile(String.valueOf(file.getFileName()))) {
@@ -103,6 +110,21 @@ public final class InstallTree {
             return false;
         }
         return !left[0];
+    }
+
+    /**
+     * Whether a folder that a {@link Files#walkFileTree} without {@code FOLLOW_LINKS} is about to
+     * enter is really a link to another folder. A symbolic link reads as one. A Windows
+     * <em>junction</em> ({@code mklink /J}) does not: Java reports it as a directory that is also
+     * "other" (a reparse point that is not a symbolic link), and the walk enters it as if it were a
+     * plain folder. Example: {@code neovim\wa} made a junction to {@code C:\tools\nvim}; a walk that
+     * deletes below {@code wa} would empty {@code C:\tools\nvim}. So every walk below the plug-in's
+     * Neovim folder asks this in {@code preVisitDirectory} and never goes below a link:
+     * {@link NeovimInstaller#deleteTree} deletes the link itself, {@link #removeSystemFiles} skips
+     * it, and {@link #of} refuses the install.
+     */
+    static boolean isLink(BasicFileAttributes attrs) {
+        return attrs.isSymbolicLink() || attrs.isOther();
     }
 
     private static boolean delete(Path file) {
@@ -130,8 +152,8 @@ public final class InstallTree {
             Files.walkFileTree(root, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (attrs.isSymbolicLink() || attrs.isOther()) {
-                        special[0] = true; // a Windows junction reads as "other"
+                    if (isLink(attrs)) {
+                        special[0] = true;
                         return FileVisitResult.TERMINATE;
                     }
                     return FileVisitResult.CONTINUE;
