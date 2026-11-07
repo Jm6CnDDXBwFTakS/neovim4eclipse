@@ -107,8 +107,8 @@ public record HeadedMessage(String intro, List<Point> points, String footer) {
         String plain() {
             String linkLabels = links.isEmpty() ? ""
                     : links.stream().map(Link::label).collect(Collectors.joining(", ", "(", ")"));
-            return heading + ": " + Stream.of(text, copy, linkLabels).filter(s -> !s.isEmpty())
-                    .collect(Collectors.joining(" "));
+            String rest = Stream.of(text, copy, linkLabels).filter(s -> !s.isEmpty()).collect(Collectors.joining(" "));
+            return heading.isEmpty() ? rest : heading + ": " + rest; // no ": " before a point without heading
         }
     }
 

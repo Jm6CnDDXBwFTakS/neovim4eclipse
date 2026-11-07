@@ -48,7 +48,7 @@ class HeadedMessageTest {
         assertEquals("", message.intro());
         assertEquals("", message.points().get(0).heading());
         assertTrue(message.point("Lost").isEmpty(), "looking for a heading meets no null");
-        assertEquals("\n\n: x.", message.plain());
+        assertEquals("\n\nx.", message.plain(), "a point without heading is its text alone");
     }
 
     @Test
