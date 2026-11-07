@@ -347,6 +347,25 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void close() {
+        shutDown(true);
+    }
+
+    /**
+     * Closes a session whose start failed half-way ({@link #initialize}): as {@link #close}, but
+     * without asking Neovim to quit first, which waits up to a second and a half for an answer a
+     * Neovim that stopped answering (the usual failure: a call that timed out) will not give.
+     */
+    private void abandon() {
+        shutDown(false);
+    }
+
+    /**
+     * Ends the session once: {@link #close} with {@code askToQuit}, {@link #abandon} without.
+     *
+     * @param askToQuit whether Neovim is asked to quit ({@code :qa!}, waited for a moment) before
+     *                  its process is ended
+     */
+    private void shutDown(boolean askToQuit) {
         if (closed) {
             return;
         }
@@ -357,29 +376,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // the closed connection's error (seen on a one-core machine), or with the interrupt the
         // shutdown sends its work. Failing a future twice keeps the first failure.
         for (CompletableFuture<?> answer : List.copyOf(unanswered)) {
-            answer.completeExceptionally(new IllegalStateException("Neovim is closed"));
+            answer.completeExceptionally(
+                    new IllegalStateException(askToQuit ? "Neovim is closed" : "Neovim did not start"));
         }
-        connection.requestQuit();
-        inputThread.shutdown();
-        held.clear();
-        connection.close();
-        LOG.info("NeovimSession closed");
-    }
-
-    /**
-     * Closes a session whose start failed half-way ({@link #initialize}): as {@link #close}, but
-     * without asking Neovim to quit first, which waits up to a second and a half for an answer a
-     * Neovim that stopped answering (the usual failure: a call that timed out) will not give.
-     */
-    private void abandon() {
-        closed = true;
-        for (CompletableFuture<?> answer : List.copyOf(unanswered)) {
-            answer.completeExceptionally(new IllegalStateException("Neovim did not start"));
+        if (askToQuit) {
+            connection.requestQuit();
         }
         inputThread.shutdown();
         held.clear();
         connection.close();
-        LOG.info("NeovimSession abandoned: its start failed");
+        LOG.info(askToQuit ? "NeovimSession closed" : "NeovimSession abandoned: its start failed");
     }
 
     // ---- state accessors and listeners ----
