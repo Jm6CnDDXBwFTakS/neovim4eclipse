@@ -9,11 +9,11 @@ import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,8 +29,10 @@ import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.INavigationHistory;
 import org.eclipse.ui.INavigationLocation;
+import org.eclipse.ui.IPageListener;
 import org.eclipse.ui.IWorkbenchCommandConstants;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
@@ -90,8 +92,7 @@ final class NavigationHistorySteps {
 
     /**
      * An editor and its selection, to come back to when Eclipse's Forward no longer can. The editor
-     * is held weakly: a closed editor is not kept alive by a remembered Back (and the page, which
-     * keys {@link #STEPS} weakly, is not kept alive through it either).
+     * is held weakly: a closed editor is not kept alive by a remembered Back.
      */
     record Place(WeakReference<IEditorPart> editor, int offset, int length) {
         boolean sameAs(Place other) {
@@ -100,7 +101,17 @@ final class NavigationHistorySteps {
         }
     }
 
-    private static final Map<IWorkbenchPage, HistorySteps<INavigationLocation, Place>> STEPS = new WeakHashMap<>();
+    /**
+     * The steps of each workbench page, removed when the page closes ({@link #forgetWhenClosed}).
+     *
+     * <p>Why not a {@code WeakHashMap}: its keys are weak, but its values are strong, and the values
+     * here reach their own key. A {@link HistorySteps} holds {@link INavigationLocation}s, a text
+     * editor's location holds its editor, the editor its site, and the site its page. So the page
+     * stays reachable through its own entry and would never be collected: each closed workbench
+     * window would keep its page and every editor in that history alive. Removing the entry when
+     * Eclipse closes the page has no such loop. UI thread only, so a plain map.
+     */
+    private static final Map<IWorkbenchPage, HistorySteps<INavigationLocation, Place>> STEPS = new HashMap<>();
 
     private NavigationHistorySteps() {
     }
@@ -384,7 +395,50 @@ final class NavigationHistorySteps {
     }
 
     private static HistorySteps<INavigationLocation, Place> steps(IWorkbenchPage page) {
-        return STEPS.computeIfAbsent(page, p -> new HistorySteps<>());
+        HistorySteps<INavigationLocation, Place> steps = STEPS.get(page);
+        if (steps == null) {
+            steps = new HistorySteps<>();
+            STEPS.put(page, steps);
+            forgetWhenClosed(page);
+        }
+        return steps;
+    }
+
+    /**
+     * Drops {@code page}'s steps when Eclipse closes it (see {@link #STEPS}): its workbench window
+     * closes, or Eclipse shuts down. Eclipse tells a window's page listeners then
+     * ({@code WorkbenchWindow.hardClose}); the listener removes itself too, so nothing of the page is
+     * left behind.
+     */
+    private static void forgetWhenClosed(IWorkbenchPage page) {
+        IWorkbenchWindow window = page.getWorkbenchWindow();
+        if (window == null) {
+            return;
+        }
+        window.addPageListener(new IPageListener() {
+            @Override
+            public void pageClosed(IWorkbenchPage closed) {
+                if (closed == page) {
+                    STEPS.remove(page);
+                    window.removePageListener(this);
+                }
+            }
+
+            @Override
+            public void pageActivated(IWorkbenchPage activated) {
+                // nothing: only the close matters
+            }
+
+            @Override
+            public void pageOpened(IWorkbenchPage opened) {
+                // nothing: only the close matters
+            }
+        });
+    }
+
+    /** For tests: whether {@code page} has steps kept for it. UI thread. */
+    static boolean hasStepsFor(IWorkbenchPage page) {
+        return STEPS.containsKey(page);
     }
 
     /** Runs {@code work} after what is already queued on the UI thread (see the class comment). */

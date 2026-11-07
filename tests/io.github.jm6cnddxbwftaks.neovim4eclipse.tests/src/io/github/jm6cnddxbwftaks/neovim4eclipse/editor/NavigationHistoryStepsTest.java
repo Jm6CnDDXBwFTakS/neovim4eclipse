@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -11,14 +12,22 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.PlatformUI;
 import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
  * The Eclipse half of {@code Ctrl-O} and {@code Ctrl-I} past Neovim's jumps
- * ({@link NavigationHistorySteps}), the parts that need no Neovim: which places count as gone.
- * The steps themselves are {@code HistoryStepsTest} and {@code EditorEndToEndTest}.
+ * ({@link NavigationHistorySteps}), the parts that need no Neovim: which places count as gone, and
+ * that a closed workbench window leaves nothing behind. The steps themselves are
+ * {@code HistoryStepsTest} and {@code EditorEndToEndTest}.
  */
 class NavigationHistoryStepsTest {
+
+    private static final long TIMEOUT_MS = TestWait.millis();
 
     @Test
     void aMissingLocalFileIsGoneAndAnExistingOneIsNot() throws Exception {
@@ -49,5 +58,30 @@ class NavigationHistoryStepsTest {
     void aFileUriWithAHostIsTakenAsThere() {
         assumeFalse(System.getProperty("os.name", "").startsWith("Windows"), "a UNC path on Windows");
         assertFalse(NavigationHistorySteps.isMissingLocalFile(URI.create("file://server/share/notes.txt")));
+    }
+
+    /** The steps kept for a page go with it: a closed window keeps no page, editor or history alive. */
+    @Test
+    void aClosedWindowsStepsAreDropped() throws Exception {
+        IWorkbenchWindow window = PlatformUI.getWorkbench().openWorkbenchWindow(null);
+        IWorkbenchPage page = window.getActivePage();
+        try {
+            NavigationHistorySteps.afterSwitch(page, new NavigationHistorySteps.Trail() {
+                @Override
+                public void wentNowhere(long first, int steps) {
+                    // not reached: no Back step is made
+                }
+
+                @Override
+                public void forget() {
+                    // nothing to forget
+                }
+            });
+            waitUntil("steps kept for the new window's page", TIMEOUT_MS,
+                    () -> NavigationHistorySteps.hasStepsFor(page));
+        } finally {
+            window.close();
+        }
+        assertFalse(NavigationHistorySteps.hasStepsFor(page), "the closed page's steps are gone");
     }
 }
