@@ -203,6 +203,13 @@ final class OtherFileWrites {
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Saved " + target + ", but could not move " + editor.getTitle() + " to it", e);
+            if (input.equals(editor.getEditorInput())) {
+                // The editor shows the new file; only Neovim's attach failed. A success for Neovim,
+                // so its buffer keeps the new name too, and says what is missing.
+                return DocumentWrite.Result.savedAs(WrittenMessage.of(name, created, document.get(),
+                        EclipseFileCommands.charsetOf(editor)) + "; Neovim is not attached to it (see the Error Log)",
+                        target.toString());
+            }
             return DocumentWrite.Result.failed("Saved " + name + ", but Eclipse could not move this editor to it"
                     + " (see the Error Log); open " + name + " to edit it");
         }

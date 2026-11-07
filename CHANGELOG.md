@@ -30,7 +30,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Fixed
 
 - `:saveas` no longer says E212 (nothing written) when the file was saved and only moving the
-  editor to it failed; it now says the file was saved and asks you to open it.
+  editor to it, or attaching Neovim to it again, failed; it now says the file was saved and what
+  did not work.
 - A change Neovim makes by itself (a plug-in's timer, a language server's edit) to a file whose
   editor is in the background is no longer lost when Eclipse writes the same file's buffer at that
   moment.
