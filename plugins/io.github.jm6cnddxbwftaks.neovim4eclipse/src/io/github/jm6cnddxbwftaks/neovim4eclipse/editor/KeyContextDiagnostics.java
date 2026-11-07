@@ -38,16 +38,18 @@ final class KeyContextDiagnostics {
         String text = Util.isMac() ? "M4+V" : "M1+V";
         try {
             String commandId = KeyBindings.commandIdFor(text);
+            // On macOS Ctrl-V (M4+V) has no Eclipse binding at all (paste is Cmd-V), so "no command" is the usual answer there.
+            String resolved = commandId == null ? "no command" : "'" + commandId + "'";
             switch (CtrlVResolution.of(contextActive, shouldReachNeovim, VimCtrlKeys.isCtrlKeyCommand(commandId))) {
                 case NOT_ACTIVE -> {
                     // Focus moved on before this ran: Eclipse's own binding is right again.
                 }
                 case NEOVIM -> LOG.fine("Ctrl-V (" + text + ") resolves to the Neovim Ctrl-key command "
                         + "(context is active and the binding wins)");
-                case EXPECTED_ECLIPSE -> LOG.fine("Ctrl-V (" + text + ") resolves to '" + commandId
-                        + "', as chosen: Ctrl-V goes to Eclipse in this mode (Ctrl Keys preferences)");
-                case WRONG -> LOG.warning("Ctrl-V (" + text + ") resolves to '" + commandId
-                        + "', not to a Neovim Ctrl-key command: either the Neovim key context is not active in the "
+                case EXPECTED_ECLIPSE -> LOG.fine("Ctrl-V (" + text + ") resolves to " + resolved
+                        + ", as chosen: Ctrl-V goes to Eclipse in this mode (Ctrl Keys preferences)");
+                case WRONG -> LOG.warning("Ctrl-V (" + text + ") resolves to " + resolved
+                        + ", not to a Neovim Ctrl-key command: either the Neovim key context is not active in the "
                         + "workbench, or another binding outranks it. Vim Ctrl keys will not work until this is resolved.");
             }
         } catch (Exception e) {

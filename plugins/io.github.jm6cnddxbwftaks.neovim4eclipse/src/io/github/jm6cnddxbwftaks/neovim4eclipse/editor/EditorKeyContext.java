@@ -76,6 +76,9 @@ final class EditorKeyContext {
     private Applied applied;
     private boolean disposed;
 
+    /** How often the contexts were activated; tells a posted Ctrl-V check whether it is the latest. UI thread. */
+    private int activations;
+
     /** The inputs of the letter choice besides the preferences: see {@link #applied}. */
     private record Applied(Column column, boolean eclipseTypes) {
     }
@@ -134,7 +137,8 @@ final class EditorKeyContext {
                 if (!wasActive) {
                     LOG.fine("Neovim key context activated (Vim Ctrl keys now go to Neovim)");
                     // Report what the workbench runs for Ctrl-V, once the activation has settled.
-                    Display.getDefault().asyncExec(this::checkCtrlV);
+                    int activation = ++activations;
+                    Display.getDefault().asyncExec(() -> checkCtrlV(activation));
                 }
             } else if (contexts.isActive()) {
                 contexts.deactivate(service);
@@ -150,8 +154,12 @@ final class EditorKeyContext {
      * Has {@link KeyContextDiagnostics} check where Ctrl-V goes. It runs posted, a moment after the
      * activation, so it reads the state as it is then: the editor may have lost focus already
      * (context off), or Neovim may be in a mode where Ctrl-V stays Eclipse's paste by choice.
+     * Only the latest activation's check reports, so that one activation gives one line.
      */
-    private void checkCtrlV() {
+    private void checkCtrlV(int activation) {
+        if (activation != activations) {
+            return; // turned off and on again before this ran: the later activation's check reports
+        }
         Applied now = applied;
         boolean active = !disposed && now != null && contexts.isActive();
         boolean toNeovim = now != null

@@ -665,8 +665,8 @@ The first three lines are written when Neovim mode turns on in an editor, not wh
 |----------|-------|---------|
 | `Neovim key context activated` | FINE | the context is on; if absent, the editor did not have focus or Neovim mode is off/insert |
 | `Ctrl-V (M1+V) resolves to the Neovim Ctrl-key command` | FINE | binding works; the key goes to Neovim |
-| `Ctrl-V (...) resolves to '<other command>', as chosen` | FINE | Ctrl-V goes to Eclipse in this mode by your Ctrl Keys choices (on Linux and Windows, insert mode by default) |
-| `Ctrl-V (...) resolves to '<other command>', not to a Neovim Ctrl-key command` | WARNING | Ctrl-V should go to Neovim, but another binding outranks ours, or the context is not in effect |
+| `Ctrl-V (...) resolves to '<other command>' (or no command), as chosen` | FINE | Ctrl-V goes to Eclipse in this mode by your Ctrl Keys choices (on Linux and Windows, insert mode by default) |
+| `Ctrl-V (...) resolves to '<other command>' (or no command), not to a Neovim Ctrl-key command` | WARNING | Ctrl-V should go to Neovim, but another binding outranks ours, or the context is not in effect |
 | `Ctrl chord reached the editor key listener` | INFO | the key got past the workbench (so a binding is not consuming it) |
 | `Ctrl-key command ran but there is nothing to send to` | WARNING | the binding fired but no editor is attached (the line names the command and key) |
 
