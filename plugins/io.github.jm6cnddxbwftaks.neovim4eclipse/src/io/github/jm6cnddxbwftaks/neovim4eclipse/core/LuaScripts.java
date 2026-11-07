@@ -1786,7 +1786,8 @@ final class LuaScripts {
      * Makes a document's buffer that is not attached equal to the document's lines (arguments: its
      * number, the lines as one list), replacing only the lines that differ, so the marks and undo
      * history of the others stay (a refactoring's change in the background, {@code
-     * sync/UnattachedDocumentSync}). Returns {@code false} for a buffer that is gone.
+     * sync/UnattachedDocumentSync}). Returns {@code "changed"}, {@code "equal"} (nothing was set, so
+     * nothing more is to be done) or {@code "gone"} (no such buffer).
      *
      * <h2>Why in one script, between two notifications</h2>
      * The line events of this change are the echo of Eclipse's own text and must not come back to
@@ -1803,7 +1804,7 @@ final class LuaScripts {
     static final String SET_DOCUMENT_LINES = """
             local buf, lines = tonumber((select(1, ...))), (select(2, ...))
             if not buf or not vim.api.nvim_buf_is_valid(buf) then
-              return false
+              return 'gone'
             end
             if #lines == 0 then
               lines = { '' } -- a buffer always has one line
@@ -1815,13 +1816,13 @@ final class LuaScripts {
               first = first + 1
             end
             if first > #current and first > #lines then
-              return true -- equal: nothing to set, no echo
+              return 'equal' -- nothing to set, no echo
             end
             local old_end, new_end = #current, #lines
             while old_end >= first and new_end >= first and current[old_end] == lines[new_end] do
               old_end, new_end = old_end - 1, new_end - 1
             end
-            local chan = vim.g.neovim4eclipse_channel
+            local chan = vim.g.neovim4eclipse_channel or 0 -- 0: every channel, Eclipse's among them
             vim.rpcnotify(chan, 'eclipse_echo', buf, true)
             local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, first - 1, old_end, true,
               vim.list_slice(lines, first, new_end))
@@ -1829,7 +1830,7 @@ final class LuaScripts {
             if not ok then
               error(err, 0)
             end
-            return true
+            return 'changed'
             """;
 
     /**

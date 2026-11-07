@@ -814,11 +814,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             return false;
         }
         // Read, compared and set in one script, which marks its own echo (see SET_DOCUMENT_LINES).
-        if (!Boolean.TRUE.equals(await(api.execLua(LuaScripts.SET_DOCUMENT_LINES,
-                List.of(String.valueOf(buffer.bufnr), List.copyOf(lines)))))) {
+        Object outcome = await(api.execLua(LuaScripts.SET_DOCUMENT_LINES,
+                List.of(String.valueOf(buffer.bufnr), List.copyOf(lines))));
+        if ("gone".equals(outcome)) {
             return false; // wiped in Neovim meanwhile
         }
-        applyModified(buffer);
+        if ("changed".equals(outcome)) {
+            applyModified(buffer); // writing lines set 'modified'; Eclipse's dirty flag decides
+        }
         return true;
     }
 

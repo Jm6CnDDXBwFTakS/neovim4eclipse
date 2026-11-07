@@ -238,12 +238,13 @@ class NeovimBufferIntegrationTest {
     }
 
     /**
-     * A change Neovim makes by itself around Eclipse's write of the same buffer (a plug-in's timer,
-     * an LSP edit) is reported, whether it lands before or after the write: only the write's own
-     * line events are its echo (LuaScripts.SET_DOCUMENT_LINES).
+     * Only the line events between the two {@code eclipse_echo} notifications are the echo of
+     * Eclipse's write (LuaScripts.SET_DOCUMENT_LINES); a change Neovim makes by itself right before
+     * or after them is reported. One script sends all of it, so Neovim sends it in exactly this
+     * order: a change, the echo pair around a change, a change.
      */
     @Test
-    void neovimsOwnChangeNextToEclipsesWriteIsStillReported() throws Exception {
+    void onlyTheChangeBetweenTheEchoNotificationsIsDropped() throws Exception {
         try (NeovimSession s = start()) {
             DocumentBuffer a = new DocumentBuffer("");
             DocumentBuffer b = new DocumentBuffer("");
@@ -252,14 +253,36 @@ class NeovimBufferIntegrationTest {
             s.showBuffer(b);
             List<BufferChange> ofA = new CopyOnWriteArrayList<>();
             s.addUnattachedChangeListener(a, ofA::add);
+            int buf = a.bufnr();
 
-            // Runs on Neovim's next loop: next to the write below, before or after it.
-            s.lua("vim.schedule(function() vim.api.nvim_buf_set_lines(" + a.bufnr() + ", 2, 3, false, {'THREE'}) end)");
-            assertTrue(s.setDocumentBufferLines(a, List.of("ONE", "two", "three")));
+            s.lua("local chan, buf = vim.g.neovim4eclipse_channel, " + buf + "\n"
+                    + "vim.api.nvim_buf_set_lines(buf, 0, 1, false, {'before'})\n"
+                    + "vim.rpcnotify(chan, 'eclipse_echo', buf, true)\n"
+                    + "vim.api.nvim_buf_set_lines(buf, 1, 2, false, {'echo'})\n"
+                    + "vim.rpcnotify(chan, 'eclipse_echo', buf, false)\n"
+                    + "vim.api.nvim_buf_set_lines(buf, 2, 3, false, {'after'})");
 
-            waitFor(() -> ofA.stream().anyMatch(c -> c.newLines().contains("THREE")), "Neovim's own change");
+            waitFor(() -> ofA.size() >= 2, "the changes before and after the echo");
             NeovimBarrier.pass(s);
-            assertTrue(ofA.stream().noneMatch(c -> c.newLines().contains("ONE")), "no echo of the write: " + ofA);
+            assertEquals(List.of(new BufferChange(0, 1, List.of("before")), new BufferChange(2, 3, List.of("after"))),
+                    ofA, "the change between the notifications is the echo");
+        }
+    }
+
+    /** Eclipse's write of lines the buffer already has changes nothing and reports nothing. */
+    @Test
+    void eclipsesWriteOfEqualLinesChangesNothing() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer("");
+            DocumentBuffer b = new DocumentBuffer("");
+            s.showBuffer(a);
+            s.setBufferLines(List.of("same"));
+            s.showBuffer(b);
+            Object tick = s.lua("return vim.api.nvim_buf_get_changedtick(" + a.bufnr() + ")");
+
+            assertTrue(s.setDocumentBufferLines(a, List.of("same")));
+
+            assertEquals(tick, s.lua("return vim.api.nvim_buf_get_changedtick(" + a.bufnr() + ")"));
         }
     }
 
