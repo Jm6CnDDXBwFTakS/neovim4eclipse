@@ -3,19 +3,17 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.util.Set;
 import java.util.function.BiConsumer;
 
-import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
+import org.eclipse.swt.widgets.Listener;
 import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.editors.text.EditorsUI;
-import org.eclipse.ui.texteditor.AbstractTextEditor;
 import org.eclipse.ui.themes.IThemeManager;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
@@ -39,8 +37,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * <h2>Dark editors without Eclipse's dark theme</h2>
  * Where the registry holds one of the two defaults, the editor's background picks between them
  * ({@link OverlayColors#searchMatch}): a dark editor in another theme, or in a high-contrast
- * system setting, gets the dark amber too. So a change of the editor's background (General &gt;
- * Editors &gt; Text Editors) is heard as well, from the editors' preference store.
+ * system setting, gets the dark amber too. The editor's colors are watched on the widget itself,
+ * at each paint: they change through the Text Editors preferences, but also straight on the
+ * widget, without any preference (a TextMate theme in the Generic Editor, for example), and the
+ * widget repaints after either. A paint whose colors differ from the last ones schedules new
+ * highlight colors (not during the paint, which must not restyle the text it draws).
  *
  * <p>Before 0.2.7 the matches took Eclipse's <i>Search Results</i> annotation color. A color of
  * its own changes the matches without changing Eclipse's own search marks, and its default could
@@ -57,30 +58,27 @@ final class SearchColors {
     /** The light default, as in {@code plugin.xml}: used where no theme registry answers. */
     static final RGB DEFAULT = rgb(OverlayColors.SEARCH_MATCH_LIGHT);
 
-    /**
-     * The editor preferences whose change may change the colors: the background picks the default
-     * (see the class comment), the text color the box.
-     */
-    private static final Set<String> EDITOR_COLORS = Set.of(
-            AbstractTextEditor.PREFERENCE_COLOR_BACKGROUND, AbstractTextEditor.PREFERENCE_COLOR_BACKGROUND_SYSTEM_DEFAULT,
-            AbstractTextEditor.PREFERENCE_COLOR_FOREGROUND, AbstractTextEditor.PREFERENCE_COLOR_FOREGROUND_SYSTEM_DEFAULT);
-
     private final StyledText widget;
     private final BiConsumer<Color, Color> apply;
     /** The theme manager, or null without a running workbench (see {@link #themeManager}). */
     private final IThemeManager themes = themeManager();
-    private final IPreferenceStore editorPreferences = EditorsUI.getPreferenceStore();
     /**
-     * Hears the theme and the editors' preferences: a change of this color, another theme, or the
-     * editor's background or text color. Any may happen on any thread
+     * Hears the theme: a change of this color, or another theme. Either may happen on any thread
      * (a preference import, a Job), and the colors go to the widget, so the work hops to the
      * widget's UI thread.
      */
     private final IPropertyChangeListener listener = this::onThemeChange;
+    /** Notices a change of the editor's own colors at the next paint (see the class comment). */
+    private final Listener paint = event -> onPaint();
+    /** The widget's background and text color the colors were last made for. UI thread. */
+    private RGB seenBackground;
+    private RGB seenForeground;
+    /** Set by {@link #dispose}: an update queued before it is dropped. UI thread. */
+    private boolean disposed;
 
     /**
-     * Hands {@code apply} the match and box colors now and after every change of the color or the
-     * theme, until {@link #dispose}.
+     * Hands {@code apply} the match and box colors now and after every change of the color, the
+     * theme, or the editor's background or text color, until {@link #dispose}.
      */
     SearchColors(StyledText widget, BiConsumer<Color, Color> apply) {
         this.widget = widget;
@@ -88,7 +86,7 @@ final class SearchColors {
         if (themes != null) {
             themes.addPropertyChangeListener(listener);
         }
-        editorPreferences.addPropertyChangeListener(listener);
+        widget.addListener(SWT.Paint, paint);
         update();
     }
 
@@ -107,26 +105,39 @@ final class SearchColors {
 
     private void onThemeChange(PropertyChangeEvent event) {
         String property = event.getProperty();
-        boolean ours = COLOR_ID.equals(property) || IThemeManager.CHANGE_CURRENT_THEME.equals(property)
-                || EDITOR_COLORS.contains(property);
-        if (ours && !widget.isDisposed()) {
-            // Later, not now: the editor sets the widget's new background in its own listener of the
-            // same change, which may run after this one.
+        if ((COLOR_ID.equals(property) || IThemeManager.CHANGE_CURRENT_THEME.equals(property)) && !widget.isDisposed()) {
             widget.getDisplay().asyncExec(this::update);
         }
     }
 
+    /** At a paint: new colors once the editor's background or text color changed. */
+    private void onPaint() {
+        RGB background = widget.getBackground().getRGB();
+        RGB foreground = widget.getForeground().getRGB();
+        if (!background.equals(seenBackground) || !foreground.equals(seenForeground)) {
+            seenBackground = background; // one update per change, however many paints come first
+            seenForeground = foreground;
+            widget.getDisplay().asyncExec(this::update);
+        }
+    }
+
+    /** Stops listening; an update already queued does nothing. UI thread. */
     void dispose() {
+        disposed = true;
         if (themes != null) {
             themes.removePropertyChangeListener(listener);
         }
-        editorPreferences.removePropertyChangeListener(listener);
+        if (!widget.isDisposed()) {
+            widget.removeListener(SWT.Paint, paint);
+        }
     }
 
     private void update() {
-        if (widget.isDisposed()) {
+        if (disposed || widget.isDisposed()) {
             return;
         }
+        seenBackground = widget.getBackground().getRGB();
+        seenForeground = widget.getForeground().getRGB();
         Color match = match();
         apply.accept(match, box(match));
     }

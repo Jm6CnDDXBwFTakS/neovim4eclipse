@@ -210,7 +210,7 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
    browser.
-   ⇒ Each of the four pictures is there in the light and the dark theme, side by side.
+   ⇒ Each of the five pictures is there in the light and the dark theme, side by side.
 2. Look at each pair against the text above it.
    ⇒ In both themes every match stands out from the editor's background, its text (syntax colors
    included, in the Java editor) stays readable, and the match under the caret is told apart from

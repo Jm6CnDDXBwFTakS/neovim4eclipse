@@ -176,9 +176,12 @@ unless it is exactly one of the defaults, which the registry cannot tell apart.
 both values, and that the stylesheet's selector names the color.
 
 `editor/SearchColors` reads the current theme's color registry and listens to the theme manager (a
-change of the color or of the theme) and to the editors' preferences (a change of the editor's
-background or text color), hopping to the UI thread, as any may come on another. While Eclipse shuts
-down there may be no workbench to ask; the highlights then take the default for the background.
+change of the color or of the theme), hopping to the UI thread, as either may come on another. The
+editor's own colors are watched on the widget, at each paint: they change through the Text Editors
+preferences, but some editors set them straight on the widget (a TextMate theme in the Generic
+Editor), and the widget repaints after either; a paint with other colors than last time schedules
+new highlight colors. While Eclipse shuts down there may be no workbench to ask; the highlights then
+take the default for the background.
 
 Until 0.2.6 the matches took Eclipse's *Search Results* annotation color. That made a change of the
 color recolor Eclipse's own search marks too, and its lavender default became a gray in the dark

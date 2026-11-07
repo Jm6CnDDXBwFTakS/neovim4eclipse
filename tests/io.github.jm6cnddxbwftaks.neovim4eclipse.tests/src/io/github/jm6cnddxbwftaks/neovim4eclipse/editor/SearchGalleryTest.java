@@ -14,14 +14,18 @@ import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -67,8 +71,13 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "background, and stay readable; the match under the caret, in the comment, has a box "
                             + "and its text reads as well as the others."),
             new Picture("color", "With another search match color",
-                    "The matches take the color set in Preferences > Editors > Text Editors > Annotations > "
-                            + "Search match (a green here); the box follows it."));
+                    "The matches take the color set in Preferences > General > Appearance > Colors and Fonts > "
+                            + "Neovim for Eclipse > Search match (a green here); the box follows it."),
+            new Picture("against", "An editor colored against the theme",
+                    "The editor's own colors are the other way round from the theme (set on the editor itself, as "
+                            + "a TextMate theme does: dark in the light run, light in the dark run). The matches take the "
+                            + "amber for that editor, dark under light text and light under dark text, and read well; "
+                            + "the box shows."));
 
     private static final String TEXT = """
             The quick brown fox jumps over the lazy dog.
@@ -145,6 +154,36 @@ class SearchGalleryTest extends EndToEndTestBase {
                 take(javaWidget, "color", 16);
             } finally {
                 colors.put(SearchColors.COLOR_ID, own);
+            }
+
+            // An editor whose colors are the other way round from the theme, set on the widget itself.
+            page().activate(text);
+            settle();
+            RGB textBefore = textWidgetBackground(textWidget, 16);
+            Color oldBackground = textWidget.getBackground();
+            Color oldForeground = textWidget.getForeground();
+            boolean dark = theme.equals("dark");
+            // Eclipse's current-line band keeps the theme's color, which a TextMate theme would set too:
+            // off here, so the picture shows the matches on the editor's own colors only.
+            IPreferenceStore editors = EditorsUI.getPreferenceStore();
+            String currentLine = AbstractDecoratedTextEditorPreferenceConstants.EDITOR_CURRENT_LINE;
+            boolean currentLineWas = editors.getBoolean(currentLine);
+            try {
+                editors.setValue(currentLine, false);
+                textWidget.setBackground(dark ? new Color(250, 250, 250)
+                        : new Color(30, 30, 30));
+                textWidget.setForeground(dark ? new Color(20, 20, 20)
+                        : new Color(220, 220, 220));
+                waitUntil("the other amber for the editor's own colors", TIMEOUT_MS,
+                        () -> !textBefore.equals(textWidgetBackground(textWidget, 16)));
+                session.inputAsync("gg0/fox<CR>"); // back on the first fox, for its box
+                settle();
+                waitForCaret(textWidget, 16);
+                take(textWidget, "against", 3);
+            } finally {
+                textWidget.setBackground(oldBackground);
+                textWidget.setForeground(oldForeground);
+                editors.setValue(currentLine, currentLineWas);
             }
         } finally {
             session.inputAsync("<Esc>:nohlsearch<CR>");
