@@ -68,7 +68,10 @@ public final class BlockSelection {
                 continue;
             }
             int last = Math.max(start, Utf8Columns.byteToCharIndex(text, range.endCol1() - 1));
-            int end = last >= text.length() ? text.length() : last + Character.charCount(text.codePointAt(last));
+            // To the end of the last character's grapheme cluster. Neovim already reports the last
+            // byte of an "e" with the combining accent U+0301 (getregionpos() ends at the accent),
+            // and a cell is never split; this keeps an accent or a joined emoji whole either way.
+            int end = VisualSelectionGeometry.afterCharacter(text, last);
             result.add(new LineRange(line0, start, end));
         }
         return result;

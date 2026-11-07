@@ -77,6 +77,35 @@ class VisualSelectionGeometryTest {
         assertEquals(r(0, 4, false), v(doc, 1, 0, 1, 2));
     }
 
+    /** "e" + U+0301 is one "é" on screen; Neovim's cursor is on the "e" and {@code vy} yanks both. */
+    @Test
+    void aCombiningAccentIsSelectedWithItsLetter() {
+        StringLineSource doc = new StringLineSource("aéb");
+        assertEquals(r(0, 3, false), v(doc, 1, 0, 1, 1));
+    }
+
+    /** A flag is two code points (four chars), one character on screen. */
+    @Test
+    void aFlagIsSelectedWhole() {
+        StringLineSource doc = new StringLineSource("🇩🇪!");
+        assertEquals(r(0, 4, false), v(doc, 1, 0, 1, 0));
+    }
+
+    /** A long run of combining marks (longer than the first window read) still ends after the last. */
+    @Test
+    void aLongClusterIsSelectedWhole() {
+        String marks = "́".repeat(40);
+        StringLineSource doc = new StringLineSource("e" + marks + "x");
+        assertEquals(r(0, 41, false), v(doc, 1, 0, 1, 0));
+    }
+
+    /** Ending on an empty line of a Windows file takes its whole "\r\n", never a lone "\r". */
+    @Test
+    void aCursorOnAnEmptyCrLfLineSelectsBothHalvesOfItsLineBreak() {
+        StringLineSource doc = new StringLineSource("a\r\n\r\nb");
+        assertEquals(r(0, 5, false), v(doc, 1, 0, 2, 0)); // "a\r\n" plus the empty line's "\r\n"
+    }
+
     @Test
     void theEndStopsAtTheEndOfTheDocument() {
         assertEquals(r(11, 16, false), v(TEXT, 3, 0, 3, 99));

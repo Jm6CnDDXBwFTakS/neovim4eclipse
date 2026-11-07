@@ -3,6 +3,9 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import java.text.BreakIterator;
+import java.util.Locale;
+
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit.LineSource;
 
 /**
@@ -16,8 +19,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit.LineSource;
  *       {@code o}). The corners are ordered first, so that a linewise start is the start of the top
  *       line and its end the end of the bottom line.</li>
  *   <li><b>Inclusive end.</b> Vim's selection includes the character under the cursor; an Eclipse
- *       selection's end is exclusive, so the end moves past that character (past both halves of a
- *       character outside the BMP, such as an emoji).</li>
+ *       selection's end is exclusive, so the end moves past that character: past the whole
+ *       grapheme cluster, so both halves of an emoji, an accent combined with its letter, and
+ *       both chars of a {@code \r\n} line break ({@link #afterCharacter}).</li>
  *   <li><b>Caret.</b> Eclipse shows the caret at one end; it goes where Neovim's cursor is, so that
  *       {@code o} visibly jumps to the other end.</li>
  * </ul>
@@ -91,18 +95,53 @@ public final class VisualSelectionGeometry {
         return Math.max(0, Math.min(line1 - 1, doc.lineCount() - 1));
     }
 
-    /** The offset after the character at {@code offset}; both UTF-16 halves of an emoji count as one character. */
+    /**
+     * The offset after the character at {@code offset}, read from a window of the document that
+     * grows until the character's end is inside it (a grapheme cluster has no length limit, but is
+     * almost always a few chars long; the whole rest of a large document is not copied for it).
+     */
     private static int afterCharacterAt(LineSource doc, int offset) {
-        if (offset >= doc.length()) {
-            return offset;
-        }
-        int width = 1;
-        if (offset + 1 < doc.length()) {
-            String two = doc.text(offset, 2);
-            if (Character.isHighSurrogate(two.charAt(0)) && Character.isLowSurrogate(two.charAt(1))) {
-                width = 2;
+        int window = 16;
+        while (offset < doc.length()) {
+            int length = Math.min(window, doc.length() - offset);
+            String text = doc.text(offset, length);
+            int end = afterCharacter(text, 0);
+            // The window's end is always a boundary; only one found before it is surely the character's.
+            if (end < length || offset + length >= doc.length()) {
+                return offset + end;
             }
+            window *= 2;
         }
-        return offset + width;
+        return offset;
+    }
+
+    /**
+     * The index after the user-perceived character (grapheme cluster) at {@code index}: what Vim's
+     * cursor covers, and so what its inclusive selection end takes. Examples:
+     * <ul>
+     *   <li>"e" followed by U+0301, a combining acute accent (one "é" on screen): Neovim's cursor
+     *       is on the "e", and {@code vy} yanks both, so the selection ends after the accent.</li>
+     *   <li>An emoji outside the BMP: both UTF-16 halves; a flag or a family emoji (several code
+     *       points joined): all of them.</li>
+     *   <li>{@code "\r\n"}: both. A selection that ends on an empty line of a Windows file takes its
+     *       line break whole; half of it would leave a lone {@code \n}, a line break of its own.</li>
+     * </ul>
+     * {@link BreakIterator#getCharacterInstance} follows Unicode's extended grapheme clusters (UAX
+     * #29; since Java 20), which also keep {@code \r\n} together; that case is checked explicitly
+     * anyway, since a split line break would change the line count.
+     *
+     * @return {@code text.length()} when {@code index} is at or past the end
+     */
+    static int afterCharacter(String text, int index) {
+        if (index >= text.length()) {
+            return text.length();
+        }
+        if (text.charAt(index) == '\r' && index + 1 < text.length() && text.charAt(index + 1) == '\n') {
+            return index + 2;
+        }
+        BreakIterator characters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        characters.setText(text);
+        int end = characters.following(index);
+        return end == BreakIterator.DONE ? text.length() : end;
     }
 }

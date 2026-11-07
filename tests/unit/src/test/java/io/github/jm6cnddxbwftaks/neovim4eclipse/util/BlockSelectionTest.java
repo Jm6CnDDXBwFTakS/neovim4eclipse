@@ -85,6 +85,12 @@ class BlockSelectionTest {
         assertEquals(List.of(new LineRange(0, 1, 3)), compute(lines("aéb"), new ByteRange(1, 2, 4)));
     }
 
+    /** An end on the base character's byte still takes the whole cluster: a cell is never split. */
+    @Test
+    void anEndOnTheBaseCharacterTakesItsCombiningMarks() {
+        assertEquals(List.of(new LineRange(0, 1, 3)), compute(lines("aéb"), new ByteRange(1, 2, 2)));
+    }
+
     /** {@code "a😀b"}: the emoji is four bytes and two UTF-16 chars, never split. */
     @Test
     void surrogatePairsAreNotSplit() {
