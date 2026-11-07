@@ -168,6 +168,8 @@ final class OtherFileWrites {
         if (openBufferOf(target, workspaceFile) != null) {
             return DocumentWrite.Result.failed("E139: File is loaded in another buffer (an Eclipse editor has \"" + name + "\" open)");
         }
+        boolean created;
+        IEditorInput input;
         try {
             if (!folderExists(target, workspaceFile)) {
                 if (!createFolders) {
@@ -175,8 +177,8 @@ final class OtherFileWrites {
                 }
                 createFolder(target, workspaceFile);
             }
-            boolean created = !Files.exists(target);
-            IEditorInput input = workspaceFile != null ? new FileEditorInput(workspaceFile)
+            created = !Files.exists(target);
+            input = workspaceFile != null ? new FileEditorInput(workspaceFile)
                     : new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(target.toUri()));
             provider.aboutToChange(input);
             try {
@@ -187,17 +189,25 @@ final class OtherFileWrites {
             if (workspaceFile != null) {
                 workspaceFile.refreshLocal(IResource.DEPTH_ZERO, null);
             }
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Saving " + editor.getTitle() + " as " + target + " failed", e);
+            return DocumentWrite.Result.failed("E212: Can't open file for writing: " + e.getMessage());
+        }
+        // The file is written from here on. A failure to move the editor there is no E212, which
+        // would say nothing was saved and invite a second :saveas over the file just written.
+        try {
             if (!EditorAttachManager.getInstance().replaceInputKeepingBuffer(editor, input)) {
                 // Another editor shows the same document: that one would be left on the old file.
                 return DocumentWrite.Result.failed("Saved " + name + ", but another editor shows this document, so this "
                         + "one stays on " + editor.getTitle());
             }
-            return DocumentWrite.Result.savedAs(WrittenMessage.of(name, created, document.get(),
-                    EclipseFileCommands.charsetOf(editor)), target.toString());
         } catch (Exception e) {
-            LOG.log(Level.FINE, "Saving " + editor.getTitle() + " as " + target + " failed", e);
-            return DocumentWrite.Result.failed("E212: Can't open file for writing: " + e.getMessage());
+            LOG.log(Level.WARNING, "Saved " + target + ", but could not move " + editor.getTitle() + " to it", e);
+            return DocumentWrite.Result.failed("Saved " + name + ", but Eclipse could not move this editor to it"
+                    + " (see the Error Log); open " + name + " to edit it");
         }
+        return DocumentWrite.Result.savedAs(WrittenMessage.of(name, created, document.get(),
+                EclipseFileCommands.charsetOf(editor)), target.toString());
     }
 
     /**

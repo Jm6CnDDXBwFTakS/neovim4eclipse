@@ -27,6 +27,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Nothing changes in the plug-in itself: a gallery run no longer keeps bringing its windows to
   the front while you work in another program; at most a test Eclipse's start does.
 
+### Fixed
+
+- `:saveas` no longer says E212 (nothing written) when the file was saved and only moving the
+  editor to it failed; it now says the file was saved and asks you to open it.
+
 ## [0.2.6] - 2026-11-07
 
 ### Fixed
