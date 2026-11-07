@@ -11,10 +11,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
 
 /**
  * The Neovim buffers that mirror Eclipse documents, the windows of the editors that show them, and
@@ -376,22 +378,61 @@ final class DocumentBuffers {
         }
     }
 
-    /** A document's buffer: new, or the file's buffer kept from a closed editor ({@code reused}). */
-    private record Created(Handle handle, boolean reused) {
+    /**
+     * A document's buffer: new, or the file's buffer kept from a closed editor ({@code reused}).
+     * {@code named}: it has the document's name (a buffer of {@link LuaScripts#CREATE_DOCUMENT_BUFFER}
+     * that took it), rather than being an unnamed scratch buffer.
+     */
+    private record Created(Handle handle, boolean reused, boolean named) {
     }
 
     private Created create(String name) throws Exception {
         // Listed, so :ls and :b see it. Scratch: no swap file, and no filetype detection runs. Its
         // buftype=nofile is then changed to acwrite, so that a write asks Eclipse to save
         // (LuaScripts.DOCUMENT_BUFFER): Neovim never writes the file itself.
-        Created made = name.isEmpty() ? new Created(await(api.createBuf(true, true)), false) : createNamed(name);
+        Created made = name.isEmpty() ? new Created(await(api.createBuf(true, true)), false, false) : createNamed(name);
         Handle buffer = made.handle();
-        await(api.execLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
-        // nvim_buf_attach: Neovim now sends nvim_buf_lines_event for this buffer. No initial
-        // full-buffer event (false): the document is pushed into the buffer instead.
-        await(api.bufAttach(buffer, false));
+        try {
+            await(api.execLua(LuaScripts.DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
+            // nvim_buf_attach: Neovim now sends nvim_buf_lines_event for this buffer. No initial
+            // full-buffer event (false): the document is pushed into the buffer instead.
+            await(api.bufAttach(buffer, false));
+        } catch (Exception e) {
+            undoCreate(made, e);
+            throw e;
+        }
         created.put(bufnr(buffer), buffer);
         return made;
+    }
+
+    /**
+     * Takes back a buffer that {@link #create} made but could not finish (its
+     * {@link LuaScripts#DOCUMENT_BUFFER} or {@code nvim_buf_attach} failed or timed out), best
+     * effort.
+     *
+     * <p>Why: the buffer exists in Neovim, listed, but never entered {@link #created}, so the
+     * document's next show would make another. A named one would even keep the file's name with
+     * {@code buftype=nofile}, and {@link LuaScripts#CREATE_DOCUMENT_BUFFER} would then leave every
+     * later buffer of that file unnamed ({@code :ls} shows the file twice, {@code :e} of it opens
+     * the wrong one). So a named buffer is closed as a closed editor's is
+     * ({@link LuaScripts#CLOSE_DOCUMENT_BUFFER}: unloaded, unlisted, plain {@code buftype}), which the
+     * next show reuses, with its marks; an unnamed scratch buffer, which nothing could reuse, is
+     * wiped. If that fails as well (Neovim hangs), it is logged and added to the first failure.
+     */
+    private void undoCreate(Created made, Exception cause) {
+        Handle buffer = made.handle();
+        try {
+            if (made.named()) {
+                await(api.execLua(LuaScripts.CLOSE_DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(buffer)))));
+            } else {
+                await(api.bufDelete(buffer, true, false));
+            }
+            LOG.fine(() -> "Took back buffer " + bufnr(buffer) + ", whose setup failed: " + cause);
+        } catch (Exception e) {
+            cause.addSuppressed(e);
+            LOG.warning(() -> "Buffer " + bufnr(buffer) + " could not be set up nor taken back; it may"
+                    + " stay listed in Neovim (:ls) without an editor: " + e);
+        }
     }
 
     /**
@@ -404,20 +445,28 @@ final class DocumentBuffers {
         if (!(result instanceof List<?> answer) || answer.size() != 3 || !(answer.get(0) instanceof Number bufnr)) {
             throw new IllegalStateException("Unexpected answer creating the buffer for " + name + ": " + result);
         }
-        if (!Boolean.TRUE.equals(answer.get(1))) {
+        boolean named = Boolean.TRUE.equals(answer.get(1));
+        if (!named) {
             LOG.fine(() -> "Buffer name already in use, left unnamed: " + name);
         }
         boolean reused = Boolean.TRUE.equals(answer.get(2));
         if (reused) {
             LOG.fine(() -> "Reusing the buffer kept from a closed editor of " + name + ": " + bufnr);
         }
-        return new Created(Handle.buffer(bufnr.longValue()), reused);
+        return new Created(Handle.buffer(bufnr.longValue()), reused, named);
     }
 
     /**
      * Closes a document's buffer, its last editor closed: as Vim's {@code :bd}, unloaded and unlisted
      * but kept, with its number and marks, for the file's next editor
      * ({@link LuaScripts#CLOSE_DOCUMENT_BUFFER}). Its undo history goes, as in Vim.
+     *
+     * <p>The close is tried even when leaving the buffer failed: Java forgets the buffer first, so
+     * a buffer left open would stay listed, attached and {@code acwrite} in Neovim with no editor
+     * that knows it ({@code :ls} lists it, {@code :w} in it asks Eclipse to save a closed editor).
+     * Should Neovim then enter some other buffer, Eclipse follows or switches back as for any such
+     * move. When a step fails, the exception says which buffer may be left over (see
+     * {@link #closeFailure}).
      */
     void close(DocumentBuffer buffer) throws Exception {
         if (!owns(buffer)) {
@@ -434,19 +483,61 @@ final class DocumentBuffers {
             attachedBufnr = bufnr(home);
             attachedDocument = null;
         }
-        // Leave the buffer first: unloading the window's buffer makes Neovim enter some other one,
-        // which Eclipse would follow by activating that editor. Editor windows still showing it
-        // are closed; the home window shows the attached buffer instead.
-        Object closed = await(api.execLua(LuaScripts.RELEASE_BUFFER,
-                List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
-        for (int winid : ids(closed)) {
-            windows.forget(winid);
-            if (winid == attachedWin) {
-                attachedWin = homeWin;
+        Exception failure = null;
+        try {
+            // Leave the buffer first: unloading the window's buffer makes Neovim enter some other one,
+            // which Eclipse would follow by activating that editor. Editor windows still showing it
+            // are closed; the home window shows the attached buffer instead.
+            Object closed = await(api.execLua(LuaScripts.RELEASE_BUFFER,
+                    List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
+            for (int winid : ids(closed)) {
+                windows.forget(winid);
+                if (winid == attachedWin) {
+                    attachedWin = homeWin;
+                }
+            }
+            returnToAttached();
+        } catch (Exception e) {
+            failure = e;
+        }
+        try {
+            await(api.execLua(LuaScripts.CLOSE_DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(doomed)))));
+        } catch (Exception e) {
+            if (failure == null) {
+                failure = e;
+            } else {
+                failure.addSuppressed(e);
             }
         }
-        returnToAttached();
-        await(api.execLua(LuaScripts.CLOSE_DOCUMENT_BUFFER, List.of(String.valueOf(bufnr(doomed)))));
+        if (failure != null) {
+            throw closeFailure(bufnr(doomed), buffer.name, failure);
+        }
+    }
+
+    /**
+     * The exception for a close that failed: it names the buffer, which Neovim may still list,
+     * so that the log says what to look for ({@code :ls}, {@code :bd 7}). The first failure is its
+     * cause; a failure of the close after it is suppressed in that. Logged here at WARNING, since
+     * the session logs a failed close at FINE only (it fails as a matter of course once Neovim is
+     * gone, and then nothing is left over).
+     */
+    private static IllegalStateException closeFailure(int bufnr, String name, Exception cause) {
+        IllegalStateException failure = new IllegalStateException("Closing buffer " + bufnr + " (" + name
+                + ") failed; Neovim may still list it without an editor", cause);
+        if (!connectionClosed(cause)) {
+            LOG.log(Level.WARNING, failure.getMessage(), cause);
+        }
+        return failure;
+    }
+
+    /** Whether {@code e} failed because the connection to Neovim has ended (Neovim gone). */
+    private static boolean connectionClosed(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof NeovimConnectionClosedException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<Integer> ids(Object answer) {
