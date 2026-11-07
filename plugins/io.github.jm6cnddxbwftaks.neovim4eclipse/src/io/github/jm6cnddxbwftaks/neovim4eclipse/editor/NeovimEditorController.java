@@ -144,6 +144,13 @@ public final class NeovimEditorController implements AutoCloseable {
     /** The wheel through Neovim; {@code null} with the viewport off. */
     private final NeovimWheel wheel;
     private volatile boolean closed;
+    /**
+     * Set when {@link #start} begins. Until then Neovim mode counts as off: should building a part
+     * fail in the constructor, the parts built before it (the mouse, the synchronizer) keep their
+     * widget and document listeners, as nobody has the half-built controller to close; this flag
+     * keeps them from sending anything to Neovim.
+     */
+    private volatile boolean started;
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
 
@@ -163,8 +170,12 @@ public final class NeovimEditorController implements AutoCloseable {
     /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
     private volatile String loggedMode;
 
+    /**
+     * Builds the editor's parts; {@link #start} then hands the editor to Neovim. The parts only
+     * watch the widget and the document here, and send nothing to Neovim before the start.
+     */
     private NeovimEditorController(ITextEditor editor, NeovimSession session, StyledText styledText,
-            DocumentBuffer buffer, EditorWindow window, boolean takeNeovimCursor) {
+            DocumentBuffer buffer, EditorWindow window) {
         this.editor = editor;
         this.session = session;
         this.styledText = styledText;
@@ -214,16 +225,7 @@ public final class NeovimEditorController implements AutoCloseable {
             this.searchHighlighter = null;
         }
 
-        // Prepend on the viewer so Neovim sees keys before the editor's own listeners: otherwise
-        // content assist auto-activates on keys Neovim consumes (e.g. the "i" that enters insert
-        // mode in m2e's POM editor), since a listener added to the widget runs after them.
-        this.keyViewer = viewerExtensionOf(editor);
-        if (keyViewer != null) {
-            keyViewer.prependVerifyKeyListener(keyInterceptor);
-        } else {
-            styledText.addVerifyKeyListener(keyInterceptor);
-        }
-        keyInterceptor.install(styledText); // an Esc that Eclipse took first (linked mode) still ends insert mode
+        this.keyViewer = viewerExtensionOf(editor); // the key interceptor goes there in start()
         // A rename begun in normal mode and accepted with Enter ends the insert typed for it.
         this.linkedEditWatch = new LinkedEditWatch(() -> documentOf(editor), this::leaveInsertAtCaret);
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
@@ -249,6 +251,27 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.setEclipseBinding(this::runEclipseBinding);
         this.otherCommandWatch = new OtherCommandWatch(editor.getSite().getService(ICommandService.class),
                 keyInterceptor::cancelCtrlX);
+    }
+
+    /**
+     * Hands the editor to Neovim: keys, session listeners, the status bar item, the first push.
+     * Separate from the constructor so that {@link #attach} can undo all of it ({@link #close})
+     * when a step fails half-way. Before, a step that threw (the status bar, the push, the viewport)
+     * left the key interceptor and the session listeners registered on a controller nobody had: it
+     * went on sending the editor's keys to Neovim and running host commands, and a {@code :q}
+     * typed in another editor closed this one too. UI thread.
+     */
+    private void start(boolean takeNeovimCursor) {
+        started = true; // a failure from here on is undone by close(), which attach calls
+        // Prepend on the viewer so Neovim sees keys before the editor's own listeners: otherwise
+        // content assist auto-activates on keys Neovim consumes (e.g. the "i" that enters insert
+        // mode in m2e's POM editor), since a listener added to the widget runs after them.
+        if (keyViewer != null) {
+            keyViewer.prependVerifyKeyListener(keyInterceptor);
+        } else {
+            styledText.addVerifyKeyListener(keyInterceptor);
+        }
+        keyInterceptor.install(styledText); // an Esc that Eclipse took first (linked mode) still ends insert mode
         // At Esc and at a sync point, only the lines typed since Neovim's buffer last equaled the document.
         session.setLeaveInsertPush(() -> {
             try {
@@ -314,8 +337,19 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         onModeChanged(session.getMode());
+        Consumer<NeovimEditorController> hook = startedHookForTests;
+        if (hook != null) {
+            hook.accept(this);
+        }
         LOG.fine("Attached Neovim to editor: " + editor.getTitle());
     }
+
+    /**
+     * For tests: run as the last step of {@link #start}, where it may throw, to see that a failed
+     * start leaves nothing registered ({@code EditorEndToEndTest.aFailedStartLeavesNoControllerBehind}).
+     * {@code null} in normal use.
+     */
+    static volatile Consumer<NeovimEditorController> startedHookForTests;
 
     /**
      * Pushes the Eclipse document and caret into Neovim without blocking the UI thread; the steps and
@@ -630,7 +664,20 @@ public final class NeovimEditorController implements AutoCloseable {
         if (documentOf(textEditor) == null) {
             throw new IllegalStateException("Editor has no IDocument");
         }
-        return new NeovimEditorController(textEditor, session, widget, buffer, window, takeNeovimCursor);
+        NeovimEditorController controller = new NeovimEditorController(textEditor, session, widget, buffer, window);
+        try {
+            controller.start(takeNeovimCursor);
+        } catch (RuntimeException | Error e) {
+            // Undo what start registered (close is safe for steps that did not happen), so that no
+            // controller the attach manager does not know of keeps the editor's keys.
+            try {
+                controller.close();
+            } catch (RuntimeException | Error closing) {
+                e.addSuppressed(closing);
+            }
+            throw e;
+        }
+        return controller;
     }
 
     public ITextEditor getEditor() {
@@ -645,7 +692,7 @@ public final class NeovimEditorController implements AutoCloseable {
      * @return {@code true} if Neovim currently owns keys
      */
     public boolean isNeovimModeActive() {
-        return neovimModeActive && !closed;
+        return started && neovimModeActive && !closed;
     }
 
     /**
@@ -746,7 +793,7 @@ public final class NeovimEditorController implements AutoCloseable {
      */
     private boolean neovimHandlesMouse() {
         String mode = session.getMode();
-        return !closed && neovimModeActive && !VimModes.isTyping(mode) && !VimModes.isExMode(mode);
+        return !closed && started && neovimModeActive && !VimModes.isTyping(mode) && !VimModes.isExMode(mode);
     }
 
     /** Whether the {@code :} box has the keyboard focus (the Vim Ctrl keys then go to its line). */

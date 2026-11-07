@@ -762,6 +762,48 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A controller whose start fails half-way (here its last step) is closed before the attach
+     * fails: nothing it registered stays. Before, its key interceptor and session listeners stayed
+     * on a controller nobody had, which kept sending the editor's keys to Neovim and running host
+     * commands ({@code :q} typed elsewhere closed this editor too). Here the key typed afterwards is
+     * Eclipse's: it is inserted, not taken by Neovim as a delete.
+     */
+    @Test
+    void aFailedStartLeavesNoControllerBehind() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor second = openFile("second.txt", "banana\n");
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        EditorAttachManager manager = EditorAttachManager.getInstance();
+        List<NeovimEditorController> failed = new ArrayList<>();
+        try {
+            NeovimEditorController.startedHookForTests = controller -> {
+                failed.add(controller);
+                throw new IllegalStateException("no start today (expected by the test)");
+            };
+            try {
+                manager.attach(second, false);
+                throw new AssertionError("the attach should have failed");
+            } catch (IllegalStateException expected) {
+                assertTrue(expected.getMessage().contains("expected by the test"), expected.toString());
+            }
+            NeovimEditorController.startedHookForTests = null;
+            assertEquals(1, failed.size());
+            assertTrue(failed.get(0).isClosed(), "the failed controller was closed");
+            assertNull(manager.getActiveController(), "no controller attached");
+
+            type(widgetOf(second), 'x');
+            settle();
+            assertEquals("xbanana\n", documentOf(second).get(), "Eclipse typed the key");
+        } finally {
+            NeovimEditorController.startedHookForTests = null;
+            page.closeEditor(second, false);
+            manager.attach(editor, false); // as in aFailedAttachHandsTheDocumentBackToItsSync
+            waitForAttach(editor, "test.txt");
+        }
+    }
+
+    /**
      * A rename of the open, attached file (as Refactor > Rename or a move in the Project Explorer
      * does it, through the workspace) gives the editor a new input and a new document
      * ({@code AbstractTextEditor}'s {@code elementMoved}). Neovim follows: its buffer is the new
