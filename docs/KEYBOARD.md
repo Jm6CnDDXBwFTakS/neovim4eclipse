@@ -70,6 +70,10 @@ The bindings use the physical **Control** key on macOS, while Eclipse's shortcut
 (`Cmd+S` saves, `Cmd+W` closes). So on a Mac all `Ctrl` letters can safely go to Neovim. A letter left
 to Eclipse there usually has no Eclipse binding, and then does nothing.
 
+`Cmd` keys never reach Neovim (`util/KeyMapping`). One that Eclipse has no binding for (say `Cmd+U`)
+is left to Eclipse and does nothing; it used to reach Neovim as the bare letter, so `Cmd+U` undid
+a change and `Cmd+P` put a register.
+
 ### Insert mode
 
 In insert mode Eclipse types, so content assist, auto-indent and templates keep working, and the

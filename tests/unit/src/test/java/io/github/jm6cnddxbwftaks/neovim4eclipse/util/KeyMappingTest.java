@@ -157,6 +157,16 @@ class KeyMappingTest {
         assertEquals("<S-F3>", KeyMapping.toNeovimKey(KeyMapping.SWT_F1 + 2, KeyMapping.SWT_SHIFT, NONE));
     }
 
+    /** An unbound Cmd+U reaching the editor must not go to Neovim as "u" (undo). */
+    @Test
+    void cmdKeysAreLeftToEclipse() {
+        assertNull(KeyMapping.toNeovimKey('u', KeyMapping.SWT_COMMAND, 'u'));
+        assertNull(KeyMapping.toNeovimKey('p', KeyMapping.SWT_COMMAND | KeyMapping.SWT_SHIFT, 'P'));
+        assertNull(KeyMapping.toNeovimKey(KeyMapping.SWT_ESC, KeyMapping.SWT_COMMAND, (char) KeyMapping.SWT_ESC));
+        assertNull(KeyMapping.toNeovimKey(KeyMapping.SWT_ARROW_UP, KeyMapping.SWT_COMMAND, NONE));
+        assertNull(KeyMapping.toNeovimKey('x', KeyMapping.SWT_COMMAND | KeyMapping.SWT_CTRL, (char) 24));
+    }
+
     @Test
     void bareModifierAndUnmappedControlCharactersAreIgnored() {
         assertNull(KeyMapping.toNeovimKey(0, 0, (char) 1));
@@ -173,5 +183,6 @@ class KeyMappingTest {
         assertEquals(0x10000, KeyMapping.SWT_ALT);
         assertEquals(0x20000, KeyMapping.SWT_SHIFT);
         assertEquals(0x40000, KeyMapping.SWT_CTRL);
+        assertEquals(0x400000, KeyMapping.SWT_COMMAND);
     }
 }

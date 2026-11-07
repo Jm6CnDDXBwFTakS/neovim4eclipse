@@ -75,6 +75,14 @@ public final class KeyMapping {
      * @return Neovim key string, or {@code null} if the event should be ignored (left to Eclipse)
      */
     public static String toNeovimKey(int keyCode, int stateMask, char character) {
+        if ((stateMask & SWT_COMMAND) != 0) {
+            // Cmd (macOS) is never Neovim's: Cmd keys are Eclipse's and the system's shortcuts. One
+            // Eclipse has no binding for still reaches the editor's key listener, with the letter as
+            // its character: read without Cmd, Cmd+U went to Neovim as "u" and undid a change, Cmd+P
+            // as "p" and put a register. Left to Eclipse, it does nothing. (On Linux, SWT reports the
+            // Super key as Cmd; it is the desktop's too.)
+            return null;
+        }
         boolean ctrl = (stateMask & SWT_CTRL) != 0;
         boolean alt = (stateMask & SWT_ALT) != 0;
         boolean shift = (stateMask & SWT_SHIFT) != 0;
