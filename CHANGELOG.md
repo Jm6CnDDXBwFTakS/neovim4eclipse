@@ -63,6 +63,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Security: a symbolic link to a file that does not exist is no longer written through by `:w`,
   `:w other`, `:saveas`, `:wq` or `:wa` without `!`; `:w!` and `:wa!` write there (`:w` says so in
   its error), and `:wq!` writes and closes.
+- On Windows, `:e` of a symbolic link to a missing file opens it as a new file, as on Linux and
+  macOS, instead of Eclipse's "File not found" page.
 - A Cmd shortcut (macOS) or Super shortcut (Linux) that Eclipse has no binding for (Cmd+U, Cmd+P)
   no longer reaches Neovim as a plain letter that changed the text, and on Linux no longer types
   it into the file.
