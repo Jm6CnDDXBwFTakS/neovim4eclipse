@@ -625,12 +625,22 @@ class EditorEndToEndTest extends EndToEndTestBase {
         settle();
         assertEquals(3, cursorLine());
 
-        session.inputAsync(":lua vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))<CR>");
-        settle();
-        waitUntil("Neovim back in test.txt", TIMEOUT_MS, () -> cursorLine() == 3);
+        session.inputAsync(":lua vim.g.e2e_scratch = vim.api.nvim_create_buf(true, false)"
+                + " vim.api.nvim_set_current_buf(vim.g.e2e_scratch)<CR>");
+        try {
+            settle();
+            waitUntil("Neovim back in test.txt", TIMEOUT_MS, () -> cursorLine() == 3);
 
-        type(widget, "ggx");
-        expectText("lpha\nbeta\ngamma\n");
+            type(widget, "ggx");
+            expectText("lpha\nbeta\ngamma\n");
+        } finally {
+            // The listed, unnamed buffer would stay for every later test of this Neovim, and their
+            // :bufdo would go through it too (the base class wipes only the project's files' buffers).
+            settle();
+            io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session,
+                    "local b = vim.g.e2e_scratch if b and vim.api.nvim_buf_is_valid(b) then"
+                    + " pcall(vim.api.nvim_buf_delete, b, { force = true }) end vim.g.e2e_scratch = nil return true");
+        }
     }
 
     /**
