@@ -373,23 +373,34 @@ public final class NeovimEditorController implements AutoCloseable {
         if (closed || !neovimModeActive || matches.bufnr() != buffer.bufnr()) {
             return;
         }
-        if (eclipseTyping() || session.isLeavingInsertMode()) {
-            // Neovim's lines are behind the document until Esc (Eclipse types), so its columns are
-            // of older text: painted, they would land on the wrong characters. The highlighter
-            // keeps its own matches in step with the typing meanwhile, and the matches are asked for
-            // again once the insert has ended: at the mode change (onModeChanged), or now if that
-            // came already (the Esc is still being handled).
-            searchSkipped = true;
-            if (!typingSeen) {
-                resendSkippedSearch();
-            }
+        if (skipWhileEclipseTypes()) {
             return;
         }
         SwtUiExecutor.INSTANCE.asyncExec(() -> {
-            if (!closed && neovimModeActive && !styledText.isDisposed()) {
+            // Again here: Eclipse may have begun typing since the matches arrived, and the document
+            // listener, which keeps shown matches in step, has not seen these.
+            if (!closed && neovimModeActive && !styledText.isDisposed() && !skipWhileEclipseTypes()) {
                 searchHighlighter.show(matches.matches());
             }
         });
+    }
+
+    /**
+     * Whether Neovim's matches must be ignored now: Neovim's lines are behind the document until Esc
+     * (Eclipse types), so its columns are of older text, and painted they would land on the wrong
+     * characters. The highlighter keeps its own matches in step with the typing meanwhile, and the
+     * matches are asked for again once the insert has ended: at the mode change (onModeChanged),
+     * or now if that came already (the Esc is still being handled). Any thread.
+     */
+    private boolean skipWhileEclipseTypes() {
+        if (!eclipseTyping() && !session.isLeavingInsertMode()) {
+            return false;
+        }
+        searchSkipped = true;
+        if (!typingSeen) {
+            resendSkippedSearch();
+        }
+        return true;
     }
 
     /**

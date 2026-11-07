@@ -3028,8 +3028,26 @@ final class LuaScripts {
             end
 
             --- The pattern as Neovim's search would apply it, with \\c or \\C (see above).
+            -- Whether pat holds Vim's \\c or \\C flag; a backslash that is itself escaped (\\\\c, a literal
+            -- backslash and c) is not one.
+            local function has_case_flag(pat)
+              local i = 1
+              while i <= #pat do
+                if pat:sub(i, i) == '\\\\' then
+                  local next = pat:sub(i + 1, i + 1)
+                  if next == 'c' or next == 'C' then
+                    return true
+                  end
+                  i = i + 2
+                else
+                  i = i + 1
+                end
+              end
+              return false
+            end
+
             function M.effective(pat, star)
-              if pat:find('\\\\[cC]') then
+              if has_case_flag(pat) then
                 return pat
               end
               if not vim.o.ignorecase then
