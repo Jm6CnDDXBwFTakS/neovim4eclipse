@@ -151,6 +151,59 @@ class SearchHighlighterTest {
         assertEquals(List.of(new Region(2, 3)), highlighter.regions());
     }
 
+    /** Text typed before a match moves it; text typed in it drops it (Neovim has not matched the new text). */
+    @Test
+    void theMatchesFollowEclipsesEdits() throws Exception {
+        highlighter.show(List.of(new SearchMatch(1, 2, 1, 5), new SearchMatch(2, 3, 2, 6)));
+        viewer.getDocument().replace(0, 0, "xx"); // "xxa foo b\n..."
+        assertEquals(List.of(new Region(4, 3), new Region(12, 3)), highlighter.regions());
+        assertEquals(MATCH, backgroundAt(4), "painted where foo now is");
+        assertNull(backgroundAt(2));
+        viewer.getDocument().replace(5, 1, "O"); // inside the first foo
+        assertEquals(List.of(new Region(12, 3)), highlighter.regions(), "the touched match is dropped");
+        viewer.getDocument().replace(15, 0, "!"); // right after the second
+        assertEquals(List.of(new Region(12, 3)), highlighter.regions(), "an edit after a match leaves it");
+    }
+
+    /** The editor reports the lines it shows, 1-based, at first and when it scrolls. */
+    @Test
+    void theLinesShownAreReported() {
+        StringBuilder text = new StringBuilder();
+        for (int i = 1; i <= 200; i++) {
+            text.append("line ").append(i).append('\n');
+        }
+        viewer.setDocument(new Document(text.toString()));
+        java.util.List<int[]> reports = new java.util.ArrayList<>();
+        SearchHighlighter fresh = new SearchHighlighter(viewer, MATCH, BOX);
+        fresh.setViewListener((top, bottom) -> reports.add(new int[] { top, bottom }));
+        assertEquals(1, reports.size(), "a first report");
+        assertEquals(1, reports.get(0)[0]);
+        assertEquals(viewer.getBottomIndex() + 1, reports.get(0)[1]);
+        viewer.setTopIndex(99);
+        assertEquals(100, reports.get(reports.size() - 1)[0], "after a scroll, from line 100");
+        int count = reports.size();
+        viewer.setTopIndex(99);
+        assertEquals(count, reports.size(), "the same view is not reported twice");
+        fresh.dispose();
+    }
+
+    /** With word wrap, the current match's part on each visual row gets a box of its own. */
+    @Test
+    void aWrappedMatchGetsABoxPerRow() {
+        viewer.setDocument(new Document("aaaa bbbb cccc dddd eeee ffff"));
+        widget.setWordWrap(true);
+        widget.setSize(widget.computeSize(SWT.DEFAULT, SWT.DEFAULT).x / 2, 200); // about half the line per row
+        widget.setCaretOffset(0);
+        SearchHighlighter fresh = new SearchHighlighter(viewer, MATCH, BOX);
+        fresh.show(List.of(new SearchMatch(1, 0, 1, 29)));
+        List<org.eclipse.swt.graphics.Rectangle> boxes = fresh.boxes();
+        assertTrue(boxes.size() > 1, "one box per row: " + boxes);
+        for (org.eclipse.swt.graphics.Rectangle box : boxes) {
+            assertEquals(widget.getLineHeight(), box.height, "each box one row high: " + boxes);
+        }
+        fresh.dispose();
+    }
+
     @Test
     void theRegionHoldingTheOffsetIsFound() {
         List<IRegion> regions = List.of(new Region(2, 3), new Region(10, 3));

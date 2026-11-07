@@ -303,6 +303,13 @@ public final class NeovimEditorController implements AutoCloseable {
         if (viewport != null) {
             viewport.start(); // after the push: the wrap is for this editor's buffer
         }
+        if (searchHighlighter != null) {
+            // After the push, which makes the buffer: the lines this editor shows, then its matches,
+            // asked for whether or not Neovim's window changed (a re-attach to the same window
+            // fires no WinEnter, and Neovim would send nothing new).
+            searchHighlighter.setViewListener((top1, bottom1) -> session.setSearchViewAsync(buffer, top1, bottom1));
+            session.resendSearchAsync(buffer);
+        }
 
         onModeChanged(session.getMode());
         LOG.fine("Attached Neovim to editor: " + editor.getTitle());

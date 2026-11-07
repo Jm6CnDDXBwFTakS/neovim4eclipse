@@ -46,6 +46,16 @@ public interface SearchPort {
     void resendSearchAsync(DocumentBuffer buffer);
 
     /**
+     * The editor of {@code buffer} shows lines {@code top1} to {@code bottom1} (1-based): Neovim
+     * searches them along with its window's own visible lines, which differ from the editor's when
+     * the viewport feature is off, when Eclipse scrolled alone in insert mode, when Neovim does not
+     * know Eclipse's folds, and by a partly shown last line. After every key queued before; views
+     * that arrive faster than Neovim answers replace each other. Nothing when {@code buffer} is no
+     * longer the one shown.
+     */
+    void setSearchViewAsync(DocumentBuffer buffer, int top1, int bottom1);
+
+    /**
      * The matches Neovim's window shows for buffer {@code bufnr}.
      *
      * @param bufnr   Neovim's buffer number
@@ -56,5 +66,9 @@ public interface SearchPort {
         public Matches {
             matches = List.copyOf(matches);
         }
+    }
+
+    /** The lines an editor shows, for {@code setSearchViewAsync}. */
+    record View(DocumentBuffer buffer, int top1, int bottom1) {
     }
 }

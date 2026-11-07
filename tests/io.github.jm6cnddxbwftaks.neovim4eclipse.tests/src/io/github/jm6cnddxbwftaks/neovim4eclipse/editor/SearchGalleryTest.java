@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.preference.PreferenceConverter;
 import org.eclipse.swt.custom.StyleRange;
@@ -23,6 +24,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -144,6 +146,19 @@ class SearchGalleryTest extends EndToEndTestBase {
             settle();
             writePage();
         }
+    }
+
+    /**
+     * Closes every editor, its two included, then waits for Eclipse's jobs, before the base deletes
+     * project e2e: a Java editor left open on a deleted project keeps JDT's jobs failing (see
+     * JavaEditorEndToEndTest's cleanup, which this follows). A job that never ends does not fail
+     * the gallery: the wait gives up at the limit.
+     */
+    @AfterEach
+    void closeEveryEditorAndLetTheJobsFinish() {
+        page().closeAllEditors(false);
+        editor = null; // closed too: the base must not close it again
+        UiTestSupport.waitUntilOrGiveUp(TIMEOUT_MS, Job.getJobManager()::isIdle);
     }
 
     /** Creates {@code name} in the project, opens it in {@code editorId} and waits for Neovim to attach. */
