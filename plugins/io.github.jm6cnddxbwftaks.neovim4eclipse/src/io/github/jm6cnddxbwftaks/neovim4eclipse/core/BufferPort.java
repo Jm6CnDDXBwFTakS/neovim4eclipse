@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -33,6 +34,19 @@ public interface BufferPort {
      */
     default boolean setBufferRegion(int first, int unchangedAtEnd, List<String> lines) throws Exception {
         return false;
+    }
+
+    /**
+     * Splits lines of the attached buffer that hold carriage returns into the lines Eclipse's
+     * document shows them as, and keeps Neovim's cursor on the part it was in
+     * ({@link LuaScripts#SPLIT_LINE_BREAKS}). A line that no longer reads as its parts joined by
+     * {@code \r} (a key changed it since) is left alone. The new cursor is reported as Neovim's.
+     * Blocking RPC: input thread, as {@link #setBufferLines}.
+     *
+     * @param parts by Neovim line number (0-based), the lines it becomes; example: {@code 1 ->
+     *              ["beta1", "2x"]} for {@code "beta1\r2x"}
+     */
+    default void splitLineBreaks(Map<Integer, List<String>> parts) throws Exception {
     }
 
     /**

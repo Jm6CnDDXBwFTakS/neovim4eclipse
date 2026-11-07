@@ -205,3 +205,38 @@ t.test('a document write marks its echo on every channel when the channel is not
   t.eq({ 'x' }, lines())
   t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
 end)
+
+-- SPLIT_LINE_BREAKS: a line holding carriage returns becomes the lines Eclipse's document shows it as
+-- (the parts come from the document), and the cursor goes onto the part it was in (sync/SplitLines).
+t.test('a carriage return inside a line splits it, and the cursor follows its part', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'alpha', 'beta1\r2x', 'x\ry\rz', 'gamma' })
+  vim.api.nvim_win_set_cursor(win, { 2, 7 }) -- on the x after the carriage return
+  local cursor = t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win),
+    { { 2, { 'beta1', '2x' } }, { 3, { 'x', 'y', 'z' } } })
+  t.eq({ 3, 1 }, cursor)
+  t.eq({ 'alpha', 'beta1', '2x', 'x', 'y', 'z', 'gamma' }, lines())
+  t.eq({ 3, 1 }, vim.api.nvim_win_get_cursor(win))
+end)
+
+t.test('the lines below a split carry the cursor down', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { '\ra', 'b' })
+  vim.api.nvim_win_set_cursor(win, { 2, 0 })
+  t.eq({ 3, 0 }, t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { '', 'a' } } }))
+  t.eq({ '', 'a', 'b' }, lines())
+end)
+
+t.test('a carriage return Eclipse keeps in a CRLF stays at the end of the last part', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'x\ra\r' })
+  t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { 'x', 'a' } } })
+  t.eq({ 'x', 'a\r' }, lines())
+end)
+
+t.test('a line a key changed since the parts were read is left alone', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'a\rbc' })
+  t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { 'a', 'b' } }, { 5, { 'p', 'q' } } })
+  t.eq({ 'a\rbc' }, lines())
+end)

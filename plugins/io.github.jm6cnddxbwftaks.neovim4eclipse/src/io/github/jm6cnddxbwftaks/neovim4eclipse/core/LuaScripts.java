@@ -1475,6 +1475,69 @@ final class LuaScripts {
             """;
 
     /**
+     * Splits lines that hold carriage returns into the lines Eclipse's document shows them as
+     * (arguments: the buffer's number, its window, a list of {@code {line1, parts}}). Returns the
+     * window's cursor after the split as {@code {line1, col0}}, or {@code nil} without a window.
+     *
+     * <p>Why: Neovim keeps {@code \r} inside a line ({@code Ctrl-V Ctrl-M}, {@code :s} with
+     * {@code nr2char(13)}, {@code Ctrl-R Ctrl-R} of a register holding one); Eclipse takes it as a
+     * line break, so the line is two there and the lines below it are numbered differently on each
+     * side ({@code sync/SplitLines}). After this script Neovim holds Eclipse's lines. Neovim does the
+     * split, rather than Eclipse pushing its lines, because only Neovim knows its cursor at that
+     * moment: on {@code "beta1\r2x"} with the cursor after {@code x} (byte 8), the cursor goes to
+     * the next line, byte 2, where Eclipse's caret is; a push would leave it on {@code "beta1"}. And
+     * it is safe in the middle of an insert, while keys still arrive: the split is one step between
+     * two keys, and its line events come in Neovim's order like theirs.
+     *
+     * <p>The parts come from Eclipse's document ({@code BufferSynchronizer.splitParts}), which
+     * decides where its lines break: {@code "a\r"} before a {@code \n} is one line there when it was
+     * loaded so, two when the {@code \r} was typed. A line is split only while it reads as its parts
+     * joined by {@code \r}, or with one more {@code \r} at its end (which Eclipse keeps in a
+     * {@code \r\n}); a key that changed it since leaves it to the next split. Bottom up, so the line
+     * numbers above a split stay right.
+     */
+    static final String SPLIT_LINE_BREAKS = """
+            local buf, win, splits = tonumber((select(1, ...))), tonumber((select(2, ...))), select(3, ...)
+            if not vim.api.nvim_buf_is_valid(buf) then
+              return nil
+            end
+            local cursor = nil
+            if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf then
+              cursor = vim.api.nvim_win_get_cursor(win)
+            end
+            table.sort(splits, function(a, b) return a[1] > b[1] end)
+            local count = vim.api.nvim_buf_line_count(buf)
+            for _, split in ipairs(splits) do
+              local row, parts = split[1], vim.list_extend({}, split[2])
+              local line = row <= count and vim.api.nvim_buf_get_lines(buf, row - 1, row, true)[1] or nil
+              local joined = table.concat(parts, '\\r')
+              if line ~= nil and (line == joined or line == joined .. '\\r') and #parts > 1 then
+                if line ~= joined then
+                  parts[#parts] = parts[#parts] .. '\\r' -- Eclipse keeps it in a "\\r\\n"
+                end
+                vim.api.nvim_buf_set_lines(buf, row - 1, row, true, parts)
+                if cursor and cursor[1] > row then
+                  cursor[1] = cursor[1] + #parts - 1
+                elseif cursor and cursor[1] == row then
+                  local col, at = cursor[2], row -- onto the part the cursor was in
+                  for k, part in ipairs(parts) do
+                    if col <= #part or k == #parts then
+                      cursor = { at, col }
+                      break
+                    end
+                    col, at = col - #part - 1, at + 1
+                  end
+                end
+              end
+            end
+            if cursor then
+              pcall(vim.api.nvim_win_set_cursor, win, cursor)
+              return vim.api.nvim_win_get_cursor(win)
+            end
+            return nil
+            """;
+
+    /**
      * Module {@code neovim4eclipse.paths}: the one rule for comparing file paths in Neovim, used by
      * every script that compares them ({@link #PROJECT_FILES}, {@link #HOST_COMMANDS},
      * {@link #DOCUMENT_BUFFER}, {@link #LEAVE_FOLDER}) and by the Lua tests ({@code t.same_file}).

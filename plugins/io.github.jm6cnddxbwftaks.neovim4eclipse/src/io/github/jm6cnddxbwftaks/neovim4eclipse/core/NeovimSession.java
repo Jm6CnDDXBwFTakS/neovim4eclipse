@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -940,6 +941,27 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (document != null) {
                 applyModified(document); // the change set 'modified'; Eclipse decides (a revert is not dirty)
             }
+        }
+    }
+
+    /**
+     * See {@link BufferPort#splitLineBreaks}. The cursor the script returns is dispatched as
+     * Neovim's, so that the editor's caret is on the split line's right part before Eclipse types
+     * again (its own report of the move may come later).
+     */
+    @Override
+    public void splitLineBreaks(Map<Integer, List<String>> parts) throws Exception {
+        Handle handle = buffers.attached();
+        if (handle == null || parts.isEmpty()) {
+            return;
+        }
+        List<List<Object>> splits = new ArrayList<>(parts.size());
+        parts.forEach((line0, lines) -> splits.add(List.of(line0 + 1, lines))); // Lua's lines are 1-based
+        Object cursor = await(api.execLua(LuaScripts.SPLIT_LINE_BREAKS, List.of(
+                String.valueOf(DocumentBuffers.bufnr(handle)), String.valueOf(buffers.attachedWin()), splits)));
+        if (cursor instanceof List<?> pos && pos.size() == 2 && pos.get(0) instanceof Number line
+                && pos.get(1) instanceof Number col) {
+            state.dispatchCursor(line.intValue(), col.intValue());
         }
     }
 

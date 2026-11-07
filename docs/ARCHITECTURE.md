@@ -792,15 +792,17 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   break. So `"\ra"` is one line in Neovim and two in Eclipse, and every line below it would be
   numbered differently on each side: Neovim's next `dd` would delete the wrong line in Eclipse. The
   change is applied as Eclipse splits it (the `\r` stays in the document, so a save writes the same
-  bytes), and the synchronizers then push the lines back, so Neovim holds the split lines too and both
-  count the same lines. Until that push runs, `sync/SplitLines` turns Neovim's line numbers into the
-  document's: in insert mode the push waits for the insert's end (a push in the middle of it would race
-  the keys Neovim is still typing), and meanwhile each key's line event must still land on the right
-  lines. Example: `qa i Ctrl-V Ctrl-M b Esc q`, where Neovim types the whole insert; its full sync after
-  Esc is applied (it has the same text) and sends the push. After an insert Eclipse typed, the push at
-  Esc writes the split lines, since Neovim's applied changes count among the changed lines. The line
-  delimiter for Neovim's new lines is not taken from a line that ends in such a `\r`
-  (`BufferSynchronizer.lineDelimiter`). A NUL byte is no such case:
+  bytes), and Neovim then splits its line the same way (`LuaScripts.SPLIT_LINE_BREAKS`), so both count
+  the same lines. Neovim does it, not a push of Eclipse's lines, because Neovim knows its cursor: it
+  goes onto the part it was in, where the caret is. The split is queued behind the keys already sent;
+  it is one step in Neovim between two keys, so it needs no pause in an insert. Until it runs,
+  `sync/SplitLines` turns Neovim's line numbers into the document's, so each earlier key's line event
+  still lands on the right lines. Example: `qa i Ctrl-V Ctrl-M b Esc q`, where Neovim types the whole
+  insert. A handshake that lets Eclipse type (an insert's start, a hand-back after `Ctrl-R`) waits for
+  the split, so Eclipse types at the right caret. The split's own line event changes no character of
+  the document (the `\r` stays, not the delimiter), and the line delimiter for Neovim's new lines is
+  not taken from a line that ends in such a `\r` (`BufferSynchronizer.lineDelimiter`). A NUL byte is no
+  such case:
   Neovim stores it as `\n` inside a line, but its API sends it to an RPC client as `\0`, an ordinary
   character in Eclipse, and turns a pushed `\0` back into a NUL.
 - **Paste, counts and `.`** are ordinary keys sent to Neovim; there is no Java-side emulation. Linewise

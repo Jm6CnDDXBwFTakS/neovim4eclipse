@@ -5,6 +5,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -397,7 +399,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             return;
         }
         if (change.changesNothing()) {
-            runOnUi(() -> runAfterApply(change)); // in order with the changes before it
+            runOnUi(() -> runAfterApplyOnceSplit(change)); // in order with the changes before it
             return;
         }
         if (!listening) {
@@ -427,20 +429,33 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                 changedLines.forget(); // Neovim's whole buffer is not applied: the next push writes everything
             }
             Edit edit;
+            int linesBefore = document.getNumberOfLines();
+            int eclipseSpan; // how many document lines Neovim's new lines take, before the edit
             if (fullBuffer) {
                 // Neovim's text as it is, carriage returns too: right even while lines are split.
                 edit = neovimBehind ? null : fullBufferEdit(document, change.newLines(), newline);
                 splitLines.replacedAll(change.newLines(), delimiter);
+                eclipseSpan = UnattachedDocumentSync.neovimLineCount(document, newline);
             } else {
                 // Neovim's line numbers, turned into the document's while a line is split (SplitLines).
-                edit = LineRangeEdit.compute(new DocumentLineSource(document),
-                        splitLines.eclipseLine(change.firstLine()), splitLines.eclipseLine(change.lastLine()),
-                        change.newLines(), delimiter, newline);
+                int first = splitLines.eclipseLine(change.firstLine());
+                int last = splitLines.eclipseLine(change.lastLine());
+                // Lines the document has already, but with other line breaks, stay: Neovim's split
+                // of "\ra" into "" and "a" (BufferPort.splitLineBreaks) would otherwise turn the
+                // document's "\r" into its delimiter, and a save would write another byte.
+                edit = hasLines(first, last, change.newLines()) ? null
+                        : rangeEdit(first, last, change.newLines(), delimiter, newline);
                 splitLines.replaced(change.firstLine(), change.lastLine(), change.newLines(), delimiter);
+                eclipseSpan = last - first;
             }
             if (edit != null) {
                 undoSteps.beforeRemoteChange(); // one undo step per Neovim command (see UndoSteps)
                 document.replace(edit.offset(), edit.length(), edit.text());
+            }
+            // The lines the new text takes now, as the document counts them (SplitLines.correct).
+            if (!(fullBuffer && neovimBehind)) { // a skipped full sync says nothing about the document
+                splitLines.correct(fullBuffer ? 0 : change.firstLine(), change.newLines().size(),
+                        eclipseSpan + document.getNumberOfLines() - linesBefore);
             }
         } catch (Exception e) {
             changedLines.forget(); // the document lacks Neovim's change, wherever it was
@@ -460,21 +475,136 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             onLocalChange();
         } else if (!splitLines.isEmpty()) {
             // A line of Neovim's holds a line break of Eclipse's: Neovim's "\ra" (Ctrl-V Ctrl-M, or
-            // :s with nr2char(13)) is one line there and two here (SplitLines). The push sends
-            // Eclipse's lines ("" and "a"), so Neovim splits the line the same way and both count
-            // the same lines again; the document keeps the "\r", so a save writes Neovim's bytes.
+            // :s with nr2char(13)) is one line there and two here (SplitLines). Neovim splits its
+            // line the same way (BufferPort.splitLineBreaks), so both count the same lines again;
+            // the document keeps the "\r", so a save writes Neovim's bytes.
             //
             // Neovim is not marked behind: its text is right, only its line numbers differ, and
-            // SplitLines translates them, so its full syncs still apply. That matters in insert mode,
-            // where the push waits (the gate is closed: a push would race the keys Neovim is still
-            // typing) for the next change Neovim sends once the insert has ended. Example: qa i
-            // Ctrl-V Ctrl-M b Esc q. Neovim types the whole insert (it is recording), each key's
-            // line event lands on the right lines, and the full sync after Esc, applied in Normal
-            // mode, sends the push. After an insert Eclipse typed, the push at Esc writes the split
-            // lines, since Neovim's applied changes count among the changed lines (ChangedLines).
-            onLocalChange();
+            // SplitLines translates them, so its full syncs still apply. The split runs on the input
+            // thread, behind the keys sent so far, and needs no gate: it is one step in Neovim
+            // between two keys, and its line events come in Neovim's order. Example: qa i Ctrl-V
+            // Ctrl-M b Esc q, where Neovim types the whole insert (it is recording): each key's
+            // line event lands on the right lines until the split, and the split's own events
+            // change nothing here.
+            requestSplit();
         }
-        runAfterApply(change);
+        runAfterApplyOnceSplit(change);
+    }
+
+    /**
+     * The edit for Neovim's lines replacing the document's lines {@code first .. last - 1} (the
+     * document's numbers). As {@link LineRangeEdit}, except for one line holding a carriage return:
+     * that one replaces the line with its line break, not its text only.
+     *
+     * <p>Why: a line of Neovim's that ends in {@code \r}, before the document's {@code \n}, is one
+     * line here ending in {@code \r\n} ({@link SplitLines#breaksIn}). Example: Ctrl-V Ctrl-M at the
+     * end of "beta1", then "2". The document reads "beta1\r\n"; Neovim sends "beta1\r2". Replacing
+     * the line's text "beta1" kept the "\r\n" after it: "beta1\r2\r\n", one carriage return too many.
+     * Replacing "beta1\r\n" with "beta1\r2\n" gives Neovim's text. UI thread.
+     */
+    private Edit rangeEdit(int first, int last, List<String> lines, String delimiter, boolean finalNewline) {
+        if (lines.size() == 1 && last == first + 1 && lines.get(0).indexOf('\r') >= 0
+                && last < document.getNumberOfLines()) {
+            try {
+                int start = document.getLineOffset(first);
+                int end = document.getLineOffset(last);
+                Edit inSpan = TextDiff.minimalEdit(document.get(start, end - start), lines.get(0) + delimiter);
+                return inSpan == null ? null : new Edit(start + inSpan.offset(), inSpan.length(), inSpan.text());
+            } catch (BadLocationException e) {
+                // the general rule below
+            }
+        }
+        return LineRangeEdit.compute(new DocumentLineSource(document), first, last, lines, delimiter, finalNewline);
+    }
+
+    /**
+     * Whether the document's lines {@code first .. last - 1} read {@code lines}, line delimiters
+     * aside. Only when their count matches and they are inside the document. UI thread.
+     */
+    private boolean hasLines(int first, int last, List<String> lines) {
+        if (last - first != lines.size() || lines.isEmpty() || last > document.getNumberOfLines()) {
+            return false;
+        }
+        try {
+            for (int i = 0; i < lines.size(); i++) {
+                IRegion line = document.getLineInformation(first + i);
+                if (!document.get(line.getOffset(), line.getLength()).equals(lines.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (BadLocationException e) {
+            return false;
+        }
+    }
+
+    /** A split is queued on the input thread and has not run yet (see {@link #requestSplit}). */
+    private final AtomicBoolean splitPending = new AtomicBoolean(false);
+
+    /** Queues Neovim's split of its lines at their carriage returns, once for several changes. UI thread. */
+    private void requestSplit() {
+        if (closed || !splitPending.compareAndSet(false, true)) {
+            return;
+        }
+        session.runAsync("split Neovim's lines at carriage returns", () -> {
+            splitPending.set(false);
+            if (closed) {
+                return;
+            }
+            try {
+                // Read when it runs, on the UI thread: the lines events applied since are in it.
+                Map<Integer, List<String>> parts = onUi(this::splitParts);
+                if (parts != null && !parts.isEmpty()) {
+                    session.splitLineBreaks(parts);
+                }
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Could not split Neovim's lines at their carriage returns; "
+                        + "Neovim gets Eclipse's lines instead", e);
+                neovimBehind = true;
+                onLocalChange(); // a push, once the gate allows it
+            }
+        });
+    }
+
+    /**
+     * For each split Neovim line (0-based), the document's lines it is shown as: what Neovim's line
+     * becomes. Example: Neovim's line 1 "beta1\r2x" is the document's lines 1 and 2, "beta1" and
+     * "2x". Read from the document, not cut at each "\r", since the document decides: a "\r" typed
+     * before a "\n" stays a line of its own there ({@link SplitLines#correct}). UI thread.
+     */
+    private Map<Integer, List<String>> splitParts() {
+        Map<Integer, List<String>> parts = new TreeMap<>();
+        for (Map.Entry<Integer, Integer> split : splitLines.splits().entrySet()) {
+            int first = splitLines.eclipseLine(split.getKey());
+            if (first + split.getValue() >= document.getNumberOfLines()) {
+                continue; // not in the document (it changed since): left to a later change
+            }
+            parts.put(split.getKey(), linesOf(first, first + split.getValue() + 1));
+        }
+        return parts;
+    }
+
+    /**
+     * Runs the change's after-apply action, or, while Neovim's lines are split differently, once
+     * Neovim has split them. The action lets Eclipse type (the handshake at an insert's start and at
+     * a hand-back); Eclipse's caret must first be where Neovim's cursor is in Eclipse's lines.
+     * Example: Ctrl-R Ctrl-R a, register a holding "1\r2", in an insert Eclipse types: the hand-back
+     * sync has "beta1\r2", Neovim's cursor is after the 2 on its line 2, but that is Eclipse's line 3.
+     * Behind the split, the caret goes to the cursor the split reports, and then Eclipse types.
+     */
+    private void runAfterApplyOnceSplit(BufferChange change) {
+        if (change.afterApply() == null || (splitLines.isEmpty() && !splitPending.get())) {
+            runAfterApply(change);
+            return;
+        }
+        session.runAsync("let Eclipse type after the split", () -> {
+            if (!closed && ui.isAvailable()) {
+                ui.asyncExec(() -> {
+                    restoreCaret();
+                    runAfterApply(change);
+                });
+            }
+        });
     }
 
     private void runAfterApply(BufferChange change) {

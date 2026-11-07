@@ -55,6 +55,18 @@ class SplitLinesTest {
         assertTrue(split.isEmpty());
     }
 
+    /** The document's count wins: a "\r" typed before a "\n" is a line of its own there. */
+    @Test
+    void theDocumentsLineCountCorrectsTheBreaks() {
+        SplitLines split = new SplitLines();
+        split.replaced(1, 2, List.of("a\r"), "\n");
+        assertTrue(split.isEmpty(), "by the rule, one line");
+        split.correct(1, 1, 2);
+        assertEquals(3, split.eclipseLine(2));
+        split.correct(1, 1, 1);
+        assertTrue(split.isEmpty());
+    }
+
     /** Each count is checked against how a JFace document splits the same text. */
     @Test
     void breaksAreCountedAsTheDocumentCountsThem() {

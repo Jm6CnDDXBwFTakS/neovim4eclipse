@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
@@ -62,6 +63,17 @@ class BufferSynchronizerTest {
             }
             regions.add(first + "|" + unchangedAtEnd + "|" + lines);
             return true;
+        }
+
+        /** Each split of Neovim's lines at carriage returns: the parts by Neovim line. */
+        final List<Map<Integer, List<String>>> splits = new ArrayList<>();
+        /** Runs inside each split: Neovim's line events for it. */
+        Runnable duringSplit = () -> { };
+
+        @Override
+        public void splitLineBreaks(Map<Integer, List<String>> parts) {
+            splits.add(Map.copyOf(parts));
+            duringSplit.run();
         }
 
         @Override
@@ -568,26 +580,30 @@ class BufferSynchronizerTest {
     /**
      * Ctrl-V Ctrl-M at the start of line 1 of "a\nb\nc\n" (as line 0 of Neovim's buffer "x"): Neovim's
      * line "\ra" is two lines in Eclipse. Without a push back, Neovim's next {@code j dd} (delete
-     * line 2, "b") would delete "a" here. The push gives Neovim Eclipse's lines, and Neovim's later
-     * changes land on the right lines; its full sync before the push has the same text, and the
+     * line 2, "b") would delete "a" here. Neovim splits its line as Eclipse does, and its later
+     * changes land on the right lines; its full sync before the split has the same text, and the
      * document keeps its "\n" line breaks (the delimiter is not taken from the "\r"'s line).
      */
     @Test
-    void aCarriageReturnInsideANeovimLineIsPushedBackSoBothCountTheSameLines() {
+    void aCarriageReturnInsideANeovimLineIsSplitInNeovimSoBothCountTheSameLines() {
         IDocument doc = new Document("a\nb\nc\n");
         try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
             s.pushLocalChanges(() -> true, null);
             s.startRemoteListening();
             neovim.neovimChanged(new BufferChange(0, 1, List.of("\ra")));
             assertEquals("\ra\nb\nc\n", doc.get(), "the carriage return is kept, as Neovim has it");
-            assertEquals(1, neovim.queued.size(), "a push of the split lines is queued");
+            assertEquals(1, neovim.queued.size(), "Neovim's split is queued");
 
             neovim.neovimChanged(new BufferChange(0, -1, List.of("\ra", "b", "c")));
             assertEquals("\ra\nb\nc\n", doc.get(), "the full sync changes nothing: its lines are joined with \"\\n\"");
+            assertEquals(1, neovim.queued.size(), "one split for both");
 
             neovim.runQueued();
-            assertEquals(List.of(List.of("", "a", "b", "c")), neovim.pushed);
-            assertTrue(neovim.queued.isEmpty(), "no push loop");
+            assertEquals(List.of(Map.of(0, List.of("", "a"))), neovim.splits, "the document's lines for Neovim's line 0");
+            assertEquals(List.of(), neovim.pushed, "Neovim splits its lines itself");
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("", "a"))); // the split's line event
+            assertEquals("\ra\nb\nc\n", doc.get(), "the same lines");
+            assertTrue(neovim.queued.isEmpty(), "no split loop");
 
             // Neovim now has "", "a", "b", "c": "dd" on "b" is line 2 on both sides.
             neovim.neovimChanged(new BufferChange(2, 3, List.of()));
@@ -597,60 +613,108 @@ class BufferSynchronizerTest {
 
     /**
      * {@code qa i Ctrl-V Ctrl-M b Esc q} on "a" (line 3 of x, y, z, a, c): while a macro is recorded
-     * Neovim types the whole insert, and in insert mode no push goes out (the gate is closed). Each
-     * key's line event uses Neovim's numbers, one line fewer than Eclipse's below the split; they
-     * land on the right lines all the same, and the full sync after Esc, applied in Normal mode,
-     * pushes the split lines. Before, the event for "b" replaced only Eclipse's line 3 and left a
-     * second "a", and the full sync after Esc was skipped.
+     * Neovim types the whole insert, its keys in flight. The split is queued behind them, so the
+     * line events of the keys before it use Neovim's numbers, one line fewer than Eclipse's below the
+     * split; they land on the right lines all the same, and so does the full sync after Esc. Before,
+     * the event for "b" replaced only Eclipse's line 3 and left a second "a", and the full sync after
+     * Esc was skipped. No push is needed (the insert's gate stays closed throughout).
      */
     @Test
-    void aSplitLineInANeovimDrivenInsertKeepsTheLinesAndIsPushedWhenTheInsertEnds() {
+    void aSplitLineInANeovimDrivenInsertKeepsTheLinesUntilNeovimSplitsIt() {
         IDocument doc = new Document("x\ny\nz\na\nc\n");
-        boolean[] insert = { true };
         try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
-            s.pushLocalChanges(() -> !insert[0], null);
+            s.pushLocalChanges(() -> false, null); // insert mode
             s.startRemoteListening();
             neovim.neovimChanged(new BufferChange(3, 4, List.of("\ra"))); // Ctrl-V Ctrl-M
-            neovim.neovimChanged(new BufferChange(3, 4, List.of("\rba"))); // b
+            neovim.neovimChanged(new BufferChange(3, 4, List.of("\rba"))); // b, before the split ran
             assertEquals("x\ny\nz\n\rba\nc\n", doc.get());
             neovim.neovimChanged(new BufferChange(4, 4, List.of("d"))); // o d: below Neovim's line 3
             assertEquals("x\ny\nz\n\rba\nd\nc\n", doc.get());
-            assertEquals(List.of(), neovim.queued, "no push in insert mode");
-
-            insert[0] = false; // Esc: the full sync of the insert's end comes in Normal mode
-            neovim.neovimChanged(new BufferChange(0, -1, List.of("x", "y", "z", "\rba", "d", "c")));
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("x", "y", "z", "\rba", "d", "c"))); // after Esc
             assertEquals("x\ny\nz\n\rba\nd\nc\n", doc.get(), "Neovim's full sync is applied: it has the same text");
-            neovim.runQueued();
-            assertEquals(List.of(List.of("x", "y", "z", "", "ba", "d", "c")), neovim.pushed);
 
+            neovim.runQueued();
+            assertEquals(List.of(Map.of(3, List.of("", "ba"))), neovim.splits);
+            neovim.neovimChanged(new BufferChange(3, 4, List.of("", "ba"))); // the split's line event
             neovim.neovimChanged(new BufferChange(6, 7, List.of())); // dd on "c": the same line on both sides
             assertEquals("x\ny\nz\n\rba\nd\n", doc.get());
+            assertEquals(List.of(), neovim.pushed);
         }
     }
 
     /**
      * {@code Ctrl-R a} in an insert Eclipse types, register a holding "1\r2": Neovim drives while it
      * waits for the register name, inserts the register and hands typing back to Eclipse after a full
-     * sync. That sync is applied (it used to be skipped once the split marked Neovim behind) and lets
-     * Eclipse type; at Esc the push of the changed lines writes the split line with Eclipse's typing.
+     * sync. That sync is applied (it used to be skipped once the split marked Neovim behind), but
+     * lets Eclipse type only once Neovim has split the line, so that the caret is where the split
+     * put Neovim's cursor (Eclipse's line 1, not line 0) when Eclipse types.
      */
     @Test
-    void aSplitLineBeforeAHandBackIsSyncedAndPushedAtEsc() {
+    void aSplitLineBeforeAHandBackLetsEclipseTypeOnlyAfterNeovimSplitIt() {
         IDocument doc = new Document("a\nb\n");
-        boolean[] eclipseTypes = { false };
+        List<String> order = new ArrayList<>();
         try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
             s.pushLocalChanges(() -> false, null); // insert mode throughout
+            s.setCaretRestorer(() -> order.add("caret"));
             s.startRemoteListening();
             neovim.neovimChanged(new BufferChange(0, 1, List.of("a1\r2")));
-            neovim.neovimChanged(new BufferChange(0, -1, List.of("a1\r2", "b"), () -> eclipseTypes[0] = true));
-            assertTrue(eclipseTypes[0], "the hand-back's sync was applied");
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("a1\r2", "b"), () -> order.add("Eclipse types")));
             assertEquals("a1\r2\nb\n", doc.get());
+            assertTrue(!order.contains("Eclipse types"), "not before the split: " + order);
 
-            doc.set("a1\r2X\nb\n"); // Eclipse types X
-            s.pushChangedLinesToNeovim(); // Esc
-            assertEquals(List.of(List.of("a1", "2X", "b")), neovim.pushed);
+            order.clear();
+            neovim.duringSplit = () -> neovim.neovimChanged(new BufferChange(0, 1, List.of("a1", "2")));
+            neovim.runQueued();
+            assertEquals(List.of("caret", "caret", "Eclipse types"), order,
+                    "the split's event, then the caret on the cursor the split reported, then the typing");
+            assertEquals("a1\r2\nb\n", doc.get());
             neovim.neovimChanged(new BufferChange(2, 3, List.of("B"))); // Neovim counts 3 lines now
-            assertEquals("a1\r2X\nB\n", doc.get());
+            assertEquals("a1\r2\nB\n", doc.get());
+        }
+    }
+
+    /**
+     * Ctrl-V Ctrl-M at the end of "beta1", then "2" and "x". A "\r" typed before the "\n" is a line
+     * of its own in a JFace document (its line tracker does not join them after an insert), so Neovim's
+     * one line is two here at once; each key's line event still lands on its lines, and the "2" goes
+     * between the carriage return and the newline. The split Neovim is asked for has the document's
+     * lines.
+     */
+    @Test
+    void aCarriageReturnTypedAtALinesEndThenTextAfterItGivesNeovimsText() {
+        IDocument doc = new Document("alpha\nbeta1\ngamma\n");
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushLocalChanges(() -> false, null);
+            s.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(1, 2, List.of("beta1\r")));
+            assertEquals("alpha\nbeta1\r\ngamma\n", doc.get());
+            assertEquals(5, doc.getNumberOfLines(), "the typed \\r is a line break of its own");
+            neovim.neovimChanged(new BufferChange(1, 2, List.of("beta1\r2")));
+            assertEquals("alpha\nbeta1\r2\ngamma\n", doc.get());
+            neovim.neovimChanged(new BufferChange(1, 2, List.of("beta1\r2x")));
+            assertEquals("alpha\nbeta1\r2x\ngamma\n", doc.get());
+            neovim.neovimChanged(new BufferChange(2, 3, List.of("GAMMA"))); // below the split line
+            assertEquals("alpha\nbeta1\r2x\nGAMMA\n", doc.get());
+            neovim.runQueued();
+            assertEquals(List.of(Map.of(1, List.of("beta1", "2x"))), neovim.splits);
+        }
+    }
+
+    /**
+     * A file loaded with "beta1\r\n" (a CRLF line in an LF file): Neovim has "beta1\r", Eclipse one
+     * line ending in "\r\n". No split, and a key after it keeps Neovim's text.
+     */
+    @Test
+    void aLoadedCarriageReturnBeforeTheNewlineIsOneLine() {
+        IDocument doc = new Document("alpha\nbeta1\r\ngamma\n");
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushLocalChanges(() -> false, null);
+            s.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(1, 2, List.of("Beta1\r")));
+            assertEquals("alpha\nBeta1\r\ngamma\n", doc.get());
+            neovim.neovimChanged(new BufferChange(2, 3, List.of("GAMMA")));
+            assertEquals("alpha\nBeta1\r\nGAMMA\n", doc.get());
+            assertEquals(List.of(), neovim.queued, "no split: one line on both sides");
         }
     }
 
