@@ -256,7 +256,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             return initialize(connection, clipboard);
         } catch (Exception e) {
             // For a failure before the session exists. After that, initialize has already closed
-            // the whole session, this connection with it, and a second close does nothing.
+            // the whole session (abandon), this connection with it, and a second close does nothing.
             connection.close();
             throw e;
         }
@@ -321,7 +321,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
             session.state.readMode();
         } catch (Exception | Error e) {
-            session.close();
+            session.abandon();
             throw e;
         }
         LOG.info("NeovimSession ready");
@@ -364,6 +364,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         held.clear();
         connection.close();
         LOG.info("NeovimSession closed");
+    }
+
+    /**
+     * Closes a session whose start failed half-way ({@link #initialize}): as {@link #close}, but
+     * without asking Neovim to quit first, which waits up to a second and a half for an answer a
+     * Neovim that stopped answering (the usual failure: a call that timed out) will not give.
+     */
+    private void abandon() {
+        closed = true;
+        for (CompletableFuture<?> answer : List.copyOf(unanswered)) {
+            answer.completeExceptionally(new IllegalStateException("Neovim did not start"));
+        }
+        inputThread.shutdown();
+        held.clear();
+        connection.close();
+        LOG.info("NeovimSession abandoned: its start failed");
     }
 
     // ---- state accessors and listeners ----

@@ -10,12 +10,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
@@ -772,41 +775,61 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * A setup step that fails once the session exists (here HOST_COMMANDS, whose :Eclipse command
-     * the user's config keeps from being made) fails the start, and the half-built session is
-     * closed whole: its Neovim ends and no input thread of it stays behind.
+     * A setup step that fails once the session exists fails the start, and the half-built session
+     * is closed whole (NeovimSession.abandon): its Neovim ends, and its input thread too. The config here breaks SEARCH,
+     * a late step, and just before has Neovim report a viewport change: the session puts that work
+     * on its input thread, which a start that closed only the connection would leave running.
      */
     @Test
     void aStartThatFailsHalfWayLeavesNoNeovimAndNoInputThread() throws Exception {
         TestNeovim.require();
-        String breakEclipseCommand = "lua local make = vim.api.nvim_create_user_command; "
-                + "vim.api.nvim_create_user_command = function(name, ...) "
-                + "if name == 'Eclipse' then error('broken by the test') end return make(name, ...) end";
-        Exception failure = assertThrows(Exception.class,
-                () -> NeovimSession.start(NVIM, List.of("--clean", "--cmd", breakEclipseCommand)).close());
-        assertTrue(String.valueOf(failure.getMessage()).contains("broken by the test")
-                || String.valueOf(failure.getCause()).contains("broken by the test"), failure.toString());
+        String breakSearch = "lua local set = vim.api.nvim_set_decoration_provider; "
+                + "vim.api.nvim_set_decoration_provider = function(ns, opts) "
+                + "if ns == vim.api.nvim_create_namespace('neovim4eclipse_search') then "
+                + "vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_viewport') "
+                + "error('broken by the test') end return set(ns, opts) end";
+        Set<Long> neovimsBefore = neovims();
+        Set<Thread> threadsBefore = inputThreads();
+
+        try (ExpectedLog log = ExpectedLog.of(NeovimSession.class)) {
+            Exception failure = assertThrows(Exception.class,
+                    () -> NeovimSession.start(NVIM, List.of("--clean", "--cmd", breakSearch)).close());
+            assertTrue(String.valueOf(failure.getMessage()).contains("broken by the test")
+                    || String.valueOf(failure.getCause()).contains("broken by the test"), failure.toString());
+            // The session itself was closed, not only its connection. Checked on the log, since the
+            // thread alone cannot tell: the JDK also shuts an executor down once nothing refers to it,
+            // at a garbage collection, so a forgotten input thread may be gone by the check below.
+            log.assertLogged(Level.INFO, "abandoned");
+        }
 
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(WAIT_MS);
-        while (neovimChildren() > 0 || inputThreads() > 0) {
+        while (true) {
+            Set<Long> neovimsLeft = neovims();
+            neovimsLeft.removeAll(neovimsBefore);
+            Set<Thread> threadsLeft = inputThreads();
+            threadsLeft.removeAll(threadsBefore);
+            if (neovimsLeft.isEmpty() && threadsLeft.isEmpty()) {
+                return;
+            }
             if (System.nanoTime() > deadline) {
-                throw new AssertionError(neovimChildren() + " Neovim processes and " + inputThreads()
-                        + " input threads left after the failed start");
+                throw new AssertionError("left after the failed start: Neovim " + neovimsLeft + ", input threads " + threadsLeft);
             }
             Thread.sleep(20);
         }
     }
 
-    /** This JVM's Neovim processes still running. */
-    private static long neovimChildren() {
+    /** The process ids of this JVM's Neovims still running. */
+    private static Set<Long> neovims() {
         return ProcessHandle.current().descendants().filter(ProcessHandle::isAlive)
-                .filter(p -> p.info().command().map(c -> c.contains("nvim")).orElse(false)).count();
+                .filter(p -> p.info().command().map(c -> c.contains("nvim")).orElse(false))
+                .map(ProcessHandle::pid).collect(Collectors.toCollection(HashSet::new));
     }
 
-    /** Session input threads still alive ({@code InputThread}'s name). */
-    private static long inputThreads() {
+    /** The sessions' input threads still alive ({@code InputThread}'s name). */
+    private static Set<Thread> inputThreads() {
         return Thread.getAllStackTraces().keySet().stream()
-                .filter(t -> t.isAlive() && t.getName().equals("neovim4eclipse-input")).count();
+                .filter(t -> t.isAlive() && t.getName().equals("neovim4eclipse-input"))
+                .collect(Collectors.toCollection(HashSet::new));
     }
 
     /** A Lua table that may have been decoded as a list or as a map. */
