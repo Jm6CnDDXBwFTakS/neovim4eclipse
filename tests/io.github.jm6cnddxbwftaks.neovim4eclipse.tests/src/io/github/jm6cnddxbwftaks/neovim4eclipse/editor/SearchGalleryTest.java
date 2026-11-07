@@ -261,7 +261,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                 String file = file(t, p.name());
                 body.append("<figure><figcaption>").append(t).append("</figcaption>");
                 body.append(Files.exists(out.resolve(file))
-                        ? "<img src=\"" + GalleryCamera.dataUri(out.resolve(file)) + "\" alt=\"" + escape(p.title()) + ", " + t + " theme\">"
+                        ? GalleryCamera.img(out.resolve(file), escape(p.title()) + ", " + t + " theme")
                         : "<p class=\"missing\">not taken (the " + t + " run did not run or failed)</p>");
                 body.append("</figure>");
             }
@@ -286,7 +286,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                 figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 6px;
                   padding: 10px; min-width: 0; }
                 figcaption { font-weight: 600; margin-bottom: 6px; }
-                img { max-width: 100%; display: block; }
+                img { max-width: 100%; height: auto; display: block; }
                 .missing { font-style: italic; }
                 </style></head><body><main>
                 <h1>Search highlighting in a light and a dark theme</h1>
