@@ -1209,6 +1209,33 @@
       </page>
    </extension>
 
+   <!-- The search highlights' color (editor/SearchColors), listed under Preferences > General >
+        Appearance > Colors and Fonts > Neovim for Eclipse, where users change it. The value is the
+        light themes' amber; Eclipse's dark theme gets a darker one from the stylesheet below. -->
+   <extension point="org.eclipse.ui.themes">
+      <themeElementCategory
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.colors"
+            label="Neovim for Eclipse">
+      </themeElementCategory>
+      <colorDefinition
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch"
+            categoryId="io.github.jm6cnddxbwftaks.neovim4eclipse.colors"
+            label="Search match"
+            value="255,214,102">
+         <description>
+            The background of the matches of Neovim's search (hlsearch, incsearch) in the editor. The box around the match under the caret is this color moved halfway toward the text color.
+         </description>
+      </colorDefinition>
+   </extension>
+
+   <!-- The dark theme's value of the color above, as JDT gives its syntax colors a dark default:
+        a stylesheet Eclipse adds to its dark theme (themeid). -->
+   <extension point="org.eclipse.e4.ui.css.swt.theme">
+      <stylesheet uri="css/e4-dark_neovim4eclipse.css">
+         <themeid refid="org.eclipse.e4.ui.css.theme.e4_dark"/>
+      </stylesheet>
+   </extension>
+
    <extension point="org.eclipse.core.runtime.preferences">
       <initializer class="io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceInitializer"/>
    </extension>

@@ -184,7 +184,7 @@ final class SearchHighlighter implements ITextPresentationListener {
         show(List.of());
     }
 
-    /** New colors (the user changed the Search Results color, or the theme). */
+    /** New colors (the user changed the search match color, or the theme). */
     void setColors(Color match, Color box) {
         matchColor = match;
         boxColor = box;

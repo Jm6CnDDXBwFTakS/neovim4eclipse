@@ -189,7 +189,7 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 - **On:** any
 - **Launch:** none
-- **Areas:** editor/SearchHighlighter.java, editor/SearchColors.java, util/OverlayColors.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
+- **Areas:** editor/SearchHighlighter.java, editor/SearchColors.java, util/OverlayColors.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
 (`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two

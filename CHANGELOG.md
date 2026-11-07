@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Search matches are highlighted in an amber of their own, darker in Eclipse's dark theme, where
+  the old color, Eclipse's *Search Results* lavender, turned into a gray that matches barely
+  showed on. Change it under *Window → Preferences → General → Appearance → Colors and Fonts →
+  Neovim for Eclipse → Search match*; a *Search Results* color set for 0.2.5 or 0.2.6 no longer
+  applies to the matches.
+
 ## [0.2.6] - 2026-11-07
 
 ### Fixed
