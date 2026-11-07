@@ -935,16 +935,21 @@ public final class EditorAttachManager {
             return EclipseFileCommands.savePart(part) ? DocumentWrite.Result.saved("")
                     : DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle() + " (see the Error Log)");
         }
-        boolean created = NewFiles.missingFileOf(text) != null;
         // Even if unchanged: Neovim asks only for :w, or for :update of a modified buffer, and
         // 'modified' follows Eclipse's dirty flag; so this is a write Vim would make.
-        // :w! may write a new file through a dangling link (DanglingLinks); :w may not.
-        if (!EclipseFileCommands.save(text, createFolders, true, request.force())) {
+        NewFiles.Missing missing = NewFiles.missingFileOf(text);
+        if (missing != null) {
+            // A new file: its error goes back to Neovim, which reports it (NewFiles.write), so the
+            // refusal of a dangling link (:w! may write through it, :w may not; DanglingLinks) or
+            // E212 for a missing folder is what the message line ends on.
+            return NewFiles.write(text, part, missing, createFolders, true, request.force());
+        }
+        if (!EclipseFileCommands.savePart(part)) {
             // No "see the Error Log": usually Eclipse has already said why in a dialog (a read-only
             // file whose "make writable?" was answered No), and the log has nothing more.
             return DocumentWrite.Result.failed("Eclipse could not save " + part.getTitle());
         }
-        return DocumentWrite.Result.saved(created ? "" : EclipseFileCommands.writtenMessage(text));
+        return DocumentWrite.Result.saved(EclipseFileCommands.writtenMessage(text));
     }
 
     /**

@@ -44,6 +44,7 @@ import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.IDocumentProviderExtension;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
@@ -359,25 +360,49 @@ final class NewFiles {
      * {@code throughLink} ({@code :w!}): the write would create the link's target, which may be
      * anywhere ({@link DanglingLinks}).
      *
+     * <p>The errors are shown on the editor's message line, for the callers that are Eclipse's own
+     * commands ({@code :wa}, {@code :wq}). A {@code :w} that Neovim asked for uses {@link #write}
+     * instead, which hands the error back for Neovim to report.
+     *
      * @param part        the workbench editor ({@code editor} itself, or the multi-page editor around it)
      * @param throughLink {@code :w!}: a dangling link may be written through
      * @return {@code true} if the editor is clean afterward
      */
     static boolean save(ITextEditor editor, IEditorPart part, Missing missing, boolean createFolders,
             boolean evenIfUnchanged, boolean throughLink) {
+        DocumentWrite.Result result = write(editor, part, missing, createFolders, evenIfUnchanged, throughLink);
+        if (!result.ok()) {
+            HostCommands.showError(editor, result.error());
+        }
+        return result.ok();
+    }
+
+    /**
+     * {@link #save}, with the error returned instead of shown. Why: a {@code :w} that Neovim asked
+     * Eclipse for (its {@code BufWriteCmd}, {@link DocumentWrite}) ends with Neovim reporting the
+     * answer. An error shown here first would at once be replaced by Neovim's report of a vaguer
+     * one ("Eclipse could not save"); returned, it is the one Neovim shows. Example: {@code :w} of a
+     * new file that is a link to a missing file reports the refusal that says {@code :w!} would
+     * write there. On success the result's message is empty: the {@code [New]} message is shown
+     * here, after the editor's switch to the workspace file (which re-attaches).
+     *
+     * @return {@link DocumentWrite.Result#saved} if the editor is clean afterward (or nothing needed
+     *         writing), otherwise {@link DocumentWrite.Result#failed} with Vim's error
+     */
+    static DocumentWrite.Result write(ITextEditor editor, IEditorPart part, Missing missing, boolean createFolders,
+            boolean evenIfUnchanged, boolean throughLink) {
         boolean changed = part.isDirty();
         if (!changed && !evenIfUnchanged) {
-            return true;
+            return DocumentWrite.Result.saved("");
         }
         if (!throughLink && DanglingLinks.isDangling(missing.path())) {
-            HostCommands.showError(editor, DanglingLinks.refusal(editor.getEditorInput().getName(), missing.path()));
-            return false;
+            return DocumentWrite.Result.failed(
+                    DanglingLinks.refusal(editor.getEditorInput().getName(), missing.path()));
         }
         try {
             if (!parentExists(missing)) {
                 if (!createFolders) {
-                    HostCommands.showError(editor, NO_FOLDER);
-                    return false;
+                    return DocumentWrite.Result.failed(NO_FOLDER);
                 }
                 createParent(missing);
             }
@@ -406,12 +431,16 @@ final class NewFiles {
             if (clean && missing.workspaceFile() != null && part == editor) {
                 becomeWorkspaceFileEditor(editor, missing.workspaceFile(), missing.path());
             }
+            if (!clean) {
+                // The file is written, yet the workbench editor is still modified: a multi-page
+                // editor with changes on another page. As before, the write counts as not done.
+                return DocumentWrite.Result.failed(written + "; " + part.getTitle() + " still has unsaved changes");
+            }
             HostCommands.showMessage(editor, written, false); // after the switch: it re-attaches
-            return clean;
+            return DocumentWrite.Result.saved("");
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not create " + missing.path(), e);
-            HostCommands.showError(editor, "E212: Can't open file for writing: " + e.getMessage());
-            return false;
+            return DocumentWrite.Result.failed("E212: Can't open file for writing: " + e.getMessage());
         }
     }
 

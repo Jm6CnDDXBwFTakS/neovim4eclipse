@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.core.filebuffers.FileBuffers;
 import org.eclipse.core.filebuffers.LocationKind;
@@ -81,6 +82,46 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     private void expectMessage(ITextEditor target, String expected) {
         waitUntil("the message " + expected, TIMEOUT_MS, () -> expected.equals(messageText(target)),
                 () -> "; the message line shows " + messageText(target));
+    }
+
+    /** The text of the output popup over {@code parent}, a {@link StyledText} below it, or "none". */
+    private static String popupText(org.eclipse.swt.widgets.Composite parent) {
+        for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
+            if (child instanceof StyledText text && !text.isDisposed()) {
+                return "\"" + text.getText() + "\"";
+            }
+            if (child instanceof org.eclipse.swt.widgets.Composite composite) {
+                String found = popupText(composite);
+                if (!found.equals("none")) {
+                    return found;
+                }
+            }
+        }
+        return "none";
+    }
+
+    /** Neovim's {@code v:errmsg}: the last error it reported. */
+    private String errmsg() {
+        AtomicReference<String> answer = new AtomicReference<>();
+        session.evalAsync("v:errmsg", answer::set);
+        waitUntil("v:errmsg", TIMEOUT_MS, () -> answer.get() != null);
+        return answer.get();
+    }
+
+    /**
+     * The error a {@code :w} that Neovim asked Eclipse for ends with: Neovim's own report of
+     * Eclipse's answer ({@code NewFiles.write}), shown as Neovim shows an error in an autocommand,
+     * in the output popup under its {@code Error in BufWriteCmd Autocommands} header. Checked as
+     * what is left, not as a message seen on the way: an error Eclipse showed itself, then
+     * replaced by Neovim's report of a vaguer one ("Eclipse could not save"), would pass a check of
+     * the message line. {@code v:errmsg} is the last error Neovim reported.
+     */
+    private void expectFinalError(ITextEditor target, String expected) {
+        waitUntil("v:errmsg " + expected, TIMEOUT_MS, () -> expected.equals(errmsg()), () -> ": " + errmsg());
+        waitUntil("the popup with " + expected, TIMEOUT_MS, () -> popupText(widgetOf(target)).contains(expected),
+                () -> "; the popup shows " + popupText(widgetOf(target)));
+        settle();
+        assertEquals(expected, errmsg(), "the error Neovim reported last, once it is done");
     }
 
     private void closeAll() {
@@ -262,8 +303,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         insert(target, "x");
 
         runInBox(target, "w");
-        expectMessage(opened, NewFiles.NO_FOLDER);
-        assertTrue(messageLineOf(opened).isError());
+        expectFinalError(opened, NewFiles.NO_FOLDER);
         assertFalse(project.getFolder("sub").exists(), "no folder");
         assertTrue(opened.isDirty());
 
@@ -298,7 +338,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             insert(target, "x");
 
             runInBox(target, "w");
-            expectMessage(opened, DanglingLinks.refusal("notes.local", link));
+            expectFinalError(opened, DanglingLinks.refusal("notes.local", link));
             assertFalse(Files.exists(gone), "nothing written through the link");
             assertTrue(opened.isDirty());
 
@@ -389,7 +429,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             expectText(opened, "out");
 
             runInBox(target, "w");
-            expectMessage(opened, NewFiles.NO_FOLDER);
+            expectFinalError(opened, NewFiles.NO_FOLDER);
             assertFalse(Files.exists(sub), "no folder");
             assertTrue(opened.isDirty());
 
