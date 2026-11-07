@@ -50,7 +50,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  * </ul>
  * The Windows and macOS calls are SWT's own internal classes ({@code org.eclipse.swt.internal.win32}
  * and {@code .cocoa}), reached by reflection: the fragment is compiled on every system, and each
- * class exists only in its own system's SWT ({@link Natives}).
+ * class exists only in its own system's SWT ({@link WindowsCalls}, {@link MacCalls}).
  *
  * <p>Pictures are drawn at the window's real pixels. With display scaling (Windows at 175% or a
  * Retina Mac) they are larger than the window's SWT size, and sharp.
@@ -83,6 +83,12 @@ public final class GalleryCamera {
      * @throws AssertionError when the picture comes out one color
      */
     public static void save(Control control, Rectangle area, Path file, String title) {
+        if ((WINDOWS || MAC) && control.getDisplay().getActiveShell() != control.getShell()) {
+            // Not needed for the drawing, which works covered too, but an inactive window draws its
+            // default button and focus in their inactive look, which users do not see. Once only:
+            // again on an active shell would move the focus to its first link.
+            control.getShell().forceActive();
+        }
         drain(control.getDisplay());
         ImageData data = WINDOWS || MAC ? settled(control, area, title) : printed(control, area);
         if (blank(data)) {
@@ -159,11 +165,12 @@ public final class GalleryCamera {
      */
     private static ImageData printWindow(Control control, Rectangle area) {
         Shell shell = control.getShell();
-        if (shell.getMinimized()) {
-            throw new AssertionError("the window to picture is minimized: it draws only its title bar");
+        if (shell.getMinimized() || !shell.isVisible()) {
+            throw new AssertionError("the window to picture is " + (shell.getMinimized() ? "minimized" : "hidden")
+                    + ": it draws only its title bar, or nothing");
         }
         try {
-            Natives n = Natives.get();
+            WindowsCalls n = WindowsCalls.get();
             long window = n.handle().getLong(shell);
             Object rect = n.rectClass().getConstructor().newInstance();
             n.getWindowRect().invoke(null, window, rect);
@@ -185,11 +192,15 @@ public final class GalleryCamera {
                     gc.dispose();
                 }
                 ImageData whole = image.getImageDataAtCurrentZoom(); // real pixels, pixelWidth x pixelHeight
+                if (Math.abs(whole.width - pixelWidth) > 1) {
+                    // The image's zoom is not the window's (a window on a monitor scaled unlike the
+                    // display's main one): the drawing would be cut off.
+                    throw new AssertionError("the image is " + whole.width + " px wide for a window of " + pixelWidth
+                            + " px: picture the window on the main monitor");
+                }
                 int x = n.pointX().getInt(origin) - left + (int) Math.round(area.x * scale);
                 int y = n.pointY().getInt(origin) - top + (int) Math.round(area.y * scale);
-                int width = Math.min((int) Math.round(area.width * scale), whole.width - x);
-                int height = Math.min((int) Math.round(area.height * scale), whole.height - y);
-                return crop(whole, x, y, width, height);
+                return crop(whole, x, y, (int) Math.round(area.width * scale), (int) Math.round(area.height * scale));
             } finally {
                 image.dispose();
             }
@@ -198,9 +209,19 @@ public final class GalleryCamera {
         }
     }
 
-    /** The {@code width} x {@code height} part of {@code whole} at ({@code x}, {@code y}), row by row. */
+    /**
+     * The {@code width} x {@code height} part of {@code whole} at ({@code x}, {@code y}), row by row.
+     * One pixel past the edge, from rounding a scaled area, is let off; more means the origin or the
+     * scale is wrong, and fails rather than give a cut-off picture.
+     */
     private static ImageData crop(ImageData whole, int x, int y, int width, int height) {
-        if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+        if (x + width == whole.width + 1) {
+            width--;
+        }
+        if (y + height == whole.height + 1) {
+            height--;
+        }
+        if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > whole.width || y + height > whole.height) {
             throw new AssertionError("the area " + width + "x" + height + " at " + x + "," + y
                     + " is not inside the window's " + whole.width + "x" + whole.height + " pixels");
         }
@@ -223,7 +244,7 @@ public final class GalleryCamera {
      */
     private static ImageData cacheDisplay(Control control, Rectangle area) {
         try {
-            Natives n = Natives.get();
+            MacCalls n = MacCalls.get();
             Object view = n.view().get(control);
             Object rect = n.rectClass().getConstructor().newInstance();
             n.rectX().setDouble(rect, area.x);
@@ -264,52 +285,58 @@ public final class GalleryCamera {
     }
 
     /**
-     * The SWT internals the camera calls on Windows ({@link #printWindow}) or macOS
-     * ({@link #cacheDisplay}), looked up once. The other system's members are null. Example: on
-     * Windows {@code printWindow} is {@code OS.PrintWindow(long hwnd, long hdc, int flags)}.
+     * The SWT internals {@link #printWindow} calls on Windows, looked up once. Example:
+     * {@code printWindow} is {@code OS.PrintWindow(long hwnd, long hdc, int flags)}.
      */
-    private record Natives(Field handle, Field gcHandle, Method getWindowRect, Method clientToScreen,
+    private record WindowsCalls(Field handle, Field gcHandle, Method getWindowRect, Method clientToScreen,
             Method printWindow, Class<?> rectClass, Field rectLeft, Field rectTop, Field rectRight, Field rectBottom,
-            Class<?> pointClass, Field pointX, Field pointY,
-            Field view, Field rectX, Field rectY, Field rectWidth, Field rectHeight, Method bitmapForCaching,
-            Method cacheDisplay, Method pixelsWide, Method pixelsHigh, Method bytesPerRow, Method bitsPerPixel,
-            Method samplesPerPixel, Method bitmapFormat, Method bitmapData, Method memmove) {
+            Class<?> pointClass, Field pointX, Field pointY) {
 
-        private static Natives natives;
+        private static WindowsCalls calls;
 
-        static synchronized Natives get() throws ReflectiveOperationException {
-            if (natives == null) {
-                natives = WINDOWS ? windows() : mac();
+        static synchronized WindowsCalls get() throws ReflectiveOperationException {
+            if (calls == null) {
+                String pkg = "org.eclipse.swt.internal.win32.";
+                Class<?> os = Class.forName(pkg + "OS");
+                Class<?> rect = Class.forName(pkg + "RECT");
+                Class<?> point = Class.forName(pkg + "POINT");
+                calls = new WindowsCalls(Control.class.getField("handle"), GC.class.getField("handle"),
+                        os.getMethod("GetWindowRect", long.class, rect), os.getMethod("ClientToScreen", long.class, point),
+                        os.getMethod("PrintWindow", long.class, long.class, int.class), rect, rect.getField("left"),
+                        rect.getField("top"), rect.getField("right"), rect.getField("bottom"), point,
+                        point.getField("x"), point.getField("y"));
             }
-            return natives;
+            return calls;
         }
+    }
 
-        private static Natives windows() throws ReflectiveOperationException {
-            String pkg = "org.eclipse.swt.internal.win32.";
-            Class<?> os = Class.forName(pkg + "OS");
-            Class<?> rect = Class.forName(pkg + "RECT");
-            Class<?> point = Class.forName(pkg + "POINT");
-            return new Natives(Control.class.getField("handle"), GC.class.getField("handle"),
-                    os.getMethod("GetWindowRect", long.class, rect), os.getMethod("ClientToScreen", long.class, point),
-                    os.getMethod("PrintWindow", long.class, long.class, int.class), rect, rect.getField("left"),
-                    rect.getField("top"), rect.getField("right"), rect.getField("bottom"), point, point.getField("x"),
-                    point.getField("y"), null, null, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null);
-        }
+    /**
+     * The SWT internals {@link #cacheDisplay} calls on macOS, looked up once: Cocoa's {@code NSView},
+     * {@code NSRect} and {@code NSBitmapImageRep}, and {@code C.memmove} to copy the bitmap's bytes.
+     */
+    private record MacCalls(Field view, Class<?> rectClass, Field rectX, Field rectY, Field rectWidth,
+            Field rectHeight, Method bitmapForCaching, Method cacheDisplay, Method pixelsWide, Method pixelsHigh,
+            Method bytesPerRow, Method bitsPerPixel, Method samplesPerPixel, Method bitmapFormat, Method bitmapData,
+            Method memmove) {
 
-        private static Natives mac() throws ReflectiveOperationException {
-            String pkg = "org.eclipse.swt.internal.cocoa.";
-            Class<?> view = Class.forName(pkg + "NSView");
-            Class<?> rect = Class.forName(pkg + "NSRect");
-            Class<?> bitmap = Class.forName(pkg + "NSBitmapImageRep");
-            return new Natives(null, null, null, null, null, rect, null, null, null, null, null, null, null,
-                    Control.class.getField("view"), rect.getField("x"), rect.getField("y"), rect.getField("width"),
-                    rect.getField("height"), view.getMethod("bitmapImageRepForCachingDisplayInRect", rect),
-                    view.getMethod("cacheDisplayInRect", rect, bitmap), bitmap.getMethod("pixelsWide"),
-                    bitmap.getMethod("pixelsHigh"), bitmap.getMethod("bytesPerRow"), bitmap.getMethod("bitsPerPixel"),
-                    bitmap.getMethod("samplesPerPixel"), bitmap.getMethod("bitmapFormat"),
-                    bitmap.getMethod("bitmapData"),
-                    Class.forName("org.eclipse.swt.internal.C").getMethod("memmove", byte[].class, long.class, long.class));
+        private static MacCalls calls;
+
+        static synchronized MacCalls get() throws ReflectiveOperationException {
+            if (calls == null) {
+                String pkg = "org.eclipse.swt.internal.cocoa.";
+                Class<?> view = Class.forName(pkg + "NSView");
+                Class<?> rect = Class.forName(pkg + "NSRect");
+                Class<?> bitmap = Class.forName(pkg + "NSBitmapImageRep");
+                calls = new MacCalls(Control.class.getField("view"), rect, rect.getField("x"), rect.getField("y"),
+                        rect.getField("width"), rect.getField("height"),
+                        view.getMethod("bitmapImageRepForCachingDisplayInRect", rect),
+                        view.getMethod("cacheDisplayInRect", rect, bitmap), bitmap.getMethod("pixelsWide"),
+                        bitmap.getMethod("pixelsHigh"), bitmap.getMethod("bytesPerRow"), bitmap.getMethod("bitsPerPixel"),
+                        bitmap.getMethod("samplesPerPixel"), bitmap.getMethod("bitmapFormat"),
+                        bitmap.getMethod("bitmapData"), Class.forName("org.eclipse.swt.internal.C")
+                                .getMethod("memmove", byte[].class, long.class, long.class));
+            }
+            return calls;
         }
     }
 
