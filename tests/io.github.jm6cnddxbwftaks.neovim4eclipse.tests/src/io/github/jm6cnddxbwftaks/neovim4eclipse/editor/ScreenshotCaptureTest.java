@@ -44,8 +44,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
  * xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path=/usr/bin/nvim
  * </pre>
  *
- * <p>The files land in {@code tests/...tests/target/screenshots/}; copy the ones to keep to
- * {@code docs/images/} (see docs/design/MARKETPLACE.md, "Images"). The {@code -s} option gives
+ * <p>The files land in {@code tests/...tests/target/screenshots/}, to upload to the Marketplace
+ * listing from there; they are not committed (see docs/design/MARKETPLACE.md, "Images"). The {@code -s} option gives
  * Xvfb a screen larger than the window ({@link #WIDTH} by {@link #HEIGHT}); its default, 640x480 at
  * 8 bits per pixel, would cut the window off and lose the colors. Without a window manager the
  * window has no title bar, which suits a listing image.

@@ -40,7 +40,7 @@
        Tests tagged "timeoutReliant" depend on how fast the machine is; -Pui leaves them out and
        ./mvnw verify -PtimeoutReliant runs only them (here and in tests/unit). Not run in CI.
 
-       ScreenshotCaptureTest (tagged "screenshots") is not a test: it takes the Marketplace and README
+       ScreenshotCaptureTest (tagged "screenshots") is not a test: it takes the Marketplace
        screenshots. Only ./mvnw verify -Pscreenshots runs it, with the Java tools for a highlighted
        Java editor; see that class for the xvfb-run command. -->
 

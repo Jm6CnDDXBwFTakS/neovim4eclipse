@@ -186,7 +186,7 @@ bottom; `*` marks a field the form requires. The form may change; it is the fina
 | Supported Platform(s) `*` | Windows, Mac, Linux/GTK |
 | Minimum Java Version `*` | Java 21 |
 | Feature ID `*` / Install state | `io.github.jm6cnddxbwftaks.neovim4eclipse.feature` / Required (the feature's ID, without the `.feature.group` suffix p2 adds) |
-| Screenshot (up to 4; png, gif or jpg; 16 MB) | in this order: [demo.gif](../images/demo.gif) (the README's demo), [screenshot-visual-mode.png](../images/screenshot-visual-mode.png), [screenshot-command-line.png](../images/screenshot-command-line.png), [screenshot-preferences.png](../images/screenshot-preferences.png) (all in `docs/images/`; how they are made: *Images*, below) |
+| Screenshot (up to 4; png, gif or jpg; 16 MB) | in this order: [demo.gif](../images/demo.gif) (the README's demo), then `01-visual-mode.png`, `02-command-line.png` and `03-preferences.png`, taken fresh for each upload and not kept in the repository (*Images*, below) |
 | Additional Editors | none |
 
 **The description** says, up front:
@@ -220,15 +220,16 @@ bottom; `*` marks a field the form requires. The form may change; it is the fina
   python3 -c "from PIL import Image; Image.open('/tmp/big.png').convert('RGB').resize((110, 80), Image.LANCZOS).save('docs/images/marketplace-logo.png', optimize=True)"
   ```
 - **Screenshots**, taken by `ScreenshotCaptureTest` in the UI test module rather than by hand, so
-  they can be taken again after the UI changes: a Java editor in visual line mode (the mode in the
-  status bar), the `:` box with a substitution typed, and the Neovim preference page. It runs only
-  with its own profile, which adds the Java tools for a highlighted Java editor:
+  they show the current UI each time: a Java editor in visual line mode (the mode in the status
+  bar), the `:` box with a substitution typed, and the Neovim preference page. Nothing shows them
+  from the repository (the README has the demo GIF), so they are not committed: take them when the
+  listing is submitted or refreshed, and upload them from
+  `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/`. A picture in the
+  repository stays in its history for good, along with anything it shows by mistake. The test runs
+  only with its own profile, which adds the Java tools for a highlighted Java editor:
 
   ```bash
   xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path="$PWD"/target/like-ci/nvim-linux-x86_64/bin/nvim
-  cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/01-visual-mode.png docs/images/screenshot-visual-mode.png
-  cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/02-command-line.png docs/images/screenshot-command-line.png
-  cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/03-preferences.png docs/images/screenshot-preferences.png
   ```
 
   Xvfb's `-screen` gives it room for the 1280×800 window in full color (its default is 640×480 at
@@ -240,7 +241,7 @@ bottom; `*` marks a field the form requires. The form may change; it is the fina
   `screenshots` profile keeps under `pictures.home` (`/tmp/neovim4eclipse-pictures`; on Windows
   `C:\Users\Public\neovim4eclipse-pictures`) instead of `target/`, so no picture shows a home
   folder and with it an account name (`gallery/PicturesFolder` in the test fragment). Look at the
-  pictures before copying them all the same: they are public.
+  pictures before uploading them all the same: they are public.
 - The README demo GIF, recorded by hand.
 
 ## Phase 3: account, submission, test
