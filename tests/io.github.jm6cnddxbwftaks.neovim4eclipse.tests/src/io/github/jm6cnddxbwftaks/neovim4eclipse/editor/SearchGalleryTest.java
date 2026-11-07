@@ -222,7 +222,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                 String file = file(t, p.name());
                 body.append("<figure><figcaption>").append(t).append("</figcaption>");
                 body.append(Files.exists(out.resolve(file))
-                        ? "<img src=\"" + file + "\" alt=\"" + escape(p.title()) + ", " + t + " theme\">"
+                        ? "<img src=\"" + GalleryCamera.dataUri(out.resolve(file)) + "\" alt=\"" + escape(p.title()) + ", " + t + " theme\">"
                         : "<p class=\"missing\">not taken (the " + t + " run did not run or failed)</p>");
                 body.append("</figure>");
             }

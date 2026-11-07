@@ -3,8 +3,11 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.gallery;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.function.BooleanSupplier;
 
 import org.eclipse.swt.SWT;
@@ -140,6 +143,16 @@ public final class GalleryCamera {
             image.dispose();
         }
         return previous[0];
+    }
+
+    /**
+     * The picture in {@code png} as a {@code data:} URI, for an {@code <img>} that needs no file
+     * beside the page: viewers that show a local page as a snapshot (an app's file pane, a page
+     * sent on) load no picture by a relative path. Example: {@code data:image/png;base64,iVBORw0K...}.
+     * The PNG files stay in the folder too.
+     */
+    public static String dataUri(Path png) throws IOException {
+        return "data:image/png;base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(png));
     }
 
     /** Whether every pixel of {@code data} is the same: a picture of nothing. */

@@ -198,7 +198,7 @@ class ChecksGalleryTest {
                 "The command line is quoted (\"" + NeovimOption.iniLine(oldValueWithSpace) + "\"); the "
                         + "eclipse.ini line is not.");
 
-        Files.writeString(out.resolve("index.html"), GalleryPage.html(platformName(), shots),
+        Files.writeString(out.resolve("index.html"), GalleryPage.html(platformName(), shots, out),
                 StandardCharsets.UTF_8);
     }
 
@@ -329,15 +329,16 @@ class ChecksGalleryTest {
 
     /**
      * The gallery's {@code index.html}: each picture under its topic, with what to look for. A plain,
-     * self-contained page (styles inline, pictures beside it), readable in a browser from the folder
-     * and publishable as it is.
+     * self-contained page (styles inline, pictures inside it as {@code data:} URIs, see
+     * {@link GalleryCamera#dataUri}), readable in a browser or an app's file pane and publishable as
+     * it is.
      */
     static final class GalleryPage {
 
         private GalleryPage() {
         }
 
-        static String html(String platform, List<Shot> shots) {
+        static String html(String platform, List<Shot> shots, Path dir) throws IOException {
             StringBuilder body = new StringBuilder();
             String topic = null;
             for (Shot shot : shots) {
@@ -346,7 +347,7 @@ class ChecksGalleryTest {
                     body.append("<h2><code>").append(escape(topic)).append("</code></h2>\n");
                 }
                 body.append("<figure><figcaption><b>").append(escape(shot.title())).append("</b> ")
-                        .append(escape(shot.lookFor())).append("</figcaption><img src=\"").append(escape(shot.file()))
+                        .append(escape(shot.lookFor())).append("</figcaption><img src=\"").append(GalleryCamera.dataUri(dir.resolve(shot.file())))
                         .append("\" alt=\"").append(escape(shot.title())).append("\"></figure>\n");
             }
             return """
