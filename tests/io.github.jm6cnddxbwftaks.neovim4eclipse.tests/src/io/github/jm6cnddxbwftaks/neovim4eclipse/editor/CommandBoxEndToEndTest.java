@@ -146,6 +146,33 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * The toolbar button switched to Eclipse mode with the box open: the box goes, and Neovim's line
+     * with it (Neovim is in normal mode again). Before, the box stayed, as Neovim's views of the line
+     * were no longer passed to it. Back in Neovim mode, {@code :} opens it as usual.
+     */
+    @Test
+    void eclipseModeClosesAnOpenBox() {
+        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
+        type(widget, ':');
+        boxReading(":");
+        try {
+            controller.setNeovimModeActive(false);
+            assertNull(textChildOf(widget), "the box is gone");
+            waitUntil("Neovim's line abandoned", TIMEOUT_MS, () -> "n".equals(session.getMode()),
+                    () -> "; mode " + session.getMode());
+        } finally {
+            controller.setNeovimModeActive(true);
+        }
+        settle();
+        type(widget, ':');
+        Text box = boxReading(":");
+        box.insert("s/alpha/omega/");
+        boxReading(":s/alpha/omega/");
+        pressEnter(box);
+        expectText("omega\nbeta\ngamma\n");
+    }
+
     /** {@code nnoremap ; :}: the key goes to Neovim, which opens its command line, and the box takes it over. */
     @Test
     void aMappingToColonOpensTheBox() throws Exception {

@@ -730,6 +730,9 @@ public final class NeovimEditorController implements AutoCloseable {
         } else {
             modeStatus.setHostEclipseMode();
             messageLine.hide(); // Neovim's messages are about keys it no longer gets
+            // Neovim's command line views are no longer passed on (onCmdline), so an open box
+            // would never hear that its line closed: it closes now, and the line is abandoned.
+            commandLine.closeForEclipseMode();
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
             if (searchHighlighter != null) {

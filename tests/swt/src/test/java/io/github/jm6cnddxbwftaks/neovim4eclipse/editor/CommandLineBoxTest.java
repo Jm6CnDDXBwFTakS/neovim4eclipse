@@ -359,6 +359,38 @@ class CommandLineBoxTest {
     }
 
     /**
+     * Neovim mode switched off with the box open: the line is abandoned and the box closes, as no
+     * view of Neovim's reaches it any more. The next line (Neovim mode on again) opens it, though
+     * Neovim's "closed" report never came.
+     */
+    @Test
+    void eclipseModeClosesTheBoxAndTheNextLineOpensItAgain() {
+        show(line(":abc", 4));
+        commandLine.closeForEclipseMode();
+        assertFalse(commandLine.isOpen());
+        assertNull(findText(host), "the box is gone");
+        assertEquals(List.of("type <C-c>"), commands.calls);
+        waitUntil("the editor's focus", host::isFocusControl);
+
+        show(line(":", 1));
+        assertTrue(commandLine.isOpen());
+    }
+
+    /** After Enter, or in Ex mode, switching to Eclipse mode closes the box but sends no {@code <C-c>}. */
+    @Test
+    void eclipseModeAfterEnterOrInExModeSendsNothing() {
+        Text box = show(line(":e x", 4));
+        key(box, SWT.CR, '\r', 0);
+        commandLine.closeForEclipseMode();
+        assertFalse(commandLine.isOpen());
+        commands.cancellable = false;
+        show(line(":abc", 4));
+        commandLine.closeForEclipseMode();
+        assertFalse(commandLine.isOpen());
+        assertEquals(List.of("type <CR>"), commands.calls);
+    }
+
+    /**
      * After Enter the line is Neovim's to close. A command can move the focus before Neovim reports
      * the line closed: {@code :e new.txt} opens another editor, which takes it. That is not a click
      * away, so no {@code <C-c>}; on a loaded machine one used to reach Neovim back in normal mode,

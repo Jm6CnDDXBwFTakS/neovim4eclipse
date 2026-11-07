@@ -627,6 +627,30 @@ final class CommandLineBox {
         close(false);
     }
 
+    /**
+     * Neovim mode was switched off (the toolbar button) while the box was open: the line is
+     * abandoned in Neovim ({@code <C-c>}) and the box closes, filters and all. From now on the
+     * controller passes Neovim's views on no more, so the box must not wait for one: before, it
+     * stayed open over the editor, its keys going to a line Eclipse no longer showed, until the
+     * editor detached. Unlike a click away ({@link #abandon}) the views of the old line are not
+     * ignored afterwards: Neovim's "closed" report is among the views that are not passed on, and
+     * the next line, back in Neovim mode, must open the box. Nothing is sent after Enter (the line
+     * is closing by itself, see {@link #submitted}) or in Ex mode, where {@code <C-c>} does
+     * nothing: there Neovim's line stays open, and the next key typed in Neovim mode shows it again.
+     * UI thread.
+     */
+    void closeForEclipseMode() {
+        if (!isOpen()) {
+            return;
+        }
+        if (!submitted && commands.cancellable()) {
+            commands.type("<C-c>");
+        }
+        abandoned = false;
+        submitted = false;
+        close(true);
+    }
+
     /** Shows the candidates in one line above the box, with the selected one highlighted. */
     private void showList(CmdlineState.View view) {
         if (view.candidates().isEmpty()) {
