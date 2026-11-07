@@ -766,6 +766,17 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   so a file keeps (or lacks) its final newline exactly as it had it. It cannot be read from the text at
   each edit: after `o` on the last line of `"a"`, the text `"a\n"` is `["a", ""]` without a final
   newline, not `["a"]` with one (class comment on `util/LineTextUtil`). Later pushes send it that way too.
+- **Line breaks inside a Neovim line:** Neovim keeps a carriage return inside a line (`Ctrl-V Ctrl-M`,
+  `:s/x/\=nr2char(13)/`, a put of a register holding one); Eclipse's document takes it as a line
+  break. So `"\ra"` is one line in Neovim and two in Eclipse, and every line below it would be
+  numbered differently on each side: Neovim's next `dd` would delete the wrong line in Eclipse. The
+  change is applied as Eclipse splits it (the `\r` stays in the document, so a save writes the same
+  bytes), and the synchronizers then push the lines back (`LineTextUtil.holdsLineBreak`), so Neovim
+  holds the split lines too and both count the same lines. Until that push runs, Neovim's full
+  re-syncs are stale and not applied, as for an edit Eclipse makes in reaction to Neovim's; in insert
+  mode, while Eclipse types, the push is the one when insert mode ends. A NUL byte is no such case:
+  Neovim stores it as `\n` inside a line, but its API sends it to an RPC client as `\0`, an ordinary
+  character in Eclipse, and turns a pushed `\0` back into a NUL.
 - **Paste, counts and `.`** are ordinary keys sent to Neovim; there is no Java-side emulation. Linewise
   paste arrives as a pure line insertion, which `LineRangeEdit` handles.
 - **Columns:** Neovim cursor/visual columns are UTF-8 byte offsets. `editor/DocumentPositions` converts

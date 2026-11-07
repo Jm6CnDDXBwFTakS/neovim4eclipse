@@ -166,6 +166,31 @@ class NeovimBufferIntegrationTest {
      * (DocumentBuffer.syncedStamp), so the next attach pushes the document again; Eclipse's own write
      * does not.
      */
+    /**
+     * What the synchronizer relies on (LineTextUtil.holdsLineBreak): a carriage return inside a line
+     * arrives as "\r" in the line event, a NUL byte as "\0" (Neovim keeps NUL as "\n" inside a line,
+     * and its API turns it back for an RPC client), and lines pushed back come out as Eclipse split
+     * them, with a NUL still a NUL.
+     */
+    @Test
+    void carriageReturnsAndNulsInsideALineArriveAsThemselvesAndPushBack() throws Exception {
+        try (NeovimSession s = start()) {
+            s.showBuffer(new DocumentBuffer(""));
+            s.setBufferLines(List.of("a", "b"));
+            List<BufferChange> changes = new CopyOnWriteArrayList<>();
+            s.addBufferChangeListener(changes::add);
+
+            s.lua("vim.api.nvim_buf_set_lines(0, 0, 1, true, {'\\ra', 'x\\0y'})");
+            waitFor(() -> changes.stream().anyMatch(c -> c.newLines().equals(List.of("\ra", "x\0y"))),
+                    "the change with a carriage return and a NUL, as they are: " + changes);
+
+            s.setBufferLines(List.of("", "a", "x\0y", "b")); // Eclipse's lines, as the push sends them
+            assertEquals(4, ((Number) s.lua("return vim.api.nvim_buf_line_count(0)")).intValue());
+            assertEquals(0, ((Number) s.lua("return vim.api.nvim_buf_get_lines(0, 2, 3, true)[1]:byte(2)")).intValue(),
+                    "the NUL is still one");
+        }
+    }
+
     @Test
     void aChangeNeovimMakesToABufferClearsItsInSyncStamp() throws Exception {
         try (NeovimSession s = start()) {

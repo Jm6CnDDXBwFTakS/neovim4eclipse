@@ -96,6 +96,22 @@ class UnattachedDocumentSyncTest {
         assertEquals(List.of(), neovim.queued, "the change came from Neovim");
     }
 
+    /**
+     * {@code :bufdo s/^/\=nr2char(13)/} on line 1: Neovim's line {@code "\rbeta"} is two lines in
+     * Eclipse, so Neovim gets the split lines back and both count the same lines.
+     */
+    @Test
+    void aCarriageReturnInsideALineIsPushedBackSplit() {
+        sync.start();
+        neovim.neovimChanged(buffer, new BufferChange(1, 2, List.of("\rbeta")));
+        assertEquals("alpha\n\rbeta\ngamma\n", document.get());
+        assertEquals(4, UnattachedDocumentSync.neovimLineCount(document, true));
+
+        neovim.runQueued();
+
+        assertEquals(List.of(List.of("alpha", "", "beta", "gamma")), neovim.pushed);
+    }
+
     @Test
     void aFullBufferFromNeovimIsAppliedAsTheSmallestEdit() {
         sync.start();

@@ -140,6 +140,11 @@ public final class UnattachedDocumentSync implements AutoCloseable {
             if (edit != null) {
                 UndoSteps.beforeChangeOnItsOwn(document); // see UndoSteps: Ctrl+Z back to the save clears the marker
                 document.replace(edit.offset(), edit.length(), edit.text());
+                if (LineTextUtil.holdsLineBreak(change.newLines())) {
+                    // Eclipse split a line of Neovim's at a "\r" (see LineTextUtil.holdsLineBreak):
+                    // Neovim gets the split lines, or its next change would hit the wrong lines.
+                    pushSoon();
+                }
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not apply Neovim's change of " + describe() + "; Neovim gets Eclipse's "

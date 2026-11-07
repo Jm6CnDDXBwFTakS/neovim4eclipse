@@ -128,6 +128,38 @@ public final class LineTextUtil {
         return lines;
     }
 
+    /**
+     * Whether one of Neovim's lines holds a character Eclipse's document takes as a line break:
+     * {@code \r} or {@code \n} (a JFace document's default line tracker splits at {@code \r},
+     * {@code \n} and {@code \r\n}, and nowhere else).
+     *
+     * <p>Why it matters: Neovim keeps a carriage return inside a line when it is typed with
+     * {@code Ctrl-V Ctrl-M}, made by {@code :s/x/\=nr2char(13)/} or put from a register that holds
+     * one. Its line {@code "\ra"} is one line in Neovim and two in Eclipse ({@code ""} and
+     * {@code "a"}), so every line below it has a different number on each side: a later {@code dd}
+     * in Neovim would delete the line above the right one in Eclipse. The synchronizers apply such a
+     * change as Eclipse splits it and then push the lines back, so that Neovim holds the split lines
+     * too and both count the same lines again (see {@code sync/BufferSynchronizer}).
+     *
+     * <p>A {@code \n} does not arrive in practice: Neovim stores a NUL byte as {@code \n} inside a
+     * line, but its API turns it back into a NUL ({@code "a\0b"}) for an RPC client, and a NUL is an
+     * ordinary character in Eclipse (pushed back, Neovim stores it as NUL again). It is checked all
+     * the same, since it would split the line just like {@code \r}.
+     *
+     * @param lines Neovim's lines; {@code null} holds none
+     */
+    public static boolean holdsLineBreak(List<String> lines) {
+        if (lines == null) {
+            return false;
+        }
+        for (String line : lines) {
+            if (line != null && (line.indexOf('\r') >= 0 || line.indexOf('\n') >= 0)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Whether the text ends with {@code \n} or {@code \r}. Empty text does not. */
     public static boolean endsWithLineBreak(String text) {
         if (text == null || text.isEmpty()) {

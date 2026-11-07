@@ -25,6 +25,11 @@ import java.util.List;
  *       Eclipse line is a Neovim line, the last one possibly empty.</li>
  *   <li>The result follows the exact rule in {@link LineTextUtil}: the document keeps ending (or
  *       not ending) with a final newline exactly as it did before the edit.</li>
+ *   <li>A new line that holds a {@code \r} (or {@code \n}) is inserted as it is, so Eclipse splits
+ *       it into more lines than Neovim has: {@code "\ra"} becomes {@code ""} and {@code "a"}. The
+ *       edit is right for the document (it keeps the characters Neovim has), but the lines below
+ *       it no longer have Neovim's numbers, so the caller must push the lines back
+ *       ({@link LineTextUtil#holdsLineBreak}).</li>
  * </ul>
  *
  * <p>Why the caller says it, instead of this class reading it from the text: the text is

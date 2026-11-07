@@ -409,6 +409,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
         applyingRemote.set(true);
         changesWhileApplying = 0;
+        boolean splitByEclipse = false;
         try {
             boolean fullBuffer = change.lastLine() < 0;
             boolean newline = FinalNewlines.of(document);
@@ -421,6 +422,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             if (edit != null) {
                 undoSteps.beforeRemoteChange(); // one undo step per Neovim command (see UndoSteps)
                 document.replace(edit.offset(), edit.length(), edit.text());
+                splitByEclipse = LineTextUtil.holdsLineBreak(change.newLines());
             }
         } catch (Exception e) {
             changedLines.forget(); // the document lacks Neovim's change, wherever it was
@@ -434,7 +436,14 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         // occurrence; Neovim must get those copies, or its next edit would hit stale text. The
         // full-text sync Neovim sends after the key would also undo them, so those are skipped
         // until the push (in insert mode, the one when insert mode ends).
-        if (changesWhileApplying > 1) {
+        //
+        // A line of Neovim's that holds a line break of Eclipse's is the same case: Neovim's
+        // "\ra" (Ctrl-V Ctrl-M, or :s with nr2char(13)) is one line there and two here, so the
+        // lines below it are numbered differently on each side, and Neovim's next "dd" would hit
+        // the wrong line here. The push sends Eclipse's lines ("" and "a"), so Neovim splits the
+        // line the same way and both count the same lines again (LineTextUtil.holdsLineBreak).
+        // The document keeps the "\r" itself, so a save writes the bytes Neovim would have.
+        if (changesWhileApplying > 1 || splitByEclipse) {
             neovimBehind = true;
             onLocalChange();
         }

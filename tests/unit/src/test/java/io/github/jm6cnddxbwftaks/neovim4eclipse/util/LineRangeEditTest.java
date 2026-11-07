@@ -46,6 +46,17 @@ class LineRangeEditTest {
         assertEquals("a\r\nX\r\nc\r\n", apply("a\r\nb\r\nc\r\n", 1, 2, List.of("X"), "\r\n"));
     }
 
+    /**
+     * Neovim's one line "\ra" keeps its carriage return in the document, which then counts one
+     * line more than Neovim: the caller pushes the lines back (LineTextUtil.holdsLineBreak).
+     */
+    @Test
+    void aCarriageReturnInsideALineIsKeptAndSplitsIt() {
+        String after = apply("a\nb\nc\n", 0, 1, List.of("\ra"), "\n");
+        assertEquals("\ra\nb\nc\n", after);
+        assertEquals(5, new StringLineSource(after).lineCount(), "\"\", a, b, c and the phantom line");
+    }
+
     @Test
     void identicalContentIsANoOp() {
         assertNull(LineRangeEdit.compute(new StringLineSource("a\nb\n"), 0, 1, List.of("a"), "\n", true));

@@ -556,6 +556,45 @@ class BufferSynchronizerTest {
         }
     }
 
+    /**
+     * Ctrl-V Ctrl-M at the start of line 1 of "a\nb\nc\n" (as line 0 of Neovim's buffer "x"): Neovim's
+     * line "\ra" is two lines in Eclipse. Without a push back, Neovim's next {@code j dd} (delete
+     * line 2, "b") would delete "a" here. The push gives Neovim Eclipse's lines, and Neovim's later
+     * changes land on the right lines; its stale full re-sync before the push is not applied.
+     */
+    @Test
+    void aCarriageReturnInsideANeovimLineIsPushedBackSoBothCountTheSameLines() {
+        IDocument doc = new Document("a\nb\nc\n");
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushLocalChanges(() -> true, null);
+            s.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("\ra")));
+            assertEquals("\ra\nb\nc\n", doc.get(), "the carriage return is kept, as Neovim has it");
+            assertEquals(1, neovim.queued.size(), "a push of the split lines is queued");
+
+            neovim.neovimChanged(new BufferChange(0, -1, List.of("\ra", "b", "c")));
+            assertEquals("\ra\nb\nc\n", doc.get(), "the stale full re-sync is not applied");
+
+            neovim.runQueued();
+            assertEquals(List.of(List.of("", "a", "b", "c")), neovim.pushed);
+            assertTrue(neovim.queued.isEmpty(), "no push loop");
+
+            // Neovim now has "", "a", "b", "c": "dd" on "b" is line 2 on both sides.
+            neovim.neovimChanged(new BufferChange(2, 3, List.of()));
+            assertEquals("\ra\nc\n", doc.get());
+        }
+    }
+
+    /** A NUL byte arrives as "\0" (Neovim's API turns its internal "\n" back): no line break, no push. */
+    @Test
+    void aNulInsideANeovimLineIsAnOrdinaryCharacter() {
+        sync.pushLocalChanges(() -> true, null);
+        sync.startRemoteListening();
+        neovim.neovimChanged(new BufferChange(1, 2, List.of("be\0ta")));
+        assertEquals("alpha\nbe\0ta\n", document.get());
+        assertEquals(List.of(), neovim.queued);
+    }
+
     @Test
     void thePushesOwnEchoIsNotApplied() throws Exception {
         sync.pushLocalChanges(() -> true, null);
