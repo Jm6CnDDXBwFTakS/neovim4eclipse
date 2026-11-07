@@ -132,11 +132,66 @@ abstract class EndToEndTestBase {
             UiTestSupport.focusWithoutTakingTheFront(widget, TIMEOUT_MS);
         }
         session = Activator.getDefault().getOrCreateSession();
+        allowLongSwapPaths(session);
         // One Neovim serves the whole IDE, so a previous test may have left it in another mode.
         session.inputAsync("<Esc>");
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
         settle(); // let the initial document push and cursor placement finish
         waitForNeovimIn(file);
+    }
+
+    /**
+     * On Windows, lets the tests' swap files have paths longer than Windows' limit of 259
+     * characters (MAX_PATH), by putting the long-path prefix {@code \\?\} in front of each folder
+     * in Neovim's {@code 'directory'}.
+     *
+     * <p>Why only the tests: their swap folder is deep, inside the checkout's {@code target/}
+     * ({@code XDG_STATE_HOME} in the pom). With a {@code 'directory'} ending in {@code \\}, Neovim
+     * names a swap file after the whole path of its file, and that of an unnamed buffer after the
+     * working folder. So the swap file of the unnamed buffer, here a 152-character folder and a
+     * 107-character name, came to 263 characters, and a {@code :bufdo} that changed it failed with
+     * E303 "Unable to open swap file". A user's swap folder is about 55 characters, so the
+     * plug-in leaves the setting alone. The prefix costs {@code :recover} and
+     * {@code swapfilelist()}: they search the folder with a file pattern, which does not read
+     * {@code \\?\} paths. Tests never recover; the warning about an existing swap file (E325)
+     * still works.
+     *
+     * <p>Example: {@code C:\ws\target\neovim-home\state\nvim\swap\\} becomes
+     * {@code \\?\C:\ws\target\neovim-home\state\nvim\swap\\}. Windows does not turn {@code /}
+     * into {@code \} after the prefix, so the forward slashes go first: {@code \\?\C:\...\swap//}
+     * still fails with E303. Neovim's {@code .} (the file's own folder) and relative entries are
+     * kept as they are, as is an entry that already has the prefix (a restarted Neovim gets the
+     * default again and is set once more).
+     */
+    private static void allowLongSwapPaths(NeovimSession session) {
+        if (!System.getProperty("os.name", "").startsWith("Windows")) {
+            return;
+        }
+        String directory = String.valueOf(SessionProbe.lua(session, "return vim.o.directory"));
+        String prefixed = withLongPathPrefix(directory);
+        if (!prefixed.equals(directory)) {
+            // A Lua long string: the backslashes stay as they are, with no escaping.
+            SessionProbe.lua(session, "vim.o.directory = [==[" + prefixed + "]==]; return 0");
+        }
+    }
+
+    /**
+     * The value of {@code 'directory'} with {@code \\?\} in front of each absolute folder, for
+     * {@link #allowLongSwapPaths}. A trailing {@code //} or {@code \\} (swap files named after the
+     * whole path) becomes {@code \\}, a single one {@code \}. Entries are split at the commas
+     * that are not escaped ({@code \,} is a comma inside a folder name).
+     */
+    static String withLongPathPrefix(String directory) {
+        List<String> entries = new ArrayList<>();
+        for (String entry : directory.split("(?<!\\\\),", -1)) {
+            if (entry.matches("[A-Za-z]:[\\\\/].*")) {
+                boolean wholePathNames = entry.matches(".*[\\\\/]{2}");
+                String folder = entry.replace('/', '\\').replaceAll("\\\\+$", "");
+                entry = "\\\\?\\" + folder + (wholePathNames ? "\\\\" : "\\");
+            }
+            entries.add(entry);
+        }
+        return String.join(",", entries);
     }
 
     /**
