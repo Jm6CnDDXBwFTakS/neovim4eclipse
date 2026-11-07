@@ -16,7 +16,9 @@ import java.util.function.Consumer;
  * <p>Examples, as Vim does them:
  * <ul>
  *   <li>{@code :wq}: save; close only if the save worked (a failed save keeps the file open).</li>
- *   <li>{@code :wq!}: save; close even if the save failed.</li>
+ *   <li>{@code :wq!}: save, even a file Vim's {@code !} lets through (a read-only file, a symbolic
+ *       link to a missing file); close only if the save worked too. Vim's {@code :wq!} does not quit
+ *       after a failed write ({@code :help :wq}), so the typed text is never thrown away.</li>
  *   <li>{@code :q!}: close and throw the changes away.</li>
  *   <li>{@code :tabn 3}: go three tabs to the right.</li>
  * </ul>
@@ -121,14 +123,19 @@ public final class HostCommandRunner {
                     if (ide.writeCopy(cmd.writeTarget(), force, !cmd.writesUnchanged(), cmd.createFolders())) {
                         ide.close(force);
                     }
-                } else if (ide.save(cmd.createFolders(), cmd.writesUnchanged(), force) || force) {
-                    // :wq! closes even when the save failed (its ! discards what could not be
-                    // saved); :wq keeps the editor open, as Vim does after E13 or E212.
+                } else if (ide.save(cmd.createFolders(), cmd.writesUnchanged(), force)) {
+                    // Closed only once saved, with or without !: Vim's :wq! does not quit when its
+                    // write fails either (E212, a missing folder without ++p). Its ! lets the write
+                    // go through (a read-only file, a link to a missing file); it never discards text
+                    // that could not be written. Example: :wq! on a new file in a missing folder
+                    // keeps the editor, and :wq! ++p then saves and closes it.
                     ide.close(true);
                 }
             });
             case WRITE_QUIT_ALL -> onUi.accept(() -> {
-                if (ide.saveAll(force) || force) {
+                // As Vim's :wqa!: "If there are buffers ... which cannot be written for another
+                // reason, Vim will not quit" (:help :wqall); the ! only lets more writes through.
+                if (ide.saveAll(force)) {
                     ide.closeAll(true);
                 }
             });

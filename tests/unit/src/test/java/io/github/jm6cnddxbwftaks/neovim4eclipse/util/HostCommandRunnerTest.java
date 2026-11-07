@@ -167,11 +167,18 @@ class HostCommandRunnerTest {
      * keeps the editor open (above).
      */
     @Test
-    void writeQuitBangSavesWithItsBangAndClosesEvenWhenTheSaveFails() {
+    void writeQuitBangSavesWithItsBangThenCloses() {
         assertEquals(List.of("save!", "close!"), run("wq!"));
-        ide.calls.clear();
+    }
+
+    /**
+     * A {@code :wq!} whose save fails (a new file in a missing folder without {@code ++p}, E212)
+     * keeps the editor and its text, as Vim's {@code :wq!} does not quit after a failed write.
+     */
+    @Test
+    void writeQuitBangKeepsTheEditorWhenTheSaveFails() {
         ide.saveWorks = false;
-        assertEquals(List.of("save!", "close!"), run("wq!"));
+        assertEquals(List.of("save!"), run("wq!"));
     }
 
     @Test
@@ -186,9 +193,12 @@ class HostCommandRunnerTest {
     }
 
     @Test
-    void writeQuitAllBangClosesEverythingEvenWhenASaveFails() {
-        ide.saveWorks = false;
+    void writeQuitAllBangKeepsTheEditorsOpenWhenASaveFails() {
+        // :help :wqall: with ! too, "Vim will not quit" when a buffer cannot be written.
         assertEquals(List.of("saveAll!", "closeAll!"), run("wqall!"));
+        ide.calls.clear();
+        ide.saveWorks = false;
+        assertEquals(List.of("saveAll!"), run("wqall!"));
     }
 
     @Test

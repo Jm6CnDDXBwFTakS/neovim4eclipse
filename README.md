@@ -475,8 +475,8 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes). The buffer is kept, as after Vim's `:bd`: `:b 3` (its number) or Ctrl-^ opens the file again |
 | `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). A range closes the editors of the buffers it covers (`:3,5bd`); `:%bd` closes all editors |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
-| `:wq`, `:x[it]`, `:exi[t]` | save, then close |
-| `:wqa[ll]`, `:xa[ll]` | save all, then close all |
+| `:wq`, `:x[it]`, `:exi[t]` | save, then close; a failed save keeps the editor open, with `!` too (`!` only lets a write through, as in Vim) |
+| `:wqa[ll]`, `:xa[ll]` | save all, then close all; if one cannot be saved, all stay open (`:wqa!` too) |
 | `:e[dit] file` | open `file`, as Neovim's `:e` names it: relative to the editor's project folder (the window's folder, `:lcd`), `./file` too; `%:h/file` is beside the current file, `#` the alternate file, and `~` and absolute paths work. A file that does not exist opens as a new, empty editor (`"file" [New]`); nothing is written until `:w` |
 | `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
