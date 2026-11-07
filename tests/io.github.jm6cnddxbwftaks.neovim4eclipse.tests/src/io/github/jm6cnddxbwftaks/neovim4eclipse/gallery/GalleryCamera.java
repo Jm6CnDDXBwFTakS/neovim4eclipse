@@ -32,7 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  * <h2>How a picture is taken: the window draws itself</h2>
  * Every system asks the window to draw itself into an image, which {@link ImageLoader} saves as
  * PNG. Nothing is read from the screen, so a picture can only ever show the test's own window:
- * the window need not be in front, the machine stays usable during a run, and no other program
+ * the window need not be in front, and no other program
  * (a chat, a mail, a notification) can end up in a gallery that is sent on. Reading the screen did
  * picture another program once, on Windows, where a newly started program may not take the front.
  * <ul>
@@ -53,7 +53,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  * class exists only in its own system's SWT ({@link WindowsCalls}, {@link MacCalls}).
  *
  * <p>Pictures are drawn at the window's real pixels. With display scaling (Windows at 175% or a
- * Retina Mac) they are larger than the window's SWT size, and sharp.
+ * Retina Mac) they are larger than the window's SWT size, and sharp. Each PNG gets a sidecar file
+ * with the size in SWT's points ({@code 01-start-offer.png.size}: {@code 640 238}), which
+ * {@link #img} writes into the page's {@code <img>}, so a page shows each picture at the window's
+ * own size, as a user sees it, not twice that.
+ *
+ * <p>The window is made active before its picture ({@link #activate}) only while the test Eclipse
+ * is the active program: an inactive window draws its default button and focus in a look users do
+ * not see, but taking the front from another program would take the keyboard from whoever works in
+ * it. Working in another program during a run is fine; the pictures then show the windows inactive.
  *
  * <p>A picture of one color is refused ({@link #blank}): a window that drew nothing must fail the
  * run, not give a gallery of empty pictures. On Windows and macOS the window is drawn again, every
@@ -83,12 +91,7 @@ public final class GalleryCamera {
      * @throws AssertionError when the picture comes out one color
      */
     public static void save(Control control, Rectangle area, Path file, String title) {
-        if ((WINDOWS || MAC) && control.getDisplay().getActiveShell() != control.getShell()) {
-            // Not needed for the drawing, which works covered too, but an inactive window draws its
-            // default button and focus in their inactive look, which users do not see. Once only:
-            // again on an active shell would move the focus to its first link.
-            control.getShell().forceActive();
-        }
+        activate(control.getShell());
         drain(control.getDisplay());
         ImageData data = WINDOWS || MAC ? settled(control, area, title) : printed(control, area);
         if (blank(data)) {
@@ -97,6 +100,46 @@ public final class GalleryCamera {
         ImageLoader loader = new ImageLoader();
         loader.data = new ImageData[] { data };
         loader.save(file.toString(), SWT.IMAGE_PNG);
+        try {
+            Files.writeString(sizeFile(file), area.width + " " + area.height + "\n");
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("cannot write the size of " + file, e);
+        }
+    }
+
+    /**
+     * Makes {@code shell} the active window, if it is not and the test Eclipse is the active
+     * program (one of its shells is active): see the class comment. Once per shell in effect, since
+     * an active shell is left alone; activating it again would move the focus to its first link.
+     * Example: a dialog the test just opened over the workbench becomes active; with the user in
+     * another program, nothing happens.
+     */
+    public static void activate(Shell shell) {
+        Shell active = shell.getDisplay().getActiveShell();
+        if (active != null && active != shell) {
+            shell.forceActive();
+        }
+    }
+
+    /** The sidecar file with a picture's size in points: {@code 01-start-offer.png.size}. */
+    private static Path sizeFile(Path png) {
+        return png.resolveSibling(png.getFileName() + ".size");
+    }
+
+    /**
+     * An {@code <img>} of {@code png}, embedded ({@link #dataUri}), at its window's size in points
+     * when its sidecar file has it ({@link #save}): {@code <img src="data:..." width="640" height="238"
+     * alt="...">}. {@code alt} is put in as it is: the caller escapes it.
+     */
+    public static String img(Path png, String alt) throws IOException {
+        StringBuilder tag = new StringBuilder("<img src=\"").append(dataUri(png)).append('"');
+        Path size = sizeFile(png);
+        if (Files.exists(size)) {
+            String[] points = Files.readString(size).strip().split(" ");
+            tag.append(" width=\"").append(Integer.parseInt(points[0])).append("\" height=\"")
+                    .append(Integer.parseInt(points[1])).append('"');
+        }
+        return tag.append(" alt=\"").append(alt).append("\">").toString();
     }
 
     /** {@code area} of {@code control}, drawn by the window itself (Linux). */
@@ -173,13 +216,13 @@ public final class GalleryCamera {
             WindowsCalls n = WindowsCalls.get();
             long window = n.handle().getLong(shell);
             Object rect = n.rectClass().getConstructor().newInstance();
-            n.getWindowRect().invoke(null, window, rect);
+            check((boolean) n.getWindowRect().invoke(null, window, rect), "GetWindowRect");
             int left = n.rectLeft().getInt(rect);
             int top = n.rectTop().getInt(rect);
             int pixelWidth = n.rectRight().getInt(rect) - left;
             int pixelHeight = n.rectBottom().getInt(rect) - top;
             Object origin = n.pointClass().getConstructor().newInstance();
-            n.clientToScreen().invoke(null, n.handle().getLong(control), origin);
+            check((boolean) n.clientToScreen().invoke(null, n.handle().getLong(control), origin), "ClientToScreen");
             double scale = (double) pixelWidth / shell.getBounds().width;
 
             Display display = control.getDisplay();
@@ -187,16 +230,18 @@ public final class GalleryCamera {
             try {
                 GC gc = new GC(image);
                 try {
-                    n.printWindow().invoke(null, window, n.gcHandle().getLong(gc), PW_RENDERFULLCONTENT);
+                    check((boolean) n.printWindow().invoke(null, window, n.gcHandle().getLong(gc), PW_RENDERFULLCONTENT),
+                            "PrintWindow");
                 } finally {
                     gc.dispose();
                 }
-                ImageData whole = image.getImageDataAtCurrentZoom(); // real pixels, pixelWidth x pixelHeight
-                if (Math.abs(whole.width - pixelWidth) > 1) {
-                    // The image's zoom is not the window's (a window on a monitor scaled unlike the
-                    // display's main one): the drawing would be cut off.
-                    throw new AssertionError("the image is " + whole.width + " px wide for a window of " + pixelWidth
-                            + " px: picture the window on the main monitor");
+                ImageData whole = image.getImageDataAtCurrentZoom(); // real pixels, at least pixelWidth x pixelHeight
+                if (whole.width < pixelWidth - 1 || whole.height < pixelHeight - 1) {
+                    // The image's zoom is below the window's: the drawing is cut off. A larger image
+                    // (a fractional SWT scale rounding up) only has room to spare.
+                    throw new AssertionError("the image is " + whole.width + "x" + whole.height + " px for a window of "
+                            + pixelWidth + "x" + pixelHeight + " px: the display's scale and the window's differ"
+                            + " (a window on a monitor scaled unlike the main one?)");
                 }
                 int x = n.pointX().getInt(origin) - left + (int) Math.round(area.x * scale);
                 int y = n.pointY().getInt(origin) - top + (int) Math.round(area.y * scale);
@@ -206,6 +251,13 @@ public final class GalleryCamera {
             }
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("cannot draw the window with PrintWindow: " + e, e);
+        }
+    }
+
+    /** Fails the picture, naming the Windows call, when it returned false. */
+    private static void check(boolean succeeded, String call) {
+        if (!succeeded) {
+            throw new AssertionError(call + " failed for the window to picture");
         }
     }
 
@@ -263,8 +315,15 @@ public final class GalleryCamera {
                 throw new AssertionError("the cached bitmap is " + bits + " bits, " + samples + " samples, format "
                         + format + ": only 32-bit RGBA with the alpha last (format 0) is read");
             }
+            long data = (long) n.bitmapData().invoke(bitmap);
+            if (data == 0 || width <= 0 || height <= 0 || stride < width * 4) {
+                // Checked before the copy: memmove from a bad pointer would crash the whole test
+                // JVM, with no report of which picture it was.
+                throw new AssertionError("the cached bitmap is empty or short: " + width + "x" + height + ", "
+                        + stride + " bytes a row, data at " + data);
+            }
             byte[] rgba = new byte[stride * height];
-            n.memmove().invoke(null, rgba, n.bitmapData().invoke(bitmap), (long) rgba.length);
+            n.memmove().invoke(null, rgba, data, (long) rgba.length);
             ImageData out = new ImageData(width, height, 24, new PaletteData(0xFF0000, 0xFF00, 0xFF));
             int[] row = new int[width];
             for (int line = 0; line < height; line++) {
@@ -350,12 +409,18 @@ public final class GalleryCamera {
         return "data:image/png;base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(png));
     }
 
-    /** Whether every pixel of {@code data} is the same: a picture of nothing. */
+    /**
+     * Whether every pixel of {@code data} is the same: a picture of nothing. A row at a time
+     * ({@link ImageData#getPixels(int, int, int, int[], int)}): a 2x picture has over a million
+     * pixels, and the camera asks after every drawing.
+     */
     public static boolean blank(ImageData data) {
         int first = data.getPixel(0, 0);
+        int[] row = new int[data.width];
         for (int y = 0; y < data.height; y++) {
-            for (int x = 0; x < data.width; x++) {
-                if (data.getPixel(x, y) != first) {
+            data.getPixels(0, y, data.width, row, 0);
+            for (int pixel : row) {
+                if (pixel != first) {
                     return false;
                 }
             }

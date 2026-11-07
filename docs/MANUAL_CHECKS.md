@@ -125,8 +125,9 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 .\mvnw.cmd verify -Pgallery -Dnvim.path=C:\path\to\nvim.exe
 ```
 
-1. On Linux, without `xvfb-run` on a desktop session. The windows draw themselves into the
-   pictures, so other windows may cover them during the run.
+1. On Linux, `xvfb-run` is optional: on a desktop session the command runs without it. On every
+   system the windows draw themselves into the pictures, so other windows may cover them; leave
+   the test Eclipse in front, though, so the pictures show its windows active, as users see them.
 2. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/index.html` in a
    browser and look at each picture against the text under it.
    ⇒ Each picture matches its caption (the list below).

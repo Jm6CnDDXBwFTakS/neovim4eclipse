@@ -104,7 +104,8 @@ to the eyes: `DialogLayoutTest` (`tests/swt`) and `NeovimPreferencePageTest` (UI
 same dialogs and notes with `LayoutCheck` (the fragment's `shared-swt/` folder) on every run. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
 platform, since each draws its own fonts and spacing. The windows draw themselves into the
 pictures (`gallery/GalleryCamera`; nothing is read from the screen), so another program's window
-cannot end up in one, and the machine stays usable during the run. With *Show borders* on (*System
+cannot end up in one. You may work in another program during the run: the camera then leaves the
+keyboard there, and the pictures show the windows inactive (a plain default button, no caret). With *Show borders* on (*System
 Settings → Accessibility → Display*), expect a frame around the links in the preference page's group:
 the look follows the macOS SDK the test's Java was built with, and for a Java built for macOS 26 or
 later (Homebrew's openjdk) AppKit draws that setting's outline around a link (a text view inside a

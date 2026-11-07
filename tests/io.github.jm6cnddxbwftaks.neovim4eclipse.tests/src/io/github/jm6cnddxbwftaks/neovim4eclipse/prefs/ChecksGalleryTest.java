@@ -260,10 +260,10 @@ class ChecksGalleryTest {
             window.setSize(GROUP_WIDTH, window.computeSize(window.getClientArea().width, SWT.DEFAULT, true).y);
             GalleryCamera.drain(window.getDisplay());
             window.layout(true, true);
-            // Active, as a user sees the page, with the focus on the window itself, not its first link:
-            // a focused link draws a focus rectangle, which the picture would show (forceActive gives
-            // it focus).
-            window.forceActive();
+            // Active, as a user sees the page (GalleryCamera.activate: only while the test Eclipse is the
+            // active program), with the focus on the window itself, not its first link: a focused link
+            // draws a focus rectangle, which the picture would show (activating gives it focus).
+            GalleryCamera.activate(window);
             window.forceFocus();
             save(window, topic, title, lookFor);
         } finally {
@@ -362,8 +362,8 @@ class ChecksGalleryTest {
                     body.append("<h2><code>").append(escape(topic)).append("</code></h2>\n");
                 }
                 body.append("<figure><figcaption><b>").append(escape(shot.title())).append("</b> ")
-                        .append(escape(shot.lookFor())).append("</figcaption><img src=\"").append(GalleryCamera.dataUri(dir.resolve(shot.file())))
-                        .append("\" alt=\"").append(escape(shot.title())).append("\"></figure>\n");
+                        .append(escape(shot.lookFor())).append("</figcaption>").append(GalleryCamera.img(dir.resolve(shot.file()), escape(shot.title())))
+                        .append("</figure>\n");
             }
             return """
                     <!doctype html>
