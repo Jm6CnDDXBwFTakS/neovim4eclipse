@@ -168,6 +168,43 @@ class StatusTrackerTest {
         assertEquals("E1: first\nE2: second", outputs.get(0).text());
     }
 
+    /**
+     * Two threads: one records a cleared message, the other then records {@code E486} and delivers
+     * it first. The late delivery of the older status is dropped, so the listeners end on the
+     * error, as {@link StatusTracker#current()} does. (The two steps are called by hand here: that
+     * is the interleaving two real threads can produce.)
+     */
+    @Test
+    void anOlderStatusDeliveredAfterANewerOneIsDropped() {
+        tracker.onMessageEvent(show("", "3 lines yanked"));
+        tracker.onMessageEvent(FLUSH);
+        seen.clear();
+        StatusInfo cleared = new StatusInfo("", "", "", false);
+        StatusInfo error = new StatusInfo("", "", "E486: Pattern not found: x", true);
+
+        StatusTracker.Delivery older = tracker.record(cleared);
+        StatusTracker.Delivery newer = tracker.record(error);
+        tracker.deliver(newer);
+        tracker.deliver(older);
+
+        assertEquals(List.of(error), seen);
+        assertEquals(error, tracker.current());
+    }
+
+    /** Deliveries in recorded order all reach the listeners. */
+    @Test
+    void statusesDeliveredInOrderAllArrive() {
+        StatusInfo first = new StatusInfo("a", "", "", false);
+        StatusInfo second = new StatusInfo("b", "", "", false);
+
+        StatusTracker.Delivery one = tracker.record(first);
+        StatusTracker.Delivery two = tracker.record(second);
+        tracker.deliver(one);
+        tracker.deliver(two);
+
+        assertEquals(List.of(first, second), seen);
+    }
+
     @Test
     void recordingListenersHearStartAndStopOnce() {
         List<String> registers = new ArrayList<>();

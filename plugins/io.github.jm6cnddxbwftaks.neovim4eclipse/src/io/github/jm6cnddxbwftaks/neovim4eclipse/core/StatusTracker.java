@@ -33,8 +33,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
  * {@code msg_showcmd "2f"} even though it answers almost no request then.
  *
  * <p>Thread-safe: messages arrive on the RPC reader thread, keys clear them on the input thread.
- * The state is guarded by {@code this}; listeners are called outside the lock, on the thread that
+ * The state is guarded by {@code this}; listeners are called outside that lock, on the thread that
  * made the change.
+ *
+ * <p>Why a status is computed, compared and recorded in one locked step, and numbered: two threads
+ * change the status at once, say the input thread clearing the message for a key while the reader
+ * thread passes on Neovim's {@code E486}. If each computed its status in one locked block and
+ * recorded it in another, the clear could be computed first and recorded last, and the status
+ * bar would show an empty message while Neovim shows the error. Recording in the same block puts
+ * the statuses in one order; the {@link Delivery} number keeps the listeners to that order: a
+ * thread that comes to deliver after a newer status went out drops its stale one.
  */
 final class StatusTracker {
 
@@ -51,6 +59,12 @@ final class StatusTracker {
     /** The output last passed to the output listeners, so it is passed once; guarded by {@code this}. */
     private String lastOutput = "";
     private volatile StatusInfo lastStatus = StatusInfo.EMPTY;
+    /** The number of the status last recorded in {@link #lastStatus}; guarded by {@code this}. */
+    private long recordedSeq;
+    /** The number of the status last passed to the listeners; guarded by {@link #deliveryLock}. */
+    private long deliveredSeq;
+    /** Serializes the calls to the status listeners, so that they hear statuses in recorded order. */
+    private final Object deliveryLock = new Object();
     /** Register of the macro being recorded ({@code qa} ... {@code q}), or "" if none. */
     private volatile String recordingRegister = "";
 
@@ -87,13 +101,13 @@ final class StatusTracker {
      * again by the next key (a second {@code n} with no match) shows again.
      */
     void clearMessage() {
-        StatusInfo info;
+        Delivery delivery;
         synchronized (this) {
             route.clear();
             lastOutput = "";
-            info = status(MessageRoute.View.NONE);
+            delivery = record(status(MessageRoute.View.NONE));
         }
-        fire(info);
+        deliver(delivery);
     }
 
     /** Neovim showed command line {@code text}, such as {@code ":ls"}: the title for its output. */
@@ -103,7 +117,7 @@ final class StatusTracker {
 
     /** One message event from Neovim; see the class comment. */
     void onMessageEvent(MessageEvent event) {
-        StatusInfo info = null;
+        Delivery delivery = null;
         CommandOutput output = null;
         synchronized (this) {
             switch (event) {
@@ -112,7 +126,7 @@ final class StatusTracker {
                 case MessageEvent.Showcmd cmd -> showcmd = cmd.text();
                 case MessageEvent.Flush flush -> {
                     MessageRoute.View view = route.view();
-                    info = status(view);
+                    delivery = record(status(view));
                     if (view.hasOutput() && !view.output().equals(lastOutput)) {
                         lastOutput = view.output();
                         output = new CommandOutput(view.title(), view.output());
@@ -120,9 +134,7 @@ final class StatusTracker {
                 }
             }
         }
-        if (info != null) {
-            fire(info);
-        }
+        deliver(delivery);
         if (output != null) {
             CommandOutput shown = output;
             LOG.fine(() -> "output for the popup: " + shown.title());
@@ -132,12 +144,12 @@ final class StatusTracker {
 
     /** The statusline read with the state snapshot ("" when the status bar does not show it). */
     void publishStatusline(String text) {
-        StatusInfo info;
+        Delivery delivery;
         synchronized (this) {
             statusline = text;
-            info = status(route.view());
+            delivery = record(status(route.view()));
         }
-        fire(info);
+        deliver(delivery);
     }
 
     /** The status for {@code view}: the message line shows its line (the popup, its output). */
@@ -146,14 +158,45 @@ final class StatusTracker {
         return new StatusInfo(statusline, cmd, view.line(), view.error());
     }
 
-    private void fire(StatusInfo info) {
-        synchronized (this) {
-            if (info.equals(lastStatus)) {
+    /** A recorded status, numbered in the order it was recorded, waiting to reach the listeners. */
+    record Delivery(long seq, StatusInfo info) {
+    }
+
+    /**
+     * Records {@code info} as the current status if it differs from the last one. Called in the
+     * same locked block that computed {@code info} (see the class comment); {@code synchronized}
+     * is reentrant, so holding the lock already is fine.
+     *
+     * @return what to pass to {@link #deliver}, or {@code null} when nothing changed
+     */
+    synchronized Delivery record(StatusInfo info) {
+        if (info.equals(lastStatus)) {
+            return null;
+        }
+        lastStatus = info;
+        return new Delivery(++recordedSeq, info);
+    }
+
+    /**
+     * Passes a recorded status to the listeners, outside the state lock, unless a newer one went
+     * out already. Example: the reader thread records {@code E486} (2) after the input thread
+     * recorded a cleared message (1), and gets to deliver first: the input thread then drops 1,
+     * and the listeners end on {@code E486}, the status {@link #current()} returns.
+     *
+     * <p>The listeners are called under {@link #deliveryLock}; they only hand the status on to the
+     * UI thread ({@code asyncExec}), so another thread waits for no more than that.
+     */
+    void deliver(Delivery delivery) {
+        if (delivery == null) {
+            return;
+        }
+        synchronized (deliveryLock) {
+            if (delivery.seq() <= deliveredSeq) {
                 return;
             }
-            lastStatus = info;
+            deliveredSeq = delivery.seq();
+            statusListeners.fire(delivery.info());
         }
-        statusListeners.fire(info);
     }
 
     // ---- macro recording ----
