@@ -128,6 +128,20 @@ class UnattachedDocumentSyncTest {
         assertEquals(List.of(List.of("", "alpha", "beta", "", "gamma")), neovim.pushed);
     }
 
+    /**
+     * {@code :bufdo %s/$/\=nr2char(13)/}: a {@code \r} added at the end of Neovim's line 0, before
+     * the document's {@code \n}. Whether the document then counts one line or two depends on how its
+     * text got there (SplitLines.correct asks it), so the next change, Neovim's line 1, before the
+     * push, still lands on "beta", not a line lower.
+     */
+    @Test
+    void aCarriageReturnAtALinesEndIsCountedAsTheDocumentCountsIt() {
+        sync.start();
+        neovim.neovimChanged(buffer, new BufferChange(0, 1, List.of("alpha\r")));
+        neovim.neovimChanged(buffer, new BufferChange(1, 2, List.of("BETA"))); // Neovim's line 1
+        assertEquals("alpha\r\nBETA\ngamma\n", document.get());
+    }
+
     @Test
     void aFullBufferFromNeovimIsAppliedAsTheSmallestEdit() {
         sync.start();

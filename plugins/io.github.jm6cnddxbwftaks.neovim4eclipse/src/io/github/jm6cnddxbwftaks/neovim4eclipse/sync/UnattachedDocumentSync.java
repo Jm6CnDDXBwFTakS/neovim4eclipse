@@ -145,18 +145,29 @@ public final class UnattachedDocumentSync implements AutoCloseable {
             boolean finalNewline = FinalNewlines.of(document);
             String delimiter = BufferSynchronizer.lineDelimiter(document);
             Edit edit;
+            int linesBefore = document.getNumberOfLines();
+            int eclipseSpan; // how many document lines Neovim's new lines take, before the edit
             if (last < 0) {
                 edit = BufferSynchronizer.fullBufferEdit(document, change.newLines(), finalNewline);
                 splitLines.replacedAll(change.newLines(), delimiter);
+                eclipseSpan = neovimLineCount(document, finalNewline);
             } else {
                 edit = BufferSynchronizer.rangeEdit(document,
                         new BufferChange(first, last, change.newLines()), finalNewline);
                 splitLines.replaced(change.firstLine(), change.lastLine(), change.newLines(), delimiter);
+                eclipseSpan = last - first;
             }
             if (edit != null) {
                 UndoSteps.beforeChangeOnItsOwn(document); // see UndoSteps: Ctrl+Z back to the save clears the marker
                 document.replace(edit.offset(), edit.length(), edit.text());
             }
+            // The lines the new text takes now, as the document counts them (SplitLines.correct), as
+            // BufferSynchronizer does. Example: :bufdo s/$/\=nr2char(13)/ makes Neovim's "alpha\r",
+            // which SplitLines alone may count other than the document does ("\r" typed before the
+            // document's "\n" is two lines there); the next change before the push would then land
+            // a line off.
+            splitLines.correct(last < 0 ? 0 : change.firstLine(), change.newLines().size(),
+                    eclipseSpan + document.getNumberOfLines() - linesBefore);
             if (!splitLines.isEmpty()) {
                 // Eclipse split a line of Neovim's at a "\r" (see SplitLines): Neovim gets the split
                 // lines, or its line numbers stay off by one below it.
