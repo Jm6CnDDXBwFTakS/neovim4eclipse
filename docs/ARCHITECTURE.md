@@ -712,7 +712,9 @@ Completion would not offer the next word when pressed again); `Ctrl-X` `Ctrl-O` 
   difference at a mode change, in one batch. `KeyInterceptor` also leaves
   Ctrl letters given to Eclipse alone, for keys Eclipse has no binding for. Bindings use
   Eclipse's platform-neutral modifiers per platform (`M1` = Ctrl on Windows/Linux, `M4` = Control on macOS).
-  `KeyContextDiagnostics` logs which command the workbench resolves for Ctrl-V.
+  `KeyContextDiagnostics` logs which command the workbench resolves for Ctrl-V, a moment after the
+  contexts turn on; `util/CtrlVResolution` warns only when Ctrl-V should reach Neovim and does not
+  (not when the editor lost focus before the check ran, nor where Ctrl-V goes to Eclipse by choice).
   **One parameterless command per key** (`...commands.ctrl.v`, `...ctrl.r`, ...; see `util/VimCtrlKeys`):
   a single command with a `key` parameter was tried first, but the parameter arrived as `null` on Linux.
   `PluginXmlConsistencyTest` checks that every letter has a context, a command, a handler and win32/gtk/cocoa
