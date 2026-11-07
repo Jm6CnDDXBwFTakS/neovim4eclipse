@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.DedicatedNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 
 /**
@@ -118,22 +119,26 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
         requireOpen(box, text).notifyListeners(SWT.KeyDown, escape);
         settle();
 
-        // 3. The preference page, as the Neovim menu opens it.
+        // 3. The preference page, as the Neovim menu opens it, in a user's Eclipse: the dedicated
+        // Neovim installed, no -Dneovim4eclipse.nvim. Its folder is under pictures.home (the
+        // screenshots profile in the test pom), so the page shows no account name.
         // The welcome check box shows its default (on); the UI tests run with it off.
-        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        boolean welcome = store.getBoolean(PreferenceConstants.SHOW_WELCOME);
-        store.setValue(PreferenceConstants.SHOW_WELCOME, true);
-        PreferenceDialog preferences = OpenPreferencesHandler.create(window);
-        preferences.setBlockOnOpen(false);
-        preferences.getShell().setBounds(80, 60, 960, 620);
-        preferences.open();
-        try {
-            UiTestSupport.spin(500);
-            capture(preferences.getShell(), "03-preferences.png");
-        } finally {
-            preferences.close();
-            store.setValue(PreferenceConstants.SHOW_WELCOME, welcome);
-        }
+        DedicatedNeovim.withOnlyTheDedicatedNeovim(() -> {
+            IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+            boolean welcome = store.getBoolean(PreferenceConstants.SHOW_WELCOME);
+            store.setValue(PreferenceConstants.SHOW_WELCOME, true);
+            PreferenceDialog preferences = OpenPreferencesHandler.create(window);
+            preferences.setBlockOnOpen(false);
+            preferences.getShell().setBounds(80, 60, 960, 700); // tall enough for the page and its Restore Defaults and Apply row
+            preferences.open();
+            try {
+                UiTestSupport.spin(500);
+                capture(preferences.getShell(), "03-preferences.png");
+            } finally {
+                preferences.close();
+                store.setValue(PreferenceConstants.SHOW_WELCOME, welcome);
+            }
+        });
 
         java.getSite().getPage().closeEditor(java, false);
     }

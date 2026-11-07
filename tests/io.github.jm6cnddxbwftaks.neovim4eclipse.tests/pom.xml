@@ -193,7 +193,7 @@
             <test.wait.seconds>${test.wait.seconds}</test.wait.seconds>
             <!-- The folder no test may write outside of (testing/TestIsolation checks the data home
                  against it, and DedicatedNeovim refuses to change a folder elsewhere). -->
-            <test.isolated.root>${project.build.directory}</test.isolated.root>
+            <test.isolated.root>${tests.isolated.root}</test.isolated.root>
             <!-- Where ScreenshotCaptureTest writes its PNG files. -->
             <screenshots.dir>${project.build.directory}/screenshots</screenshots.dir>
           </systemProperties>
@@ -219,7 +219,7 @@
             <XDG_CONFIG_HOME>${project.build.directory}/neovim-home/config</XDG_CONFIG_HOME>
             <XDG_STATE_HOME>${project.build.directory}/neovim-home/state</XDG_STATE_HOME>
             <XDG_CACHE_HOME>${project.build.directory}/neovim-home/cache</XDG_CACHE_HOME>
-            <XDG_DATA_HOME>${project.build.directory}/neovim-home/data</XDG_DATA_HOME>
+            <XDG_DATA_HOME>${tests.isolated.root}/neovim-home/data</XDG_DATA_HOME>
             <LC_MESSAGES>C</LC_MESSAGES>
           </environmentVariables>
           <!-- Which tests run, by JUnit tag: all but the "heavyJava" ones, unless the uiHeavyJava
@@ -247,6 +247,16 @@
     <!-- The JUnit tags run and left out; see the uiHeavyJava profile. Empty: no filter. -->
     <ui.groups></ui.groups>
     <ui.excludedGroups>gallery,heavyJava,screenshots,timeoutReliant</ui.excludedGroups>
+    <!-- The folder the test Eclipse keeps the plug-in's data in (XDG_DATA_HOME, under neovim-home/data)
+         and the only one the tests may change (test.isolated.root, prefs/DedicatedNeovim): target/.
+         The gallery and screenshots profiles set it to pictures.home instead. -->
+    <tests.isolated.root>${project.build.directory}</tests.isolated.root>
+    <!-- Where the pictures' runs (-Pgallery, -Pscreenshots) keep the plug-in's data and their own
+         files: outside the home folder, where target/ usually is, so no picture shows the account
+         name in a path (gallery/PicturesFolder). /tmp on Linux and macOS; on Windows the
+         pictures-home-windows profile below picks C:\Users\Public, since the temp folder there is
+         under the account's own folder. -Dpictures.home=... sets another. -->
+    <pictures.home>/tmp/neovim4eclipse-pictures</pictures.home>
   </properties>
 
   <profiles>
@@ -279,6 +289,21 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <!-- On Windows, pictures.home is C:\Users\Public\neovim4eclipse-pictures: a folder every
+         account may write and whose path holds no account name (the temp folder,
+         C:\Users\<account>\AppData\Local\Temp, does). gallery/PicturesFolder refuses it if another
+         account made it. -->
+    <profile>
+      <id>pictures-home-windows</id>
+      <activation>
+        <os>
+          <family>windows</family>
+        </os>
+      </activation>
+      <properties>
+        <pictures.home>C:\Users\Public\neovim4eclipse-pictures</pictures.home>
+      </properties>
     </profile>
     <!-- ./mvnw verify -Pui: start the test Eclipse and run the UI tests (unless -DskipTests). -->
     <profile>
@@ -340,6 +365,8 @@
     <profile>
       <id>screenshots</id>
       <properties>
+        <!-- Data and files outside the home folder: see pictures.home above. -->
+        <tests.isolated.root>${pictures.home}</tests.isolated.root>
         <ui.skip>${skipTests}</ui.skip>
         <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups>screenshots</ui.groups>
@@ -376,6 +403,8 @@
     <profile>
       <id>gallery</id>
       <properties>
+        <!-- Data and files outside the home folder: see pictures.home above. -->
+        <tests.isolated.root>${pictures.home}</tests.isolated.root>
         <ui.skip>${skipTests}</ui.skip>
         <!-- SearchGalleryTest starts Neovim: -Dnvim.path is required, as for -Pui. -->
         <nvim.optional>${skipTests}</nvim.optional>

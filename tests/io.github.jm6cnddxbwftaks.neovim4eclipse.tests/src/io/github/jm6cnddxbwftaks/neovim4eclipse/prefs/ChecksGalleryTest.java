@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
@@ -99,14 +100,16 @@ class ChecksGalleryTest {
 
     /**
      * Files the pictures need (a stand-in program, a folder), deleted afterwards. Made by hand: the
-     * fragment's manifest does not import JUnit's {@code @TempDir} package.
+     * fragment's manifest does not import JUnit's {@code @TempDir} package. In
+     * {@link PicturesFolder}, not the system's temp folder, which on Windows is under the account's
+     * own folder: the refused-program pictures show these paths.
      */
     private Path temp;
 
     @Test
     void takeTheGallery() throws IOException {
         Files.createDirectories(out);
-        temp = Files.createTempDirectory("n4e-gallery");
+        temp = PicturesFolder.newTemp("n4e-gallery");
         try {
             takeEach();
         } finally {
