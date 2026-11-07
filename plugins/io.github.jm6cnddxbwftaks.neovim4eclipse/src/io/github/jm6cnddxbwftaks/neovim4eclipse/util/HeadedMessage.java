@@ -80,6 +80,7 @@ public record HeadedMessage(String intro, List<Point> points, String footer) {
 
         /** Nulls count as none, and the links become a list that cannot change, so a point stays a value. */
         public Point {
+            heading = heading == null ? "" : heading;
             text = text == null ? "" : text;
             copy = copy == null ? "" : copy;
             links = List.copyOf(links == null ? List.of() : links);
@@ -111,8 +112,9 @@ public record HeadedMessage(String intro, List<Point> points, String footer) {
         }
     }
 
-    /** The points made a list that cannot change, so the record stays a value; no footer is "". */
+    /** The points made a list that cannot change, so the record stays a value; no intro or footer is "". */
     public HeadedMessage {
+        intro = intro == null ? "" : intro;
         points = List.copyOf(points);
         footer = footer == null ? "" : footer;
     }

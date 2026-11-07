@@ -41,6 +41,16 @@ class HeadedMessageTest {
         assertFalse(new HeadedMessage("Q?", List.of(), null).hasFooter(), "null counts as none");
     }
 
+    /** A null intro or heading counts as none, as a null text, copy or footer does. */
+    @Test
+    void aNullIntroOrHeadingCountsAsNone() {
+        HeadedMessage message = new HeadedMessage(null, List.of(new HeadedMessage.Point(null, "x.")), null);
+        assertEquals("", message.intro());
+        assertEquals("", message.points().get(0).heading());
+        assertTrue(message.point("Lost").isEmpty(), "looking for a heading meets no null");
+        assertEquals("\n\n: x.", message.plain());
+    }
+
     @Test
     void thePointsCannotChangeAfterwards() {
         List<HeadedMessage.Point> points = new ArrayList<>(List.of(new HeadedMessage.Point("A", "a")));
