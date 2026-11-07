@@ -22,7 +22,6 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.MsgpackNeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimVersion;
@@ -110,6 +109,11 @@ final class NeovimConnection implements AutoCloseable {
     private static final long STARTUP_TIMEOUT_SEC = 10;
     /** How long {@link #requestQuit} waits for Neovim to exit after {@code :qa!} (it takes milliseconds). */
     private static final long QUIT_TIMEOUT_MS = 1500;
+    /**
+     * How long {@link #requestQuit} waits for {@code :qa!} to be written (it takes microseconds,
+     * unless Neovim stopped reading its input).
+     */
+    private static final long QUIT_SEND_TIMEOUT_MS = 500;
 
     private final Process process;
     /** The program started, as the command's first word: {@code /home/you/.local/share/.../neovim/la/bin/nvim}. */
@@ -164,6 +168,17 @@ final class NeovimConnection implements AutoCloseable {
             connection.close();
             throw e;
         }
+        return connection;
+    }
+
+    /**
+     * A connection over a process that is already running, with nothing asked of it: for tests of
+     * closing, which need a process that misbehaves (one that never reads its input) rather than
+     * Neovim.
+     */
+    static NeovimConnection over(Process process, String program) {
+        NeovimConnection connection = new NeovimConnection(process, program);
+        connection.channel.start();
         return connection;
     }
 
@@ -342,6 +357,12 @@ final class NeovimConnection implements AutoCloseable {
      * close, 1.5 s per session.) So the command is sent as a msgpack-rpc <em>notification</em>, a
      * message that expects no answer. The channel is told first that the end of Neovim's output is
      * expected now ({@link RpcChannel#closing()}), so that it is not reported as a crash.
+     *
+     * <p>The write itself is bounded too, {@value #QUIT_SEND_TIMEOUT_MS} ms ({@link BoundedSend}):
+     * a hung Neovim that stopped reading its input, with another thread stuck writing a large
+     * request, would otherwise keep this call, on the UI thread, waiting for the channel's write
+     * lock for good. Not written in time, the quit is given up, and {@link #close()} ends the
+     * process, which also frees the stuck writer.
      */
     void requestQuit() {
         channel.closing();
@@ -349,9 +370,19 @@ final class NeovimConnection implements AutoCloseable {
             return;
         }
         try {
-            channel.notify("nvim_command", "qa!");
-        } catch (NeovimConnectionClosedException e) {
-            LOG.log(Level.FINE, "Could not send :qa! (Neovim already gone?); close() ends the process", e);
+            BoundedSend.start("neovim4eclipse-quit", () -> {
+                channel.notify("nvim_command", "qa!");
+                return CompletableFuture.completedFuture(null);
+            }).get(QUIT_SEND_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            LOG.warning("Could not send :qa! within " + QUIT_SEND_TIMEOUT_MS
+                    + " ms (Neovim does not read its input); ending its process");
+            return;
+        } catch (ExecutionException e) {
+            LOG.log(Level.FINE, "Could not send :qa! (Neovim already gone?); close() ends the process", e.getCause());
+            return;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return;
         }
         try {
@@ -363,11 +394,22 @@ final class NeovimConnection implements AutoCloseable {
         }
     }
 
-    /** Closes the connection (failing any request still waiting) and ends the process (forcibly if it lingers). */
+    /**
+     * Ends the process (forcibly if it lingers) and closes the connection, failing any request
+     * still waiting.
+     *
+     * <p>The process first, then the streams. Closing Neovim's stdin flushes it, and the flush waits
+     * for the stream's lock, which a thread blocked writing into a full pipe holds (see
+     * {@link BoundedSend}): with Neovim hung, closing the streams first never returned. Once the
+     * process is gone, its pipe is broken and that write fails, so nothing waits any more. The
+     * channel is told first that the end of Neovim's output is expected
+     * ({@link RpcChannel#closing()}), so the reader does not log the end as a crash.
+     */
     @Override
     public void close() {
-        channel.close();
+        channel.closing();
         destroyProcess();
+        channel.close();
     }
 
     private void destroyProcess() {

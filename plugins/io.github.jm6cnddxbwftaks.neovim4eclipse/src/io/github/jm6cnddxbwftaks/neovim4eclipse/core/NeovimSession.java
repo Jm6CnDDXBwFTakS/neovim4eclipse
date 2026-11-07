@@ -1419,7 +1419,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * input thread: work there can wait for the UI thread (a key whose changes the UI thread
      * applies), which here is waiting for this answer, so a queued request missed the bound in
      * about one project delete out of five in the UI tests. Writes to Neovim are serialized by the
-     * RPC channel, so this cannot cut into a request of the input thread.
+     * RPC channel, so this cannot cut into a request of the input thread. And the request is written
+     * on a thread of its own ({@link BoundedSend}), so that the bound covers the write too: with
+     * Neovim not reading its input and the input thread stuck writing a large request, the write
+     * would wait for the channel's lock for good.
      *
      * @return how many working folders Neovim moved, or {@code -1} when it did not answer in time,
      *         failed, or is closed
@@ -1429,7 +1432,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             return -1;
         }
         try {
-            Object moved = api.execLua(LuaScripts.LEAVE_FOLDER, List.of(folder)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            Object moved = BoundedSend.start("neovim4eclipse-leave-folder",
+                    () -> api.execLua(LuaScripts.LEAVE_FOLDER, List.of(folder)))
+                    .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             return moved instanceof Number n ? n.intValue() : 0;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

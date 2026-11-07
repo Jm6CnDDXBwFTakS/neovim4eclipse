@@ -38,7 +38,9 @@
  *             popup ({@code CommandOutput}) and macro recording, fired to listeners only when they
  *             change; messages and showcmd come from Neovim's UI events ({@code ext_messages});</li>
  *         <li>{@code InputThread}: the single thread for all blocking RPC, which keeps keys in order;</li>
- *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call.</li>
+ *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call;</li>
+ *         <li>{@code BoundedSend}: a message written on a thread of its own, for the few callers
+ *             (closing, leaving a folder) whose wait must be bounded even when the write blocks.</li>
  *       </ul></li>
  *   <li>Value types passed to listeners: {@code CursorPos}, {@code VisualSelection},
  *       {@code BufferChange}, {@code FoldState}; and {@code DocumentBuffer}, the handle of one document's buffer,

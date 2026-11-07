@@ -168,7 +168,13 @@ notification names (`redraw`, `nvim_buf_changedtick_event`, ...) are ignored and
 a notification handler that throws is logged at WARNING; a request whose handler throws is answered
 with an error.
 
-`requestQuit` calls `channel.closing()` and then `channel.notify("nvim_command", "qa!")`.
+`requestQuit` calls `channel.closing()` and then `channel.notify("nvim_command", "qa!")`, on a
+thread of its own (`core/BoundedSend`) and waited for at most half a second: a write blocks while
+Neovim does not read its input, and the write lock is held by whichever thread is stuck in such a
+write, so a quit sent from the UI thread could otherwise wait for good. `close()` then ends the
+process before it closes the streams: closing stdin flushes it, which waits for that same stuck
+writer, and a dead process breaks the pipe, which fails the write and frees the lock.
+`NeovimSession.leaveFolder`, the one bounded wait on the UI thread, sends its request the same way.
 
 The JDK's `sun.misc.Unsafe` warning at start-up comes from msgpack-core itself (its
 `MessageBuffer`); msgpack-core 0.9.12 still prints it on JDK 25.
