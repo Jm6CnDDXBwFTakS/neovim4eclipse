@@ -2806,7 +2806,8 @@ final class LuaScripts {
      * <p><b>Which pattern.</b> What Neovim itself highlights:
      * <ul>
      *   <li>while a search is typed ({@code /} or {@code ?}) and {@code 'incsearch'} is on: the text
-     *       typed so far, without a search offset ({@code /foo/e} is {@code foo});</li>
+     *       typed so far, without a search offset ({@code /foo/e} is {@code foo}); before the first
+     *       character, the last search, which Neovim still shows;</li>
      *   <li>while a {@code :s}, {@code :g}, {@code :v}, {@code :smagic} or {@code :snomagic} line is
      *       typed, with {@code 'incsearch'}: its pattern ({@code :%s/foo/bar} gives {@code foo});
      *       a range with a pattern of its own ({@code :/x/s/y/}) is not read, and the last search
@@ -2826,7 +2827,8 @@ final class LuaScripts {
      * {@code g#} is never made smart, and stays so for {@code n} and after any other command, as
      * Vim keeps that with the pattern. A {@code *} key may also be the argument of another command
      * ({@code "*p}, {@code f*}), so {@code vim.on_key} only notes register {@code /} before it;
-     * if the register changed once the key ran, its new value is the star's pattern, and the
+     * if the register changed once the key ran (at the next key, or in scheduled work when none
+     * follows: a macro's keys run before any scheduled work), its new value is the star's pattern, and the
      * highlighted pattern is a star's while it equals that value. Example, with
      * {@code ignorecase smartcase}: {@code /Foo} finds only {@code Foo}, {@code /foo} finds
      * {@code Foo} too, and {@code *} on {@code Foo} finds both, also after {@code :w}.
@@ -2836,7 +2838,8 @@ final class LuaScripts {
      * {@code w$}) and the lines the editor shows, which Eclipse reports when its view changes
      * ({@code M.set_view}, {@link #SEARCH_VIEW}): the two differ when the viewport feature is off,
      * when Eclipse scrolled alone in insert mode, when Neovim does not know Eclipse's folds, and
-     * by a partly shown last line. A pattern that can match across lines ({@code \n},
+     * by a partly shown last line. Two ranges apart are searched one by one, not with every line
+     * between them. A pattern that can match across lines ({@code \n},
      * {@code \_x}) is found with a {@code searchpos()} walk instead, as {@code matchbufline()}
      * matches within one line; the walk starts a screen higher, for a match that begins above the
      * view, and stops after {@code 'redrawtime'}, as Neovim's own highlighting does.
@@ -2846,7 +2849,9 @@ final class LuaScripts {
      * character, an edit, a scroll. It only schedules the work ({@code vim.schedule}, once per
      * batch: twenty {@code Ctrl-E} compute once), since {@code on_win} must not change anything.
      * A window's matches are sent only when they differ from what was sent for it last, so
-     * {@code n}, which moves the cursor between the same matches, sends nothing: Eclipse picks the
+     * {@code n}, which moves the cursor between the same matches, sends nothing; with matches, the
+     * buffer's change count counts as part of them, so they are sent again after an edit, which may
+     * have made the editor drop one it touched: Eclipse picks the
      * match under the caret itself ({@code CurSearch}). Entering a window or a buffer (an editor
      * attached, or switched to) forgets what was sent for it, as that editor has nothing painted;
      * so does {@code M.resend()}, which the session calls when an editor is attached or back in
@@ -2881,16 +2886,26 @@ final class LuaScripts {
 
             local ns = vim.api.nvim_create_namespace('neovim4eclipse_search')
             -- A * or # in normal mode may be a search, or the argument of another command ("*p, f*): it was a
-            -- search if register / changed once the key has run, and then the new value is the star's.
+            -- search if register / changed once the key has run, and then the new value is the star's. "Once
+            -- the key has run" is the next key (keys that arrive together, as a macro's, run before any
+            -- scheduled work) or, when no key follows, the scheduled check, whichever comes first.
+            local star_before = nil -- register / before a * or # not checked yet
+
+            local function check_star()
+              if star_before ~= nil then
+                local after = vim.fn.getreg('/')
+                if after ~= star_before then
+                  star_pattern = after
+                end
+                star_before = nil
+              end
+            end
+
             vim.on_key(function(key)
+              check_star() -- the key before this one has run
               if (key == '*' or key == '#') and vim.api.nvim_get_mode().mode == 'n' then
-                local before = vim.fn.getreg('/')
-                vim.schedule(function()
-                  local after = vim.fn.getreg('/')
-                  if after ~= before then
-                    star_pattern = after
-                  end
-                end)
+                star_before = vim.fn.getreg('/')
+                vim.schedule(check_star)
               end
             end, ns)
             local group = vim.api.nvim_create_augroup('neovim4eclipse_search', { clear = true })
@@ -2992,15 +3007,17 @@ final class LuaScripts {
               local kind = vim.fn.getcmdtype()
               if vim.o.incsearch then
                 if kind == '/' or kind == '?' then
-                  return until_delimiter(vim.fn.getcmdline(), kind), false
+                  local typed = until_delimiter(vim.fn.getcmdline(), kind)
+                  if typed ~= '' then
+                    return typed, false
+                  end
+                  -- Nothing typed yet: Neovim still shows the last search's matches.
                 elseif kind == ':' then
                   local pat = ex_pattern(vim.fn.getcmdline())
                   if pat then
                     return pat, false
                   end
                 end
-              elseif kind == '/' or kind == '?' then
-                return nil
               end
               if vim.v.hlsearch == 1 and vim.o.hlsearch then
                 local pat = vim.fn.getreg('/')
@@ -3110,20 +3127,40 @@ final class LuaScripts {
               end
               local pat, star = current_pattern()
               local ranges = {}
+              local buf = vim.api.nvim_win_get_buf(win)
               if pat and pat ~= '' then
+                local effective = M.effective(pat, star)
                 local top, bottom = vim.fn.line('w0', win), vim.fn.line('w$', win)
                 local view = views[win]
                 if view then
-                  local last = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
-                  top = math.max(1, math.min(top, view[1]))
-                  bottom = math.min(last, math.max(bottom, view[2]))
+                  local last = vim.api.nvim_buf_line_count(buf)
+                  local vtop, vbottom = math.max(1, view[1]), math.min(last, view[2])
+                  if vtop > bottom + 1 or vbottom < top - 1 then
+                    -- Apart (the viewport off, the editor far from Neovim's window): two searches, top first,
+                    -- not one over every line between them.
+                    local first, second = { top, bottom }, { vtop, vbottom }
+                    if vtop < top then
+                      first, second = second, first
+                    end
+                    ranges = matches(win, effective, first[1], first[2])
+                    vim.list_extend(ranges, matches(win, effective, second[1], second[2]))
+                  else
+                    ranges = matches(win, effective, math.min(top, vtop), math.max(bottom, vbottom))
+                  end
+                else
+                  ranges = matches(win, effective, top, bottom)
                 end
-                ranges = matches(win, M.effective(pat, star), top, bottom)
               end
+              -- With matches, the buffer's change count is part of what was sent: after an edit the editor may
+              -- have dropped a match it touched (SearchHighlighter), and needs them again even if no position
+              -- moved. Without matches it is not, so an edit sends nothing new.
               local key = table.concat(ranges, ',')
+              if #ranges > 0 then
+                key = key .. '@' .. vim.api.nvim_buf_get_changedtick(buf)
+              end
               if sent[win] ~= key then
                 sent[win] = key
-                notify('eclipse_search', vim.api.nvim_win_get_buf(win), ranges, win)
+                notify('eclipse_search', buf, ranges, win)
               end
               return ranges
             end
