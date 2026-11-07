@@ -75,6 +75,15 @@ public final class KeyMapping {
      * @return Neovim key string, or {@code null} if the event should be ignored (left to Eclipse)
      */
     public static String toNeovimKey(int keyCode, int stateMask, char character) {
+        return toNeovimKey(keyCode, stateMask, character, PlatformUtil.isMac());
+    }
+
+    /**
+     * {@link #toNeovimKey(int, int, char)} for a given platform (tests).
+     *
+     * @param optionTypes whether Alt types characters, as Option does on macOS (see {@link #altTypes})
+     */
+    static String toNeovimKey(int keyCode, int stateMask, char character, boolean optionTypes) {
         if ((stateMask & SWT_COMMAND) != 0) {
             // Cmd (macOS) is never Neovim's: Cmd keys are Eclipse's and the system's shortcuts. One
             // Eclipse has no binding for still reaches the editor's key listener, with the letter as
@@ -119,7 +128,7 @@ public final class KeyMapping {
         }
 
         if (character != 0 && !Character.isISOControl(character)) {
-            return printableKey(character, ctrl, alt);
+            return printableKey(keyCode, character, ctrl, alt, optionTypes);
         }
 
         return null;
@@ -153,17 +162,48 @@ public final class KeyMapping {
         return 0;
     }
 
-    private static String printableKey(char character, boolean ctrl, boolean alt) {
-        char lower = Character.toLowerCase(character);
-        boolean isLetter = lower >= 'a' && lower <= 'z';
-        if (isLetter && ctrl && !alt) {
-            return "<C-" + lower + ">";
+    /**
+     * A printable character, with Ctrl or Alt held or not, in Neovim's notation.
+     *
+     * <ul>
+     *   <li><b>Ctrl</b> (without Alt): {@code <C-w>} for a letter, lowercase since Neovim reads
+     *       {@code <C-W>} as the same key. Any other character keeps Ctrl too: Ctrl+&lt; is
+     *       {@code <C-lt>}, Ctrl+2 {@code <C-2>}. Sent as the bare character, Ctrl+2 would start a
+     *       count and Ctrl+&gt; would shift lines, which is not what was pressed.</li>
+     *   <li><b>Alt</b> (without Ctrl): the character as it is, so Alt+Shift+A is {@code <A-A>},
+     *       which Neovim tells from {@code <A-a>}; Alt+1 is {@code <A-1>}, Alt+! {@code <A-!>}.
+     *       Except where Alt types characters, see {@link #altTypes}.</li>
+     *   <li><b>Ctrl+Alt</b>: typed. On Windows that is AltGr, which types {@code @}, {@code \} and
+     *       more on many layouts.</li>
+     * </ul>
+     * Names for the characters the notation cannot hold as they are: {@code <} is {@code lt}
+     * ({@code <A-lt>}; a bare {@code <} would start a key-notation sequence for {@code nvim_input}),
+     * a space is {@code Space}. Neovim's {@code keytrans()} spells Alt as {@code M-}; {@code A-} is the
+     * same key ({@code :help <M-}).
+     */
+    private static String printableKey(int keyCode, char character, boolean ctrl, boolean alt,
+            boolean optionTypes) {
+        String name = character == '<' ? "lt" : character == ' ' ? "Space" : String.valueOf(character);
+        if (ctrl && !alt) {
+            char lower = Character.toLowerCase(character);
+            return "<C-" + (lower >= 'a' && lower <= 'z' ? String.valueOf(lower) : name) + ">";
         }
-        if (isLetter && alt && !ctrl) {
-            return "<A-" + lower + ">";
+        if (alt && !ctrl && !altTypes(keyCode, character, optionTypes)) {
+            return "<A-" + name + ">";
         }
-        // '<' must be escaped for nvim_input or it starts a key-notation sequence.
         return character == '<' ? "<lt>" : String.valueOf(character);
+    }
+
+    /**
+     * Whether Alt typed {@code character}, instead of being a modifier for Neovim. On macOS, Option
+     * (Alt) types characters: Option+A is {@code å}, Option+5 is {@code [} on a German keyboard, and
+     * the accents of {@code PressAndHold} follow from it. Those are text, not {@code <A-…>}. SWT's
+     * key code there is the key's character without modifiers, so Option made the character when the
+     * two differ (ignoring case, which Shift gives): Option+5 is key {@code 5}, character {@code [}.
+     * Elsewhere Alt never types: AltGr is a key of its own on Linux and Ctrl+Alt on Windows.
+     */
+    private static boolean altTypes(int keyCode, char character, boolean optionTypes) {
+        return optionTypes && Character.toLowerCase(character) != Character.toLowerCase(keyCode);
     }
 
     private static String specialKeyName(int keyCode) {

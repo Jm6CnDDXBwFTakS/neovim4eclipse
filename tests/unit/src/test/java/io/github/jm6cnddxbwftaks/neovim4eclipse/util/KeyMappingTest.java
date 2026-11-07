@@ -106,12 +106,23 @@ class KeyMappingTest {
         assertEquals("<C-@>", KeyMapping.toNeovimKey('2', CTRL_SHIFT, '@'));
     }
 
-    /** Ctrl-[ is Esc (code 27), as before; Ctrl+2 and Ctrl+- are Eclipse's, not Vim's aliases. */
+    /**
+     * Ctrl-[ is Esc (code 27), as before; Ctrl+2 and Ctrl+- are no aliases of Vim's (Eclipse binds
+     * them), and when they do reach Neovim they keep Ctrl: a bare "2" would start a count.
+     */
     @Test
     void ctrlOpenBracketIsEscAndOtherDigitsAreNoAliases() {
         assertEquals("<Esc>", KeyMapping.toNeovimKey('[', CTRL, (char) 27));
-        assertEquals("2", KeyMapping.toNeovimKey('2', CTRL, '2'));
-        assertEquals("-", KeyMapping.toNeovimKey('-', CTRL, '-'));
+        assertEquals("<C-2>", KeyMapping.toNeovimKey('2', CTRL, '2'));
+        assertEquals("<C-->", KeyMapping.toNeovimKey('-', CTRL, '-'));
+    }
+
+    /** Ctrl with '<' or another character keeps Ctrl, in Neovim's spelling (keytrans() gives <C-lt>). */
+    @Test
+    void ctrlWithPunctuationKeepsCtrl() {
+        assertEquals("<C-lt>", KeyMapping.toNeovimKey(',', CTRL_SHIFT, '<'));
+        assertEquals("<C->>", KeyMapping.toNeovimKey('.', CTRL_SHIFT, '>'));
+        assertEquals("<C-Space>", KeyMapping.toNeovimKey(' ', CTRL, ' '));
     }
 
     /** Ctrl+Alt is AltGr on Windows: AltGr+] types ] on many layouts, it is no Ctrl-]. */
@@ -121,9 +132,43 @@ class KeyMappingTest {
         assertEquals("\\", KeyMapping.toNeovimKey('\\', CTRL | KeyMapping.SWT_ALT, '\\'));
     }
 
+    private static final int ALT = KeyMapping.SWT_ALT;
+    private static final int ALT_SHIFT = KeyMapping.SWT_ALT | KeyMapping.SWT_SHIFT;
+
     @Test
     void altLetter() {
-        assertEquals("<A-x>", KeyMapping.toNeovimKey(0, KeyMapping.SWT_ALT, 'x'));
+        assertEquals("<A-x>", KeyMapping.toNeovimKey('x', ALT, 'x'));
+        assertEquals("<A-x>", KeyMapping.toNeovimKey('x', ALT, 'x', true), "Option+X that types no other character");
+    }
+
+    /** Neovim tells <A-A> from <A-a>; it was sent as <A-a>. */
+    @Test
+    void altShiftLetterKeepsItsCase() {
+        assertEquals("<A-A>", KeyMapping.toNeovimKey('a', ALT_SHIFT, 'A', false));
+        assertEquals("<A-A>", KeyMapping.toNeovimKey('a', ALT_SHIFT, 'A', true));
+    }
+
+    /** Alt with a digit or punctuation keeps Alt (it was dropped: Alt+1 started a count). */
+    @Test
+    void altWithDigitsAndPunctuationKeepsAlt() {
+        assertEquals("<A-1>", KeyMapping.toNeovimKey('1', ALT, '1', false));
+        assertEquals("<A-!>", KeyMapping.toNeovimKey('1', ALT_SHIFT, '!', false));
+        assertEquals("<A-lt>", KeyMapping.toNeovimKey(',', ALT_SHIFT, '<', false));
+        assertEquals("<A-Space>", KeyMapping.toNeovimKey(' ', ALT, ' ', false));
+        assertEquals("<A-é>", KeyMapping.toNeovimKey('é', ALT, 'é', false));
+        assertEquals("<A-1>", KeyMapping.toNeovimKey('1', ALT, '1', true), "Option+1 as the key itself");
+    }
+
+    /**
+     * On macOS, Option types characters: Option+A is "å", Option+5 is "[" on a German keyboard, and
+     * Option+Shift+A is "Å". They stay text, not Alt keys.
+     */
+    @Test
+    void optionCharactersOnMacOsAreTyped() {
+        assertEquals("å", KeyMapping.toNeovimKey('a', ALT, 'å', true));
+        assertEquals("[", KeyMapping.toNeovimKey('5', ALT, '[', true));
+        assertEquals("Å", KeyMapping.toNeovimKey('a', ALT_SHIFT, 'Å', true));
+        assertEquals("<lt>", KeyMapping.toNeovimKey('z', ALT, '<', true), "an Option '<' is still escaped");
     }
 
     @Test

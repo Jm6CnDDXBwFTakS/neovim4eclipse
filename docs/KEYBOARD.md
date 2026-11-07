@@ -140,8 +140,10 @@ inserts its first match without showing the list.
   mapping of `z` alone that reads the next key without a time limit (two-key mappings timed out,
   and a slowly typed `zE` was Neovim's); `:fold` is refused when its line runs, like the host
   commands. In an editor that cannot fold they are Neovim's own.
-- Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`,
-  arrows, `Home`, `End`, unbound function keys as `<F5>` and so on.
+- Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`
+  (`Alt+Shift+A` as `<A-A>`, `Alt+1` as `<A-1>`, `Alt+<` as `<A-lt>`), `Ctrl` with a character that
+  is no Vim Ctrl key as `<C-2>` or `<C-lt>`, arrows, `Home`, `End`, unbound function keys as `<F5>`
+  and so on. On macOS, an Option key that types a character (`Option+A` is `å`) types it.
 
 ## Keys Neovim hands to Eclipse: `gd`, `Ctrl-]`, `K`, `gr*`, `gO`, `gt`, `gT`, `ZZ`, `ZQ`
 
