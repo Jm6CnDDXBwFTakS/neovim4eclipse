@@ -131,6 +131,29 @@ public final class GalleryCamera {
         }
     }
 
+    /**
+     * Deletes the pictures in {@code dir} whose file names match {@code names} (a regular expression
+     * for the name before {@code .png}), their size files, and {@code page} if not null. A run
+     * starts with this, so a page written after a failure shows only this run's pictures, and
+     * "not taken" for the rest, never an earlier run's as if they were new. Example:
+     * {@code clear(out, "search-dark-.*", null)} before the dark run's pictures.
+     */
+    public static void clear(Path dir, String names, String page) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (var files = Files.list(dir)) {
+            for (Path file : files.toList()) {
+                if (file.getFileName().toString().matches("(" + names + ")\\.png(\\.size)?")) {
+                    Files.delete(file);
+                }
+            }
+        }
+        if (page != null) {
+            Files.deleteIfExists(dir.resolve(page));
+        }
+    }
+
     /** The sidecar file with a picture's size in points: {@code 01-start-offer.png.size}. */
     private static Path sizeFile(Path png) {
         return png.resolveSibling(png.getFileName() + ".size");

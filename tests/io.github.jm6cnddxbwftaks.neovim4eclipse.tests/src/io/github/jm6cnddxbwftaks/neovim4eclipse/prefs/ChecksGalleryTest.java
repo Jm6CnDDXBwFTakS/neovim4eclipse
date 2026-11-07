@@ -107,6 +107,7 @@ class ChecksGalleryTest {
 
     @Test
     void takeTheGallery() throws IOException {
+        GalleryCamera.clear(out, "[0-9]{2}-.*", "index.html"); // no earlier run's pictures pass for this one's
         Files.createDirectories(out);
         temp = PicturesFolder.newTemp("n4e-gallery");
         try {

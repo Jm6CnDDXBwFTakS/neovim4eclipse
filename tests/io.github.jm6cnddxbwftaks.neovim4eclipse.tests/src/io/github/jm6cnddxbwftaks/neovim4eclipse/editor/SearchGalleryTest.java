@@ -109,6 +109,10 @@ class SearchGalleryTest extends EndToEndTestBase {
 
     @Test
     void takeTheSearchPictures() throws Exception {
+        // No earlier run's pictures pass for this one's. The light run (the first) clears both themes,
+        // the dark run only its own, as the light ones are this run's.
+        GalleryCamera.clear(out, theme.equals("light") ? "search-.*" : "search-" + theme + "-.*",
+                theme.equals("light") ? "search.html" : null);
         Files.createDirectories(out);
         ITextEditor text = open("search-sample.txt", TEXT, TEXT_EDITOR);
         StyledText textWidget = widgetOf(text);
