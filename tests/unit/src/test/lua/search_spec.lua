@@ -23,6 +23,17 @@ local function start(lines)
   return package.loaded['neovim4eclipse.search']
 end
 
+--- Runs the work scheduled so far (vim.schedule runs in order): a barrier, not a sleep.
+local function flush()
+  local done = false
+  vim.schedule(function()
+    done = true
+  end)
+  t.wait_for('the scheduled work', function()
+    return done
+  end)
+end
+
 --- The ranges update() sends now, as {line, startbyte, endline, endbyte} lists.
 local function matches(m)
   local flat = m.update()
@@ -83,6 +94,7 @@ t.test('smartcase: an upper-case letter makes the search exact, but not after *'
   t.type('/foo<CR>')
   t.eq(3, #matches(m), '/foo: every case')
   t.type('0*')
+  flush() -- the scheduled check of register /
   t.eq(3, #matches(m), '* on Foo: every case, as Vim never makes * smart')
   t.type('n')
   t.eq(3, #matches(m), 'n after * keeps it')
@@ -162,4 +174,98 @@ t.test('entering a window, or resend, sends the same matches again', function()
     return #t.sent('eclipse_search') == 1
   end)
   vim.cmd('only')
+end)
+
+t.test('a search made with * stays one after :w, a cancelled / and n', function()
+  local m = start({ 'Foo foo FOO *' })
+  vim.o.ignorecase = true
+  vim.o.smartcase = true
+  t.type('0*')
+  flush() -- the scheduled check of register /
+  t.eq(3, #matches(m), '* on Foo: every case')
+  t.type(':echo 1<CR>')
+  t.eq(3, #matches(m), 'a : line that sets no pattern keeps it')
+  t.type('/x<Esc>')
+  t.eq(3, #matches(m), 'a cancelled search keeps it')
+end)
+
+t.test('* as the argument of another command is not a search', function()
+  local m = start({ 'Foo foo FOO *' })
+  vim.o.ignorecase = true
+  vim.o.smartcase = true
+  t.type('/Foo<CR>')
+  t.type('0f*')
+  flush()
+  t.eq(1, #matches(m), 'f* did not change register /: the typed search stays smart')
+end)
+
+t.test("smartcase's capitals are Vim's: none after \\_ or \\%, accented ones count", function()
+  local m = start({ '' })
+  t.eq(false, m.has_upper('a\\S'))
+  t.eq(false, m.has_upper('\\_Sfoo'), '\\_S is a class')
+  t.eq(false, m.has_upper('\\%Vfoo'), '\\%V is an atom')
+  t.eq(true, m.has_upper('Éte'), 'É is a capital')
+  t.eq(false, m.has_upper('éte'))
+  t.eq(true, m.has_upper('\\_sFoo'))
+end)
+
+t.test('the pattern of :s, :g and :v lines, as typed', function()
+  local m = start({ '' })
+  t.eq('foo', m.ex_pattern('%s/foo/bar'))
+  t.eq('Foo', m.ex_pattern("'<,'>s/Foo"))
+  t.eq('a\\/b', m.ex_pattern('10,20s/a\\/b/c'), 'the escaped delimiter stays escaped, as Vim reads it')
+  t.eq('x', m.ex_pattern('g/x'))
+  t.eq('z', m.ex_pattern('v!/z'))
+  t.eq('a', m.ex_pattern('substitute#a#b'))
+  t.eq(nil, m.ex_pattern('s'), 'no pattern yet')
+  t.eq(nil, m.ex_pattern('set hls'), 'another command')
+  t.eq(nil, m.ex_pattern('sort /x/'), ':sort is not one of them')
+end)
+
+t.test('while a :s line is typed, the matches of its pattern', function()
+  local m = start({ 'foo fob bar' })
+  t.type('/bar<CR>')
+  local typing
+  t.during(':%s/fo', function()
+    typing = matches(m)
+  end)
+  t.eq({ { 1, 0, 1, 2 }, { 1, 4, 1, 6 } }, typing, 'fo, as typed after :%s/')
+  t.during(':echo', function()
+    typing = matches(m)
+  end)
+  t.eq({ { 1, 8, 1, 11 } }, typing, 'another command: the last search')
+end)
+
+t.test('a match across lines that begins above the view is found', function()
+  local lines = {}
+  for i = 1, 100 do
+    lines[i] = 'x'
+  end
+  lines[50], lines[51] = 'foo', 'bar'
+  local m = start(lines)
+  t.type('/foo\\nbar<CR>')
+  vim.fn.winrestview({ topline = 51, lnum = 60 })
+  t.eq(51, vim.fn.line('w0'))
+  t.eq({ { 50, 0, 51, 3 } }, matches(m), 'it ends on the top line')
+end)
+
+t.test('the lines the editor reports are searched too', function()
+  local lines = {}
+  for i = 1, 300 do
+    lines[i] = 'foo ' .. i
+  end
+  local m = start(lines)
+  t.type('/foo<CR>')
+  t.forget()
+  m.set_view(nil, 200, 210)
+  t.wait_for('the matches after set_view', function()
+    return #t.sent('eclipse_search') == 1
+  end)
+  local flat = t.sent('eclipse_search')[1][2]
+  local lines_sent = {}
+  for i = 1, #flat, 4 do
+    lines_sent[flat[i]] = true
+  end
+  t.ok(lines_sent[1] and lines_sent[205] and lines_sent[210], 'the window\'s lines and the editor\'s')
+  t.ok(not lines_sent[250], 'not past the editor\'s last line')
 end)
