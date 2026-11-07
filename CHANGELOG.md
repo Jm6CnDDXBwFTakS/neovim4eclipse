@@ -37,6 +37,59 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   moment.
 - `:w` to a name the file system cannot hold (`:w a<b.txt` on Windows) gives Vim's E212 for that
   name, instead of saying Eclipse could not save the editor's own file and logging an error.
+- A carriage return Neovim keeps inside a line (Ctrl-V Ctrl-M, `:s` with `nr2char(13)`) no longer
+  makes Eclipse's lines and Neovim's differ, which could delete or save the wrong lines. Eclipse
+  takes it as a line break, and Neovim gets the split lines back.
+- Keys typed right after Esc (a fast `ihello<Esc>:w<CR>`) go to Neovim instead of landing in the
+  document.
+- Renaming or moving an open file (Refactor › Rename, the Project Explorer), or File › Save As, no
+  longer cuts Neovim off from the editor.
+- After `:wa` created a new file in the background, `:bufdo … | update` no longer changes Neovim but
+  saves Eclipse's old text.
+- Get Neovim and the start-up clean-up no longer delete files inside a folder that a junction or
+  link in the plug-in's Neovim folder points to (Windows).
+- Restart Neovim, or closing an editor, no longer freezes Eclipse when Neovim hangs.
+- A Neovim whose `--version` prints another line first (a loader warning, a failed `LD_PRELOAD`)
+  is no longer refused as not running.
+- A broken message from Neovim ends the connection cleanly, with a message, instead of leaving
+  every later request to time out.
+- Security: `:e` and `gf` no longer open a file in a non-text editor (the Web Browser) when a
+  project's own content-type settings map its name to an image type.
+- Security: a symbolic link to a file that does not exist is no longer written through by `:w`,
+  `:wq name` or `:wa`; `:w!` writes there.
+- macOS: a Cmd shortcut Eclipse has no binding for (Cmd+U, Cmd+P) no longer reaches Neovim as a
+  plain letter that changed the text.
+- Alt and Ctrl keys reach Neovim as pressed: Alt+Shift+A is `<A-A>` (was `<A-a>`), Alt+1 is
+  `<A-1>`, Ctrl+2 is `<C-2>`, Ctrl+< and Alt+< are `<C-lt>` and `<A-lt>`. Option characters on
+  macOS are typed as before.
+- A macro that ends waiting for a key (`@a` with a = `ddf`) now reaches the editor.
+- A failed close or setup of an editor's buffer no longer leaves a listed or duplicate buffer in
+  Neovim.
+- The status bar no longer loses a message such as E486 to an older status.
+- Switching to Eclipse mode with the `:` box open closes it; it stayed open and stuck.
+- After Detach Neovim, a restart of Neovim, or a multi-page editor's page switch, the editor gets
+  its normal caret back instead of the block.
+- The command line, output popup and message line follow a light/dark theme switch while open; an
+  error flash no longer undoes a background change made during it.
+- Folds Java's reconcile changes while Neovim opens or closes a fold now reach Neovim.
+- Ctrl-O and Ctrl-I no longer break off on a place whose `file:` URI names a host.
+- Clicking past the end of a line that ends in a Tab or a wide character puts the cursor after it
+  (insert mode, a visual drag).
+- `:x +name`, `:wq +name` and `:exit +name` write a file named `+name`, as in Vim, instead of
+  running `:name`.
+- Search highlighting:
+  - across lines, a match that begins inside another one is no longer painted, as in Neovim, and
+    patterns like `foo\_.\{-}bar` no longer slow down redraws;
+  - a match across lines that begins at a line break is found;
+  - while a `?` search is typed, `\?` is a plain `?` (`?what\?` shows `what?`);
+  - while a search or `:s` is typed, a delimiter inside `[]` no longer ends the pattern.
+- A visual selection ending on a letter with a combining accent, or on an empty line of a Windows
+  file, covers the whole character or line break.
+- Two Eclipses on one plug-in folder can no longer install or clean up the dedicated Neovim at the
+  same time (Linux, macOS).
+- A network error whose message happens to contain 407 is no longer reported as a proxy password
+  problem.
+- Opening or closing a project in a large workspace no longer scans every project again.
 
 ## [0.2.6] - 2026-11-07
 
