@@ -43,7 +43,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Keys typed right after Esc (a fast `ihello<Esc>:w<CR>`) go to Neovim instead of landing in the
   document.
 - Renaming or moving an open file (Refactor › Rename, the Project Explorer), or File › Save As, no
-  longer cuts Neovim off from the editor.
+  longer cuts Neovim off from the editor, and keeps its Neovim buffer: undo history and marks
+  survive, in multi-page editors too.
 - After `:wa` created a new file in the background, `:bufdo … | update` no longer changes Neovim but
   saves Eclipse's old text.
 - Get Neovim and the start-up clean-up no longer delete files inside a folder that a junction or
@@ -56,7 +57,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Security: `:e` and `gf` no longer open a file in a non-text editor (the Web Browser) when a
   project's own content-type settings map its name to an image type.
 - Security: a symbolic link to a file that does not exist is no longer written through by `:w`,
-  `:wq name` or `:wa`; `:w!` writes there.
+  `:w other`, `:saveas`, `:wq` or `:wa` without `!`; `:w!` writes there, and `:wq!` writes and
+  closes.
 - macOS: a Cmd shortcut Eclipse has no binding for (Cmd+U, Cmd+P) no longer reaches Neovim as a
   plain letter that changed the text.
 - Alt and Ctrl keys reach Neovim as pressed: Alt+Shift+A is `<A-A>` (was `<A-a>`), Alt+1 is
