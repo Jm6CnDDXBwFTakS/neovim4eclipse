@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ class NotificationBridgeTest {
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onViewportOverheadChanged() { events.add("overhead"); }
+            @Override public void onSearchMatches(int bufnr, List<SearchMatch> matches, int winid) { events.add("search@" + bufnr + ":" + matches + "#" + winid); }
             @Override public void onTopLine(int bufnr, int line1, int winid) { events.add("top@" + bufnr + ":" + line1 + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
@@ -189,6 +191,17 @@ class NotificationBridgeTest {
         notify("eclipse_wrap");
         notify("eclipse_wrap", 3, true, 1001);
         assertEquals(List.of("wrap@3:true", "wrap@3:false", "wrap@3:true#1001"), events);
+    }
+
+    /** LuaScripts.SEARCH: four numbers per match; an incomplete group or a payload without a list is ignored. */
+    @Test
+    void searchMatchesComeInGroupsOfFour() {
+        notify("eclipse_search", 3, List.of(1, 2, 1, 5, 3, 0, 4, 3), 1001);
+        notify("eclipse_search", 3, List.of(), 1001);
+        notify("eclipse_search", 3, List.of(1, 2, 1), 1001);
+        notify("eclipse_search", 3);
+        assertEquals(List.of("search@3:" + List.of(new SearchMatch(1, 2, 1, 5), new SearchMatch(3, 0, 4, 3)) + "#1001",
+                "search@3:[]#1001", "search@3:[]#1001"), events);
     }
 
     @Test

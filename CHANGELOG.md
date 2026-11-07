@@ -14,6 +14,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
+- Search matches are highlighted in the editor as in Neovim: every match while a search is typed,
+  then those of the last search until `:noh`, behind the text in Eclipse's *Search Results* color,
+  and the match under the caret a shade stronger. `vim.g.neovim4eclipse_search = 0` turns it off.
+
 - Nothing changes in the plug-in itself: a new check installs a release from the public update
   site into a copy of an Eclipse, trusting only the project's signing key and no unsigned file, as
   a careful user does in Eclipse's trust dialog. The release steps offer it after each release.

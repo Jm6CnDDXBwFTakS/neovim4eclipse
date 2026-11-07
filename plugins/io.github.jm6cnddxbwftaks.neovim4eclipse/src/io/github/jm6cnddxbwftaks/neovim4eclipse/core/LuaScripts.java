@@ -2798,12 +2798,276 @@ final class LuaScripts {
             """;
 
     /**
+     * Search highlighting (docs/design/SEARCH_HIGHLIGHTING.md): the matches of Neovim's search that
+     * the current window shows, sent to Eclipse, which paints them behind the editor's text. Run
+     * once at start, after the user's config; returns {@code false} (and installs nothing) when the
+     * config sets {@code vim.g.neovim4eclipse_search = 0} (or {@code false}).
+     *
+     * <p><b>Which pattern.</b> What Neovim itself highlights:
+     * <ul>
+     *   <li>while a search is typed ({@code /} or {@code ?}) and {@code 'incsearch'} is on: the text
+     *       typed so far, without a search offset ({@code /foo/e} is {@code foo});</li>
+     *   <li>else, while {@code v:hlsearch} is 1 (so {@code 'hlsearch'} is on and no {@code :noh}
+     *       since the last search): the last search pattern, register {@code /};</li>
+     *   <li>else none: an empty list is sent once, and Eclipse clears the highlights.</li>
+     * </ul>
+     *
+     * <p><b>Upper and lower case.</b> {@code matchbufline()} follows {@code 'ignorecase'} but not
+     * {@code 'smartcase'}, so the pattern gets an explicit {@code \c} or {@code \C} as Neovim's own
+     * search would: a {@code \c} or {@code \C} in it wins; then {@code 'noignorecase'} means exact
+     * case; then {@code 'smartcase'} with an upper-case letter (not one after a backslash, as in
+     * {@code \S}) means exact case, except for a search made with {@code *}, {@code #},
+     * {@code g*} or {@code g#}, which Vim never makes smart. Those keys are seen by
+     * {@code vim.on_key}, and the flag lasts until the next {@code /}, {@code ?} or {@code :}
+     * command line. Example, with {@code ignorecase smartcase}: {@code /Foo} finds only
+     * {@code Foo}, {@code /foo} finds {@code Foo} too, and {@code *} on {@code Foo} finds both.
+     *
+     * <p><b>Which lines.</b> Only the window's visible lines ({@code w0} to {@code w$}): 0.1 to
+     * 0.2 ms whatever the file's size, where the whole of a 100,000-line file takes over 100 ms.
+     * A pattern that can match across lines ({@code \n}, {@code \_x}) is found with a
+     * {@code searchpos()} walk instead, as {@code matchbufline()} matches within one line.
+     *
+     * <p><b>When.</b> A decoration provider's {@code on_win} runs at every redraw of a window, which
+     * is exactly when the highlights may have changed: a new pattern, {@code :noh}, a typed
+     * character, an edit, a scroll. It only schedules the work ({@code vim.schedule}, once per
+     * batch: twenty {@code Ctrl-E} compute once), since {@code on_win} must not change anything.
+     * A window's matches are sent only when they differ from what was sent for it last, so
+     * {@code n}, which moves the cursor between the same matches, sends nothing: Eclipse picks the
+     * match under the caret itself ({@code CurSearch}). Entering a window or a buffer (an editor
+     * attached, or switched to) forgets what was sent for it, as that editor has nothing painted;
+     * so does {@code M.resend()}, which the session calls when an editor is back in Neovim mode. Without a UI attached (a headless test) no
+     * redraw happens; {@code M.update()} does the same work on demand.
+     *
+     * <p>Sent: {@code eclipse_search(buf, ranges, win)}, where {@code ranges} is a flat list of
+     * four numbers per match: start line (1-based), start byte column (0-based), end line, end byte
+     * column (0-based, exclusive). Example: {@code foo} at the start of line 3 is
+     * {@code {3, 0, 3, 3}}. A match of no width (as {@code ^}) is left out: there is nothing to
+     * paint.
+     */
+    static final String SEARCH = """
+            local enabled = vim.g.neovim4eclipse_search
+            if enabled == 0 or enabled == false then
+              return false
+            end
+            local M = {}
+            -- Set by *, #, g* and g# in normal mode, cleared by the next / ? or : line (see above).
+            local from_star = false
+            -- What each window was last sent, as text, so that only a change is sent.
+            local sent = {}
+
+            local function notify(...)
+              local chan = vim.g.neovim4eclipse_channel
+              if chan then
+                vim.rpcnotify(chan, ...)
+              end
+            end
+
+            local ns = vim.api.nvim_create_namespace('neovim4eclipse_search')
+            vim.on_key(function(key)
+              if (key == '*' or key == '#') and vim.api.nvim_get_mode().mode == 'n' then
+                from_star = true
+              end
+            end, ns)
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_search', { clear = true })
+            vim.api.nvim_create_autocmd('CmdlineLeave', {
+              group = group,
+              pattern = { '/', '\\\\?', ':' },
+              callback = function()
+                from_star = false
+              end,
+            })
+            -- A window or buffer entered: an editor was attached to it (or switched to), and has
+            -- nothing painted yet, so the next redraw sends its matches even if they did not change.
+            vim.api.nvim_create_autocmd({ 'WinEnter', 'BufWinEnter' }, {
+              group = group,
+              callback = function()
+                sent[vim.api.nvim_get_current_win()] = nil
+              end,
+            })
+            vim.api.nvim_create_autocmd('WinClosed', {
+              group = group,
+              callback = function(ev)
+                sent[tonumber(ev.match)] = nil
+              end,
+            })
+
+            -- Whether pat has an upper-case letter that is not escaped, as Vim decides for 'smartcase'.
+            local function has_upper(pat)
+              local i = 1
+              while i <= #pat do
+                local c = pat:sub(i, i)
+                if c == '\\\\' then
+                  i = i + 2
+                else
+                  if c:match('%u') then
+                    return true
+                  end
+                  i = i + 1
+                end
+              end
+              return false
+            end
+
+            -- The typed search without its offset: 'foo/e' typed after / is 'foo'.
+            local function without_offset(line, delimiter)
+              local i = 1
+              while i <= #line do
+                local c = line:sub(i, i)
+                if c == '\\\\' then
+                  i = i + 2
+                elseif c == delimiter then
+                  return line:sub(1, i - 1)
+                else
+                  i = i + 1
+                end
+              end
+              return line
+            end
+
+            -- The pattern Neovim highlights now and whether * made it; nil when there is none.
+            local function current_pattern()
+              local kind = vim.fn.getcmdtype()
+              if kind == '/' or kind == '?' then
+                if not vim.o.incsearch then
+                  return nil
+                end
+                return without_offset(vim.fn.getcmdline(), kind), false
+              end
+              if vim.v.hlsearch == 1 and vim.o.hlsearch then
+                return vim.fn.getreg('/'), from_star
+              end
+              return nil
+            end
+
+            --- The pattern as Neovim's search would apply it, with \\\\c or \\\\C (see above).
+            function M.effective(pat, star)
+              if pat:find('\\\\[cC]') then
+                return pat
+              end
+              if not vim.o.ignorecase then
+                return '\\\\C' .. pat
+              end
+              if vim.o.smartcase and not star and has_upper(pat) then
+                return '\\\\C' .. pat
+              end
+              return '\\\\c' .. pat
+            end
+
+            -- The matches of pat in win's lines top to bottom, as the flat list sent to Eclipse.
+            local function matches(win, pat, top, bottom)
+              local ranges = {}
+              local buf = vim.api.nvim_win_get_buf(win)
+              if not pat:find('\\\\n') and not pat:find('\\\\_') then
+                local ok, found = pcall(vim.fn.matchbufline, buf, pat, top, bottom)
+                if ok then
+                  for _, m in ipairs(found) do
+                    if #m.text > 0 then
+                      vim.list_extend(ranges, { m.lnum, m.byteidx, m.lnum, m.byteidx + #m.text })
+                    end
+                  end
+                end
+                return ranges
+              end
+              -- Across lines: walk the matches with the cursor, then put the view back as it was.
+              vim.api.nvim_win_call(win, function()
+                local view = vim.fn.winsaveview()
+                pcall(function()
+                  vim.fn.cursor(top, 1)
+                  local flags = 'cW'
+                  while true do
+                    local s = vim.fn.searchpos(pat, flags, bottom)
+                    if s[1] == 0 then
+                      break
+                    end
+                    local e = vim.fn.searchpos(pat, 'cenW')
+                    if e[1] == 0 then
+                      break
+                    end
+                    -- e is the last character's first byte: the end is after that character.
+                    local line = vim.api.nvim_buf_get_lines(buf, e[1] - 1, e[1], true)[1]
+                    local last = vim.fn.strcharpart(line:sub(e[2]), 0, 1)
+                    local stop = e[2] - 1 + math.max(#last, 1)
+                    if e[1] > s[1] or stop > s[2] - 1 then
+                      vim.list_extend(ranges, { s[1], s[2] - 1, e[1], math.min(stop, #line) })
+                    end
+                    flags = 'W'
+                  end
+                end)
+                vim.fn.winrestview(view)
+              end)
+              return ranges
+            end
+
+            --- Sends win's visible matches even if they did not change: the editor that shows them
+            --- was just attached, or Neovim mode is back on, and has none painted. Scheduled, as
+            --- on_win's work is: run inside the RPC call that asks for it, the search state is
+            --- not the one the window shows.
+            function M.resend(win)
+              win = win or vim.api.nvim_get_current_win()
+              sent[win] = nil
+              vim.schedule(function()
+                pcall(M.update, win)
+              end)
+            end
+
+            --- Works out win's visible matches and sends them if they changed. Returns the ranges.
+            function M.update(win)
+              win = win or vim.api.nvim_get_current_win()
+              if not vim.api.nvim_win_is_valid(win) then
+                return {}
+              end
+              local pat, star = current_pattern()
+              local ranges = {}
+              if pat and pat ~= '' then
+                local top, bottom = vim.fn.line('w0', win), vim.fn.line('w$', win)
+                ranges = matches(win, M.effective(pat, star), top, bottom)
+              end
+              local key = table.concat(ranges, ',')
+              if sent[win] ~= key then
+                sent[win] = key
+                notify('eclipse_search', vim.api.nvim_win_get_buf(win), ranges, win)
+              end
+              return ranges
+            end
+
+            local scheduled = false
+            vim.api.nvim_set_decoration_provider(ns, {
+              on_win = function()
+                if not scheduled then
+                  scheduled = true
+                  vim.schedule(function()
+                    scheduled = false
+                    pcall(M.update)
+                  end)
+                end
+                return false -- no on_line calls: nothing is drawn here
+              end,
+            })
+            package.loaded['neovim4eclipse.search'] = M
+            return true
+            """;
+
+    /**
      * The rows and columns Neovim's screen has besides the current window's text,
      * {@code { rows, columns }}; see {@link #VIEWPORT}'s {@code overhead}. Sent only when the
      * viewport is on, so the module is there.
      */
     static final String VIEWPORT_OVERHEAD = """
             return require('neovim4eclipse.viewport').overhead()
+            """;
+
+    /**
+     * Sends the current window's visible search matches again ({@link #SEARCH}'s {@code resend}),
+     * for the editor back in Neovim mode, which has none painted (argument:
+     * the buffer number). Nothing when that buffer is not the current one. Sent only when search
+     * highlighting is on, so the module is there.
+     */
+    static final String SEARCH_RESEND = """
+            local buf = tonumber((select(1, ...)))
+            if vim.api.nvim_get_current_buf() ~= buf then
+              return
+            end
+            require('neovim4eclipse.search').resend()
             """;
 
     /**

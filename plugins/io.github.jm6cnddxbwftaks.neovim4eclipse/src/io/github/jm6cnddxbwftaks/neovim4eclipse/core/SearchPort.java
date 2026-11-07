@@ -1,0 +1,60 @@
+// SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+// SPDX-License-Identifier: EPL-2.0
+
+package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
+
+import java.util.List;
+import java.util.function.Consumer;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
+
+/**
+ * What search highlighting needs from the session (docs/design/SEARCH_HIGHLIGHTING.md): whether
+ * it is on, and the matches of Neovim's search in the lines its window shows. An interface, rather
+ * than the whole {@link NeovimSession}, so that the editor's side is tested with a small fake.
+ * {@link NeovimSession} implements it.
+ *
+ * <p>The flow, for {@code /foo} typed in normal mode: Neovim redraws its window with the matches
+ * highlighted; {@link LuaScripts#SEARCH} hears the redraw, finds the matches in the visible lines
+ * and sends them; the session passes them to the listener of the attached editor, which paints
+ * them behind its text. {@code :noh}, a scroll and each character of an incremental search are
+ * reported the same way; {@code n} is not, as it changes no match, only the cursor.
+ */
+public interface SearchPort {
+
+    /**
+     * Whether search matches are reported: {@code true} unless the user's config sets
+     * {@code vim.g.neovim4eclipse_search = 0} (or {@code false}). Read once when the session starts.
+     */
+    boolean searchEnabled();
+
+    /**
+     * Hears the visible matches of the attached editor's window, on a session thread (hop to the UI
+     * thread yourself). Only for the attached window; an empty list means none (no search, or
+     * {@code :noh}).
+     */
+    void addSearchListener(Consumer<Matches> listener);
+
+    void removeSearchListener(Consumer<Matches> listener);
+
+    /**
+     * Has Neovim send the matches of {@code buffer}'s window again, after every key queued before:
+     * the editor is back in Neovim mode and has none painted. Matches are otherwise sent only when
+     * they change, or when the window or buffer is entered (an attach). Nothing when
+     * {@code buffer} is no longer the one shown.
+     */
+    void resendSearchAsync(DocumentBuffer buffer);
+
+    /**
+     * The matches Neovim's window shows for buffer {@code bufnr}.
+     *
+     * @param bufnr   Neovim's buffer number
+     * @param matches in the order Neovim found them, top to bottom
+     */
+    record Matches(int bufnr, List<SearchMatch> matches) {
+
+        public Matches {
+            matches = List.copyOf(matches);
+        }
+    }
+}

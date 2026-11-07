@@ -49,6 +49,13 @@ class OverlayColorsTest {
         assertEquals(0xCD3131, OverlayColors.errorText(0xFFFFFF));
     }
 
+    /** The search match under the caret stands out: toward the text color, in either theme. */
+    @Test
+    void theCurrentSearchMatchMovesTowardTheText() {
+        assertEquals(0x9B99B9, OverlayColors.currentSearch(0xCECCF7, 0x000000), "light theme: darker");
+        assertEquals(0x646488, OverlayColors.currentSearch(0x3E3E6E, 0xD4D4D4), "dark theme: lighter");
+    }
+
     @Test
     void darknessFollowsPerceivedBrightness() {
         assertTrue(OverlayColors.isDark(0x2F2F2F));

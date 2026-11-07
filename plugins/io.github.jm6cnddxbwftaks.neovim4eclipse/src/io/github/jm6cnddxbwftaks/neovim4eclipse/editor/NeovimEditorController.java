@@ -40,6 +40,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FoldState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.KeyRouter;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SearchPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ViewportPort;
@@ -113,6 +114,9 @@ public final class NeovimEditorController implements AutoCloseable {
     /** Reads the status again after the statusline's width settled. */
     private final Runnable statuslineSettled = this::refreshStatusIfOpen;
     private final CursorStyleController cursorStyle;
+    /** Paints Neovim's search matches; {@code null} when search highlighting is off or the viewer cannot. */
+    private final SearchHighlighter searchHighlighter;
+    private final SearchColors searchColors;
     /** Neovim's visual selection shown in the widget (native selection or blockwise overlay). */
     private final VisualSelectionView selectionView;
     /** When the Vim Ctrl-key bindings are active for this editor. */
@@ -153,6 +157,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<FoldState> foldListener = this::onFolds;
     private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
+    private final Consumer<SearchPort.Matches> searchListener = this::onSearchMatches;
     /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
     private volatile String loggedMode;
 
@@ -191,6 +196,21 @@ public final class NeovimEditorController implements AutoCloseable {
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution(this::onStatuslineColumns);
         this.cursorStyle = new CursorStyleController(styledText);
+        ITextViewer textViewer = viewerOf(editor);
+        if (session.searchEnabled() && textViewer != null && SearchHighlighter.supports(textViewer)) {
+            SearchHighlighter[] made = new SearchHighlighter[1];
+            this.searchColors = new SearchColors(styledText, (match, current) -> {
+                if (made[0] == null) {
+                    made[0] = new SearchHighlighter(textViewer, match, current);
+                } else {
+                    made[0].setColors(match, current);
+                }
+            });
+            this.searchHighlighter = made[0];
+        } else {
+            this.searchColors = null;
+            this.searchHighlighter = null;
+        }
 
         // Prepend on the viewer so Neovim sees keys before the editor's own listeners: otherwise
         // content assist auto-activates on keys Neovim consumes (e.g. the "i" that enters insert
@@ -271,6 +291,9 @@ public final class NeovimEditorController implements AutoCloseable {
             session.addWrapListener(wrapListener);
             session.addTopLineListener(topLineListener);
         }
+        if (searchHighlighter != null) {
+            session.addSearchListener(searchListener); // the attach's window switch has them sent (SEARCH)
+        }
 
         modeStatus.addTo(editor.getEditorSite());
 
@@ -328,6 +351,22 @@ public final class NeovimEditorController implements AutoCloseable {
                 // line after it, where zo found no fold. The cursor that follows puts the caret on
                 // the fold's caption line.
                 caretSync.runAsFromNeovim(() -> foldMirror.applyNeovimState(folds.closed()));
+            }
+        });
+    }
+
+    /**
+     * The matches of Neovim's search in its window's visible lines changed: paint them, when they
+     * are this editor's buffer's and Neovim has the keys (in Eclipse mode they are cleared, and asked
+     * for again when Neovim mode is back). Session thread.
+     */
+    private void onSearchMatches(SearchPort.Matches matches) {
+        if (closed || !neovimModeActive || matches.bufnr() != buffer.bufnr()) {
+            return;
+        }
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed && neovimModeActive && !styledText.isDisposed()) {
+                searchHighlighter.show(matches.matches());
             }
         });
     }
@@ -593,12 +632,18 @@ public final class NeovimEditorController implements AutoCloseable {
             pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
             modeStatus.setMode(session.getMode());
             cursorStyle.updateForMode(session.getMode());
+            if (searchHighlighter != null) {
+                session.resendSearchAsync(buffer); // cleared in Eclipse mode
+            }
             LOG.info("Mode → NEOVIM (keys to nvim)");
         } else {
             modeStatus.setHostEclipseMode();
             messageLine.hide(); // Neovim's messages are about keys it no longer gets
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
+            if (searchHighlighter != null) {
+                searchHighlighter.clear(); // Neovim's search is not Eclipse's: nothing of it stays
+            }
             LOG.info("Mode → ECLIPSE (keys to IDE)");
         }
         keyContext.update();
@@ -966,6 +1011,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeFoldStateListener(foldListener);
             session.removeWrapListener(wrapListener);
             session.removeTopLineListener(topLineListener);
+            session.removeSearchListener(searchListener);
             if (viewport != null) {
                 session.setLeaveInsertView(null); // the next editor's attach sets its own
             }
@@ -988,6 +1034,10 @@ public final class NeovimEditorController implements AutoCloseable {
             commandLine.dispose();
             messageLine.dispose();
             selectionView.dispose();
+            if (searchHighlighter != null) {
+                searchColors.dispose();
+                searchHighlighter.dispose();
+            }
             if (keyViewer != null) {
                 keyViewer.removeVerifyKeyListener(keyInterceptor);
             } else {

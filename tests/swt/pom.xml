@@ -191,6 +191,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ViewportFollower.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWheel.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusBarLabels.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/SearchHighlighter.java</include>
           </includes>
         </configuration>
       </plugin>

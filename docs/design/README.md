@@ -20,6 +20,7 @@ and [KEYBOARD.md](../KEYBOARD.md)).
 | [STATUS_BAR.md](STATUS_BAR.md) | The status bar's three labels: the mode's names (lualine's), widths in characters, the cap, Neovim fitting the statusline |
 | [DOWNLOAD_NEOVIM.md](DOWNLOAD_NEOVIM.md) | *Get Neovim*: download the pinned Neovim release or install it from a file, check its SHA-256, unpack it into `neovim/<platform code>/`; Eclipse's proxy setting; the plug-in folder layout |
 | [INSERT_CTRL_KEYS.md](INSERT_CTRL_KEYS.md) | Vim's `Ctrl` keys in insert mode: a Normal and an Insert choice per letter, a sync point that hands Eclipse's typed text to Neovim before the key, the user's insert mappings kept |
+| [SEARCH_HIGHLIGHTING.md](SEARCH_HIGHLIGHTING.md) | The matches of Neovim's search painted behind the editor's text, the one under the caret stronger: visible lines only, sent when they change, JFace's presentation listener |
 | [NEW_FILE.md](NEW_FILE.md) | `:e newfile` opens an empty editor that `:w` creates |
 | [LOG_LEVEL.md](LOG_LEVEL.md) | One switch for the plug-in's log level, and why it is the only one |
 | [RPC_CLIENT.md](RPC_CLIENT.md) | The plug-in's own msgpack-rpc client, and why it replaced neovim-java |
