@@ -622,6 +622,28 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * A macro that ends waiting for a key: register {@code a} holds {@code ddf}. The playback
+     * deletes line 1 while buffer events are suppressed, then waits for {@code f}'s character.
+     * Once the character is typed, the editor gets the whole buffer, without the deleted line.
+     */
+    @Test
+    void aMacroThatEndsWaitingForAKeyReachesTheEditorAfterThatKey() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("a", "b c", "d"));
+            List<BufferChange> changes = new CopyOnWriteArrayList<>();
+            s.addBufferChangeListener(changes::add);
+            keys(s, ":let @a = 'ddf'<CR>", "g", "g");
+            keys(s, "@", "a");
+            keys(s, "c"); // f's character: the cursor moves to the c on "b c"
+            NeovimBarrier.pass(s);
+            assertFalse(changes.isEmpty(), "the editor heard the macro's change");
+            BufferChange last = changes.get(changes.size() - 1);
+            assertEquals(-1, last.lastLine(), "a full sync: " + changes);
+            assertEquals(List.of("b c", "d"), last.newLines());
+        }
+    }
+
     @Test
     void exCommandsAreRecordedInTheMacroAndRepeatWithAtColon() throws Exception {
         try (NeovimSession s = start()) {

@@ -155,6 +155,16 @@ final class KeyInput {
     private volatile Runnable leaveInsertView;
     /** Set by a lone {@code @}: the next key names the macro register and starts the playback. */
     private boolean macroRegisterPending;
+    /**
+     * Set when a macro's playback stopped with Neovim waiting for a key the macro did not hold.
+     * Example: register {@code a} holds {@code ddf}; {@code @a} deletes a line, then {@code f}
+     * waits for its character. The {@code dd}'s line events came while buffer events were
+     * suppressed (the playback's, {@link #syncBufferAfterMacro}), so the editor never had them;
+     * and the buffer cannot be read now, while Neovim waits. So the key that ends the wait
+     * finishes the playback: it is typed as a macro's is, and the buffer is synced after it.
+     * Input thread only.
+     */
+    private boolean macroSyncPending;
 
     KeyInput(Neovim nvim, StateSync state, StatusTracker status, Supplier<Runnable> leaveInsertPush) {
         this(nvim, state, status, leaveInsertPush, MACRO_TIMEOUT);
@@ -276,8 +286,9 @@ final class KeyInput {
 
         boolean wasTyping = state.isTypingMode();
         String modeBefore = state.mode();
-        // The key after a lone @ names the macro register and starts the playback.
-        boolean startsMacro = macroRegisterPending && !wasTyping;
+        // The key after a lone @ names the macro register and starts the playback; the key after a
+        // playback that stopped waiting finishes it (macroSyncPending).
+        boolean startsMacro = (macroRegisterPending && !wasTyping) || macroSyncPending;
         macroRegisterPending = false;
 
         if (startsMacro) {
@@ -289,15 +300,19 @@ final class KeyInput {
             mode = state.readMode();
         } catch (Exception e) {
             state.setSuppressBufferEvents(false);
-            throw e;
+            throw e; // macroSyncPending stays: the next key still syncs
         }
         if (mode != null && mode.blocking()) {
             // Waiting for the rest of the command (see the method comment): nothing to sync yet, and
-            // a buffer request would not be answered until the next key arrives.
+            // a buffer request would not be answered until the next key arrives. Buffer events go
+            // through meanwhile (a timer may edit another buffer); a macro's edits so far are synced
+            // after the key that ends the wait.
             state.setSuppressBufferEvents(false);
+            macroSyncPending = startsMacro;
             macroRegisterPending = "@".equals(keys) && !wasTyping;
             return; // Neovim sends the pending command itself (msg_showcmd "2f")
         }
+        macroSyncPending = false;
         if (startsMacro) {
             syncBufferAfterMacro();
             state.publishState();

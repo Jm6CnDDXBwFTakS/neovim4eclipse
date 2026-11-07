@@ -625,6 +625,44 @@ class KeyInputTest {
         assertEquals(List.of("buffer [after macro]", "mode n"), heard);
     }
 
+    /**
+     * {@code @a} with {@code a} = {@code ddf}: the {@code dd} edits while buffer events are
+     * suppressed, then {@code f} waits for its character. Nothing can be read while Neovim waits;
+     * the key that ends the wait finishes the playback, and the buffer is synced after it, so
+     * the deleted line leaves the document too.
+     */
+    @Test
+    void aMacroThatStopsWaitingForAKeyIsSyncedAfterThatKey() throws Exception {
+        nvim.after.put("@", new Mode("n", true)); // waiting for the register name
+        nvim.after.put("a", new Mode("n", true)); // the macro's f waits for its character
+        nvim.after.put("x", new Mode("n", false));
+        nvim.keyWithLineEvent = "a"; // the dd, while events are suppressed
+        nvim.lines = List.of("after macro");
+
+        type("@", "a");
+        assertEquals(List.of("type @", "type a"), nvim.calls, "nothing is asked while Neovim waits");
+        assertEquals(List.of(), heard, "the dd's event was suppressed");
+
+        type("x");
+
+        assertEquals(List.of("type @", "type a", "type x", "bufferLines after macro", "snapshot"), nvim.calls);
+        assertEquals(List.of("buffer [after macro]", "mode n"), heard);
+    }
+
+    /** Once that sync is done, the next keys are ordinary keys again. */
+    @Test
+    void afterTheKeyThatFinishesAMacroKeysAreOrdinary() throws Exception {
+        nvim.after.put("@", new Mode("n", true));
+        nvim.after.put("a", new Mode("n", true));
+        nvim.after.put("x", new Mode("n", false));
+        type("@", "a", "x");
+        nvim.calls.clear();
+
+        type("j");
+
+        assertEquals(List.of("type j", "snapshot"), nvim.calls);
+    }
+
     @Test
     void aMacroThatDoesNotFinishInTimeStillResumesBufferEvents() throws Exception {
         try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
