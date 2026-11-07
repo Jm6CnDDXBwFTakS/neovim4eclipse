@@ -56,7 +56,8 @@ import org.msgpack.core.MessageUnpacker;
  * When the input ends (Neovim exited) or breaks, the reader stops and every request still waiting
  * fails at once with {@link NeovimConnectionClosedException}, as does any later one. After
  * {@link #closing()} (we asked Neovim to exit) that end is expected and logged at FINE only;
- * before it, it is logged once at WARNING ("Neovim exited unexpectedly").
+ * before it, it is logged once at WARNING ("Neovim exited unexpectedly"). An {@link Error} on
+ * the reader thread ends the connection the same way, logged at SEVERE (see {@link #readLoop}).
  *
  * <p>Logging: {@code java.util.logging}; at FINEST every message in and out is traced, which is the
  * way to study the traffic ({@code docs/LEARNING.md}).
@@ -219,25 +220,43 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
 
     // ---- reading (reader thread) ----
 
+    /**
+     * Reads and dispatches until the input ends or breaks, then ends the connection.
+     *
+     * <p>Every way out ends it the same way, an {@link Error} too: the channel is marked closed,
+     * the end is logged, and every waiting request fails. Without that, an error that stops this
+     * thread (a {@code StackOverflowError} from input nested too deep, an
+     * {@code OutOfMemoryError}, a {@code NoSuchMethodError} from a stale class in a handler) would
+     * leave the channel looking open: each later request would be written, never answered, and
+     * wait out its full timeout, key after key. A {@link VirtualMachineError} is thrown again
+     * after the cleanup, so that the JVM's handler for uncaught errors still sees it.
+     */
     private void readLoop() {
         Throwable failure = null;
         try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(in)) {
             while (unpacker.hasNext()) { // false at a clean end of the input
                 dispatch(MsgpackValues.unpack(unpacker));
             }
-        } catch (IOException | RuntimeException e) {
-            // RuntimeException: above all msgpack-core's unchecked MessagePackException, also
-            // thrown for input that ends in the middle of a message (see MsgpackValues.unpack);
-            // and any bug in dispatching, so that waiting requests still fail instead of hanging.
+        } catch (Throwable e) {
+            // Above all msgpack-core's unchecked MessagePackException, also thrown for input that
+            // ends in the middle of a message (see MsgpackValues.unpack); IOException; and any
+            // bug in dispatching, so that waiting requests still fail instead of hanging.
             failure = e;
+        } finally {
+            closed = true;
+            if (failure instanceof Error) {
+                // Neovim may well be running still: the fault is on our side of the pipe.
+                LOG.log(Level.SEVERE, "Reading from Neovim failed; the connection is closed", failure);
+            } else if (closing) {
+                LOG.log(Level.FINE, "Neovim connection ended", failure);
+            } else {
+                LOG.log(Level.WARNING, "Neovim exited unexpectedly", failure);
+            }
+            failPending();
         }
-        closed = true;
-        if (closing) {
-            LOG.log(Level.FINE, "Neovim connection ended", failure);
-        } else {
-            LOG.log(Level.WARNING, "Neovim exited unexpectedly", failure);
+        if (failure instanceof VirtualMachineError fatal) {
+            throw fatal;
         }
-        failPending();
     }
 
     private void dispatch(Object raw) {
@@ -272,19 +291,32 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
     private void onNotification(String method, List<?> params) {
         try {
             incoming.notification(method, params);
-        } catch (RuntimeException e) {
+        } catch (VirtualMachineError fatal) {
+            throw fatal; // ends the reader; readLoop cleans up
+        } catch (Throwable e) {
+            // An Error too (a NoSuchMethodError from a stale class, an AssertionError): one
+            // handler's bug must not stop the reading of everything after it.
             LOG.log(Level.WARNING, "Notification " + method + " from Neovim failed", e);
         }
     }
 
-    /** Answers a request from Neovim, exactly once: with the result, or with an error. */
+    /**
+     * Answers a request from Neovim, exactly once: with the result, or with an error. Neovim
+     * blocks until the answer comes (its {@code vim.rpcrequest} waits), so even a handler that
+     * fails with an {@link Error} gets an answer; a {@link VirtualMachineError} is thrown again
+     * after it, ending the reader (see {@link #readLoop}).
+     */
     private void onRequest(long id, String method, List<?> params) {
         byte[] response;
+        VirtualMachineError fatal = null;
         try {
             response = encode(Arrays.asList(RESPONSE, id, null, incoming.request(method, params)));
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // Also an answer that cannot be encoded (IllegalArgumentException): Neovim still waits.
             LOG.log(Level.WARNING, "Request " + method + " from Neovim failed", e);
+            if (e instanceof VirtualMachineError vme) {
+                fatal = vme;
+            }
             try {
                 response = encode(Arrays.asList(RESPONSE, id,
                         List.of(EXCEPTION_ERROR, String.valueOf(e.getMessage())), null));
@@ -296,6 +328,9 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
             write(response, "the answer to " + method);
         } catch (NeovimConnectionClosedException e) {
             LOG.log(Level.FINE, "Answering " + method + " failed (Neovim gone?)", e);
+        }
+        if (fatal != null) {
+            throw fatal;
         }
     }
 

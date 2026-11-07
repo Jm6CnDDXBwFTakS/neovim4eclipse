@@ -73,6 +73,9 @@ class RpcChannelTest {
                 if ("explode".equals(method)) {
                     throw new IllegalStateException("handler bug");
                 }
+                if ("linkage".equals(method)) {
+                    throw new NoSuchMethodError("a class compiled against an older one");
+                }
                 if ("close".equals(method)) {
                     channel.close(); // from the reader thread itself, as a handler may
                 }
@@ -239,6 +242,64 @@ class RpcChannelTest {
             send(2, "after", List.of());
             waitUntil(() -> heard.size() == 2);
             log.assertLogged(Level.WARNING, "Notification explode from Neovim failed");
+        }
+    }
+
+    /** An Error from a handler (here a stale class's NoSuchMethodError) is one handler's bug too. */
+    @Test
+    void aNotificationHandlerThatThrowsAnErrorIsLoggedAndReadingGoesOn() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            send(2, "linkage", List.of());
+            send(2, "after", List.of());
+            waitUntil(() -> heard.size() == 2);
+            log.assertLogged(Level.WARNING, "Notification linkage from Neovim failed");
+        }
+    }
+
+    /**
+     * A handler that overflows the stack: Neovim, which waits for the answer, still gets one, and
+     * then the connection ends as if Neovim had exited: a waiting request fails at once rather
+     * than after its timeout, and so does every later one.
+     */
+    @Test
+    void aRequestHandlerThatOverflowsTheStackIsAnsweredAndEndsTheConnection() throws Exception {
+        requestHandler = (method, params) -> {
+            throw new StackOverflowError("deep");
+        };
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            CompletableFuture<Object> waiting = channel.request("nvim_get_mode");
+            receive();
+            send(0, 4, "eclipse_deep", List.of());
+            assertEquals(Arrays.asList(1L, 4L, List.of(0L, "deep"), null), receive());
+            assertInstanceOf(NeovimConnectionClosedException.class, failure(waiting));
+            assertInstanceOf(NeovimConnectionClosedException.class, failure(channel.request("nvim_get_mode")));
+            log.assertLogged(Level.SEVERE, "Reading from Neovim failed; the connection is closed");
+        }
+    }
+
+    /**
+     * Input nested deeper than the reader's stack: {@code 91} (an array of one element) a million
+     * times. The StackOverflowError ends the reader, and the waiting request fails at once. The
+     * bytes are written on a thread of their own: once the reader is gone, nobody drains the pipe.
+     */
+    @Test
+    void inputNestedTooDeepEndsTheConnectionAndFailsWaitingRequests() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            CompletableFuture<Object> waiting = channel.request("nvim_get_mode");
+            receive();
+            byte[] nested = new byte[1_000_000];
+            Arrays.fill(nested, (byte) 0x91);
+            Thread writer = new Thread(() -> {
+                try {
+                    toChannelStream.write(nested);
+                } catch (IOException expected) {
+                    // the pipe closes when the test ends
+                }
+            }, "test-nested-writer");
+            writer.setDaemon(true);
+            writer.start();
+            assertInstanceOf(NeovimConnectionClosedException.class, failure(waiting));
+            log.assertLogged(Level.SEVERE, "Reading from Neovim failed; the connection is closed");
         }
     }
 

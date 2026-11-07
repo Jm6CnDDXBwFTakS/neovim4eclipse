@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -60,6 +61,17 @@ public final class MsgpackValues {
     static final byte BUFFER_TYPE = 0;
     static final byte WINDOW_TYPE = 1;
     static final byte TABPAGE_TYPE = 2;
+
+    /**
+     * The most array elements or {@code bin} bytes made room for before they are read.
+     *
+     * <p>Why: a header announces the size of what follows, and a corrupt one (a stray byte in the
+     * stream) can announce two billion elements. Allocating that up front fails with an
+     * {@code OutOfMemoryError} before a single element is read. With room for a few thousand to
+     * start with, the list grows as elements arrive, and a header that lies runs out of input and
+     * fails as an incomplete message ({@code MessageInsufficientBufferException}) instead.
+     */
+    static final int PREALLOCATE_LIMIT = 4096;
 
     private MsgpackValues() {
     }
@@ -135,10 +147,11 @@ public final class MsgpackValues {
             case STRING:
                 return unpacker.unpackString();
             case BINARY:
-                return unpacker.readPayload(unpacker.unpackBinaryHeader());
+                return readBinary(unpacker, unpacker.unpackBinaryHeader());
             case ARRAY: {
                 int size = unpacker.unpackArrayHeader();
-                List<Object> list = new ArrayList<>(size);
+                // Not new ArrayList<>(size): see PREALLOCATE_LIMIT.
+                List<Object> list = new ArrayList<>(Math.min(size, PREALLOCATE_LIMIT));
                 for (int i = 0; i < size; i++) {
                     list.add(unpack(unpacker));
                 }
@@ -161,6 +174,26 @@ public final class MsgpackValues {
             default:
                 throw new IOException("Unexpected MessagePack value: " + unpacker.getNextFormat());
         }
+    }
+
+    /**
+     * A {@code bin} payload of {@code length} bytes, read in pieces of at most
+     * {@link #PREALLOCATE_LIMIT} so that memory grows only with the bytes that really arrive.
+     * ({@code unpacker.readPayload(length)} allocates the whole array before it reads a byte.)
+     */
+    private static byte[] readBinary(MessageUnpacker unpacker, int length) throws IOException {
+        if (length <= PREALLOCATE_LIMIT) {
+            return unpacker.readPayload(length);
+        }
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(PREALLOCATE_LIMIT);
+        byte[] piece = new byte[PREALLOCATE_LIMIT];
+        for (int left = length; left > 0;) {
+            int n = Math.min(left, piece.length);
+            unpacker.readPayload(piece, 0, n);
+            bytes.write(piece, 0, n);
+            left -= n;
+        }
+        return bytes.toByteArray();
     }
 
     private static byte typeCode(Handle.Kind kind) {

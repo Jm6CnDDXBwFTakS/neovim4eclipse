@@ -159,4 +159,26 @@ class MsgpackValuesTest {
         // must catch this too (see MsgpackValues.unpack).
         assertThrows(MessageInsufficientBufferException.class, () -> decode(hex("92 01")));
     }
+
+    /**
+     * A corrupt header announces far more than follows: {@code dd 7f ff ff ff} is an array of
+     * 2^31 - 1 elements, {@code c6 7f ff ff ff} a {@code bin} of as many bytes. Making room for all
+     * of it first would be an {@code OutOfMemoryError}, which no reader loop expects; growing with
+     * the input ends in the usual error for input that stops short.
+     */
+    @Test
+    void aHeaderThatAnnouncesTooMuchIsAnIncompleteMessageNotOutOfMemory() {
+        assertThrows(MessageInsufficientBufferException.class, () -> decode(hex("dd 7f ff ff ff 01")));
+        assertThrows(MessageInsufficientBufferException.class, () -> decode(hex("c6 7f ff ff ff 01 02")));
+    }
+
+    /** A {@code bin} longer than the preallocation limit is read in pieces, all of it. */
+    @Test
+    void aLongBinaryRoundTrips() throws IOException {
+        byte[] bytes = new byte[MsgpackValues.PREALLOCATE_LIMIT * 3 + 7];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) i;
+        }
+        assertArrayEquals(bytes, (byte[]) roundTrip(bytes));
+    }
 }
