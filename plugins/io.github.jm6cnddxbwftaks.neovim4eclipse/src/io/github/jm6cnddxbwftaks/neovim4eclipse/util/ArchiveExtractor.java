@@ -13,6 +13,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
@@ -43,10 +44,11 @@ import java.util.zip.ZipInputStream;
  * <h2>The tar format, briefly</h2>
  * A tar file is a list of 512-byte headers, each followed by the file's bytes padded to a multiple
  * of 512, and ends with two empty blocks. A header holds the name (100 bytes, with a 155-byte
- * {@code prefix} in the ustar format), the mode in octal (so the execute bits), the size in octal
- * and a type flag ({@code 0} file, {@code 5} folder, {@code 1}/{@code 2} links). A name longer than
- * that comes in an extra header before the entry: a PAX header ({@code x}) with a {@code path=}
- * record, or GNU's {@code L} entry. Example: Neovim 0.12.6's {@code nvim-linux-arm64.tar.gz} has
+ * {@code prefix} in the ustar format, magic {@code "ustar\0"}; GNU's own format, magic
+ * {@code "ustar  \0"}, keeps times there instead), the mode in octal (so the execute bits), the size
+ * in octal and a type flag ({@code 0} file, {@code 5} folder, {@code 1}/{@code 2} links). A name
+ * longer than that comes in an extra header before the entry: a PAX header ({@code x}) with a
+ * {@code path=} record (its lengths count UTF-8 bytes), or GNU's {@code L} entry. Example: Neovim 0.12.6's {@code nvim-linux-arm64.tar.gz} has
  * 2127 entries, no links, and its longest path is 84 characters.
  *
  * <h2>Execute bits</h2>
@@ -108,9 +110,11 @@ public final class ArchiveExtractor {
                 return; // end of archive
             }
             String name = string(header, 0, 100);
-            String prefix = string(header, 345, 155);
-            if (!prefix.isEmpty() && "ustar".equals(string(header, 257, 5))) {
-                name = prefix + "/" + name;
+            if (isPosixUstar(header)) {
+                String prefix = string(header, 345, 155);
+                if (!prefix.isEmpty()) {
+                    name = prefix + "/" + name;
+                }
             }
             long size = octal(header, 124, 12);
             int mode = (int) octal(header, 100, 8);
@@ -151,26 +155,35 @@ public final class ArchiveExtractor {
         }
     }
 
-    /** The {@code path} record of a PAX header, whose records read {@code "<length> path=<name>\n"}. */
+    /**
+     * The {@code path} record of a PAX header, whose records read {@code "<length> path=<name>\n"}.
+     * The length counts the record's <em>bytes</em> (UTF-8), so the records are cut from the bytes
+     * and only then decoded. Example: {@code "17 path=a/ü.txt\n"} is 17 bytes but 16 characters, as
+     * {@code ü} takes two bytes; counted in characters, every record after it would be cut in the
+     * wrong place, and the path lost.
+     */
     static String paxPath(byte[] data) {
-        String text = new String(data, StandardCharsets.UTF_8);
         String path = null;
         int at = 0;
-        while (at < text.length()) {
-            int space = text.indexOf(' ', at);
-            if (space < 0) {
+        while (at < data.length) {
+            int space = at;
+            while (space < data.length && data[space] != ' ') {
+                space++;
+            }
+            if (space == data.length) {
                 break;
             }
             int length;
             try {
-                length = Integer.parseInt(text.substring(at, space));
+                length = Integer.parseInt(new String(data, at, space - at, StandardCharsets.US_ASCII));
             } catch (NumberFormatException e) {
                 break;
             }
-            if (length <= 0 || at + length > text.length()) {
+            int end = at + length - 1; // the record's newline
+            if (length <= 0 || end <= space || end >= data.length) {
                 break;
             }
-            String record = text.substring(space + 1, at + length - 1); // without the newline
+            String record = new String(data, space + 1, end - space - 1, StandardCharsets.UTF_8);
             if (record.startsWith("path=")) {
                 path = record.substring(5);
             }
@@ -331,6 +344,21 @@ public final class ArchiveExtractor {
     private static long padding(long size) {
         long rest = size % BLOCK;
         return rest == 0 ? 0 : BLOCK - rest;
+    }
+
+    /** The POSIX magic at byte 257: {@code "ustar"} and a NUL. */
+    private static final byte[] USTAR_MAGIC = { 'u', 's', 't', 'a', 'r', 0 };
+
+    /**
+     * Whether the header is POSIX ustar (or PAX, which is ustar plus {@code x} headers), the only
+     * format with a name {@code prefix} at bytes 345 to 499. GNU tar's own format looks alike but
+     * writes {@code "ustar  \0"} (two spaces) and keeps other fields there: the access and change
+     * times, and sparse-file data. Reading those as a prefix would turn {@code nvim/bin/nvim} into
+     * {@code 14524770400/nvim/bin/nvim}. A GNU archive's long names come in {@code L} entries
+     * instead, which {@link #untar} reads.
+     */
+    private static boolean isPosixUstar(byte[] header) {
+        return Arrays.equals(header, 257, 263, USTAR_MAGIC, 0, USTAR_MAGIC.length);
     }
 
     private static boolean isZero(byte[] block) {

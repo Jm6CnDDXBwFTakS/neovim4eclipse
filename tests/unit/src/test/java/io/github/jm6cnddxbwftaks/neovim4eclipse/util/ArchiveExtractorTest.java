@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -122,5 +123,47 @@ class ArchiveExtractorTest {
     void paxRecordsAreParsed() {
         assertEquals("a/b", ArchiveExtractor.paxPath("12 path=a/b\n20 mtime=1700000000\n".getBytes()));
         assertEquals(null, ArchiveExtractor.paxPath("20 mtime=1700000000\n".getBytes()));
+    }
+
+    /**
+     * A PAX record's length counts UTF-8 bytes: "17 path=a/ü.txt\n" is 17 bytes, 16 characters. A
+     * record after a non-ASCII one is still found where its length says.
+     */
+    @Test
+    void paxLengthsCountBytesNotCharacters() {
+        String records = TestArchives.Tar.paxRecord("mtime", "1700000000") + TestArchives.Tar.paxRecord("path", "a/ü.txt")
+                + TestArchives.Tar.paxRecord("comment", "née");
+        assertTrue(records.startsWith("20 mtime=1700000000\n17 path=a/ü.txt\n"), records);
+        assertEquals("a/ü.txt", ArchiveExtractor.paxPath(records.getBytes(StandardCharsets.UTF_8)));
+        String pathLast = TestArchives.Tar.paxRecord("comment", "née") + TestArchives.Tar.paxRecord("path", "a/b");
+        assertEquals("a/b", ArchiveExtractor.paxPath(pathLast.getBytes(StandardCharsets.UTF_8)),
+                "the path after a non-ASCII record");
+    }
+
+    /** A file whose PAX name holds non-ASCII letters is unpacked under that name. */
+    @Test
+    void aNonAsciiPaxNameIsUnpacked() throws IOException {
+        String name = "nvim/share/nvim/runtime/doc/" + "überlänge-".repeat(12) + "ñ.txt";
+        untar(new TestArchives.Tar().folder("nvim/").paxFile(name, "x", TestArchives.Tar.paxRecord("mtime", "1700000000"))
+                .gzipTo(tmp.resolve("u.tar.gz")));
+        assertEquals("x", Files.readString(target().resolve(name.substring("nvim/".length()))));
+    }
+
+    /**
+     * A GNU-format header (magic "ustar  \0") keeps its access and change times where ustar has the
+     * name prefix; they are not read as one, so the file keeps its own name and top folder.
+     */
+    @Test
+    void aGnuHeadersTimesAreNotANamePrefix() throws IOException {
+        untar(new TestArchives.Tar().folder("nvim/").gnuFile("nvim/bin/nvim", "gnu").gzipTo(tmp.resolve("g.tar.gz")));
+        assertEquals("gnu", Files.readString(target().resolve("bin/nvim")));
+    }
+
+    /** A POSIX ustar header's prefix is still joined to its name. */
+    @Test
+    void aUstarPrefixIsJoinedToTheName() throws IOException {
+        untar(new TestArchives.Tar().folder("nvim/").prefixedFile("nvim/share", "a.txt", "p")
+                .gzipTo(tmp.resolve("pre.tar.gz")));
+        assertEquals("p", Files.readString(target().resolve("share/a.txt")));
     }
 }

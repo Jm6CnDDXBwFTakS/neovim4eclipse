@@ -42,14 +42,31 @@ final class TestArchives {
 
         /** A file whose name is in a PAX header ({@code x}) and too long for the header itself. */
         Tar paxFile(String name, String text) throws IOException {
-            String record = " path=" + name + "\n";
-            int length = record.length() + 1;
-            while (String.valueOf(length).length() + record.length() != length) {
-                length = String.valueOf(length).length() + record.length();
-            }
-            byte[] pax = (length + record).getBytes(StandardCharsets.UTF_8);
+            return paxFile(name, text, "");
+        }
+
+        /**
+         * {@link #paxFile(String, String)} with more PAX records after the path, already written
+         * ({@code "20 mtime=1700000000\n"}): a record's length must be right for those to be found.
+         */
+        Tar paxFile(String name, String text, String moreRecords) throws IOException {
+            byte[] pax = (paxRecord("path", name) + moreRecords).getBytes(StandardCharsets.UTF_8);
             entry("PaxHeaders/x", 'x', 0644, pax, null);
             return entry("ignored-short-name", '0', 0644, text.getBytes(StandardCharsets.UTF_8), null);
+        }
+
+        /**
+         * A file in GNU tar's own format (magic {@code "ustar  \0"}), with the access and change times
+         * set that GNU writes where ustar keeps its name prefix (bytes 345 and 357), as
+         * {@code tar --format=gnu --atime-preserve} or an incremental dump does.
+         */
+        Tar gnuFile(String name, String text) throws IOException {
+            return entry(name, '0', 0644, text.getBytes(StandardCharsets.UTF_8), null, true, null);
+        }
+
+        /** A POSIX ustar file whose name is split: {@code prefix} at byte 345, {@code name} at 0. */
+        Tar prefixedFile(String prefix, String name, String text) throws IOException {
+            return entry(name, '0', 0644, text.getBytes(StandardCharsets.UTF_8), null, false, prefix);
         }
 
         /**
@@ -63,6 +80,11 @@ final class TestArchives {
         }
 
         private Tar entry(String name, char type, int mode, byte[] data, String link) throws IOException {
+            return entry(name, type, mode, data, link, false, null);
+        }
+
+        private Tar entry(String name, char type, int mode, byte[] data, String link, boolean gnu, String prefix)
+                throws IOException {
             byte[] h = new byte[512];
             put(h, 0, 100, name);
             put(h, 100, 8, String.format("%07o", mode));
@@ -77,8 +99,17 @@ final class TestArchives {
             if (link != null) {
                 put(h, 157, 100, link);
             }
-            put(h, 257, 6, "ustar");
-            put(h, 263, 2, "00");
+            if (gnu) {
+                put(h, 257, 8, "ustar  "); // GNU: "ustar", two spaces, NUL; no version field
+                put(h, 345, 12, String.format("%011o", 1700000000)); // atime
+                put(h, 357, 12, String.format("%011o", 1700000000)); // ctime
+            } else {
+                put(h, 257, 6, "ustar"); // POSIX: "ustar" and a NUL, then the version "00"
+                put(h, 263, 2, "00");
+                if (prefix != null) {
+                    put(h, 345, 155, prefix);
+                }
+            }
             int sum = 0;
             for (byte b : h) {
                 sum += b & 0xff;
@@ -89,6 +120,20 @@ final class TestArchives {
             int pad = (512 - data.length % 512) % 512;
             bytes.write(new byte[pad]);
             return this;
+        }
+
+        /**
+         * One PAX record, {@code "<length> <key>=<value>\n"}, whose length counts its own UTF-8
+         * bytes, the length's digits included: {@code paxRecord("path", "a/b")} is
+         * {@code "12 path=a/b\n"}, and a name with {@code ü} (two bytes) counts it twice.
+         */
+        static String paxRecord(String key, String value) {
+            int rest = (" " + key + "=" + value + "\n").getBytes(StandardCharsets.UTF_8).length;
+            int length = rest + 1;
+            while (String.valueOf(length).length() + rest != length) {
+                length = String.valueOf(length).length() + rest;
+            }
+            return length + " " + key + "=" + value + "\n";
         }
 
         private static void put(byte[] h, int off, int len, String s) {
