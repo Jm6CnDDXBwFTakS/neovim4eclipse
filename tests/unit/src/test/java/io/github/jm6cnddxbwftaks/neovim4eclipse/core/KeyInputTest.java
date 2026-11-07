@@ -692,6 +692,24 @@ class KeyInputTest {
         assertEquals(List.of("buffer [after macro]", "mode n"), heard);
     }
 
+    /**
+     * {@code @a} stops waiting in {@code f}, then another editor is attached: the key typed there
+     * that ends the wait is an ordinary key, not the end of a playback in the new buffer.
+     */
+    @Test
+    void anEditorSwitchDropsTheSyncOfAMacroThatStoppedWaiting() throws Exception {
+        nvim.after.put("@", new Mode("n", true));
+        nvim.after.put("a", new Mode("n", true));
+        nvim.after.put("<Esc>", new Mode("n", false));
+        type("@", "a");
+        nvim.calls.clear();
+
+        keys.onAttachedBufferChanged(); // NeovimSession.showWindow, for another buffer
+        type("<Esc>");
+
+        assertEquals(List.of("type <Esc>", "snapshot"), nvim.calls, "no macro sync in the new buffer");
+    }
+
     /** Once that sync is done, the next keys are ordinary keys again. */
     @Test
     void afterTheKeyThatFinishesAMacroKeysAreOrdinary() throws Exception {

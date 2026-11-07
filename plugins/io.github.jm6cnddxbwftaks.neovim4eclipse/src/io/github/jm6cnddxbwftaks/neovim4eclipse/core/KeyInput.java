@@ -204,6 +204,20 @@ final class KeyInput {
         }
     }
 
+    /**
+     * Another buffer became the attached one (an editor switch). A macro playback still waiting to
+     * be finished ({@link #macroSyncPending}) belonged to the buffer before: the key that ends the
+     * wait, typed in the new editor, is an ordinary key there, and the new buffer needs no sync for
+     * the old one's playback. Example: {@code @a} stops waiting in {@code f}, the user switches
+     * editors and presses Esc: without this, the Esc ran with buffer events suppressed and pulled
+     * the new buffer, as if a macro had played in it. (The old buffer's changes from the playback
+     * never reached its document; its own sync makes Neovim's buffer equal it again once it is no
+     * longer attached: {@code sync/UnattachedDocumentSync.setAttached}.) Input thread only.
+     */
+    void onAttachedBufferChanged() {
+        macroSyncPending = false;
+    }
+
     /** A key is about to be queued for {@link #inputQueued} (see {@link #keysQueued}). Any thread. */
     void keyQueued() {
         keysQueued.incrementAndGet();

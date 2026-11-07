@@ -627,7 +627,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * Blocking: input thread only.
      */
     public void showBuffer(DocumentBuffer buffer) throws Exception {
-        buffers.show(buffer);
+        showWindow(buffer, null, "");
     }
 
     /**
@@ -644,7 +644,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      *               folder if none was. Ignored when {@code 'autochdir'} is set.
      */
     public void showWindow(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
-        buffers.show(buffer, window, folder);
+        int before = buffers.attachedBufnr();
+        try {
+            buffers.show(buffer, window, folder);
+        } finally {
+            if (buffers.attachedBufnr() != before) {
+                keyInput.onAttachedBufferChanged(); // a macro's pending sync was the other buffer's
+            }
+        }
     }
 
     /**
