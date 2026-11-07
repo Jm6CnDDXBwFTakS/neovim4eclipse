@@ -236,6 +236,20 @@ t.test('while a :s line is typed, the matches of its pattern', function()
   t.eq({ { 1, 8, 1, 11 } }, typing, 'another command: the last search')
 end)
 
+t.test('across lines, the next match is looked for after the last one, as hlsearch does', function()
+  -- What Neovim's own hlsearch paints for each (its screen attributes, read once by hand): the
+  -- walk goes on from a match's end, so a match that begins inside another is not one.
+  local m = start({ 'a', 'b', 'c' })
+  t.type('/a\\nb\\|b\\nc<CR>')
+  t.eq({ { 1, 0, 2, 1 } }, matches(m), 'b\\nc begins inside a\\nb: only the first')
+  m = start({ 'foo foo', 'bar' })
+  t.type('/foo\\_.\\{-}bar<CR>')
+  t.eq({ { 1, 0, 2, 3 } }, matches(m), 'one match from the first foo, none from the foo inside it')
+  m = start({ 'xaxax', 'x' })
+  t.type('/a\\_.\\{-}x<CR>')
+  t.eq({ { 1, 1, 1, 3 }, { 1, 3, 1, 5 } }, matches(m), 'matches side by side are both found')
+end)
+
 t.test('a match across lines that begins above the view is found', function()
   local lines = {}
   for i = 1, 100 do

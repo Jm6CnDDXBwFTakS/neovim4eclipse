@@ -63,7 +63,10 @@ NeovimEditorController ─UI thread─▶ SearchHighlighter.show ─▶ invalida
   from Neovim's window) are searched one by one, not with every line between them.
 - **Across lines.** `matchbufline()` matches within one line. A pattern that can span lines (`\n`,
   `\_x`) is found with a `searchpos()` walk inside `nvim_win_call`: the start, then the end
-  (`'e'` flag), then the view is put back as it was. The walk starts a screen above the top, so a
+  (`'e'` flag), then the view is put back as it was. Each next match is looked for after the end of
+  the last one, as Neovim's hlsearch goes on (with `'cpoptions'` `c`, the default): on lines `a`,
+  `b`, `c` the pattern `a\nb\|b\nc` paints `a`-`b` only, and on `foo foo`, `bar` the pattern
+  `foo\_.\{-}bar` paints one match, without a second scan from the inner `foo`. The walk starts a screen above the top, so a
   match that begins above the view and ends in it is found, and it stops after `'redrawtime'`
   (2 s by default), as Neovim's own highlighting does: `foo\_.*bar` makes each end search scan
   towards the end of the file.

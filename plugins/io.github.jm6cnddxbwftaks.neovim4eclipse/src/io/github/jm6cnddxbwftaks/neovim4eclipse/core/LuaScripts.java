@@ -2901,7 +2901,8 @@ final class LuaScripts {
      * between them. A pattern that can match across lines ({@code \n},
      * {@code \_x}) is found with a {@code searchpos()} walk instead, as {@code matchbufline()}
      * matches within one line; the walk starts a screen higher, for a match that begins above the
-     * view, and stops after {@code 'redrawtime'}, as Neovim's own highlighting does.
+     * view, goes on after each match's end (a match that begins inside another is not one, as in
+     * Neovim's hlsearch), and stops after {@code 'redrawtime'}, as Neovim's own highlighting does.
      *
      * <p><b>When.</b> A decoration provider's {@code on_win} runs at every redraw of a window, which
      * is exactly when the highlights may have changed: a new pattern, {@code :noh}, a typed
@@ -3151,6 +3152,7 @@ final class LuaScripts {
               local height = bottom - top + 1
               local budget = vim.o.redrawtime
               local started = vim.uv.hrtime()
+              local from_end = vim.o.cpoptions:find('c', 1, true) ~= nil -- see the end of the loop
               vim.api.nvim_win_call(win, function()
                 local view = vim.fn.winsaveview()
                 pcall(function()
@@ -3175,6 +3177,16 @@ final class LuaScripts {
                     local stop = e[2] - 1 + math.max(#last, 1)
                     if e[1] >= top and (e[1] > s[1] or stop > s[2] - 1) then
                       vim.list_extend(ranges, { s[1], s[2] - 1, e[1], math.min(stop, #line) })
+                    end
+                    -- The next search starts after this match, not inside it, as Neovim's hlsearch
+                    -- goes on at the match's end (with 'cpoptions' c, the default): on lines a, b, c
+                    -- a\\nb\\|b\\nc paints a-b only, and on "foo foo", "bar" foo\\_.\\{-}bar paints one
+                    -- match from the first foo, not a second from the other foo, each of which
+                    -- could scan far for its bar. The cursor goes to the match's last character;
+                    -- 'W' (no 'c') then looks from the one after it. A match of no width (or
+                    -- 'cpoptions' without c) goes on from its start, which 'W' moves one on.
+                    if from_end and (e[1] > s[1] or (e[1] == s[1] and e[2] > s[2])) then
+                      vim.fn.cursor(e[1], e[2])
                     end
                     flags = 'W'
                   end
