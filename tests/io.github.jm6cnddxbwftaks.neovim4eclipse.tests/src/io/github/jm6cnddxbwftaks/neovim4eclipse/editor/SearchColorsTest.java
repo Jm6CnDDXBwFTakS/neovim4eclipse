@@ -93,6 +93,9 @@ class SearchColorsTest {
         assertEquals(SearchColors.DEFAULT, match.get(), "a light widget: the light amber");
 
         widget.setBackground(new Color(30, 30, 30));
+        // Paint now rather than wait for the system to: a hidden or locked screen may never paint.
+        widget.redraw();
+        widget.update();
         int dark = OverlayColors.SEARCH_MATCH_DARK;
         RGB darkAmber = new RGB((dark >> 16) & 0xFF, (dark >> 8) & 0xFF, dark & 0xFF);
         waitUntil("the dark amber after the widget turned dark", TIMEOUT_MS, () -> darkAmber.equals(match.get()));
