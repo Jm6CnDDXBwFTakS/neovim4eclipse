@@ -1495,6 +1495,20 @@ final class LuaScripts {
      * joined by {@code \r}, or with one more {@code \r} at its end (which Eclipse keeps in a
      * {@code \r\n}); a key that changed it since leaves it to the next split. Bottom up, so the line
      * numbers above a split stay right.
+     *
+     * <p><b>Undo.</b> The split is joined to the buffer's last change ({@code :undojoin}), so it
+     * is no undo step of its own. Example: {@code A}, {@code Ctrl-R Ctrl-R a} (the register holds
+     * {@code "1\r2"}), {@code Esc}, {@code u}. The split is queued behind the keys, so it usually
+     * runs after the {@code Esc}, when the insert's step is closed; as a step of its own, the
+     * {@code u} would undo only the split, put back {@code "x1\r2"}, which Eclipse shows as two
+     * lines and has split again: {@code u} would never get past it. Joined, one {@code u} undoes
+     * the insert with its split. (During the insert Neovim keeps an API change in the insert's step
+     * anyway.) Right after an undo there is nothing to join to (E790, silenced): the split is then a
+     * step of its own, as the undone text was split before.
+     *
+     * <p>The buffer is the one of the editor that asked, which need not be the window's any more
+     * (the user switched editors before the split ran); its cursor is moved only when the window
+     * shows it.
      */
     static final String SPLIT_LINE_BREAKS = """
             local buf, win, splits = tonumber((select(1, ...))), tonumber((select(2, ...))), select(3, ...)
@@ -1515,7 +1529,10 @@ final class LuaScripts {
                 if line ~= joined then
                   parts[#parts] = parts[#parts] .. '\\r' -- Eclipse keeps it in a "\\r\\n"
                 end
-                vim.api.nvim_buf_set_lines(buf, row - 1, row, true, parts)
+                vim.api.nvim_buf_call(buf, function() -- :undojoin acts on the current buffer
+                  vim.cmd('silent! undojoin') -- E790 right after an undo: then a step of its own
+                  vim.api.nvim_buf_set_lines(buf, row - 1, row, true, parts)
+                end)
                 if cursor and cursor[1] > row then
                   cursor[1] = cursor[1] + #parts - 1
                 elseif cursor and cursor[1] == row then

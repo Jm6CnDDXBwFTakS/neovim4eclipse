@@ -240,3 +240,66 @@ t.test('a line a key changed since the parts were read is left alone', function(
   t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { 'a', 'b' } }, { 5, { 'p', 'q' } } })
   t.eq({ 'a\rbc' }, lines())
 end)
+
+-- The split must not be an undo step of its own: one u after the insert puts back the line from
+-- before it, not the "x1\r2" that Eclipse would split again (a u that never gets past the split).
+-- Example: A, Ctrl-R Ctrl-R a (the register holds "1\r2"), Esc, u. During the insert Neovim keeps
+-- every change in the insert's undo step anyway; the split usually arrives after the Esc, though
+-- (it is queued behind the keys), when the insert's step is closed.
+t.test('one u undoes an insert together with the split made during it', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.bo.undolevels = 50
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'x' }) -- an undo step before the insert
+  vim.fn.setreg('a', '1\r2')
+  t.during('A<C-R><C-R>a', function()
+    t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { 'x1', '2' } } })
+  end)
+  t.eq({ 'x1', '2' }, lines())
+  t.type('u')
+  t.eq({ 'x' }, lines())
+end)
+
+t.test('one u undoes an insert together with the split that arrived after its Esc', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.bo.undolevels = 50
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'x' })
+  vim.fn.setreg('a', '1\r2')
+  t.type('A<C-R><C-R>a<Esc>')
+  t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { 'x1', '2' } } })
+  t.eq({ 'x1', '2' }, lines())
+  t.type('u')
+  t.eq({ 'x' }, lines())
+end)
+
+-- Another buffer than the window's (the editor that asked is no longer the attached one): the split
+-- and its undo join happen in that buffer, and the window's cursor is not touched.
+t.test('a buffer not shown in the window is split and joined to its own last change', function()
+  local win, other = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+  vim.bo[other].undolevels = 50
+  vim.api.nvim_buf_set_lines(other, 0, -1, true, { 'x' })
+  vim.fn.setreg('a', '1\r2')
+  t.type('A<C-R><C-R>a<Esc>') -- typed in one editor, which the user then leaves for another
+  local shown = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_win_set_buf(win, shown)
+  vim.api.nvim_buf_set_lines(shown, 0, -1, true, { 'shown' })
+  vim.api.nvim_win_set_cursor(win, { 1, 3 })
+  t.eq(nil, t.run('SPLIT_LINE_BREAKS', tostring(other), tostring(win), { { 1, { 'x1', '2' } } }))
+  t.eq({ 'x1', '2' }, vim.api.nvim_buf_get_lines(other, 0, -1, true))
+  t.eq({ 1, 3 }, vim.api.nvim_win_get_cursor(win))
+  t.eq(shown, vim.api.nvim_win_get_buf(win))
+  vim.api.nvim_buf_call(other, function() vim.cmd('silent undo') end)
+  t.eq({ 'x' }, vim.api.nvim_buf_get_lines(other, 0, -1, true), 'the split went with the change')
+end)
+
+-- Outside an insert, after an undo, there is no change to join (Vim's E790): the split is then a
+-- step of its own, and the script does not fail.
+t.test('a split right after an undo still splits', function()
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  vim.bo.undolevels = 50
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'a' })
+  t.type('ox<Esc>u')
+  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { 'p\rq' })
+  t.type('ox<Esc>u') -- the last command is an undo: :undojoin would say E790
+  t.run('SPLIT_LINE_BREAKS', tostring(buf), tostring(win), { { 1, { 'p', 'q' } } })
+  t.eq({ 'p', 'q' }, lines())
+end)
