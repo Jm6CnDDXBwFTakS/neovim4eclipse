@@ -268,4 +268,40 @@ t.test('the lines the editor reports are searched too', function()
   end
   t.ok(lines_sent[1] and lines_sent[205] and lines_sent[210], 'the window\'s lines and the editor\'s')
   t.ok(not lines_sent[250], 'not past the editor\'s last line')
+  t.ok(not lines_sent[100], 'not the lines between the two: two searches, not one over all')
+end)
+
+t.test('after an edit the matches are sent again, even where none moved', function()
+  local m = start({ 'foo', 'other' })
+  t.type('/foo<CR>')
+  m.update()
+  t.forget()
+  vim.api.nvim_buf_set_lines(0, 1, 2, true, { 'changed' })
+  m.update()
+  t.eq(1, #t.sent('eclipse_search'), 'the editor may have dropped one the edit touched')
+  vim.cmd('nohlsearch')
+  m.update()
+  t.forget()
+  vim.api.nvim_buf_set_lines(0, 1, 2, true, { 'again' })
+  m.update()
+  t.eq({}, t.sent('eclipse_search'), 'without matches an edit sends nothing')
+end)
+
+t.test('pressing / keeps the last search shown until something is typed', function()
+  local m = start({ 'foo bar' })
+  t.type('/foo<CR>')
+  local typing
+  t.during('/', function()
+    typing = matches(m)
+  end)
+  t.eq({ { 1, 0, 1, 3 } }, typing, "the last search's matches, as Neovim shows them")
+end)
+
+t.test('a typed search in the same batch of keys as a * is not the star\'s', function()
+  local m = start({ 'Foo foo FOO' })
+  vim.o.ignorecase = true
+  vim.o.smartcase = true
+  t.type('0*:echo 1<CR>/Foo<CR>') -- one batch, as a macro's keys: no scheduled work runs in between
+  flush()
+  t.eq(1, #matches(m), '/Foo stays smart: only Foo')
 end)
