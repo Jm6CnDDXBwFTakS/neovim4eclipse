@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.lang.ref.WeakReference;
+import java.net.URI;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -271,10 +273,37 @@ final class NavigationHistorySteps {
         if (file != null) {
             return !file.exists();
         }
-        if (input instanceof IURIEditorInput uri && uri.getURI() != null && "file".equals(uri.getURI().getScheme())) {
-            return !Files.exists(Path.of(uri.getURI()));
+        if (input instanceof IURIEditorInput uri) {
+            return isMissingLocalFile(uri.getURI());
         }
         return false;
+    }
+
+    /**
+     * Whether {@code uri} names a local file ({@code file:}) that does not exist. Anything that is
+     * not a plain local path counts as there: {@code null}, another scheme, or a {@code file:} URI
+     * that Java cannot turn into a path.
+     *
+     * <p>Example of the last: {@code file://server/share/notes.txt}. On Windows it is the UNC path
+     * {@code \\server\share\notes.txt} and is checked; on Linux and macOS {@link Path#of(URI)}
+     * refuses a {@code file:} URI with a host ({@link IllegalArgumentException}, "URI has an
+     * authority component"). Such a place may well exist (a share Eclipse reaches through another
+     * file system), and a place that counts as gone is closed ({@link #closeIfGone}), so the safe
+     * answer is "there": the step stays an ordinary step. Uncaught, the exception would end
+     * {@code Ctrl-O} halfway, inside a posted runnable (Eclipse logs "Unhandled event loop
+     * exception"), without telling Neovim's trail which steps went nowhere, so the two histories
+     * would no longer match.
+     */
+    static boolean isMissingLocalFile(URI uri) {
+        if (uri == null || !"file".equalsIgnoreCase(uri.getScheme())) {
+            return false;
+        }
+        try {
+            return !Files.exists(Path.of(uri));
+        } catch (IllegalArgumentException | FileSystemNotFoundException | SecurityException e) {
+            LOG.log(Level.FINE, "Not a local path, taken as there: " + uri, e);
+            return false;
+        }
     }
 
     /** The editors open now, restored or not loaded yet ({@code null}s left out). */
