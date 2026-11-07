@@ -916,15 +916,18 @@ public final class EditorAttachManager {
                 // file it cannot open, not "Eclipse could not save" the editor's own file.
                 return DocumentWrite.Result.failed("E212: Can't open file for writing: " + request.target());
             }
+            // request.force() is the !: it also lets a write through a symbolic link to a missing
+            // file, which Neovim's own E13 check takes for a missing file (DanglingLinks).
             return switch (request.kind()) {
-                case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders());
+                case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders(),
+                        request.force());
                 case APPEND -> OtherFileWrites.append(text, target, request.first(), request.last(), request.force(),
                         request.createFolders());
-                case SAVE_AS -> part == text ? OtherFileWrites.saveAs(text, target, request.createFolders())
+                case SAVE_AS -> part == text ? OtherFileWrites.saveAs(text, target, request.createFolders(), request.force())
                         : DocumentWrite.Result.failed("Eclipse cannot save a page of " + part.getTitle()
                                 + " as another file; use File > Save As");
                 // :w a.txt: a copy, or for an untitled editor a save as (OtherFileWrites.copyOrSaveAs)
-                default -> OtherFileWrites.copyOrSaveAs(text, part, target, request.createFolders());
+                default -> OtherFileWrites.copyOrSaveAs(text, part, target, request.createFolders(), request.force());
             };
         }
         boolean createFolders = request.createFolders();

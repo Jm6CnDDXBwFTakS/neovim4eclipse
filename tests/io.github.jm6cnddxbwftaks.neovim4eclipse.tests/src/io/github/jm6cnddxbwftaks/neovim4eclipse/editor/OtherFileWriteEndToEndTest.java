@@ -9,8 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -667,4 +669,36 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals(project.getFile("copy.txt").getLocation().toOSString(), name.get());
         assertEquals("alpha\nbeta\ngamma\n", documentOf(copy).get());
     }
+
+    /**
+     * Neovim's own {@code :w other} (a copy) onto a symbolic link to a missing file: Neovim's E13
+     * check follows the link and lets it pass as a missing file, so Eclipse refuses the write
+     * without {@code !} ({@link DanglingLinks}); {@code :w!} writes through it. Skipped where links
+     * cannot be made.
+     */
+    @Test
+    void aCopyThroughALinkToAMissingFileNeedsBang() throws Exception {
+        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+        Path gone = dir.resolve("gone.txt");
+        Path link = Path.of(project.getLocation().toOSString()).resolve("copy.local");
+        try {
+            try {
+                Files.createSymbolicLink(link, gone);
+            } catch (IOException | UnsupportedOperationException e) {
+                assumeTrue(false, "cannot make a symbolic link here: " + e);
+            }
+            runInBox(widget, "w copy.local");
+            waitUntil("the refusal", TIMEOUT_MS, () -> errmsg().contains("is a link to"), () -> ": " + errmsg());
+            assertEquals(DanglingLinks.refusal("copy.local", link), errmsg());
+            assertFalse(Files.exists(gone), "nothing written through the link");
+
+            runInBox(widget, "w! copy.local");
+            waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
+            assertEquals("alpha\nbeta\ngamma\n", Files.readString(gone, StandardCharsets.UTF_8));
+        } finally {
+            Files.deleteIfExists(link);
+            leaveAndDelete(dir, gone);
+        }
+    }
 }
+

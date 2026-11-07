@@ -31,8 +31,11 @@ public final class HostCommandRunner {
          * @param createFolders   {@code :w ++p}: a new file's missing folders may be created
          * @param evenIfUnchanged {@code :w}, {@code :wq}: a new file is created even when nothing was
          *                        typed (an empty file); {@code :x} and {@code :update} create none
+         * @param force           {@code :wq!}: a new file that is a symbolic link to a missing file is
+         *                        written through it, as an overwrite (without {@code !} the save is
+         *                        refused, and the editor stays open)
          */
-        boolean save(boolean createFolders, boolean evenIfUnchanged);
+        boolean save(boolean createFolders, boolean evenIfUnchanged, boolean force);
 
         /**
          * Writes a copy of the current editor's text to {@code file} ({@code :wq other.txt}), as
@@ -112,7 +115,9 @@ public final class HostCommandRunner {
                     if (ide.writeCopy(cmd.writeTarget(), force, !cmd.writesUnchanged(), cmd.createFolders())) {
                         ide.close(force);
                     }
-                } else if (ide.save(cmd.createFolders(), cmd.writesUnchanged()) || force) {
+                } else if (ide.save(cmd.createFolders(), cmd.writesUnchanged(), force) || force) {
+                    // :wq! closes even when the save failed (its ! discards what could not be
+                    // saved); :wq keeps the editor open, as Vim does after E13 or E212.
                     ide.close(true);
                 }
             });

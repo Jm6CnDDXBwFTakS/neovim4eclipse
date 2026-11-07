@@ -37,7 +37,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  * Writes that Neovim asks for to a file other than the editor's own. {@code :w other.txt} is a copy, as in Vim: the document's text goes to {@code other.txt},
  * and the editor stays on its own file with its unsaved changes, so {@code :w} afterwards still
  * saves the editor. {@code :5,10w part.txt} writes those lines only ({@link #lines}), and
- * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}). {@code :saveas new.txt}
+ * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}); a symbolic link to a
+ * file that does not exist is written through only with {@code !} ({@link DanglingLinks}). {@code :saveas new.txt}
  * is Eclipse's Save As without its dialog: the editor moves to the new file ({@link #saveAs}). Neovim decides which
  * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already
  * refused an existing file without {@code !} (E13). The one choice made here: a copy of an untitled
@@ -78,35 +79,42 @@ final class OtherFileWrites {
      *
      * @param target        the file, a full path ({@code /ws/proj/other.txt})
      * @param createFolders {@code ++p}: its missing folders may be created
+     * @param throughLink   {@code !}: a symbolic link to a missing file may be written through
+     *                      ({@link DanglingLinks})
      * @return Vim's written message ({@code "other.txt" [New] 3L, 12B written}), or why not
      */
-    static DocumentWrite.Result copy(ITextEditor editor, Path target, boolean createFolders) {
+    static DocumentWrite.Result copy(ITextEditor editor, Path target, boolean createFolders, boolean throughLink) {
         IDocument document = documentOf(editor);
         if (document == null) {
             return DocumentWrite.Result.failed(editor.getTitle() + " has no text to copy");
         }
-        return write(target, document.get(), EclipseFileCommands.charsetOf(editor), false, true, createFolders);
+        return write(target, document.get(), EclipseFileCommands.charsetOf(editor), false, true, createFolders,
+                throughLink);
     }
 
     /**
      * Writes lines {@code first} to {@code last} (1-based) of {@code editor}'s text to {@code target},
      * which they replace, as {@code :5,10w target} does in Vim. Example: {@code :2,3w part.txt} of
      * {@code "a\nb\nc\n"} makes {@code part.txt} {@code "b\nc\n"}.
+     *
+     * @param throughLink {@code !}: a symbolic link to a missing file may be written through
      */
-    static DocumentWrite.Result lines(ITextEditor editor, Path target, int first, int last, boolean createFolders) {
+    static DocumentWrite.Result lines(ITextEditor editor, Path target, int first, int last, boolean createFolders,
+            boolean throughLink) {
         IDocument document = documentOf(editor);
         if (document == null) {
             return DocumentWrite.Result.failed(editor.getTitle() + " has no text to write");
         }
         return write(target, TextLines.of(document.get(), first, last), EclipseFileCommands.charsetOf(editor), false,
-                true, createFolders);
+                true, createFolders, throughLink);
     }
 
     /**
      * Adds lines {@code first} to {@code last} (1-based) of {@code editor}'s text to the end of
      * {@code target}, as {@code :5,10w >> target} does in Vim; {@code :w >> target} sends all lines.
      *
-     * @param force {@code !}: a missing file is created ({@code :w! >> log.txt}); without it, E212
+     * @param force {@code !}: a missing file is created ({@code :w! >> log.txt}), also through a
+     *              symbolic link to it; without it, E212
      */
     static DocumentWrite.Result append(ITextEditor editor, Path target, int first, int last, boolean force,
             boolean createFolders) {
@@ -115,7 +123,7 @@ final class OtherFileWrites {
             return DocumentWrite.Result.failed(editor.getTitle() + " has no text to write");
         }
         return write(target, TextLines.of(document.get(), first, last), EclipseFileCommands.charsetOf(editor), true,
-                force, createFolders);
+                force, createFolders, force);
     }
 
     /**
@@ -131,12 +139,15 @@ final class OtherFileWrites {
      * longer exists. Example: {@code :w notes.txt} in a cloned untitled editor writes
      * {@code notes.txt}, and both editors stay untitled.
      *
-     * @param part the workbench part showing {@code editor}; a page of a multi-page editor gets a copy
+     * @param part        the workbench part showing {@code editor}; a page of a multi-page editor gets a copy
+     * @param throughLink {@code !}: a symbolic link to a missing file may be written through
      */
-    static DocumentWrite.Result copyOrSaveAs(ITextEditor editor, IEditorPart part, Path target, boolean createFolders) {
+    static DocumentWrite.Result copyOrSaveAs(ITextEditor editor, IEditorPart part, Path target, boolean createFolders,
+            boolean throughLink) {
         boolean saveAs = part == editor && EditorAttachManager.hasNoFile(editor.getEditorInput())
                 && !EditorAttachManager.getInstance().isShownInAnotherEditor(editor);
-        return saveAs ? saveAs(editor, target, createFolders) : copy(editor, target, createFolders);
+        return saveAs ? saveAs(editor, target, createFolders, throughLink)
+                : copy(editor, target, createFolders, throughLink);
     }
 
     /**
@@ -156,9 +167,13 @@ final class OtherFileWrites {
      * that cannot take another file (a part of a multi-page editor, say).
      *
      * @param createFolders {@code ++p}: missing folders may be created
+     * @param throughLink   {@code :saveas!}: a symbolic link to a missing file may be written through
      */
-    static DocumentWrite.Result saveAs(ITextEditor editor, Path target, boolean createFolders) {
+    static DocumentWrite.Result saveAs(ITextEditor editor, Path target, boolean createFolders, boolean throughLink) {
         String name = target.getFileName() == null ? target.toString() : target.getFileName().toString();
+        if (!throughLink && DanglingLinks.isDangling(target)) {
+            return DocumentWrite.Result.failed(DanglingLinks.refusal(name, target));
+        }
         IDocumentProvider provider = editor.getDocumentProvider();
         IDocument document = documentOf(editor);
         if (provider == null || document == null || !(editor instanceof IReusableEditor)) {
@@ -221,11 +236,18 @@ final class OtherFileWrites {
      * Writes {@code text} to {@code target} in {@code charset}, replacing the file or, with
      * {@code append}, after its text; see the class comment.
      *
-     * @param mayCreate whether a missing file may be made (an append needs {@code !} for it)
+     * @param mayCreate   whether a missing file may be made (an append needs {@code !} for it)
+     * @param throughLink whether a symbolic link to a missing file may be written through, which
+     *                    creates its target wherever it points ({@link DanglingLinks}): only with
+     *                    {@code !}. Neovim's own E13 check before the write follows links, so it lets
+     *                    such a link pass as a missing file.
      */
     private static DocumentWrite.Result write(Path target, String text, Charset charset, boolean append,
-            boolean mayCreate, boolean createFolders) {
+            boolean mayCreate, boolean createFolders, boolean throughLink) {
         String name = target.getFileName() == null ? target.toString() : target.getFileName().toString();
+        if (!throughLink && DanglingLinks.isDangling(target)) {
+            return DocumentWrite.Result.failed(DanglingLinks.refusal(name, target));
+        }
         IFile workspaceFile = NewFiles.workspaceFileAt(target);
         ITextFileBuffer open = openBufferOf(target, workspaceFile);
         if (open != null && open.isDirty()) {

@@ -26,8 +26,8 @@ class HostCommandRunnerTest {
         boolean saveWorks = true;
 
         @Override
-        public boolean save(boolean createFolders, boolean evenIfUnchanged) {
-            calls.add((evenIfUnchanged ? "save" : "update") + (createFolders ? " ++p" : ""));
+        public boolean save(boolean createFolders, boolean evenIfUnchanged, boolean force) {
+            calls.add((evenIfUnchanged ? "save" : "update") + (force ? "!" : "") + (createFolders ? " ++p" : ""));
             return saveWorks;
         }
 
@@ -155,10 +155,17 @@ class HostCommandRunnerTest {
         assertEquals(List.of("save"), run("wq"));
     }
 
+    /**
+     * {@code :wq!} passes its {@code !} to the save, which may then write through a symbolic link
+     * to a missing file ({@code editor/DanglingLinks}); {@code :wq} does not, and a refused save
+     * keeps the editor open (above).
+     */
     @Test
-    void writeQuitBangClosesEvenWhenTheSaveFails() {
+    void writeQuitBangSavesWithItsBangAndClosesEvenWhenTheSaveFails() {
+        assertEquals(List.of("save!", "close!"), run("wq!"));
+        ide.calls.clear();
         ide.saveWorks = false;
-        assertEquals(List.of("save", "close!"), run("wq!"));
+        assertEquals(List.of("save!", "close!"), run("wq!"));
     }
 
     @Test

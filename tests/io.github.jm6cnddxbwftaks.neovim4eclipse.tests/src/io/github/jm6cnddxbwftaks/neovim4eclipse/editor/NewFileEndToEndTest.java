@@ -313,6 +313,43 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * {@code :wq} on a new file that is a link to a missing file refuses the write and leaves the
+     * editor open, as Vim does after E13 or E212; {@code :wq!} passes its {@code !} on to the save
+     * (util/HostCommandRunner), writes through the link and closes. Skipped where links cannot be made.
+     */
+    @Test
+    void wqThroughALinkToAMissingFileNeedsBangAndOtherwiseKeepsTheEditor() throws Exception {
+        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+        Path gone = dir.resolve("gone.txt");
+        Path link = Path.of(project.getLocation().toOSString()).resolve("wq.local");
+        try {
+            try {
+                Files.createSymbolicLink(link, gone);
+            } catch (IOException | UnsupportedOperationException e) {
+                assumeTrue(false, "cannot make a symbolic link here: " + e);
+            }
+            List<String> dialogs = closeModalDialogsWhile(widget);
+            runInBox(widget, "e wq.local");
+            ITextEditor opened = activeEditorNamed("wq.local");
+            StyledText target = widgetOf(opened);
+            insert(target, "q");
+
+            runInBox(target, "wq");
+            expectMessage(opened, DanglingLinks.refusal("wq.local", link));
+            assertFalse(target.isDisposed(), "the editor stays open");
+            assertFalse(Files.exists(gone), "nothing written through the link");
+
+            runInBox(target, "wq!");
+            waitUntil("the editor to close", TIMEOUT_MS, target::isDisposed);
+            assertEquals("q", Files.readString(gone, StandardCharsets.UTF_8));
+            assertEquals(List.of(), dialogs);
+        } finally {
+            Files.deleteIfExists(link);
+            leaveAndDelete(dir, gone);
+        }
+    }
+
     @Test
     void aNewFileOutsideTheWorkspaceIsCreatedByWrite() throws Exception {
         Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();

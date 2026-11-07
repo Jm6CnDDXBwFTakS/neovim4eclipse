@@ -145,8 +145,10 @@ location, a new file never meets it, so no workaround is needed
 7. **A dangling symbolic link:** a link whose target does not exist counts as missing
    (`Files.exists` follows links), so it opens as a new file, as in Vim, with the target named in
    the `[New]` message. Its write would create the target, wherever the link points, so `:w`
-   refuses it and `:w!` writes there (`editor/DanglingLinks`); the same goes for a copy onto one
-   (`:wq other.txt`, as E13 does for an existing file).
+   refuses it and `:w!` writes there (`editor/DanglingLinks`). `:wq` refuses it too and keeps the
+   editor open, `:wq!` writes through it and closes (`util/HostCommandRunner` passes the `!` on).
+   The same goes for a copy onto one, Neovim's own `:w other.txt` (`editor/OtherFileWrites`,
+   since Neovim's E13 check follows the link and lets it pass) and `:wq other.txt` alike.
 
 ## 4. Writing (`:w`, `:wq`, `:x`, `ZZ`, `:wa`)
 

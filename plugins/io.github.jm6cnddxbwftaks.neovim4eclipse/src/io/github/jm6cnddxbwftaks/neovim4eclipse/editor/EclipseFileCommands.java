@@ -126,7 +126,7 @@ public final class EclipseFileCommands {
         // onto the file the editor shows (FilePaths, the one rule Neovim's side uses too).
         Path own = EditorAttachManager.fileOf(editor.getEditorInput());
         if (own != null && FilePaths.same(own, target)) {
-            return save(editor, createFolders, !onlyIfChanged);
+            return save(editor, createFolders, !onlyIfChanged, force);
         }
         if (!force && Files.exists(target)) {
             HostCommands.showError(editor, "E13: File exists (add ! to override)");
@@ -140,7 +140,7 @@ public final class EclipseFileCommands {
         }
         // An untitled editor is saved as the file instead, so the close that follows has no unsaved
         // changes to ask about (OtherFileWrites.copyOrSaveAs; the Neovim buffer goes with the editor).
-        DocumentWrite.Result result = OtherFileWrites.copyOrSaveAs(editor, part, target, createFolders);
+        DocumentWrite.Result result = OtherFileWrites.copyOrSaveAs(editor, part, target, createFolders, force);
         HostCommands.showMessage(editor, result.ok() ? result.message() : result.error(), !result.ok());
         return result.ok();
     }
