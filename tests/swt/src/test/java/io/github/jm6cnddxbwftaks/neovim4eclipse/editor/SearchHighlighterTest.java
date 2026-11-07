@@ -97,6 +97,18 @@ class SearchHighlighterTest {
         assertTrue(highlighter.boxes().isEmpty(), "no match under the caret: no box");
     }
 
+    /** While a search is typed, Neovim's cursor is after the match it jumped to: that one gets the box. */
+    @Test
+    void whileASearchIsTypedTheMatchEndingAtTheCaretIsCurrent() {
+        widget.setCaretOffset(5); // just after the first foo (2 to 5)
+        highlighter.show(List.of(new SearchMatch(1, 2, 1, 5), new SearchMatch(2, 3, 2, 6)));
+        assertEquals(-1, highlighter.current(), "in normal mode the caret after a match is not on it");
+        highlighter.setSearchTyped(true);
+        assertEquals(0, highlighter.current());
+        highlighter.setSearchTyped(false);
+        assertEquals(-1, highlighter.current());
+    }
+
     /** A current match across lines gets a box on each line it covers. */
     @Test
     void aMatchAcrossLinesGetsABoxPerLine() {

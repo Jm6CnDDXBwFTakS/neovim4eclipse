@@ -732,6 +732,9 @@ public final class NeovimEditorController implements AutoCloseable {
         HostCommands.runOnUi(() -> {
             if (!closed && !styledText.isDisposed()) {
                 commandLine.show(view);
+                if (searchHighlighter != null) {
+                    searchHighlighter.setSearchTyped(view.isSearch()); // the match Neovim jumped to gets the box
+                }
             }
         });
     }
