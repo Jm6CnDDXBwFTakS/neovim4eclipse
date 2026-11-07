@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- Nothing changes in the plug-in itself: the pictures the manual checks look at are taken only
+  while the test's window is really in front. On Windows, another program's window could end up
+  in them.
+
 ## [0.2.5] - 2026-11-07
 
 ### Added
