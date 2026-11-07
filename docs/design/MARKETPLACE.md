@@ -225,7 +225,7 @@ bottom; `*` marks a field the form requires. The form may change; it is the fina
   with its own profile, which adds the Java tools for a highlighted Java editor:
 
   ```bash
-  xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path=/opt/nvim-linux-x86_64/bin/nvim
+  xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path="$PWD"/target/like-ci/nvim-linux-x86_64/bin/nvim
   cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/01-visual-mode.png docs/images/screenshot-visual-mode.png
   cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/02-command-line.png docs/images/screenshot-command-line.png
   cp tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/03-preferences.png docs/images/screenshot-preferences.png
@@ -234,20 +234,13 @@ bottom; `*` marks a field the form requires. The form may change; it is the fina
   Xvfb's `-screen` gives it room for the 1280×800 window in full color (its default is 640×480 at
   8 bits). They show Eclipse's default light theme on Linux/GTK, without a window title bar.
 
-  The preference page shows `-Dnvim.path` (passed on as `-Dneovim4eclipse.nvim`) in its *Found:*
-  note, so use a Neovim (`NeovimVersion.MINIMUM` or newer, or the note turns red) at a path that
-  names no one: not one under your home folder. Without write access to `/opt`, a private mount
-  namespace shows your own Neovim there for this one build, changing nothing on the system (Linux):
-
-  ```bash
-  NV=$(readlink -f ~/.local/share/neovim4eclipse-plugin/neovim/current)   # its top folder, e.g. nvim-linux-arm64_0.12.6
-  DIR=/opt/$(basename "$NV" | sed 's/_.*//')   # the release's own name for this machine: nvim-linux-arm64 or nvim-linux-x86_64
-  unshare -rm sh -c "mount -t tmpfs tmpfs /opt && mkdir $DIR && mount --bind '$NV' $DIR &&
-    exec unshare -U --map-user=$(id -u) --map-group=$(id -g) sh -c \"xvfb-run -a -s '-screen 0 1600x1000x24' ./mvnw verify -Pscreenshots -Dnvim.path=$DIR/bin/nvim\""
-  ```
-
-  The outer `unshare -rm` is root in a new user and mount namespace, which may mount; the inner one
-  maps you back to your own user id, so Maven finds `~/.m2` and writes files you own.
+  The preference page is taken as a user's Eclipse shows it: with the dedicated Neovim (a copy of
+  the `-Dnvim.path` release, so use the pinned one from `LikeCi`, under `target/like-ci/`) and
+  without `-Dneovim4eclipse.nvim`. Its *Found:* note names the dedicated Neovim's folder, which the
+  `screenshots` profile keeps under `pictures.home` (`/tmp/neovim4eclipse-pictures`; on Windows
+  `C:\Users\Public\neovim4eclipse-pictures`) instead of `target/`, so no picture shows a home
+  folder and with it an account name (`gallery/PicturesFolder` in the test fragment). Look at the
+  pictures before copying them all the same: they are public.
 - The README demo GIF, recorded by hand.
 
 ## Phase 3: account, submission, test

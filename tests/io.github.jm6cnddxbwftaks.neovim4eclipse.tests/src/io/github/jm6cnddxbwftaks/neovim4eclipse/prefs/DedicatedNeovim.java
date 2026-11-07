@@ -15,6 +15,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimPlatform;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
@@ -45,10 +47,14 @@ public final class DedicatedNeovim {
     /** The folder the dedicated Neovim for this machine's processor goes in: {@code neovim/la}. */
     public static Path home() {
         Path home = PluginNeovim.home(PluginFolders.neovimFolder(), platform()).toAbsolutePath().normalize();
-        String root = System.getProperty("test.isolated.root");
-        assertTrue(root != null && !root.isBlank() && home.startsWith(Path.of(root).toAbsolutePath().normalize()),
-                "refusing to change " + home + ": it is not under the tests' own folder " + root
-                        + " (XDG_DATA_HOME in the test pom)");
+        Path root;
+        try {
+            root = PicturesFolder.root(); // also refuses a link, or a folder another account owns
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        assertTrue(home.startsWith(root), "refusing to change " + home + ": it is not under the tests' own folder "
+                + root + " (XDG_DATA_HOME in the test pom)");
         return home;
     }
 
@@ -76,6 +82,29 @@ public final class DedicatedNeovim {
         }
         PluginNeovim.forget();
         GetNeovimOffer.recheck();
+    }
+
+    /**
+     * Runs {@code action} with the dedicated Neovim installed and {@code -Dneovim4eclipse.nvim}
+     * taken away, so the plug-in sees what a user's Eclipse started without the option sees: the
+     * preference page then reports the dedicated Neovim, not "another Neovim program". Example: the
+     * Marketplace picture of the preference page (editor/ScreenshotCaptureTest). Afterwards the option
+     * is back and the copy gone. A session already running keeps its Neovim: only what the plug-in
+     * checks from now on changes.
+     */
+    public static void withOnlyTheDedicatedNeovim(Runnable action) {
+        install();
+        String option = System.clearProperty(NeovimOption.PROPERTY);
+        try {
+            PluginNeovim.forget();
+            GetNeovimOffer.recheck();
+            action.run();
+        } finally {
+            if (option != null) {
+                System.setProperty(NeovimOption.PROPERTY, option);
+            }
+            remove();
+        }
     }
 
     /** Removes the dedicated Neovim, if a test installed one. */
