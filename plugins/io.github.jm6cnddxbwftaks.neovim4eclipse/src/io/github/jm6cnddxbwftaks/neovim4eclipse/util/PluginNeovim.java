@@ -123,9 +123,9 @@ public final class PluginNeovim {
      * (the folder's name, {@code la}): its {@link InstallTree tree hash} equals the pinned one.
      * Hashing takes about 0.1 to 0.2 s, so the answer is kept until the install changes (its folders'
      * and program's modification times, which a swap or a reinstall changes) or {@link #forget} is
-     * called: the Activator forgets before every Neovim start after the first, so each start is
-     * checked in full (the first uses EarlyStartup's check, made in the background at Eclipse's
-     * start). Call this off the UI thread where possible.
+     * called: the Activator forgets before every Neovim start, the first included, so each start is
+     * checked in full (EarlyStartup's check, made in the background at Eclipse's start, only decides
+     * whether Get Neovim opens at once). Call this off the UI thread where possible.
      */
     public static boolean verified(Path home, boolean windows, NeovimRelease release) {
         Optional<NeovimPlatform> platform = NeovimPlatform.byCode(String.valueOf(home.getFileName()));

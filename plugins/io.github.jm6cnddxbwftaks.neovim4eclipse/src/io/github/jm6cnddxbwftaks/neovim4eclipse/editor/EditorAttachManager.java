@@ -940,7 +940,8 @@ public final class EditorAttachManager {
 
     /**
      * Forgets {@code part}: its Neovim window and tabpage are closed, and the buffer of a document
-     * whose last editor closed is wiped in Neovim.
+     * whose last editor closed is unloaded and unlisted in Neovim, as {@code :bd} does
+     * ({@link NeovimSession#closeBufferAsync}).
      */
     private void releaseDocumentsOf(IEditorPart part) {
         part.removePropertyListener(dirtyListener);

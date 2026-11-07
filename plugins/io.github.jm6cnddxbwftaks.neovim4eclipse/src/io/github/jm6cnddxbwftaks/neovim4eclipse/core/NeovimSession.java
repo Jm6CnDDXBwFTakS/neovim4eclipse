@@ -241,7 +241,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Launches Neovim, attaches as a UI, creates a scratch buffer and installs the Lua hooks.
      *
-     * @param nvimPath  preference value: blank, a folder or an absolute path (see {@link NvimExecutable})
+     * @param nvimPath  the {@code -Dneovim4eclipse.nvim} value: blank for the dedicated Neovim, or the
+     *                  absolute path of a Neovim program (see {@link NvimExecutable}; a folder is refused)
      * @param extraArgs extra command-line arguments, e.g. {@code --clean} for tests
      * @param clipboard the system clipboard: receives text yanked in Neovim, and is read when Neovim
      *                  pastes from {@code "+} or {@code "*}
@@ -657,7 +658,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return buffers.attachedWin();
     }
 
-    /** Wipes a document's buffer, with its undo history and marks (its last editor closed). */
+    /**
+     * Unloads a document's buffer and takes it off the buffer list (its last editor closed), as
+     * Vim's {@code :bd} does: its text and undo history go, the buffer, its number and its marks
+     * stay, so the file opened again gets them back ({@link DocumentBuffer#reopened};
+     * {@link LuaScripts#CLOSE_DOCUMENT_BUFFER}, docs/design/BUFFER_NUMBERS.md).
+     */
     public void closeBufferAsync(DocumentBuffer buffer) {
         submit("close buffer", Level.FINE, () -> buffers.close(buffer));
     }
@@ -1443,10 +1449,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit(key + " after the typed text", Level.WARNING, () -> keyInput.syncInsertThenInput(sync, key));
     }
 
-    /** See {@link InputThread#submit}; {@code false} if {@code work} will never run. */
     /**
-     * Queues {@code work} on the input thread. Afterward, even if it failed, the input-handled
-     * listeners hear that Neovim has done what it asked (see {@link #addInputHandledListener}).
+     * Queues {@code work} on the input thread ({@link InputThread#submit}). Afterward, even if it
+     * failed, the input-handled listeners hear that Neovim has done what it asked (see
+     * {@link #addInputHandledListener}).
+     *
+     * @return {@code false} if {@code work} will never run (the session is closed)
      */
     private boolean submit(String what, Level failureLevel, InputThread.Task work) {
         return inputThread.submit(what, failureLevel, () -> {

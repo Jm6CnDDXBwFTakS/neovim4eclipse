@@ -65,12 +65,8 @@ public record NeovimRelease(NeovimVersion version, Map<String, Archive> download
      * @param url      where to download it
      * @param size     its size in bytes
      * @param sha256   its SHA-256, 64 lower-case hex digits
-     */
-    /**
-     * One release archive.
-     *
-     * @param tree the {@link InstallTree tree hash} of the files inside it, which an unpacked
-     *             install must match to be run (checked at every start)
+     * @param tree     the {@link InstallTree tree hash} of the files inside it, which an unpacked
+     *                 install must match to be run (checked at every start)
      */
     public record Archive(NeovimPlatform platform, String asset, URI url, long size, String sha256, String tree) {
 
