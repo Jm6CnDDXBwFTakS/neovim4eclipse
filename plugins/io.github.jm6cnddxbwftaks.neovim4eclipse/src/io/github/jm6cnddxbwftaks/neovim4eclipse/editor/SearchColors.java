@@ -3,8 +3,10 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.Set;
 import java.util.function.BiConsumer;
 
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
@@ -12,6 +14,8 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.texteditor.AbstractTextEditor;
 import org.eclipse.ui.themes.IThemeManager;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
@@ -32,6 +36,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * order. Neovim's {@code Search} highlight group is not used: its colors are made for Neovim's own
  * screen, not for the editor's theme.
  *
+ * <h2>Dark editors without Eclipse's dark theme</h2>
+ * Where the registry holds one of the two defaults, the editor's background picks between them
+ * ({@link OverlayColors#searchMatch}): a dark editor in another theme, or in a high-contrast
+ * system setting, gets the dark amber too. So a change of the editor's background (General &gt;
+ * Editors &gt; Text Editors) is heard as well, from the editors' preference store.
+ *
  * <p>Before 0.2.7 the matches took Eclipse's <i>Search Results</i> annotation color. A color of
  * its own changes the matches without changing Eclipse's own search marks, and its default could
  * differ from that lavender, which a dark theme turns into a gray that matches barely show on.
@@ -45,13 +55,24 @@ final class SearchColors {
     static final String COLOR_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch";
 
     /** The light default, as in {@code plugin.xml}: used where no theme registry answers. */
-    static final RGB DEFAULT = new RGB(255, 214, 102);
+    static final RGB DEFAULT = rgb(OverlayColors.SEARCH_MATCH_LIGHT);
+
+    /**
+     * The editor preferences whose change may change the colors: the background picks the default
+     * (see the class comment), the text color the box.
+     */
+    private static final Set<String> EDITOR_COLORS = Set.of(
+            AbstractTextEditor.PREFERENCE_COLOR_BACKGROUND, AbstractTextEditor.PREFERENCE_COLOR_BACKGROUND_SYSTEM_DEFAULT,
+            AbstractTextEditor.PREFERENCE_COLOR_FOREGROUND, AbstractTextEditor.PREFERENCE_COLOR_FOREGROUND_SYSTEM_DEFAULT);
 
     private final StyledText widget;
     private final BiConsumer<Color, Color> apply;
-    private final IThemeManager themes = PlatformUI.getWorkbench().getThemeManager();
+    /** The theme manager, or null without a running workbench (see {@link #themeManager}). */
+    private final IThemeManager themes = themeManager();
+    private final IPreferenceStore editorPreferences = EditorsUI.getPreferenceStore();
     /**
-     * Hears the theme: a change of this color, or another theme. Either may happen on any thread
+     * Hears the theme and the editors' preferences: a change of this color, another theme, or the
+     * editor's background or text color. Any may happen on any thread
      * (a preference import, a Job), and the colors go to the widget, so the work hops to the
      * widget's UI thread.
      */
@@ -64,31 +85,42 @@ final class SearchColors {
     SearchColors(StyledText widget, BiConsumer<Color, Color> apply) {
         this.widget = widget;
         this.apply = apply;
-        themes.addPropertyChangeListener(listener);
+        if (themes != null) {
+            themes.addPropertyChangeListener(listener);
+        }
+        editorPreferences.addPropertyChangeListener(listener);
         update();
     }
 
-    /** The match color now. */
+    /** The match color now, for the widget's background. */
     Color match() {
-        return new Color(rgb());
+        int chosen = toInt(registryRgb());
+        return new Color(rgb(OverlayColors.searchMatch(chosen, toInt(widget.getBackground().getRGB()))));
     }
 
     /** The box color for {@code match}, toward the widget's text color. */
     Color box(Color match) {
         RGB fg = widget.getForeground().getRGB();
         int mixed = OverlayColors.searchBox(toInt(match.getRGB()), toInt(fg));
-        return new Color((mixed >> 16) & 0xFF, (mixed >> 8) & 0xFF, mixed & 0xFF);
+        return new Color(rgb(mixed));
     }
 
     private void onThemeChange(PropertyChangeEvent event) {
         String property = event.getProperty();
-        if ((COLOR_ID.equals(property) || IThemeManager.CHANGE_CURRENT_THEME.equals(property)) && !widget.isDisposed()) {
+        boolean ours = COLOR_ID.equals(property) || IThemeManager.CHANGE_CURRENT_THEME.equals(property)
+                || EDITOR_COLORS.contains(property);
+        if (ours && !widget.isDisposed()) {
+            // Later, not now: the editor sets the widget's new background in its own listener of the
+            // same change, which may run after this one.
             widget.getDisplay().asyncExec(this::update);
         }
     }
 
     void dispose() {
-        themes.removePropertyChangeListener(listener);
+        if (themes != null) {
+            themes.removePropertyChangeListener(listener);
+        }
+        editorPreferences.removePropertyChangeListener(listener);
     }
 
     private void update() {
@@ -99,9 +131,30 @@ final class SearchColors {
         apply.accept(match, box(match));
     }
 
-    private RGB rgb() {
-        RGB rgb = themes.getCurrentTheme().getColorRegistry().getRGB(COLOR_ID);
+    /** The color in Colors and Fonts: the user's, the theme's or plugin.xml's; {@link #DEFAULT} where none answers. */
+    private RGB registryRgb() {
+        RGB rgb = themes != null ? themes.getCurrentTheme().getColorRegistry().getRGB(COLOR_ID) : null;
         return rgb != null ? rgb : DEFAULT;
+    }
+
+    /**
+     * The workbench's theme manager, or null when there is no running workbench: an editor may
+     * attach while Eclipse shuts down, when {@link PlatformUI#getWorkbench()} may throw. The
+     * highlights then keep {@link #DEFAULT} (chosen by background) and hear no theme change.
+     */
+    private static IThemeManager themeManager() {
+        if (!PlatformUI.isWorkbenchRunning()) {
+            return null;
+        }
+        try {
+            return PlatformUI.getWorkbench().getThemeManager();
+        } catch (IllegalStateException e) {
+            return null; // closed between the check and the call
+        }
+    }
+
+    private static RGB rgb(int rgb) {
+        return new RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
     private static int toInt(RGB rgb) {
