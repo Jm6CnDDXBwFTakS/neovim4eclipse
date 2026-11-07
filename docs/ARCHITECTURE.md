@@ -792,10 +792,15 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   break. So `"\ra"` is one line in Neovim and two in Eclipse, and every line below it would be
   numbered differently on each side: Neovim's next `dd` would delete the wrong line in Eclipse. The
   change is applied as Eclipse splits it (the `\r` stays in the document, so a save writes the same
-  bytes), and the synchronizers then push the lines back (`LineTextUtil.holdsLineBreak`), so Neovim
-  holds the split lines too and both count the same lines. Until that push runs, Neovim's full
-  re-syncs are stale and not applied, as for an edit Eclipse makes in reaction to Neovim's; in insert
-  mode, while Eclipse types, the push is the one when insert mode ends. A NUL byte is no such case:
+  bytes), and the synchronizers then push the lines back, so Neovim holds the split lines too and both
+  count the same lines. Until that push runs, `sync/SplitLines` turns Neovim's line numbers into the
+  document's: in insert mode the push waits for the insert's end (a push in the middle of it would race
+  the keys Neovim is still typing), and meanwhile each key's line event must still land on the right
+  lines. Example: `qa i Ctrl-V Ctrl-M b Esc q`, where Neovim types the whole insert; its full sync after
+  Esc is applied (it has the same text) and sends the push. After an insert Eclipse typed, the push at
+  Esc writes the split lines, since Neovim's applied changes count among the changed lines. The line
+  delimiter for Neovim's new lines is not taken from a line that ends in such a `\r`
+  (`BufferSynchronizer.lineDelimiter`). A NUL byte is no such case:
   Neovim stores it as `\n` inside a line, but its API sends it to an RPC client as `\0`, an ordinary
   character in Eclipse, and turns a pushed `\0` back into a NUL.
 - **Paste, counts and `.`** are ordinary keys sent to Neovim; there is no Java-side emulation. Linewise

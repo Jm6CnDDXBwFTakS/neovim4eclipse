@@ -103,6 +103,12 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * ({@link #pushChangedLinesToNeovim}). Every change counts, Neovim's applied ones too. UI thread.
      */
     private final ChangedLines changedLines = new ChangedLines();
+    /**
+     * Neovim's lines that the document shows as more than one (a {@code \r} inside them), until a
+     * push gives Neovim the document's lines: Neovim's line events are translated through it. Cleared
+     * with {@link #changedLines} when a push reads the document. UI thread.
+     */
+    private final SplitLines splitLines = new SplitLines();
     private final IDocumentListener changedLinesListener = new IDocumentListener() {
         @Override
         public void documentAboutToBeChanged(DocumentEvent event) {
@@ -240,6 +246,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         try {
             List<String> lines = onUi(() -> {
                 changedLines.clear(); // read in the same step as the lines: no edit falls between
+                splitLines.clear(); // Neovim gets the document's lines, split as Eclipse splits them
                 return FinalNewlines.linesToPush(document);
             });
             if (lines == null) {
@@ -296,6 +303,9 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                     return null;
                 }
                 changedLines.clear();
+                // The region holds every split line: Neovim's applied changes count among the
+                // changed lines, and a line above the region has the same number on both sides.
+                splitLines.clear();
                 return new RegionPush(region, region.isEmpty() ? List.of() : linesOf(region.first(), region.end()));
             });
             if (push == null) {
@@ -409,20 +419,28 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
         applyingRemote.set(true);
         changesWhileApplying = 0;
-        boolean splitByEclipse = false;
         try {
             boolean fullBuffer = change.lastLine() < 0;
             boolean newline = FinalNewlines.of(document);
+            String delimiter = lineDelimiter(document);
             if (fullBuffer && neovimBehind) {
                 changedLines.forget(); // Neovim's whole buffer is not applied: the next push writes everything
             }
-            Edit edit = fullBuffer && neovimBehind ? null
-                    : fullBuffer ? fullBufferEdit(document, change.newLines(), newline)
-                    : rangeEdit(document, change, newline);
+            Edit edit;
+            if (fullBuffer) {
+                // Neovim's text as it is, carriage returns too: right even while lines are split.
+                edit = neovimBehind ? null : fullBufferEdit(document, change.newLines(), newline);
+                splitLines.replacedAll(change.newLines(), delimiter);
+            } else {
+                // Neovim's line numbers, turned into the document's while a line is split (SplitLines).
+                edit = LineRangeEdit.compute(new DocumentLineSource(document),
+                        splitLines.eclipseLine(change.firstLine()), splitLines.eclipseLine(change.lastLine()),
+                        change.newLines(), delimiter, newline);
+                splitLines.replaced(change.firstLine(), change.lastLine(), change.newLines(), delimiter);
+            }
             if (edit != null) {
                 undoSteps.beforeRemoteChange(); // one undo step per Neovim command (see UndoSteps)
                 document.replace(edit.offset(), edit.length(), edit.text());
-                splitByEclipse = LineTextUtil.holdsLineBreak(change.newLines());
             }
         } catch (Exception e) {
             changedLines.forget(); // the document lacks Neovim's change, wherever it was
@@ -437,14 +455,23 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         // full-text sync Neovim sends after the key would also undo them, so those are skipped
         // until the push (in insert mode, the one when insert mode ends).
         //
-        // A line of Neovim's that holds a line break of Eclipse's is the same case: Neovim's
-        // "\ra" (Ctrl-V Ctrl-M, or :s with nr2char(13)) is one line there and two here, so the
-        // lines below it are numbered differently on each side, and Neovim's next "dd" would hit
-        // the wrong line here. The push sends Eclipse's lines ("" and "a"), so Neovim splits the
-        // line the same way and both count the same lines again (LineTextUtil.holdsLineBreak).
-        // The document keeps the "\r" itself, so a save writes the bytes Neovim would have.
-        if (changesWhileApplying > 1 || splitByEclipse) {
+        if (changesWhileApplying > 1) {
             neovimBehind = true;
+            onLocalChange();
+        } else if (!splitLines.isEmpty()) {
+            // A line of Neovim's holds a line break of Eclipse's: Neovim's "\ra" (Ctrl-V Ctrl-M, or
+            // :s with nr2char(13)) is one line there and two here (SplitLines). The push sends
+            // Eclipse's lines ("" and "a"), so Neovim splits the line the same way and both count
+            // the same lines again; the document keeps the "\r", so a save writes Neovim's bytes.
+            //
+            // Neovim is not marked behind: its text is right, only its line numbers differ, and
+            // SplitLines translates them, so its full syncs still apply. That matters in insert mode,
+            // where the push waits (the gate is closed: a push would race the keys Neovim is still
+            // typing) for the next change Neovim sends once the insert has ended. Example: qa i
+            // Ctrl-V Ctrl-M b Esc q. Neovim types the whole insert (it is recording), each key's
+            // line event lands on the right lines, and the full sync after Esc, applied in Normal
+            // mode, sends the push. After an insert Eclipse typed, the push at Esc writes the split
+            // lines, since Neovim's applied changes count among the changed lines (ChangedLines).
             onLocalChange();
         }
         runAfterApply(change);
@@ -502,19 +529,47 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         return DocumentBuffer.NO_STAMP;
     }
 
+    /** How far {@link #lineDelimiter} looks past a lone {@code \r} for the file's real delimiter. */
+    private static final int DELIMITER_SEARCH_LINES = 1000;
+
+    /**
+     * The delimiter that ends the document's lines, for the lines Neovim's changes add.
+     *
+     * <p>A JFace document's default delimiter is its first line's. A {@code \r} that Neovim keeps
+     * inside a line ({@link SplitLines}) also ends a line here, so after {@code Ctrl-V Ctrl-M} on
+     * line 1 of a {@code \n} file that first delimiter is {@code \r}, and Neovim's next full sync
+     * would join every line with {@code \r}. So a lone {@code \r} counts only when no line below
+     * (in the next {@value #DELIMITER_SEARCH_LINES}) ends in {@code \n} or {@code \r\n}: a file
+     * that really uses {@code \r} alone (classic Mac OS) still gets it.
+     */
     static String lineDelimiter(IDocument document) {
         if (document instanceof IDocumentExtension4 ext4) {
             String delim = ext4.getDefaultLineDelimiter();
+            if ("\r".equals(delim)) {
+                return delimiterPastCarriageReturns(document);
+            }
             if (delim != null && !delim.isEmpty()) {
                 return delim;
             }
         }
+        return delimiterPastCarriageReturns(document);
+    }
+
+    /** The first line delimiter other than {@code \r}, else {@code \r}, else the platform's. */
+    private static String delimiterPastCarriageReturns(IDocument document) {
         try {
-            if (document.getNumberOfLines() > 0) {
-                String delim = document.getLineDelimiter(0);
-                if (delim != null && !delim.isEmpty()) {
+            int lines = Math.min(document.getNumberOfLines(), DELIMITER_SEARCH_LINES);
+            boolean carriageReturn = false;
+            for (int line = 0; line < lines; line++) {
+                String delim = document.getLineDelimiter(line);
+                if ("\r".equals(delim)) {
+                    carriageReturn = true;
+                } else if (delim != null && !delim.isEmpty()) {
                     return delim;
                 }
+            }
+            if (carriageReturn) {
+                return "\r";
             }
         } catch (BadLocationException ignored) {
             // fall through to the platform default

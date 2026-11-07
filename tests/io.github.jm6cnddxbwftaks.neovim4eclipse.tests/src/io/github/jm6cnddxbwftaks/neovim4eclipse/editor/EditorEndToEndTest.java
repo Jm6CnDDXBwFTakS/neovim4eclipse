@@ -1672,6 +1672,57 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A carriage return inserted while a macro is recorded ({@code Ctrl-R Ctrl-R a}, register a
+     * holding {@code "1\r2"}, inserts it literally): Neovim types the whole insert, its line is two
+     * lines in Eclipse, and the keys after it still land on the right lines (SplitLines). After Esc
+     * Neovim gets the split lines, so both count the same lines and {@code Gdd} deletes gamma.
+     */
+    @Test
+    void aCarriageReturnInsertedWhileRecordingLeavesBothSidesWithTheSameLines() throws Exception {
+        session.commandAsync("let @a = \"1\\r2\"");
+        settle();
+        typeSlowly("jqbA");
+        waitUntil("an insert Neovim drives", TIMEOUT_MS, session::isNeovimDrivenInsert);
+        ctrlKey(widget, 'r');
+        ctrlKey(widget, 'r');
+        typeSlowly("ax");
+        expectText("alpha\nbeta1\r2x\ngamma\n");
+        escape(widget);
+        typeSlowly("q");
+        settle(); // the push of the split lines included
+        assertEquals(List.of("alpha", "beta1", "2x", "gamma"), session.getBufferLines(), "Neovim's lines");
+        typeSlowly("Gdd");
+        expectText("alpha\nbeta1\r2x\n");
+    }
+
+    /**
+     * The same carriage return in an insert Eclipse types: Neovim drives while {@code Ctrl-R} waits
+     * for the register, inserts it and hands typing back after a full sync, which is applied; at Esc
+     * Neovim gets the split lines with Eclipse's typing.
+     */
+    @Test
+    void aCarriageReturnInsertedBeforeAHandBackLeavesBothSidesWithTheSameLines() throws Exception {
+        session.commandAsync("let @a = \"1\\r2\"");
+        settle();
+        typeSlowly("j");
+        type(widget, 'A');
+        waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+        ctrlKey(widget, 'r');
+        ctrlKey(widget, 'r');
+        type(widget, 'a');
+        expectText("alpha\nbeta1\r2\ngamma\n");
+        waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+        type(widget, "x");
+        expectText("alpha\nbeta1\r2x\ngamma\n");
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        settle(); // the push of the split lines included
+        assertEquals(List.of("alpha", "beta1", "2x", "gamma"), session.getBufferLines(), "Neovim's lines");
+        typeSlowly("Gdd");
+        expectText("alpha\nbeta1\r2x\n");
+    }
+
+    /**
      * {@code o} on the last line of a file without a final newline shows one new line, not two, and
      * the file then ends with exactly one line break (see {@code LineTextUtil}).
      */

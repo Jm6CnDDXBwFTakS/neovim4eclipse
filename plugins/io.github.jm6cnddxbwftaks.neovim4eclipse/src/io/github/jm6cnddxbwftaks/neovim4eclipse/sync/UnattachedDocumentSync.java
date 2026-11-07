@@ -80,6 +80,12 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     private boolean attached;
     /** UI thread only. A change from Neovim is being written into the document: not to be pushed back. */
     private boolean applyingNeovim;
+    /**
+     * Neovim's lines the document shows as more than one, until the push reads the document. Example:
+     * {@code :bufdo s/^/\=nr2char(13)/} sends a change per line before the push runs, each with
+     * Neovim's line numbers (see {@link SplitLines}). UI thread only.
+     */
+    private final SplitLines splitLines = new SplitLines();
     /** A push is queued on the input thread and has not read the document yet. */
     private final AtomicBoolean pushPending = new AtomicBoolean(false);
     private volatile boolean closed;
@@ -125,7 +131,9 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         if (closed) {
             return;
         }
-        if (change.lastLine() > neovimLineCount(document, FinalNewlines.of(document))) {
+        int first = splitLines.eclipseLine(change.firstLine());
+        int last = change.lastLine() < 0 ? -1 : splitLines.eclipseLine(change.lastLine());
+        if (last > neovimLineCount(document, FinalNewlines.of(document))) {
             // LineRangeEdit would clamp the range to the end of the document and apply it there.
             LOG.warning("Neovim's change of " + describe() + " does not fit the document (did Eclipse change it "
                     + "at the same time?); Neovim gets Eclipse's text instead: " + change);
@@ -135,16 +143,24 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         applyingNeovim = true;
         try {
             boolean finalNewline = FinalNewlines.of(document);
-            Edit edit = change.lastLine() < 0 ? BufferSynchronizer.fullBufferEdit(document, change.newLines(), finalNewline)
-                    : BufferSynchronizer.rangeEdit(document, change, finalNewline);
+            String delimiter = BufferSynchronizer.lineDelimiter(document);
+            Edit edit;
+            if (last < 0) {
+                edit = BufferSynchronizer.fullBufferEdit(document, change.newLines(), finalNewline);
+                splitLines.replacedAll(change.newLines(), delimiter);
+            } else {
+                edit = BufferSynchronizer.rangeEdit(document,
+                        new BufferChange(first, last, change.newLines()), finalNewline);
+                splitLines.replaced(change.firstLine(), change.lastLine(), change.newLines(), delimiter);
+            }
             if (edit != null) {
                 UndoSteps.beforeChangeOnItsOwn(document); // see UndoSteps: Ctrl+Z back to the save clears the marker
                 document.replace(edit.offset(), edit.length(), edit.text());
-                if (LineTextUtil.holdsLineBreak(change.newLines())) {
-                    // Eclipse split a line of Neovim's at a "\r" (see LineTextUtil.holdsLineBreak):
-                    // Neovim gets the split lines, or its next change would hit the wrong lines.
-                    pushSoon();
-                }
+            }
+            if (!splitLines.isEmpty()) {
+                // Eclipse split a line of Neovim's at a "\r" (see SplitLines): Neovim gets the split
+                // lines, or its line numbers stay off by one below it.
+                pushSoon();
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not apply Neovim's change of " + describe() + "; Neovim gets Eclipse's "
@@ -225,6 +241,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     }
 
     private Snapshot snapshot() {
+        splitLines.clear(); // Neovim gets the document's lines, split as Eclipse splits them
         return new Snapshot(FinalNewlines.linesToPush(document), BufferSynchronizer.stampOf(document));
     }
 

@@ -112,6 +112,22 @@ class UnattachedDocumentSyncTest {
         assertEquals(List.of(List.of("alpha", "", "beta", "gamma")), neovim.pushed);
     }
 
+    /**
+     * {@code :bufdo %s/^/\=nr2char(13)/} sends one change per line before the push runs; each has
+     * Neovim's numbers, which the split lines above it no longer match in Eclipse.
+     */
+    @Test
+    void changesBeforeThePushLandOnTheLinesBelowASplitOne() {
+        sync.start();
+        neovim.neovimChanged(buffer, new BufferChange(0, 1, List.of("\ralpha")));
+        neovim.neovimChanged(buffer, new BufferChange(2, 3, List.of("\rgamma"))); // Neovim's line 2
+        assertEquals("\ralpha\nbeta\n\rgamma\n", document.get());
+
+        neovim.runQueued();
+
+        assertEquals(List.of(List.of("", "alpha", "beta", "", "gamma")), neovim.pushed);
+    }
+
     @Test
     void aFullBufferFromNeovimIsAppliedAsTheSmallestEdit() {
         sync.start();
