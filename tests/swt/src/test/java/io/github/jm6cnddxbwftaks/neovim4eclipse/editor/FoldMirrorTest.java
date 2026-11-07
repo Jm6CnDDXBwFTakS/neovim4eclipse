@@ -130,6 +130,67 @@ class FoldMirrorTest {
     }
 
     @Test
+    void aReconcileOnAnotherThreadWhileNeovimsStateIsAppliedIsStillSent() throws InterruptedException {
+        // An executor whose UI thread is this test's thread, and which queues work as SWT does.
+        Thread uiThread = Thread.currentThread();
+        List<Runnable> queued = new ArrayList<>();
+        UiExecutor ui = new UiExecutor() {
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public boolean isUiThread() {
+                return Thread.currentThread() == uiThread;
+            }
+
+            @Override
+            public synchronized void asyncExec(Runnable work) {
+                queued.add(work);
+            }
+
+            @Override
+            public void syncExec(Runnable work) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        mirror.close();
+        mirror = new FoldMirror(viewer, ui, sends::add);
+
+        // While Neovim's zc is applied on the UI thread, JDT's reconciler adds a fold on its own.
+        // (Adding a listener calls it at once, so it acts only once armed.)
+        ProjectionAnnotation added = new ProjectionAnnotation();
+        Thread[] reconciler = { null };
+        boolean[] armed = { false };
+        model.addAnnotationModelListener(changed -> {
+            if (armed[0] && reconciler[0] == null && Thread.currentThread() == uiThread) {
+                reconciler[0] = new Thread(() -> model.addAnnotation(added, lines(5, 5)), "reconciler");
+                reconciler[0].start();
+                try {
+                    reconciler[0].join(10_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        mirror.send();
+        queued.clear(); // the sends scheduled while listening started: Neovim has these folds
+        sends.clear();
+        armed[0] = true;
+        mirror.applyNeovimState(List.of(1));
+        assertTrue(first.isCollapsed());
+        assertFalse(reconciler[0].isAlive(), "the reconciler's change finished");
+
+        List<Runnable> work;
+        synchronized (ui) {
+            work = new ArrayList<>(queued);
+        }
+        work.forEach(Runnable::run);
+        assertFalse(sends.isEmpty(), "the reconcile reached Neovim");
+    }
+
+    @Test
     void foldsInsideAClosedOneKeepEclipsesState() {
         model.collapse(first);
         sends.clear();

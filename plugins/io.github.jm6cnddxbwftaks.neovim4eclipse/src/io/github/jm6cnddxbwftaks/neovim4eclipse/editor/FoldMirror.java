@@ -52,7 +52,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions.Region;
  *   <li><b>From Neovim</b> ({@link #applyNeovimState}): the indexes of the outermost closed folds,
  *       read after each key. {@link FoldRegions#stateChange} turns them into annotations to
  *       collapse and expand. Those changes are made with a flag set, so the model listener does not
- *       send them back.</li>
+ *       send them back. The flag covers the UI thread's own changes only: a reconcile on the
+ *       reconciler's thread in the same moment is still sent ({@link #onModelChanged}).</li>
  * </ul>
  *
  * <p>Example: {@code zc} on a method. Neovim closes its fold; the state after the key lists the
@@ -93,7 +94,11 @@ final class FoldMirror implements AutoCloseable {
      * lines become one fold ({@link FoldRegions#forNeovim}) and are collapsed and expanded together.
      */
     private List<List<ProjectionAnnotation>> annotationsByIndex = List.of();
-    /** True while Neovim's state is being applied: those model changes are not sent back. */
+    /**
+     * True while Neovim's state is being applied: those model changes are not sent back. Written and
+     * read on the UI thread only ({@link #onModelChanged} asks {@code ui.isUiThread()} first), so it
+     * needs no {@code volatile}.
+     */
     private boolean applyingNeovimState;
     /** A send is scheduled for this UI-thread turn. Any thread. */
     private volatile boolean sendScheduled;
@@ -228,9 +233,19 @@ final class FoldMirror implements AutoCloseable {
         }
     }
 
-    /** The model changed: unless the change is Neovim's own, send the folds again (coalesced). */
+    /**
+     * The model changed: unless the change is Neovim's own, send the folds again (coalesced).
+     *
+     * <p>Neovim's own changes are the ones {@link #applyNeovimState} makes, on the UI thread, while
+     * {@link #applyingNeovimState} is set. The flag says nothing about other threads: JDT's folding
+     * changes the model on the reconciler's thread, and a reconcile can land while the UI thread is
+     * inside {@code applyNeovimState} (a {@code zc} right after typing a method). Dropping that
+     * change would leave Neovim with the old fold list until the next reconcile, and the indexes it
+     * reports would then point at the wrong annotations. So only a change on the UI thread is
+     * skipped; any other one is sent.
+     */
     private void onModelChanged(IAnnotationModel changed) {
-        if (applyingNeovimState || closed) {
+        if (closed || (ui.isUiThread() && applyingNeovimState)) {
             return;
         }
         scheduleSend();
