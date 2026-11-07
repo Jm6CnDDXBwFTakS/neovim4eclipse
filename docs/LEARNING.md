@@ -206,6 +206,11 @@ editor fires the property `IEditorPart.PROP_INPUT` (a part listener hears it as
 changes its input without its part's changing, so the plug-in listens on the text editor itself).
 The plug-in then binds the editor to its new document and renames its Neovim buffer after the file,
 keeping the undo history (`EditorAttachManager.onInputChanged`, `NeovimSession.renameBufferAsync`).
+The new input alone does not tell why it came: File › Save As and an editor reused for another file
+look alike (the old file is still there, and two empty files even have the same text). The plug-in
+asks Eclipse instead: an `IExecutionListener` on the workbench's `ICommandService` hears every
+command start and end, and an input that comes while `org.eclipse.ui.file.saveAs` runs is the file
+saved under its new name (`editor/SaveAsWatch`).
 
 ### 1.5 SWT: one UI thread
 

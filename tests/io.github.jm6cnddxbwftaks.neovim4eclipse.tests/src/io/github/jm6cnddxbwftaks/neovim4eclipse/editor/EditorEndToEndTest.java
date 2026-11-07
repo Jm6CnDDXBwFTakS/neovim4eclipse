@@ -53,14 +53,18 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.INavigationLocation;
 import org.eclipse.ui.IPartListener2;
+import org.eclipse.ui.IReusableEditor;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchPartReference;
+import org.eclipse.ui.IWorkbenchCommandConstants;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
+import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.junit.jupiter.api.Test;
@@ -833,6 +837,65 @@ class EditorEndToEndTest extends EndToEndTestBase {
         runInBox(widget, "w");
         waitUntil("renamed.txt saved", TIMEOUT_MS, () -> "alpha\neta\ngamma\n".equals(fileText("renamed.txt")),
                 () -> "; it reads " + fileText("renamed.txt").replace("\n", "\\n"));
+    }
+
+    /**
+     * An editor Eclipse reuses for another file (as for search results, with "reuse editors") gets
+     * a new input and a new document, as a rename does, but the old file is still there. Even when
+     * the other file has the same text, it gets a Neovim buffer of its own: with the old one, its
+     * {@code u} would undo the old file's change, and turn it into what that file was before.
+     */
+    @Test
+    void anEditorReusedForAFileWithTheSameTextGetsABufferOfItsOwn() throws Exception {
+        type(widget, 'x');
+        expectText(editor, "lpha\nbeta\ngamma\n");
+        runInBox(widget, "w");
+        waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty());
+        int bufnr = session.getAttachedBufnr();
+        IFile other = createFile("same.txt", "lpha\nbeta\ngamma\n");
+
+        page().reuseEditor((IReusableEditor) editor, new FileEditorInput(other));
+        waitForNeovimIn(other);
+        waitForAttach(editor, "same.txt");
+        assertTrue(bufnr != session.getAttachedBufnr(), "a buffer of its own, not test.txt's " + bufnr);
+
+        type(widget, 'u'); // nothing to undo in same.txt
+        settle();
+        assertEquals("lpha\nbeta\ngamma\n", documentOf(editor).get());
+        assertTrue(project.getFile("test.txt").exists(), "the old file is still there");
+    }
+
+    /**
+     * File &gt; Save As gives the editor a new input with the same text, and the old file stays, as
+     * for a reused editor; but it is the same text moving to a new name, so the Neovim buffer moves
+     * along, undo history and all. Told apart by Eclipse's Save As command running
+     * ({@code SaveAsWatch}); the editor ({@link TestSaveAsEditor}) only skips the name dialog.
+     */
+    @Test
+    void saveAsKeepsTheBufferAndUndo() throws Exception {
+        IFile file = createFile("a.saveas", "one\n");
+        ITextEditor saving = (ITextEditor) IDE.openEditor(page(), file, true);
+        assertTrue(saving instanceof TestSaveAsEditor, "opened in " + saving);
+        waitForAttach(saving, "a.saveas");
+        try {
+            type(widgetOf(saving), 'x');
+            expectText(saving, "ne\n");
+            int bufnr = session.getAttachedBufnr();
+            IFile saved = project.getFile("b.saveas");
+            TestSaveAsEditor.target = saved;
+
+            page().getWorkbenchWindow().getService(IHandlerService.class)
+                    .executeCommand(IWorkbenchCommandConstants.FILE_SAVE_AS, null);
+            assertEquals(saved, saving.getEditorInput().getAdapter(IFile.class), "the editor shows b.saveas");
+            waitForNeovimIn(saved);
+            waitForAttach(saving, "b.saveas");
+            assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
+
+            type(widgetOf(saving), 'u');
+            expectText(saving, "one\n");
+        } finally {
+            page().closeEditor(saving, false);
+        }
     }
 
     /**

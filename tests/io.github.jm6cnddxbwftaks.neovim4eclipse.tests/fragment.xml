@@ -76,4 +76,16 @@
       </editor>
    </extension>
 
+   <!-- A text editor whose Save As takes a name the test sets instead of asking for one, for the
+        test of File > Save As keeping the Neovim buffer; only test files have the extension saveas. -->
+   <extension point="org.eclipse.ui.editors">
+      <editor
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.tests.saveAsEditor"
+            name="Neovim for Eclipse tests: Save As without a dialog"
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.TestSaveAsEditor"
+            extensions="saveas"
+            default="true">
+      </editor>
+   </extension>
+
 </fragment>

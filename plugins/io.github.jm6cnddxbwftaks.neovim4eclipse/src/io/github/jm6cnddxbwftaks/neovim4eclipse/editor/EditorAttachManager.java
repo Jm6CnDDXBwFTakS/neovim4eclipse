@@ -8,6 +8,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +41,7 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchPartReference;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.part.MultiPageEditorPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 
@@ -143,12 +145,28 @@ public final class EditorAttachManager {
      */
     private final Map<ITextEditor, Bound> boundDocuments = new HashMap<>();
     /**
+     * Guarded by {@code this}. The bound text editors whose new input came from File &gt; Save As
+     * ({@link SaveAsWatch}), until {@link #rebind} takes them: their buffer moves to the new file.
+     */
+    private final Set<ITextEditor> savedAs = Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Eclipse's Save As command, watched from {@link #installWorkbenchListeners}; {@code null} before. UI thread. */
+    private volatile SaveAsWatch saveAsWatch;
+    /**
      * A text editor got a new input ({@code PROP_INPUT}): see {@link #onInputChanged}. On the text
      * editor itself, not the workbench part: a page of a multi-page editor gets its new input on its
      * own (its {@code elementMoved}), without the part's input changing. UI thread.
      */
     private final IPropertyListener inputListener = (source, propId) -> {
         if (propId == IEditorPart.PROP_INPUT && source instanceof ITextEditor text) {
+            // Read now, while the command still runs: onInputChanged runs after it has ended.
+            SaveAsWatch watch = saveAsWatch;
+            if (watch != null && watch.running()) {
+                synchronized (this) {
+                    if (boundDocuments.containsKey(text)) {
+                        savedAs.add(text);
+                    }
+                }
+            }
             // After the event: the editor may still be setting itself up for the new input (a dirty
             // editor's text is put into the new document right after).
             Display.getDefault().asyncExec(() -> onInputChanged(text));
@@ -296,6 +314,7 @@ public final class EditorAttachManager {
             for (IWorkbenchWindow window : workbench.getWorkbenchWindows()) {
                 addPartListener(window);
             }
+            saveAsWatch = SaveAsWatch.install(workbench.getService(ICommandService.class));
             workbench.addWindowListener(new IWindowListener() {
                 @Override
                 public void windowOpened(IWorkbenchWindow window) {
@@ -1107,10 +1126,12 @@ public final class EditorAttachManager {
      * ({@link NeovimSession#renameBufferAsync}, which also records the name for a Neovim started
      * later), when all of these hold:
      * <ul>
-     *   <li>The editor moved with its file: the old file is gone (a rename or move), or the new
-     *       document has the old one's text (Save As). Not an editor reused for another file (Eclipse
-     *       reuses search results' editors): that file's text would get the old file's undo
-     *       history, and {@code u} would turn it into the old file.</li>
+     *   <li>The editor moved with its file: the old file is gone (a rename or move: Eclipse moved
+     *       it, then gave the editor the new one), or the new input came while Eclipse's Save As
+     *       command ran ({@link SaveAsWatch}). Not an editor reused for another file (Eclipse
+     *       reuses search results' editors), even one with the same text (two empty files): that
+     *       file would get the old file's undo history, and {@code u} would turn it into the old
+     *       file.</li>
      *   <li>Every editor of the old document shows the new one now. Clones (Window › Editor ›
      *       Clone) share a document, and each moves with the file by its own {@code setInput}, all
      *       in one notification, so they have all moved by the time this runs.</li>
@@ -1120,6 +1141,7 @@ public final class EditorAttachManager {
      * shows it), and the new document gets its own buffer at the next attach.
      */
     private Rebound rebind(ITextEditor editor, IDocument fresh, NeovimSession session) {
+        boolean wasSavedAs = savedAs.remove(editor);
         Bound bound = boundDocuments.get(editor);
         if (bound == null || fresh == null || bound.document() == fresh) {
             return null;
@@ -1128,7 +1150,9 @@ public final class EditorAttachManager {
         IEditorPart part = bound.part();
         DocumentBuffer buffer = documents.bufferOf(old).orElse(null);
         List<IEditorPart> sharing = documents.editorsOf(old);
-        boolean moved = buffer != null && (isGone(buffer.name()) || old.get().equals(fresh.get()));
+        // Not from the text: an editor reused for another file with the same text (two empty
+        // files) would look like a Save As, and that file would get the old one's undo history.
+        boolean moved = buffer != null && (isGone(buffer.name()) || wasSavedAs);
         boolean kept = moved && documents.bufferOf(fresh).isEmpty()
                 && sharing.stream().allMatch(other -> other == part || showsDocument(other, fresh));
         IEditorPart reattach = null;
@@ -1225,6 +1249,7 @@ public final class EditorAttachManager {
                     return false;
                 }
                 entry.getKey().removePropertyListener(inputListener);
+                savedAs.remove(entry.getKey());
                 return true;
             });
             unused = documents.remove(part);
