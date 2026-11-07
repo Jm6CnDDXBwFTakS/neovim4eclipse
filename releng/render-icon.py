@@ -9,15 +9,15 @@ Example, the toolbar icon and its HiDPI variant (Eclipse picks name@2x.png on it
 screen scale is 200%):
 
     releng/render-icon.py docs/images/logo.svg \
-        16 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim.png \
-        32 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim@2x.png
+        16 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/n4e-mode-on.png \
+        32 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/n4e-mode-on@2x.png
 
 With --grey the icons are greyscale: the toolbar button shows them in Eclipse mode, so that the
 mode is visible where a pressed toggle button is hard to tell from a raised one (macOS):
 
     releng/render-icon.py --grey docs/images/logo.svg \
-        16 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim-off.png \
-        32 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/neovim-off@2x.png
+        16 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/n4e-mode-off.png \
+        32 plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/n4e-mode-off@2x.png
 
 Why this way: no SVG renderer (rsvg-convert, Inkscape, ImageMagick) is assumed to be installed, but
 Firefox is. Firefox's --screenshot has no transparency, so the SVG is rendered twice, once on black

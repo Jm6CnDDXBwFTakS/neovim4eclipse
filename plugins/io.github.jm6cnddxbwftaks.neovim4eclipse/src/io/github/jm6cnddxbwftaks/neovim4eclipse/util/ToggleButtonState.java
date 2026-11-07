@@ -49,9 +49,9 @@ public record ToggleButtonState(boolean enabled, boolean checked, String icon, S
     }
 
     /** The logo in color: Neovim mode (and the greyed-out button). Also plugin.xml's icon. */
-    public static final String ICON_ON = "icons/neovim.png";
+    public static final String ICON_ON = "icons/n4e-mode-on.png";
     /** The logo in grey ({@code releng/render-icon.py --grey}): Eclipse mode. */
-    public static final String ICON_OFF = "icons/neovim-off.png";
+    public static final String ICON_OFF = "icons/n4e-mode-off.png";
 
     /**
      * The attach command (plugin.xml), which the greyed-out button's tooltip names. It has no key
