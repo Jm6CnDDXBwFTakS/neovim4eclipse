@@ -215,6 +215,32 @@ class DocumentBuffersTest {
     }
 
     /**
+     * The attached buffer's rename refused: the close leaves the home buffer attached for a moment,
+     * and the editor's attach that follows the rename (queued right behind it) makes and attaches a
+     * buffer under the new name. That show runs before any key typed after the rename.
+     */
+    @Test
+    void aRefusedRenameOfTheAttachedBufferIsShownAgainByTheNextShow() throws Exception {
+        DocumentBuffer doc = new DocumentBuffer("/ws/a.txt");
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(5L, true, false));
+        buffers.show(doc);
+        answers.put("RENAME_DOCUMENT_BUFFER", false);
+        doc.rename("/ws/b.txt");
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            buffers.rename(doc);
+        }
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer until the attach");
+        assertNull(buffers.attachedDocument());
+
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(7L, true, false));
+        buffers.show(doc); // the attach's
+        assertTrue(calls.stream().anyMatch(call -> call.startsWith("CREATE_DOCUMENT_BUFFER [/ws/b.txt")), calls.toString());
+        assertEquals(7, buffers.attachedBufnr());
+        assertEquals(doc, buffers.attachedDocument());
+        assertFalse(doc.isInSyncAt(1), "out of sync: the attach pushes the document into it");
+    }
+
+    /**
      * A buffer this Neovim has not made (not shown yet, or a Neovim restarted since) is not renamed
      * in Neovim; it is made under the new name when shown.
      */

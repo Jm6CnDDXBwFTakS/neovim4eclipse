@@ -899,6 +899,29 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Neovim refuses the new name when a loaded buffer has it already (E95; here one loaded with
+     * {@code bufload()}): the editor's buffer is closed, and the attach that follows the rename shows
+     * one under the new name with the document pushed into it, so the editor's keys still edit its
+     * own text, not the home buffer.
+     */
+    @Test
+    void aRenameNeovimRefusesStillLeavesTheEditorOnItsFile() throws Exception {
+        IFile renamed = project.getFile("taken.txt");
+        String path = renamed.getLocation().toOSString();
+        io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "vim.fn.bufload(vim.fn.bufadd([==[" + path + "]==])) return true");
+        project.getFile("test.txt").move(renamed.getFullPath(), true, null);
+        waitUntil("the editor to show taken.txt", TIMEOUT_MS,
+                () -> renamed.equals(editor.getEditorInput().getAdapter(IFile.class)));
+        waitForNeovimIn(renamed);
+        waitForAttach(editor, "taken.txt");
+
+        typeSlowly("jx");
+        expectText(editor, "alpha\neta\ngamma\n");
+        settle();
+        assertEquals(List.of("alpha", "eta", "gamma"), session.getBufferLines(), "Neovim's buffer is the editor's");
+    }
+
+    /**
      * A multi-page editor's text page moves to the renamed file by itself (its own
      * {@code elementMoved}), while the multi-page editor keeps its input: the plug-in hears it from
      * the page, and the page keeps its buffer and undo history as a plain editor does.

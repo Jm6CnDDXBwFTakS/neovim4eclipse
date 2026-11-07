@@ -463,6 +463,14 @@ final class DocumentBuffers {
      * made: it is made under the new name when it is shown. Should Neovim refuse the name (a loaded
      * buffer has it), the buffer is closed as a closed editor's, so that the next show makes one
      * under the new name: a buffer under the old name would stand for a file that is not there.
+     *
+     * <p>When that buffer is the attached one, the close leaves the home buffer attached, and nothing
+     * here shows the buffer again: a buffer made here would be empty, and a key typed into it would
+     * reach the document as Neovim's change (a full sync of nothing). The editor's attach does it,
+     * with the document's push: every rename of an attached document comes with one
+     * ({@code editor/EditorAttachManager.rebind} hands the editor back to {@code attach}, which runs
+     * on the same UI thread call), queued on the input thread right behind this rename, so no key
+     * typed after the rename gets between the two.
      */
     void rename(DocumentBuffer buffer) throws Exception {
         Handle handle = owns(buffer) ? created.get(buffer.bufnr) : null;
