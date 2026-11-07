@@ -503,6 +503,49 @@ class KeyInputTest {
         assertTrue(state.isEclipseTypingReady());
     }
 
+    /**
+     * {@code ihello<Esc>ibye} typed fast: the second {@code i} enters insert mode while {@code b}
+     * (and more) still wait in the queue for Neovim. The insert's sync must not let Eclipse type:
+     * Neovim's events for those keys come after it. Neovim keeps the insert; the last key hands it
+     * back.
+     */
+    @Test
+    void anInsertEnteredWhileKeysWaitStaysNeovimsUntilTheLastOfThem() throws Exception {
+        nvim.mode = new Mode("n", false);
+        state.readMode();
+        nvim.after.put("i", new Mode("i", false));
+        keys.keyQueued(); // i
+        keys.keyQueued(); // b, queued behind it before Neovim reported the insert
+
+        keys.inputQueued("i");
+        lastChange().afterApply().run(); // the editor applied the insert's sync
+
+        assertFalse(state.isEclipseTypingReady(), "b waits for Neovim: Eclipse must not type yet");
+        assertTrue(keys.isNeovimDrivenInsert(), "the keys go to Neovim meanwhile");
+        assertTrue(keys.isHandBackPending());
+
+        nvim.calls.clear();
+        keys.inputQueued("b"); // the last key: the hand-back
+        assertTrue(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+        lastChange().afterApply().run();
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertTrue(state.isEclipseTypingReady(), "Eclipse types the next key");
+    }
+
+    /** No key waits when the insert's sync is applied: Eclipse types at once, as before. */
+    @Test
+    void anInsertEnteredWithNoKeyWaitingLetsEclipseType() throws Exception {
+        nvim.mode = new Mode("n", false);
+        state.readMode();
+        nvim.after.put("i", new Mode("i", false));
+
+        queue("i");
+        lastChange().afterApply().run();
+
+        assertTrue(state.isEclipseTypingReady());
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
     /** A block-visual I: Neovim types to the end (Esc repeats the text on every line), even after a gap key. */
     @Test
     void anInsertFromBlockwiseVisualIsNotHandedBack() throws Exception {

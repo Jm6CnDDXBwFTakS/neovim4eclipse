@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -333,13 +334,45 @@ final class KeyInput {
             // made this insert Neovim-driven (a key typed before the sync below reached the editor).
             case ENTER_INSERT, TEXT_CHANGED, NONE -> { }
         }
-        if (transition.syncsBuffer()) {
+        if (transition == ModeTransition.ENTER_INSERT) {
+            state.syncBuffer(noKeyWaitsAfter(keysTaken)); // the insert-start handshake
+        } else if (transition.syncsBuffer()) {
             state.syncBuffer();
         }
         state.publishState();
         if (mayHandBack()) {
             handBackToEclipse();
         }
+    }
+
+    /**
+     * The check, on the UI thread once the editor has applied an insert's first full sync, that lets
+     * Eclipse type only if no key waits for Neovim behind the one that entered the insert. If keys
+     * wait, they reach Neovim's insert after the sync was read, so their line events would land
+     * among Eclipse's typing: the insert stays Neovim's ({@link #handBackPending}), and the last of
+     * those keys hands it back ({@link #handBackToEclipse}), as for a key typed before the sync.
+     *
+     * <p>Example: {@code ihello<Esc>ibye} typed fast. The keys after Esc go to Neovim, queued behind
+     * the leave (NeovimSession.leaveInsertModeAsync). The second {@code i} enters insert mode while
+     * {@code b}, {@code y} and {@code e} still wait in the queue; the mode change has ended the
+     * Neovim-driven insert they were sent in, so without this check Eclipse typed the next key, and
+     * Neovim's events for {@code bye} could then overwrite it. The same holds for {@code ibye} typed
+     * fast in Normal mode: {@code b}, {@code y} and {@code e} were routed as Normal-mode keys before
+     * Neovim reported the insert.
+     *
+     * @param taken the keys taken from the queue when the sync was read ({@link #keysTaken})
+     */
+    private BooleanSupplier noKeyWaitsAfter(long taken) {
+        return () -> {
+            if (keysQueued.get() == taken) {
+                return true;
+            }
+            if (state.isTypingMode() && !neovimDrivenInsert) {
+                neovimDrivenInsert = true;
+                handBackPending = true;
+            }
+            return false;
+        };
     }
 
     /** Whether the insert Neovim drives now may go back to Eclipse ({@link #handBackPending}). */

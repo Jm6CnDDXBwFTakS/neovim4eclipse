@@ -955,6 +955,58 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * {@code ihello<Esc>ibye} typed fast: the second {@code i} enters insert mode while {@code b},
+     * {@code y} and {@code e} still wait in the queue. Its sync, applied at once here, must not let
+     * Eclipse type (their line events come after it): Neovim types them, and the last hands the
+     * insert back. Each "Eclipse types" check is taken right after an applied sync.
+     */
+    @Test
+    void anInsertEnteredWhileKeysWaitIsHandedToEclipseOnlyAfterTheLast() throws Exception {
+        try (NeovimSession s = start()) {
+            List<Boolean> eclipseTypes = new CopyOnWriteArrayList<>();
+            s.addBufferChangeListener(change -> {
+                if (change.afterApply() != null) {
+                    change.afterApply().run(); // as the editor does once it applied the change
+                    if (s.isTypingMode()) {
+                        eclipseTypes.add(s.isEclipseTypingReady() && !s.isNeovimDrivenInsert());
+                    }
+                }
+            });
+            s.setBufferLines(List.of("one"));
+            keys(s, "A");
+            waitFor(s::isEclipseTypingReady, "Eclipse may type");
+            CountDownLatch routed = new CountDownLatch(1);
+            s.setLeaveInsertPush(() -> {
+                try {
+                    assertTrue(routed.await(WAIT_MS, TimeUnit.MILLISECONDS));
+                    s.setBufferLines(List.of("one hello")); // what Eclipse typed
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            KeyRouter router = new KeyRouter(s);
+            CountDownLatch handled = new CountDownLatch(5); // the leave, then i, b, y, e
+            Runnable listener = handled::countDown;
+            s.addInputHandledListener(listener);
+            eclipseTypes.clear();
+            try {
+                for (String key : List.of("<Esc>", "i", "b", "y", "e")) {
+                    assertTrue(router.route(key), key + " goes to Neovim");
+                }
+                routed.countDown();
+                assertTrue(handled.await(WAIT_MS, TimeUnit.MILLISECONDS), "Neovim handled them all");
+            } finally {
+                s.removeInputHandledListener(listener);
+            }
+            waitFor(s::isEclipseTypingReady, "the insert handed back to Eclipse");
+            assertFalse(eclipseTypes.isEmpty() || eclipseTypes.get(0), "not at the insert's sync: " + eclipseTypes);
+            assertFalse(s.isNeovimDrivenInsert());
+            // Esc put the cursor on the "e" of "one"; i inserted bye before it.
+            assertEquals(List.of("onbyee hello"), s.getBufferLines());
+        }
+    }
+
     @Test
     void dotRepeatsTextTypedInInsertModeByEclipse() throws Exception {
         try (NeovimSession s = start()) {

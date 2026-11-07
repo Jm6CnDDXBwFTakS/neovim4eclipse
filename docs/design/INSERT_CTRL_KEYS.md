@@ -159,6 +159,14 @@ hand-back starts only when none waits, and the editor calls it off on applying t
 queued since (the next key retries). Tests: `KeyInputTest` (`onceNeovimHasTheKeyItWaitedFor…`, the
 queue cases), UI `ctrlRWhileEclipseTypesInsertsARegisterThenEclipseTypesAgain`.
 
+The insert-start handshake makes the same check. Keys can wait behind the key that enters insert
+mode: `ihello<Esc>ibye` typed fast sends the second `i` and `bye` to Neovim, queued behind the
+leave, and the mode change ends the Neovim-driven insert they were sent in (`ibye` typed fast in
+Normal mode is the same: the keys are routed before Neovim reports the insert). If any key waits
+when the editor applies the insert's sync, Eclipse does not type yet: the insert becomes
+Neovim-driven, and the last waiting key hands it back (`KeyInput.noKeyWaitsAfter`;
+`KeyInputTest.anInsertEnteredWhileKeysWait…`, `NeovimSessionIntegrationTest.anInsertEnteredWhileKeysWait…`).
+
 The same hand-back covers a key typed in the millisecond before Eclipse has Neovim's text, at an
 insert's start or after a sync point (`KeyRouter` → `driveInsertFromNeovim`): it goes to Neovim, and
 Eclipse types the next one, rather than Neovim typing the rest of the insert
