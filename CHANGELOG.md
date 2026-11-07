@@ -40,14 +40,15 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A carriage return Neovim keeps inside a line (Ctrl-V Ctrl-M, Ctrl-R Ctrl-R of a register that
   holds one, `:s` with `nr2char(13)`) no longer makes Eclipse's lines and Neovim's differ, which
   could delete, duplicate or save the wrong lines, also in an insert recorded as a macro. Eclipse
-  takes it as a line break, and Neovim splits its line there too.
+  takes it as a line break, and Neovim splits its line there too; one `u` undoes the whole insert.
 - Keys typed right after Esc (a fast `ihello<Esc>:w<CR>`) go to Neovim instead of landing in the
   document, and typing `<Esc>i…` or `i…` very fast no longer lets a key Eclipse types be
   overwritten by Neovim's.
 - Renaming or moving an open file (Refactor › Rename, the Project Explorer), or File › Save As, no
   longer cuts Neovim off from the editor, and keeps its Neovim buffer: undo history and marks
   survive, in multi-page editors too. An editor Eclipse reuses for another file gets a buffer of
-  its own, even when both files have the same text.
+  its own, even when both files have the same text. Every Save As keeps the buffer, not only
+  *File › Save As* (an editor's own Save As too).
 - After `:wa` created a new file in the background, `:bufdo … | update` no longer changes Neovim but
   saves Eclipse's old text.
 - Get Neovim and the start-up clean-up no longer delete files inside a folder that a junction or
@@ -63,6 +64,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Security: a symbolic link to a file that does not exist is no longer written through by `:w`,
   `:w other`, `:saveas`, `:wq` or `:wa` without `!`; `:w!` and `:wa!` write there (`:w` says so in
   its error), and `:wq!` writes and closes.
+- `:wq!` and `:wqa!` no longer close an editor whose save failed (a new file in a missing folder
+  without `++p`, E212): its text stays, as in Vim.
 - On Windows, `:e` of a symbolic link to a missing file opens it as a new file, as on Linux and
   macOS, instead of Eclipse's "File not found" page.
 - A Cmd shortcut (macOS) or Super shortcut (Linux) that Eclipse has no binding for (Cmd+U, Cmd+P)
@@ -78,7 +81,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Switching to Eclipse mode with the `:` box open closes it; it stayed open and stuck.
 - After Detach Neovim, a restart of Neovim, or a multi-page editor's page switch, the editor gets
   its normal caret back instead of the block, and a caret Eclipse changed meanwhile (Insert
-  toggling overwrite) stays.
+  toggling overwrite) stays; an editor that had no caret of its own gets a thin one.
 - The command line, output popup and message line follow a light/dark theme switch while open; an
   error flash no longer undoes a background change made during it.
 - Folds Java's reconcile changes while Neovim opens or closes a fold now reach Neovim.
