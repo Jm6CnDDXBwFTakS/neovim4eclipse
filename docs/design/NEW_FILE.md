@@ -134,7 +134,8 @@ location, a new file never meets it, so no workaround is needed
    the Text Editor, never an external program. (An existing workspace file goes by every content
    type the workspace gives it, its project's own content types included: a cloned project can map
    a name to the image type, which the Web Browser editor shows, scripts and all.)
-4. **Which input:** always a `FileStoreEditorInput` (section 2). `NewFiles.workspaceFileAt` finds
+4. **Which input:** always a `FileStoreEditorInput` (section 2); for a dangling link, one on the
+   link's target (item 7). `NewFiles.workspaceFileAt` finds
    the project from the location wherever the code needs it (`missingFileOf`, the project root for
    `:e` lookups).
 5. **Encoding:** an editor opened by location would use the workspace default, so it takes the
@@ -152,6 +153,25 @@ location, a new file never meets it, so no workaround is needed
    line ends on. The same goes for a copy onto one, Neovim's own `:w other.txt` (`editor/OtherFileWrites`,
    since Neovim's E13 check follows the link and lets it pass) and `:wq other.txt` alike.
 
+   **The editor is opened on the link's target, not on the link** (`editor/DanglingLinkInput`, a
+   `FileStoreEditorInput` on `DanglingLinks.finalTarget`, named after the link). Why: on Windows,
+   Eclipse's local file system looks a file up with `FindFirstFile`, which finds the link itself
+   instead of following it, so it reports the link as an existing file, and a refresh lists it in
+   the workspace as an existing `IFile`. A text editor on the link then reads it, through the
+   workspace file or through the location, the read fails, and the editor shows Eclipse's "File
+   not found: ...\notes.local." page in front of its text. On Linux and macOS Eclipse's file system
+   follows the link (`stat`), so it counts as missing there and the editor on the link worked. The
+   missing target reads as missing on every system. The plug-in itself still knows the file by
+   the link: the Neovim buffer's name, the `!` rule, and the workspace file the first write switches
+   to (section 4, step 4), which then reads the written target through the link. Every decision
+   about such a link is made from the file system (`DanglingLinks`, `Files.exists`), never from
+   `IFile.exists()`: `NewFiles.missingFileOf` counts a listed workspace file that is a dangling
+   link as missing, and `ProjectFileEditors` opens no editor for one (a quickfix entry or a buffer
+   Neovim moves into), so Neovim keeps the buffer as for any missing file.
+   `NewFileEndToEndTest.aLinkToAMissingFileThatTheWorkspaceListsStillOpensAsANewFile` makes the
+   Windows state on Linux: the workspace file is created as a plain file and replaced by the link
+   behind Eclipse's back.
+
 ## 4. Writing (`:w`, `:wq`, `:x`, `ZZ`, `:wa`)
 
 **Where the writes come from.** `:w` and `:update` are Neovim's own writes: the buffer's
@@ -165,7 +185,7 @@ takes both, and closes only after the save worked. `ZZ` (`EclipseFileCommands.zz
 (`saveAll`) end in the same `NewFiles.save`.
 
 **The rule, with no state kept:** before saving an editor, `NewFiles.missingFileOf` checks whether
-its file exists (`IFile.exists()`, or the location on disk). If it does, Eclipse saves it as
+its file exists (`IFile.exists()`, or the location on disk; a dangling link is missing either way). If it does, Eclipse saves it as
 `Ctrl+S` would. If not, `NewFiles.save`:
 
 1. **Folder check, first:** if the parent folder is missing, then without `++p` show the E212
@@ -179,7 +199,8 @@ its file exists (`IFile.exists()`, or the location on disk). If it does, Eclipse
    with no dialog. The workspace file is then refreshed, since an editor opened by location writes
    to disk without telling the workspace.
 3. **An untouched new editor:** the provider writes nothing for a clean document, so for `:w` and
-   `:wq` the plug-in creates the empty file itself, refreshes the workspace file, then asks the
+   `:wq` the plug-in creates the empty file itself (for a dangling link, `:w!`: at its target,
+   since the link's own name is taken; `NewFiles.Missing.onDisk`), refreshes the workspace file, then asks the
    provider to synchronize the editor, in that order: the editor's synchronize compares with what
    the workspace knows, so in the other order Eclipse later asks "File Changed". `:x` and `ZZ`
    write only changed editors, as in Vim, so they create nothing.
@@ -225,7 +246,11 @@ instead, and `:wa` reports failure.
   by `:w`; the written message counts bytes in the file's encoding (`é` in an ISO-8859-1 project is
   `1B`, and one byte on disk); an unknown extension opens in the Text Editor; `:wq` and `ZZ` create
   the file and close; `:x` on an untouched editor closes without creating one; `:wa` creates new
-  files and saves the others; `./` is the project root and `%:h` the file's folder.
+  files and saves the others; `./` is the project root and `%:h` the file's folder; a link to a
+  missing file opens as a new file and needs `!` for `:w`, `:wa` and `:wq`, also while the
+  workspace lists it as an existing file (as Windows does), and `:w!` then shows the text in the
+  workspace file. `DanglingLinksTest` (`tests/text`) checks the link rule and the target a write
+  creates (relative, a chain of links, a loop) on real links.
   `CommandBoxEndToEndTest.anUntitledFileFindsNamesInTheFolderOfTheEditorBeforeIt` covers the
   untitled case.
 

@@ -93,9 +93,26 @@ final class NewFiles {
      * An editor's file that does not exist on disk.
      *
      * @param workspaceFile the workspace file, or {@code null} for a file outside the workspace
-     * @param path          where it is on disk
+     * @param path          where it is on disk, as the user named it
+     * @param onDisk        the file a write creates: {@code path}, or for a dangling symbolic link
+     *                      its missing target ({@link DanglingLinks#finalTarget}). Example:
+     *                      {@code /ws/proj/notes.local} linked to {@code /tmp/gone.txt} has
+     *                      {@code /tmp/gone.txt}, whose folder must exist and where the empty file of
+     *                      an unchanged {@code :w!} is made (a new file cannot be made at the link
+     *                      itself: its name is taken)
      */
-    record Missing(IFile workspaceFile, Path path) {
+    record Missing(IFile workspaceFile, Path path, Path onDisk) {
+
+        /** The missing file at {@code path}, which a write creates through it if it is a dangling link. */
+        static Missing at(IFile workspaceFile, Path path) {
+            Path target = DanglingLinks.finalTarget(path);
+            return new Missing(workspaceFile, path, target != null ? target : path);
+        }
+
+        /** Whether {@code path} is a dangling link, so the write goes to another place. */
+        boolean throughALink() {
+            return !onDisk.equals(path);
+        }
     }
 
     /**
@@ -184,15 +201,27 @@ final class NewFiles {
         if (input == null) {
             return null;
         }
+        if (input instanceof DanglingLinkInput linked) {
+            // Missing while the link dangles (Files.exists follows it); after the first write an
+            // ordinary file outside the workspace (inside, the editor has switched to the workspace file).
+            Path link = linked.link();
+            return Files.exists(link) ? null : Missing.at(workspaceFileAt(link), link);
+        }
         IFile file = input.getAdapter(IFile.class);
         if (file != null) {
-            return file.exists() || file.getLocation() == null ? null
-                    : new Missing(file, Path.of(file.getLocation().toOSString()));
+            if (file.getLocation() == null) {
+                return null;
+            }
+            // Not by IFile.exists() alone for a dangling link: Windows lists one as an existing
+            // workspace file (see DanglingLinkInput), and its save would then write through the link
+            // without the ! the rule asks for.
+            Path path = Path.of(file.getLocation().toOSString());
+            return file.exists() && !DanglingLinks.isDangling(path) ? null : Missing.at(file, path);
         }
         if (input instanceof FileStoreEditorInput store && store.getURI() != null
                 && "file".equals(store.getURI().getScheme())) {
             Path path = Path.of(store.getURI());
-            return Files.exists(path) ? null : new Missing(workspaceFileAt(path), path);
+            return Files.exists(path) ? null : Missing.at(workspaceFileAt(path), path);
         }
         return null;
     }
@@ -203,19 +232,25 @@ final class NewFiles {
      * ... does not exist." instead of its text (see the class comment). Code that needs the project
      * finds it from the location ({@link #workspaceFileAt}).
      *
+     * <p>A dangling symbolic link opens on its missing target, under the link's name
+     * ({@link DanglingLinkInput}): decided from the file system ({@link DanglingLinks}), never from
+     * the workspace, which on Windows lists such a link as an existing file.
+     *
      * @param name the name as typed after {@code :e}, for the message
      */
     static void open(IWorkbenchPage page, Path path, String name) {
         try {
             String editorId = editorIdFor(path.getFileName().toString());
-            IEditorInput input = new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(path.toUri()));
+            Path target = DanglingLinks.finalTarget(path);
+            IEditorInput input = target != null ? new DanglingLinkInput(path, target)
+                    : new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(path.toUri()));
             IEditorPart opened = page.openEditor(input, editorId, true);
             ITextEditor text = EditorAttachManager.textEditorOf(opened);
             if (text != null) {
                 useWorkspaceEncoding(text, workspaceFileAt(path));
                 // A dangling link opens as a new file, as in Vim, but says where :w! would write.
                 String message = "\"" + name + "\" [New]"
-                        + (DanglingLinks.isDangling(path) ? " " + DanglingLinks.newFileNote(path) : "");
+                        + (target != null ? " " + DanglingLinks.newFileNote(path) : "");
                 // After the plug-in attaches, which the editor's activation has queued.
                 Display.getCurrent().asyncExec(() -> HostCommands.showMessage(text, message, false));
             }
@@ -429,7 +464,8 @@ final class NewFiles {
             String written = WrittenMessage.of(input.getName(), true, document.get(), charsetOf(editor, missing));
             boolean clean = !part.isDirty();
             if (clean && missing.workspaceFile() != null && part == editor) {
-                becomeWorkspaceFileEditor(editor, missing.workspaceFile(), missing.path());
+                // The location the editor's file buffer was filed under: the target, for a link.
+                becomeWorkspaceFileEditor(editor, missing.workspaceFile(), missing.onDisk());
             }
             if (!clean) {
                 // The file is written, yet the workbench editor is still modified: a multi-page
@@ -512,19 +548,24 @@ final class NewFiles {
         return provider == null ? null : provider.getDocument(editor.getEditorInput());
     }
 
+    /**
+     * Whether the folder the write creates the file in exists: the workspace file's, or on disk for
+     * a file outside the workspace and for a dangling link's target (Vim's {@code :w!} through such
+     * a link fails with E212 when the target's folder is missing, too).
+     */
     private static boolean parentExists(Missing missing) {
-        if (missing.workspaceFile() != null) {
+        if (missing.workspaceFile() != null && !missing.throughALink()) {
             return missing.workspaceFile().getParent().exists();
         }
-        Path parent = missing.path().getParent();
+        Path parent = missing.onDisk().getParent();
         return parent != null && Files.isDirectory(parent);
     }
 
     private static void createParent(Missing missing) throws Exception {
-        if (missing.workspaceFile() != null) {
+        if (missing.workspaceFile() != null && !missing.throughALink()) {
             createWorkspaceFolder(missing.workspaceFile().getParent());
         } else {
-            Files.createDirectories(missing.path().getParent());
+            Files.createDirectories(missing.onDisk().getParent());
         }
     }
 
@@ -544,7 +585,7 @@ final class NewFiles {
      * of it from {@link #refreshWorkspaceFile}.
      */
     private static void createEmpty(Missing missing) throws Exception {
-        Files.createFile(missing.path());
+        Files.createFile(missing.onDisk());
     }
 
     /**
@@ -555,6 +596,11 @@ final class NewFiles {
     private static void refreshWorkspaceFile(Missing missing) throws CoreException {
         if (missing.workspaceFile() != null) {
             missing.workspaceFile().refreshLocal(IResource.DEPTH_ZERO, null);
+        }
+        // A link's target in a project of its own (or the same one) is a new workspace file too.
+        IFile target = missing.throughALink() ? workspaceFileAt(missing.onDisk()) : null;
+        if (target != null) {
+            target.refreshLocal(IResource.DEPTH_ZERO, null);
         }
     }
 

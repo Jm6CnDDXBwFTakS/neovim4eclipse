@@ -357,6 +357,60 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A link to a missing file that the workspace lists as an existing file still opens as a new
+     * file, and {@code :w!} writes its target, which the workspace file then shows.
+     *
+     * <p>Why: on Windows Eclipse's file system finds the link itself ({@code FindFirstFile} does not
+     * follow it), so a refresh puts the link in the workspace as an existing {@code IFile}, and a
+     * text editor reading it, by the workspace file or by its location, shows "File not found"
+     * instead of its text. Linux's file system follows the link and never lists it, so the test makes
+     * the same state another way: the workspace file is created as a plain file, which is then
+     * replaced by the link behind Eclipse's back, with no refresh. Skipped where links cannot be made.
+     */
+    @Test
+    void aLinkToAMissingFileThatTheWorkspaceListsStillOpensAsANewFile() throws Exception {
+        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+        Path gone = dir.resolve("gone.txt");
+        IFile listed = project.getFile("listed.local");
+        Path link = Path.of(listed.getLocation().toOSString());
+        try {
+            listed.create(new java.io.ByteArrayInputStream(new byte[0]), true, null);
+            Files.delete(link);
+            try {
+                Files.createSymbolicLink(link, gone);
+            } catch (IOException | UnsupportedOperationException e) {
+                assumeTrue(false, "cannot make a symbolic link here: " + e);
+            }
+            assertTrue(listed.exists(), "the workspace lists the link as an existing file, as on Windows");
+            List<String> dialogs = closeModalDialogsWhile(widget);
+            runInBox(widget, "e listed.local");
+            ITextEditor opened = activeEditorNamed("listed.local");
+            expectMessage(opened, "\"listed.local\" [New] " + DanglingLinks.newFileNote(link));
+            StyledText target = widgetOf(opened);
+            insert(target, "x");
+
+            runInBox(target, "w");
+            expectFinalError(opened, DanglingLinks.refusal("listed.local", link));
+            assertFalse(Files.exists(gone), "nothing written through the link");
+
+            runInBox(target, "w!");
+            waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
+            assertEquals("x", Files.readString(gone, StandardCharsets.UTF_8));
+            waitUntil("the editor clean", TIMEOUT_MS, () -> !opened.isDirty());
+            assertEquals(listed, opened.getEditorInput().getAdapter(IFile.class),
+                    "the editor switched to the workspace file");
+            assertEquals("x", fileText("listed.local"), "the workspace file shows the written text");
+            assertEquals(List.of(), dialogs);
+            closeAll();
+        } finally {
+            closeAll(); // first, unsaved: see aWriteThroughALinkToAMissingFileNeedsBang
+            Files.deleteIfExists(link);
+            listed.refreshLocal(IResource.DEPTH_ZERO, null);
+            leaveAndDelete(dir, gone);
+        }
+    }
+
+    /**
      * {@code :wa} leaves a new file that is a link to a missing file unsaved, as {@code :w} does;
      * {@code :wa!} passes its {@code !} on (util/HostCommandRunner) and writes through the link, as
      * {@code :w!} does. Skipped where links cannot be made.

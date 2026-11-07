@@ -43,6 +43,41 @@ final class DanglingLinks {
         }
     }
 
+    /** Links followed before {@link #finalTarget} gives up, as the kernel's limit for a chain (Linux: 40). */
+    private static final int MAX_HOPS = 40;
+
+    /**
+     * The missing file a write through the dangling link {@code link} would create: its target,
+     * followed through further links, with a relative target taken from the link's folder. Example:
+     * {@code /ws/proj/notes.local} to {@code ../gone.txt} gives {@code /ws/proj/../gone.txt}; to
+     * {@code next.local}, itself a link to {@code /tmp/gone.txt}, gives {@code /tmp/gone.txt}.
+     * {@code null} when {@code link} is not dangling, or the chain cannot be read or is too long
+     * (a loop).
+     *
+     * <p>Why: an editor for a new file that is such a link is opened on this path, not on the link
+     * ({@code NewFiles.open}). On Windows, Eclipse's file system finds the link itself and so counts
+     * it as an existing file, and reading it then fails ("File not found"), so an editor on the link
+     * shows that error instead of its text. The missing target reads as missing everywhere.
+     */
+    static Path finalTarget(Path link) {
+        if (!isDangling(link)) {
+            return null;
+        }
+        try {
+            Path current = link.toAbsolutePath();
+            for (int hop = 0; hop < MAX_HOPS && Files.isSymbolicLink(current); hop++) {
+                Path parent = current.getParent();
+                Path target = Files.readSymbolicLink(current);
+                // Not normalized: "dir/../x" is then resolved by the file system, as it resolves the
+                // link's own target, also where dir is itself a link.
+                current = parent == null ? target : parent.resolve(target);
+            }
+            return Files.isSymbolicLink(current) ? null : current;
+        } catch (IOException | UnsupportedOperationException | SecurityException e) {
+            return null;
+        }
+    }
+
     /**
      * The message for a write refused at a dangling link. Example:
      * {@code "notes.local" is a link to /home/you/.config/autostart/x.desktop, which does not exist; add ! to write there}.

@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -49,6 +50,45 @@ class DanglingLinksTest {
         assertFalse(DanglingLinks.isDangling(link));
         assertFalse(DanglingLinks.isDangling(dir.resolve("new.txt")), "a missing file is no link");
         assertFalse(DanglingLinks.isDangling(target));
+    }
+
+    @Test
+    void theFinalTargetIsTheMissingFileAWriteWouldCreate() throws IOException {
+        Path absolute = dir.resolve("abs.local");
+        link(absolute, dir.resolve("gone.txt"));
+        assertEquals(dir.resolve("gone.txt"), DanglingLinks.finalTarget(absolute));
+
+        Files.createDirectory(dir.resolve("sub"));
+        Path relative = dir.resolve("sub").resolve("rel.local");
+        link(relative, Path.of("..", "gone.txt"));
+        Path found = DanglingLinks.finalTarget(relative);
+        assertEquals(dir.resolve("gone.txt"), found.normalize(), "relative to the link's folder");
+        Files.writeString(found, "x"); // written there, it is the file the link shows
+        assertEquals("x", Files.readString(relative));
+    }
+
+    @Test
+    void theFinalTargetFollowsAChainAndGivesUpOnALoop() {
+        Path first = dir.resolve("first.local");
+        Path second = dir.resolve("second.local");
+        link(first, second);
+        link(second, dir.resolve("gone.txt"));
+        assertEquals(dir.resolve("gone.txt"), DanglingLinks.finalTarget(first));
+
+        Path a = dir.resolve("a.local");
+        Path b = dir.resolve("b.local");
+        link(a, b);
+        link(b, a);
+        assertNull(DanglingLinks.finalTarget(a), "a loop has no file to write");
+    }
+
+    @Test
+    void anythingButADanglingLinkHasNoFinalTarget() throws IOException {
+        Path target = Files.writeString(dir.resolve("here.txt"), "x");
+        Path link = dir.resolve("ok.local");
+        link(link, target);
+        assertNull(DanglingLinks.finalTarget(link));
+        assertNull(DanglingLinks.finalTarget(dir.resolve("new.txt")));
     }
 
     @Test

@@ -1333,6 +1333,9 @@ public final class EditorAttachManager {
             return null;
         }
         try {
+            if (input instanceof DanglingLinkInput linked) {
+                return linked.link(); // its editor reads the link's target; the file is the link
+            }
             IFile file = input.getAdapter(IFile.class);
             if (file != null && file.getLocation() != null) {
                 return Path.of(file.getLocation().toOSString());

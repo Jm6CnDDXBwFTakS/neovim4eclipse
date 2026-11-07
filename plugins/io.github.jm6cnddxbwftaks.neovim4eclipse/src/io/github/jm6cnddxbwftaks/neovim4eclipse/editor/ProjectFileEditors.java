@@ -40,6 +40,8 @@ import org.eclipse.ui.part.MultiPageEditorPart;
  *       empty. Its missing folders and the file are refreshed, one level each. A refresh waits for
  *       the workspace while a build runs, so this part runs off the UI thread
  *       ({@link #workspaceFile}).</li>
+ *   <li><b>Not a dangling link.</b> A symbolic link to a missing file has no file to show, even
+ *       where the workspace lists it as existing (Windows; {@link DanglingLinkInput}).</li>
  *   <li><b>Only Eclipse's own editors.</b> {@code IDE.getEditorDescriptor} names the editor Eclipse
  *       would open; for a {@code .zip}, a {@code .pdf} or an unknown binary that is the system's
  *       program, which would start outside Eclipse. Then nothing opens.</li>
@@ -127,6 +129,13 @@ final class ProjectFileEditors {
      * project's), refreshed when Eclipse does not know it yet, or {@code null}.
      */
     private static IFile existing(Path path) {
+        if (DanglingLinks.isDangling(path)) {
+            // No file to open: decided from the file system, since Windows lists a link to a missing
+            // file as an existing workspace file, and an editor on it shows "File not found"
+            // instead of its text (DanglingLinkInput). Linux and macOS never list it. Neovim keeps
+            // the buffer, as for any missing file; :e opens it as a new file (NewFiles.open).
+            return null;
+        }
         IFile file = NewFiles.workspaceFileAt(path);
         if (file == null) {
             return null;
