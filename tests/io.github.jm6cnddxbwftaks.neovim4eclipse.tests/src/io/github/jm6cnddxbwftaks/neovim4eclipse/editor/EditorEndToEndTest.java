@@ -720,6 +720,48 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * An attach that fails (its controller could not be made) leaves the document with its own sync
+     * (sync/UnattachedDocumentSync), as a detach does: Eclipse's change to it in the background
+     * still reaches its buffer, so the {@code :bufdo} below edits the text Eclipse has. Were the sync
+     * left "attached" to a controller that does not exist, Neovim would edit its stale copy.
+     */
+    @Test
+    void aFailedAttachHandsTheDocumentBackToItsSync() throws Exception {
+        IWorkbenchPage page = editor.getSite().getPage();
+        ITextEditor second = openFile("second.txt", "banana\n");
+        page.activate(editor);
+        waitForAttach(editor, "test.txt");
+        EditorAttachManager manager = EditorAttachManager.getInstance();
+        try {
+            manager.setControllerMakerForTests((textEditor, s, buffer, window, takeCursor) -> {
+                throw new IllegalStateException("no controller today (expected by the test)");
+            });
+            // try/catch, not assertThrows: the fragment does not import JUnit's function package.
+            try {
+                manager.attach(second, false);
+                throw new AssertionError("the attach should have failed");
+            } catch (IllegalStateException expected) {
+                assertTrue(expected.getMessage().contains("expected by the test"), expected.toString());
+            }
+            manager.setControllerMakerForTests(null); // :bufdo below attaches as usual
+
+            documentOf(second).replace(0, 0, "added\n");
+            settle();
+            session.commandAsync("bufdo %s/^/>/");
+
+            waitUntil("second.txt changed", TIMEOUT_MS, () -> ">added\n>banana\n".equals(documentOf(second).get()),
+                    () -> "; it reads " + documentOf(second).get().replace("\n", "\\n"));
+        } finally {
+            manager.setControllerMakerForTests(null);
+            page.closeEditor(second, false);
+            // test.txt stayed the active editor through the failed attach, so activating it again
+            // attaches nothing: attach it directly, as the next test expects.
+            manager.attach(editor, false);
+            waitForAttach(editor, "test.txt");
+        }
+    }
+
+    /**
      * {@code :bufdo ... | update} saves every changed file through Eclipse: the document buffers are
      * {@code buftype=acwrite}, and their write hook asks Eclipse to save (core/LuaScripts.DOCUMENT_BUFFER).
      */

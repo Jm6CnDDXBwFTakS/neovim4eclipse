@@ -126,6 +126,20 @@ public final class EditorAttachManager {
     /** Guarded by {@code this}. The buffer of the attached document, or {@code null}. */
     private DocumentBuffer attachedBuffer;
     private volatile boolean autoAttach = true;
+
+    /** Makes the controller that drives an editor: {@link NeovimEditorController#attach}. */
+    @FunctionalInterface
+    interface ControllerMaker {
+        NeovimEditorController make(ITextEditor editor, NeovimSession session, DocumentBuffer buffer,
+                EditorWindow window, boolean takeNeovimCursor) throws Exception;
+    }
+
+    /**
+     * Makes each controller ({@link #attach}). Always {@link NeovimEditorController#attach}, but for
+     * a test that makes it fail, to see what a failed attach leaves behind
+     * ({@code EditorEndToEndTest.aFailedAttachHandsTheDocumentBackToItsSync}). UI thread.
+     */
+    private ControllerMaker controllerMaker = NeovimEditorController::attach;
     /**
      * An editor's dirty flag changed (it was saved, reverted, or edited): Neovim's {@code 'modified'}
      * for its document follows, so {@code :update} writes what Eclipse would save. UI thread.
@@ -444,7 +458,7 @@ public final class EditorAttachManager {
         attachedBuffer = buffer;
         EditorWindow window = windows.computeIfAbsent(editor, part -> new EditorWindow());
         try {
-            activeController = NeovimEditorController.attach(textEditor, session, buffer, window, takeNeovimCursor);
+            activeController = controllerMaker.make(textEditor, session, buffer, window, takeNeovimCursor);
         } catch (Exception | Error e) {
             // No controller: the document's own sync carries the changes across again. Without
             // this it would stay "attached" to nothing, and :bufdo edits of the document (or
@@ -1088,6 +1102,11 @@ public final class EditorAttachManager {
             }
             attachedBuffer = null;
         }
+    }
+
+    /** For tests: {@code maker} makes the controllers from now on; {@code null} puts the real one back. UI thread. */
+    void setControllerMakerForTests(ControllerMaker maker) {
+        controllerMaker = maker == null ? NeovimEditorController::attach : maker;
     }
 
     /** Closes the attached editor's controller, if any; a failure is only logged. Guarded by {@code this}. */
