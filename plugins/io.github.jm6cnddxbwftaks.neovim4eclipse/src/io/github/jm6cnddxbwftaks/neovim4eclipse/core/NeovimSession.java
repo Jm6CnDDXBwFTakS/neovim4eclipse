@@ -103,11 +103,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Who hears of Neovim's changes to each document buffer that is not attached. */
     private final Map<DocumentBuffer, Consumer<BufferChange>> unattachedListeners = new ConcurrentHashMap<>();
     /**
-     * The buffer {@link #setDocumentBufferLines} is writing, or {@link NotificationBridge#UNKNOWN_BUFFER}.
-     * Neovim sends a write's line events before its reply, so they are all read while this is set
-     * and can be dropped: they would echo the write back to the document it came from.
+     * The buffer whose line events are now the echo of {@link #setDocumentBufferLines}, or
+     * {@link NotificationBridge#UNKNOWN_BUFFER}: set and cleared by the {@code eclipse_echo}
+     * notifications around the write ({@link LuaScripts#SET_DOCUMENT_LINES}), so exactly the write's
+     * own events are dropped; they would bring Eclipse's text back to the document it came from.
+     * RPC reader thread only.
      */
-    private volatile int writingBufnr = NotificationBridge.UNKNOWN_BUFFER;
+    private int echoBufnr = NotificationBridge.UNKNOWN_BUFFER;
 
     // ---- state ----
 
@@ -796,17 +798,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (handle == null || !buffer.loaded) {
             return false;
         }
-        List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
-        List<String> current = await(api.bufGetLines(handle, 0, -1, false));
-        LineDiff.Change change = LineDiff.between(current == null ? List.of() : current, target);
-        if (change == null) {
-            return true;
-        }
-        writingBufnr = buffer.bufnr;
-        try {
-            await(api.bufSetLines(handle, change.start(), change.end(), false, change.replacement()));
-        } finally {
-            writingBufnr = NotificationBridge.UNKNOWN_BUFFER;
+        // Read, compared and set in one script, which marks its own echo (see SET_DOCUMENT_LINES).
+        if (!Boolean.TRUE.equals(await(api.execLua(LuaScripts.SET_DOCUMENT_LINES,
+                List.of(String.valueOf(buffer.bufnr), List.copyOf(lines)))))) {
+            return false; // wiped in Neovim meanwhile
         }
         applyModified(buffer);
         return true;
@@ -1549,12 +1544,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void onBufferLines(int bufnr, int firstLine, int lastLine, List<String> newLines) {
-            if (bufnr != NotificationBridge.UNKNOWN_BUFFER && bufnr == writingBufnr) {
+            if (bufnr != NotificationBridge.UNKNOWN_BUFFER && bufnr == echoBufnr) {
                 return; // the echo of Eclipse's own write (setDocumentBufferLines)
             }
-            DocumentBuffer changed = buffers.documentOf(bufnr);
-            if (changed != null) {
-                changed.markOutOfSync(); // the next attach pushes again (DocumentBuffer.syncedStamp)
+            DocumentBuffer document = buffers.documentOf(bufnr);
+            if (document != null) {
+                document.markOutOfSync(); // the next attach pushes again (DocumentBuffer.syncedStamp)
             }
             if (buffers.isAttached(bufnr)) {
                 state.dispatchBufferChange(firstLine, lastLine, newLines);
@@ -1562,7 +1557,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             }
             // Another document's buffer (:bufdo, :argdo, a plug-in), or one that is no document's
             // (help, :enew), which Eclipse does not mirror.
-            DocumentBuffer document = buffers.documentOf(bufnr);
             Consumer<BufferChange> listener = document == null ? null : unattachedListeners.get(document);
             if (listener != null) {
                 try {
@@ -1571,6 +1565,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                     LOG.log(Level.WARNING, "Change of buffer " + bufnr + " not mirrored", e);
                 }
             }
+        }
+
+        @Override
+        public void onEcho(int bufnr, boolean starts) {
+            echoBufnr = starts ? bufnr : NotificationBridge.UNKNOWN_BUFFER;
         }
 
         @Override

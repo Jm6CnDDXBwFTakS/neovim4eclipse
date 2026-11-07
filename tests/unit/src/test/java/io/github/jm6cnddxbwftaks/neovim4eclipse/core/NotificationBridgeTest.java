@@ -50,6 +50,7 @@ class NotificationBridgeTest {
             }
             @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
+            @Override public void onEcho(int bufnr, boolean starts) { events.add("echo@" + bufnr + ":" + starts); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onViewportOverheadChanged() { events.add("overhead"); }
@@ -236,6 +237,15 @@ class NotificationBridgeTest {
         notify("eclipse_window_closed", 1003);
         notify("eclipse_window_closed");
         assertEquals(List.of("winclosed:1003"), events);
+    }
+
+    /** The two notifications around Eclipse's write of a buffer (LuaScripts.SET_DOCUMENT_LINES). */
+    @Test
+    void anEchoStartsAndEndsForItsBuffer() {
+        notify("eclipse_echo", 4, true);
+        notify("eclipse_echo", 4, false);
+        notify("eclipse_echo");
+        assertEquals(List.of("echo@4:true", "echo@4:false"), events);
     }
 
     @Test

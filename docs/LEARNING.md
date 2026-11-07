@@ -515,9 +515,13 @@ is held, the wait ends after 1 s, and Eclipse goes on with the delete.
 Every document buffer is attached this way, not only the one in the window, so a change to any of
 them arrives: `:bufdo` edits each buffer in turn. `NeovimSession` sends the attached buffer's events to
 the editor and the others to their own document (`sync/UnattachedDocumentSync`). When Eclipse writes a
-buffer itself, Neovim reports that write too, as a line event; since Neovim sends the event before the
-reply to `nvim_buf_set_lines`, the session drops the events that arrive while it waits for that reply
-(`setDocumentBufferLines`), instead of applying its own change a second time.
+buffer itself, Neovim reports that write too, as a line event, which must not come back to the
+document. So the write is one Lua script (`LuaScripts.SET_DOCUMENT_LINES`) that reads the buffer, sets
+only the lines that differ, and sends a notification before and after (`eclipse_echo`). Neovim sends
+notifications and line events on one channel in the order they happen, and runs one script at a time,
+so the session drops exactly the events between the two (`setDocumentBufferLines`). A change a plug-in
+makes just before or after it still reaches the document. Example: a timer edits line 1 as Eclipse
+pushes line 2; line 1's event comes outside the pair, line 2's inside.
 
 **Unload, wipe, keep.** Vim's `:bd` *unloads* a buffer (its text and undo history go) and unlists it,
 but keeps the buffer itself: its number, marks and last cursor position (`'"`). `:bw` *wipes* it,

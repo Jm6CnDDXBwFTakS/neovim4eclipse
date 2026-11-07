@@ -1784,6 +1784,56 @@ final class LuaScripts {
             """;
 
     /**
+     * Makes a document's buffer that is not attached equal to the document's lines (arguments: its
+     * number, the lines as one list), replacing only the lines that differ, so the marks and undo
+     * history of the others stay (a refactoring's change in the background, {@code
+     * sync/UnattachedDocumentSync}). Returns {@code false} for a buffer that is gone.
+     *
+     * <h2>Why in one script, between two notifications</h2>
+     * The line events of this change are the echo of Eclipse's own text and must not come back to
+     * the document; any other change of the buffer must. Neovim runs one script at a time, so
+     * nothing else changes the buffer between reading it here and setting it, and it sends the
+     * script's notifications and the change's line events on the one channel in the order they
+     * happen: {@code eclipse_echo(buf, true)}, the echo, {@code eclipse_echo(buf, false)}. The
+     * session drops exactly the line events between the two ({@code NeovimSession.EventSink}).
+     * Example: a plug-in's timer edits line 1 just before Eclipse's push of line 2 arrives: its
+     * event comes before the first notification and reaches the document; the push's comes inside.
+     * (Reading the lines in one request and setting them in a second left a gap where such a change
+     * was lost, or met a replacement computed for the lines before it.)
+     */
+    static final String SET_DOCUMENT_LINES = """
+            local buf, lines = tonumber((select(1, ...))), (select(2, ...))
+            if not buf or not vim.api.nvim_buf_is_valid(buf) then
+              return false
+            end
+            if #lines == 0 then
+              lines = { '' } -- a buffer always has one line
+            end
+            local current = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+            -- The lines that differ: past the common first lines, before the common last ones.
+            local first = 1
+            while first <= #current and first <= #lines and current[first] == lines[first] do
+              first = first + 1
+            end
+            if first > #current and first > #lines then
+              return true -- equal: nothing to set, no echo
+            end
+            local old_end, new_end = #current, #lines
+            while old_end >= first and new_end >= first and current[old_end] == lines[new_end] do
+              old_end, new_end = old_end - 1, new_end - 1
+            end
+            local chan = vim.g.neovim4eclipse_channel
+            vim.rpcnotify(chan, 'eclipse_echo', buf, true)
+            local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, first - 1, old_end, true,
+              vim.list_slice(lines, first, new_end))
+            vim.rpcnotify(chan, 'eclipse_echo', buf, false)
+            if not ok then
+              error(err, 0)
+            end
+            return true
+            """;
+
+    /**
      * Sets {@code 'modified'} of a buffer (arguments: its number, {@code "1"} or {@code "0"}) to
      * Eclipse's dirty flag: Eclipse decides whether a document has unsaved changes, and Neovim's flag
      * follows, so that {@code :update} and {@code :bufdo update} write what Eclipse would save and

@@ -157,3 +157,43 @@ t.test('the cursor goes to the buffer\'s last position, if it has one inside the
   vim.cmd('lockmarks call nvim_buf_set_lines(0, 0, -1, v:false, ["only"])')
   t.eq(false, t.run('GO_TO_LAST_POSITION', 'true'), 'past the end: the caret\'s place instead')
 end)
+
+-- SET_DOCUMENT_LINES: a document's buffer made equal to the document, only the lines that differ
+-- replaced, with the echo marked by two notifications (see its Java comment).
+
+t.test('a document write replaces only the lines that differ, between the two echo notifications', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'one', 'two', 'three' })
+  vim.api.nvim_buf_set_mark(buf, 'a', 3, 0, {})
+  t.eq(true, t.run('SET_DOCUMENT_LINES', tostring(buf), { 'one', 'TWO', 'three' }))
+  t.eq({ 'one', 'TWO', 'three' }, lines())
+  t.eq({ 3, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'), 'an unchanged line keeps its mark')
+  t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
+end)
+
+t.test('a document write of equal lines sets nothing and marks no echo', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'same' })
+  local tick = vim.api.nvim_buf_get_changedtick(buf)
+  t.eq(true, t.run('SET_DOCUMENT_LINES', tostring(buf), { 'same' }))
+  t.eq(tick, vim.api.nvim_buf_get_changedtick(buf))
+  t.eq({}, t.sent('eclipse_echo'))
+end)
+
+t.test('a document write adds and removes lines at the end, and an empty document is one empty line', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a' })
+  t.run('SET_DOCUMENT_LINES', tostring(buf), { 'a', 'b', 'c' })
+  t.eq({ 'a', 'b', 'c' }, lines())
+  t.run('SET_DOCUMENT_LINES', tostring(buf), { 'a' })
+  t.eq({ 'a' }, lines())
+  t.run('SET_DOCUMENT_LINES', tostring(buf), {})
+  t.eq({ '' }, lines())
+end)
+
+t.test('a document write to a buffer that is gone does nothing', function()
+  local gone = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_delete(gone, { force = true })
+  t.eq(false, t.run('SET_DOCUMENT_LINES', tostring(gone), { 'x' }))
+  t.eq({}, t.sent('eclipse_echo'))
+end)

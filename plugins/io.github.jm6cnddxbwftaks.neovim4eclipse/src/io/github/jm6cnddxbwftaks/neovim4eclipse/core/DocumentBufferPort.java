@@ -28,7 +28,9 @@ public interface DocumentBufferPort {
     /**
      * Makes the text of {@code buffer} equal to {@code lines}, attached or not, changing only the
      * lines that differ (so undo history and marks of the others survive). Neovim's line events for
-     * this write are not reported: they would echo it back. Blocking RPC: call on the session's
+     * this write are not reported: they would echo it back. A change Neovim makes to the buffer
+     * by itself is reported, even one that comes just before or after the write
+     * ({@link LuaScripts#SET_DOCUMENT_LINES}). Blocking RPC: call on the session's
      * input thread, that is, from work given to {@link #runAsync}.
      *
      * @return {@code false}, having done nothing, when the buffer does not exist in this session

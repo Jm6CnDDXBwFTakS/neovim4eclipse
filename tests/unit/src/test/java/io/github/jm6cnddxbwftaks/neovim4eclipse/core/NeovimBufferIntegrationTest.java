@@ -237,6 +237,32 @@ class NeovimBufferIntegrationTest {
         }
     }
 
+    /**
+     * A change Neovim makes by itself around Eclipse's write of the same buffer (a plug-in's timer,
+     * an LSP edit) is reported, whether it lands before or after the write: only the write's own
+     * line events are its echo (LuaScripts.SET_DOCUMENT_LINES).
+     */
+    @Test
+    void neovimsOwnChangeNextToEclipsesWriteIsStillReported() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer a = new DocumentBuffer("");
+            DocumentBuffer b = new DocumentBuffer("");
+            s.showBuffer(a);
+            s.setBufferLines(List.of("one", "two", "three"));
+            s.showBuffer(b);
+            List<BufferChange> ofA = new CopyOnWriteArrayList<>();
+            s.addUnattachedChangeListener(a, ofA::add);
+
+            // Runs on Neovim's next loop: next to the write below, before or after it.
+            s.lua("vim.schedule(function() vim.api.nvim_buf_set_lines(" + a.bufnr() + ", 2, 3, false, {'THREE'}) end)");
+            assertTrue(s.setDocumentBufferLines(a, List.of("ONE", "two", "three")));
+
+            waitFor(() -> ofA.stream().anyMatch(c -> c.newLines().contains("THREE")), "Neovim's own change");
+            NeovimBarrier.pass(s);
+            assertTrue(ofA.stream().noneMatch(c -> c.newLines().contains("ONE")), "no echo of the write: " + ofA);
+        }
+    }
+
     @Test
     void neovimSwitchingToAnotherDocumentIsReportedButEclipsesOwnSwitchesAreNot() throws Exception {
         try (NeovimSession s = start()) {

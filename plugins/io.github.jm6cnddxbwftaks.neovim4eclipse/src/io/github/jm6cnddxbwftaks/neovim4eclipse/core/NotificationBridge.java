@@ -62,6 +62,13 @@ final class NotificationBridge implements Incoming {
         void onBufferLines(int bufnr, int firstLine, int lastLine, List<String> newLines);
 
         /**
+         * The line events of buffer {@code bufnr} that follow are the echo of Eclipse's own write
+         * ({@code starts}), or are Neovim's own again ({@code !starts}): the two notifications
+         * around {@link LuaScripts#SET_DOCUMENT_LINES}'s change.
+         */
+        void onEcho(int bufnr, boolean starts);
+
+        /**
          * Neovim made {@code bufnr} its current buffer in window {@code winid} (a jump, {@code :b},
          * or a switch by Eclipse); {@code winid} is {@link EditorWindow#UNKNOWN} if not sent.
          * {@code jumped}: the move is in the window's jump history (false if not sent).
@@ -215,6 +222,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_topline" -> onTopLine(args);
             case "eclipse_search" -> onSearch(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
+            case "eclipse_echo" -> onEcho(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -276,6 +284,14 @@ final class NotificationBridge implements Incoming {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             sink.onBufferReload(buf, args.size() > 1 && Boolean.TRUE.equals(args.get(1)));
+        }
+    }
+
+    /** Payload: {@code [bufnr, starts]}, from {@link LuaScripts#SET_DOCUMENT_LINES}. */
+    private void onEcho(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        if (buf != null) {
+            sink.onEcho(buf, args.size() > 1 && Boolean.TRUE.equals(args.get(1)));
         }
     }
 
