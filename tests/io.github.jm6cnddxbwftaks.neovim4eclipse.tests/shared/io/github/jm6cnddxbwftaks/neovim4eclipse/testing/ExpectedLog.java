@@ -118,6 +118,23 @@ public final class ExpectedLog implements AutoCloseable {
         }
     }
 
+    /**
+     * Fails if a record at {@code level} or above has {@code messagePart} in its message. Example:
+     * a command's text may be logged at {@code FINE}, never at {@code WARNING}, which reaches the
+     * Error Log.
+     */
+    public void assertNotLoggedAtOrAbove(Level level, String messagePart) {
+        synchronized (records) {
+            for (LogRecord logRecord : records) {
+                if (logRecord.getLevel().intValue() >= level.intValue()
+                        && String.valueOf(logRecord.getMessage()).contains(messagePart)) {
+                    fail("expected no " + level + " or higher log containing \"" + messagePart + "\"; logged: "
+                            + logRecord.getLevel() + " " + logRecord.getMessage());
+                }
+            }
+        }
+    }
+
     /** Stops capturing; the logger prints to the console again. */
     @Override
     public void close() {

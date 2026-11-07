@@ -1341,7 +1341,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@link CommandRunner#run}.
      */
     public void commandAsync(String cmd) {
-        submit("command " + cmd, Level.WARNING, () -> commands.run(cmd));
+        // No command line in the label, as for a key (inputAsync): a failure logs the label at
+        // WARNING, into Eclipse's Error Log and .metadata/.log, and a line typed in the : box may
+        // hold a secret (:!curl -H 'Authorization: token ...').
+        submit("a : command", Level.WARNING, () -> commands.run(cmd));
     }
 
     /**

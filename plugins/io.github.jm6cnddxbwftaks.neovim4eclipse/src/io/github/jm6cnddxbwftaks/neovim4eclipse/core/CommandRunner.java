@@ -102,7 +102,11 @@ final class CommandRunner {
         try {
             nvim.awaitIdle(commandTimeout);
         } catch (TimeoutException e) {
-            LOG.warning("Command still running after " + commandTimeout.toSeconds() + " s: " + keys);
+            // The command's text only at FINE: a WARNING reaches the Error Log and .metadata/.log,
+            // and a command line may hold a secret (a token in :!curl -H ...), as for
+            // NeovimSession.commandAsync's label.
+            LOG.warning("Command still running after " + commandTimeout.toSeconds() + " s");
+            LOG.fine(() -> "The command still running: " + keys);
         }
         nvim.syncBuffer();
         nvim.syncModeAndCursor();

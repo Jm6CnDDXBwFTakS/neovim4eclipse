@@ -90,7 +90,7 @@ class CommandRunnerTest {
 
     @Test
     void aCommandStillRunningAfterTheTimeoutIsLoggedAndEclipseIsStillRefreshed() throws Exception {
-        try (ExpectedLog log = ExpectedLog.of(CommandRunner.class)) {
+        try (ExpectedLog log = ExpectedLog.of(CommandRunner.class, Level.FINE)) {
             nvim.idleFailure = new TimeoutException();
 
             runner.run("!sleep 100");
@@ -98,6 +98,9 @@ class CommandRunnerTest {
             assertEquals(List.of("syncBuffer", "syncModeAndCursor"),
                     nvim.calls.subList(nvim.calls.size() - 2, nvim.calls.size()));
             log.assertLogged(Level.WARNING, "still running");
+            // The command's text, which may hold a secret, only below WARNING (the Error Log's).
+            log.assertNotLoggedAtOrAbove(Level.WARNING, "sleep 100");
+            log.assertLogged(Level.FINE, "sleep 100");
         }
     }
 
