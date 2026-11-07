@@ -50,8 +50,14 @@ public final class HostCommandRunner {
          */
         boolean writeCopy(String file, boolean force, boolean onlyIfChanged, boolean createFolders);
 
-        /** Saves every modified editor; {@code false} if one could not be saved. */
-        boolean saveAll();
+        /**
+         * Saves every modified editor; {@code false} if one could not be saved.
+         *
+         * @param force {@code :wa!}, {@code :wqa!}: a new file that is a symbolic link to a missing
+         *              file is written through it, as {@code :w!} writes one (without {@code !}
+         *              that editor is left unsaved, with the refusal shown)
+         */
+        boolean saveAll(boolean force);
 
         /** Closes the current editor; {@code force} discards its changes instead of asking. */
         void close(boolean force);
@@ -103,7 +109,7 @@ public final class HostCommandRunner {
     public void run(HostCommand cmd) {
         boolean force = cmd.force();
         switch (cmd.kind()) {
-            case WRITE_ALL -> onUi.accept(ide::saveAll);
+            case WRITE_ALL -> onUi.accept(() -> ide.saveAll(force));
             case QUIT -> onUi.accept(() -> ide.close(force));
             case QUIT_ALL -> onUi.accept(() -> ide.closeAll(force));
             case BUFFER_DELETE -> onUi.accept(() -> ide.closeBuffers(cmd.args(), force));
@@ -122,7 +128,7 @@ public final class HostCommandRunner {
                 }
             });
             case WRITE_QUIT_ALL -> onUi.accept(() -> {
-                if (ide.saveAll() || force) {
+                if (ide.saveAll(force) || force) {
                     ide.closeAll(true);
                 }
             });

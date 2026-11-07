@@ -204,9 +204,12 @@ public final class EclipseFileCommands {
      * be written (its folder is missing), Eclipse's Save All would still offer Save As for it, so the
      * other editors are then saved one by one instead.
      *
+     * @param throughLink {@code :wa!}: a new file that is a symbolic link to a missing file is
+     *                    written through it, as {@code :w!} writes one ({@link DanglingLinks});
+     *                    {@code :wa} leaves that editor unsaved and shows the refusal
      * @return {@code true} if nothing is left unsaved (an editor can refuse, e.g. on a write error)
      */
-    static boolean saveAll() {
+    static boolean saveAll(boolean throughLink) {
         try {
             IWorkbench workbench = PlatformUI.getWorkbench();
             List<IEditorPart> dirty = dirtyEditors(workbench);
@@ -214,7 +217,7 @@ public final class EclipseFileCommands {
             for (IEditorPart part : dirty) {
                 ITextEditor text = EditorAttachManager.textEditorOf(part);
                 NewFiles.Missing missing = text == null ? null : NewFiles.missingFileOf(text);
-                if (missing != null && !NewFiles.save(text, part, missing, false, false, false)) {
+                if (missing != null && !NewFiles.save(text, part, missing, false, false, throughLink)) {
                     failed.add(part);
                 }
             }

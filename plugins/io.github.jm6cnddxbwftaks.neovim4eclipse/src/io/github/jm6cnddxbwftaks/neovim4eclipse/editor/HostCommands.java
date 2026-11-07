@@ -62,8 +62,8 @@ public final class HostCommands {
         }
 
         @Override
-        public boolean saveAll() {
-            return EclipseFileCommands.saveAll();
+        public boolean saveAll(boolean force) {
+            return EclipseFileCommands.saveAll(force);
         }
 
         @Override

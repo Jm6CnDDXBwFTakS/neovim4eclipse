@@ -354,6 +354,44 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code :wa} leaves a new file that is a link to a missing file unsaved, as {@code :w} does;
+     * {@code :wa!} passes its {@code !} on (util/HostCommandRunner) and writes through the link, as
+     * {@code :w!} does. Skipped where links cannot be made.
+     */
+    @Test
+    void writeAllThroughALinkToAMissingFileNeedsBang() throws Exception {
+        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+        Path gone = dir.resolve("gone.txt");
+        Path link = Path.of(project.getLocation().toOSString()).resolve("all.local");
+        try {
+            try {
+                Files.createSymbolicLink(link, gone);
+            } catch (IOException | UnsupportedOperationException e) {
+                assumeTrue(false, "cannot make a symbolic link here: " + e);
+            }
+            List<String> dialogs = closeModalDialogsWhile(widget);
+            runInBox(widget, "e all.local");
+            ITextEditor opened = activeEditorNamed("all.local");
+            StyledText target = widgetOf(opened);
+            insert(target, "a");
+
+            runInBox(target, "wa");
+            expectMessage(opened, DanglingLinks.refusal("all.local", link));
+            assertFalse(Files.exists(gone), "nothing written through the link");
+            assertTrue(opened.isDirty());
+
+            runInBox(target, "wa!");
+            waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
+            assertEquals("a", Files.readString(gone, StandardCharsets.UTF_8));
+            assertEquals(List.of(), dialogs);
+            closeAll();
+        } finally {
+            Files.deleteIfExists(link);
+            leaveAndDelete(dir, gone);
+        }
+    }
+
+    /**
      * {@code :wq} on a new file that is a link to a missing file refuses the write and leaves the
      * editor open, as Vim does after E13 or E212; {@code :wq!} passes its {@code !} on to the save
      * (util/HostCommandRunner), writes through the link and closes. Skipped where links cannot be made.

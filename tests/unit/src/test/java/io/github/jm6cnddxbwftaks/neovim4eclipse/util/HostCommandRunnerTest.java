@@ -39,8 +39,8 @@ class HostCommandRunnerTest {
         }
 
         @Override
-        public boolean saveAll() {
-            calls.add("saveAll");
+        public boolean saveAll(boolean force) {
+            calls.add(force ? "saveAll!" : "saveAll");
             return saveWorks;
         }
 
@@ -99,6 +99,12 @@ class HostCommandRunnerTest {
     @Test
     void writeAllSavesEveryEditor() {
         assertEquals(List.of("saveAll"), run("wall"));
+    }
+
+    /** {@code :wa!} passes its {@code !} on: a new file that is a link to a missing file is written through it. */
+    @Test
+    void writeAllBangPassesTheBangOn() {
+        assertEquals(List.of("saveAll!"), run("wall!"));
     }
 
     @Test
@@ -182,7 +188,7 @@ class HostCommandRunnerTest {
     @Test
     void writeQuitAllBangClosesEverythingEvenWhenASaveFails() {
         ide.saveWorks = false;
-        assertEquals(List.of("saveAll", "closeAll!"), run("wqall!"));
+        assertEquals(List.of("saveAll!", "closeAll!"), run("wqall!"));
     }
 
     @Test

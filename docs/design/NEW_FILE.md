@@ -147,7 +147,9 @@ location, a new file never meets it, so no workaround is needed
    the `[New]` message. Its write would create the target, wherever the link points, so `:w`
    refuses it and `:w!` writes there (`editor/DanglingLinks`). `:wq` refuses it too and keeps the
    editor open, `:wq!` writes through it and closes (`util/HostCommandRunner` passes the `!` on).
-   The same goes for a copy onto one, Neovim's own `:w other.txt` (`editor/OtherFileWrites`,
+   `:wa` leaves such an editor unsaved and `:wa!` writes it, as `:w!` does. The refusal of `:w`
+   is the answer Neovim reports for the write (`NewFiles.write`), so it is the error the message
+   line ends on. The same goes for a copy onto one, Neovim's own `:w other.txt` (`editor/OtherFileWrites`,
    since Neovim's E13 check follows the link and lets it pass) and `:wq other.txt` alike.
 
 ## 4. Writing (`:w`, `:wq`, `:x`, `ZZ`, `:wa`)
