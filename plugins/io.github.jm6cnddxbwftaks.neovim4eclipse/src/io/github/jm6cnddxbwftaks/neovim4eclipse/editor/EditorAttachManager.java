@@ -941,6 +941,9 @@ public final class EditorAttachManager {
             }
         } catch (Exception | Error e) {
             if (wasAttached) {
+                // Both documents: the old one keeps its sync when the input or the buffer's move
+                // failed, the new one has one when the re-attach failed after making it.
+                handBackToSync(old);
                 handBackToSync(documentOf(editor));
             }
             throw e;
