@@ -420,3 +420,19 @@ t.test('a name a loaded buffer has is refused: the buffer keeps its name and fil
   t.eq(name, vim.api.nvim_buf_get_name(buf))
   t.eq(name, vim.b[buf].neovim4eclipse_file)
 end)
+
+-- A listed buffer without a name that no editor shows (a plug-in's nvim_create_buf(true, false))
+-- is one more buffer for :bufdo to visit, as in Neovim: the walk goes on to the documents after it.
+t.test(':bufdo goes through a listed scratch buffer to the documents after it', function()
+  t.setup()
+  local a = t.document('A.txt', { 'a' })
+  local scratch = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_set_current_buf(scratch) -- entered and left again, as Eclipse sends Neovim back
+  vim.api.nvim_set_current_buf(a)
+  local b = t.document('B.txt', { 'banana' })
+  vim.api.nvim_set_current_buf(a)
+  t.type(':bufdo %s/^/>/<CR>')
+  t.eq({ '>a' }, vim.api.nvim_buf_get_lines(a, 0, -1, true))
+  t.eq({ '>' }, vim.api.nvim_buf_get_lines(scratch, 0, -1, true))
+  t.eq({ '>banana' }, vim.api.nvim_buf_get_lines(b, 0, -1, true), 'the walk reached B.txt')
+end)

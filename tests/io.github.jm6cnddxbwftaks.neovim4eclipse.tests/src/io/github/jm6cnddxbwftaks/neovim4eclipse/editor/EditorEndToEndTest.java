@@ -734,6 +734,31 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A listed buffer without a name that no editor shows (a plug-in's
+     * {@code nvim_create_buf(true, false)}), entered once and sent back from, as in
+     * {@link #neovimIsSentBackFromABufferNoEditorShows}, stays one more buffer for {@code :bufdo}:
+     * the walk goes on through it to second.txt, here after a failed attach, as in
+     * {@link #aFailedAttachHandsTheDocumentBackToItsSync}. The buffer is kept until the end.
+     */
+    @Test
+    void bufdoGoesThroughAListedBufferNoEditorShowsAfterAFailedAttach() throws Exception {
+        type(widget, "G");
+        settle();
+        session.inputAsync(":lua vim.g.e2e_scratch = vim.api.nvim_create_buf(true, false)"
+                + " vim.api.nvim_set_current_buf(vim.g.e2e_scratch)<CR>");
+        try {
+            settle();
+            waitUntil("Neovim back in test.txt", TIMEOUT_MS, () -> cursorLine() == 3);
+            aFailedAttachHandsTheDocumentBackToItsSync();
+        } finally {
+            settle();
+            io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session,
+                    "local b = vim.g.e2e_scratch if b and vim.api.nvim_buf_is_valid(b) then"
+                    + " pcall(vim.api.nvim_buf_delete, b, { force = true }) end vim.g.e2e_scratch = nil return true");
+        }
+    }
+
+    /**
      * An attach that fails (its controller could not be made) leaves the document with its own sync
      * (sync/UnattachedDocumentSync), as a detach does: Eclipse's change to it in the background
      * still reaches its buffer, so the {@code :bufdo} below edits the text Eclipse has. Were the sync
