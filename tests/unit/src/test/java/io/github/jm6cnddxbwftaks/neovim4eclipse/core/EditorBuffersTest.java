@@ -163,4 +163,32 @@ class EditorBuffersTest {
         assertThrows(IllegalStateException.class, () -> buffers.move("A", "B"));
         assertTrue(buffers.isSharedWithAnotherEditor("A", "editor 2"), "A keeps its buffer and editor");
     }
+
+    @Test
+    void theEditorsOfADocumentAreListedInTheOrderTheyOpened() {
+        buffers.add("A.java", "editor 1", () -> "/src/A.java");
+        buffers.add("A.java", "editor 2", () -> "/src/A.java");
+        assertEquals(List.of("editor 1", "editor 2"), buffers.editorsOf("A.java"));
+        assertEquals(List.of(), buffers.editorsOf("B.java"), "no buffer, no editors");
+    }
+
+    /**
+     * An editor that moved to another document gives up only the old one: a multi-page editor's
+     * other pages keep theirs, and a clone keeps the shared buffer until it moves too.
+     */
+    @Test
+    void anEditorGivesUpOneDocumentAndItsBufferGoesWithTheLastEditor() {
+        DocumentBuffer manifest = buffers.add("MANIFEST.MF", "plugin editor", () -> "/p/MANIFEST.MF");
+        DocumentBuffer plugin = buffers.add("plugin.xml", "plugin editor", () -> "/p/plugin.xml");
+        buffers.add("plugin.xml", "clone", () -> "/p/plugin.xml");
+
+        assertNull(buffers.removeFrom("plugin.xml", "plugin editor"), "the clone still shows it");
+        assertSame(manifest, buffers.bufferOf("MANIFEST.MF").orElseThrow(), "the other page's document stays");
+        assertSame(plugin, buffers.removeFrom("plugin.xml", "clone"), "the last editor gave it up");
+        assertTrue(buffers.bufferOf("plugin.xml").isEmpty());
+        assertNull(buffers.removeFrom("plugin.xml", "clone"), "gone already");
+        assertNull(buffers.removeFrom("MANIFEST.MF", "someone else"), "not this document's editor");
+        assertSame(manifest, buffers.bufferOf("MANIFEST.MF").orElseThrow());
+    }
 }
+

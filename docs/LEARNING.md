@@ -200,9 +200,12 @@ So `:e new.txt` inside a project opens by location (an empty, editable editor) a
 
 Eclipse makes such a switch by itself too: rename an open file (Refactor › Rename, or F2 in the
 Project Explorer) and its editor gets a new input, so a new `IDocument`, without being closed.
-Anything that holds on to the old document (a listener, a sync) is then cut off from the editor. A
-part listener hears of it as `IPartListener2.partInputChanged`; the plug-in then binds the editor
-to its new document (`EditorAttachManager.onInputChanged`).
+Anything that holds on to the old document (a listener, a sync) is then cut off from the editor. The
+editor fires the property `IEditorPart.PROP_INPUT` (a part listener hears it as
+`IPartListener2.partInputChanged`, but only for the workbench part: a multi-page editor's page
+changes its input without its part's changing, so the plug-in listens on the text editor itself).
+The plug-in then binds the editor to its new document and renames its Neovim buffer after the file,
+keeping the undo history (`EditorAttachManager.onInputChanged`, `NeovimSession.renameBufferAsync`).
 
 ### 1.5 SWT: one UI thread
 

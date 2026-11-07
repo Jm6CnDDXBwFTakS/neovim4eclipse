@@ -806,26 +806,64 @@ class EditorEndToEndTest extends EndToEndTestBase {
     /**
      * A rename of the open, attached file (as Refactor > Rename or a move in the Project Explorer
      * does it, through the workspace) gives the editor a new input and a new document
-     * ({@code AbstractTextEditor}'s {@code elementMoved}). Neovim follows: its buffer is the new
-     * file's, and an edit in Neovim reaches the document the editor shows now, which {@code :w}
-     * then saves. Before, the plug-in stayed on the old document: the edit reached no editor.
+     * ({@code AbstractTextEditor}'s {@code elementMoved}). Neovim follows with the same buffer,
+     * renamed after the file: {@code u} undoes the edit made before the rename, an edit in Neovim
+     * reaches the document the editor shows now, and {@code :w} saves it. Before, the plug-in stayed
+     * on the old document (the edit reached no editor); then it made a new buffer, without the undo
+     * history.
      */
     @Test
-    void anEditAfterARenameOfTheOpenFileReachesItsNewDocument() throws Exception {
+    void aRenameOfTheOpenFileKeepsItsBufferAndUndo() throws Exception {
+        type(widget, 'x'); // before the rename
+        expectText(editor, "lpha\nbeta\ngamma\n");
+        int bufnr = session.getAttachedBufnr();
         IFile renamed = project.getFile("renamed.txt");
         project.getFile("test.txt").move(renamed.getFullPath(), true, null);
         waitUntil("the editor to show renamed.txt", TIMEOUT_MS,
                 () -> renamed.equals(editor.getEditorInput().getAdapter(IFile.class)));
         assertTrue(documentOf(editor) != document, "Eclipse gave the editor a new document");
-        waitForNeovimIn(renamed); // the attach to the new document made the buffer of renamed.txt
+        waitForNeovimIn(renamed); // the same buffer, renamed after the file
         waitForAttach(editor, "renamed.txt");
+        assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
 
-        type(widget, 'x');
-
-        expectText(editor, "lpha\nbeta\ngamma\n");
+        type(widget, 'u');
+        expectText(editor, "alpha\nbeta\ngamma\n");
+        type(widget, "jx");
+        expectText(editor, "alpha\neta\ngamma\n");
         runInBox(widget, "w");
-        waitUntil("renamed.txt saved", TIMEOUT_MS, () -> "lpha\nbeta\ngamma\n".equals(fileText("renamed.txt")),
+        waitUntil("renamed.txt saved", TIMEOUT_MS, () -> "alpha\neta\ngamma\n".equals(fileText("renamed.txt")),
                 () -> "; it reads " + fileText("renamed.txt").replace("\n", "\\n"));
+    }
+
+    /**
+     * A multi-page editor's text page moves to the renamed file by itself (its own
+     * {@code elementMoved}), while the multi-page editor keeps its input: the plug-in hears it from
+     * the page, and the page keeps its buffer and undo history as a plain editor does.
+     */
+    @Test
+    void aRenameOfAFileOpenInAMultiPageEditorKeepsItsBufferAndUndo() throws Exception {
+        IFile file = createFile("pom.mpage", "<project/>\n");
+        IEditorPart multiPage = IDE.openEditor(page(), file, true);
+        assertTrue(multiPage instanceof TestMultiPageEditor, "opened in " + multiPage);
+        ITextEditor sourcePage = EditorAttachManager.textEditorOf(multiPage);
+        waitForAttach(sourcePage, "the Source page");
+        try {
+            type(widgetOf(sourcePage), 'x');
+            expectText(sourcePage, "project/>\n");
+            int bufnr = session.getAttachedBufnr();
+            IFile renamed = project.getFile("renamed.mpage");
+            file.move(renamed.getFullPath(), true, null);
+            waitUntil("the Source page to show renamed.mpage", TIMEOUT_MS,
+                    () -> renamed.equals(sourcePage.getEditorInput().getAdapter(IFile.class)));
+            waitForNeovimIn(renamed);
+            waitForAttach(sourcePage, "the Source page of renamed.mpage");
+            assertEquals(bufnr, session.getAttachedBufnr(), "the same Neovim buffer");
+
+            type(widgetOf(sourcePage), 'u');
+            expectText(sourcePage, "<project/>\n");
+        } finally {
+            page().closeEditor(multiPage, false);
+        }
     }
 
     /**

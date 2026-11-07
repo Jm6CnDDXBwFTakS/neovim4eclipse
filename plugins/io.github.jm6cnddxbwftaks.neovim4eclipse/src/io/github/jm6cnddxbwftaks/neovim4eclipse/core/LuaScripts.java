@@ -1438,6 +1438,43 @@ final class LuaScripts {
             """;
 
     /**
+     * Renames a document's buffer after its file (arguments: the buffer's number, the new name), when
+     * Eclipse moved the editor to another file: a rename or move of the open file, File › Save As
+     * ({@code editor/EditorAttachManager.rebind}). The buffer stays, with its number, undo history
+     * and marks, as after Vim's {@code :saveas}. Returns whether the buffer has the name now.
+     *
+     * <p>{@code b:neovim4eclipse_file} is set first: {@link #DOCUMENT_BUFFER}'s {@code BufFilePost}
+     * check puts back a name that is not the file's (it undoes {@code :file new.txt}), and must find
+     * the new name to be the file's. That check also wipes the unloaded buffer the rename leaves
+     * under the old name (Vim's alternate file). Nothing for a buffer already so named (Neovim's own
+     * {@code :saveas} renamed it) or one that is gone (it is made under the new name when shown).
+     * The rename fails (E95) when a loaded buffer has the name already; then the old name and file
+     * stay, and the caller closes the buffer, so that it is made anew under the new name.
+     *
+     * <p>Like any rename, it marks the buffer {@code [Not edited]} in its file info until the next
+     * write; writes go through Eclipse ({@code BufWriteCmd}) and work as usual.
+     */
+    static final String RENAME_DOCUMENT_BUFFER = """
+            local buf, name = tonumber((select(1, ...))), select(2, ...)
+            if not vim.api.nvim_buf_is_valid(buf) then
+              return true
+            end
+            local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
+            if canonical(vim.api.nvim_buf_get_name(buf)) == canonical(name) then
+              vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
+              return true
+            end
+            local before = vim.b[buf].neovim4eclipse_file
+            vim.b[buf].neovim4eclipse_file = name
+            if not pcall(vim.api.nvim_buf_set_name, buf, name) then
+              vim.b[buf].neovim4eclipse_file = before
+              return false
+            end
+            vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf) -- as Neovim names it (links resolved)
+            return true
+            """;
+
+    /**
      * Module {@code neovim4eclipse.paths}: the one rule for comparing file paths in Neovim, used by
      * every script that compares them ({@link #PROJECT_FILES}, {@link #HOST_COMMANDS},
      * {@link #DOCUMENT_BUFFER}, {@link #LEAVE_FOLDER}) and by the Lua tests ({@code t.same_file}).

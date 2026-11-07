@@ -132,6 +132,31 @@ public final class EditorBuffers<D, E> {
     }
 
     /**
+     * The editors that show {@code document}, in the order they were opened; empty for a document
+     * without a buffer. Example: {@code A.java} and its clone: both editors.
+     */
+    public List<E> editorsOf(D document) {
+        Entry<E> entry = documents.get(document);
+        return entry == null ? List.of() : List.copyOf(entry.editors);
+    }
+
+    /**
+     * Forgets that {@code editor} shows {@code document} (it shows another one now: its file was
+     * renamed, say), leaving its other documents alone, and returns the document's buffer if no
+     * editor shows it any more, for the caller to close in Neovim; else {@code null}. Example: a
+     * multi-page editor shows {@code MANIFEST.MF} and {@code plugin.xml}; its {@code plugin.xml}
+     * page moving to a renamed file gives up only {@code plugin.xml}'s buffer.
+     */
+    public DocumentBuffer removeFrom(D document, E editor) {
+        Entry<E> entry = documents.get(document);
+        if (entry == null || !entry.editors.remove(editor) || !entry.editors.isEmpty()) {
+            return null;
+        }
+        documents.remove(document);
+        return entry.buffer;
+    }
+
+    /**
      * Forgets {@code editor} (it closed) and returns the buffers no editor shows any more, for the
      * caller to wipe in Neovim. An editor can be listed under more than one document when Eclipse
      * reused it for another file, so the result may hold several buffers; usually it holds one or none.

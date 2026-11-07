@@ -170,14 +170,20 @@ editor reads neither the whole document nor the whole buffer. Both sides changin
 is applied in arrival order; a Neovim change that no longer fits is logged and replaced by Eclipse's text.
 
 Eclipse can also give an open editor a new input itself, and with it a new `IDocument`: a rename or
-move of its file (`AbstractTextEditor`'s `elementMoved` calls `setInput`), or File › Save As. The
-workbench reports it as `partInputChanged`, and `EditorAttachManager.onInputChanged` binds the editor
-to its new document (`rebind`): the old document's controller and syncs stop, and the editor is
-attached again if it was attached. The Neovim buffer moves to the new document when the file's name
-stayed the same; a renamed file gets a new buffer (named after its new path) and the old one is
-closed, since a buffer's name is the path it is made under, again after Restart Neovim. The
-plug-in's own input changes (a new file's first `:w`, `:saveas`) keep the buffer through
-`replaceInputKeepingBuffer`, which makes the syncs again for a document in the background too.
+move of its file (`AbstractTextEditor`'s `elementMoved` calls `setInput`), File › Save As, or an
+editor reused for another file. The text editor fires `PROP_INPUT`, which `EditorAttachManager`
+hears on the text editor itself (a multi-page editor's page moves to the renamed file on its own,
+while the multi-page editor keeps its input), and `onInputChanged` binds the editor to its new
+document (`rebind`): the old document's controller and syncs stop, and the editor is attached again
+if it was attached. When the editor moved with its file (the old file is gone, or the new document
+has the old one's text) and every clone sharing the document moved too, the Neovim buffer moves to
+the new document and is renamed after the new file (`NeovimSession.renameBufferAsync`,
+`LuaScripts.RENAME_DOCUMENT_BUFFER`): its number, undo history and marks stay. The new name is
+recorded in `DocumentBuffer` at once, so a Neovim started by Restart Neovim makes the buffer under
+it. An editor reused for another file gives its buffer up instead, as that file's text must not get
+the old one's undo history. The plug-in's own input changes (a new file's first `:w`, `:saveas`)
+keep the buffer through `replaceInputKeepingBuffer`, which makes the syncs again for a document in
+the background too.
 
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is
 followed: its editor is activated and attached, keeping Neovim's cursor. When several editors show

@@ -9,7 +9,13 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * restarted Neovim creates a new one). Discard it with {@link NeovimSession#closeBufferAsync}.
  */
 public final class DocumentBuffer {
-    final String name;
+    /**
+     * The name the buffer is made under ({@link DocumentBuffers#show}), on first use and again in a
+     * restarted Neovim: normally the file's path. Changed by {@link NeovimSession#renameBufferAsync}
+     * when the file moves (a rename, File › Save As), so that a Neovim started later names the
+     * buffer after the file it now is. Volatile: set on the UI thread, read on the input thread.
+     */
+    volatile String name;
     /** The registry that created the buffer; {@code null} before first use and after wiping. */
     volatile DocumentBuffers owner;
     volatile int bufnr = NotificationBridge.UNKNOWN_BUFFER;
@@ -51,6 +57,11 @@ public final class DocumentBuffer {
     /** The buffer name, normally the file path; may be empty. */
     public String name() {
         return name;
+    }
+
+    /** Records the buffer's new name ({@link NeovimSession#renameBufferAsync}); {@code null} is "". */
+    void rename(String newName) {
+        name = newName == null ? "" : newName;
     }
 
     /** Neovim's buffer number, or {@link NotificationBridge#UNKNOWN_BUFFER} before first use. */

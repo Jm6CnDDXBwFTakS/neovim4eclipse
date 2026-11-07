@@ -457,6 +457,28 @@ final class DocumentBuffers {
     }
 
     /**
+     * Gives Neovim's buffer of {@code buffer} its new name ({@link DocumentBuffer#name}, already
+     * changed by {@link NeovimSession#renameBufferAsync}), keeping the buffer, its undo history and
+     * marks ({@link LuaScripts#RENAME_DOCUMENT_BUFFER}). Nothing for a buffer this Neovim has not
+     * made: it is made under the new name when it is shown. Should Neovim refuse the name (a loaded
+     * buffer has it), the buffer is closed as a closed editor's, so that the next show makes one
+     * under the new name: a buffer under the old name would stand for a file that is not there.
+     */
+    void rename(DocumentBuffer buffer) throws Exception {
+        Handle handle = owns(buffer) ? created.get(buffer.bufnr) : null;
+        if (handle == null) {
+            return;
+        }
+        Object renamed = await(api.execLua(LuaScripts.RENAME_DOCUMENT_BUFFER,
+                List.of(String.valueOf(bufnr(handle)), buffer.name)));
+        if (!Boolean.TRUE.equals(renamed)) {
+            LOG.warning(() -> "Neovim refused the name " + buffer.name + " for buffer " + bufnr(handle)
+                    + "; the buffer is made anew under it");
+            close(buffer);
+        }
+    }
+
+    /**
      * Closes a document's buffer, its last editor closed: as Vim's {@code :bd}, unloaded and unlisted
      * but kept, with its number and marks, for the file's next editor
      * ({@link LuaScripts#CLOSE_DOCUMENT_BUFFER}). Its undo history goes, as in Vim.

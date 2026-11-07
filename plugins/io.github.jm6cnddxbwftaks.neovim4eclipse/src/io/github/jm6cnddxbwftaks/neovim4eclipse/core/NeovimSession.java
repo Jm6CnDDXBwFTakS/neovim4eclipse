@@ -693,6 +693,20 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * The document's file has a new name (a rename or move of the open file, File › Save As): the
+     * buffer is renamed after it, and keeps its number, undo history and marks
+     * ({@link DocumentBuffers#rename}). The name is recorded at once, before Neovim hears of it, so
+     * that a buffer made later, in this Neovim or in one started by Restart Neovim, gets the new
+     * name too. Example: {@code a.txt} renamed to {@code b.txt}; {@code u} in {@code b.txt} undoes
+     * the edit made in {@code a.txt}, and after Restart Neovim the buffer is {@code b.txt}. UI
+     * thread (any thread works).
+     */
+    public void renameBufferAsync(DocumentBuffer buffer, String name) {
+        buffer.rename(name);
+        submit("rename buffer", Level.WARNING, () -> buffers.rename(buffer));
+    }
+
+    /**
      * Handles Neovim switching by itself to the buffer of another open document; the handler should
      * show that document, or call {@link #returnToAttachedBufferAsync()}. Without a handler, and for
      * any buffer that is not a document's, Neovim is switched back to the attached buffer.

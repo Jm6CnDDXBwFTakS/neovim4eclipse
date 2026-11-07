@@ -38,7 +38,8 @@ class DocumentBuffersTest {
             LuaScripts.DOCUMENT_BUFFER, "DOCUMENT_BUFFER",
             LuaScripts.SHOW_WINDOW, "SHOW_WINDOW",
             LuaScripts.RELEASE_BUFFER, "RELEASE_BUFFER",
-            LuaScripts.CLOSE_DOCUMENT_BUFFER, "CLOSE_DOCUMENT_BUFFER");
+            LuaScripts.CLOSE_DOCUMENT_BUFFER, "CLOSE_DOCUMENT_BUFFER",
+            LuaScripts.RENAME_DOCUMENT_BUFFER, "RENAME_DOCUMENT_BUFFER");
 
     /** The calls made, in order: {@code "DOCUMENT_BUFFER [5]"}, {@code "nvim_buf_delete ..."}. */
     private final List<String> calls = new CopyOnWriteArrayList<>();
@@ -176,4 +177,57 @@ class DocumentBuffersTest {
         assertEquals("CLOSE_DOCUMENT_BUFFER [5]", calls.get(calls.size() - 1));
         assertFalse(called("nvim_buf_delete"));
     }
+
+    // ---- a buffer renamed after its file ----
+
+    /** A buffer this Neovim made is renamed in place: it keeps its number (and Neovim its undo history). */
+    @Test
+    void aShownBufferIsRenamedInNeovimAndKeepsItsNumber() throws Exception {
+        DocumentBuffer doc = new DocumentBuffer("/ws/a.txt");
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(5L, true, false));
+        buffers.show(doc);
+        answers.put("RENAME_DOCUMENT_BUFFER", true);
+
+        doc.rename("/ws/b.txt");
+        buffers.rename(doc);
+
+        assertTrue(calls.contains("RENAME_DOCUMENT_BUFFER [5, /ws/b.txt]"), calls.toString());
+        assertTrue(buffers.owns(doc));
+        assertEquals(5, doc.bufnr);
+    }
+
+    /** Neovim refuses the name (a loaded buffer has it): the buffer is closed, to be made anew under it. */
+    @Test
+    void aRefusedRenameClosesTheBuffer() throws Exception {
+        DocumentBuffer doc = new DocumentBuffer("/ws/a.txt");
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(5L, true, false));
+        buffers.show(doc);
+        answers.put("RENAME_DOCUMENT_BUFFER", false);
+
+        doc.rename("/ws/b.txt");
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            buffers.rename(doc);
+            log.assertLogged(Level.WARNING, "Neovim refused the name /ws/b.txt for buffer 5");
+        }
+
+        assertTrue(calls.contains("CLOSE_DOCUMENT_BUFFER [5]"), calls.toString());
+        assertFalse(buffers.owns(doc));
+    }
+
+    /**
+     * A buffer this Neovim has not made (not shown yet, or a Neovim restarted since) is not renamed
+     * in Neovim; it is made under the new name when shown.
+     */
+    @Test
+    void aBufferNotMadeYetIsMadeUnderItsNewName() throws Exception {
+        DocumentBuffer doc = new DocumentBuffer("/ws/a.txt");
+        doc.rename("/ws/b.txt");
+        buffers.rename(doc);
+        assertFalse(called("RENAME_DOCUMENT_BUFFER"), calls.toString());
+
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(5L, true, false));
+        buffers.show(doc);
+        assertTrue(calls.stream().anyMatch(call -> call.startsWith("CREATE_DOCUMENT_BUFFER [/ws/b.txt")), calls.toString());
+    }
 }
+
