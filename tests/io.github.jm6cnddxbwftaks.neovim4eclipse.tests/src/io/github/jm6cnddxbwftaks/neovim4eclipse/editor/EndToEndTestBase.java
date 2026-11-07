@@ -195,11 +195,17 @@ abstract class EndToEndTestBase {
         UiTestSupport.settle(running, TIMEOUT_MS); // the closes are queued in the session: let them happen first
         String folder = project == null || project.getLocation() == null ? "" : project.getLocation().toOSString();
         SessionProbe.lua(running, """
-                local folder = vim.fs.normalize(FOLDER)
+                local paths = require('neovim4eclipse.paths') -- the one rule (LuaScripts.PATHS)
+                local folder = FOLDER
                 for _, b in ipairs(vim.api.nvim_list_bufs()) do
-                  local name = vim.fs.normalize(vim.api.nvim_buf_get_name(b))
+                  local name = vim.api.nvim_buf_get_name(b)
                   local closed = not vim.api.nvim_buf_is_loaded(b) and vim.b[b].neovim4eclipse_file
-                  local stray = folder ~= '' and vim.bo[b].buftype == '' and name:sub(1, #folder + 1) == folder .. '/'
+                  -- Compared by the paths rule, not as strings: on Windows Neovim's name and the
+                  -- project's location differ in case or by an 8.3 short name (C:/Users/RUNNER~1),
+                  -- and a string compare missed every stray there, so they piled up from test to
+                  -- test and a later :bufdo went through all of them.
+                  local stray = folder ~= '' and name ~= '' and vim.bo[b].buftype == ''
+                      and paths.inside(name, folder)
                   if closed or stray then
                     pcall(vim.api.nvim_buf_delete, b, { force = true })
                   end
