@@ -3213,42 +3213,85 @@ final class LuaScripts {
               local budget = vim.o.redrawtime
               local started = vim.uv.hrtime()
               local from_end = vim.o.cpoptions:find('c', 1, true) ~= nil -- see the end of the loop
+              local function text(l)
+                return vim.api.nvim_buf_get_lines(buf, l - 1, l, true)[1]
+              end
+              -- A match that begins at a line break (after the last character: \\n.\\|b on "ab", "cd"
+              -- has b, then the break and c). Neovim's search puts such a match on the line's last
+              -- character, and so skips it when the cursor is there, as it is after a match that ends
+              -- on that character ('W', and 'c' too); nor does a search for its end start there.
+              -- So pat is searched for only where it begins at that break: \\%23l\\%5c before it in a
+              -- group, from the last character with 'c'. The \\m before \\) closes the group in any
+              -- mode, after a \\v or \\V in pat. Example: pat \\n. at line 1 of "ab" is
+              -- \\m\\%1l\\%3c\\%(\\n.\\m\\).
+              local function at_break(l, len)
+                return '\\\\m\\\\%' .. l .. 'l\\\\%' .. (len + 1) .. 'c\\\\%(' .. pat .. '\\\\m\\\\)'
+              end
               vim.api.nvim_win_call(win, function()
                 local view = vim.fn.winsaveview()
                 pcall(function()
-                  vim.fn.cursor(math.max(1, top - height), 1)
-                  local flags = 'cW'
-                  while true do
+                  -- Where the next match may begin: line l, byte column c (1-based; #line + 1 is
+                  -- the line break).
+                  local l, c = math.max(1, top - height), 1
+                  while l <= bottom do
                     local left = math.floor(budget - (vim.uv.hrtime() - started) / 1e6) -- a Number: searchpos takes no Float
                     if left <= 0 then
                       break
                     end
-                    local s = vim.fn.searchpos(pat, flags, bottom, left)
+                    local len = #text(l)
+                    local s, here
+                    if c > len and len > 0 then
+                      here = at_break(l, len)
+                      vim.fn.cursor(l, len)
+                      s = vim.fn.searchpos(here, 'cnW', l, left)
+                    else
+                      vim.fn.cursor(l, c)
+                      s = vim.fn.searchpos(pat, 'cW', bottom, left)
+                      if s[1] == 0 then
+                        break
+                      end
+                      local slen = #text(s[1])
+                      if s[2] > slen and slen > 0 then
+                        here = at_break(s[1], slen) -- found from further back, but the cursor is put back
+                        vim.fn.cursor(s[1], slen)
+                      end
+                    end
                     if s[1] == 0 then
-                      break
+                      l, c = l + 1, 1 -- no match begins at l's break: go on at the next line
+                    else
+                      local e = vim.fn.searchpos(here or pat, 'cenW', 0, left)
+                      if e[1] == 0 then
+                        break
+                      end
+                      -- e is the last character's first byte: the end is after that character.
+                      local line = text(e[1])
+                      local last = vim.fn.strcharpart(line:sub(e[2]), 0, 1)
+                      local stop = e[2] - 1 + math.max(#last, 1)
+                      local empty = e[1] < s[1] or (e[1] == s[1] and stop <= s[2] - 1)
+                      if e[1] >= top and not empty then
+                        vim.list_extend(ranges, { s[1], s[2] - 1, e[1], math.min(stop, #line) })
+                      end
+                      -- The next search starts after this match, not inside it, as Neovim's hlsearch
+                      -- goes on at the match's end (with 'cpoptions' c, the default): on lines a, b, c
+                      -- a\\nb\\|b\\nc paints a-b only, and on "foo foo", "bar" foo\\_.\\{-}bar paints one
+                      -- match from the first foo, not a second from the other foo, each of which
+                      -- could scan far for its bar. A match of no width (or 'cpoptions' without c)
+                      -- goes on one character after its start.
+                      if from_end and not empty then
+                        if e[2] > #line then
+                          l, c = e[1] + 1, 1 -- the match took the line break
+                        else
+                          l, c = e[1], stop + 1
+                        end
+                      else
+                        local sline = text(s[1])
+                        if s[2] > #sline then
+                          l, c = s[1] + 1, 1
+                        else
+                          l, c = s[1], s[2] + #vim.fn.strcharpart(sline:sub(s[2]), 0, 1)
+                        end
+                      end
                     end
-                    local e = vim.fn.searchpos(pat, 'cenW', 0, left)
-                    if e[1] == 0 then
-                      break
-                    end
-                    -- e is the last character's first byte: the end is after that character.
-                    local line = vim.api.nvim_buf_get_lines(buf, e[1] - 1, e[1], true)[1]
-                    local last = vim.fn.strcharpart(line:sub(e[2]), 0, 1)
-                    local stop = e[2] - 1 + math.max(#last, 1)
-                    if e[1] >= top and (e[1] > s[1] or stop > s[2] - 1) then
-                      vim.list_extend(ranges, { s[1], s[2] - 1, e[1], math.min(stop, #line) })
-                    end
-                    -- The next search starts after this match, not inside it, as Neovim's hlsearch
-                    -- goes on at the match's end (with 'cpoptions' c, the default): on lines a, b, c
-                    -- a\\nb\\|b\\nc paints a-b only, and on "foo foo", "bar" foo\\_.\\{-}bar paints one
-                    -- match from the first foo, not a second from the other foo, each of which
-                    -- could scan far for its bar. The cursor goes to the match's last character;
-                    -- 'W' (no 'c') then looks from the one after it. A match of no width (or
-                    -- 'cpoptions' without c) goes on from its start, which 'W' moves one on.
-                    if from_end and (e[1] > s[1] or (e[1] == s[1] and e[2] > s[2])) then
-                      vim.fn.cursor(e[1], e[2])
-                    end
-                    flags = 'W'
                   end
                 end)
                 vim.fn.winrestview(view)

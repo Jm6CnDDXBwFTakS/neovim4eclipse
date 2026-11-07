@@ -250,6 +250,20 @@ t.test('across lines, the next match is looked for after the last one, as hlsear
   t.eq({ { 1, 1, 1, 3 }, { 1, 3, 1, 5 } }, matches(m), 'matches side by side are both found')
 end)
 
+t.test('across lines, a match that begins at a line break is found', function()
+  -- Neovim's search puts such a match on the line's last character, so a walk from that
+  -- character skipped it: \n. after the b of "ab" painted nothing on the next line.
+  local m = start({ 'ab', 'cd', 'e' })
+  t.type('/b\\|\\n.<CR>')
+  t.eq({ { 1, 1, 1, 2 }, { 1, 2, 2, 1 }, { 2, 2, 3, 1 } }, matches(m), 'b, the break and c, the break and e')
+  m = start({ 'ab', 'cd' })
+  t.type('/\\vb|\\n.<CR>')
+  t.eq({ { 1, 1, 1, 2 }, { 1, 2, 2, 1 } }, matches(m), 'the same with \\v, which changes how the group must close')
+  m = start({ 'ab', 'cd' })
+  t.type('/\\v(b|\\n)c<CR>')
+  t.eq({ { 1, 2, 2, 1 } }, matches(m), 'found from the start of the line, its end is its own, not the b')
+end)
+
 t.test('a match across lines that begins above the view is found', function()
   local lines = {}
   for i = 1, 100 do

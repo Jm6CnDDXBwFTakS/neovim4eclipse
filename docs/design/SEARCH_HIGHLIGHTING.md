@@ -68,7 +68,10 @@ NeovimEditorController ─UI thread─▶ SearchHighlighter.show ─▶ invalida
   (`'e'` flag), then the view is put back as it was. Each next match is looked for after the end of
   the last one, as Neovim's hlsearch goes on (with `'cpoptions'` `c`, the default): on lines `a`,
   `b`, `c` the pattern `a\nb\|b\nc` paints `a`-`b` only, and on `foo foo`, `bar` the pattern
-  `foo\_.\{-}bar` paints one match, without a second scan from the inner `foo`. The walk starts a screen above the top, so a
+  `foo\_.\{-}bar` paints one match, without a second scan from the inner `foo`. A match that
+  begins at a line break (`b\|\n.` on `ab`, `cd`: the break and `c`) is one Neovim's search puts on
+  the line's last character, and so skips from there; the walk looks for it with the pattern tied
+  to that spot (`\%1l\%3c` before it, in a group). The walk starts a screen above the top, so a
   match that begins above the view and ends in it is found, and it stops after `'redrawtime'`
   (2 s by default), as Neovim's own highlighting does: `foo\_.*bar` makes each end search scan
   towards the end of the file.
