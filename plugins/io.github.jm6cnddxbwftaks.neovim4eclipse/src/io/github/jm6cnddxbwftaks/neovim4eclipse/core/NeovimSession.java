@@ -255,6 +255,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         try {
             return initialize(connection, clipboard);
         } catch (Exception e) {
+            // For a failure before the session exists. After that, initialize has already closed
+            // the whole session, this connection with it, and a second close does nothing.
             connection.close();
             throw e;
         }

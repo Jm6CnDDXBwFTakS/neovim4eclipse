@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -768,6 +769,44 @@ class NeovimSessionIntegrationTest {
                 }
             }
         }
+    }
+
+    /**
+     * A setup step that fails once the session exists (here HOST_COMMANDS, whose :Eclipse command
+     * the user's config keeps from being made) fails the start, and the half-built session is
+     * closed whole: its Neovim ends and no input thread of it stays behind.
+     */
+    @Test
+    void aStartThatFailsHalfWayLeavesNoNeovimAndNoInputThread() throws Exception {
+        TestNeovim.require();
+        String breakEclipseCommand = "lua local make = vim.api.nvim_create_user_command; "
+                + "vim.api.nvim_create_user_command = function(name, ...) "
+                + "if name == 'Eclipse' then error('broken by the test') end return make(name, ...) end";
+        Exception failure = assertThrows(Exception.class,
+                () -> NeovimSession.start(NVIM, List.of("--clean", "--cmd", breakEclipseCommand)).close());
+        assertTrue(String.valueOf(failure.getMessage()).contains("broken by the test")
+                || String.valueOf(failure.getCause()).contains("broken by the test"), failure.toString());
+
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(WAIT_MS);
+        while (neovimChildren() > 0 || inputThreads() > 0) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError(neovimChildren() + " Neovim processes and " + inputThreads()
+                        + " input threads left after the failed start");
+            }
+            Thread.sleep(20);
+        }
+    }
+
+    /** This JVM's Neovim processes still running. */
+    private static long neovimChildren() {
+        return ProcessHandle.current().descendants().filter(ProcessHandle::isAlive)
+                .filter(p -> p.info().command().map(c -> c.contains("nvim")).orElse(false)).count();
+    }
+
+    /** Session input threads still alive ({@code InputThread}'s name). */
+    private static long inputThreads() {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> t.isAlive() && t.getName().equals("neovim4eclipse-input")).count();
     }
 
     /** A Lua table that may have been decoded as a list or as a map. */
