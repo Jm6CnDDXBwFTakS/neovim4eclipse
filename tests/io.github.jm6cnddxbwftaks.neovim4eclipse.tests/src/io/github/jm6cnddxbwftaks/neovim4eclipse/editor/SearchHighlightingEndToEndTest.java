@@ -7,6 +7,7 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
@@ -74,26 +75,61 @@ class SearchHighlightingEndToEndTest extends EndToEndTestBase {
 
     /**
      * Typing in insert mode (Eclipse types, Neovim gets the text at Esc) moves the highlights with
-     * the text, and Neovim's older columns are not painted meanwhile; after Esc they are Neovim's
-     * again, in the same place.
+     * the text. A scroll to another match meanwhile has Neovim send its matches, of its older lines:
+     * on the line typed in, they would land two characters early, and must not be painted. After
+     * Esc the matches are Neovim's again, in the same place. A file long enough to scroll, with a
+     * second beta on line 150.
      */
     @Test
-    void theHighlightsFollowTypingInInsertMode() {
-        session.inputAsync("/beta<CR>"); // offset 6
-        settle();
-        waitForBackground(6, true);
-        session.inputAsync("ggI");
-        settle();
-        waitUntil("insert mode", TIMEOUT_MS, () -> "i".equals(session.getMode()));
-        typeSlowly("xx"); // alpha becomes xxalpha: beta at 8
-        waitForBackground(8, true);
-        waitForBackground(7, false);
-        UiTestSupport.escape(widget);
-        settle();
-        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
-        expectText("xxalpha\nbeta\ngamma\n");
-        waitForBackground(8, true);
-        waitForBackground(7, false);
+    void theHighlightsFollowTypingInInsertMode() throws Exception {
+        StringBuilder text = new StringBuilder("alpha\nbeta\n");
+        for (int i = 3; i <= 200; i++) {
+            text.append(i == 150 ? "beta" : "line " + i).append('\n');
+        }
+        IFile file = createFile("long.txt", text.toString());
+        ITextEditor longEditor = (ITextEditor) IDE.openEditor(page(), file, TEXT_EDITOR, true);
+        try {
+            waitForAttach(longEditor, "long.txt");
+            settle();
+            StyledText longWidget = widgetOf(longEditor);
+            session.inputAsync("/beta<CR>"); // offset 6
+            settle();
+            waitForBackgroundIn(longWidget, 6, true);
+            session.inputAsync("2GI"); // the start of beta's own line
+            settle();
+            waitUntil("insert mode", TIMEOUT_MS, () -> "i".equals(session.getMode()));
+            typeSlowly(longWidget, "xx"); // xxbeta: beta at 8
+            waitForBackgroundIn(longWidget, 8, true);
+            waitForBackgroundIn(longWidget, 6, false);
+
+            // Eclipse scrolls alone to line 150's beta: the view report has Neovim send its matches,
+            // line 2's at its older column 0 (offset 6).
+            ITextViewer longViewer = longEditor.getAdapter(ITextViewer.class); // the viewer tells its viewport listeners
+            longViewer.setTopIndex(140);
+            settle();
+            longViewer.setTopIndex(0);
+            settle();
+            assertEquals(null, backgroundIn(longWidget, 6), "Neovim's older columns are not painted");
+            waitForBackgroundIn(longWidget, 8, true);
+
+            UiTestSupport.escape(longWidget);
+            settle();
+            waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+            waitForBackgroundIn(longWidget, 8, true);
+            waitForBackgroundIn(longWidget, 6, false);
+        } finally {
+            page().closeEditor(longEditor, false);
+        }
+    }
+
+    private static Color backgroundIn(StyledText target, int offset) {
+        StyleRange range = target.getStyleRangeAtOffset(offset);
+        return range == null ? null : range.background;
+    }
+
+    private static void waitForBackgroundIn(StyledText target, int offset, boolean painted) {
+        waitUntil("offset " + offset + (painted ? " painted" : " not painted"), TIMEOUT_MS,
+                () -> (backgroundIn(target, offset) != null) == painted, () -> "; background " + backgroundIn(target, offset));
     }
 
     /**

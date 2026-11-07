@@ -2854,9 +2854,10 @@ final class LuaScripts {
      * have made the editor drop one it touched: Eclipse picks the
      * match under the caret itself ({@code CurSearch}). Entering a window or a buffer (an editor
      * attached, or switched to) forgets what was sent for it, as that editor has nothing painted;
-     * so does {@code M.resend()}, which the session calls when an editor is attached or back in
-     * Neovim mode. Without a UI attached (a headless test) no redraw happens; {@code M.update()}
-     * does the same work on demand.
+     * so does {@code M.resend()}, which the session calls when an editor is attached, back in
+     * Neovim mode, or at the end of an insert in which Eclipse typed and ignored the matches Neovim
+     * sent (they were of Neovim's older lines). Without a UI attached (a headless test) no redraw
+     * happens; {@code M.update()} does the same work on demand.
      *
      * <p>Sent: {@code eclipse_search(buf, ranges, win)}, where {@code ranges} is a flat list of
      * four numbers per match: start line (1-based), start byte column (0-based), end line, end byte
@@ -3143,7 +3144,17 @@ final class LuaScripts {
                       first, second = second, first
                     end
                     ranges = matches(win, effective, first[1], first[2])
-                    vim.list_extend(ranges, matches(win, effective, second[1], second[2]))
+                    -- A match across lines between the two can be found from both: kept once.
+                    local seen = {}
+                    for i = 1, #ranges, 4 do
+                      seen[ranges[i] .. ':' .. ranges[i + 1]] = true
+                    end
+                    local more = matches(win, effective, second[1], second[2])
+                    for i = 1, #more, 4 do
+                      if not seen[more[i] .. ':' .. more[i + 1]] then
+                        vim.list_extend(ranges, { more[i], more[i + 1], more[i + 2], more[i + 3] })
+                      end
+                    end
                   else
                     ranges = matches(win, effective, math.min(top, vtop), math.max(bottom, vbottom))
                   end

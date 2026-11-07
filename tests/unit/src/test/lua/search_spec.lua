@@ -305,3 +305,18 @@ t.test('a typed search in the same batch of keys as a * is not the star\'s', fun
   flush()
   t.eq(1, #matches(m), '/Foo stays smart: only Foo')
 end)
+
+t.test('a match across the lines between two searched ranges is sent once', function()
+  local lines = {}
+  for i = 1, 200 do
+    lines[i] = 'x'
+  end
+  local m = start(lines)
+  local b = vim.fn.line('w$')
+  vim.api.nvim_buf_set_lines(0, b - 1, b + 2, true, { 'foo', 'x', 'bar' })
+  t.type('/foo\\_.\\{-}bar<CR>')
+  vim.fn.winrestview({ topline = 1, lnum = 1 })
+  m.set_view(nil, b + 2, b + 8) -- apart from the window's lines by one: two searches
+  flush()
+  t.eq({ { b, 0, b + 2, 3 } }, matches(m), 'found by both walks, kept once')
+end)

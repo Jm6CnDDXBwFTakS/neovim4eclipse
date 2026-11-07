@@ -131,13 +131,16 @@ Format or a Quick Fix changes the document directly), so Neovim sends nothing ne
 prenotified document listener, told of each change before the viewer repaints it, moves the
 matches after the change by its length and drops one the change touches, as an editor keeps its
 markers. Example: `foo` at 10 to 13, `xx` typed at 2: the match is now 12 to 15. The match under
-the caret is worked out again afterward, on the UI thread: the listener runs before the widget has
-the change, and on the thread that changed the document.
+the caret keeps its box where it moved (or loses it when dropped), and is worked out again from the
+caret afterward, on the UI thread: the listener runs before the widget has the change, and on the
+thread that changed the document.
 
 While Eclipse types, Neovim may still send matches (a view report after a scroll asks for them),
 but of its older lines, whose columns would land on the wrong characters; the editor ignores
 them, as it ignores Neovim's cursor then. When the insert ends, the editor asks for the matches
-again (`resendSearchAsync`, queued after the `Esc` push).
+again if it ignored any (`resendSearchAsync`, queued after the `Esc` push); an insert without a
+search costs nothing more. A match that typing dropped needs no request: the `Esc` push changes
+the buffer, and its matches are sent with the new change count.
 
 The match under the caret is the one whose range holds the caret's document offset (from its
 start, up to its end). After `n` Neovim's cursor is on a match's first character, so that match is
@@ -180,8 +183,8 @@ editor's theme.
   before anything is typed), smartcase and `*` (kept after `:w` and a cancelled search, not set by
   `f*`, not given to a search in the same batch of keys), Vim's capitals, offsets, byte columns,
   matches across lines (one beginning above the view too), only the visible lines and the
-  editor's reported ones (two ranges apart searched apart), only changes sent, sent again after an
-  edit, resend.
+  editor's reported ones (two ranges apart searched apart, a match between them sent once), only
+  changes sent, sent again after an edit, resend.
 - `NotificationBridgeTest.searchMatchesComeInGroupsOfFour`: the payload.
 - `SearchHighlighterTest` (`tests/swt`): on a real source viewer, the backgrounds in the widget's
   style ranges, the box around the current match (painted into an image, one per wrapped row),
@@ -189,6 +192,7 @@ editor's theme.
   longer has.
 - `OverlayColorsTest.theSearchBoxMovesTowardTheText`.
 - `SearchHighlightingEndToEndTest`: a search, `n`, `:noh`, Eclipse mode and back, another editor
-  and back, Detach and Attach, typing in insert mode and `Esc`, in a real editor.
+  and back, Detach and Attach, typing in insert mode with a scroll to another match before `Esc`
+  (Neovim's older columns not painted), in a real editor.
 - The manual check `sh-colors`: the gallery's pictures (`SearchGalleryTest`, `-Pgallery`) in a
   light and a dark theme, plain text and the Java editor.

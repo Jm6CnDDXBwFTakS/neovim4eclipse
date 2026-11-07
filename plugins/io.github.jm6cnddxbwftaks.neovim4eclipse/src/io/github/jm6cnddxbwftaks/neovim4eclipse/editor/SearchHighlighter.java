@@ -116,8 +116,8 @@ final class SearchHighlighter implements ITextPresentationListener {
      * a document change on another thread replaces it (onDocumentChanged).
      */
     private volatile List<IRegion> regions = List.of();
-    /** The index in {@link #regions} of the match under the caret, or -1. */
-    private int current = -1;
+    /** The index in {@link #regions} of the match under the caret, or -1. Volatile, as {@link #regions}. */
+    private volatile int current = -1;
 
     /**
      * @param viewer       the editor's viewer; it must support presentation listeners and
@@ -363,18 +363,28 @@ final class SearchHighlighter implements ITextPresentationListener {
             return;
         }
         int delta = inserted - removed;
+        int oldCurrent = current;
+        int newCurrent = -1;
         List<IRegion> moved = new ArrayList<>(regions.size());
-        for (IRegion r : regions) {
+        for (int i = 0; i < regions.size(); i++) {
+            IRegion r = regions.get(i);
             int start = r.getOffset();
             int end = start + r.getLength();
             if (end <= offset) {
                 moved.add(r); // before the change
             } else if (start >= offset + removed) {
                 moved.add(new Region(start + delta, r.getLength())); // after it (text typed right before it included)
+            } else {
+                continue; // the change touches the match, which is dropped
             }
-            // else: the change touches the match, which is dropped
+            if (i == oldCurrent) {
+                newCurrent = moved.size() - 1;
+            }
         }
+        // The current match keeps its box where it moved (or loses it when dropped), so that a paint
+        // before the refresh below draws no box around another match.
         this.regions = List.copyOf(moved);
+        current = newCurrent;
         // The current match: once the widget has the change, and on its thread. The listener runs
         // before the widget applies the change (the caret is still the old one) and on the thread
         // that changed the document, which may not be the UI thread (a Job): it must not read the
