@@ -413,6 +413,35 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code :wa} creates a new file whose editor is in the background and switches that editor to
+     * the workspace file, keeping its Neovim buffer. The document's sync must go with it: before,
+     * only an attach made it again, so the {@code :bufdo} below changed Neovim's buffer but not the
+     * document, and its {@code update} saved Eclipse's old text.
+     */
+    @Test
+    void aNewFileThatWriteAllCreatedInTheBackgroundStillFollowsNeovim() throws Exception {
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        runInBox(widget, "e new1.txt");
+        ITextEditor first = activeEditorNamed("new1.txt");
+        insert(widgetOf(first), "x");
+        runInBox(widgetOf(first), "e new2.txt");
+        ITextEditor second = activeEditorNamed("new2.txt");
+
+        runInBox(widgetOf(second), "wa");
+        assertEquals("x", fileText("new1.txt"));
+        assertEquals(project.getFile("new1.txt"), first.getEditorInput().getAdapter(IFile.class),
+                "new1.txt's editor shows the workspace file now");
+
+        session.commandAsync("bufdo %s/x/y/e | update");
+
+        waitUntil("new1.txt saved with Neovim's change", TIMEOUT_MS, () -> "y".equals(fileText("new1.txt")),
+                () -> "; it reads " + fileText("new1.txt"));
+        expectText(first, "y");
+        assertEquals(List.of(), dialogs);
+        closeAll();
+    }
+
+    /**
      * As in Neovim, {@code ./} is the window's folder (the project root), like a plain name; the
      * file's own folder is {@code %:h}, which Neovim expands. From {@code src/Nested.txt}.
      */

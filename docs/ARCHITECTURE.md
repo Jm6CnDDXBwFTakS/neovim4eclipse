@@ -177,7 +177,7 @@ attached again if it was attached. The Neovim buffer moves to the new document w
 stayed the same; a renamed file gets a new buffer (named after its new path) and the old one is
 closed, since a buffer's name is the path it is made under, again after Restart Neovim. The
 plug-in's own input changes (a new file's first `:w`, `:saveas`) keep the buffer through
-`replaceInputKeepingBuffer`.
+`replaceInputKeepingBuffer`, which makes the syncs again for a document in the background too.
 
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is
 followed: its editor is activated and attached, keeping Neovim's cursor. When several editors show

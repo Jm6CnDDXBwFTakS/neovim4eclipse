@@ -990,8 +990,17 @@ public final class EditorAttachManager {
                     if (boundDocuments.containsKey(editor)) {
                         boundDocuments.put(editor, fresh); // so onInputChanged, which follows, has nothing to do
                     }
+                    boolean hadSync = buffer != null && unattachedSyncs.containsKey(buffer);
                     if (buffer != null) {
-                        stopSyncs(buffer); // they listen to the old document; the attach below makes them for the new
+                        stopSyncs(buffer); // they listen to the old document and its annotation model
+                    }
+                    if (hadSync && !wasAttached && followedSession != null) {
+                        // The attach below makes them again for an attached editor. One in the
+                        // background (a new file that :wa created) needs them now: without them a
+                        // later :bufdo %s/x/y/ | update changed Neovim's buffer but not the
+                        // document, and saved Eclipse's old text.
+                        startUnattachedSync(fresh, buffer, followedSession);
+                        startDiagnostics(editor, fresh, buffer, followedSession);
                     }
                 }
             }
