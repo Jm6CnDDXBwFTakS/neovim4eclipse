@@ -348,6 +348,9 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertEquals(List.of(), dialogs);
             closeAll();
         } finally {
+            // Closed first, unsaved: an editor left open on a deleted link (a failed assertion
+            // above) makes Eclipse ask about the missing file in a dialog that blocks every later test.
+            closeAll();
             Files.deleteIfExists(link);
             leaveAndDelete(dir, gone);
         }
@@ -386,6 +389,9 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertEquals(List.of(), dialogs);
             closeAll();
         } finally {
+            // Closed first, unsaved: an editor left open on a deleted link (a failed assertion
+            // above) makes Eclipse ask about the missing file in a dialog that blocks every later test.
+            closeAll();
             Files.deleteIfExists(link);
             leaveAndDelete(dir, gone);
         }
@@ -423,6 +429,9 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertEquals("q", Files.readString(gone, StandardCharsets.UTF_8));
             assertEquals(List.of(), dialogs);
         } finally {
+            // Closed first, unsaved: an editor left open on a deleted link (a failed assertion
+            // above) makes Eclipse ask about the missing file in a dialog that blocks every later test.
+            closeAll();
             Files.deleteIfExists(link);
             leaveAndDelete(dir, gone);
         }
