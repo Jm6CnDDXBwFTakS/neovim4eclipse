@@ -154,6 +154,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile DocumentBuffer wheelBuffer;
     /** The editor's newest scroll, not sent yet: a scroll-bar drag sends many, Neovim needs the last. */
     private final LatestValue<Scroll> pendingScroll = new LatestValue<>();
+    /** The editor's newest view for search highlighting, not sent yet: only the last counts. */
+    private final LatestValue<View> pendingSearchView = new LatestValue<>();
     /**
      * The last editor size, {@code {columns, rows}}, kept for a resize that Neovim asks for itself
      * ({@code :set number}) and while no editor is attached (D8). {@code null} until an editor sent one.
@@ -1027,6 +1029,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     @Override
     public void removeSearchListener(Consumer<Matches> listener) {
         events.removeSearchListener(listener);
+    }
+
+    @Override
+    public void setSearchViewAsync(DocumentBuffer buffer, int top1, int bottom1) {
+        if (!searchEnabled || top1 < 1 || bottom1 < top1) {
+            return;
+        }
+        if (pendingSearchView.offer(new View(buffer, top1, bottom1))) {
+            submit("search view", Level.FINE, () -> {
+                View latest = pendingSearchView.take();
+                if (latest == null || buffers.handleOf(latest.buffer()) == null || !latest.buffer().loaded) {
+                    return; // not created yet, or gone; SEARCH_VIEW itself skips a buffer not shown
+                }
+                await(api.execLua(LuaScripts.SEARCH_VIEW, List.of(String.valueOf(latest.buffer().bufnr),
+                        String.valueOf(latest.top1()), String.valueOf(latest.bottom1()))));
+            });
+        }
     }
 
     @Override

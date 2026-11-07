@@ -12,7 +12,9 @@ group.
   editor shows, while `v:hlsearch` is 1. That is, while `'hlsearch'` is on and no `:nohlsearch`
   came after the search.
 - **While a search is typed**, with `'incsearch'` on: the matches of what is typed so far, without a
-  search offset (`/foo/e` shows `foo`).
+  search offset (`/foo/e` shows `foo`). The same for the pattern of a `:s`, `:g`, `:v`, `:smagic`
+  or `:snomagic` line (`:%s/foo/bar` shows `foo`). A range with a pattern of its own
+  (`:/x/s/y/`) is not read; the last search shows instead.
 - **Nothing** otherwise, and in Eclipse mode. Back in Neovim mode, the matches come back.
 
 The plug-in follows the user's options and `:noh`, and adds no preference of its own. The plug-in's
@@ -45,18 +47,27 @@ NeovimEditorController ─UI thread─▶ SearchHighlighter.show ─▶ invalida
   when the highlights may have changed: a new pattern, `:noh`, a typed character, an edit, a
   scroll. `on_win` must not change anything, so it only schedules the work, once per batch:
   twenty `Ctrl-E` give twenty `on_win` calls and one computation.
-- **Only the visible lines.** `matchbufline(buf, pattern, line('w0'), line('w$'))` takes 0.1 to
-  0.2 ms over 60 lines, whatever the file's size. The whole buffer takes 2.5 ms at 2,000 lines,
-  8 ms at 10,000 and 114 ms at 100,000 (Neovim 0.12.6, headless and with a UI attached). The
-  viewport feature keeps Neovim's window the editor's size, so its visible lines are the
-  editor's.
+- **Only the visible lines.** `matchbufline(buf, pattern, top, bottom)` takes 0.1 to 0.2 ms over
+  60 lines, whatever the file's size. The whole buffer takes 2.5 ms at 2,000 lines, 8 ms at 10,000
+  and 114 ms at 100,000 (Neovim 0.12.6, headless and with a UI attached).
+- **Which lines are visible.** The window's own (`w0` to `w$`) and the editor's, which Eclipse
+  reports whenever its view changes (a scroll, a resize: `SearchHighlighter.setViewListener`,
+  `SearchPort.setSearchViewAsync`, `LuaScripts.SEARCH_VIEW`); both ranges are searched. The
+  viewport feature keeps the two the same, but they differ when it is off
+  (`vim.g.neovim4eclipse_viewport = 0`, a fixed 120 × 40 screen), when Eclipse scrolled alone in
+  insert mode, when Neovim does not know Eclipse's folds (`vim.g.neovim4eclipse_folds = 0`), and by
+  a last line the editor shows only in part.
 - **Across lines.** `matchbufline()` matches within one line. A pattern that can span lines (`\n`,
   `\_x`) is found with a `searchpos()` walk inside `nvim_win_call`: the start, then the end
-  (`'e'` flag), then the view is put back as it was.
+  (`'e'` flag), then the view is put back as it was. The walk starts a screen above the top, so a
+  match that begins above the view and ends in it is found, and it stops after `'redrawtime'`
+  (2 s by default), as Neovim's own highlighting does: `foo\_.*bar` makes each end search scan
+  towards the end of the file.
 - **Only changes are sent.** Each window's last list is kept, as text. `n`, which moves the cursor
   between the same matches, sends nothing: the editor decides the current match from the caret.
-  Entering a window or a buffer forgets the window's list, so an editor just attached gets its
-  matches at the next redraw. `M.resend()` does the same when an editor is back in Neovim mode
+  Entering a window or a buffer forgets the window's list, so an editor switched to gets its
+  matches at the next redraw. `M.resend()` sends them in any case, after an attach's push (a
+  re-attach to the same window enters nothing) and when an editor is back in Neovim mode
   (`SearchPort.resendSearchAsync`, `LuaScripts.SEARCH_RESEND`). It is scheduled too: called
   inside the RPC request, the search state it reads is not the one the window shows.
 - **Units.** Each match is four numbers: start line (1-based), start byte column (0-based), end
@@ -70,16 +81,20 @@ gets an explicit `\c` or `\C`, in the order Neovim's own search decides:
 
 1. a `\c` or `\C` in the pattern wins;
 2. `'noignorecase'` means exact case;
-3. `'smartcase'` and an upper-case letter that is not escaped (`\S` is a class, not a capital)
-   means exact case, except for a search made with `*`, `#`, `g*` or `g#`, which Vim never makes
-   smart;
+3. `'smartcase'` and an upper-case letter means exact case, except for a search made with `*`,
+   `#`, `g*` or `g#`, which Vim never makes smart. Which letters count is Vim's
+   `pat_has_uppercase`: not one after a backslash (`\S` is a class), nor the one after `\_` or
+   `\%` (`\_S`, `\%V`); an accented capital (`É`) counts;
 4. otherwise, any case.
 
-The `*` case is seen with `vim.on_key` in normal mode, and lasts until the next `/`, `?` or `:`
-command line, so `n` after `*` keeps it. A spike compared this with Neovim's own `searchcount()`
-in seven cases (`/Foo`, `/foo`, `*`, `n` after `*`, `:s`, `#`, `noignorecase`); all agreed.
-Known gap: `f*` or `r*` in normal mode also set the flag, as `on_key` sees the `*` before Neovim
-knows it is the argument of `f`; the next typed search clears it.
+Vim keeps "made with `*`" with the pattern, so it holds for `n`, and after `:w` or a search
+cancelled with `Esc`. The plug-in follows the pattern the same way: `vim.on_key` notes register
+`/` before a `*` or `#` in normal mode, and when the register changed once the key ran, its new
+value is the star's pattern. The highlighted pattern is a star's while it equals that value. A
+`*` that is the argument of another command (`"*p`, `f*`, `r*`) changes no register and counts
+for nothing. Left over: a search typed to the very pattern `*` made (`/\<Foo\>` after `*` on
+`Foo`) still counts as the star's. A spike compared the rules with Neovim's own `searchcount()` in
+seven cases (`/Foo`, `/foo`, `*`, `n` after `*`, `:s`, `#`, `noignorecase`); all agreed.
 
 ### In Eclipse: behind the text
 
@@ -99,10 +114,18 @@ the syntax colors. A `LineBackgroundListener` colors whole lines only.
 The presentation is in document offsets, and the viewer maps it to the widget, so folded code needs
 nothing: a match inside a closed fold is not shown. The selection is drawn over the backgrounds.
 
+Between two reports from Neovim the matches follow the text. An edit made on Eclipse's side
+reaches Neovim later (in insert mode Eclipse types itself, and Neovim gets the lines at `Esc`;
+Format or a Quick Fix changes the document directly), so Neovim sends nothing new meanwhile. A
+prenotified document listener, told of each change before the viewer repaints it, moves the
+matches after the change by its length and drops one the change touches, as an editor keeps its
+markers. Example: `foo` at 10 to 13, `xx` typed at 2: the match is now 12 to 15.
+
 The match under the caret is the one whose range holds the caret's document offset (from its
 start, up to its end). After `n` Neovim's cursor is on a match's first character, so that match is
 the current one. It keeps the same background as the others and gets a box: a one-pixel rectangle
-around each line's part of it, drawn by a `PaintListener` after the text, at its place in the
+around each visual row's part of it (a wrapped line has several), drawn by a `PaintListener` after
+the text, at its place in the
 widget (`modelOffset2WidgetOffset`, so a match in a closed fold has none). A caret move repaints
 only the old and the new box.
 
@@ -117,7 +140,7 @@ every one; a box does not sit under the text at all.
 The *Search Results* annotation color (*Window → Preferences → General → Editors → Text Editors →
 Annotations*), the color Eclipse's Search view marks its hits with. It follows the theme and the
 user's choice, and a change applies at once (`editor/SearchColors` listens to the preference
-store). The key is read from the Search plug-in's annotation declaration
+store, and hops to the UI thread: a preference may be changed on any thread). The key is read from the Search plug-in's annotation declaration
 (`org.eclipse.search.results`), not written here. Without that plug-in, its default (206, 204,
 247) is used. The box is that color moved halfway toward the editor's text color
 (`util/OverlayColors.searchBox`): darker in a light theme, lighter in a dark one, so it shows on
@@ -135,13 +158,17 @@ editor's theme.
 
 ## Tests
 
-- `tests/unit/src/test/lua/search_spec.lua`: which pattern, smartcase and `*`, offsets, byte
-  columns, matches across lines, only the visible lines, only changes sent, resend.
+- `tests/unit/src/test/lua/search_spec.lua`: which pattern (`/`, `?`, `:s`, `:g`), smartcase and
+  `*` (kept after `:w` and a cancelled search, not set by `f*`), Vim's capitals, offsets, byte
+  columns, matches across lines (one beginning above the view too), only the visible lines and
+  the editor's reported ones, only changes sent, resend.
 - `NotificationBridgeTest.searchMatchesComeInGroupsOfFour`: the payload.
 - `SearchHighlighterTest` (`tests/swt`): on a real source viewer, the backgrounds in the widget's
-  style ranges, the box around the current match (painted into an image), clear and dispose, a
-  match the document no longer has.
+  style ranges, the box around the current match (painted into an image, one per wrapped row),
+  matches following Eclipse's edits, the view reports, clear and dispose, a match the document no
+  longer has.
 - `OverlayColorsTest.theSearchBoxMovesTowardTheText`.
-- `SearchHighlightingEndToEndTest`: a search, `n`, `:noh`, Eclipse mode and back, in a real editor.
+- `SearchHighlightingEndToEndTest`: a search, `n`, `:noh`, Eclipse mode and back, another editor
+  and back, Detach and Attach, in a real editor.
 - The manual check `sh-colors`: the gallery's pictures (`SearchGalleryTest`, `-Pgallery`) in a
   light and a dark theme, plain text and the Java editor.

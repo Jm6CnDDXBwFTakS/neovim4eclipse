@@ -4,23 +4,29 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.jface.text.BadLocationException;
+import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextPresentationListener;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextViewerExtension2;
 import org.eclipse.jface.text.ITextViewerExtension4;
 import org.eclipse.jface.text.ITextViewerExtension5;
+import org.eclipse.jface.text.IViewportListener;
 import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.TextPresentation;
 import org.eclipse.swt.custom.CaretListener;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.GC;
@@ -52,8 +58,25 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  * text's own colors are unknown here (each syntax color is the theme's), so no background is safe
  * under every one of them. A box around the match leaves the text on the same background as the
  * other matches, and stands out in any theme. It is drawn by a {@link PaintListener} after the
- * text, around each line's part of the match, in the box color, at the match's place in the widget
- * (the widget's offsets differ from the document's where code is folded).
+ * text, around each visual row's part of the match (a wrapped line has more than one), in the box
+ * color, at the match's place in the widget (the widget's offsets differ from the document's where
+ * code is folded).
+ *
+ * <h2>Following the text between two reports</h2>
+ * Neovim sends new matches after each redraw, but an edit made on Eclipse's side reaches Neovim
+ * later: in insert mode Eclipse types itself, and Neovim gets the lines at {@code Esc}; an
+ * Eclipse command (Format, a Quick Fix) changes the document directly. Meanwhile the matches are
+ * kept in step with the text, as an editor keeps its markers: a {@linkplain
+ * IDocument#addPrenotifiedDocumentListener prenotified} document listener, told of each change
+ * before the viewer repaints it, moves the matches after the change by its length and drops a
+ * match the change touches. Example: {@code foo} at 10 to 13, and {@code xx} typed at 2: the
+ * match is now 12 to 15.
+ *
+ * <h2>The lines the editor shows</h2>
+ * Neovim searches its window's visible lines, which are the editor's only while the viewport
+ * feature keeps them in step. So the editor reports its own (the viewer's top and bottom
+ * document lines, the partly shown last one included) to {@link #setViewListener}'s listener
+ * whenever they change: a scroll, a resize.
  *
  * <p>Matches arrive in Neovim's units (lines from 1, UTF-8 byte columns) and become document
  * offsets with {@link DocumentPositions#byteColToOffset}. Example: {@code foo} after {@code é } on
@@ -68,6 +91,24 @@ final class SearchHighlighter implements ITextPresentationListener {
     private final StyledText widget;
     private final CaretListener caretListener = event -> onCaretMoved();
     private final PaintListener boxPainter = event -> paintBox(event.gc);
+    private final IDocumentListener follower = new IDocumentListener() {
+        @Override
+        public void documentAboutToBeChanged(DocumentEvent event) {
+            // Nothing: the matches move once the change is made, in documentChanged.
+        }
+
+        @Override
+        public void documentChanged(DocumentEvent event) {
+            onDocumentChanged(event.getOffset(), event.getLength(), event.getText() == null ? 0 : event.getText().length());
+        }
+    };
+    private final IViewportListener viewportListener = verticalOffset -> reportView();
+    private final ControlListener resizeListener = ControlListener.controlResizedAdapter(event -> reportView());
+    private final IDocument document;
+    /** Hears the lines the editor shows, 1-based; {@code null} until {@link #setViewListener}. */
+    private BiConsumer<Integer, Integer> viewListener;
+    /** The view last reported, {@code {top1, bottom1}}: the same is not reported twice. */
+    private int[] viewReported;
     private Color matchColor;
     private Color boxColor;
     /** The matches as document regions, in Neovim's order; empty when nothing is highlighted. */
@@ -86,9 +127,27 @@ final class SearchHighlighter implements ITextPresentationListener {
         this.widget = viewer.getTextWidget();
         this.matchColor = matchColor;
         this.boxColor = boxColor;
+        this.document = viewer.getDocument();
         ((ITextViewerExtension4) viewer).addTextPresentationListener(this);
         widget.addCaretListener(caretListener);
         widget.addPaintListener(boxPainter);
+        if (document != null) {
+            document.addPrenotifiedDocumentListener(follower);
+        }
+    }
+
+    /**
+     * Reports the lines the editor shows to {@code listener} ({@code top1}, {@code bottom1},
+     * 1-based document lines) now and whenever they change, until {@link #dispose}.
+     */
+    void setViewListener(BiConsumer<Integer, Integer> listener) {
+        if (viewListener == null) {
+            viewer.addViewportListener(viewportListener);
+            widget.addControlListener(resizeListener);
+        }
+        viewListener = listener;
+        viewReported = null;
+        reportView();
     }
 
     /** Whether {@code viewer} can show the highlights: it takes presentation listeners and invalidation. */
@@ -99,14 +158,13 @@ final class SearchHighlighter implements ITextPresentationListener {
 
     /** Shows {@code matches} (Neovim's units) in place of the ones shown before; empty clears. */
     void show(List<SearchMatch> matches) {
-        IDocument document = viewer.getDocument();
         List<IRegion> next = document == null ? List.of() : toRegions(document, matches);
         if (next.equals(regions)) {
             return; // the same matches: nothing to paint again
         }
         List<IRegion> old = regions;
+        redrawBoxes(); // the old box, while regions and current still describe it
         regions = next;
-        redrawBoxes();
         current = indexAt(next, caretOffset());
         repaint(old, next);
         redrawBoxes();
@@ -157,9 +215,26 @@ final class SearchHighlighter implements ITextPresentationListener {
             int lineEnd = lineStart + widget.getLine(line).length();
             int from = Math.max(start, lineStart);
             int to = Math.min(end, lineEnd);
-            if (to > from) {
-                boxes.add(widget.getTextBounds(from, to - 1));
+            if (to <= from) {
+                continue;
             }
+            if (!widget.getWordWrap()) {
+                boxes.add(widget.getTextBounds(from, to - 1));
+                continue;
+            }
+            // Word wrap may split the line's part over visual rows: one box per row, found where
+            // a character's top moves down.
+            int rowStart = from;
+            int rowTop = widget.getLocationAtOffset(from).y;
+            for (int i = from + 1; i < to; i++) {
+                int top = widget.getLocationAtOffset(i).y;
+                if (top != rowTop) {
+                    boxes.add(widget.getTextBounds(rowStart, i - 1));
+                    rowStart = i;
+                    rowTop = top;
+                }
+            }
+            boxes.add(widget.getTextBounds(rowStart, to - 1));
         }
         return boxes;
     }
@@ -170,9 +245,16 @@ final class SearchHighlighter implements ITextPresentationListener {
         regions = List.of();
         current = -1;
         ((ITextViewerExtension4) viewer).removeTextPresentationListener(this);
+        if (document != null) {
+            document.removePrenotifiedDocumentListener(follower);
+        }
+        if (viewListener != null) {
+            viewer.removeViewportListener(viewportListener);
+        }
         if (!widget.isDisposed()) {
             widget.removeCaretListener(caretListener);
             widget.removePaintListener(boxPainter);
+            widget.removeControlListener(resizeListener);
             repaint(old, List.of());
             widget.redraw();
         }
@@ -260,6 +342,49 @@ final class SearchHighlighter implements ITextPresentationListener {
             ((ITextViewerExtension2) viewer).invalidateTextPresentation(start, end - start);
         } catch (RuntimeException e) {
             LOG.log(Level.FINE, "search highlight repaint failed", e); // e.g. the document changed under us
+        }
+    }
+
+    /**
+     * The document changed by {@code removed} characters at {@code offset} replaced with
+     * {@code inserted}: the matches after it move by the difference, one it touches is dropped (its
+     * text is no longer what Neovim matched), the ones before stay. The viewer repaints the change
+     * after this, with the matches where the text now is.
+     */
+    void onDocumentChanged(int offset, int removed, int inserted) {
+        if (regions.isEmpty()) {
+            return;
+        }
+        int delta = inserted - removed;
+        List<IRegion> moved = new ArrayList<>(regions.size());
+        for (IRegion r : regions) {
+            int start = r.getOffset();
+            int end = start + r.getLength();
+            if (end <= offset) {
+                moved.add(r); // before the change
+            } else if (start >= offset + removed) {
+                moved.add(new Region(start + delta, r.getLength())); // after it (text typed right before it included)
+            }
+            // else: the change touches the match, which is dropped
+        }
+        regions = List.copyOf(moved);
+        current = indexAt(regions, caretOffset());
+    }
+
+    /** Reports the lines the editor shows, if they changed since the last report. */
+    private void reportView() {
+        if (viewListener == null || widget.isDisposed()) {
+            return;
+        }
+        int top = viewer.getTopIndex();
+        int bottom = viewer.getBottomIndex();
+        if (top < 0 || bottom < top) {
+            return; // not laid out yet
+        }
+        int[] view = { top + 1, bottom + 1 };
+        if (!Arrays.equals(view, viewReported)) {
+            viewReported = view;
+            viewListener.accept(view[0], view[1]);
         }
     }
 

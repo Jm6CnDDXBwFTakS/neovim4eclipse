@@ -8,6 +8,7 @@ import java.util.function.BiConsumer;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.preference.PreferenceConverter;
 import org.eclipse.jface.util.IPropertyChangeListener;
+import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
@@ -29,7 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * ({@code org.eclipse.search.results}), read from the annotation preferences rather than written
  * here; where that plug-in is missing, its default (206, 204, 247) is used. A change of the color
  * (or a theme that sets it) reaches the editor at once through the preference store's listener.
- * UI thread.
+ * UI thread, but for that listener, which may be called on another.
  */
 final class SearchColors {
 
@@ -43,11 +44,11 @@ final class SearchColors {
     private final BiConsumer<Color, Color> apply;
     private final IPreferenceStore store = EditorsUI.getPreferenceStore();
     private final String key = Key.VALUE;
-    private final IPropertyChangeListener listener = event -> {
-        if (key != null && key.equals(event.getProperty())) {
-            update();
-        }
-    };
+    /**
+     * Hears the preference. A preference may be changed on any thread (an import, a Job), and the
+     * colors go to the widget, so the work hops to the widget's UI thread.
+     */
+    private final IPropertyChangeListener listener = this::onPreferenceChange;
 
     /**
      * Hands {@code apply} the match and box colors now and after every change of the
@@ -70,6 +71,12 @@ final class SearchColors {
         RGB fg = widget.getForeground().getRGB();
         int mixed = OverlayColors.searchBox(toInt(match.getRGB()), toInt(fg));
         return new Color((mixed >> 16) & 0xFF, (mixed >> 8) & 0xFF, mixed & 0xFF);
+    }
+
+    private void onPreferenceChange(PropertyChangeEvent event) {
+        if (key != null && key.equals(event.getProperty()) && !widget.isDisposed()) {
+            widget.getDisplay().asyncExec(this::update);
+        }
     }
 
     void dispose() {

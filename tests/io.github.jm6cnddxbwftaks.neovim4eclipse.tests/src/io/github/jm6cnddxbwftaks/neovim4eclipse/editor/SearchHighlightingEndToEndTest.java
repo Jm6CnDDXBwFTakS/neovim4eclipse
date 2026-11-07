@@ -6,8 +6,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import org.eclipse.core.resources.IFile;
 import org.eclipse.swt.custom.StyleRange;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -66,6 +70,39 @@ class SearchHighlightingEndToEndTest extends EndToEndTestBase {
         for (int offset : new int[] { 0, 4, 9, 12, 15 }) {
             waitForBackground(offset, false);
         }
+    }
+
+    /**
+     * Each editor attached gets the matches of its own window, whether attaching it switched Neovim's
+     * window (back from another editor) or not (Detach, then Attach, on the same editor).
+     */
+    @Test
+    void anEditorAttachedAgainGetsItsMatches() throws Exception {
+        session.inputAsync("/beta<CR>"); // offset 6 in test.txt
+        settle();
+        waitForBackground(6, true);
+        IFile other = createFile("other.txt", "beta gamma\n");
+        ITextEditor second = (ITextEditor) IDE.openEditor(page(), other, TEXT_EDITOR, true);
+        waitForAttach(second, "other.txt");
+        settle();
+        StyledText secondWidget = widgetOf(second);
+        waitUntil("the second editor's match", TIMEOUT_MS, () -> secondWidget.getStyleRangeAtOffset(0) != null
+                && secondWidget.getStyleRangeAtOffset(0).background != null);
+
+        page().activate(editor); // back: Neovim's window switches
+        waitForAttach(editor, "test.txt");
+        settle();
+        waitForBackground(6, true);
+
+        // As Detach and Attach do, without their notes (an information dialog would wait for a click).
+        EditorAttachManager.getInstance().detach();
+        settle();
+        waitForBackground(6, false);
+        EditorAttachManager.getInstance().attach(editor, true); // the same window: no switch in Neovim
+        waitForAttach(editor, "test.txt again");
+        settle();
+        waitForBackground(6, true);
+        page().closeEditor(second, false);
     }
 
     /** Eclipse mode clears them; back in Neovim mode they are asked for again, and painted. */
