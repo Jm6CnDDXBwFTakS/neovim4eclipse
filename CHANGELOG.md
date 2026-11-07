@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-07
+
 ### Fixed
 
 - Nothing changes in the plug-in itself: the pictures the manual checks look at are taken only
