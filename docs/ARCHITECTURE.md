@@ -111,7 +111,7 @@ extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a clic
 ### 4. UI chrome
 
 - **Mode status**: `ModeStatusContribution` on the editor status line.
-- **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`).
+- **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`); Eclipse's own width comes back when Neovim leaves the editor.
 - **Ex / search**: `CommandLineBox`, an inline `Text` child of the editor widget, shows Neovim's command
   line (see "Command line" below). Its keys and pastes go to the session through its small
   `CommandLineBox.Commands` interface, so the box itself needs only SWT and is tested in `tests/swt`.
