@@ -126,6 +126,13 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   phases, dates of decisions, "review fix" labels, or pointers to private notes, checklists,
   artifacts or chats (see `docs/design/README.md`, "What goes in a note"). Plans stay outside the
   repository until built.
+- Nothing that reaches GitHub holds personal data: no real or account name, home path
+  (`/home/<name>`, `/Users/<name>`, `C:\Users\<name>`), personal email address or machine name.
+  This covers code, docs, commit messages and metadata, tags, release notes and assets, CI output,
+  and every picture (screenshots, GIFs, galleries). Use placeholders such as `/home/you`,
+  `C:\Users\you` and `pat@example.org`, and the GitHub noreply address. Before a commit, search
+  the diff for home paths and open every new or changed image. Why: a pushed leak stays in the
+  history; removing it means rewriting history, and tags of immutable releases cannot be moved.
 - One commit per logical change. Do not push, and never to `main`, unless the maintainer asks.
 - Branches (CONTRIBUTING.md, "Branches"): work on `fix/<name>` or `feature/<name>` cut from the
   current release branch (`release/<next version>`, e.g. `release/0.1.2`), merge it back into that
