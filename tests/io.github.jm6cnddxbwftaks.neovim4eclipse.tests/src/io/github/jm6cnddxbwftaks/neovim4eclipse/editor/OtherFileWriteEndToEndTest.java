@@ -14,6 +14,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -93,14 +94,21 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
      * {@code eclipse_write} request), with a NUL in the name.
      */
     @Test
-    void aWriteToANameTheFileSystemCannotHoldIsE212() {
+    void aWriteToANameTheFileSystemCannotHoldIsE212() throws Exception {
+        List<String> before = memberNames();
         AtomicReference<String> answer = new AtomicReference<>();
         session.evalAsync("luaeval('vim.rpcrequest(vim.g.neovim4eclipse_channel, \"eclipse_write\", "
                 + "vim.api.nvim_get_current_buf(), \"\", \"copy\", \"a\\0b.txt\", 0, 0, false)[1]')", answer::set);
 
         waitUntil("Eclipse's answer", TIMEOUT_MS, () -> answer.get() != null);
         assertTrue(answer.get().startsWith("E212: Can't open file for writing"), answer.get());
-        assertEquals("alpha\nbeta\ngamma\n", fileText("test.txt"), "the editor's file is untouched");
+        assertEquals(before, memberNames(), "no file was written");
+    }
+
+    /** The names of the test project's files and folders, sorted. */
+    private List<String> memberNames() throws Exception {
+        project.refreshLocal(IResource.DEPTH_ONE, null);
+        return Arrays.stream(project.members()).map(IResource::getName).sorted().toList();
     }
 
     @Test
