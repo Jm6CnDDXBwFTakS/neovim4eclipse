@@ -76,13 +76,39 @@ class OverlayFrameTest {
         host.setBounds(0, 0, 300, 200);
         shell.open();
         OverlayFrame<Text> frame = new OverlayFrame<>(host, parent -> new Text(parent, SWT.SINGLE));
-        frame.content().setForeground(new Color(0xFF, 0x40, 0x40));
+        frame.useOwnForeground(new Color(0xFF, 0x40, 0x40));
         host.setBackground(new Color(0xFF, 0xFF, 0xFF));
         host.setForeground(new Color(0x10, 0x10, 0x10));
 
         runUntil("the overlay's light colors",
                 () -> rgb(frame.content().getBackground()) == OverlayColors.background(0xFFFFFF));
         assertEquals(0xFF4040, rgb(frame.content().getForeground()));
+    }
+
+    /**
+     * An error under which the theme switched, then a plain message, then another switch: the text
+     * color is the editor's again and follows the second switch too.
+     */
+    @Test
+    void theEditorsTextColorFollowsAgainAfterAnOwnColor() throws InterruptedException {
+        shell.setSize(300, 200);
+        host.setBounds(0, 0, 300, 200);
+        shell.open();
+        OverlayFrame<Text> frame = new OverlayFrame<>(host, parent -> new Text(parent, SWT.SINGLE));
+        frame.useOwnForeground(new Color(0xFF, 0x40, 0x40)); // an error
+        host.setBackground(new Color(0xFF, 0xFF, 0xFF)); // light theme
+        host.setForeground(new Color(0x10, 0x10, 0x10));
+        runUntil("the overlay's light colors",
+                () -> rgb(frame.content().getBackground()) == OverlayColors.background(0xFFFFFF));
+
+        frame.followForeground(); // a plain message
+        assertEquals(0x101010, rgb(frame.content().getForeground()));
+        host.setBackground(new Color(0x1E, 0x1E, 0x1E)); // dark again
+        host.setForeground(new Color(0xD4, 0xD4, 0xD4));
+        host.redraw();
+        runUntil("the overlay's dark colors",
+                () -> rgb(frame.content().getBackground()) == OverlayColors.background(0x1E1E1E));
+        assertEquals(0xD4D4D4, rgb(frame.content().getForeground()), "the editor's text color follows");
     }
 
     /** During the error flash the background under the tint is the editor's: the overlay takes that. */

@@ -119,7 +119,11 @@ final class MessageLine {
         CLabel label = frame.content();
         label.setText(LabelText.literal(text)); // a file named R&D.txt keeps its & (no mnemonic)
         label.setToolTipText(text);
-        label.setForeground(isError ? errorColor() : host.getForeground());
+        if (isError) {
+            frame.useOwnForeground(errorColor());
+        } else {
+            frame.followForeground(); // the editor's, through later theme switches too
+        }
         reposition();
         frame.control().moveAbove(null);
         frame.control().setVisible(true);
