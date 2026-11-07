@@ -246,8 +246,13 @@ public class Activator extends AbstractUIPlugin {
      * Stops the current session and detaches the editor so the next attach starts a fresh
      * {@code nvim} (and a fresh read of {@code init.lua}), then
      * re-attaches the active editor.
+     *
+     * <p>Not synchronized: {@code EditorAttachManager.attach} holds the manager's lock while it
+     * asks for a session ({@link #getOrCreateSession()}, this object's lock), so the locks are
+     * always taken manager first. Holding this one here while calling the manager would take them
+     * the other way round, and two threads doing both at once would wait for each other forever.
      */
-    private synchronized void resetSession() {
+    private void resetSession() {
         EditorAttachManager manager = EditorAttachManager.getInstance();
         manager.detachQuietly();
         shutdownSession();
