@@ -125,6 +125,19 @@ public final class EditorAttachManager {
     private final Map<DocumentBuffer, DiagnosticsSync> diagnosticsSyncs = new HashMap<>();
     /** Guarded by {@code this}. The buffer of the attached document, or {@code null}. */
     private DocumentBuffer attachedBuffer;
+    /**
+     * Guarded by {@code this}. The document the attached controller drives, or {@code null}: an
+     * attach to the attached editor is a no-op only while the editor still shows it (after a
+     * rename it shows a new one, see {@link #onInputChanged}).
+     */
+    private IDocument attachedDocument;
+    /**
+     * Guarded by {@code this}. The document each plain text editor was last attached on, by editor,
+     * so that a new input Eclipse gives the editor itself can be told from the old one
+     * ({@link #rebind}). Multi-page editors are not listed: their text pages show several documents
+     * in turn, by design.
+     */
+    private final Map<IEditorPart, IDocument> boundDocuments = new HashMap<>();
     private volatile boolean autoAttach = true;
 
     /** Makes the controller that drives an editor: {@link NeovimEditorController#attach}. */
@@ -206,7 +219,21 @@ public final class EditorAttachManager {
         @Override public void partDeactivated(IWorkbenchPartReference partRef) { }
         @Override public void partHidden(IWorkbenchPartReference partRef) { }
         @Override public void partVisible(IWorkbenchPartReference partRef) { }
-        @Override public void partInputChanged(IWorkbenchPartReference partRef) { }
+        /**
+         * Eclipse gave an editor a new input itself (Refactor > Rename or a move of its open file,
+         * File > Save As): it now shows another document. Handled after the event, as the editor
+         * may still be setting itself up for the new input (a dirty editor's text is put into the
+         * new document right after). See {@link #onInputChanged}.
+         */
+        @Override
+        public void partInputChanged(IWorkbenchPartReference partRef) {
+            if (partRef instanceof IEditorReference eref) {
+                IEditorPart part = eref.getEditor(false);
+                if (part != null) {
+                    Display.getDefault().asyncExec(() -> onInputChanged(part));
+                }
+            }
+        }
     };
 
     private EditorAttachManager() {
@@ -404,9 +431,10 @@ public final class EditorAttachManager {
                     + "source tab): " + editor.getTitle());
         }
 
-        // Already attached to this editor
+        // Already attached to this editor, on the document it shows. Not when Eclipse has given the
+        // editor a new input since (a rename): the controller still drives the old document.
         if (activeController != null && activeController.getEditor().equals(textEditor)
-                && !activeController.isClosed()) {
+                && !activeController.isClosed() && documentOf(textEditor) == attachedDocument) {
             return activeController;
         }
 
@@ -442,20 +470,23 @@ public final class EditorAttachManager {
         if (document == null) {
             throw new IllegalStateException("Editor has no document: " + editor.getTitle());
         }
+        if (editor == textEditor) {
+            // A new input the workbench has not reported yet (onInputChanged runs later): the old
+            // document is given up first, as there.
+            Rebound rebound = rebind(textEditor, document, session);
+            if (rebound != null) {
+                closeReleased(session, rebound.released());
+            }
+            boundDocuments.put(editor, document);
+        }
         DocumentBuffer buffer = documents.add(document, editor, () -> bufferName(textEditor.getEditorInput()));
         // Neovim's 'modified' follows the editor's dirty flag, from the first load on.
         editor.addPropertyListener(dirtyListener); // once per editor: a listener list holds it once
         session.setModifiedAsync(buffer, editor.isDirty());
-        UnattachedDocumentSync sync = unattachedSyncs.computeIfAbsent(buffer, b -> {
-            UnattachedDocumentSync created = new UnattachedDocumentSync(document, b, session, SwtUiExecutor.INSTANCE);
-            created.start();
-            // A file the quickfix list named by path only (a closed file's line) now has an editor:
-            // its entries get columns (QuickfixLists).
-            QuickfixLists.changed(session);
-            return created;
-        });
+        UnattachedDocumentSync sync = startUnattachedSync(document, buffer, session);
         sync.setAttached(true); // before the controller's synchronizer takes over
         attachedBuffer = buffer;
+        attachedDocument = document;
         EditorWindow window = windows.computeIfAbsent(editor, part -> new EditorWindow());
         try {
             activeController = controllerMaker.make(textEditor, session, buffer, window, takeNeovimCursor);
@@ -473,6 +504,34 @@ public final class EditorAttachManager {
         ToggleButtonRefresh.request(); // the toolbar button shows this editor's mode
         LOG.fine("Attached Neovim to: " + textEditor.getTitle());
         return activeController;
+    }
+
+    /**
+     * The {@link UnattachedDocumentSync} of {@code buffer}, started for {@code document} if it has
+     * none yet. Guarded by {@code this}.
+     */
+    private UnattachedDocumentSync startUnattachedSync(IDocument document, DocumentBuffer buffer, NeovimSession session) {
+        return unattachedSyncs.computeIfAbsent(buffer, b -> {
+            UnattachedDocumentSync created = new UnattachedDocumentSync(document, b, session, SwtUiExecutor.INSTANCE);
+            created.start();
+            // A file the quickfix list named by path only (a closed file's line) now has an editor:
+            // its entries get columns (QuickfixLists).
+            QuickfixLists.changed(session);
+            return created;
+        });
+    }
+
+    /**
+     * Stops {@code buffer}'s {@link UnattachedDocumentSync} and {@link DiagnosticsSync}: they listen
+     * to a document that is gone (its last editor closed, or the editor moved to a new document).
+     * Guarded by {@code this}.
+     */
+    private void stopSyncs(DocumentBuffer buffer) {
+        UnattachedDocumentSync sync = unattachedSyncs.remove(buffer);
+        if (sync != null) {
+            sync.close();
+        }
+        stopDiagnostics(buffer);
     }
 
     /**
@@ -919,6 +978,7 @@ public final class EditorAttachManager {
                 closeControllerQuietly();
                 attachedPart = null;
                 attachedBuffer = null;
+                attachedDocument = null;
             }
         }
         try {
@@ -927,12 +987,11 @@ public final class EditorAttachManager {
             synchronized (this) {
                 if (old != null && fresh != null && fresh != old) {
                     DocumentBuffer buffer = documents.move(old, fresh);
-                    UnattachedDocumentSync sync = buffer == null ? null : unattachedSyncs.remove(buffer);
-                    if (sync != null) {
-                        sync.close(); // listens to the old document; the attach below makes one for the new
+                    if (boundDocuments.containsKey(editor)) {
+                        boundDocuments.put(editor, fresh); // so onInputChanged, which follows, has nothing to do
                     }
                     if (buffer != null) {
-                        stopDiagnostics(buffer); // the same for its annotation model
+                        stopSyncs(buffer); // they listen to the old document; the attach below makes them for the new
                     }
                 }
             }
@@ -963,6 +1022,109 @@ public final class EditorAttachManager {
         }
     }
 
+    /**
+     * What {@link #rebind} did: whether the editor was attached (its controller is closed now),
+     * whether its Neovim buffer moved to the new document, and the buffers no editor shows any
+     * more, which the caller closes in Neovim ({@link #closeReleased}).
+     */
+    private record Rebound(boolean wasAttached, boolean kept, List<DocumentBuffer> released) {
+    }
+
+    /**
+     * Eclipse gave {@code part} a new input itself, and with it a new {@link IDocument}: a rename or
+     * move of its open file (Refactor > Rename, a move in the Project Explorer: the document
+     * provider tells the editor, whose {@code AbstractTextEditor.ElementStateListener.elementMoved}
+     * calls {@code setInput}, and that connects a new document), or File > Save As. Without this
+     * the controller, its {@link BufferSynchronizer} and the document's {@link UnattachedDocumentSync}
+     * would go on driving the old document, which no editor shows: an edit in Neovim would reach no
+     * editor, and the next save would write Eclipse's text without it. The plug-in's own input
+     * changes keep the buffer themselves ({@link #replaceInputKeepingBuffer}) and leave nothing to
+     * do here.
+     *
+     * <p>The editor is bound to its new document ({@link #rebind}) and attached again if it was
+     * attached. Example: {@code a.txt} attached, renamed to {@code b.txt}; {@code ix<Esc>} then
+     * changes the document of {@code b.txt}, and Neovim's buffer is named {@code b.txt}. UI thread.
+     */
+    private void onInputChanged(IEditorPart part) {
+        if (!(part instanceof ITextEditor text)) {
+            return; // a multi-page editor: its pages' documents are not tracked (boundDocuments)
+        }
+        Rebound rebound;
+        NeovimSession session;
+        synchronized (this) {
+            session = followedSession;
+            rebound = session == null ? null : rebind(text, documentOf(text), session);
+        }
+        if (rebound == null) {
+            return;
+        }
+        closeReleased(session, rebound.released());
+        if (rebound.wasAttached()) {
+            try {
+                // A kept buffer has Neovim's cursor where the caret was; a new one gets the caret's.
+                attach(part, false, rebound.kept());
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Could not attach again to " + part.getTitle() + " after its input changed", e);
+            }
+        }
+    }
+
+    /**
+     * Binds {@code editor} to {@code fresh}, the document it shows now, when it was attached on
+     * another one before; {@code null} when there is nothing to do (never attached, or bound to it
+     * already). Guarded by {@code this}.
+     *
+     * <p>The old document's controller (if attached) and syncs stop. Its Neovim buffer moves to the
+     * new document when the file's name stayed the same (the buffer keeps its number, undo history
+     * and marks) and no other editor shares the old document. A renamed or moved file gets a new
+     * buffer at its next attach instead, and the old one is closed: a buffer is named after the
+     * file's path ({@link #bufferName}) when it is made, also again after Restart Neovim, so a
+     * moved buffer would keep the old path. Example: {@code a.txt} renamed to {@code b.txt} closes
+     * buffer {@code a.txt}; {@code b.txt} gets its own.
+     */
+    private Rebound rebind(ITextEditor editor, IDocument fresh, NeovimSession session) {
+        IDocument old = boundDocuments.get(editor);
+        if (old == null || fresh == null || old == fresh) {
+            return null;
+        }
+        boolean wasAttached = isAttachedTo(editor);
+        if (wasAttached) {
+            closeControllerQuietly(); // its sync is closed below, not handed the old document
+            attachedPart = null;
+            attachedBuffer = null;
+            attachedDocument = null;
+        }
+        DocumentBuffer buffer = documents.bufferOf(old).orElse(null);
+        boolean kept = buffer != null && buffer.name().equals(bufferName(editor.getEditorInput()))
+                && !documents.isSharedWithAnotherEditor(old, editor) && documents.bufferOf(fresh).isEmpty();
+        List<DocumentBuffer> released;
+        if (kept) {
+            documents.move(old, fresh);
+            boundDocuments.put(editor, fresh);
+            boolean hadSync = unattachedSyncs.containsKey(buffer);
+            stopSyncs(buffer);
+            if (hadSync && !wasAttached) {
+                startUnattachedSync(fresh, buffer, session); // an attached editor gets them at its attach
+                startDiagnostics(editor, fresh, buffer, session);
+            }
+            released = List.of();
+        } else {
+            boundDocuments.remove(editor);
+            released = documents.remove(editor); // the old document's buffer, unless a clone still shows it
+            released.forEach(this::stopSyncs);
+        }
+        return new Rebound(wasAttached, kept, released);
+    }
+
+    /** Closes in Neovim the buffers no editor shows any more, as {@link #releaseDocumentsOf} does. */
+    private static void closeReleased(NeovimSession session, List<DocumentBuffer> released) {
+        if (released.isEmpty() || session == null || !session.isAlive()) {
+            return;
+        }
+        released.forEach(session::closeBufferAsync);
+        QuickfixLists.changed(session); // their entries go back to the markers, by file name
+    }
+
     /** Tells Neovim whether {@code part}'s document has unsaved changes. UI thread. */
     private void onDirtyChanged(IEditorPart part) {
         ITextEditor text = textEditorOf(part); // a multi-page editor's text page too
@@ -991,14 +1153,9 @@ public final class EditorAttachManager {
         synchronized (this) {
             session = followedSession;
             window = windows.remove(part);
+            boundDocuments.remove(part);
             unused = documents.remove(part);
-            for (DocumentBuffer buffer : unused) {
-                UnattachedDocumentSync sync = unattachedSyncs.remove(buffer);
-                if (sync != null) {
-                    sync.close();
-                }
-                stopDiagnostics(buffer);
-            }
+            unused.forEach(this::stopSyncs);
         }
         if (session != null && session.isAlive()) {
             if (window != null) {
@@ -1098,6 +1255,7 @@ public final class EditorAttachManager {
     public synchronized void detachQuietly() {
         closeControllerQuietly();
         attachedPart = null;
+        attachedDocument = null;
         if (attachedBuffer != null) {
             UnattachedDocumentSync sync = unattachedSyncs.get(attachedBuffer);
             if (sync != null) {

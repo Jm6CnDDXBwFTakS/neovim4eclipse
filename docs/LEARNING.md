@@ -198,6 +198,12 @@ So `:e new.txt` inside a project opens by location (an empty, editable editor) a
 (`EditorAttachManager.replaceInputKeepingBuffer`) instead of starting a new one. Details:
 [NEW_FILE.md](design/NEW_FILE.md).
 
+Eclipse makes such a switch by itself too: rename an open file (Refactor › Rename, or F2 in the
+Project Explorer) and its editor gets a new input, so a new `IDocument`, without being closed.
+Anything that holds on to the old document (a listener, a sync) is then cut off from the editor. A
+part listener hears of it as `IPartListener2.partInputChanged`; the plug-in then binds the editor
+to its new document (`EditorAttachManager.onInputChanged`).
+
 ### 1.5 SWT: one UI thread
 
 SWT is Eclipse's widget toolkit. It wraps the native widgets of each platform (GTK, Cocoa, Win32),

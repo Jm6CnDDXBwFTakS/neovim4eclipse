@@ -169,6 +169,16 @@ document still has that stamp skips its push (`DocumentPush`), so switching back
 editor reads neither the whole document nor the whole buffer. Both sides changing the same document at once
 is applied in arrival order; a Neovim change that no longer fits is logged and replaced by Eclipse's text.
 
+Eclipse can also give an open editor a new input itself, and with it a new `IDocument`: a rename or
+move of its file (`AbstractTextEditor`'s `elementMoved` calls `setInput`), or File › Save As. The
+workbench reports it as `partInputChanged`, and `EditorAttachManager.onInputChanged` binds the editor
+to its new document (`rebind`): the old document's controller and syncs stop, and the editor is
+attached again if it was attached. The Neovim buffer moves to the new document when the file's name
+stayed the same; a renamed file gets a new buffer (named after its new path) and the old one is
+closed, since a buffer's name is the path it is made under, again after Restart Neovim. The
+plug-in's own input changes (a new file's first `:w`, `:saveas`) keep the buffer through
+`replaceInputKeepingBuffer`.
+
 A `BufEnter` autocmd reports buffer switches. Neovim's switch to another open document's buffer is
 followed: its editor is activated and attached, keeping Neovim's cursor. When several editors show
 that document, the first one opened is chosen. Commands such as `:bufdo`, `:argdo` and `:cdo` enter

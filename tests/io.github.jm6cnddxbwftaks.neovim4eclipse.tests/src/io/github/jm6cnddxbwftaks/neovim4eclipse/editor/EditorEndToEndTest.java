@@ -762,6 +762,31 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * A rename of the open, attached file (as Refactor > Rename or a move in the Project Explorer
+     * does it, through the workspace) gives the editor a new input and a new document
+     * ({@code AbstractTextEditor}'s {@code elementMoved}). Neovim follows: its buffer is the new
+     * file's, and an edit in Neovim reaches the document the editor shows now, which {@code :w}
+     * then saves. Before, the plug-in stayed on the old document: the edit reached no editor.
+     */
+    @Test
+    void anEditAfterARenameOfTheOpenFileReachesItsNewDocument() throws Exception {
+        IFile renamed = project.getFile("renamed.txt");
+        project.getFile("test.txt").move(renamed.getFullPath(), true, null);
+        waitUntil("the editor to show renamed.txt", TIMEOUT_MS,
+                () -> renamed.equals(editor.getEditorInput().getAdapter(IFile.class)));
+        assertTrue(documentOf(editor) != document, "Eclipse gave the editor a new document");
+        waitForNeovimIn(renamed); // the attach to the new document made the buffer of renamed.txt
+        waitForAttach(editor, "renamed.txt");
+
+        type(widget, 'x');
+
+        expectText(editor, "lpha\nbeta\ngamma\n");
+        runInBox(widget, "w");
+        waitUntil("renamed.txt saved", TIMEOUT_MS, () -> "lpha\nbeta\ngamma\n".equals(fileText("renamed.txt")),
+                () -> "; it reads " + fileText("renamed.txt").replace("\n", "\\n"));
+    }
+
+    /**
      * {@code :bufdo ... | update} saves every changed file through Eclipse: the document buffers are
      * {@code buftype=acwrite}, and their write hook asks Eclipse to save (core/LuaScripts.DOCUMENT_BUFFER).
      */
