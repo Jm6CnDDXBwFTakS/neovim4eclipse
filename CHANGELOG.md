@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-07
+
 ### Added
 
 - Search matches are highlighted in the editor as in Neovim: every match while a search is typed,
