@@ -442,7 +442,15 @@ public final class EditorAttachManager {
         sync.setAttached(true); // before the controller's synchronizer takes over
         attachedBuffer = buffer;
         EditorWindow window = windows.computeIfAbsent(editor, part -> new EditorWindow());
-        activeController = NeovimEditorController.attach(textEditor, session, buffer, window, takeNeovimCursor);
+        try {
+            activeController = NeovimEditorController.attach(textEditor, session, buffer, window, takeNeovimCursor);
+        } catch (Exception | Error e) {
+            // No controller: the document's own sync carries the changes across again. Without
+            // this it would stay "attached" to nothing, and :bufdo edits of the document (or
+            // Eclipse's background edits of it) would reach neither side until the next attach.
+            detachQuietly();
+            throw e;
+        }
         attachedPart = editor;
         // After the controller: its attach queued the buffer's creation and first load, and the
         // problems sent now are queued behind them, so they land on the document's text.
@@ -882,10 +890,9 @@ public final class EditorAttachManager {
             }
             wasAttached = isAttachedTo(editor);
             if (wasAttached) {
-                activeController.close();
-                activeController = null;
-                attachedPart = null;
-                attachedBuffer = null;
+                // As any detach: the document's own sync takes over, so nothing is lost should
+                // the attach below fail.
+                detachQuietly();
             }
         }
         reusable.setInput(input); // outside the lock: it notifies listeners
