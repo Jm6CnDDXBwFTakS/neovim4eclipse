@@ -86,6 +86,23 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         waitForAttach(editor, "test.txt");
     }
 
+    /**
+     * A write to a name the file system cannot hold gets Vim's E212 for that name, not "Eclipse could
+     * not save" the editor's own file. On Windows {@code :w a<b.txt} is such a name; a NUL byte is one
+     * everywhere, so the test asks for the write as Neovim's write hook does (DOCUMENT_BUFFER's
+     * {@code eclipse_write} request), with a NUL in the name.
+     */
+    @Test
+    void aWriteToANameTheFileSystemCannotHoldIsE212() {
+        AtomicReference<String> answer = new AtomicReference<>();
+        session.evalAsync("luaeval('vim.rpcrequest(vim.g.neovim4eclipse_channel, \"eclipse_write\", "
+                + "vim.api.nvim_get_current_buf(), \"\", \"copy\", \"a\\0b.txt\", 0, 0, false)[1]')", answer::set);
+
+        waitUntil("Eclipse's answer", TIMEOUT_MS, () -> answer.get() != null);
+        assertTrue(answer.get().startsWith("E212: Can't open file for writing"), answer.get());
+        assertEquals("alpha\nbeta\ngamma\n", fileText("test.txt"), "the editor's file is untouched");
+    }
+
     @Test
     void aWriteUnderAnotherNameIsACopyAndTheEditorKeepsItsChanges() {
         List<String> dialogs = closeModalDialogsWhile(widget);
