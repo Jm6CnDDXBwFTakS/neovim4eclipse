@@ -117,6 +117,8 @@ public final class NeovimEditorController implements AutoCloseable {
     /** Paints Neovim's search matches; {@code null} when search highlighting is off or the viewer cannot. */
     private final SearchHighlighter searchHighlighter;
     private final SearchColors searchColors;
+    /** Set when Neovim's matches were ignored while Eclipse typed; cleared when they are asked for again. */
+    private volatile boolean searchSkipped;
     /** Neovim's visual selection shown in the widget (native selection or blockwise overlay). */
     private final VisualSelectionView selectionView;
     /** When the Vim Ctrl-key bindings are active for this editor. */
@@ -374,8 +376,13 @@ public final class NeovimEditorController implements AutoCloseable {
         if (eclipseTyping() || session.isLeavingInsertMode()) {
             // Neovim's lines are behind the document until Esc (Eclipse types), so its columns are
             // of older text: painted, they would land on the wrong characters. The highlighter
-            // keeps its own matches in step with the typing meanwhile, and at Esc the matches are
-            // asked for again (onModeChanged).
+            // keeps its own matches in step with the typing meanwhile, and the matches are asked for
+            // again once the insert has ended: at the mode change (onModeChanged), or now if that
+            // came already (the Esc is still being handled).
+            searchSkipped = true;
+            if (!typingSeen) {
+                resendSkippedSearch();
+            }
             return;
         }
         SwtUiExecutor.INSTANCE.asyncExec(() -> {
@@ -383,6 +390,18 @@ public final class NeovimEditorController implements AutoCloseable {
                 searchHighlighter.show(matches.matches());
             }
         });
+    }
+
+    /**
+     * Asks for the matches again if some were ignored while Eclipse typed (onSearchMatches): queued
+     * after the push at Esc, so Neovim has the typed text. Nothing when none were ignored, so an
+     * insert without a search costs nothing more.
+     */
+    private void resendSkippedSearch() {
+        if (searchHighlighter != null && searchSkipped) {
+            searchSkipped = false;
+            session.resendSearchAsync(buffer);
+        }
     }
 
     /**
@@ -954,10 +973,8 @@ public final class NeovimEditorController implements AutoCloseable {
                     }
                 }
             });
-            if (!typing && searchHighlighter != null) {
-                // The insert ended: Neovim has Eclipse's typing now (queued after the push at Esc),
-                // and the matches skipped meanwhile (onSearchMatches) are asked for.
-                session.resendSearchAsync(buffer);
+            if (!typing) {
+                resendSkippedSearch(); // the insert ended: Neovim has Eclipse's typing now
             }
         }
         if (!typing) {
