@@ -792,12 +792,12 @@ The editor shows the text `a foo b foo`, and the user types `/foo` and Enter.
 5. `editor/SearchHighlighter` turns byte columns into document offsets (2.8) and asks the viewer to
    rebuild the presentation of that region (`invalidateTextPresentation`). The viewer runs the
    syntax coloring again for it, then calls the highlighter's `applyTextPresentation`, which merges
-   a background into the ranges of the matches. The text keeps its colors; the match under the
-   caret gets the stronger color.
+   a background into the ranges of the matches. The text keeps its colors. A paint listener then
+   draws a box around the match under the caret.
 
 `n` moves Neovim's cursor to the next match. Neovim redraws, `M.update` finds the same matches and
 sends nothing; the caret moves (`eclipse_cursor`, as for any motion), and the highlighter's caret
-listener moves the stronger color with it. `:noh` sends an empty list, which clears. Design:
+listener moves the box with it. `:noh` sends an empty list, which clears. Design:
 [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
 
 ### 3.3 Insert mode

@@ -2,7 +2,8 @@
 
 Neovim highlights the matches of the last search (`'hlsearch'`), and every match of a search while
 it is typed (`'incsearch'`). The editor shows the same: each match gets a background color behind
-its text, and the match under the caret a shade stronger, as Neovim's `CurSearch` group does.
+its text, and a box around the match under the caret, which Neovim marks with its `CurSearch`
+group.
 `:noh` takes them away until the next search.
 
 ## What is shown
@@ -100,7 +101,16 @@ nothing: a match inside a closed fold is not shown. The selection is drawn over 
 
 The match under the caret is the one whose range holds the caret's document offset (from its
 start, up to its end). After `n` Neovim's cursor is on a match's first character, so that match is
-the current one. A caret move repaints only the old and the new current match.
+the current one. It keeps the same background as the others and gets a box: a one-pixel rectangle
+around each line's part of it, drawn by a `PaintListener` after the text, at its place in the
+widget (`modelOffset2WidgetOffset`, so a match in a closed fold has none). A caret move repaints
+only the old and the new box.
+
+Rejected: a stronger background for it, the match color moved toward the text color. In a light
+theme that is a darker shade under dark text, which reads well; in Eclipse's dark theme it is a
+light gray, and the gray of a Java comment on it could not be read (the gallery's dark pictures,
+`SearchGalleryTest`, showed it). Each syntax color is the theme's, so no background is safe under
+every one; a box does not sit under the text at all.
 
 ### Colors
 
@@ -109,8 +119,9 @@ Annotations*), the color Eclipse's Search view marks its hits with. It follows t
 user's choice, and a change applies at once (`editor/SearchColors` listens to the preference
 store). The key is read from the Search plug-in's annotation declaration
 (`org.eclipse.search.results`), not written here. Without that plug-in, its default (206, 204,
-247) is used. The current match is that color moved a quarter toward the editor's text color
-(`util/OverlayColors.currentSearch`), so it stands out in a light theme and a dark one alike.
+247) is used. The box is that color moved halfway toward the editor's text color
+(`util/OverlayColors.searchBox`): darker in a light theme, lighter in a dark one, so it shows on
+the match's background in both.
 Neovim's `Search` and `CurSearch` groups are not used: their colors suit Neovim's screen, not the
 editor's theme.
 
@@ -128,7 +139,9 @@ editor's theme.
   columns, matches across lines, only the visible lines, only changes sent, resend.
 - `NotificationBridgeTest.searchMatchesComeInGroupsOfFour`: the payload.
 - `SearchHighlighterTest` (`tests/swt`): on a real source viewer, the backgrounds in the widget's
-  style ranges, the current match, clear and dispose, a match the document no longer has.
-- `OverlayColorsTest.theCurrentSearchMatchMovesTowardTheText`.
+  style ranges, the box around the current match (painted into an image), clear and dispose, a
+  match the document no longer has.
+- `OverlayColorsTest.theSearchBoxMovesTowardTheText`.
 - `SearchHighlightingEndToEndTest`: a search, `n`, `:noh`, Eclipse mode and back, in a real editor.
-- The manual check `sh-colors`: the colors in a light and a dark theme, and in the Java editor.
+- The manual check `sh-colors`: the gallery's pictures (`SearchGalleryTest`, `-Pgallery`) in a
+  light and a dark theme, plain text and the Java editor.

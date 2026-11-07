@@ -21,13 +21,16 @@ import org.eclipse.jface.text.TextPresentation;
 import org.eclipse.swt.custom.CaretListener;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.GC;
+import org.eclipse.swt.graphics.Rectangle;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
 /**
  * Paints the matches of Neovim's search behind the editor's text (docs/design/SEARCH_HIGHLIGHTING.md),
- * and the match under the caret a shade stronger, as Neovim's {@code CurSearch} does.
+ * and draws a box around the match under the caret, which Neovim marks with {@code CurSearch}.
  *
  * <h2>Behind the text, with JFace's own mechanism</h2>
  * A JFace text viewer builds what the widget shows (the syntax colors) as a
@@ -42,6 +45,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  * <p>The presentation is in document offsets, and the viewer maps it to the widget itself, so
  * folded code needs nothing here: a match inside a closed fold is simply not shown.
  *
+ * <h2>The match under the caret: a box, not a stronger background</h2>
+ * A stronger background was tried first: the match color moved toward the text color. In a light
+ * theme that is a darker shade, under dark text; in Eclipse's dark theme it is a light gray, and
+ * the gray of a Java comment on it could not be read (the gallery's dark pictures showed it). The
+ * text's own colors are unknown here (each syntax color is the theme's), so no background is safe
+ * under every one of them. A box around the match leaves the text on the same background as the
+ * other matches, and stands out in any theme. It is drawn by a {@link PaintListener} after the
+ * text, around each line's part of the match, in the box color, at the match's place in the widget
+ * (the widget's offsets differ from the document's where code is folded).
+ *
  * <p>Matches arrive in Neovim's units (lines from 1, UTF-8 byte columns) and become document
  * offsets with {@link DocumentPositions#byteColToOffset}. Example: {@code foo} after {@code é } on
  * line 1 is bytes 3 to 6, characters 2 to 5. Only the lines Neovim's window shows are sent, which
@@ -54,8 +67,9 @@ final class SearchHighlighter implements ITextPresentationListener {
     private final ITextViewer viewer;
     private final StyledText widget;
     private final CaretListener caretListener = event -> onCaretMoved();
+    private final PaintListener boxPainter = event -> paintBox(event.gc);
     private Color matchColor;
-    private Color currentColor;
+    private Color boxColor;
     /** The matches as document regions, in Neovim's order; empty when nothing is highlighted. */
     private List<IRegion> regions = List.of();
     /** The index in {@link #regions} of the match under the caret, or -1. */
@@ -64,16 +78,17 @@ final class SearchHighlighter implements ITextPresentationListener {
     /**
      * @param viewer       the editor's viewer; it must support presentation listeners and
      *                     invalidation ({@link #supports}), as every JFace text viewer does
-     * @param matchColor   the background of a match
-     * @param currentColor the background of the match under the caret
+     * @param matchColor the background of a match
+     * @param boxColor   the box around the match under the caret
      */
-    SearchHighlighter(ITextViewer viewer, Color matchColor, Color currentColor) {
+    SearchHighlighter(ITextViewer viewer, Color matchColor, Color boxColor) {
         this.viewer = viewer;
         this.widget = viewer.getTextWidget();
         this.matchColor = matchColor;
-        this.currentColor = currentColor;
+        this.boxColor = boxColor;
         ((ITextViewerExtension4) viewer).addTextPresentationListener(this);
         widget.addCaretListener(caretListener);
+        widget.addPaintListener(boxPainter);
     }
 
     /** Whether {@code viewer} can show the highlights: it takes presentation listeners and invalidation. */
@@ -91,8 +106,10 @@ final class SearchHighlighter implements ITextPresentationListener {
         }
         List<IRegion> old = regions;
         regions = next;
+        redrawBoxes();
         current = indexAt(next, caretOffset());
         repaint(old, next);
+        redrawBoxes();
     }
 
     /** Clears the highlights (Neovim mode off, or the editor detaches). */
@@ -101,10 +118,13 @@ final class SearchHighlighter implements ITextPresentationListener {
     }
 
     /** New colors (the user changed the Search Results color, or the theme). */
-    void setColors(Color match, Color currentMatch) {
+    void setColors(Color match, Color box) {
         matchColor = match;
-        currentColor = currentMatch;
+        boxColor = box;
         repaint(regions, List.of());
+        if (!widget.isDisposed()) {
+            widget.redraw();
+        }
     }
 
     /** The regions shown, in document offsets; for tests. */
@@ -117,6 +137,33 @@ final class SearchHighlighter implements ITextPresentationListener {
         return current;
     }
 
+    /**
+     * The box around the match under the caret, in widget pixels: one rectangle per line the match
+     * covers (wrapped parts included), none when there is no such match or it is folded away.
+     */
+    List<Rectangle> boxes() {
+        if (current < 0 || current >= regions.size() || widget.isDisposed()) {
+            return List.of();
+        }
+        IRegion r = regions.get(current);
+        int start = toWidget(r.getOffset());
+        int end = toWidget(r.getOffset() + r.getLength());
+        if (start < 0 || end <= start || end > widget.getCharCount()) {
+            return List.of();
+        }
+        List<Rectangle> boxes = new ArrayList<>(1);
+        for (int line = widget.getLineAtOffset(start); line <= widget.getLineAtOffset(end - 1); line++) {
+            int lineStart = widget.getOffsetAtLine(line);
+            int lineEnd = lineStart + widget.getLine(line).length();
+            int from = Math.max(start, lineStart);
+            int to = Math.min(end, lineEnd);
+            if (to > from) {
+                boxes.add(widget.getTextBounds(from, to - 1));
+            }
+        }
+        return boxes;
+    }
+
     /** Stops painting and listening. */
     void dispose() {
         List<IRegion> old = regions;
@@ -125,7 +172,9 @@ final class SearchHighlighter implements ITextPresentationListener {
         ((ITextViewerExtension4) viewer).removeTextPresentationListener(this);
         if (!widget.isDisposed()) {
             widget.removeCaretListener(caretListener);
+            widget.removePaintListener(boxPainter);
             repaint(old, List.of());
+            widget.redraw();
         }
     }
 
@@ -143,8 +192,37 @@ final class SearchHighlighter implements ITextPresentationListener {
             int end = Math.min(r.getOffset() + r.getLength(), to);
             if (start < end) {
                 // No foreground and no font: only the background is merged, the syntax colors stay.
-                presentation.mergeStyleRange(new StyleRange(start, end - start, null, i == current ? currentColor : matchColor));
+                presentation.mergeStyleRange(new StyleRange(start, end - start, null, matchColor));
             }
+        }
+    }
+
+    /**
+     * Draws the box around the match under the caret with {@code gc}. Called by the paint listener
+     * after the widget drew its text; package-private so a test can paint into an image.
+     */
+    void paintBox(GC gc) {
+        List<Rectangle> boxes;
+        try {
+            boxes = boxes();
+        } catch (RuntimeException e) {
+            LOG.log(Level.FINE, "search box paint failed", e); // e.g. the document changed under us
+            return;
+        }
+        if (boxes.isEmpty()) {
+            return;
+        }
+        Color old = gc.getForeground();
+        int oldWidth = gc.getLineWidth();
+        try {
+            gc.setForeground(boxColor);
+            gc.setLineWidth(1);
+            for (Rectangle box : boxes) {
+                gc.drawRectangle(box.x, box.y, Math.max(1, box.width - 1), Math.max(1, box.height - 1));
+            }
+        } finally {
+            gc.setForeground(old);
+            gc.setLineWidth(oldWidth);
         }
     }
 
@@ -152,16 +230,16 @@ final class SearchHighlighter implements ITextPresentationListener {
     private void onCaretMoved() {
         int next = indexAt(regions, caretOffset());
         if (next != current) {
-            IRegion before = current >= 0 ? regions.get(current) : null;
+            redrawBoxes(); // the old box goes
             current = next;
-            List<IRegion> changed = new ArrayList<>(2);
-            if (before != null) {
-                changed.add(before);
-            }
-            if (next >= 0) {
-                changed.add(regions.get(next));
-            }
-            repaint(changed, List.of());
+            redrawBoxes(); // the new one comes
+        }
+    }
+
+    /** Has the widget repaint where the current box is, with a pixel around it for the line. */
+    private void redrawBoxes() {
+        for (Rectangle box : boxes()) {
+            widget.redraw(box.x - 1, box.y - 1, box.width + 2, box.height + 2, false);
         }
     }
 
@@ -183,6 +261,11 @@ final class SearchHighlighter implements ITextPresentationListener {
         } catch (RuntimeException e) {
             LOG.log(Level.FINE, "search highlight repaint failed", e); // e.g. the document changed under us
         }
+    }
+
+    /** A document offset as the widget's, or -1 inside a closed fold. */
+    private int toWidget(int offset) {
+        return viewer instanceof ITextViewerExtension5 extension ? extension.modelOffset2WidgetOffset(offset) : offset;
     }
 
     /** The caret as a document offset (the widget's offset differs where code is folded). */

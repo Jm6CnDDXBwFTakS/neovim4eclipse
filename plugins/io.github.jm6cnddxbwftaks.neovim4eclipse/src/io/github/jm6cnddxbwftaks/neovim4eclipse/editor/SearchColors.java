@@ -20,8 +20,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 /**
  * The colors of the search highlights: Eclipse's own <i>Search Results</i> annotation color
  * (<i>Window &gt; Preferences &gt; General &gt; Editors &gt; Text Editors &gt; Annotations</i>), so
- * that they follow the theme and the user's choice, and for the match under the caret the same
- * color a shade toward the text ({@link OverlayColors#currentSearch}). Neovim's {@code Search}
+ * that they follow the theme and the user's choice, and for the box around the match under the
+ * caret the same color halfway toward the text ({@link OverlayColors#searchBox}). Neovim's {@code Search}
  * highlight group is not used: its colors are made for Neovim's own screen, not for the editor's
  * theme.
  *
@@ -50,7 +50,7 @@ final class SearchColors {
     };
 
     /**
-     * Hands {@code apply} the match and current-match colors now and after every change of the
+     * Hands {@code apply} the match and box colors now and after every change of the
      * preference, until {@link #dispose}.
      */
     SearchColors(StyledText widget, BiConsumer<Color, Color> apply) {
@@ -65,10 +65,10 @@ final class SearchColors {
         return new Color(rgb());
     }
 
-    /** The current-match color for {@code match}, toward the widget's text color. */
-    Color current(Color match) {
+    /** The box color for {@code match}, toward the widget's text color. */
+    Color box(Color match) {
         RGB fg = widget.getForeground().getRGB();
-        int mixed = OverlayColors.currentSearch(toInt(match.getRGB()), toInt(fg));
+        int mixed = OverlayColors.searchBox(toInt(match.getRGB()), toInt(fg));
         return new Color((mixed >> 16) & 0xFF, (mixed >> 8) & 0xFF, mixed & 0xFF);
     }
 
@@ -81,7 +81,7 @@ final class SearchColors {
             return;
         }
         Color match = match();
-        apply.accept(match, current(match));
+        apply.accept(match, box(match));
     }
 
     private RGB rgb() {
