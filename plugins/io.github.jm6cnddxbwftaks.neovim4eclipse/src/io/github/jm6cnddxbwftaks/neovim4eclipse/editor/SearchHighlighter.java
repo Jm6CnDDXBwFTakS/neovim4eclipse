@@ -118,8 +118,11 @@ final class SearchHighlighter implements ITextPresentationListener {
      * that thread), and it reads, moves and writes the matches, while {@link #show} replaces them on
      * the UI thread. Without one lock for both, one of the two writes was lost: the matches of the
      * new {@code show} replaced by the old ones moved, or a {@code current} index into a list it did
-     * not belong to. Readers that only look (painting, the presentation listener) take the volatile
-     * fields as they are, each read a consistent list. The lock is held only for the arithmetic,
+     * not belong to. A reader that needs one field (the presentation listener: the regions) copies
+     * it once into a local and reads only that: each list is never changed, only replaced. A reader
+     * that needs both ({@link #boxes}: the current region) reads them under the lock, since a change
+     * between its two reads could pair an index with a list it does not belong to, and the paint
+     * would fail with an {@code IndexOutOfBoundsException}. The lock is held only for the arithmetic,
      * never while waiting for a thread or the widget's repaint, so it cannot block either side long.
      */
     private final Object lock = new Object();
@@ -236,10 +239,16 @@ final class SearchHighlighter implements ITextPresentationListener {
      * covers (wrapped parts included), none when there is no such match or it is folded away.
      */
     List<Rectangle> boxes() {
-        if (current < 0 || current >= regions.size() || widget.isDisposed()) {
+        if (widget.isDisposed()) {
             return List.of();
         }
-        IRegion r = regions.get(current);
+        IRegion r;
+        synchronized (lock) { // the index and its list as one pair (see lock)
+            if (current < 0 || current >= regions.size()) {
+                return List.of();
+            }
+            r = regions.get(current);
+        }
         int start = toWidget(r.getOffset());
         int end = toWidget(r.getOffset() + r.getLength());
         if (start < 0 || end <= start || end > widget.getCharCount()) {
@@ -302,13 +311,13 @@ final class SearchHighlighter implements ITextPresentationListener {
     @Override
     public void applyTextPresentation(TextPresentation presentation) {
         IRegion extent = presentation.getExtent();
-        if (extent == null || regions.isEmpty()) {
+        List<IRegion> shown = regions; // read once: a change on another thread replaces the list (see lock)
+        if (extent == null || shown.isEmpty()) {
             return;
         }
         int from = extent.getOffset();
         int to = from + extent.getLength();
-        for (int i = 0; i < regions.size(); i++) {
-            IRegion r = regions.get(i);
+        for (IRegion r : shown) {
             int start = Math.max(r.getOffset(), from);
             int end = Math.min(r.getOffset() + r.getLength(), to);
             if (start < end) {
