@@ -111,6 +111,8 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * with {@link #changedLines} when a push reads the document. UI thread.
      */
     private final SplitLines splitLines = new SplitLines();
+    /** The document's buffer, or {@code null} for the attached one (see the constructor). */
+    private final DocumentBuffer buffer;
     private final IDocumentListener changedLinesListener = new IDocumentListener() {
         @Override
         public void documentAboutToBeChanged(DocumentEvent event) {
@@ -129,9 +131,24 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
         }
     };
 
-    /** @param ui the UI thread, where the document is changed ({@code SwtUiExecutor} in the editor) */
+    /**
+     * For a document with no buffer of its own (Neovim's home buffer), or a test of its sync.
+     *
+     * @param ui the UI thread, where the document is changed ({@code SwtUiExecutor} in the editor)
+     */
     public BufferSynchronizer(IDocument document, BufferPort session, UiExecutor ui) {
+        this(document, null, session, ui);
+    }
+
+    /**
+     * @param buffer the document's buffer in Neovim, which work queued for later acts on (the split
+     *               at carriage returns) even if another editor is attached by then; {@code null}
+     *               for the attached buffer
+     * @param ui     the UI thread, where the document is changed ({@code SwtUiExecutor} in the editor)
+     */
+    public BufferSynchronizer(IDocument document, DocumentBuffer buffer, BufferPort session, UiExecutor ui) {
         this.document = document;
+        this.buffer = buffer;
         this.session = session;
         this.ui = ui;
         this.undoSteps = new UndoSteps(document);
@@ -555,7 +572,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                 // Read when it runs, on the UI thread: the lines events applied since are in it.
                 Map<Integer, List<String>> parts = onUi(this::splitParts);
                 if (parts != null && !parts.isEmpty()) {
-                    session.splitLineBreaks(parts);
+                    session.splitLineBreaks(buffer, parts); // this document's, even if no longer attached
                 }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Could not split Neovim's lines at their carriage returns; "

@@ -37,16 +37,24 @@ public interface BufferPort {
     }
 
     /**
-     * Splits lines of the attached buffer that hold carriage returns into the lines Eclipse's
-     * document shows them as, and keeps Neovim's cursor on the part it was in
+     * Splits lines of {@code buffer} that hold carriage returns into the lines Eclipse's document
+     * shows them as, and keeps Neovim's cursor on the part it was in
      * ({@link LuaScripts#SPLIT_LINE_BREAKS}). A line that no longer reads as its parts joined by
-     * {@code \r} (a key changed it since) is left alone. The new cursor is reported as Neovim's.
-     * Blocking RPC: input thread, as {@link #setBufferLines}.
+     * {@code \r} (a key changed it since) is left alone. When the buffer is the attached one, shown
+     * in its window, the new cursor is reported as Neovim's. Blocking RPC: input thread, as
+     * {@link #setBufferLines}.
      *
-     * @param parts by Neovim line number (0-based), the lines it becomes; example: {@code 1 ->
-     *              ["beta1", "2x"]} for {@code "beta1\r2x"}
+     * <p>The buffer is named, not taken to be the attached one: the split runs on the input thread
+     * after the keys sent before it, and the user may have switched editors in between. Example:
+     * {@code Ctrl-V Ctrl-M} in one editor, then a click into another before the split runs: the
+     * first editor's buffer is split, not the second's.
+     *
+     * @param buffer the document's buffer; {@code null} for the attached buffer (the home buffer,
+     *               which has no document of its own)
+     * @param parts  by Neovim line number (0-based), the lines it becomes; example: {@code 1 ->
+     *               ["beta1", "2x"]} for {@code "beta1\r2x"}
      */
-    default void splitLineBreaks(Map<Integer, List<String>> parts) throws Exception {
+    default void splitLineBreaks(DocumentBuffer buffer, Map<Integer, List<String>> parts) throws Exception {
     }
 
     /**

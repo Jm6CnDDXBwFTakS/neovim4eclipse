@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferChange;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.BufferPort;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.VimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
@@ -67,12 +69,15 @@ class BufferSynchronizerTest {
 
         /** Each split of Neovim's lines at carriage returns: the parts by Neovim line. */
         final List<Map<Integer, List<String>>> splits = new ArrayList<>();
+        /** The buffer each split was for ({@code null}: the attached one). */
+        final List<DocumentBuffer> splitBuffers = new ArrayList<>();
         /** Runs inside each split: Neovim's line events for it. */
         Runnable duringSplit = () -> { };
 
         @Override
-        public void splitLineBreaks(Map<Integer, List<String>> parts) {
+        public void splitLineBreaks(DocumentBuffer buffer, Map<Integer, List<String>> parts) {
             splits.add(Map.copyOf(parts));
+            splitBuffers.add(buffer);
             duringSplit.run();
         }
 
@@ -608,6 +613,26 @@ class BufferSynchronizerTest {
             // Neovim now has "", "a", "b", "c": "dd" on "b" is line 2 on both sides.
             neovim.neovimChanged(new BufferChange(2, 3, List.of()));
             assertEquals("\ra\nc\n", doc.get());
+        }
+    }
+
+    /**
+     * The split names the synchronizer's own buffer, not "the attached one": it runs on the input
+     * thread after the keys before it, and by then the user may have switched to another editor,
+     * whose buffer would be tried instead (and this one never split).
+     */
+    @Test
+    void theSplitIsForTheSynchronizersOwnBuffer() {
+        IDocument doc = new Document("a\nb\n");
+        DocumentBuffer buffer = new DocumentBuffer("/ws/p/a.txt");
+        try (BufferSynchronizer s = new BufferSynchronizer(doc, buffer, neovim, UiExecutor.IMMEDIATE)) {
+            s.pushLocalChanges(() -> true, null);
+            s.startRemoteListening();
+            neovim.neovimChanged(new BufferChange(0, 1, List.of("\ra")));
+            neovim.runQueued();
+            assertEquals(List.of(Map.of(0, List.of("", "a"))), neovim.splits);
+            assertEquals(1, neovim.splitBuffers.size());
+            assertSame(buffer, neovim.splitBuffers.get(0));
         }
     }
 

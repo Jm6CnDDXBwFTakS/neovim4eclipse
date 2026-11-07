@@ -945,22 +945,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * See {@link BufferPort#splitLineBreaks}. The cursor the script returns is dispatched as
+     * See {@link BufferPort#splitLineBreaks}. Splits {@code buffer} whether attached or not (the
+     * user may have switched editors since the split was asked for). The script moves the cursor of
+     * the attached window only when that window shows the buffer; that cursor is then dispatched as
      * Neovim's, so that the editor's caret is on the split line's right part before Eclipse types
-     * again (its own report of the move may come later).
+     * again (its own report of the move may come later). A buffer split while another editor is
+     * attached moves no cursor, and nothing is dispatched: Neovim's cursor is in that other buffer.
      */
     @Override
-    public void splitLineBreaks(Map<Integer, List<String>> parts) throws Exception {
-        Handle handle = buffers.attached();
+    public void splitLineBreaks(DocumentBuffer buffer, Map<Integer, List<String>> parts) throws Exception {
+        Handle handle = buffer == null ? buffers.attached() : buffers.handleOf(buffer);
         if (handle == null || parts.isEmpty()) {
-            return;
+            return; // not made yet, or wiped: its next push gives it the document's lines
         }
+        int bufnr = DocumentBuffers.bufnr(handle);
         List<List<Object>> splits = new ArrayList<>(parts.size());
         parts.forEach((line0, lines) -> splits.add(List.of(line0 + 1, lines))); // Lua's lines are 1-based
         Object cursor = await(api.execLua(LuaScripts.SPLIT_LINE_BREAKS, List.of(
-                String.valueOf(DocumentBuffers.bufnr(handle)), String.valueOf(buffers.attachedWin()), splits)));
-        if (cursor instanceof List<?> pos && pos.size() == 2 && pos.get(0) instanceof Number line
-                && pos.get(1) instanceof Number col) {
+                String.valueOf(bufnr), String.valueOf(buffers.attachedWin()), splits)));
+        if (bufnr == buffers.attachedBufnr() && cursor instanceof List<?> pos && pos.size() == 2
+                && pos.get(0) instanceof Number line && pos.get(1) instanceof Number col) {
             state.dispatchCursor(line.intValue(), col.intValue());
         }
     }
