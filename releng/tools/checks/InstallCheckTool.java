@@ -5,19 +5,13 @@ package checks;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import common.Ask;
 import common.EclipseCopy;
@@ -25,6 +19,7 @@ import common.Folders;
 import common.PgpKey;
 import common.Settings;
 import common.ToolFailure;
+import common.UpdateSite;
 import common.Version;
 
 /**
@@ -51,10 +46,16 @@ import common.Version;
  *   <li>{@code -trustedPGPKeys <fingerprint>}: artifacts signed by the release key, its fingerprint
  *       computed from {@code releng/signing-key.asc} ({@code common/PgpKey}) in lower case, which is
  *       how the director compares it (upper case, or the 16-digit key id, trusts nothing);</li>
+ *   <li>{@code -trustedCertificates} with no value: no jar signed with a self-made ("unanchored")
+ *       certificate. Without it the director trusts every such certificate, and
+ *       {@code -trustSignedContentOnly} alone only refuses what is not signed at all;</li>
  *   <li>{@code -trustSignedContentOnly}: no unsigned artifact.</li>
  * </ul>
- * So an artifact signed by another key, or not signed, fails the install, where a user could click
- * <i>Trust</i> on it. {@code -verboseTrust} prints which key signed what.
+ * A jar signed with a certificate from an authority Java trusts is accepted by p2 without asking,
+ * whatever the arguments, and releases are never jar-signed. So the tool also reads the director's
+ * report ({@code -verboseTrust}, which lists what each key signed) and passes only if the release
+ * key signed the plug-in and the feature and nothing else is listed ({@link #trustProblem}). An
+ * artifact signed otherwise, or not signed, fails, where a user could click <i>Trust</i> on it.
  *
  * <h2>A fresh copy of your Eclipse, each time</h2>
  * The Eclipse is a copy of yours under {@code ~/var/n4e-checks/install-check/eclipse}, made with
@@ -65,6 +66,10 @@ import common.Version;
  * too, so the Eclipse it starts shows <i>Get Neovim</i> as a first-time user sees it. A separate
  * folder from {@code ManualChecks}' copy, which holds the build under test.
  *
+ * <p>The folder is deleted at the start of each run, so the tool refuses a {@code --root} it did
+ * not make: one that holds files but not its mark ({@link #MARK}). Example: {@code --root
+ * ~/var/n4e-checks}, the manual checks' folder, stops before anything is deleted.
+ *
  * <p>When the install passed, it records the version in {@code target/release-tool/install-checked}
  * ({@link #RECORD}), which the Release tool's status reads.
  */
@@ -74,6 +79,15 @@ public final class InstallCheckTool {
 
     /** Where a passed install is recorded, from the repository's root: the version and the time. */
     public static final String RECORD = "target/release-tool/install-checked";
+
+    /** Where the copy goes unless {@code --root} says otherwise. */
+    static final Path DEFAULT_ROOT = Path.of(System.getProperty("user.home"), "var", "n4e-checks", "install-check");
+
+    /** The file that marks a folder as this tool's: only such a folder, or an empty one, is deleted. */
+    static final String MARK = ".install-check";
+
+    /** The plug-in's bundle, as the director's trust report names its artifact. */
+    private static final String BUNDLE = "io.github.jm6cnddxbwftaks.neovim4eclipse";
 
     /** The p2 director's application, run inside the Eclipse copy. */
     private static final List<String> DIRECTOR = List.of("--launcher.suppressErrors", "-nosplash", "-application",
@@ -87,7 +101,7 @@ public final class InstallCheckTool {
 
         static Options parse(String[] args) {
             Optional<Version> version = Optional.empty();
-            Path root = Path.of(System.getProperty("user.home"), "var", "n4e-checks", "install-check");
+            Path root = DEFAULT_ROOT;
             String eclipse = System.getenv("ECLIPSE");
             Ask.Mode mode = Ask.Mode.ASK;
             boolean launch = true;
@@ -155,8 +169,11 @@ public final class InstallCheckTool {
         String fingerprint = PgpKey.fingerprint(Files.readString(repo.resolve(settings.get("signing.key"))));
 
         // The release: asked, or the site's newest; either way it must be on the site.
-        String listing = fetch(site + "compositeContent.xml");
-        List<Version> released = releases(listing);
+        String listing = UpdateSite.get(site + "compositeContent.xml");
+        if (listing == null) {
+            throw new ToolFailure("cannot read " + site + "compositeContent.xml");
+        }
+        List<Version> released = UpdateSite.releases(listing);
         Version v = options.version().orElseGet(() -> released.stream().max(Version::compareTo)
                 .orElseThrow(() -> new ToolFailure(site + " lists no release")));
         if (!released.contains(v)) {
@@ -177,12 +194,18 @@ public final class InstallCheckTool {
             throw new ToolFailure(source + " (the folder of " + yours + ") is not an Eclipse installation: no eclipse.ini and plugins/"
                     + " there. Name the eclipse program itself with --eclipse or the ECLIPSE environment variable");
         }
+        if (!mayDelete(root)) {
+            throw new ToolFailure(root + " holds files but is not an InstallCheck folder (no " + MARK + " in it), so it is not"
+                    + " deleted. Name an empty or new folder with --root, or leave it out for ~/var/n4e-checks/install-check");
+        }
         try {
             Folders.deleteTree(root); // links and copies only: your Eclipse keeps its files
         } catch (ToolFailure f) {
             throw new ToolFailure(f.getMessage() + ". Close whatever still uses a file there (an Eclipse or Neovim from an earlier"
                     + " run), then run this again");
         }
+        Files.createDirectories(root);
+        Files.writeString(root.resolve(MARK), "Made by " + TOOL + ", which deletes this folder at its next run.\n");
         Path copy = root.resolve("eclipse").resolve(source.getFileName().toString());
         System.out.println("Copying " + source + " to " + copy + " ...");
         long[] counts = EclipseCopy.copyTree(source, copy, EclipseCopy.inner(source));
@@ -202,6 +225,11 @@ public final class InstallCheckTool {
         if (!output.contains("Operation completed")) {
             throw new ToolFailure("the install from " + site + " failed (see above; all of it in " + log + ")");
         }
+        Optional<String> distrust = trustProblem(output, fingerprint, v);
+        if (distrust.isPresent()) {
+            throw new ToolFailure("the install of " + v + " is not trusted as a release: " + distrust.get()
+                    + ". Do not start this Eclipse; look at the update site (" + log + ")");
+        }
         Optional<String> installed = installedVersion(director, log);
         if (installed.isEmpty() || !isVersion(installed.get(), v)) {
             throw new ToolFailure("after the install the copy has " + installed.map(s -> "version " + s).orElse("no plug-in")
@@ -213,6 +241,22 @@ public final class InstallCheckTool {
         if (options.launch() && new Ask(options.mode(), "").offer("Start this Eclipse for a look (a new workspace and an empty"
                 + " Neovim folder: Get Neovim opens at its first start)", "java " + TOOL + " " + v + " --yes")) {
             start(program, root, workspace);
+        }
+    }
+
+    /**
+     * Whether a run may delete {@code root} to start afresh: it does not exist, is empty, holds this
+     * tool's {@link #MARK}, or is the default folder (made by runs from before the mark).
+     */
+    static boolean mayDelete(Path root) throws IOException {
+        if (!Files.exists(root) || root.equals(DEFAULT_ROOT.toAbsolutePath()) || Files.isRegularFile(root.resolve(MARK))) {
+            return true;
+        }
+        if (!Files.isDirectory(root)) {
+            return false;
+        }
+        try (var entries = Files.list(root)) {
+            return entries.findAny().isEmpty();
         }
     }
 
@@ -228,7 +272,7 @@ public final class InstallCheckTool {
      * The director's arguments that install release {@code v} from the site, after the program
      * (see the class comment for the trust arguments). Example, for 0.2.4 with the plug-in already
      * in the copy: {@code ... -repository https://jm6cnddxbwftaks.github.io/neovim4eclipse/releases/0.2.4/
-     * -uninstallIU <feature> -installIU <feature> -trustSignedContentOnly -trustedPGPKeys a91f…063c
+     * -uninstallIU <feature> -installIU <feature> -trustSignedContentOnly -trustedCertificates -trustedPGPKeys a91f…063c
      * -trustedAuthorities https://jm6cnddxbwftaks.github.io/ -verboseTrust -data @none}.
      */
     static List<String> installArguments(String site, Version v, String fingerprint, boolean installed) {
@@ -237,7 +281,8 @@ public final class InstallCheckTool {
         if (installed) {
             args.addAll(List.of("-uninstallIU", EclipseCopy.FEATURE));
         }
-        args.addAll(List.of("-installIU", EclipseCopy.FEATURE, "-trustSignedContentOnly",
+        // -trustedCertificates with no value (the next argument is an option) trusts no self-made certificate.
+        args.addAll(List.of("-installIU", EclipseCopy.FEATURE, "-trustSignedContentOnly", "-trustedCertificates",
                 "-trustedPGPKeys", fingerprint.toLowerCase(java.util.Locale.ROOT), "-trustedAuthorities", authority(site),
                 "-verboseTrust", "-data", "@none"));
         return args;
@@ -249,18 +294,6 @@ public final class InstallCheckTool {
         return uri.getScheme() + "://" + uri.getAuthority() + "/";
     }
 
-    private static final Pattern CHILD = Pattern.compile("<child location='releases/(\\d+\\.\\d+\\.\\d+)'/>");
-
-    /** The releases a composite repository's {@code compositeContent.xml} lists, as {@code releases/0.2.4}. */
-    static List<Version> releases(String compositeContent) {
-        List<Version> found = new ArrayList<>();
-        Matcher m = CHILD.matcher(compositeContent);
-        while (m.find()) {
-            found.add(Version.parse(m.group(1)));
-        }
-        return found;
-    }
-
     /** Whether p2's version of the feature is release {@code v}: {@code 0.2.4}, or {@code 0.2.4.<qualifier>}. */
     static boolean isVersion(String p2Version, Version v) {
         return p2Version.equals(v.toString()) || p2Version.startsWith(v + ".");
@@ -268,24 +301,55 @@ public final class InstallCheckTool {
 
     /**
      * The director's output without the log lines of Eclipse's own bundles starting up (a date line
-     * and an {@code INFO:} line each, dozens of them), leaving what it installed and trusted.
+     * and an {@code INFO:} line each, dozens of them, in English as {@link EclipseCopy#run} runs it)
+     * and Java's note about {@code JAVA_TOOL_OPTIONS}, leaving what it installed and trusted.
      */
     static List<String> directorLines(String output) {
-        return output.lines().filter(l -> !l.isBlank() && !l.startsWith("INFO: ")
+        return output.lines().filter(l -> !l.isBlank() && !l.startsWith("INFO: ") && !l.startsWith("Picked up JAVA_TOOL_OPTIONS")
                 && !l.matches("[A-Z][a-z]{2} \\d{1,2}, \\d{4} \\d{1,2}:\\d{2}:\\d{2} [AP]M .*")).toList();
     }
 
-    /** The text at {@code url}, bypassing caches (a cache could hold the site from before the release). */
-    private static String fetch(String url) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url + "?t=" + System.currentTimeMillis()))
-                .timeout(Duration.ofSeconds(60)).header("Cache-Control", "no-cache").build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new ToolFailure(url + " answered " + response.statusCode());
+    /**
+     * What is wrong with the director's trust report ({@code -verboseTrust}) for a release, if
+     * anything. A release passes only if the report lists the plug-in's bundle and the feature
+     * under the release key, and no other heading: no other key, no certificate chain, nothing
+     * unsigned. Example of a good report:
+     * <pre>
+     * The following artifacts are signed by PGP key a91f53d8931b7fd0d14686186cc9e446147b063c
+     *   osgi.bundle,io.github.jm6cnddxbwftaks.neovim4eclipse,0.2.4 -> /.../plugins/...jar
+     *   org.eclipse.update.feature,io.github.jm6cnddxbwftaks.neovim4eclipse.feature,0.2.4 -> /.../features/...
+     * </pre>
+     */
+    static Optional<String> trustProblem(String output, String fingerprint, Version v) {
+        String ours = "The following artifacts are signed by PGP key " + fingerprint.toLowerCase(java.util.Locale.ROOT);
+        String feature = EclipseCopy.FEATURE.substring(0, EclipseCopy.FEATURE.length() - ".feature.group".length());
+        boolean underOurs = false;
+        boolean bundle = false;
+        boolean featureSigned = false;
+        for (String raw : output.lines().toList()) {
+            String line = raw.strip();
+            if (line.startsWith("The following artifacts are") || line.startsWith("The artifacts below are")) {
+                if (!line.equals(ours)) {
+                    return Optional.of("the director reports \"" + line + "\"");
+                }
+                underOurs = true;
+            } else if (underOurs && raw.startsWith("  ")) {
+                String artifact = line.split(" -> ")[0];
+                bundle |= isArtifact(artifact, "osgi.bundle," + BUNDLE + ",", v);
+                featureSigned |= isArtifact(artifact, "org.eclipse.update.feature," + feature + ",", v);
+            } else {
+                underOurs = false;
+            }
         }
-        return response.body();
+        if (!bundle || !featureSigned) {
+            return Optional.of("the release key did not sign " + (bundle ? "the feature" : featureSigned ? "the plug-in" : "the plug-in and the feature")
+                    + " (no such line after \"" + ours + "\")");
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isArtifact(String artifact, String prefix, Version v) {
+        return artifact.startsWith(prefix) && isVersion(artifact.substring(prefix.length()), v);
     }
 
     /** Records that {@code v} installed, for the Release tool's status: {@code 0.2.4 1794005281}. */

@@ -6,3 +6,9 @@
 
 # A last paragraph for the tools' commits, e.g. when an assistant runs a tool for you:
 #commit.trailer=Co-Authored-By: Name <address>
+
+# The update site and the release signing key (a fork's own), here and only here: the Release tool
+# and InstallCheck both read them, and a value set in releng/tools/release/ would reach only the
+# Release tool.
+#site.url=https://<owner>.github.io/<repository>/
+#signing.key=releng/signing-key.asc

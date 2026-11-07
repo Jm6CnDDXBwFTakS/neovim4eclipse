@@ -44,6 +44,9 @@ import java.util.stream.Stream;
  */
 public final class EclipseCopy {
 
+    /** The Java options that make an Eclipse run in English ({@link #run}). */
+    static final String ENGLISH = "-Duser.language=en -Duser.country=US";
+
     private EclipseCopy() {
     }
 
@@ -260,10 +263,20 @@ public final class EclipseCopy {
         }
     }
 
-    /** Runs a command to its end; returns its output, also appended to {@code log}. */
+    /**
+     * Runs a command (an Eclipse, as the director) to its end; returns its output, also appended to
+     * {@code log}. The Eclipse runs in English whatever this machine's language, so that its output
+     * reads the same everywhere: the tools look for {@code Operation completed} and the director's
+     * trust headings in it. {@code JAVA_TOOL_OPTIONS} sets the language (Eclipse takes its own
+     * from Java's) and is added to any the environment has, not put in place of the
+     * {@code eclipse.ini} options as a {@code -vmargs} on the command line would be; Java then
+     * prints a "Picked up JAVA_TOOL_OPTIONS" line first.
+     */
     public static String run(List<String> command, Path log) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command).directory(log.getParent().toFile()) // the log's folder: stray files land there
-                .redirectErrorStream(true).start();
+        ProcessBuilder builder = new ProcessBuilder(command).directory(log.getParent().toFile()); // the log's folder: stray files land there
+        String options = builder.environment().getOrDefault("JAVA_TOOL_OPTIONS", "");
+        builder.environment().put("JAVA_TOOL_OPTIONS", (options + " " + ENGLISH).strip());
+        Process process = builder.redirectErrorStream(true).start();
         String output;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             output = String.join("\n", reader.lines().toList());
