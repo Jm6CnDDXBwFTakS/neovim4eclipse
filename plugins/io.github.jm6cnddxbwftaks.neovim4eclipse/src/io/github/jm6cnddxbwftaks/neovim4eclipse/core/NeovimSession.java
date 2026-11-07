@@ -35,6 +35,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
@@ -69,7 +70,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  * other buffers are dropped.
  */
 public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, BufferPort, CursorPort,
-        DocumentBufferPort, DiagnosticsPort, FoldsPort, ViewportPort, QuickfixPort {
+        DocumentBufferPort, DiagnosticsPort, FoldsPort, ViewportPort, QuickfixPort, SearchPort {
 
     private static final Logger LOG = Logger.getLogger(NeovimSession.class.getName());
 
@@ -140,6 +141,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@link #initialize}, before the session is handed out.
      */
     private volatile boolean viewportEnabled;
+    /**
+     * Whether search matches are reported ({@link SearchPort#searchEnabled()}): the answer of
+     * {@link LuaScripts#SEARCH}, run once at start after the user's config. Written once, in
+     * {@link #initialize}, before the session is handed out.
+     */
+    private volatile boolean searchEnabled;
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -290,6 +297,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // And for the viewport (docs/design/VIEWPORT.md, D5): when off, the screen stays 120 × 40.
         session.viewportEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.VIEWPORT, List.of())));
         LOG.info(() -> "viewport " + (session.viewportEnabled ? "follows the editor" : "off (g:neovim4eclipse_viewport)"));
+        // And for search highlighting (docs/design/SEARCH_HIGHLIGHTING.md, "Turning it off").
+        session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
+        LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search)"));
         Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
         session.nvimManagesClipboard = managesSystemClipboard(
                 clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -1005,6 +1015,34 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     @Override
+    public boolean searchEnabled() {
+        return searchEnabled;
+    }
+
+    @Override
+    public void addSearchListener(Consumer<Matches> listener) {
+        events.addSearchListener(listener);
+    }
+
+    @Override
+    public void removeSearchListener(Consumer<Matches> listener) {
+        events.removeSearchListener(listener);
+    }
+
+    @Override
+    public void resendSearchAsync(DocumentBuffer buffer) {
+        if (!searchEnabled) {
+            return;
+        }
+        submit("search matches again for " + buffer.name(), Level.FINE, () -> {
+            if (buffers.handleOf(buffer) == null || !buffer.loaded) {
+                return; // not created yet, or gone; SEARCH_RESEND itself skips a buffer not shown
+            }
+            await(api.execLua(LuaScripts.SEARCH_RESEND, List.of(String.valueOf(buffer.bufnr))));
+        });
+    }
+
+    @Override
     public void setEditorSizeAsync(int columns, int rows) {
         if (!viewportEnabled) {
             return;
@@ -1602,6 +1640,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (viewportEnabled && buffers.isAttached(winid, bufnr)) {
                 LOG.finest(() -> "Neovim's top line " + line1 + " in buffer " + bufnr);
                 events.topLine(new TopLine(bufnr, line1));
+            }
+        }
+
+        @Override
+        public void onSearchMatches(int bufnr, List<SearchMatch> matches, int winid) {
+            if (searchEnabled && buffers.isAttached(winid, bufnr)) {
+                LOG.finest(() -> matches.size() + " search matches in view, buffer " + bufnr);
+                events.search(new Matches(bufnr, matches));
             }
         }
 

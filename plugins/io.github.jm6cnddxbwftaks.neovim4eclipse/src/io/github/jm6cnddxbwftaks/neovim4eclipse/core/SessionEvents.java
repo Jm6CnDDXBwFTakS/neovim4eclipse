@@ -36,6 +36,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
     private final ListenerList<ViewportPort.WrapChange> wrapListeners = new ListenerList<>("wrap", Level.WARNING);
     private final ListenerList<ViewportPort.TopLine> topLineListeners = new ListenerList<>("top line", Level.WARNING);
+    private final ListenerList<SearchPort.Matches> searchListeners = new ListenerList<>("search matches", Level.WARNING);
 
     // ---- firing ----
 
@@ -82,6 +83,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** {@code :set wrap} or {@code :set nowrap} in Neovim (see {@link ViewportPort#addWrapListener}). */
     void wrap(ViewportPort.WrapChange change) {
         wrapListeners.fire(change);
+    }
+
+    /** The attached window's visible search matches changed (see {@link SearchPort#addSearchListener}). */
+    void search(SearchPort.Matches matches) {
+        searchListeners.fire(matches);
     }
 
     /** Neovim's window scrolled (see {@link ViewportPort#addTopLineListener}). */
@@ -177,6 +183,14 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeWrapListener(Consumer<ViewportPort.WrapChange> listener) {
         wrapListeners.remove(listener);
+    }
+
+    void addSearchListener(Consumer<SearchPort.Matches> listener) {
+        searchListeners.add(listener);
+    }
+
+    void removeSearchListener(Consumer<SearchPort.Matches> listener) {
+        searchListeners.remove(listener);
     }
 
     void addTopLineListener(Consumer<ViewportPort.TopLine> listener) {

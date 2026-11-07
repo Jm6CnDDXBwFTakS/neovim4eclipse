@@ -183,6 +183,32 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 **Expect:** each step's result, after its ⇒.
 
+## Search highlighting
+
+### `sh-colors` Search matches readable in a light and a dark theme
+
+- **On:** any
+- **Launch:** checks
+- **Areas:** editor/SearchHighlighter.java, editor/SearchColors.java, util/OverlayColors.java
+
+Whether a color reads well is for a person to judge; the painting itself is tested
+(`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`).
+
+1. Open a Java file of `n4e-alpha` with the Java editor, in Neovim mode. Type `/e` and Enter.
+   ⇒ Every `e` on screen has a light background behind it, the syntax colors of the text unchanged;
+   the `e` under the caret is a shade darker.
+2. Press `n` a few times, then type `:noh` and Enter.
+   ⇒ The darker match moves with the caret; after `:noh` no background is left.
+3. Switch to the dark theme (*Window → Preferences → General → Appearance*, Dark), restart if asked,
+   and repeat step 1.
+   ⇒ The matches stand out from the dark background and their text stays readable; the match under
+   the caret is a shade lighter.
+4. In *General → Editors → Text Editors → Annotations*, select *Search Results* and change its color.
+   Apply.
+   ⇒ The highlights in the open editor take the new color at once.
+
+**Expect:** each step's result, after its ⇒.
+
 ## Input method and accent menu in the `:` box
 
 ### `ime-compose` Japanese typing in the `:` box reaches Neovim once

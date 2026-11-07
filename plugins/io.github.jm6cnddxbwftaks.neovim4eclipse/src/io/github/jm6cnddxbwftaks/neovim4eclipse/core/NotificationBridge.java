@@ -14,6 +14,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
 /**
  * Receives raw Neovim RPC notifications (and two requests) and turns them into typed {@link Sink} calls.
@@ -134,6 +135,12 @@ final class NotificationBridge implements Incoming {
         void onViewportOverheadChanged();
 
         /**
+         * The matches of Neovim's search that window {@code winid}, showing buffer {@code bufnr},
+         * has in its visible lines changed ({@link LuaScripts#SEARCH}); empty when there are none.
+         */
+        void onSearchMatches(int bufnr, List<SearchMatch> matches, int winid);
+
+        /**
          * Neovim's window {@code winid}, which shows buffer {@code bufnr}, has {@code line1} (1-based) as its top
          * line now: it scrolled ({@code Ctrl-E}, {@code zt}), or the cursor report carried it. Comes
          * before the cursor of the same report, so that the editor scrolls first and the caret then
@@ -206,6 +213,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_wrap" -> onWrap(args);
             case "eclipse_viewport" -> sink.onViewportOverheadChanged();
             case "eclipse_topline" -> onTopLine(args);
+            case "eclipse_search" -> onSearch(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
@@ -283,6 +291,29 @@ final class NotificationBridge implements Incoming {
     private static int window(List<?> args, int index) {
         Integer win = args.size() > index ? toInt(args.get(index)) : null;
         return win == null ? EditorWindow.UNKNOWN : win;
+    }
+
+    /**
+     * Payload: {@code [bufnr, ranges, winid]}, from {@link LuaScripts#SEARCH}: {@code ranges} holds
+     * four numbers per match (start line, start byte, end line, end byte). An incomplete last group
+     * is left out.
+     */
+    private void onSearch(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        if (buf == null || args.size() < 2 || !(args.get(1) instanceof List<?> flat)) {
+            return;
+        }
+        List<SearchMatch> matches = new ArrayList<>(flat.size() / 4);
+        for (int i = 0; i + 3 < flat.size(); i += 4) {
+            Integer l1 = toInt(flat.get(i));
+            Integer c1 = toInt(flat.get(i + 1));
+            Integer l2 = toInt(flat.get(i + 2));
+            Integer c2 = toInt(flat.get(i + 3));
+            if (l1 != null && c1 != null && l2 != null && c2 != null) {
+                matches.add(new SearchMatch(l1, c1, l2, c2));
+            }
+        }
+        sink.onSearchMatches(buf, matches, window(args, 2));
     }
 
     /** Payload: {@code [bufnr, line1, winid]}, from {@link LuaScripts#VIEWPORT}'s {@code WinScrolled}. */

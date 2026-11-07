@@ -60,6 +60,23 @@ public final class OverlayColors {
         return isDark(editorBackground) ? 0xF14C4C : 0xCD3131;
     }
 
+    /** Share of the editor foreground mixed into a search match's color for the match under the caret. */
+    public static final double CURRENT_SEARCH_STRENGTH = 0.25;
+
+    /**
+     * The background of the search match under the caret (Neovim's {@code CurSearch}): the match
+     * color moved part way toward the text color, so it stands out from the other matches in either
+     * theme: darker on a light background, lighter on a dark one.
+     *
+     * <pre>
+     *   currentSearch(0xCECCF7, 0x000000) = 0x9B99B9   (light theme: Eclipse's Search Results color, darker)
+     *   currentSearch(0x3E3E6E, 0xD4D4D4) = 0x646488   (dark theme: lighter)
+     * </pre>
+     */
+    public static int currentSearch(int matchColor, int editorForeground) {
+        return blend(matchColor, editorForeground, CURRENT_SEARCH_STRENGTH);
+    }
+
     /** Whether a color is dark: its perceived brightness (ITU-R BT.601 weights) is below half. */
     static boolean isDark(int rgb) {
         int r = (rgb >> 16) & 0xFF;

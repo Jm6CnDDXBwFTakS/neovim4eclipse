@@ -401,6 +401,12 @@ Counts and multi-key sequences rely on Neovim typeahead across sequential RPCs.
 
 Search options set at session start: `hlsearch`, `incsearch`, `ignorecase`, `smartcase`, `wrapscan`.
 
+The matches Neovim highlights are painted in the editor too: `LuaScripts.SEARCH` finds them in the
+window's visible lines at each redraw (a decoration provider's `on_win`) and sends
+`eclipse_search` when they change; `SearchPort` hands them to the attached editor, whose
+`editor/SearchHighlighter` merges a background into the viewer's text presentation, so the syntax
+colors stay. Design: [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
+
 
 ## Status bar items
 

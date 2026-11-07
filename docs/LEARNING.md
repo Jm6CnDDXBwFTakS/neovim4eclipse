@@ -774,6 +774,32 @@ Design, the proxy and platform experiments and the decisions: [DOWNLOAD_NEOVIM.m
 Tests: `ArchiveExtractorTest` (archives written byte by byte), `NeovimInstallerTest`,
 `NeovimDownloadTest` (a local `com.sun.net.httpserver.HttpServer`, so no test touches GitHub).
 
+### 3.2e Search highlighting: `/foo`, and the matches painted
+
+The editor shows the text `a foo b foo`, and the user types `/foo` and Enter.
+
+1. The keys go to Neovim like `x` (3.2); `/` opens Neovim's command line, shown in the `:` box.
+   Neovim jumps to the first match and redraws its window with every match highlighted.
+2. The redraw calls the decoration provider's `on_win` (`LuaScripts.SEARCH`). It changes nothing
+   itself (Neovim forbids that while it draws), only schedules `M.update`, which runs right after.
+3. `M.update` takes the pattern (the typed text while the box is open, else register `/`), adds
+   `\c` or `\C` for `'smartcase'`, and calls `matchbufline()` over the visible lines: matches at
+   bytes 2 to 5 and 8 to 11 of line 1. They differ from what was sent last, so it sends
+   `eclipse_search(buf, {1, 2, 1, 5, 1, 8, 1, 11}, win)`.
+4. `NotificationBridge` turns the numbers into `util/SearchMatch` records; the session passes them
+   on for the attached window only (`SearchPort`); `NeovimEditorController.onSearchMatches` hops to
+   the UI thread.
+5. `editor/SearchHighlighter` turns byte columns into document offsets (2.8) and asks the viewer to
+   rebuild the presentation of that region (`invalidateTextPresentation`). The viewer runs the
+   syntax coloring again for it, then calls the highlighter's `applyTextPresentation`, which merges
+   a background into the ranges of the matches. The text keeps its colors; the match under the
+   caret gets the stronger color.
+
+`n` moves Neovim's cursor to the next match. Neovim redraws, `M.update` finds the same matches and
+sends nothing; the caret moves (`eclipse_cursor`, as for any motion), and the highlighter's caret
+listener moves the stronger color with it. `:noh` sends an empty list, which clears. Design:
+[SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
+
 ### 3.3 Insert mode
 
 `i` goes to Neovim like any key; its `ModeChanged` notification switches the plug-in to "typing".
