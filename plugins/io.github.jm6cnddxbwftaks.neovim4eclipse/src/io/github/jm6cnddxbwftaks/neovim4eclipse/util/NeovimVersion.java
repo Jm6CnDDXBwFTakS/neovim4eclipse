@@ -44,8 +44,17 @@ public record NeovimVersion(int major, int minor, int patch) implements Comparab
      */
     public static final String LUA_QUERY = "local v = vim.version() return { v.major, v.minor, v.patch }";
 
-    /** The start of {@code nvim --version}'s first line, {@code NVIM v0.12.6}; the numbers are groups. */
-    private static final Pattern VERSION_LINE = Pattern.compile("^\\s*NVIM v(\\d+)\\.(\\d+)\\.(\\d+)");
+    /**
+     * The start of {@code nvim --version}'s version line, {@code NVIM v0.12.6}; the numbers are
+     * groups. {@code MULTILINE}: the line may come after others, as the {@code ^} then matches at
+     * the start of every line. Example: a wrapper script named as the Neovim program that prints
+     * {@code Using the team's Neovim} first, or a loader warning such as
+     * {@code ERROR: ld.so: object 'x.so' from LD_PRELOAD cannot be preloaded: ignored.} in text
+     * that holds both output streams; Neovim still runs, and its version must still be read.
+     * ({@link InstalledVersions} reads only standard output, where Neovim prints it.)
+     */
+    private static final Pattern VERSION_LINE = Pattern.compile("^[ \\t]*NVIM v(\\d+)\\.(\\d+)\\.(\\d+)",
+            Pattern.MULTILINE);
 
     /**
      * The oldest supported Neovim, and the one <i>Get Neovim</i> installs: the version in
@@ -80,10 +89,11 @@ public record NeovimVersion(int major, int minor, int patch) implements Comparab
     }
 
     /**
-     * Reads the first line of {@code nvim --version}: {@code NVIM v0.12.6}, or for a nightly build
-     * {@code NVIM v0.13.0-dev-1234+gabcdef}, which counts as 0.13.0.
+     * Reads the version line of {@code nvim --version}: {@code NVIM v0.12.6}, or for a nightly build
+     * {@code NVIM v0.13.0-dev-1234+gabcdef}, which counts as 0.13.0. Usually the first line, but
+     * the first line that starts so wins wherever it is ({@link #VERSION_LINE}).
      *
-     * @return the version, or {@code null} if the text does not start that way (not Neovim)
+     * @return the version, or {@code null} if no line starts that way (not Neovim)
      */
     public static NeovimVersion fromVersionOutput(String output) {
         if (output == null) {

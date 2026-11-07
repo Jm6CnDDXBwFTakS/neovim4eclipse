@@ -97,11 +97,18 @@ public final class InstalledVersions {
         static final Run FAILED = new Run(null, false);
     }
 
-    /** Runs {@code program --version} for at most {@code timeoutMs}. */
+    /**
+     * Runs {@code program --version} for at most {@code timeoutMs}. Only its standard output is
+     * read: Neovim prints its version there, and what goes to standard error comes from elsewhere
+     * (the system loader's {@code LD_PRELOAD} warning, a macOS {@code dyld} note) and must not hide
+     * it. Standard error is discarded, so a program that writes much there cannot block on a full
+     * pipe.
+     */
     private static Run runVersion(Path program, long timeoutMs) {
         Process process = null;
         try {
-            process = new ProcessBuilder(List.of(program.toString(), "--version")).redirectErrorStream(true).start();
+            process = new ProcessBuilder(List.of(program.toString(), "--version"))
+                    .redirectError(ProcessBuilder.Redirect.DISCARD).start();
             process.getOutputStream().close();
             if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                 return Run.TIMED_OUT;

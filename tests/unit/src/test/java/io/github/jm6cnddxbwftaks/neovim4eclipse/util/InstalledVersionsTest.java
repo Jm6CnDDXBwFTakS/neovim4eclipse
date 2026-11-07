@@ -39,6 +39,18 @@ class InstalledVersionsTest {
     }
 
     /**
+     * What the system writes around Neovim's answer does not hide the version: a loader warning on
+     * standard error (an {@code LD_PRELOAD} naming a missing library) and a line of a wrapper on
+     * standard output before {@code NVIM v...}.
+     */
+    @Test
+    void otherOutputBeforeTheVersionLineIsIgnored() throws IOException {
+        Path program = script("echo \"ERROR: ld.so: object 'x.so' from LD_PRELOAD cannot be preloaded: ignored.\" >&2\n"
+                + "echo 'Using the team Neovim'\n" + ANSWER);
+        assertEquals(new NeovimVersion(0, 12, 6), InstalledVersions.of(program, TestWait.millis(), TestWait.millis()));
+    }
+
+    /**
      * A first run slower than the first limit (a virus scanner holding a fresh program) is tried
      * again with the second, longer one. The script always takes 0.5 s, so the 0.1 s limit always
      * times out; the second limit is the tests' usual wait.

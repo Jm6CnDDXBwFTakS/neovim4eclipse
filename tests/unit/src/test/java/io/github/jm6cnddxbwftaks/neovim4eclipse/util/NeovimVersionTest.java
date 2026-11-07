@@ -66,4 +66,14 @@ class NeovimVersionTest {
         assertEquals(null, NeovimVersion.fromVersionOutput("VIM - Vi IMproved 9.1\n"));
         assertEquals(null, NeovimVersion.fromVersionOutput(null));
     }
+
+    /** Lines before the version line (a loader warning, a wrapper's note) do not hide it. */
+    @Test
+    void readsTheVersionLineAfterOtherLines() {
+        assertEquals(new NeovimVersion(0, 12, 6), NeovimVersion.fromVersionOutput(
+                "ERROR: ld.so: object 'x.so' from LD_PRELOAD cannot be preloaded: ignored.\r\n"
+                        + "NVIM v0.12.6\nBuild type: Release\n"));
+        assertEquals(null, NeovimVersion.fromVersionOutput("a note about NVIM v0.12.6\n"),
+                "only a line that starts with it");
+    }
 }
