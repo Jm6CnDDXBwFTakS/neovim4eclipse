@@ -75,6 +75,8 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
     private final InputStream in;
     private final OutputStream out;
     private final Incoming incoming;
+    /** A handler's failures: in full the first time, then counted (a stale class fails at every redraw). */
+    private final RepeatedFailures handlerFailures = new RepeatedFailures(LOG);
     private final Thread reader;
     /** Guards {@link #out}: one whole message at a time. */
     private final Object writeLock = new Object();
@@ -295,8 +297,9 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
             throw fatal; // ends the reader; readLoop cleans up
         } catch (Throwable e) {
             // An Error too (a NoSuchMethodError from a stale class, an AssertionError): one
-            // handler's bug must not stop the reading of everything after it.
-            LOG.log(Level.WARNING, "Notification " + method + " from Neovim failed", e);
+            // handler's bug must not stop the reading of everything after it. It then fails at
+            // each such notification, so only the first is logged in full (RepeatedFailures).
+            handlerFailures.log("Notification " + method + " from Neovim failed", e);
         }
     }
 
@@ -313,7 +316,7 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
             response = encode(Arrays.asList(RESPONSE, id, null, incoming.request(method, params)));
         } catch (Throwable e) {
             // Also an answer that cannot be encoded (IllegalArgumentException): Neovim still waits.
-            LOG.log(Level.WARNING, "Request " + method + " from Neovim failed", e);
+            handlerFailures.log("Request " + method + " from Neovim failed", e);
             if (e instanceof VirtualMachineError vme) {
                 fatal = vme;
             }

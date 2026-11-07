@@ -257,6 +257,23 @@ class RpcChannelTest {
     }
 
     /**
+     * The same Error at every notification (a stale class in the redraw handler fails at each
+     * redraw): logged in full once, then counted, not a WARNING with a stack trace each time.
+     */
+    @Test
+    void aHandlerThatFailsAgainAndAgainIsLoggedInFullOnce() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
+            for (int i = 0; i < 12; i++) {
+                send(2, "linkage", List.of());
+            }
+            send(2, "after", List.of());
+            waitUntil(() -> heard.size() == 13);
+            log.assertLogged(Level.WARNING, "Notification linkage from Neovim failed");
+            log.assertLogged(Level.WARNING, "Notification linkage from Neovim failed: 10 times so far");
+        }
+    }
+
+    /**
      * A handler that overflows the stack: Neovim, which waits for the answer, still gets one, and
      * then the connection ends as if Neovim had exited: a waiting request fails at once rather
      * than after its timeout, and so does every later one.
