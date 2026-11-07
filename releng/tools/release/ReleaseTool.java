@@ -5,11 +5,6 @@ package release;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -38,6 +33,7 @@ import common.GitHub;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
+import common.UpdateSite;
 import common.Version;
 
 /**
@@ -144,7 +140,7 @@ public final class ReleaseTool {
         // go goes on by itself; a dry run changed nothing, so its next step would be this one.
         if (!inGo && options.mode() != Ask.Mode.DRY_RUN) {
             System.out.println();
-            System.out.println(state(v).nextLine(TOOL));
+            System.out.println(stateAsFetched(v).nextLine(TOOL));
         }
     }
 
@@ -156,6 +152,14 @@ public final class ReleaseTool {
     /** The facts behind {@link ReleaseState}, read now. Fetches first, so that origin's side is current. */
     private ReleaseState state(Version v) {
         git.fetch();
+        return stateAsFetched(v);
+    }
+
+    /**
+     * {@link #state} without the fetch, for the line after a step: the step has just fetched, and
+     * its own pushes moved the remote-tracking branches, so origin's side is current already.
+     */
+    private ReleaseState stateAsFetched(Version v) {
         String head = git.head();
         boolean released = false;
         boolean tagged = remoteTagCommit(v.tag()) != null;
@@ -227,7 +231,7 @@ public final class ReleaseTool {
             System.out.println();
         }
         inGo = false;
-        System.out.println(state(v).nextLine(TOOL));
+        System.out.println(stateAsFetched(v).nextLine(TOOL));
     }
 
     // ---------------------------------------------------------------- check
@@ -594,10 +598,15 @@ public final class ReleaseTool {
      * your Eclipse, as a user installs it. Recommended, never required: {@code next} does not wait
      * for it (a fix for a release that fails it ships from the branch {@code next} cuts), and it
      * can fail for reasons of this machine's Eclipse. The status shows whether it passed.
+     *
+     * <p>Only a person's yes runs it: {@code --yes} approves the tag step's own side effects, not a
+     * new copy of an Eclipse and three Eclipse starts besides, so with {@code --yes} the offer is
+     * asked like any other (and, with no terminal, only recommended).
      */
     private void offerInstallCheck(Version v) {
         List<String> command = Shell.java(INSTALL_CHECK, v.toString());
-        if (ask.offer("Install " + v + " from the update site into a copy of your Eclipse (InstallCheck)", "java " + INSTALL_CHECK + " " + v)
+        Ask asking = options.mode() == Ask.Mode.YES ? new Ask(Ask.Mode.ASK, options.rerunWithYes("tag")) : ask;
+        if (asking.offer("Install " + v + " from the update site into a copy of your Eclipse (InstallCheck)", "java " + INSTALL_CHECK + " " + v)
                 && shell.show(command) != 0) {
             System.out.println("note: InstallCheck failed (see above); the release itself is out. Run it again with: java "
                     + INSTALL_CHECK + " " + v);
@@ -609,20 +618,16 @@ public final class ReleaseTool {
     private static final int SITE_LOOK_TIMES = 20;
 
     /**
-     * Waits until the public update site lists {@code v} and serves its {@code content.jar}.
-     * GitHub Pages answers through a cache that keeps a file up to ten minutes
-     * ({@code Cache-Control: max-age=600}): {@code compositeContent.xml} fetched by anyone shortly
-     * before the deployment comes back without the new release. Each request therefore carries a
-     * query of its own ({@code ?fresh=<time>}), which the cache has never seen, so it asks GitHub;
-     * and the check is repeated for a while, as a deployment takes a moment to reach every server.
+     * Waits until the public update site lists {@code v} and serves its {@code content.jar}. Each
+     * look goes past GitHub Pages' cache ({@link UpdateSite#get}), and the look is repeated for a
+     * while, as a deployment takes a moment to reach every server.
      */
     private void awaitSite(Version v) {
         String site = settings.get("site.url");
         for (int i = 0; i < SITE_LOOK_TIMES; i++) {
-            String fresh = "?fresh=" + System.currentTimeMillis();
-            String composite = httpGet(site + "compositeContent.xml" + fresh);
-            boolean listed = composite != null && composite.contains("'releases/" + v + "'");
-            if (listed && httpGet(site + "releases/" + v + "/content.jar" + fresh) != null) {
+            String composite = UpdateSite.get(site + "compositeContent.xml");
+            boolean listed = composite != null && UpdateSite.releases(composite).contains(v);
+            if (listed && UpdateSite.get(site + "releases/" + v + "/content.jar") != null) {
                 ok("the update site " + site + " lists and serves " + v);
                 return;
             }
@@ -891,21 +896,6 @@ public final class ReleaseTool {
             Files.writeString(root.resolve(file), text);
         } catch (IOException e) {
             throw new ToolFailure("cannot write " + file + ": " + e.getMessage());
-        }
-    }
-
-    /** The body of a GET of {@code url}, or {@code null} unless the answer is 200. */
-    private static String httpGet(String url) {
-        try {
-            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NORMAL).build();
-            HttpResponse<byte[]> r = client.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).build(),
-                    HttpResponse.BodyHandlers.ofByteArray());
-            return r.statusCode() == 200 ? new String(r.body(), StandardCharsets.UTF_8) : null;
-        } catch (IOException e) {
-            return null;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ToolFailure("interrupted");
         }
     }
 

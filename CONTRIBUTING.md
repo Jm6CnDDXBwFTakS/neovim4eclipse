@@ -607,11 +607,15 @@ java releng/tools/checks/InstallCheck.java 0.2.4    # a given one
 It copies your Eclipse (with hard links, as `ManualChecks launch` does; `--eclipse` or `ECLIPSE`
 names it) to `~/var/n4e-checks/install-check/`, afresh each run, and installs the release there from
 the live update site with p2's director, trusting only the site's host and the release key (its
-fingerprint computed from `releng/signing-key.asc`), and no unsigned artifact: what a careful user
-accepts in Eclipse's trust dialog. Then it offers to start that Eclipse, with a new workspace and an
+fingerprint computed from `releng/signing-key.asc`), no jar-signing certificate and no unsigned
+artifact: what a careful user accepts in Eclipse's trust dialog. It also reads the director's trust
+report and fails unless the release key signed the plug-in and the feature and nothing else is
+listed. A `--root` folder it did not make (no `.install-check` file in it) is refused rather than
+deleted. Then it offers to start that Eclipse, with a new workspace and an
 empty Neovim folder, for the rest of the manual check `rl-publish`: *Get Neovim* opens, and a file
 attaches after it. Nothing waits for it: a release that fails it is fixed by the next one, from the
-branch `next` cuts. It is worth running at any time, too, such as after an Eclipse upgrade.
+branch `next` cuts, and `tag --yes` still asks before it runs InstallCheck. It is worth running at
+any time, too, such as after an Eclipse upgrade.
 
 When a workflow run fails, the tool prints the failed jobs' last log lines and what to do: rerun the
 failed jobs for a runner hiccup, or fix the cause on the release branch and run `check` and

@@ -6,4 +6,5 @@
 # LikeCi's arguments for the check step; empty runs only what CI runs (-Pui, then the integration tests).
 #tests=
 
-# The commits' last paragraph (commit.trailer) is a setting of every tool: releng/tools/common.
+# The commits' last paragraph (commit.trailer), the update site (site.url) and the signing key
+# (signing.key) are settings of every tool: set them in releng/tools/common/local.properties, not here.
