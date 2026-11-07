@@ -58,7 +58,7 @@ Maven, and `UpdateNeovimDownloads.java install` retries Neovim's.
 **Running every test.** `-Pall` runs every test in one build: the unit, text, SWT and UI tests as
 `-Pui` does, the integration tests (`-Pintegration`), the Java editor tests (`-PuiHeavyJava`, so the
 test Eclipse gets the Java development tools) and the `timeoutReliant` ones. Only the screenshots
-and the gallery stay out, since they are not tests (the screenshots rewrite the Marketplace images). Listing the profiles instead
+and the gallery stay out, since they are not tests (the screenshots take the Marketplace images). Listing the profiles instead
 (`-Pui,uiHeavyJava,timeoutReliant`) does not add them up: each one sets which tags run, and the last
 one wins. Pass `-Dnvim.path` as for `-Pintegration`. It is the slowest run (a large first download
 for the Java tools), so use it before a release or after a wide change, not for every commit. One
