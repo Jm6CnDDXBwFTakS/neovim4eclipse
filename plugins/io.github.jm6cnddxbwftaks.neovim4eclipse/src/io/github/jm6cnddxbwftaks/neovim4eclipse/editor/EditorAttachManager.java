@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -829,7 +830,14 @@ public final class EditorAttachManager {
             if (text == null) {
                 return DocumentWrite.Result.failed(part.getTitle() + " has no text to write");
             }
-            Path target = Path.of(request.target());
+            Path target;
+            try {
+                target = Path.of(request.target());
+            } catch (InvalidPathException e) {
+                // A name the file system cannot hold (:w a<b.txt on Windows): Vim's error for a
+                // file it cannot open, not "Eclipse could not save" the editor's own file.
+                return DocumentWrite.Result.failed("E212: Can't open file for writing: " + request.target());
+            }
             return switch (request.kind()) {
                 case LINES -> OtherFileWrites.lines(text, target, request.first(), request.last(), request.createFolders());
                 case APPEND -> OtherFileWrites.append(text, target, request.first(), request.last(), request.force(),

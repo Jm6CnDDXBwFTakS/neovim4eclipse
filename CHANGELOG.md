@@ -34,6 +34,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A change Neovim makes by itself (a plug-in's timer, a language server's edit) to a file whose
   editor is in the background is no longer lost when Eclipse writes the same file's buffer at that
   moment.
+- `:w` to a name the file system cannot hold (`:w a<b.txt` on Windows) gives Vim's E212 for that
+  name, instead of saying Eclipse could not save the editor's own file and logging an error.
 
 ## [0.2.6] - 2026-11-07
 
