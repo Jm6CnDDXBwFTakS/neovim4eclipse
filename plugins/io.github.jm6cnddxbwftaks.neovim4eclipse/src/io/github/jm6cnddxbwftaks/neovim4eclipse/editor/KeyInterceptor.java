@@ -122,6 +122,10 @@ public final class KeyInterceptor implements VerifyKeyListener {
         if (!enabled || !session.isAlive()) {
             return;
         }
+        if (KeyMapping.dropsKey(event.stateMask)) {
+            event.doit = false; // Super+U on Linux: neither Neovim's nor a letter to type (KeyMapping.dropsKey)
+            return;
+        }
         logCtrlChord(event, nvimKey);
         if (nvimKey != null && router.route(nvimKey)) {
             event.doit = false;

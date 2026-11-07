@@ -74,6 +74,12 @@ to Eclipse there usually has no Eclipse binding, and then does nothing.
 is left to Eclipse and does nothing; it used to reach Neovim as the bare letter, so `Cmd+U` undid
 a change and `Cmd+P` put a register.
 
+On Linux SWT reports the **Super** (Windows logo) key as `Cmd`, and the text widget would type the
+letter of a Super chord the desktop does not take: `Super+U` put a `u` in the file. So outside macOS
+the editor drops such a key: it is neither typed nor sent (`KeyMapping.dropsKey`). It is not sent as
+Neovim's `<D-u>` either: unmapped, Neovim types that as the text `<D-u>` in insert mode and takes it
+as `u` (undo) in normal mode.
+
 ### Insert mode
 
 In insert mode Eclipse types, so content assist, auto-indent and templates keep working, and the

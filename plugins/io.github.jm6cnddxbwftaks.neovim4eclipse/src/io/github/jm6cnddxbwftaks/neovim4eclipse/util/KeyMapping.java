@@ -79,17 +79,41 @@ public final class KeyMapping {
     }
 
     /**
+     * Whether the editor must drop a key that reached it, so that it neither goes to Neovim
+     * ({@link #toNeovimKey} gives none) nor is typed: a Super key chord outside macOS, such as
+     * Super+U that the desktop does not take.
+     *
+     * <p>Why: SWT reports Super as {@code SWT.COMMAND} on Linux, and outside macOS
+     * {@code StyledText} does not take a {@code COMMAND} chord for a shortcut. Left to it, Super+U
+     * typed "u" into the document, which then reached Neovim as an edit. On macOS {@code StyledText}
+     * itself ignores Cmd chords, so an unbound one is left to Eclipse and does nothing.
+     *
+     * <p>Not sent as Neovim's {@code <D-u>} (its notation for Cmd and Super) instead: unmapped,
+     * Neovim's insert mode types it as the text {@code <D-u>}, and its normal mode reads it as a
+     * plain {@code u} and undoes a change (Neovim 0.12), the very thing to avoid.
+     */
+    public static boolean dropsKey(int stateMask) {
+        return dropsKey(stateMask, PlatformUtil.isMac());
+    }
+
+    /** {@link #dropsKey(int)} for a given platform (tests). */
+    static boolean dropsKey(int stateMask, boolean mac) {
+        return !mac && (stateMask & SWT_COMMAND) != 0;
+    }
+
+    /**
      * {@link #toNeovimKey(int, int, char)} for a given platform (tests).
      *
      * @param optionTypes whether Alt types characters, as Option does on macOS (see {@link #altTypes})
      */
     static String toNeovimKey(int keyCode, int stateMask, char character, boolean optionTypes) {
         if ((stateMask & SWT_COMMAND) != 0) {
-            // Cmd (macOS) is never Neovim's: Cmd keys are Eclipse's and the system's shortcuts. One
-            // Eclipse has no binding for still reaches the editor's key listener, with the letter as
-            // its character: read without Cmd, Cmd+U went to Neovim as "u" and undid a change, Cmd+P
-            // as "p" and put a register. Left to Eclipse, it does nothing. (On Linux, SWT reports the
-            // Super key as Cmd; it is the desktop's too.)
+            // SWT_COMMAND is Cmd on macOS and the Super (Windows logo) key on Linux. Neither is
+            // Neovim's: they are Eclipse's, the system's and the desktop's shortcuts. One that has
+            // no binding still reaches the editor's key listener, with the letter as its character:
+            // read without the modifier, Cmd+U went to Neovim as "u" and undid a change, Cmd+P as
+            // "p" and put a register. On macOS the text widget leaves a Cmd key alone, so it does
+            // nothing; elsewhere it would type the letter, so the caller drops the key (dropsKey).
             return null;
         }
         boolean ctrl = (stateMask & SWT_CTRL) != 0;

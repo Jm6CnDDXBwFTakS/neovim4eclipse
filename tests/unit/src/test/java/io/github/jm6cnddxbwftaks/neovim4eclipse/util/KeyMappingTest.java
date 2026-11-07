@@ -4,7 +4,9 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -210,6 +212,22 @@ class KeyMappingTest {
         assertNull(KeyMapping.toNeovimKey(KeyMapping.SWT_ESC, KeyMapping.SWT_COMMAND, (char) KeyMapping.SWT_ESC));
         assertNull(KeyMapping.toNeovimKey(KeyMapping.SWT_ARROW_UP, KeyMapping.SWT_COMMAND, NONE));
         assertNull(KeyMapping.toNeovimKey('x', KeyMapping.SWT_COMMAND | KeyMapping.SWT_CTRL, (char) 24));
+        for (boolean mac : new boolean[] { true, false }) {
+            assertNull(KeyMapping.toNeovimKey('u', KeyMapping.SWT_COMMAND, 'u', mac), "mac=" + mac);
+        }
+    }
+
+    /**
+     * On macOS the text widget leaves an unbound Cmd+U alone, so the key is not dropped. On Linux
+     * the same modifier is Super, and the widget would type "u" into the document: dropped.
+     */
+    @Test
+    void superChordsAreDroppedOutsideMacOsOnly() {
+        assertFalse(KeyMapping.dropsKey(KeyMapping.SWT_COMMAND, true), "Cmd+U on macOS: Eclipse's");
+        assertTrue(KeyMapping.dropsKey(KeyMapping.SWT_COMMAND, false), "Super+U on Linux");
+        assertTrue(KeyMapping.dropsKey(KeyMapping.SWT_COMMAND | KeyMapping.SWT_SHIFT, false), "Super+Shift+U");
+        assertFalse(KeyMapping.dropsKey(KeyMapping.SWT_CTRL, false), "Ctrl keys are routed as usual");
+        assertFalse(KeyMapping.dropsKey(0, false), "a plain key");
     }
 
     @Test
