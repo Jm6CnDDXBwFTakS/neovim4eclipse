@@ -81,7 +81,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  * <p>Matches arrive in Neovim's units (lines from 1, UTF-8 byte columns) and become document
  * offsets with {@link DocumentPositions#byteColToOffset}. Example: {@code foo} after {@code é } on
  * line 1 is bytes 3 to 6, characters 2 to 5. Only the lines Neovim's window shows are sent, which
- * are the lines the editor shows. UI thread only.
+ * are the lines the editor shows. UI thread only, except the document listener, which runs on the
+ * thread that changed the document ({@link #lock}).
  */
 final class SearchHighlighter implements ITextPresentationListener {
 
@@ -112,11 +113,22 @@ final class SearchHighlighter implements ITextPresentationListener {
     private Color matchColor;
     private Color boxColor;
     /**
+     * Guards every change of {@link #regions} and {@link #current}. A document change may come on
+     * another thread than the UI's (a Job edits the document; {@link #onDocumentChanged} runs on
+     * that thread), and it reads, moves and writes the matches, while {@link #show} replaces them on
+     * the UI thread. Without one lock for both, one of the two writes was lost: the matches of the
+     * new {@code show} replaced by the old ones moved, or a {@code current} index into a list it did
+     * not belong to. Readers that only look (painting, the presentation listener) take the volatile
+     * fields as they are, each read a consistent list. The lock is held only for the arithmetic,
+     * never while waiting for a thread or the widget's repaint, so it cannot block either side long.
+     */
+    private final Object lock = new Object();
+    /**
      * The matches as document regions, in Neovim's order; empty when nothing is highlighted. Volatile:
-     * a document change on another thread replaces it (onDocumentChanged).
+     * a document change on another thread replaces it (onDocumentChanged); written under {@link #lock}.
      */
     private volatile List<IRegion> regions = List.of();
-    /** The index in {@link #regions} of the match under the caret, or -1. Volatile, as {@link #regions}. */
+    /** The index in {@link #regions} of the match under the caret, or -1. As {@link #regions}. */
     private volatile int current = -1;
     /**
      * Whether a search is being typed ({@code /} or {@code ?} open). Neovim then puts its cursor,
@@ -171,10 +183,14 @@ final class SearchHighlighter implements ITextPresentationListener {
         if (next.equals(regions)) {
             return; // the same matches: nothing to paint again
         }
-        List<IRegion> old = regions;
         redrawBoxes(); // the old box, while regions and current still describe it
-        regions = next;
-        current = currentAt(next, caretOffset());
+        int caret = caretOffset();
+        List<IRegion> old;
+        synchronized (lock) {
+            old = regions;
+            regions = next;
+            current = currentAt(next, caret);
+        }
         repaint(old, next);
         redrawBoxes();
     }
@@ -261,9 +277,12 @@ final class SearchHighlighter implements ITextPresentationListener {
 
     /** Stops painting and listening. */
     void dispose() {
-        List<IRegion> old = regions;
-        regions = List.of();
-        current = -1;
+        List<IRegion> old;
+        synchronized (lock) {
+            old = regions;
+            regions = List.of();
+            current = -1;
+        }
         ((ITextViewerExtension4) viewer).removeTextPresentationListener(this);
         if (document != null) {
             document.removePrenotifiedDocumentListener(follower);
@@ -333,10 +352,12 @@ final class SearchHighlighter implements ITextPresentationListener {
         if (widget.isDisposed()) {
             return;
         }
-        int next = currentAt(regions, caretOffset());
-        if (next != current) {
+        int caret = caretOffset();
+        if (currentAt(regions, caret) != current) {
             redrawBoxes(); // the old box goes
-            current = next;
+            synchronized (lock) {
+                current = currentAt(regions, caret); // of the regions now, should a change have come since
+            }
             redrawBoxes(); // the new one comes
         }
     }
@@ -375,33 +396,35 @@ final class SearchHighlighter implements ITextPresentationListener {
      * after this, with the matches where the text now is.
      */
     void onDocumentChanged(int offset, int removed, int inserted) {
-        List<IRegion> regions = this.regions;
-        if (regions.isEmpty()) {
-            return;
-        }
-        int delta = inserted - removed;
-        int oldCurrent = current;
-        int newCurrent = -1;
-        List<IRegion> moved = new ArrayList<>(regions.size());
-        for (int i = 0; i < regions.size(); i++) {
-            IRegion r = regions.get(i);
-            int start = r.getOffset();
-            int end = start + r.getLength();
-            if (end <= offset) {
-                moved.add(r); // before the change
-            } else if (start >= offset + removed) {
-                moved.add(new Region(start + delta, r.getLength())); // after it (text typed right before it included)
-            } else {
-                continue; // the change touches the match, which is dropped
+        synchronized (lock) { // read, move, write: as one step against show() (see lock)
+            List<IRegion> regions = this.regions;
+            if (regions.isEmpty()) {
+                return;
             }
-            if (i == oldCurrent) {
-                newCurrent = moved.size() - 1;
+            int delta = inserted - removed;
+            int oldCurrent = current;
+            int newCurrent = -1;
+            List<IRegion> moved = new ArrayList<>(regions.size());
+            for (int i = 0; i < regions.size(); i++) {
+                IRegion r = regions.get(i);
+                int start = r.getOffset();
+                int end = start + r.getLength();
+                if (end <= offset) {
+                    moved.add(r); // before the change
+                } else if (start >= offset + removed) {
+                    moved.add(new Region(start + delta, r.getLength())); // after it (text typed right before it included)
+                } else {
+                    continue; // the change touches the match, which is dropped
+                }
+                if (i == oldCurrent) {
+                    newCurrent = moved.size() - 1;
+                }
             }
+            // The current match keeps its box where it moved (or loses it when dropped), so that a
+            // paint before the refresh below draws no box around another match.
+            this.regions = List.copyOf(moved);
+            current = newCurrent;
         }
-        // The current match keeps its box where it moved (or loses it when dropped), so that a paint
-        // before the refresh below draws no box around another match.
-        this.regions = List.copyOf(moved);
-        current = newCurrent;
         // The current match: once the widget has the change, and on its thread. The listener runs
         // before the widget applies the change (the caret is still the old one) and on the thread
         // that changed the document, which may not be the UI thread (a Job): it must not read the

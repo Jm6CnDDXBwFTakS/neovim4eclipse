@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IRegion;
@@ -195,6 +196,44 @@ class SearchHighlighterTest {
         assertEquals(List.of(new Region(12, 3)), highlighter.regions(), "the touched match is dropped");
         viewer.getDocument().replace(15, 0, "!"); // right after the second
         assertEquals(List.of(new Region(12, 3)), highlighter.regions(), "an edit after a match leaves it");
+    }
+
+    /**
+     * A document change on another thread (a Job) and a new {@code show} on the UI thread at the
+     * same time: the matches shown are always the last {@code show}'s. The worker's changes are at
+     * the end of the text and move nothing, so with the two kept apart the regions after each
+     * {@code show} are exactly its own; before, the worker's read-move-write could put the matches
+     * it read before the {@code show} back. A race found only by chance, so a pass proves little
+     * alone, but a failure here is always the bug: there is no timing in which the right code fails.
+     */
+    @Test
+    void aChangeOnAnotherThreadDoesNotUndoANewShow() throws Exception {
+        List<SearchMatch> first = List.of(new SearchMatch(1, 2, 1, 5));
+        List<SearchMatch> second = List.of(new SearchMatch(2, 3, 2, 6));
+        List<IRegion> firstRegions = List.of(new Region(2, 3));
+        List<IRegion> secondRegions = List.of(new Region(10, 3));
+        int end = viewer.getDocument().getLength();
+        AtomicBoolean stop = new AtomicBoolean();
+        Thread worker = new Thread(() -> {
+            // Bounded: each change also queues a caret update on the UI thread, drained below.
+            for (int n = 0; n < 100_000 && !stop.get(); n++) {
+                highlighter.onDocumentChanged(end, 0, 0); // an empty change past every match
+            }
+        }, "search highlighter test worker");
+        worker.start();
+        try {
+            for (int i = 0; i < 2000; i++) {
+                boolean odd = i % 2 == 1;
+                highlighter.show(odd ? second : first);
+                assertEquals(odd ? secondRegions : firstRegions, highlighter.regions(), "after show " + i);
+            }
+        } finally {
+            stop.set(true);
+            worker.join();
+        }
+        while (Display.getDefault().readAndDispatch()) {
+            // the caret updates the worker's changes queued
+        }
     }
 
     /** The editor reports the lines it shows, 1-based, at first and when it scrolls. */
