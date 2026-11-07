@@ -260,8 +260,10 @@ class ChecksGalleryTest {
             window.setSize(GROUP_WIDTH, window.computeSize(window.getClientArea().width, SWT.DEFAULT, true).y);
             GalleryCamera.drain(window.getDisplay());
             window.layout(true, true);
-            // Focus on the window itself, not its first link: a focused link draws a focus rectangle,
-            // which the picture would show.
+            // Active, as a user sees the page, with the focus on the window itself, not its first link:
+            // a focused link draws a focus rectangle, which the picture would show (forceActive gives
+            // it focus).
+            window.forceActive();
             window.forceFocus();
             save(window, topic, title, lookFor);
         } finally {
