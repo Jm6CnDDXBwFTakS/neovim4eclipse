@@ -887,6 +887,52 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * A key typed right after Esc, while Neovim is still leaving insert mode: the session stops
+     * Eclipse's typing at the Esc, so the router sends the key to Neovim, queued behind the leave,
+     * where it runs in Normal mode. The leave is held in its push until the key is routed, so the
+     * mode is certainly still insert then. Example: {@code ihello<Esc>x} typed fast.
+     */
+    @Test
+    void aKeyRightAfterEscGoesToNeovimInNormalMode() throws Exception {
+        try (NeovimSession s = start()) {
+            s.addBufferChangeListener(change -> {
+                if (change.afterApply() != null) {
+                    change.afterApply().run(); // as the editor does once it applied the change
+                }
+            });
+            s.setBufferLines(List.of("one"));
+            keys(s, "A");
+            waitFor(s::isEclipseTypingReady, "Eclipse may type");
+            CountDownLatch routed = new CountDownLatch(1);
+            s.setLeaveInsertPush(() -> {
+                try {
+                    assertTrue(routed.await(WAIT_MS, TimeUnit.MILLISECONDS));
+                    s.setBufferLines(List.of("one hello")); // what Eclipse typed
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            KeyRouter router = new KeyRouter(s);
+            CountDownLatch handled = new CountDownLatch(2); // the leave, then the key
+            Runnable listener = handled::countDown;
+            s.addInputHandledListener(listener);
+            try {
+                assertTrue(router.route("<Esc>"));
+                assertTrue(s.isTypingMode(), "Neovim has not left insert mode yet");
+                assertTrue(router.route("x"), "the key goes to Neovim, not into the document");
+                routed.countDown();
+                assertTrue(handled.await(WAIT_MS, TimeUnit.MILLISECONDS), "Neovim handled both");
+            } finally {
+                s.removeInputHandledListener(listener);
+            }
+            assertEquals("n", s.getMode());
+            // Neovim's cursor was after "one" (no replay plan moved it), and Esc put it on the "e":
+            // x deleted that in Normal mode, rather than being typed into the text.
+            assertEquals(List.of("on hello"), s.getBufferLines());
+        }
+    }
+
     @Test
     void dotRepeatsTextTypedInInsertModeByEclipse() throws Exception {
         try (NeovimSession s = start()) {

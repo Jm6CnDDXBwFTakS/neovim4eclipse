@@ -58,6 +58,7 @@ class KeyRouterTest {
 
         @Override
         public void leaveInsertModeAsync(InsertReplay.Plan replay) {
+            eclipseTypingReady = false; // as the session does: keys until the mode change go to Neovim
             leftInsert.add(replay);
         }
 
@@ -111,6 +112,19 @@ class KeyRouterTest {
         type("<Esc>");
         assertEquals(1, neovim.leftInsert.size());
         assertEquals(null, neovim.leftInsert.get(0));
+    }
+
+    /**
+     * {@code <Esc>:w<CR>} typed fast: Neovim reports Normal mode only once it handled the Esc, so the
+     * keys after it arrive while the mode is still insert. They must go to Neovim, behind the Esc,
+     * not be typed into the document by Eclipse.
+     */
+    @Test
+    void keysAfterEscBeforeTheModeChangesGoToNeovim() {
+        neovim.typing = true;
+        assertEquals(List.of(true, true, true, true), type("<Esc>", ":", "w", "<CR>"));
+        assertEquals(1, neovim.leftInsert.size());
+        assertEquals(List.of(":", "w", "<CR>"), neovim.sent);
     }
 
     @Test

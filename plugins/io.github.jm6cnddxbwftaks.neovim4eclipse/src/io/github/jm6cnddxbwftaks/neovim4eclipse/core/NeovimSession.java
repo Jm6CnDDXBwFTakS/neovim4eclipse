@@ -1457,9 +1457,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * Leaves insert mode after Eclipse handled the typing, re-typing the text into Neovim first when
      * {@code replay} allows it, so that {@code .} repeats it. See {@link KeyInput#leaveInsertMode}.
      *
+     * <p>Eclipse stops typing now, on the UI thread, as at a sync point
+     * ({@link #syncInsertThenInputAsync}): the mode stays insert until Neovim reports the change, and
+     * until then a key typed after Esc would still be Eclipse's to insert. Example: {@code ihello},
+     * then {@code <Esc>:w<CR>} typed fast; without the pause, {@code :w} and Enter landed in the
+     * document. Paused, they take the Neovim-driven path ({@code KeyRouter}), queued behind this
+     * task, and reach Neovim in Normal mode. The mode change ends the Neovim-driven insert again
+     * ({@code KeyInput#onModeChanged}).
+     *
      * @param replay what to re-type, or {@code null}
      */
     public void leaveInsertModeAsync(InsertReplay.Plan replay) {
+        state.pauseEclipseTyping();
         submit("leave insert mode", Level.WARNING, () -> keyInput.leaveInsertMode(replay));
     }
 
