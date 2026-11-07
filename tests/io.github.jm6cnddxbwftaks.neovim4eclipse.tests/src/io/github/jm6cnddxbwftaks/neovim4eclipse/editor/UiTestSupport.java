@@ -271,6 +271,25 @@ final class UiTestSupport {
      * depends on the editor having focus.
      */
     static void requireKeyboardFocus(Control control, long timeoutMs) {
+        focus(control, timeoutMs, true);
+    }
+
+    /**
+     * Like {@link #requireKeyboardFocus}, but never takes the front from another program: while no
+     * window of the test Eclipse is active (the developer works in another program), it only gives
+     * {@code control} the focus inside its window, for when that window is active again, and
+     * returns. For the gallery ({@code SearchGalleryTest}), whose pictures do not need the focus:
+     * {@code Shell.forceActive()} would bring the test Eclipse to the front about once a second
+     * while the developer works elsewhere (on macOS it activates the whole program).
+     *
+     * <p>Example: the developer clicks into a browser as the test Eclipse opens; the editor gets
+     * the focus inside the workbench window, which stays behind the browser, and the test goes on.
+     */
+    static void focusWithoutTakingTheFront(Control control, long timeoutMs) {
+        focus(control, timeoutMs, false);
+    }
+
+    private static void focus(Control control, long timeoutMs, boolean takeTheFront) {
         Display display = control.getDisplay();
         Shell shell = control.getShell();
         long deadline = System.currentTimeMillis() + timeoutMs;
@@ -283,6 +302,10 @@ final class UiTestSupport {
                         + focusReport(control));
             }
             if (now >= nextRequest) {
+                if (!takeTheFront && display.getActiveShell() == null) {
+                    control.forceFocus(); // inside its window only: no window is activated
+                    return;
+                }
                 if (display.getActiveShell() != shell) {
                     shell.forceActive();
                 }

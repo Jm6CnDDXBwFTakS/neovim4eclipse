@@ -203,6 +203,16 @@ class SearchGalleryTest extends EndToEndTestBase {
      * JavaEditorEndToEndTest's cleanup, which this follows). A job that never ends does not fail
      * the gallery: the wait gives up at the limit.
      */
+    /**
+     * The pictures need no keyboard focus (the keys go to Neovim with {@code session.inputAsync},
+     * and the windows draw themselves), so the run never takes the front from the developer's
+     * program for it.
+     */
+    @Override
+    protected boolean takesTheFront() {
+        return false;
+    }
+
     @AfterEach
     void closeEveryEditorAndLetTheJobsFinish() {
         page().closeAllEditors(false);
@@ -221,7 +231,7 @@ class SearchGalleryTest extends EndToEndTestBase {
         assertTrue(part instanceof ITextEditor, editorId + " opened " + part);
         ITextEditor opened = (ITextEditor) part;
         waitForAttach(opened, name);
-        UiTestSupport.requireKeyboardFocus(widgetOf(opened), TIMEOUT_MS);
+        UiTestSupport.focusWithoutTakingTheFront(widgetOf(opened), TIMEOUT_MS);
         settle();
         waitForNeovimIn(file);
         return opened;

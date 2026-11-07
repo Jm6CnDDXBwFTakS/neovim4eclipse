@@ -24,6 +24,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the windows themselves on Windows and macOS too, instead of read from the screen, so they cannot
   show another program, need no Screen Recording permission on macOS, and come out at the screen's
   full resolution.
+- Nothing changes in the plug-in itself: a gallery run no longer keeps bringing its windows to
+  the front while you work in another program; only each test Eclipse's start does.
 
 ## [0.2.6] - 2026-11-07
 

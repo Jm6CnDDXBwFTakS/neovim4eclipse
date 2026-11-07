@@ -126,7 +126,11 @@ abstract class EndToEndTestBase {
         // leave no window active (xvfb has no window manager to hand the focus back), and a developer
         // may be typing in another window; fail here with a "lost keyboard focus" message instead of
         // a timeout later. See UiTestSupport.requireKeyboardFocus.
-        requireKeyboardFocus(widget, TIMEOUT_MS);
+        if (takesTheFront()) {
+            requireKeyboardFocus(widget, TIMEOUT_MS);
+        } else {
+            UiTestSupport.focusWithoutTakingTheFront(widget, TIMEOUT_MS);
+        }
         session = Activator.getDefault().getOrCreateSession();
         // One Neovim serves the whole IDE, so a previous test may have left it in another mode.
         session.inputAsync("<Esc>");
@@ -295,6 +299,16 @@ abstract class EndToEndTestBase {
         assertNull(untitled.getEditorInput().getAdapter(IFile.class), "an untitled file");
         waitForAttach(untitled, "the untitled file");
         return untitled;
+    }
+
+    /**
+     * Whether the setup may bring the test Eclipse to the front for the editor's keyboard focus:
+     * yes for a test, whose focus-dependent steps need it; a subclass whose steps do not need it
+     * (the gallery's pictures) says no, so the developer can work in another program meanwhile
+     * (see {@link UiTestSupport#focusWithoutTakingTheFront}).
+     */
+    protected boolean takesTheFront() {
+        return true;
     }
 
     /** Creates {@code name} in the test project, without opening it. */
