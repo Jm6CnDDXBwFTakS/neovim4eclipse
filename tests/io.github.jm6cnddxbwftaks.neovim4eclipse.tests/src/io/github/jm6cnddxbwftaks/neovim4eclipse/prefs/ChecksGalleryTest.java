@@ -8,20 +8,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.graphics.GC;
-import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.graphics.ImageData;
-import org.eclipse.swt.graphics.ImageLoader;
-import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
@@ -34,7 +27,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
@@ -77,25 +70,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * the plug-in.
  *
  * <h2>How a picture is taken</h2>
- * On Linux, {@link Control#print(GC)} asks the window to draw itself into an image, which
- * {@link ImageLoader} saves as PNG. Unlike reading the screen (ScreenshotCaptureTest), it works on
- * Wayland and does not need the window in front; it shows the window's inside, without the title bar.
- *
- * <p>On macOS and Windows {@code print} draws nothing: the pictures came out white (both seen
- * 2026-11-05). On macOS Cocoa's views are layer-backed, and SWT's {@code displayRectIgnoringOpacity}
- * into an image's context leaves it white (SWT 3.128); on Windows SWT's {@code PrintWindow} call
- * lacks {@code PW_RENDERFULLCONTENT}, which today's themed windows need. There the window's inside is
- * read from the screen instead ({@link GC#copyArea(Image, int, int)} on a {@code GC} of the display), as
- * ScreenshotCaptureTest does, which needs the window in front, and on macOS the Screen Recording
- * permission for the test's Java (System Settings, Privacy &amp; Security). The window is then active,
- * so a link may show a focus rectangle.
- *
- * <p>Either way a picture of one color is refused ({@link #blank}): a window that drew nothing must
- * fail the run, not give a gallery of empty pictures. (A screen read without the permission shows
- * the desktop instead of the window, which this cannot tell: the person looking sees it.) The screen
- * is read again, at most {@link TestWait#millis()}, until the window is in front and two reads
- * {@link #READ_INTERVAL_MS} apart are the same: the last paint may not have reached the screen yet,
- * and Windows fades a new window in over the workbench.
+ * By {@link GalleryCamera}: the window draws itself into an image on Linux, and is read from the
+ * screen on macOS and Windows, which needs it in front (and on macOS the Screen Recording
+ * permission). A picture of one color fails the run.
  *
  * <h2>The states shown</h2>
  * Dialogs are built from the same texts the plug-in shows ({@link GetNeovimText},
@@ -113,18 +90,6 @@ class ChecksGalleryTest {
     private static final int GROUP_WIDTH = 640;
 
     private static final boolean WINDOWS = System.getProperty("os.name").startsWith("Windows");
-    /**
-     * Whether a picture is read from the screen rather than drawn by the window: on macOS and
-     * Windows, where {@link Control#print(GC)} draws nothing (see the class comment).
-     */
-    /**
-     * How long apart two reads of the screen are, at least: long enough for a fade-in to change the
-     * picture between them, so two equal reads mean the window has settled.
-     */
-    private static final long READ_INTERVAL_MS = 200;
-
-    private static final boolean FROM_SCREEN = !System.getProperty("os.name").startsWith("Linux");
-
     /** One picture: the topic it belongs to, its file name, and what the person checks in it. */
     private record Shot(String topic, String file, String title, String lookFor) {
     }
@@ -277,7 +242,7 @@ class ChecksGalleryTest {
             window.setSize(GROUP_WIDTH, 600); // the width the note and the help wrap in; the height is fitted below
             window.open();
             // The note is probed off the UI thread; it reads "Looking for Neovim..." until it answers.
-            waitUntil("the Neovim group's note for " + title, () -> !looking(group));
+            GalleryCamera.waitUntil("the Neovim group's note for " + title, () -> !looking(group));
             // Fit the height to the wrapped text: computeSize takes the inside's width, so the note and the
             // help wrap as at GROUP_WIDTH (pack() would measure them unwrapped, one long line each).
             window.setSize(GROUP_WIDTH, window.computeSize(window.getClientArea().width, SWT.DEFAULT).y);
@@ -297,84 +262,13 @@ class ChecksGalleryTest {
      */
     private void save(Shell shell, String topic, String title, String lookFor) {
         shell.layout(true, true);
-        drain(shell.getDisplay());
-        Rectangle area = shell.getClientArea();
-        Image image = new Image(shell.getDisplay(), area.width, area.height);
-        try {
-            ImageData data = FROM_SCREEN ? fromScreen(shell, image, title) : printed(shell, image);
-            if (blank(data)) {
-                throw new AssertionError("the picture of " + title + " is one color: nothing was drawn");
-            }
-            String file = String.format("%02d-%s.png", shots.size() + 1, topic);
-            ImageLoader loader = new ImageLoader();
-            loader.data = new ImageData[] { data };
-            loader.save(out.resolve(file).toString(), SWT.IMAGE_PNG);
-            shots.add(new Shot(topic, file, title, lookFor));
-        } finally {
-            image.dispose();
-        }
+        String file = String.format("%02d-%s.png", shots.size() + 1, topic);
+        GalleryCamera.save(shell, shell.getClientArea(), out.resolve(file), title);
+        shots.add(new Shot(topic, file, title, lookFor));
     }
 
-    /** {@code shell}'s inside, drawn by the window itself into {@code image} (Linux). */
-    private static ImageData printed(Shell shell, Image image) {
-        GC gc = new GC(image);
-        try {
-            shell.print(gc);
-        } finally {
-            gc.dispose();
-        }
-        return image.getImageData();
-    }
 
-    /**
-     * {@code shell}'s inside as the screen shows it (macOS, Windows), read again until it is not blank: the
-     * window is brought to the front first, and its last paint may reach the screen a moment later.
-     */
-    private static ImageData fromScreen(Shell shell, Image image, String title) {
-        Display display = shell.getDisplay();
-        if (display.getActiveShell() != shell) {
-            shell.forceActive(); // not again when active: it would move the focus to the first link
-        }
-        Rectangle client = display.map(shell, null, shell.getClientArea());
-        ImageData[] previous = new ImageData[1];
-        long[] lastRead = { 0 };
-        waitUntil("a settled picture of " + title + " on the screen (on macOS: Screen Recording permitted for Java?)",
-                () -> {
-                    // Read only once the window is in front, and at most every READ_INTERVAL_MS: Windows
-                    // fades a new window in, and until then the screen holds the workbench behind it,
-                    // which is not blank either (seen 2026-11-05: empty workbenches, half-faded dialogs).
-                    long now = System.currentTimeMillis();
-                    if (display.getActiveShell() != shell || now - lastRead[0] < READ_INTERVAL_MS) {
-                        return false;
-                    }
-                    lastRead[0] = now;
-                    GC gc = new GC(display);
-                    try {
-                        gc.copyArea(image, client.x, client.y);
-                    } finally {
-                        gc.dispose();
-                    }
-                    ImageData read = image.getImageData();
-                    // Settled: two reads in a row the same, and not blank (a fade changes every pixel).
-                    boolean settled = previous[0] != null && !blank(read) && Arrays.equals(read.data, previous[0].data);
-                    previous[0] = read;
-                    return settled;
-                });
-        return previous[0];
-    }
 
-    /** Whether every pixel of {@code data} is the same: a picture of nothing. */
-    static boolean blank(ImageData data) {
-        int first = data.getPixel(0, 0);
-        for (int y = 0; y < data.height; y++) {
-            for (int x = 0; x < data.width; x++) {
-                if (data.getPixel(x, y) != first) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
 
     /**
      * A stand-in for a Neovim of the user's own: a script that answers {@code --version} as the
@@ -431,27 +325,7 @@ class ChecksGalleryTest {
         return false;
     }
 
-    /** Runs the display's pending work (layout, paint), so the picture shows the window as laid out. */
-    private static void drain(Display display) {
-        while (display.readAndDispatch()) {
-            // keep going until nothing is left
-        }
-    }
 
-    /** Waits for {@code condition} while the display runs, at most {@link TestWait#millis()}. */
-    private static void waitUntil(String what, BooleanSupplier condition) {
-        Display display = Display.getCurrent();
-        long deadline = System.currentTimeMillis() + TestWait.millis();
-        while (!condition.getAsBoolean()) {
-            if (System.currentTimeMillis() > deadline) {
-                throw new AssertionError("timed out waiting for " + what);
-            }
-            if (!display.readAndDispatch()) {
-                display.timerExec(20, () -> { }); // wake up again soon
-                display.sleep();
-            }
-        }
-    }
 
     /**
      * The gallery's {@code index.html}: each picture under its topic, with what to look for. A plain,
@@ -501,6 +375,7 @@ class ChecksGalleryTest {
                     </style></head><body><main>
                     <h1>Neovim for Eclipse checks gallery</h1>
                     <p class="sub">Taken on {platform} by ChecksGalleryTest (-Pgallery).</p>
+                    <p class="sub">Search highlighting, light and dark: <a href="search.html">search.html</a> (SearchGalleryTest).</p>
                     {body}</main></body></html>
                     """.replace("{platform}", escape(platform)).replace("{body}", body); // not formatted(): the CSS has % signs
         }

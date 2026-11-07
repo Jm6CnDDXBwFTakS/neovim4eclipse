@@ -106,7 +106,7 @@ is shown on those platforms only.
 
 - **On:** linux, macos, windows
 - **Launch:** none
-- **Areas:** dialogs/**, prefs/NeovimStatusSection.java, prefs/NeovimPreferencePage.java, prefs/GetNeovim.java, prefs/PageLayout.java, util/GetNeovimText.java, util/StartFailureReport.java, util/OldNeovimProgram.java, util/NvimProbe.java, util/HeadedMessage.java, util/LabelText.java, editor/StartFailureNotice.java, editor/OldNeovimProgramNotice.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/ChecksGalleryTest.java, /pom.xml
+- **Areas:** dialogs/**, prefs/NeovimStatusSection.java, prefs/NeovimPreferencePage.java, prefs/GetNeovim.java, prefs/PageLayout.java, util/GetNeovimText.java, util/StartFailureReport.java, util/OldNeovimProgram.java, util/NvimProbe.java, util/HeadedMessage.java, util/LabelText.java, editor/StartFailureNotice.java, editor/OldNeovimProgramNotice.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/ChecksGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java, /pom.xml
 
 The gallery draws the dialogs and preference-page notes that used to be checked by opening each
 one by hand (`ChecksGalleryTest`, CONTRIBUTING.md, "Build and test"). Pictures are not stored or
@@ -114,15 +114,15 @@ compared: fonts, the operating system and SWT change pixels all the time, and a 
 could only be refreshed on its own platform. So a person looks, and only when `due` lists this card.
 
 ```sh linux
-xvfb-run -a ./mvnw verify -Pgallery
+xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/path/to/nvim
 ```
 
 ```sh macos
-./mvnw verify -Pgallery
+./mvnw verify -Pgallery -Dnvim.path=/path/to/nvim
 ```
 
 ```powershell windows
-.\mvnw.cmd verify -Pgallery
+.\mvnw.cmd verify -Pgallery -Dnvim.path=C:\path\to\nvim.exe
 ```
 
 1. On macOS, run it from a terminal that has the Screen Recording permission: the pictures are
@@ -188,24 +188,33 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 ### `sh-colors` Search matches readable in a light and a dark theme
 
 - **On:** any
-- **Launch:** checks
-- **Areas:** editor/SearchHighlighter.java, editor/SearchColors.java, util/OverlayColors.java
+- **Launch:** none
+- **Areas:** editor/SearchHighlighter.java, editor/SearchColors.java, util/OverlayColors.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
-(`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`).
+(`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two
+test Eclipses, one started in the light theme and one in Eclipse's dark theme, as a user's Eclipse
+starts after choosing Dark (`SearchGalleryTest`).
 
-1. Open a Java file of `n4e-alpha` with the Java editor, in Neovim mode. Type `/e` and Enter.
-   ⇒ Every `e` on screen has a light background behind it, the syntax colors of the text unchanged;
-   the `e` under the caret is a shade darker.
-2. Press `n` a few times, then type `:noh` and Enter.
-   ⇒ The darker match moves with the caret; after `:noh` no background is left.
-3. Switch to the dark theme (*Window → Preferences → General → Appearance*, Dark), restart if asked,
-   and repeat step 1.
-   ⇒ The matches stand out from the dark background and their text stays readable; the match under
-   the caret is a shade lighter.
-4. In *General → Editors → Text Editors → Annotations*, select *Search Results* and change its color.
-   Apply.
-   ⇒ The highlights in the open editor take the new color at once.
+```sh linux
+xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/path/to/nvim
+```
+
+```sh macos
+./mvnw verify -Pgallery -Dnvim.path=/path/to/nvim
+```
+
+```powershell windows
+.\mvnw.cmd verify -Pgallery -Dnvim.path=C:\path\to\nvim.exe
+```
+
+1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
+   browser.
+   ⇒ Each of the four pictures is there in the light and the dark theme, side by side.
+2. Look at each pair against the text above it.
+   ⇒ In both themes every match stands out from the editor's background, its text (syntax colors
+   included, in the Java editor) stays readable, and the match under the caret is told apart from
+   the others without hiding its text.
 
 **Expect:** each step's result, after its ⇒.
 
