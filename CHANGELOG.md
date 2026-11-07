@@ -18,6 +18,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   site into a copy of an Eclipse, trusting only the project's signing key and no unsigned file, as
   a careful user does in Eclipse's trust dialog. The release steps offer it after each release.
 
+### Fixed
+
+- The Error Log no longer warns that Ctrl-V "resolves to 'org.eclipse.ui.edit.paste'" when that is
+  right: when an editor takes focus in insert mode on Linux or Windows (where Ctrl-V stays Eclipse's
+  paste by default), or when it loses focus again at once.
+
 ## [0.2.4] - 2026-11-06
 
 ### Changed

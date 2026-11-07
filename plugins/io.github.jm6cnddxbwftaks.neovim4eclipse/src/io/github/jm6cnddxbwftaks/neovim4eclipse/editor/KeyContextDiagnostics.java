@@ -8,6 +8,7 @@ import java.util.logging.Logger;
 
 import org.eclipse.jface.util.Util;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CtrlVResolution;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -23,24 +24,31 @@ final class KeyContextDiagnostics {
     }
 
     /**
-     * Logs which command the workbench would run for {@code sequence} right now (with the current
-     * active contexts): INFO if it is our command, WARNING if some other command wins or none is
-     * bound. Must run on the UI thread, after the Neovim context was activated.
+     * Logs which command the workbench would run for the platform's Vim Ctrl-V ({@code M1+V}, or
+     * {@code M4+V} on macOS) right now: FINE when that is what it should run, WARNING only when
+     * Ctrl-V should reach Neovim and does not. {@link CtrlVResolution} decides; it keeps quiet about
+     * a context that was turned off again before this ran, and about Ctrl-V staying Eclipse's paste
+     * where the preferences give it to Eclipse (insert mode on Linux and Windows, by default). UI
+     * thread.
      *
-     * @param sequence unused placeholder kept for call-site readability; the platform's Vim-Ctrl-V
-     *                 sequence is checked ({@code M1+V}, or {@code M4+V} on macOS)
+     * @param contextActive     whether the Neovim key context is still active
+     * @param shouldReachNeovim whether Ctrl-V goes to Neovim in Neovim's current mode
      */
-    static void logResolution(String sequence) {
+    static void logResolution(boolean contextActive, boolean shouldReachNeovim) {
         String text = Util.isMac() ? "M4+V" : "M1+V";
         try {
             String commandId = KeyBindings.commandIdFor(text);
-            if (VimCtrlKeys.isCtrlKeyCommand(commandId)) {
-                LOG.fine("Ctrl-V (" + text + ") resolves to the Neovim Ctrl-key command "
+            switch (CtrlVResolution.of(contextActive, shouldReachNeovim, VimCtrlKeys.isCtrlKeyCommand(commandId))) {
+                case NOT_ACTIVE -> {
+                    // Focus moved on before this ran: Eclipse's own binding is right again.
+                }
+                case NEOVIM -> LOG.fine("Ctrl-V (" + text + ") resolves to the Neovim Ctrl-key command "
                         + "(context is active and the binding wins)");
-            } else {
-                LOG.warning("Ctrl-V (" + text + ") resolves to '" + commandId + "', not to a Neovim Ctrl-key command: "
-                        + "either the Neovim key context is not active in the workbench, or another binding "
-                        + "outranks it. Vim Ctrl keys will not work until this is resolved.");
+                case EXPECTED_ECLIPSE -> LOG.fine("Ctrl-V (" + text + ") resolves to '" + commandId
+                        + "', as chosen: Ctrl-V goes to Eclipse in this mode (Ctrl Keys preferences)");
+                case WRONG -> LOG.warning("Ctrl-V (" + text + ") resolves to '" + commandId
+                        + "', not to a Neovim Ctrl-key command: either the Neovim key context is not active in the "
+                        + "workbench, or another binding outranks it. Vim Ctrl keys will not work until this is resolved.");
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Key binding check for " + text + " failed", e);
