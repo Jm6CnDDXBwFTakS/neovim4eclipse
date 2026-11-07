@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -118,7 +119,14 @@ class SearchHighlighterTest {
                 "b on line 1, é on line 2 (the line break has no box)");
     }
 
-    /** The box is drawn over the match: a pixel of its top edge has the box color. */
+    /**
+     * The box is drawn over the match: a pixel of its top edge has the box color, give or take
+     * {@link #EDGE_TOLERANCE} per channel, and clearly not the blank image's color.
+     *
+     * <p>Why not the exact color: on macOS the edge pixel can come out a few steps off (98,97,120 for
+     * 103,102,124 on an external display), as Cocoa blends a one-pixel line's edge or applies the
+     * display's color profile. A missing box leaves the blank color, far from the box color.
+     */
     @Test
     void theBoxIsPainted() {
         widget.setCaretOffset(2);
@@ -133,10 +141,22 @@ class SearchHighlighterTest {
                 gc.dispose();
             }
             org.eclipse.swt.graphics.ImageData data = image.getImageData();
-            assertEquals(BOX.getRGB(), data.palette.getRGB(data.getPixel(box.x + box.width / 2, box.y)));
+            org.eclipse.swt.graphics.RGB edge = data.palette.getRGB(data.getPixel(box.x + box.width / 2, box.y));
+            org.eclipse.swt.graphics.RGB blank = data.palette.getRGB(data.getPixel(399, 199)); // a corner nothing paints
+            assertTrue(near(BOX.getRGB(), edge, EDGE_TOLERANCE), "the box color " + BOX.getRGB() + " on its edge, was " + edge);
+            assertFalse(near(blank, edge, EDGE_TOLERANCE), "the edge " + edge + " is still the blank color " + blank);
         } finally {
             image.dispose();
         }
+    }
+
+    /** How far a painted pixel may stray from its color, per channel (see {@link #theBoxIsPainted}). */
+    private static final int EDGE_TOLERANCE = 12;
+
+    /** Whether every channel of {@code a} and {@code b} differs by at most {@code tolerance}. */
+    private static boolean near(org.eclipse.swt.graphics.RGB a, org.eclipse.swt.graphics.RGB b, int tolerance) {
+        return Math.abs(a.red - b.red) <= tolerance && Math.abs(a.green - b.green) <= tolerance
+                && Math.abs(a.blue - b.blue) <= tolerance;
     }
 
     @Test
