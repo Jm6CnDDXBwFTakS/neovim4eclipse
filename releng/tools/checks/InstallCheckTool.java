@@ -96,8 +96,13 @@ public final class InstallCheckTool {
     private InstallCheckTool() {
     }
 
-    /** What the command line asked for. */
-    record Options(Optional<Version> version, Path root, String eclipse, Ask.Mode mode, boolean launch) {
+    /**
+     * What the command line asked for. {@code named} keeps the {@code --eclipse} and {@code --root}
+     * arguments as given, so a command the tool prints to run it again ({@link #startCommand}) finds
+     * the same Eclipse and folder.
+     */
+    record Options(Optional<Version> version, Path root, String eclipse, Ask.Mode mode, boolean launch,
+            List<String> named) {
 
         static Options parse(String[] args) {
             Optional<Version> version = Optional.empty();
@@ -105,10 +110,17 @@ public final class InstallCheckTool {
             String eclipse = System.getenv("ECLIPSE");
             Ask.Mode mode = Ask.Mode.ASK;
             boolean launch = true;
+            List<String> named = new ArrayList<>();
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
-                    case "--root" -> root = Path.of(value(args, ++i));
-                    case "--eclipse" -> eclipse = value(args, ++i);
+                    case "--root" -> {
+                        root = Path.of(value(args, ++i));
+                        named.addAll(List.of("--root", args[i]));
+                    }
+                    case "--eclipse" -> {
+                        eclipse = value(args, ++i);
+                        named.addAll(List.of("--eclipse", args[i]));
+                    }
                     case "--yes" -> mode = Ask.Mode.YES;
                     case "--no-launch" -> launch = false;
                     case "-h", "--help" -> throw new ToolFailure(usage());
@@ -120,7 +132,41 @@ public final class InstallCheckTool {
                     }
                 }
             }
-            return new Options(version, root.toAbsolutePath(), eclipse, mode, launch);
+            return new Options(version, root.toAbsolutePath(), eclipse, mode, launch, List.copyOf(named));
+        }
+
+        /**
+         * The command that installs {@code v} again and starts the copy without asking, with this
+         * run's {@code --eclipse} and {@code --root}: without them a machine whose Eclipse is not
+         * on PATH would stop at once. Example:
+         * {@code java releng/tools/checks/InstallCheck.java 0.2.5 --eclipse /opt/eclipse/current/eclipse --yes}.
+         * An argument with a space or a shell character is quoted for the shell it is pasted into
+         * ({@link #shellWord}).
+         */
+        String startCommand(Version v) {
+            return startCommand(v, System.getProperty("os.name").startsWith("Windows"));
+        }
+
+        /** {@link #startCommand(Version)} for Windows' shells or for a POSIX shell. */
+        String startCommand(Version v, boolean windows) {
+            StringBuilder command = new StringBuilder("java ").append(TOOL).append(' ').append(v);
+            for (String arg : named) {
+                command.append(' ').append(shellWord(arg, windows));
+            }
+            return command.append(" --yes").toString();
+        }
+
+        /**
+         * {@code arg} as one word of a pasted command. Plain words stay as they are. A POSIX shell
+         * gets single quotes, inside which nothing expands ({@code '} itself becomes {@code '\''}):
+         * {@code /tmp/a$b c} gives {@code '/tmp/a$b c'}. Windows gets double quotes (cmd and
+         * PowerShell), which a Windows path cannot contain.
+         */
+        static String shellWord(String arg, boolean windows) {
+            if (arg.matches("[A-Za-z0-9_./:=@+,-]+")) {
+                return arg;
+            }
+            return windows ? '"' + arg + '"' : "'" + arg.replace("'", "'\\''") + "'";
         }
 
         private static String value(String[] args, int i) {
@@ -239,7 +285,7 @@ public final class InstallCheckTool {
         record(repo, v);
 
         if (options.launch() && new Ask(options.mode(), "").offer("Start this Eclipse for a look (a new workspace and an empty"
-                + " Neovim folder: Get Neovim opens at its first start)", "java " + TOOL + " " + v + " --yes")) {
+                + " Neovim folder: Get Neovim opens at its first start)", options.startCommand(v))) {
             start(program, root, workspace);
         }
     }
