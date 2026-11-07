@@ -73,6 +73,30 @@ class SearchHighlightingEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Typing in insert mode (Eclipse types, Neovim gets the text at Esc) moves the highlights with
+     * the text, and Neovim's older columns are not painted meanwhile; after Esc they are Neovim's
+     * again, in the same place.
+     */
+    @Test
+    void theHighlightsFollowTypingInInsertMode() {
+        session.inputAsync("/beta<CR>"); // offset 6
+        settle();
+        waitForBackground(6, true);
+        session.inputAsync("ggI");
+        settle();
+        waitUntil("insert mode", TIMEOUT_MS, () -> "i".equals(session.getMode()));
+        typeSlowly("xx"); // alpha becomes xxalpha: beta at 8
+        waitForBackground(8, true);
+        waitForBackground(7, false);
+        UiTestSupport.escape(widget);
+        settle();
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        expectText("xxalpha\nbeta\ngamma\n");
+        waitForBackground(8, true);
+        waitForBackground(7, false);
+    }
+
+    /**
      * Each editor attached gets the matches of its own window, whether attaching it switched Neovim's
      * window (back from another editor) or not (Detach, then Attach, on the same editor).
      */
@@ -83,26 +107,29 @@ class SearchHighlightingEndToEndTest extends EndToEndTestBase {
         waitForBackground(6, true);
         IFile other = createFile("other.txt", "beta gamma\n");
         ITextEditor second = (ITextEditor) IDE.openEditor(page(), other, TEXT_EDITOR, true);
-        waitForAttach(second, "other.txt");
-        settle();
-        StyledText secondWidget = widgetOf(second);
-        waitUntil("the second editor's match", TIMEOUT_MS, () -> secondWidget.getStyleRangeAtOffset(0) != null
-                && secondWidget.getStyleRangeAtOffset(0).background != null);
+        try {
+            waitForAttach(second, "other.txt");
+            settle();
+            StyledText secondWidget = widgetOf(second);
+            waitUntil("the second editor's match", TIMEOUT_MS, () -> secondWidget.getStyleRangeAtOffset(0) != null
+                    && secondWidget.getStyleRangeAtOffset(0).background != null);
 
-        page().activate(editor); // back: Neovim's window switches
-        waitForAttach(editor, "test.txt");
-        settle();
-        waitForBackground(6, true);
+            page().activate(editor); // back: Neovim's window switches
+            waitForAttach(editor, "test.txt");
+            settle();
+            waitForBackground(6, true);
 
-        // As Detach and Attach do, without their notes (an information dialog would wait for a click).
-        EditorAttachManager.getInstance().detach();
-        settle();
-        waitForBackground(6, false);
-        EditorAttachManager.getInstance().attach(editor, true); // the same window: no switch in Neovim
-        waitForAttach(editor, "test.txt again");
-        settle();
-        waitForBackground(6, true);
-        page().closeEditor(second, false);
+            // As Detach and Attach do, without their notes (an information dialog would wait for a click).
+            EditorAttachManager.getInstance().detach();
+            settle();
+            waitForBackground(6, false);
+            EditorAttachManager.getInstance().attach(editor, true); // the same window: no switch in Neovim
+            waitForAttach(editor, "test.txt again");
+            settle();
+            waitForBackground(6, true);
+        } finally {
+            page().closeEditor(second, false); // a failed wait must not leave it open for the next test
+        }
     }
 
     /** Eclipse mode clears them; back in Neovim mode they are asked for again, and painted. */

@@ -371,6 +371,13 @@ public final class NeovimEditorController implements AutoCloseable {
         if (closed || !neovimModeActive || matches.bufnr() != buffer.bufnr()) {
             return;
         }
+        if (eclipseTyping() || session.isLeavingInsertMode()) {
+            // Neovim's lines are behind the document until Esc (Eclipse types), so its columns are
+            // of older text: painted, they would land on the wrong characters. The highlighter
+            // keeps its own matches in step with the typing meanwhile, and at Esc the matches are
+            // asked for again (onModeChanged).
+            return;
+        }
         SwtUiExecutor.INSTANCE.asyncExec(() -> {
             if (!closed && neovimModeActive && !styledText.isDisposed()) {
                 searchHighlighter.show(matches.matches());
@@ -947,6 +954,11 @@ public final class NeovimEditorController implements AutoCloseable {
                     }
                 }
             });
+            if (!typing && searchHighlighter != null) {
+                // The insert ended: Neovim has Eclipse's typing now (queued after the push at Esc),
+                // and the matches skipped meanwhile (onSearchMatches) are asked for.
+                session.resendSearchAsync(buffer);
+            }
         }
         if (!typing) {
             insertTracker.reset(); // an insert ended (or never started): drop any stale snapshot

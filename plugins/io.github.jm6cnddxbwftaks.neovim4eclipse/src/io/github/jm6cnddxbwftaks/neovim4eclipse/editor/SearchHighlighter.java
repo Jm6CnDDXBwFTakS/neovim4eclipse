@@ -111,8 +111,11 @@ final class SearchHighlighter implements ITextPresentationListener {
     private int[] viewReported;
     private Color matchColor;
     private Color boxColor;
-    /** The matches as document regions, in Neovim's order; empty when nothing is highlighted. */
-    private List<IRegion> regions = List.of();
+    /**
+     * The matches as document regions, in Neovim's order; empty when nothing is highlighted. Volatile:
+     * a document change on another thread replaces it (onDocumentChanged).
+     */
+    private volatile List<IRegion> regions = List.of();
     /** The index in {@link #regions} of the match under the caret, or -1. */
     private int current = -1;
 
@@ -308,8 +311,11 @@ final class SearchHighlighter implements ITextPresentationListener {
         }
     }
 
-    /** The caret moved ({@code n}, a click): the match under it is now the current one. */
+    /** The caret moved ({@code n}, a click), or the text did: the match under it is now the current one. */
     private void onCaretMoved() {
+        if (widget.isDisposed()) {
+            return;
+        }
         int next = indexAt(regions, caretOffset());
         if (next != current) {
             redrawBoxes(); // the old box goes
@@ -352,6 +358,7 @@ final class SearchHighlighter implements ITextPresentationListener {
      * after this, with the matches where the text now is.
      */
     void onDocumentChanged(int offset, int removed, int inserted) {
+        List<IRegion> regions = this.regions;
         if (regions.isEmpty()) {
             return;
         }
@@ -367,8 +374,14 @@ final class SearchHighlighter implements ITextPresentationListener {
             }
             // else: the change touches the match, which is dropped
         }
-        regions = List.copyOf(moved);
-        current = indexAt(regions, caretOffset());
+        this.regions = List.copyOf(moved);
+        // The current match: once the widget has the change, and on its thread. The listener runs
+        // before the widget applies the change (the caret is still the old one) and on the thread
+        // that changed the document, which may not be the UI thread (a Job): it must not read the
+        // widget itself.
+        if (!widget.isDisposed()) {
+            widget.getDisplay().asyncExec(this::onCaretMoved);
+        }
     }
 
     /** Reports the lines the editor shows, if they changed since the last report. */
