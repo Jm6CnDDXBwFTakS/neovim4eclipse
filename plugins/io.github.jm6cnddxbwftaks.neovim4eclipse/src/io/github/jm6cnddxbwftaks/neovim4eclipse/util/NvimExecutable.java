@@ -38,9 +38,8 @@ import java.util.function.Predicate;
  * <h2>Why nothing is searched</h2>
  * Until 0.2.1 a blank value also searched {@code PATH} and the usual install folders, and a
  * folder was searched up to four levels down, running {@code nvim --version} on every
- * {@code bin/nvim} it found there. The 0.2.1 security review found that this ran programs the user
- * never named: choosing {@code ~/src} by mistake would run a {@code bin/nvim} planted in a cloned
- * repository below it. Now the plug-in runs only a Neovim it installed and checked, or the one
+ * {@code bin/nvim} it found there. That ran programs the user never named: choosing
+ * {@code ~/src} by mistake would run a {@code bin/nvim} planted in a cloned repository below it. Now the plug-in runs only a Neovim it installed and checked, or the one
  * program the user named; and searching {@code PATH} had its own trouble anyway (Eclipse started
  * from the macOS Dock or a desktop menu gets a minimal {@code PATH}, so a Homebrew Neovim was found
  * or not depending on how Eclipse started).

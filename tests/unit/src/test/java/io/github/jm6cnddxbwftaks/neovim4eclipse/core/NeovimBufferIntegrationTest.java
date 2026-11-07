@@ -534,9 +534,8 @@ class NeovimBufferIntegrationTest {
 
     /**
      * A document's lines, its problems and a quickfix list go to Neovim as one list each, however
-     * long (file-by-file security review of 0.2.1). Sent as one argument each, Lua's stack
-     * overflowed from about 33,000 lines (the load failed, the editor showed an empty buffer), and
-     * the embedded Neovim exited from about 65,500: a cloned repository's file of 70,000 lines, or a
+     * long. Sent as one argument each, Lua's stack overflowed from about 33,000 lines (the load
+     * failed, the editor showed an empty buffer), and the embedded Neovim exited from about 65,500: a cloned repository's file of 70,000 lines, or a
      * workspace with about 9,400 problems in :Eproblems, ended the Neovim every editor shares.
      */
     @Test

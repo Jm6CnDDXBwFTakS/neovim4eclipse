@@ -206,8 +206,7 @@ public class Activator extends AbstractUIPlugin {
             // file changed since the last check is caught. That includes the first start: the
             // check EarlyStartup made at Eclipse's start may be hours old, and its kept answer
             // (PluginNeovim.verified) notices a change only through four modification times,
-            // which editing a runtime file in place does not touch (file-by-file security review
-            // of 0.2.1). EarlyStartup's check still decides whether Get Neovim opens at once.
+            // which editing a runtime file in place does not touch. EarlyStartup's check still decides whether Get Neovim opens at once.
             PluginNeovim.forget();
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
