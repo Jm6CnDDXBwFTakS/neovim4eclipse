@@ -199,11 +199,11 @@ public final class NeovimEditorController implements AutoCloseable {
         ITextViewer textViewer = viewerOf(editor);
         if (session.searchEnabled() && textViewer != null && SearchHighlighter.supports(textViewer)) {
             SearchHighlighter[] made = new SearchHighlighter[1];
-            this.searchColors = new SearchColors(styledText, (match, current) -> {
+            this.searchColors = new SearchColors(styledText, (match, box) -> {
                 if (made[0] == null) {
-                    made[0] = new SearchHighlighter(textViewer, match, current);
+                    made[0] = new SearchHighlighter(textViewer, match, box);
                 } else {
-                    made[0].setColors(match, current);
+                    made[0].setColors(match, box);
                 }
             });
             this.searchHighlighter = made[0];

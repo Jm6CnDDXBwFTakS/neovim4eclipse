@@ -5,7 +5,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.graphics.Color;
@@ -14,7 +13,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Search highlighting in a real editor (docs/design/SEARCH_HIGHLIGHTING.md): a search typed in
- * Neovim paints its matches behind the editor's text, the one under the caret a shade stronger;
+ * Neovim paints its matches behind the editor's text, all in one color (the box around the one
+ * under the caret is {@code SearchHighlighterTest}'s);
  * {@code :noh} and Eclipse mode take them away. The document is the base class's
  * {@code alpha\nbeta\ngamma\n}, where {@code a} is at offsets 0, 4, 9, 12 and 15. The painting
  * itself is {@code SearchHighlighterTest}; the matches Neovim finds are {@code search_spec.lua}.
@@ -52,15 +52,14 @@ class SearchHighlightingEndToEndTest extends EndToEndTestBase {
             waitForBackground(offset, true);
         }
         waitForBackground(1, false);
-        assertEquals(backgroundAt(9), backgroundAt(12), "two matches, one color");
-        waitUntil("the match under the caret", TIMEOUT_MS, () -> widget.getCaretOffset() == 4);
-        assertNotEquals(backgroundAt(9), backgroundAt(4), "the current match is stronger");
+        waitUntil("the caret on the match after the first", TIMEOUT_MS, () -> widget.getCaretOffset() == 4);
+        assertEquals(backgroundAt(9), backgroundAt(12), "the matches share one color");
+        assertEquals(backgroundAt(9), backgroundAt(4), "the one under the caret too: its box marks it");
 
-        session.inputAsync("n"); // to offset 9: the current match moves with the caret
+        session.inputAsync("n"); // to offset 9: the matches stay as they are
         settle();
         waitUntil("the caret on the next match", TIMEOUT_MS, () -> widget.getCaretOffset() == 9);
-        waitUntil("the current match on offset 9", TIMEOUT_MS, () -> backgroundAt(9).equals(backgroundAt(4)) == false
-                && backgroundAt(4).equals(backgroundAt(12)));
+        waitForBackground(4, true);
 
         session.inputAsync(":nohlsearch<CR>");
         settle();

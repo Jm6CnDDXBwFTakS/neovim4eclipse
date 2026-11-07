@@ -58,15 +58,16 @@ class SearchGalleryTest extends EndToEndTestBase {
     static final List<Picture> PICTURES = List.of(
             new Picture("text", "After /fox in a text file",
                     "Every fox has a background behind it, FOX in capitals too ('smartcase', a lower-case search); "
-                            + "the text stays readable on it. The first fox, under the caret, is a shade stronger."),
+                            + "the text stays readable on it. The first fox, under the caret, has a box around it."),
             new Picture("typing", "While /fo is typed",
-                    "Every fo is highlighted as it is typed ('incsearch'), the one the cursor jumped to stronger."),
+                    "Every fo is highlighted as it is typed ('incsearch'); the one the cursor jumped to has the box."),
             new Picture("java", "After /fox in the Java editor",
-                    "The comment, the class name, the string and the variables keep their syntax "
-                            + "colors on the background; the match under the caret is stronger."),
+                    "The comment, the class name, the string and the variables keep their syntax colors on the "
+                            + "background, and stay readable; the match under the caret, in the comment, has a box "
+                            + "and its text reads as well as the others."),
             new Picture("color", "With another Search Results color",
                     "The matches take the color set in Preferences > Editors > Text Editors > Annotations > "
-                            + "Search Results (an amber here), the current one a shade stronger."));
+                            + "Search Results (an amber here); the box follows it."));
 
     private static final String TEXT = """
             The quick brown fox jumps over the lazy dog.

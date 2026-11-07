@@ -60,21 +60,22 @@ public final class OverlayColors {
         return isDark(editorBackground) ? 0xF14C4C : 0xCD3131;
     }
 
-    /** Share of the editor foreground mixed into a search match's color for the match under the caret. */
-    public static final double CURRENT_SEARCH_STRENGTH = 0.25;
+    /** Share of the editor foreground mixed into a search match's color for the box around the current match. */
+    public static final double SEARCH_BOX_STRENGTH = 0.5;
 
     /**
-     * The background of the search match under the caret (Neovim's {@code CurSearch}): the match
-     * color moved part way toward the text color, so it stands out from the other matches in either
-     * theme: darker on a light background, lighter on a dark one.
+     * The color of the box around the search match under the caret (Neovim's {@code CurSearch}):
+     * the match color moved halfway toward the text color, so the box shows on the match's
+     * background in either theme: darker in a light theme, lighter in a dark one. A box, not a
+     * background: it does not sit under the text, so it can be this strong.
      *
      * <pre>
-     *   currentSearch(0xCECCF7, 0x000000) = 0x9B99B9   (light theme: Eclipse's Search Results color, darker)
-     *   currentSearch(0x3E3E6E, 0xD4D4D4) = 0x646488   (dark theme: lighter)
+     *   searchBox(0xCECCF7, 0x000000) = 0x67667C   (light theme: Eclipse's Search Results color, darker)
+     *   searchBox(0x3E3E6E, 0xD4D4D4) = 0x8989A1   (dark theme: lighter)
      * </pre>
      */
-    public static int currentSearch(int matchColor, int editorForeground) {
-        return blend(matchColor, editorForeground, CURRENT_SEARCH_STRENGTH);
+    public static int searchBox(int matchColor, int editorForeground) {
+        return blend(matchColor, editorForeground, SEARCH_BOX_STRENGTH);
     }
 
     /** Whether a color is dark: its perceived brightness (ITU-R BT.601 weights) is below half. */
