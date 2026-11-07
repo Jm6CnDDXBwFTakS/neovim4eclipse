@@ -100,6 +100,39 @@ class CursorStyleControllerTest {
         assertEquals(3, replaced.getSize().x);
     }
 
+    /**
+     * A widget without a caret: the controller makes one for Neovim's block. Dispose leaves that
+     * one (a StyledText without a caret shows none) but thin, as Eclipse's caret is, not the block.
+     */
+    @Test
+    void disposeMakesTheCaretItCreatedThinAgain() {
+        text.setCaret(null);
+        CursorStyleController style = new CursorStyleController(text);
+        Caret own = text.getCaret();
+        assertTrue(own != null && own.getSize().x > eclipsesWidth, "a block made by the controller");
+
+        style.dispose();
+        assertSame(own, text.getCaret(), "still a caret to see");
+        assertFalse(own.isDisposed());
+        assertEquals(eclipsesWidth, own.getSize().x, "as thin as StyledText's own caret");
+        assertEquals(CursorStyleController.ECLIPSE_THIN_WIDTH, own.getSize().x);
+    }
+
+    /** Eclipse's caret disposed while Neovim had the editor: the controller's own is thin again too. */
+    @Test
+    void disposeMakesItsCaretEclipsesWidthWhenEclipsesIsGone() {
+        CursorStyleController style = new CursorStyleController(text);
+        text.setCaret(null);
+        eclipses.dispose();
+        style.updateForMode("n"); // makes a caret of its own
+        Caret own = text.getCaret();
+        assertTrue(own.getSize().x > eclipsesWidth);
+
+        style.dispose();
+        assertSame(own, text.getCaret());
+        assertEquals(eclipsesWidth, own.getSize().x, "the width Eclipse's caret had");
+    }
+
     @Test
     void disposeFromAnotherThreadGivesItBackOnTheUiThread() throws InterruptedException {
         CursorStyleController style = new CursorStyleController(text);

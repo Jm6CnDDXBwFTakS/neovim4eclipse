@@ -79,11 +79,25 @@ public final class CursorStyleController {
     }
 
     /**
+     * The width of a caret Eclipse never measured for us: 1 pixel, the width of StyledText's own
+     * default caret and of {@code AbstractTextEditor}'s insert caret ({@code SINGLE_CARET_WIDTH},
+     * without the "wide caret" preference). For the caret this controller made when the widget had
+     * none (see {@link #restoreOriginalCaret}).
+     */
+    static final int ECLIPSE_THIN_WIDTH = 1;
+
+    /**
      * Gives Eclipse's caret back its width, if the widget still shows a caret this controller
      * changed. UI thread. Three cases:
      * <ul>
      *   <li>The widget shows {@link #eclipseCaret}: back to {@link #eclipseWidth}.</li>
-     *   <li>It shows {@link #ownCaret}: Eclipse's caret goes back in its place, and this one goes.</li>
+     *   <li>It shows {@link #ownCaret}: Eclipse's caret goes back in its place, and this one goes.
+     *       When there is none to give back (the widget had no caret, or Eclipse's was disposed),
+     *       this one stays, as the editor's caret, but thin, as Eclipse's are: Eclipse's width when
+     *       one was seen, else {@link #ECLIPSE_THIN_WIDTH}. Removing it is no option: a
+     *       {@code StyledText} without a caret shows none, so the user could not see where Eclipse
+     *       types. Example: Detach Neovim on such an editor; it used to keep the block of normal
+     *       mode.</li>
      *   <li>It shows another caret: Eclipse set it after the last change (Insert toggled overwrite
      *       mode, say), so it already has Eclipse's shape, and it stays. Putting the earlier caret
      *       back would give the editor a caret of the wrong mode, and disposing the current one
@@ -91,7 +105,7 @@ public final class CursorStyleController {
      * </ul>
      */
     private void restoreOriginalCaret() {
-        if (eclipseWidth < 0 || isWidgetDisposed()) {
+        if (isWidgetDisposed()) {
             return;
         }
         Caret caret = styledText.getCaret();
@@ -100,13 +114,15 @@ public final class CursorStyleController {
         }
         if (caret == ownCaret) {
             if (eclipseCaret == null || eclipseCaret.isDisposed()) {
-                return; // no caret of Eclipse's left to give back; this one keeps the editor's caret
+                // No caret of Eclipse's left to give back: this one stays the editor's caret.
+                caret.setSize(eclipseWidth >= 0 ? eclipseWidth : ECLIPSE_THIN_WIDTH, styledText.getLineHeight());
+                return;
             }
             styledText.setCaret(eclipseCaret);
             caret.dispose();
             ownCaret = null;
             caret = eclipseCaret;
-        } else if (caret != eclipseCaret) {
+        } else if (caret != eclipseCaret || eclipseWidth < 0) {
             return; // Eclipse's own, set since the last change
         }
         caret.setSize(eclipseWidth, styledText.getLineHeight());
