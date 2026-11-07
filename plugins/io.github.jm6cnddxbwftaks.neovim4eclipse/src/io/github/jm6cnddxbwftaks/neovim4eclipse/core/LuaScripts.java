@@ -3806,7 +3806,9 @@ final class LuaScripts {
      * </ul>
      *
      * <p>Clicking past the end of a line points at the cell after its last character, as a click
-     * there does in Neovim. Without the mouse ({@code 'mouse'} lacks {@code n} or {@code v}, or
+     * there does in Neovim: after all of its cells ({@code screenpos()}'s {@code endcol}), so a line
+     * that ends in a Tab or a wide character such as {@code 中} still gets the cursor after it in
+     * insert mode, and a visual drag there takes it in. Without the mouse ({@code 'mouse'} lacks {@code n} or {@code v}, or
      * {@code a}) a press only moves the cursor, as the plug-in did before it forwarded the mouse.
      *
      * <p>Example: {@code ("left", "press", "", 250, 5)} with Neovim showing lines 1 to 38 scrolls
@@ -3832,7 +3834,15 @@ final class LuaScripts {
               if pos.row == 0 then
                 return nil
               end
-              return pos.row - 1, pos.col - 1 + (past and 1 or 0)
+              if not past then
+                return pos.row - 1, pos.col - 1
+              end
+              -- The cell after the last character: endcol is its last cell (1-based), so endcol is
+              -- the next one 0-based. A Tab or a wide character takes more than one cell; for
+              -- "ab<Tab>" the Tab is cells 2..7, and cell 3 would put the cursor before the Tab.
+              -- Kept inside the window: a line that fills it would point at the window beside.
+              local win = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+              return pos.row - 1, math.min(pos.endcol, win.wincol - 1 + win.width - 1)
             end
             local row, scol = cell(lnum, col)
             if not row then
