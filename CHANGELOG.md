@@ -37,11 +37,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   moment.
 - `:w` to a name the file system cannot hold (`:w a<b.txt` on Windows) gives Vim's E212 for that
   name, instead of saying Eclipse could not save the editor's own file and logging an error.
-- A carriage return Neovim keeps inside a line (Ctrl-V Ctrl-M, `:s` with `nr2char(13)`) no longer
-  makes Eclipse's lines and Neovim's differ, which could delete or save the wrong lines. Eclipse
-  takes it as a line break, and Neovim gets the split lines back.
+- A carriage return Neovim keeps inside a line (Ctrl-V Ctrl-M, Ctrl-R Ctrl-R of a register that
+  holds one, `:s` with `nr2char(13)`) no longer makes Eclipse's lines and Neovim's differ, which
+  could delete, duplicate or save the wrong lines, also in an insert recorded as a macro. Eclipse
+  takes it as a line break, and Neovim splits its line there too.
 - Keys typed right after Esc (a fast `ihello<Esc>:w<CR>`) go to Neovim instead of landing in the
-  document.
+  document, and typing `<Esc>i…` or `i…` very fast no longer lets a key Eclipse types be
+  overwritten by Neovim's.
 - Renaming or moving an open file (Refactor › Rename, the Project Explorer), or File › Save As, no
   longer cuts Neovim off from the editor, and keeps its Neovim buffer: undo history and marks
   survive, in multi-page editors too. An editor Eclipse reuses for another file gets a buffer of
@@ -54,7 +56,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A Neovim whose `--version` prints another line first (a loader warning, a failed `LD_PRELOAD`)
   is no longer refused as not running.
 - A broken message from Neovim ends the connection cleanly, with a message, instead of leaving
-  every later request to time out.
+  every later request to time out; a handler that fails at every redraw no longer floods the Error
+  Log.
 - Security: `:e` and `gf` no longer open a file in a non-text editor (the Web Browser) when a
   project's own content-type settings map its name to an image type.
 - Security: a symbolic link to a file that does not exist is no longer written through by `:w`,
