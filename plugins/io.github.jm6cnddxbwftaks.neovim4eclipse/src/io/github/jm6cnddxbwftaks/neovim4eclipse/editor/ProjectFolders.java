@@ -4,10 +4,15 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -71,6 +76,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
  * </ul>
  * The cost: Neovim learns of a change some milliseconds later, so a {@code gf} in the same moment
  * as an import may still be read by Neovim itself.
+ *
+ * <h2>Only the changed projects are walked again</h2>
+ * Each project's walk is kept ({@link #WALKED}). The first attach of a Neovim walks every project
+ * (the workspace may have changed while no Neovim ran); after that a workspace change marks only
+ * the projects it touches ({@link #STALE}), and the next run walks those and reuses the others.
+ * Example: a workspace of 200 projects, one of them closed and opened again: one walk, not 200.
+ * A project whose location differs from its kept walk's is walked again too, marked or not.
  */
 public final class ProjectFolders implements IResourceChangeListener {
 
@@ -85,6 +97,22 @@ public final class ProjectFolders implements IResourceChangeListener {
      * Written by {@link #current} in {@link #SENDER}, read by the listener.
      */
     private static volatile Set<IPath> linkedFolders = Set.of();
+
+    /**
+     * One open project's folders, as its last walk found them: its location, and its linked folders'
+     * targets and workspace paths, each in the walk's order.
+     */
+    private record Walked(String location, List<String> targets, Set<IPath> linked) {
+    }
+
+    /** The last walk of each open project, by name. Only {@link #current} touches it (synchronized). */
+    private static final Map<String, Walked> WALKED = new HashMap<>();
+    /** Projects, by name, that a workspace change touched since their last walk. Any thread. */
+    private static final Set<String> STALE = ConcurrentHashMap.newKeySet();
+    /** Every project must be walked again: set at each first attach ({@link #sendTo}). Any thread. */
+    private static final AtomicBoolean ALL_STALE = new AtomicBoolean(true);
+    /** How many projects have been walked, for tests that check an untouched one is not walked again. */
+    private static final AtomicInteger WALKS = new AtomicInteger();
     /**
      * The folders the last walk sent, as Eclipse records them: each open project's location and each
      * linked folder's target, spelled as the user gave it. Written by {@link #current}, read by
@@ -125,8 +153,12 @@ public final class ProjectFolders implements IResourceChangeListener {
         SENDER.cancel(); // a run already started finishes; its session check makes it harmless
     }
 
-    /** Sends the folders to {@code neovim} in the background (see the class comment). Any thread. */
+    /**
+     * Sends the folders to {@code neovim} in the background (see the class comment), after a walk of
+     * every project: a new Neovim may follow changes that no Neovim was there for. Any thread.
+     */
     static void sendTo(NeovimSession neovim) {
+        ALL_STALE.set(true);
         SENDER.sendTo(neovim);
     }
 
@@ -168,9 +200,22 @@ public final class ProjectFolders implements IResourceChangeListener {
         }
     }
 
-    /** The folders now (see the class comment), in the workspace's order, each once. */
-    static List<String> current() {
+    /**
+     * The folders now (see the class comment), in the workspace's order, each once. Walks the
+     * projects marked {@link #STALE} (all of them after {@link #sendTo}) and reuses the other
+     * projects' last walks. Synchronized: the job and a test may both call it.
+     */
+    static synchronized List<String> current() {
         IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
+        // Taken before the walk: a change made during it marks again and runs the job once more.
+        boolean all = ALL_STALE.getAndSet(false);
+        Set<String> stale = new HashSet<>();
+        for (String name : STALE) {
+            if (STALE.remove(name)) {
+                stale.add(name);
+            }
+        }
+        Map<String, Walked> now = new HashMap<>();
         Set<String> folders = new LinkedHashSet<>();
         Set<IPath> linked = new HashSet<>();
         for (IProject project : root.getProjects()) {
@@ -178,26 +223,55 @@ public final class ProjectFolders implements IResourceChangeListener {
             if (location == null) {
                 continue;
             }
-            folders.add(location.toOSString());
-            try {
-                project.accept(proxy -> {
-                    if (proxy.isLinked() && proxy.getType() == IResource.FOLDER) {
-                        IResource folder = proxy.requestResource();
-                        IPath target = folder.getLocation(); // null for a link to a missing variable
-                        if (target != null) {
-                            folders.add(target.toOSString());
-                            linked.add(folder.getFullPath());
-                        }
-                    }
-                    return proxy.getType() != IResource.FILE;
-                }, IResource.NONE);
-            } catch (CoreException e) {
-                LOG.log(Level.FINE, "Could not look for linked folders in " + project.getName(), e);
+            String name = project.getName();
+            Walked walked = all || stale.contains(name) ? null : WALKED.get(name);
+            if (walked == null || !walked.location().equals(location.toOSString())) {
+                walked = walk(project, location);
             }
+            now.put(name, walked);
+            folders.add(walked.location());
+            folders.addAll(walked.targets());
+            linked.addAll(walked.linked());
         }
+        WALKED.clear(); // closed, deleted and renamed projects go
+        WALKED.putAll(now);
         linkedFolders = Set.copyOf(linked);
         lastFolders = List.copyOf(folders);
         return new ArrayList<>(folders);
+    }
+
+    /** Walks one open project for its linked folders (Eclipse's in-memory tree, no disk access). */
+    private static Walked walk(IProject project, IPath location) {
+        WALKS.incrementAndGet();
+        List<String> targets = new ArrayList<>();
+        Set<IPath> linked = new HashSet<>();
+        try {
+            project.accept(proxy -> {
+                if (proxy.isLinked() && proxy.getType() == IResource.FOLDER) {
+                    IResource folder = proxy.requestResource();
+                    IPath target = folder.getLocation(); // null for a link to a missing variable
+                    if (target != null) {
+                        targets.add(target.toOSString());
+                        linked.add(folder.getFullPath());
+                    }
+                }
+                return proxy.getType() != IResource.FILE;
+            }, IResource.NONE);
+        } catch (CoreException e) {
+            LOG.log(Level.FINE, "Could not look for linked folders in " + project.getName(), e);
+        }
+        return new Walked(location.toOSString(), List.copyOf(targets), Set.copyOf(linked));
+    }
+
+    /** For tests: the folders after a walk of every project, as at a first attach. */
+    static List<String> currentAfterFullWalk() {
+        ALL_STALE.set(true);
+        return current();
+    }
+
+    /** For tests: how many project walks have been made so far. */
+    static int walks() {
+        return WALKS.get();
     }
 
     /**
@@ -210,30 +284,37 @@ public final class ProjectFolders implements IResourceChangeListener {
         return lastFolders;
     }
 
+    /**
+     * Marks the projects a change touches as {@link #STALE}, with or without a Neovim (marking is
+     * cheap), and has their folders sent to a running Neovim.
+     */
     @Override
     public void resourceChanged(IResourceChangeEvent event) {
         IResourceDelta delta = event.getDelta();
-        NeovimSession neovim = session.get();
-        if (delta == null || neovim == null || !neovim.isAlive()) {
+        if (delta == null) {
             return;
         }
-        if (changesFolders(delta)) {
-            sendTo(neovim);
+        Set<String> touched = projectsWithChangedFolders(delta);
+        if (touched.isEmpty()) {
+            return;
+        }
+        STALE.addAll(touched);
+        NeovimSession neovim = session.get();
+        if (neovim != null && neovim.isAlive()) {
+            SENDER.sendTo(neovim); // not sendTo: only the marked projects are walked again
         }
     }
 
     /**
-     * Whether a change adds, removes, opens, closes or moves a project, or adds or removes a linked
-     * folder. Only folders are walked: a file's change cannot be one of those.
+     * The names of the projects whose folders a change changes: one added, removed, opened, closed
+     * or moved (under its old and its new name), or one in which a linked folder was added or
+     * removed. Only folders are walked: a file's change cannot be one of those.
      */
-    private static boolean changesFolders(IResourceDelta delta) {
-        boolean[] found = { false };
+    private static Set<String> projectsWithChangedFolders(IResourceDelta delta) {
+        Set<String> touched = new HashSet<>();
         Set<IPath> known = linkedFolders;
         try {
             delta.accept(d -> {
-                if (found[0]) {
-                    return false;
-                }
                 IResource resource = d.getResource();
                 int kind = d.getKind();
                 switch (resource.getType()) {
@@ -243,15 +324,15 @@ public final class ProjectFolders implements IResourceChangeListener {
                     case IResource.PROJECT -> {
                         int flags = IResourceDelta.OPEN | IResourceDelta.MOVED_FROM | IResourceDelta.MOVED_TO;
                         if (kind != IResourceDelta.CHANGED || (d.getFlags() & flags) != 0) {
-                            found[0] = true;
-                            return false;
+                            touched.add(resource.getName());
+                            return false; // walked again whole: its folders need no look
                         }
                         return true;
                     }
                     case IResource.FOLDER -> {
                         if ((kind == IResourceDelta.ADDED && resource.isLinked())
                                 || (kind == IResourceDelta.REMOVED && known.contains(resource.getFullPath()))) {
-                            found[0] = true;
+                            touched.add(resource.getProject().getName());
                             return false;
                         }
                         return true;
@@ -264,6 +345,6 @@ public final class ProjectFolders implements IResourceChangeListener {
         } catch (CoreException e) {
             LOG.log(Level.FINE, "Could not read a workspace change", e);
         }
-        return found[0];
+        return touched;
     }
 }

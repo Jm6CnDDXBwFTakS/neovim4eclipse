@@ -135,6 +135,8 @@ never reads a project's file itself** (1.1):
    through one coalescing job (`Sender`) that does every walk: the first attach's job and the
    listener would otherwise send out of order, and the walk stays off the thread of each change
    (it is fast: 0.2 ms for 30 projects of 120 folders, so the job is for order and the UI thread).
+   Each project's walk is kept: the first attach walks every project, a later change only the
+   projects it touched, so a huge workspace is not walked whole at each project opened or closed.
 2. **A `BufNew` hook, no patterns** (X19b; `LuaScripts.PROJECT_FILES`, module
    `neovim4eclipse.project_files`, and `SET_PROJECT_FOLDERS`). For each new buffer, Neovim compares
    the buffer's file, resolved with `fs_realpath` (links, junctions, 8.3 names, NFD), `/`
