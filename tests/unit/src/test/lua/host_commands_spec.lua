@@ -323,6 +323,23 @@ t.test(':wq name and :x name get the same full path as :w name; ++p stays', func
   }, t.sent('eclipse_command'))
 end)
 
+t.test(':wq, :x and :exit take no +cmd: a leading + is part of the file name, as in Vim', function()
+  local app = editing_main_in_a_project()
+  vim.g.ran = nil
+  vim.api.nvim_create_user_command('Ran', 'let g:ran = 1', {})
+  t.type(':x +Ran<CR>')
+  t.type(':wq ++p +Ran<CR>')
+  t.type(':exit +3 a.txt<CR>')
+  t.type(':Eclipse xit +Ran<CR>') -- typed by hand: expanded as a name too
+  t.eq({
+    { 'xit', false, { sent_path(app .. '/+Ran') } },
+    { 'wq', false, { '++p', sent_path(app .. '/+Ran') } },
+    { 'exit', false, { sent_path(app .. '/+3 a.txt') } },
+    { 'xit', false, { sent_path(app .. '/+Ran') } },
+  }, t.sent('eclipse_command'))
+  t.eq(nil, vim.g.ran, ':Ran never ran')
+end)
+
 --- The names of the commands sent to Eclipse, with a ! for a bang: { 'edit', 'edit!' }.
 local function sent_names()
   return vim.tbl_map(function(c)

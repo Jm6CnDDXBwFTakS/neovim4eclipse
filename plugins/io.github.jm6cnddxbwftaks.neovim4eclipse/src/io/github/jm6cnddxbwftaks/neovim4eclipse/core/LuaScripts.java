@@ -470,6 +470,10 @@ final class LuaScripts {
               return false
             end
             local file_commands = { edit = true, wq = true, xit = true, exit = true } -- take a file name
+            -- Of those, the ones that take a +cmd before it: :e[dit] [++opt] [+cmd] {file}, while
+            -- :wq, :x and :exit take [++opt] [file] only (:help :wq, :help :x). So :x +foo writes
+            -- the file "+foo" and runs no :foo, as in Vim.
+            local cmd_commands = { edit = true }
             local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
             -- Runs the +cmd of :e +cmd name as Vim does: + alone goes to the last line, +10 to line
             -- 10, +/pat to the first match, any other an Ex command. It is what you typed (a
@@ -522,7 +526,8 @@ final class LuaScripts {
                 else
                   -- :Eclipse edit name typed by hand: the name is expanded here, as :edit would.
                   for i, word in ipairs(args) do
-                    if word:sub(1, 1) ~= '+' then
+                    local plus = cmd_commands[name] and '+' or '++' -- a word left as it is
+                    if word:sub(1, #plus) ~= plus then
                       local ok, expanded = pcall(vim.fn.expandcmd, word, { errmsg = true })
                       if not ok then
                         vim.api.nvim_echo({ { (tostring(expanded):gsub('^Vim:', '')) } }, true, { err = true })
@@ -533,7 +538,7 @@ final class LuaScripts {
                   end
                 end
                 for i = #args, 1, -1 do
-                  if args[i]:match('^%+[^+]') or args[i] == '+' then
+                  if cmd_commands[name] and (args[i]:match('^%+[^+]') or args[i] == '+') then
                     command = args[i]:sub(2)
                     table.remove(args, i)
                   end
@@ -602,8 +607,8 @@ final class LuaScripts {
             end
 
             -- The words :Eclipse sends for the argument of :e, :wq or :x, as nvim_parse_cmd gives it
-            -- (one string, escapes as typed): its ++opt words, its +cmd (backslashes taken out, as
-            -- Vim does), and the file as the full path Neovim's own :edit or :write would use (the
+            -- (one string, escapes as typed): its ++opt words, its +cmd when the command takes one
+            -- (with_cmd: :e only; backslashes taken out, as Vim does), and the file as the full path Neovim's own :edit or :write would use (the
             -- rest is one name, spaces and all, as for :edit: :e a b is the file "a b"). Returns nil
             -- and why when it is refused.
             --
@@ -616,19 +621,20 @@ final class LuaScripts {
             -- resolves ../, without expanding $NAME a second time (a file named x$HOME stays so).
             -- Example, editing src/Main.java in /ws/app: `:e notes.txt` and `:e ./notes.txt` give
             -- /ws/app/notes.txt, `:wq %:h/Copy.java` /ws/app/src/Copy.java, `:x ++p out/a.txt`
-            -- { '++p', '/ws/app/out/a.txt' }, `:e +10 a.txt` { '+10', '/ws/app/a.txt' }.
+            -- { '++p', '/ws/app/out/a.txt' }, `:e +10 a.txt` { '+10', '/ws/app/a.txt' }, and
+            -- `:x +10 a.txt` { '/ws/app/+10 a.txt' } (no +cmd for :x: the name is all of it).
             --
             -- A name with a line break is refused: Eclipse cannot show it, and the :Eclipse line
             -- would end at it, running the rest of the name as a command (a cloned repository's file
             -- named notes, a line break, then lua=os.execute(...)).
-            local function file_words(raw)
+            local function file_words(raw, with_cmd)
               local words, rest = {}, raw
               while rest:match('^%+%+') do -- ++opt words
                 local e = word_end(rest, 1)
                 words[#words + 1] = rest:sub(1, e - 1)
                 rest = (rest:sub(e):gsub('^%s+', ''))
               end
-              if rest:sub(1, 1) == '+' then -- +cmd; a backslash before a space keeps it in
+              if with_cmd and rest:sub(1, 1) == '+' then -- +cmd; a backslash before a space keeps it in
                 local e = word_end(rest, 1)
                 words[#words + 1] = (rest:sub(1, e - 1):gsub(BS .. '(.)', '%1'))
                 rest = (rest:sub(e):gsub('^%s+', ''))
@@ -707,7 +713,7 @@ final class LuaScripts {
               end
               local cmd = 'Eclipse' .. (p.bang and '!' or '') .. ' ' .. p.cmd
               if file_commands[p.cmd] and #args > 0 then
-                local words, why = file_words(table.concat(args, ' '))
+                local words, why = file_words(table.concat(args, ' '), cmd_commands[p.cmd])
                 if not words then
                   refusing[p.cmd] = why
                   return 'Eclipse ' .. p.cmd -- without the name: none of it runs
