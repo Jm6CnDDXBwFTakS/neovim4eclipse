@@ -429,6 +429,32 @@ t.test('a document buffer unloaded on its own is acwrite again on the next loop,
   t.eq('', vim.o.eventignore, "'eventignore' is put back")
 end)
 
+-- :edit! unloads and reads the buffer in one command: BufUnload sets 'buftype' to '', BufReadCmd
+-- 'acwrite' again. Neither fires OptionSet, since autocommands do not nest; the scheduled clean-up
+-- after them is quiet too.
+t.test(':edit! of a document fires no OptionSet for its buftype', function()
+  t.setup()
+  local buf = t.document('EditBang.txt', { 'one' })
+  local seen = {}
+  local watcher = vim.api.nvim_create_autocmd('OptionSet', {
+    pattern = 'buftype',
+    callback = function() table.insert(seen, vim.v.option_new) end,
+  })
+  local ok, err = pcall(function()
+    vim.cmd('edit!')
+    local next_loop = false
+    vim.schedule(function() next_loop = true end)
+    t.wait_for("Neovim's next loop", function() return next_loop end)
+  end)
+  vim.api.nvim_del_autocmd(watcher)
+  if not ok then
+    error(err, 0)
+  end
+  t.eq('acwrite', vim.bo[buf].buftype)
+  t.eq({ 'one' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  t.eq({}, seen, 'no OptionSet for buftype')
+end)
+
 t.test('closing a buffer that is gone does nothing', function()
   t.run('CLOSE_DOCUMENT_BUFFER', '999')
 end)

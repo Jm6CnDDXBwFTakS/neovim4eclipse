@@ -232,8 +232,9 @@ final class DocumentBuffers {
 
     /**
      * One try of {@link #show(DocumentBuffer, EditorWindow, String)}: returns the window shown, or
-     * {@link #BUFFER_GONE} when the buffer this session made for {@code buffer} was wiped in Neovim
-     * (nothing shown; {@link #attachedWin} is then left as it was set for the try).
+     * {@link #BUFFER_GONE} when the buffer this session made for {@code buffer} was wiped in Neovim,
+     * and nothing was shown. When SHOW_WINDOW found it gone, the attachment already names it (set
+     * before the switch); when OPEN_WINDOW did, before any window was given, nothing was attached.
      */
     private int showOnce(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         Handle target = owns(buffer) ? created.get(buffer.bufnr) : null;
@@ -553,10 +554,16 @@ final class DocumentBuffers {
         buffer.owner = null;
         // First, before the return below: a buffer whose making anew failed (show) is attached
         // still but no longer in `created`, and its closed document must not stay attached.
-        if (attachedBufnr == buffer.bufnr) {
+        boolean wasAttached = attachedBufnr == buffer.bufnr;
+        if (wasAttached) {
             attachHome();
         }
         if (doomed == null) {
+            if (wasAttached) {
+                // Neovim shows the home buffer too: its current window holds whatever buffer it took
+                // when the old one was wiped, and a key typed now would go there.
+                returnToAttached();
+            }
             return;
         }
         Exception failure = null;

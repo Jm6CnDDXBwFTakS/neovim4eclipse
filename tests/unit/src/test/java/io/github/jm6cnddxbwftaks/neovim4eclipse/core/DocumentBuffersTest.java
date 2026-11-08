@@ -248,6 +248,9 @@ class DocumentBuffersTest {
     void anEditorWindowOpenedOnAWipedBufferGetsTheBufferMadeAnew() throws Exception {
         DocumentBuffer doc = shown("/ws/a.txt", 5);
         answers.put("OPEN_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(0)) ? -2L : 1001L);
+        // As Neovim does: the window shown is the one asked for (-1: the home window, 1000).
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "-1".equals(args.get(0)) ? 1000L
+                : Long.parseLong((String) args.get(0)));
         answers.put("CREATE_DOCUMENT_BUFFER", List.of(7L, true, false));
 
         buffers.show(doc, new EditorWindow(), "/ws");
@@ -256,6 +259,7 @@ class DocumentBuffersTest {
         assertEquals(7, buffers.attachedBufnr());
         assertTrue(calls.stream().anyMatch(c -> c.startsWith("OPEN_WINDOW [7, ")), calls.toString());
         assertTrue(calls.contains("SHOW_WINDOW [1001, 7]"), calls.toString());
+        assertEquals(1001, buffers.attachedWin(), "the editor's new window, not the home window");
     }
 
     /**
@@ -268,11 +272,13 @@ class DocumentBuffersTest {
         answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? -2L : 1000L);
         answers.put("CREATE_DOCUMENT_BUFFER", new IllegalStateException("timed out"));
         assertThrows(Exception.class, () -> buffers.show(doc));
+        calls.clear();
 
         buffers.close(doc);
 
         assertEquals(1, buffers.attachedBufnr(), "the home buffer is attached");
         assertNull(buffers.attachedDocument(), "no closed document");
+        assertTrue(calls.contains("SHOW_WINDOW [-1, 1]"), "and Neovim shows it: " + calls);
     }
 
     /** Wiped again as soon as it was made: the show fails, naming the buffer. */
