@@ -223,8 +223,7 @@ final class DocumentBuffers {
         // closed in Neovim is opened anew; the document's push then fills it. A notice that still
         // comes names the old number, no document's any more, and is ignored.
         LOG.fine(() -> "Buffer " + buffer.bufnr + " (" + buffer.name + ") was wiped in Neovim; made anew");
-        created.remove(buffer.bufnr);
-        documents.remove(buffer.bufnr);
+        forget(buffer.bufnr);
         if (showOnce(buffer, window, folder) == BUFFER_GONE) {
             throw new IllegalStateException("Buffer " + buffer.bufnr + " (" + buffer.name
                     + ") was wiped in Neovim as soon as it was made");
@@ -251,6 +250,9 @@ final class DocumentBuffers {
         // The window attached before, whose folder a new untitled window inherits (folderOfNewWindow).
         int before = attachedWin;
         int win = window == null ? homeWin : windowFor(window, target, folder, before);
+        if (win == BUFFER_GONE) {
+            return BUFFER_GONE; // nothing attached yet: the caller makes the buffer anew
+        }
         // Attach first: the BufEnter this switch causes is then recognized as Eclipse's own.
         attached = target;
         attachedBufnr = buffer.bufnr;
@@ -262,6 +264,9 @@ final class DocumentBuffers {
             // SHOW_WINDOW did nothing, so the current window is still the one attached before.
             windows.forget(window);
             win = windowFor(window, target, folder, before);
+            if (win == BUFFER_GONE) {
+                return BUFFER_GONE;
+            }
             attachedWin = win;
             shown = showWindow(win, buffer.bufnr);
         }
@@ -272,7 +277,11 @@ final class DocumentBuffers {
     }
 
     /**
-     * The editor's window, opened in a new tabpage on {@code buffer} if it has none in this session.
+     * The editor's window, opened in a new tabpage on {@code buffer} if it has none in this session;
+     * {@link #BUFFER_GONE}, no window opened, when that buffer was wiped in Neovim. Example: a
+     * document's second editor is shown for the first time after a plug-in's
+     * {@code :noautocmd bwipeout} of its buffer; {@link #show(DocumentBuffer, EditorWindow, String)}
+     * then makes the buffer anew and opens the window on that.
      *
      * @param before the window attached before this show (see {@link #folderOfNewWindow})
      */
@@ -284,6 +293,9 @@ final class DocumentBuffers {
                 List.of(String.valueOf(bufnr(buffer)), folderOfNewWindow(folder, before))));
         if (!(answer instanceof Number id)) {
             throw new IllegalStateException("Unexpected answer opening a window: " + answer);
+        }
+        if (id.intValue() == BUFFER_GONE) {
+            return BUFFER_GONE;
         }
         windows.add(window, id.intValue());
         LOG.fine(() -> "Opened window " + id + " on buffer " + bufnr(buffer));
@@ -537,14 +549,15 @@ final class DocumentBuffers {
         if (!owns(buffer)) {
             return;
         }
-        Handle doomed = created.remove(buffer.bufnr);
-        documents.remove(buffer.bufnr);
+        Handle doomed = forget(buffer.bufnr);
         buffer.owner = null;
-        if (doomed == null) {
-            return;
-        }
+        // First, before the return below: a buffer whose making anew failed (show) is attached
+        // still but no longer in `created`, and its closed document must not stay attached.
         if (attachedBufnr == buffer.bufnr) {
             attachHome();
+        }
+        if (doomed == null) {
+            return;
         }
         Exception failure = null;
         try {
@@ -644,6 +657,16 @@ final class DocumentBuffers {
             return;
         }
         attachedWin = shown;
+    }
+
+    /**
+     * Forgets buffer {@code bufnr}: no longer a document's in this session. Returns its handle, or
+     * {@code null} if it had none. Example: its last editor closed, or Neovim wiped it and it is made
+     * anew under another number.
+     */
+    private Handle forget(int bufnr) {
+        documents.remove(bufnr);
+        return created.remove(bufnr);
     }
 
     /**

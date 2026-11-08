@@ -1113,6 +1113,9 @@ final class LuaScripts {
             end
 
             function M.open(buf, folder)
+              if not vim.api.nvim_buf_is_valid(buf) then
+                return -2 -- wiped in Neovim (:noautocmd bwipeout): Eclipse makes the buffer anew
+              end
               -- Not entered: fires WinNew, TabNew, BufWinEnter and WinScrolled only (E7), so the
               -- user's BufWinEnter autocommands run, and Eclipse sees no switch.
               local win = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
@@ -1357,8 +1360,9 @@ final class LuaScripts {
 
     /**
      * Opens the window of an editor (arguments: the buffer number, and the folder for {@code :lcd},
-     * "" to keep the one it copies) in a new tabpage, without entering it, and returns its id. Its
-     * jump history starts empty. See {@link #WINDOWS}.
+     * "" to keep the one it copies) in a new tabpage, without entering it, and returns its id; -2,
+     * nothing opened, when the buffer was wiped in Neovim (as {@link #SHOW_WINDOW}). Its jump
+     * history starts empty. See {@link #WINDOWS}.
      */
     static final String OPEN_WINDOW = """
             local buf, folder = tonumber((select(1, ...))), (select(2, ...))
@@ -3806,8 +3810,11 @@ final class LuaScripts {
             -- for an unload (the marks, X5) and back to 'acwrite' right after: a step of their own,
             -- not a change another plug-in should react to (a status line that hides itself for
             -- special buffers would flicker, one that tracks file buffers would take it for a file).
-            -- Example: :bunload 3 sets '' and, on Neovim's next loop, 'acwrite' again, and an
-            -- OptionSet autocommand for buftype runs neither time.
+            -- Only the switch back on Neovim's next loop needs this: inside an autocommand's
+            -- callback (BufUnload, BufReadCmd) no other autocommand fires, OptionSet included, since
+            -- autocommands do not nest (:help autocmd-nested). Example: :bunload 3 sets '' in
+            -- BufUnload and, on the next loop, 'acwrite' here, and an OptionSet autocommand for
+            -- buftype runs neither time.
             local function set_buftype(b, value)
               local saved = vim.o.eventignore
               vim.o.eventignore = saved == '' and 'OptionSet' or saved .. ',OptionSet'
@@ -4021,7 +4028,7 @@ final class LuaScripts {
                 -- (BUFFER_NUMBERS.md, X5): for Neovim's own :bdelete (a Lua plug-in, <Cmd>bd!), whose
                 -- buffer Eclipse then closes (the safety net), as for CLOSE_DOCUMENT_BUFFER's unload.
                 -- 'acwrite' comes back with the read (BufReadCmd below) or on the next loop.
-                set_buftype(ev.buf, '')
+                vim.bo[ev.buf].buftype = '' -- no OptionSet: inside an autocommand (see set_buftype)
                 vim.schedule(function()
                   kept = nil
                   if vim.api.nvim_buf_is_valid(ev.buf)
@@ -4036,7 +4043,7 @@ final class LuaScripts {
               group = group,
               desc = 'Eclipse keeps the document',
               callback = function(ev)
-                set_buftype(ev.buf, 'acwrite') -- BufUnload made it '' for the unload
+                vim.bo[ev.buf].buftype = 'acwrite' -- BufUnload made it '' for the unload; no OptionSet here
                 local k = kept
                 kept = nil
                 if k then

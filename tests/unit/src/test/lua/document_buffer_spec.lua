@@ -412,11 +412,17 @@ t.test('a document buffer unloaded on its own is acwrite again on the next loop,
     pattern = 'buftype',
     callback = function() table.insert(seen, vim.v.option_new) end,
   })
-  vim.cmd('bunload! ' .. buf)
-  local next_loop = false
-  vim.schedule(function() next_loop = true end) -- after the hook's own scheduled clean-up
-  t.wait_for("Neovim's next loop", function() return next_loop end)
+  -- Removed whatever happens, so that a failure here leaves no watcher for the specs after it.
+  local ok, err = pcall(function()
+    vim.cmd('bunload! ' .. buf)
+    local next_loop = false
+    vim.schedule(function() next_loop = true end) -- after the hook's own scheduled clean-up
+    t.wait_for("Neovim's next loop", function() return next_loop end)
+  end)
   vim.api.nvim_del_autocmd(watcher)
+  if not ok then
+    error(err, 0)
+  end
   t.eq('acwrite', vim.bo[buf].buftype)
   t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'))
   t.eq({}, seen, 'no OptionSet for buftype')

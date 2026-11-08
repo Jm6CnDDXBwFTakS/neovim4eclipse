@@ -38,6 +38,7 @@ class DocumentBuffersTest {
             LuaScripts.CREATE_DOCUMENT_BUFFER, "CREATE_DOCUMENT_BUFFER",
             LuaScripts.DOCUMENT_BUFFER, "DOCUMENT_BUFFER",
             LuaScripts.SHOW_WINDOW, "SHOW_WINDOW",
+            LuaScripts.OPEN_WINDOW, "OPEN_WINDOW",
             LuaScripts.RELEASE_BUFFER, "RELEASE_BUFFER",
             LuaScripts.CLOSE_DOCUMENT_BUFFER, "CLOSE_DOCUMENT_BUFFER",
             LuaScripts.RENAME_DOCUMENT_BUFFER, "RENAME_DOCUMENT_BUFFER");
@@ -236,6 +237,42 @@ class DocumentBuffersTest {
         assertNull(buffers.documentOf(5), "the wiped number is no document's");
         assertEquals(doc, buffers.documentOf(7));
         assertTrue(calls.contains("SHOW_WINDOW [-1, 7]"), calls.toString());
+    }
+
+    /**
+     * The document's second editor is shown for the first time after the wipe: its window would be
+     * opened on the wiped buffer, which OPEN_WINDOW refuses (-2). The buffer is made anew and the
+     * window opened on that.
+     */
+    @Test
+    void anEditorWindowOpenedOnAWipedBufferGetsTheBufferMadeAnew() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        answers.put("OPEN_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(0)) ? -2L : 1001L);
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(7L, true, false));
+
+        buffers.show(doc, new EditorWindow(), "/ws");
+
+        assertEquals(7, doc.bufnr);
+        assertEquals(7, buffers.attachedBufnr());
+        assertTrue(calls.stream().anyMatch(c -> c.startsWith("OPEN_WINDOW [7, ")), calls.toString());
+        assertTrue(calls.contains("SHOW_WINDOW [1001, 7]"), calls.toString());
+    }
+
+    /**
+     * Making the wiped buffer anew fails (Neovim does not answer), then the editor closes: the
+     * closed document does not stay attached, the home buffer is.
+     */
+    @Test
+    void closingAfterTheMakingAnewFailedAttachesTheHomeBuffer() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? -2L : 1000L);
+        answers.put("CREATE_DOCUMENT_BUFFER", new IllegalStateException("timed out"));
+        assertThrows(Exception.class, () -> buffers.show(doc));
+
+        buffers.close(doc);
+
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer is attached");
+        assertNull(buffers.attachedDocument(), "no closed document");
     }
 
     /** Wiped again as soon as it was made: the show fails, naming the buffer. */
