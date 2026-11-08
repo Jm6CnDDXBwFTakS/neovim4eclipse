@@ -86,7 +86,13 @@ returns to the attached buffer. Then `CLOSE_DOCUMENT_BUFFER`:
    when the buffer is reused (without the group, `DOCUMENT_BUFFER` would add them a second time).
 2. Sets `'buftype'` back to `''` (X4, X5), so the marks survive.
 3. `nvim_buf_delete(buf, { force = true, unload = true })`, then `'buflisted'` off: `:bd`. `force`,
-   because unsaved changes live in Eclipse.
+   because unsaved changes live in Eclipse. A buffer that is not loaded is only unlisted:
+   `nvim_buf_delete` with `unload` fails ("Failed to unload buffer") on it. That is the case after
+   Neovim's own `:bdelete! 3` (a Lua plug-in, a mapping): the buffer is unloaded first, the safety
+   net's `BufDelete` closes the editor, and this script runs on the unloaded buffer. Its marks are
+   kept there too, because the document's `BufUnload` hook sets `'buftype'` to `''` for every
+   unload (X5) and gives it `'acwrite'` back with the read, or on Neovim's next loop if it is still
+   a document's buffer.
 
 `b:neovim4eclipse_file` stays: it marks the buffer as a closed document's. The safety net's
 `BufDelete` notice from step 3 reaches Eclipse after Java has forgotten the buffer, and is ignored.

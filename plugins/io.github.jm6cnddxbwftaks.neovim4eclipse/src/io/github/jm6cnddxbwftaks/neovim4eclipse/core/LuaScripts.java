@@ -1428,11 +1428,12 @@ final class LuaScripts {
      *
      * <p><b>A buffer Neovim unloaded itself</b> is only unlisted: {@code nvim_buf_delete} with
      * {@code unload} fails ("Failed to unload buffer") on a buffer that is not loaded. Example: a
-     * Lua plug-in, or {@code <Cmd>bd 3<CR>}, runs {@code :bdelete 3}; the safety net in
+     * Lua plug-in, or {@code <Cmd>bd! 3<CR>}, runs {@code :bdelete! 3} (without {@code !} Neovim
+     * refuses with E89 while the editor has unsaved changes, and nothing closes); the safety net in
      * {@link #DOCUMENT_BUFFER} tells Eclipse, which closes the editor, and this script then finds
-     * buffer 3 unloaded and unlisted already. Its marks are gone by then (it was still
-     * {@code acwrite} when Neovim unloaded it); {@code 'buftype'} is reset all the same, so that the
-     * file's next {@code :e} reads it as a normal file.
+     * buffer 3 unloaded and unlisted already. Its marks are kept all the same: the document's
+     * {@code BufUnload} hook set {@code 'buftype'} to {@code ''} for that unload (X5), and the
+     * {@code ''} set here keeps it a closed file's buffer instead of a document's.
      */
     static final String CLOSE_DOCUMENT_BUFFER = """
             local buf = tonumber((select(1, ...)))
@@ -1747,8 +1748,12 @@ final class LuaScripts {
             local function read(ev)
               local buf = ev.buf
               vim.bo[buf].swapfile = false -- first: a stale swap file would stop the read at E325
-              if vim.bo[buf].buftype == 'acwrite' then
-                return -- a document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER)
+              -- A document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER). Known
+              -- by its hooks as well as by 'acwrite': during :edit! the buffer is read with 'buftype'
+              -- '' (its BufUnload set it, to keep the marks), and this hook runs first.
+              local ok, hooks = pcall(vim.api.nvim_get_autocmds, { group = 'neovim4eclipse_document', buf = buf })
+              if vim.bo[buf].buftype == 'acwrite' or (ok and #hooks > 0) then
+                return
               end
               local name = ev.match
               if vim.fn.filereadable(name) == 0 then
@@ -3969,7 +3974,8 @@ final class LuaScripts {
             -- (eclipse_reload, true). Kept only until Neovim's next loop: a buffer unloaded on its own
             -- (:bunload) and read much later gets Eclipse's text instead (eclipse_reload, false).
             -- The marks too: Neovim drops an acwrite buffer's a-z marks when it unloads it, and puts
-            -- its A-Z marks on line 1 (BUFFER_NUMBERS.md, X4), where Vim's :edit! keeps them.
+            -- its A-Z marks on line 1 (BUFFER_NUMBERS.md, X4), where Vim's :edit! keeps them; the
+            -- unload runs with 'buftype' '' (X5) and the read puts them back besides.
             local kept
             vim.api.nvim_create_autocmd('BufUnload', {
               buf = buf,
@@ -3991,8 +3997,17 @@ final class LuaScripts {
                 end
                 kept = { lines = vim.api.nvim_buf_get_lines(ev.buf, 0, -1, false), modified = vim.bo[ev.buf].modified,
                          marks = marks }
+                -- Unloaded as a normal file's buffer, the buffer keeps its marks and last position
+                -- (BUFFER_NUMBERS.md, X5): for Neovim's own :bdelete (a Lua plug-in, <Cmd>bd!), whose
+                -- buffer Eclipse then closes (the safety net), as for CLOSE_DOCUMENT_BUFFER's unload.
+                -- 'acwrite' comes back with the read (BufReadCmd below) or on the next loop.
+                vim.bo[ev.buf].buftype = ''
                 vim.schedule(function()
                   kept = nil
+                  if vim.api.nvim_buf_is_valid(ev.buf)
+                      and #vim.api.nvim_get_autocmds({ group = group, buf = ev.buf }) > 0 then
+                    vim.bo[ev.buf].buftype = 'acwrite' -- still a document's buffer (not closed meanwhile)
+                  end
                 end)
               end,
             })
@@ -4001,6 +4016,7 @@ final class LuaScripts {
               group = group,
               desc = 'Eclipse keeps the document',
               callback = function(ev)
+                vim.bo[ev.buf].buftype = 'acwrite' -- BufUnload made it '' for the unload
                 local k = kept
                 kept = nil
                 if k then

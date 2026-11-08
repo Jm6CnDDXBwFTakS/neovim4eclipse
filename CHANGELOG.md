@@ -17,6 +17,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A buffer deleted from inside Neovim (a Lua plug-in, a mapping to `:bd 3`) no longer puts a
   warning in the Error Log, "Closing buffer 3 (...) failed; Neovim may still list it without an
   editor", when its editor closes. The buffer was closed all the same.
+- Such a buffer also keeps its marks and last cursor position, as one whose editor Eclipse closes
+  does: opening the file again brings back `'a` and puts the cursor where it was.
 
 ## [0.2.7] - 2026-11-08
 

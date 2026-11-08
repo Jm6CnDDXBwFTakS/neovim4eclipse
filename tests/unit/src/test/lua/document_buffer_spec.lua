@@ -379,9 +379,11 @@ end)
 
 -- Neovim's own :bdelete (a Lua plug-in, <Cmd>bd) unloads the buffer before Eclipse closes the editor:
 -- the close then only unlists it. nvim_buf_delete with unload fails on a buffer that is not loaded.
-t.test('closing a buffer Neovim deleted itself succeeds and keeps it', function()
+t.test('closing a buffer Neovim deleted itself succeeds and keeps it, marks and last position too', function()
   t.setup()
-  local buf, name = t.document('Deleted.txt', { 'x' })
+  local buf, name = t.document('Deleted.txt', { '1', '2', '3' })
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+  vim.api.nvim_buf_set_mark(buf, 'a', 2, 0, {})
   vim.cmd('enew')
   vim.cmd('bdelete! ' .. buf) -- !: its text is unsaved; the safety net tells Eclipse, which closes the editor
   t.forget()
@@ -391,8 +393,25 @@ t.test('closing a buffer Neovim deleted itself succeeds and keeps it', function(
   t.eq(false, vim.bo[buf].buflisted, 'only :ls! shows it')
   t.eq('', vim.bo[buf].buftype, 'a normal file again')
   t.eq(0, plugins_autocmds(buf), 'no write hook, no safety net')
+  t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'), 'BufUnload unloaded it with buftype \'\' (X5)')
+  t.eq(3, vim.api.nvim_buf_get_mark(buf, '"')[1])
   local again = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
   t.eq(buf, again, 'the next editor gets the same buffer')
+end)
+
+-- The BufUnload hook unloads with 'buftype' '' to keep the marks; a document's buffer that stays
+-- unloaded (a plug-in's :bunload, its editor still open) is an acwrite buffer again on the next loop.
+t.test('a document buffer unloaded on its own is acwrite again on the next loop, its marks kept', function()
+  t.setup()
+  local buf = t.document('Bunload.txt', { '1', '2' })
+  vim.api.nvim_buf_set_mark(buf, 'a', 2, 0, {})
+  vim.cmd('enew')
+  vim.cmd('bunload! ' .. buf)
+  local next_loop = false
+  vim.schedule(function() next_loop = true end) -- after the hook's own scheduled clean-up
+  t.wait_for("Neovim's next loop", function() return next_loop end)
+  t.eq('acwrite', vim.bo[buf].buftype)
+  t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'))
 end)
 
 t.test('closing a buffer that is gone does nothing', function()
