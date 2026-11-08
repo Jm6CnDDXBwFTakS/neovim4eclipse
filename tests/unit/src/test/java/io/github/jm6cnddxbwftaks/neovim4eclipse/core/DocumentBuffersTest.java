@@ -448,6 +448,46 @@ class DocumentBuffersTest {
         assertTrue(e.getMessage().contains("wiped in Neovim"), e.getMessage());
     }
 
+    /** Eclipse no longer knows the window: closing it again asks nothing of Neovim. */
+    private void assertForgotten(EditorWindow window) throws Exception {
+        calls.clear();
+        buffers.closeWindow(window);
+        assertEquals(List.of(), calls, "the window is forgotten");
+    }
+
+    /**
+     * The document's editor windows close with its buffer (RELEASE_BUFFER names them before the
+     * home buffer): Eclipse forgets them, and the attached one hands over to the home window.
+     */
+    @Test
+    void theWindowsReleasedWithABufferAreForgotten() throws Exception {
+        EditorWindow window = shownInWindow("/ws/a.txt", 5);
+        DocumentBuffer a = buffers.documentAt(5);
+        answers.put("RELEASE_BUFFER", List.of(List.of(1001L), 1L));
+
+        buffers.close(a);
+
+        assertForgotten(window);
+        assertEquals(1000, buffers.attachedWin(), "the home window");
+        assertEquals(1, buffers.attachedBufnr());
+    }
+
+    /** Taking the new home buffer fails: the windows released are forgotten all the same. */
+    @Test
+    void theReleasedWindowsAreForgottenWhenTakingTheNewHomeBufferFails() throws Exception {
+        EditorWindow window = shownInWindow("/ws/a.txt", 5);
+        DocumentBuffer a = buffers.documentAt(5);
+        answers.put("RELEASE_BUFFER", List.of(List.of(1001L), 9L));
+        answers.put("nvim_buf_attach", new IllegalStateException("timed out"));
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            assertThrows(Exception.class, () -> buffers.close(a));
+        }
+
+        assertForgotten(window);
+        assertEquals(1000, buffers.attachedWin(), "the home window, not the closed one");
+    }
+
     @Test
     void aBufferThatClosesWellLeavesItThenClosesIt() throws Exception {
         DocumentBuffer doc = shown("/ws/a.txt", 5);

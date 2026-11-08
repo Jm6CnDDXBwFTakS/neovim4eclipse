@@ -1020,6 +1020,8 @@ final class LuaScripts {
      *   <li>{@code travel(win, buf, line, col)}: {@link #TRAVEL_WINDOW}.</li>
      *   <li>{@code close(win, fallback)}: {@link #CLOSE_WINDOW}.</li>
      *   <li>{@code release(buf, fallback)}: {@link #RELEASE_BUFFER}.</li>
+     *   <li>{@code home_buffer()}: {@link #HOME_BUFFER}; {@code close} and {@code release} use it
+     *       too, for a fallback buffer Neovim wiped.</li>
      *   <li>{@code is_side_window(win)}: whether a window is a floating or special one beside an
      *       editor's, where {@code :q} is Neovim's ({@link #WINDOW_COMMANDS}).</li>
      * </ul>

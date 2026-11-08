@@ -597,14 +597,15 @@ final class DocumentBuffers {
                     List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
             // The closed windows' ids and the home buffer's number, made anew if Neovim wiped it.
             List<?> released = answer instanceof List<?> l && l.size() == 2 ? l : List.of();
-            if (!released.isEmpty() && released.get(1) instanceof Number homeBuf) {
-                adoptHome(homeBuf.intValue()); // first: the switch back below shows the home buffer
-            }
+            // The windows first: should taking a new home buffer fail, none stays known after its close.
             for (int winid : ids(released.isEmpty() ? null : released.get(0))) {
                 windows.forget(winid);
                 if (winid == attachedWin) {
                     attachedWin = homeWin;
                 }
+            }
+            if (!released.isEmpty() && released.get(1) instanceof Number homeBuf) {
+                adoptHome(homeBuf.intValue()); // before the switch back below, which shows the home buffer
             }
             returnToAttached();
         } catch (Exception e) {
