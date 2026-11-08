@@ -206,7 +206,8 @@ final class DocumentBuffers {
     /**
      * Makes {@code buffer} the attached buffer and {@code window} the attached window, Neovim's
      * current one, creating either on first use (and again after Restart Neovim, or after the window
-     * was closed in Neovim: the safety net).
+     * was closed in Neovim: the safety net). A buffer wiped in Neovim without the safety net's
+     * notice (a plug-in's {@code :noautocmd bwipeout}) is made anew too, for the document's push to fill.
      *
      * @param window the editor's window, or {@code null} for the home window
      * @param folder the folder for {@code :lcd} when the window is opened ({@link LuaScripts#OPEN_WINDOW}),
@@ -214,6 +215,28 @@ final class DocumentBuffers {
      *               of its own (an untitled one): see {@link #folderOfNewWindow}
      */
     void show(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
+        if (showOnce(buffer, window, folder) != BUFFER_GONE) {
+            return;
+        }
+        // Wiped in Neovim behind Eclipse's back, and no BufWipeout notice closed the editor (yet):
+        // a plug-in's :noautocmd bwipeout, say. Forget the buffer and make it anew, as a window
+        // closed in Neovim is opened anew; the document's push then fills it. A notice that still
+        // comes names the old number, no document's any more, and is ignored.
+        LOG.fine(() -> "Buffer " + buffer.bufnr + " (" + buffer.name + ") was wiped in Neovim; made anew");
+        created.remove(buffer.bufnr);
+        documents.remove(buffer.bufnr);
+        if (showOnce(buffer, window, folder) == BUFFER_GONE) {
+            throw new IllegalStateException("Buffer " + buffer.bufnr + " (" + buffer.name
+                    + ") was wiped in Neovim as soon as it was made");
+        }
+    }
+
+    /**
+     * One try of {@link #show(DocumentBuffer, EditorWindow, String)}: returns the window shown, or
+     * {@link #BUFFER_GONE} when the buffer this session made for {@code buffer} was wiped in Neovim
+     * (nothing shown; {@link #attachedWin} is then left as it was set for the try).
+     */
+    private int showOnce(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
         Handle target = owns(buffer) ? created.get(buffer.bufnr) : null;
         if (target == null) {
             Created made = create(buffer.name);
@@ -242,12 +265,10 @@ final class DocumentBuffers {
             attachedWin = win;
             shown = showWindow(win, buffer.bufnr);
         }
-        if (shown == BUFFER_GONE) {
-            // Wiped in Neovim since this session made it; the safety net closes its editor.
-            throw new IllegalStateException("Buffer " + buffer.bufnr + " (" + buffer.name
-                    + ") was wiped in Neovim; its editor closes");
+        if (shown != BUFFER_GONE) {
+            attachedWin = shown;
         }
-        attachedWin = shown;
+        return shown;
     }
 
     /**
@@ -320,9 +341,7 @@ final class DocumentBuffers {
         int win = window.winid;
         windows.forget(window);
         if (attachedWin == win) {
-            attached = home;
-            attachedBufnr = bufnr(home);
-            attachedDocument = null;
+            attachHome();
             attachedWin = homeWin;
         }
         Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW,
@@ -525,9 +544,7 @@ final class DocumentBuffers {
             return;
         }
         if (attachedBufnr == buffer.bufnr) {
-            attached = home;
-            attachedBufnr = bufnr(home);
-            attachedDocument = null;
+            attachHome();
         }
         Exception failure = null;
         try {
@@ -611,18 +628,33 @@ final class DocumentBuffers {
         if (shown == BUFFER_GONE) {
             // Wiped in Neovim behind Eclipse's back: a plug-in's :bwipeout of several buffers, the
             // attached one among them. Its editor closes too (the safety net's BufWipeout notice),
-            // but that notice may come after this. Until the next show, the home buffer is attached.
-            attached = home;
-            attachedBufnr = bufnr(home);
-            attachedDocument = null;
-            attachedWin = homeWin;
-            shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
+            // but that notice may come after this. Until the next show, the home buffer is attached,
+            // in the home window (the step below).
+            attachHome();
+            shown = EditorWindow.UNKNOWN;
         }
         if (shown == EditorWindow.UNKNOWN) {
             attachedWin = homeWin;
             shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
         }
+        if (shown == BUFFER_GONE) {
+            // The home buffer was wiped as well (:bwipeout 1 5): nothing to show. The home window
+            // stays the attached one, so that the next show or BufEnter still finds a window id.
+            LOG.fine(() -> "The home buffer " + attachedBufnr + " was wiped in Neovim; nothing shown");
+            return;
+        }
         attachedWin = shown;
+    }
+
+    /**
+     * Makes the home buffer the attached one (its window is the caller's to set). Example: the
+     * attached document's editor closed, or its buffer was wiped in Neovim; Eclipse shows the next
+     * editor's document later.
+     */
+    private void attachHome() {
+        attached = home;
+        attachedBufnr = bufnr(home);
+        attachedDocument = null;
     }
 
     void setEnterHandler(Consumer<Integer> handler) {

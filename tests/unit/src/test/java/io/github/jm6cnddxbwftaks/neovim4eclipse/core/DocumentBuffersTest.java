@@ -199,6 +199,56 @@ class DocumentBuffersTest {
         assertTrue(calls.contains("CLOSE_DOCUMENT_BUFFER [5]"), calls.toString());
     }
 
+    /**
+     * The home buffer was wiped as well ({@code :bwipeout 1 6}): nothing can be shown, and the home
+     * window stays attached; the window id is never SHOW_WINDOW's -2.
+     */
+    @Test
+    void closingWhenTheHomeBufferWasWipedTooKeepsTheHomeWindowAttached() throws Exception {
+        DocumentBuffer a = shown("/ws/a.txt", 5);
+        shown("/ws/b.txt", 6);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? 1000L : -2L);
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            buffers.close(a);
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer is attached");
+        assertEquals(1000, buffers.attachedWin(), "the home window, not -2");
+    }
+
+    /**
+     * A buffer wiped in Neovim with no notice to Eclipse ({@code :noautocmd bwipeout 5}): the
+     * editor's next show makes the buffer anew rather than failing on every activation.
+     */
+    @Test
+    void showingADocumentWhoseBufferWasWipedMakesItAnew() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        shown("/ws/b.txt", 6);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? -2L : 1000L);
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(7L, true, false));
+
+        buffers.show(doc);
+
+        assertEquals(7, doc.bufnr);
+        assertEquals(7, buffers.attachedBufnr());
+        assertNull(buffers.documentOf(5), "the wiped number is no document's");
+        assertEquals(doc, buffers.documentOf(7));
+        assertTrue(calls.contains("SHOW_WINDOW [-1, 7]"), calls.toString());
+    }
+
+    /** Wiped again as soon as it was made: the show fails, naming the buffer. */
+    @Test
+    void aBufferWipedAgainAsSoonAsItWasMadeFailsTheShow() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        answers.put("SHOW_WINDOW", -2L);
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(7L, true, false));
+
+        Exception e = assertThrows(IllegalStateException.class, () -> buffers.show(doc));
+        assertTrue(e.getMessage().contains("wiped in Neovim"), e.getMessage());
+    }
+
     @Test
     void aBufferThatClosesWellLeavesItThenClosesIt() throws Exception {
         DocumentBuffer doc = shown("/ws/a.txt", 5);
