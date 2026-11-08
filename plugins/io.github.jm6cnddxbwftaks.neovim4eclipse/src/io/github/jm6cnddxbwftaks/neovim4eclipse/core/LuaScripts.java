@@ -1075,7 +1075,7 @@ final class LuaScripts {
             end
 
             --- The home buffer's number: made anew, an unlisted scratch buffer as at start, if Neovim
-            --- wiped it (a plug-in's :bwipeout 1, or one that wipes every buffer nvim_list_bufs() has),
+            --- wiped it (a plug-in's :bwipeout 2, its usual number, or one that wipes every buffer nvim_list_bufs() has),
             --- and remembered, so that every later call and the home window agree on it. Eclipse
             --- asks for it (HOME_BUFFER) when the home buffer it knows is gone.
             function M.home_buffer()
@@ -1371,7 +1371,8 @@ final class LuaScripts {
 
     /**
      * The home buffer's number, made anew if Neovim wiped it ({@code M.home_buffer} in
-     * {@link #WINDOWS}). Example: a plug-in ran {@code :bwipeout 1}; Eclipse, finding the home buffer
+     * {@link #WINDOWS}). Example: a plug-in ran {@code :bwipeout 2} (the home buffer's usual number:
+     * Neovim's own buffer 1 is wiped at start); Eclipse, finding the home buffer
      * gone when it goes back to it, gets 9, a new unlisted scratch buffer, and shows that.
      */
     static final String HOME_BUFFER = """

@@ -350,7 +350,10 @@ final class DocumentBuffers {
      * Closes an editor's window and its tabpage (its editor closed). The buffer stays, for the
      * document's other editors; {@link #close(DocumentBuffer)} wipes it after the last one. When it
      * was the attached window, the home buffer in the home window is attached until Eclipse shows the
-     * next editor.
+     * next editor; one Neovim wiped is made anew first ({@link #renewHome}), so that the home window
+     * shows it rather than the buffer Neovim chose. Example: a plug-in ran {@code :bwipeout 2}, then
+     * the active editor closes: the home window shows the new home buffer 9, and keys typed before
+     * the next editor's show go to 9, not to another document's buffer.
      */
     void closeWindow(EditorWindow window) throws Exception {
         if (!windows.owns(window)) {
@@ -359,6 +362,7 @@ final class DocumentBuffers {
         int win = window.winid;
         windows.forget(window);
         if (attachedWin == win) {
+            renewHome(); // one call, only for the attached window: the others leave the home buffer alone
             attachHome();
             attachedWin = homeWin;
         }
@@ -675,7 +679,7 @@ final class DocumentBuffers {
             shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
         }
         if (shown == BUFFER_GONE) {
-            // The home buffer was wiped as well (:bwipeout 1 5): Neovim makes a new one, which is
+            // The home buffer was wiped as well (:bwipeout 2 5): Neovim makes a new one, which is
             // attached and shown from now on.
             renewHome();
             attachHome();
@@ -694,8 +698,9 @@ final class DocumentBuffers {
     /**
      * Takes the home buffer Neovim has now ({@link LuaScripts#HOME_BUFFER}), made anew there because
      * the one this session knew was wiped, and attaches it for line events as the start-up does
-     * ({@code NeovimSession.start}). Example: a plug-in ran {@code :bwipeout 1}; the home buffer
-     * is 9 from then on.
+     * ({@code NeovimSession.start}); nothing if it is still the one this session knows. Example: a
+     * plug-in ran {@code :bwipeout 2} (the home buffer's usual number); the home buffer is 9 from
+     * then on.
      */
     private void renewHome() throws Exception {
         Object answer = await(api.execLua(LuaScripts.HOME_BUFFER, List.of()));
@@ -703,6 +708,9 @@ final class DocumentBuffers {
             throw new IllegalStateException("Unexpected answer for the home buffer: " + answer);
         }
         int old = bufnr(home);
+        if (n.intValue() == old) {
+            return;
+        }
         home = Handle.buffer(n.longValue());
         LOG.fine(() -> "The home buffer " + old + " was wiped in Neovim; the home buffer is " + n + " now");
         await(api.bufAttach(home, true));

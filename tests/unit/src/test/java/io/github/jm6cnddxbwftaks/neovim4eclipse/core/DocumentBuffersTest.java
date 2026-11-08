@@ -41,6 +41,7 @@ class DocumentBuffersTest {
             LuaScripts.OPEN_WINDOW, "OPEN_WINDOW",
             LuaScripts.HOME_BUFFER, "HOME_BUFFER",
             LuaScripts.RELEASE_BUFFER, "RELEASE_BUFFER",
+            LuaScripts.CLOSE_WINDOW, "CLOSE_WINDOW",
             LuaScripts.CLOSE_DOCUMENT_BUFFER, "CLOSE_DOCUMENT_BUFFER",
             LuaScripts.RENAME_DOCUMENT_BUFFER, "RENAME_DOCUMENT_BUFFER");
 
@@ -284,6 +285,53 @@ class DocumentBuffersTest {
         assertTrue(calls.stream().anyMatch(c -> c.startsWith("OPEN_WINDOW [7, ")), calls.toString());
         assertTrue(calls.contains("SHOW_WINDOW [1001, 7]"), calls.toString());
         assertEquals(1001, buffers.attachedWin(), "the editor's new window, not the home window");
+    }
+
+    // ---- closing an editor's window ----
+
+    /** A document shown in an editor's own window (1001), as Neovim answers: the window asked for. */
+    private EditorWindow shownInWindow(String name, long bufnr) throws Exception {
+        answers.put("OPEN_WINDOW", 1001L);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "-1".equals(args.get(0)) ? 1000L
+                : Long.parseLong((String) args.get(0)));
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(bufnr, true, false));
+        EditorWindow window = new EditorWindow();
+        buffers.show(new DocumentBuffer(name), window, "/ws");
+        calls.clear();
+        return window;
+    }
+
+    /**
+     * The home buffer was wiped in Neovim ({@code :bwipeout 2}), then the active editor closes:
+     * Neovim makes a new home buffer (9), which the home window is given and Eclipse attaches,
+     * rather than the gone one, which left the home window on a buffer Neovim chose.
+     */
+    @Test
+    void closingTheActiveWindowAfterTheHomeBufferWasWipedAttachesANewOne() throws Exception {
+        EditorWindow window = shownInWindow("/ws/a.txt", 5);
+        answers.put("HOME_BUFFER", 9L);
+        answers.put("CLOSE_WINDOW", 1000L);
+
+        buffers.closeWindow(window);
+
+        assertEquals(9, buffers.attachedBufnr(), "the new home buffer is attached");
+        assertEquals(1000, buffers.attachedWin(), "in the home window");
+        assertTrue(calls.contains("nvim_buf_attach [" + Handle.buffer(9) + ", true, {}]"), calls.toString());
+        assertTrue(calls.contains("CLOSE_WINDOW [1001, 9]"), "the home window shows it: " + calls);
+    }
+
+    /** The home buffer is still there: it is not attached a second time. */
+    @Test
+    void closingTheActiveWindowKeepsAHomeBufferThatIsStillThere() throws Exception {
+        EditorWindow window = shownInWindow("/ws/a.txt", 5);
+        answers.put("HOME_BUFFER", 1L);
+        answers.put("CLOSE_WINDOW", 1000L);
+
+        buffers.closeWindow(window);
+
+        assertEquals(1, buffers.attachedBufnr());
+        assertFalse(called("nvim_buf_attach"), calls.toString());
+        assertTrue(calls.contains("CLOSE_WINDOW [1001, 1]"), calls.toString());
     }
 
     /**

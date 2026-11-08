@@ -55,8 +55,9 @@ The Neovim side:
 - **The home window** stays: it is the window Neovim starts in, shows the home buffer, and shows
   a document shown without a token (`NeovimSession.showBuffer`, which only tests use). It is never
   closed by the plug-in, and opened again if the user closed it. The home buffer, unlisted, is
-  safe from `:%bwipeout`; one wiped by number (a plug-in's `:bwipeout 1`) is made anew, an
-  unlisted scratch buffer again, the next time Eclipse goes back to it (`M.home_buffer`,
+  safe from `:%bwipeout`; one wiped by number (a plug-in's `:bwipeout 2`, the number `:ls!` shows for it; Neovim's own
+  buffer 1 is wiped at start) is made anew, an unlisted scratch buffer again, the next time
+  Eclipse goes back to it, or closes the active editor's window (`M.home_buffer`,
   `DocumentBuffers.renewHome`).
 - **No stray jumps.** Buffers are put in windows with `:keepjumps buffer!` (`put_buf`); see E2.
 
