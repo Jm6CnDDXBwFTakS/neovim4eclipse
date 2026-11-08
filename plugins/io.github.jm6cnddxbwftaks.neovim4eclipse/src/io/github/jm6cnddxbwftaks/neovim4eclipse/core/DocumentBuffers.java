@@ -367,15 +367,21 @@ final class DocumentBuffers {
         }
         Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW,
                 List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
-        if (answer instanceof List<?> ids && ids.size() == 2
-                && ids.get(0) instanceof Number id && ids.get(1) instanceof Number buf) {
-            boolean attachedHome = attachedWin == homeWin;
-            homeWin = id.intValue();
-            if (attachedHome) {
-                attachedWin = homeWin;
-            }
-            adoptHome(buf.intValue());
+        WithHome closed;
+        try {
+            closed = WithHome.of("CLOSE_WINDOW", answer, Number.class);
+        } catch (IllegalStateException e) {
+            // The session logs a failed window close at FINE only (normal once Neovim is gone); a
+            // wrong answer means a stale or broken script, which should show in the Error Log.
+            LOG.log(Level.WARNING, e.getMessage(), e);
+            throw e;
         }
+        boolean attachedHome = attachedWin == homeWin;
+        homeWin = ((Number) closed.first()).intValue();
+        if (attachedHome) {
+            attachedWin = homeWin;
+        }
+        adoptHome(closed.homeBuf());
     }
 
     /**
@@ -596,17 +602,15 @@ final class DocumentBuffers {
             Object answer = await(api.execLua(LuaScripts.RELEASE_BUFFER,
                     List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
             // The closed windows' ids and the home buffer's number, made anew if Neovim wiped it.
-            List<?> released = answer instanceof List<?> l && l.size() == 2 ? l : List.of();
+            WithHome released = WithHome.of("RELEASE_BUFFER", answer, List.class);
             // The windows first: should taking a new home buffer fail, none stays known after its close.
-            for (int winid : ids(released.isEmpty() ? null : released.get(0))) {
+            for (int winid : ids(released.first())) {
                 windows.forget(winid);
                 if (winid == attachedWin) {
                     attachedWin = homeWin;
                 }
             }
-            if (!released.isEmpty() && released.get(1) instanceof Number homeBuf) {
-                adoptHome(homeBuf.intValue()); // before the switch back below, which shows the home buffer
-            }
+            adoptHome(released.homeBuf()); // before the switch back below, which shows the home buffer
             returnToAttached();
         } catch (Exception e) {
             failure = e;
@@ -649,6 +653,29 @@ final class DocumentBuffers {
             }
         }
         return false;
+    }
+
+    /**
+     * An answer of the form {@code {x, homeBuf}}: what a close script reports first, and the home
+     * buffer's number, made anew if Neovim wiped it. CLOSE_WINDOW answers {@code {1000, 2}} (the
+     * home window, then the home buffer); RELEASE_BUFFER {@code {{1001, 1002}, 2}} (the windows it
+     * closed, then the home buffer).
+     *
+     * <p>{@link #of} throws on any other shape, the first element's type included, rather than
+     * guess, as {@link #renewHome} does. A class compiled against an older script (AGENTS.md,
+     * "Pitfalls") may still send RELEASE_BUFFER's earlier answer, a bare list of window ids.
+     * Example: {@code {1001, 1002}} read without the type check would be windows 1001 and home
+     * buffer 1002, and the plug-in would attach a buffer that is not there. A close that throws
+     * here is logged as a failed close ({@link #closeFailure}).
+     */
+    private record WithHome(Object first, int homeBuf) {
+        static WithHome of(String script, Object answer, Class<?> first) {
+            if (answer instanceof List<?> l && l.size() == 2 && first.isInstance(l.get(0))
+                    && l.get(1) instanceof Number buf) {
+                return new WithHome(l.get(0), buf.intValue());
+            }
+            throw new IllegalStateException("Unexpected answer from " + script + ": " + answer);
+        }
     }
 
     private static List<Integer> ids(Object answer) {

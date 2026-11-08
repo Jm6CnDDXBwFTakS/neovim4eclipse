@@ -73,6 +73,10 @@ class DocumentBuffersTest {
     DocumentBuffersTest() {
         answers.put("SHOW_WINDOW", 1000L);
         answers.put("nvim_buf_attach", true);
+        // The close scripts' answers when nothing was wiped: no window closed with the buffer, and
+        // the home window 1000 with the home buffer 1 (the closes throw on any other shape).
+        answers.put("RELEASE_BUFFER", List.of(List.of(), 1L));
+        answers.put("CLOSE_WINDOW", List.of(1000L, 1L));
     }
 
     private boolean called(String name) {
@@ -482,10 +486,49 @@ class DocumentBuffersTest {
 
         try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
             assertThrows(Exception.class, () -> buffers.close(a));
+            log.assertLogged(Level.WARNING, "Closing buffer 5 (/ws/a.txt) failed");
         }
 
         assertForgotten(window);
         assertEquals(1000, buffers.attachedWin(), "the home window, not the closed one");
+    }
+
+    /**
+     * RELEASE_BUFFER's earlier answer, a bare list of window ids (a class compiled against the old
+     * script): the close fails and says so, rather than taking window 1002 as the home buffer.
+     */
+    @Test
+    void anAnswerOfTheWrongShapeFailsTheCloseInsteadOfTakingAWindowAsTheHomeBuffer() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        answers.put("RELEASE_BUFFER", List.of(1001L, 1002L));
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            Exception e = assertThrows(IllegalStateException.class, () -> buffers.close(doc));
+            assertTrue(e.getCause().getMessage().contains("Unexpected answer from RELEASE_BUFFER"),
+                    e.getCause().getMessage());
+            log.assertLogged(Level.WARNING, "Closing buffer 5 (/ws/a.txt) failed");
+        }
+        assertFalse(called("nvim_buf_attach"), "no buffer 1002 attached");
+        assertTrue(calls.contains("CLOSE_DOCUMENT_BUFFER [5]"), "closed all the same");
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer stays");
+    }
+
+    /**
+     * CLOSE_WINDOW's answer of the wrong shape fails the close with a warning (the session logs a
+     * failed window close at FINE only); the home window stays known.
+     */
+    @Test
+    void aCloseWindowAnswerOfTheWrongShapeFails() throws Exception {
+        EditorWindow window = shownInWindow("/ws/a.txt", 5);
+        answers.put("CLOSE_WINDOW", 1000L); // the answer before the home buffer was added
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            Exception e = assertThrows(IllegalStateException.class, () -> buffers.closeWindow(window));
+            assertTrue(e.getMessage().contains("Unexpected answer from CLOSE_WINDOW"), e.getMessage());
+            log.assertLogged(Level.WARNING, "Unexpected answer from CLOSE_WINDOW");
+        }
+        assertEquals(1000, buffers.attachedWin(), "the home window");
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer, attached before the call");
     }
 
     @Test
