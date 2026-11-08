@@ -1226,7 +1226,7 @@ final class LuaScripts {
                   closed[#closed + 1] = win
                 end
               end
-              return closed
+              return { closed, M.home_buffer() }
             end
 
             --- Whether win (0: the current one) is a window Neovim opened beside an editor's for a
@@ -1951,8 +1951,10 @@ final class LuaScripts {
 
     /**
      * Before a document's buffer is closed (arguments: its number, and the buffer shown instead):
-     * closes the editor windows that show it, quietly, and returns their ids; the home window shows
-     * the other buffer instead (the home buffer if that one was wiped in Neovim). Unloading a buffer shown in a window would make Neovim close that
+     * closes the editor windows that show it, quietly; the home window shows the other buffer
+     * instead (the home buffer if that one was wiped in Neovim). Returns the closed windows' ids and
+     * the home buffer's number, as {@link #CLOSE_WINDOW} does, made anew if it was wiped. Example:
+     * {@code {{1001, 1002}, 2}}. Unloading a buffer shown in a window would make Neovim close that
      * window or put some other buffer in it, by itself. See {@link #WINDOWS}.
      */
     static final String RELEASE_BUFFER = """

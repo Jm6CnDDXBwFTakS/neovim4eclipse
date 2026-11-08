@@ -318,9 +318,10 @@ t.test('releasing a buffer the home window shows after the home buffer was wiped
   show(-1, a) -- a document whose own window was closed in Neovim
   vim.api.nvim_buf_delete(home_buf, { force = true })
   t.forget()
-  t.eq({}, t.run('RELEASE_BUFFER', tostring(a), tostring(home_buf)), 'no E86')
-  local new = t.run('HOME_BUFFER')
-  t.eq(true, new ~= home_buf, 'made anew')
+  local answer = t.run('RELEASE_BUFFER', tostring(a), tostring(home_buf)) -- no E86
+  local new = answer[2]
+  t.eq({}, answer[1], 'no editor window closed')
+  t.eq(true, new ~= home_buf and vim.api.nvim_buf_is_valid(new), 'made anew, named in the answer')
   t.eq(new, vim.api.nvim_win_get_buf(home))
 end)
 
@@ -343,7 +344,8 @@ t.test("before a buffer is wiped, the editor windows on it close and the home wi
   show(w1, a)
   vim.api.nvim_win_set_buf(home, a)
   t.forget()
-  local closed = t.run('RELEASE_BUFFER', tostring(a), tostring(home_buf))
+  local closed, home_now = unpack(t.run('RELEASE_BUFFER', tostring(a), tostring(home_buf)))
+  t.eq(home_buf, home_now, 'the home buffer, as it was')
   table.sort(closed)
   t.eq({ w1, w2 }, closed)
   t.ok(vim.api.nvim_win_is_valid(w3), 'a window on another buffer stays')

@@ -383,24 +383,23 @@ class DocumentBuffersTest {
 
     /**
      * The last editor of a document shown in the home window (its own window was closed in Neovim)
-     * closes after the home buffer was wiped: RELEASE_BUFFER puts a new home buffer there itself,
-     * and Eclipse, going back to the home buffer, takes that one; the close logs nothing.
+     * closes after the home buffer was wiped: RELEASE_BUFFER puts a new home buffer there itself and
+     * names it, and Eclipse takes it and goes back to it straight away; the close logs nothing.
      */
     @Test
     void closingADocumentAfterTheHomeBufferWasWipedTakesTheNewOne() throws Exception {
         DocumentBuffer a = shown("/ws/a.txt", 5);
-        answers.put("RELEASE_BUFFER", List.of());
+        answers.put("RELEASE_BUFFER", List.of(List.of(), 9L));
         answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "1".equals(args.get(1)) ? -2L : 1000L);
-        answers.put("HOME_BUFFER", 9L);
 
         try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
             buffers.close(a);
             log.assertNothingAtOrAbove(Level.WARNING);
         }
 
-        assertTrue(calls.contains("RELEASE_BUFFER [5, 1]"), calls.toString());
+        assertEquals(List.of("RELEASE_BUFFER [5, 1]", "nvim_buf_attach [" + Handle.buffer(9) + ", true, {}]",
+                "SHOW_WINDOW [-1, 9]", "CLOSE_DOCUMENT_BUFFER [5]"), calls, "no call to ask for the home buffer");
         assertEquals(9, buffers.attachedBufnr());
-        assertTrue(calls.contains("CLOSE_DOCUMENT_BUFFER [5]"), calls.toString());
     }
 
     /**
