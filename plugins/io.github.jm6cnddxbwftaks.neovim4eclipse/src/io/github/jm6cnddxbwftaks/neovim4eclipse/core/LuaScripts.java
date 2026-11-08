@@ -1425,6 +1425,14 @@ final class LuaScripts {
      * belong to a document with an editor); {@code 'buftype'} goes back to a normal file's, since
      * Neovim drops the marks of an {@code acwrite} buffer when it unloads it (BUFFER_NUMBERS.md, X4); then unload and
      * unlist. {@code b:neovim4eclipse_file} stays. Nothing for a buffer that is gone.
+     *
+     * <p><b>A buffer Neovim unloaded itself</b> is only unlisted: {@code nvim_buf_delete} with
+     * {@code unload} fails ("Failed to unload buffer") on a buffer that is not loaded. Example: a
+     * Lua plug-in, or {@code <Cmd>bd 3<CR>}, runs {@code :bdelete 3}; the safety net in
+     * {@link #DOCUMENT_BUFFER} tells Eclipse, which closes the editor, and this script then finds
+     * buffer 3 unloaded and unlisted already. Its marks are gone by then (it was still
+     * {@code acwrite} when Neovim unloaded it); {@code 'buftype'} is reset all the same, so that the
+     * file's next {@code :e} reads it as a normal file.
      */
     static final String CLOSE_DOCUMENT_BUFFER = """
             local buf = tonumber((select(1, ...)))
@@ -1433,7 +1441,9 @@ final class LuaScripts {
             end
             pcall(vim.api.nvim_clear_autocmds, { group = 'neovim4eclipse_document', buf = buf })
             vim.bo[buf].buftype = ''
-            vim.api.nvim_buf_delete(buf, { force = true, unload = true }) -- force: unsaved changes live in Eclipse
+            if vim.api.nvim_buf_is_loaded(buf) then -- not after Neovim's own :bdelete, which unloaded it
+              vim.api.nvim_buf_delete(buf, { force = true, unload = true }) -- force: unsaved changes live in Eclipse
+            end
             vim.bo[buf].buflisted = false
             """;
 

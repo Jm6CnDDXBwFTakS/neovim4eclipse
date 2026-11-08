@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- A buffer deleted from inside Neovim (a Lua plug-in, a mapping to `:bd 3`) no longer puts a
+  warning in the Error Log, "Closing buffer 3 (...) failed; Neovim may still list it without an
+  editor", when its editor closes. The buffer was closed all the same.
+
 ## [0.2.7] - 2026-11-08
 
 ### Changed

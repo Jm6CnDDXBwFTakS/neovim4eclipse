@@ -377,6 +377,24 @@ t.test('a document buffer unloaded on its own and read later comes back empty, f
   t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'neither the disk nor old text')
 end)
 
+-- Neovim's own :bdelete (a Lua plug-in, <Cmd>bd) unloads the buffer before Eclipse closes the editor:
+-- the close then only unlists it. nvim_buf_delete with unload fails on a buffer that is not loaded.
+t.test('closing a buffer Neovim deleted itself succeeds and keeps it', function()
+  t.setup()
+  local buf, name = t.document('Deleted.txt', { 'x' })
+  vim.cmd('enew')
+  vim.cmd('bdelete! ' .. buf) -- !: its text is unsaved; the safety net tells Eclipse, which closes the editor
+  t.forget()
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  t.eq(true, vim.api.nvim_buf_is_valid(buf), 'kept')
+  t.eq(false, vim.api.nvim_buf_is_loaded(buf), 'unloaded')
+  t.eq(false, vim.bo[buf].buflisted, 'only :ls! shows it')
+  t.eq('', vim.bo[buf].buftype, 'a normal file again')
+  t.eq(0, plugins_autocmds(buf), 'no write hook, no safety net')
+  local again = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq(buf, again, 'the next editor gets the same buffer')
+end)
+
 t.test('closing a buffer that is gone does nothing', function()
   t.run('CLOSE_DOCUMENT_BUFFER', '999')
 end)
