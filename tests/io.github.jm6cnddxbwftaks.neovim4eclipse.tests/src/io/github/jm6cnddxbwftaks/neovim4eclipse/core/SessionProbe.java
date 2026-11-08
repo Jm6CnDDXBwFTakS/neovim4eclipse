@@ -24,4 +24,26 @@ public final class SessionProbe {
             throw new AssertionError("Neovim did not run: " + code, e);
         }
     }
+
+    /**
+     * The class that opens and closes documents' buffers, for {@code ExpectedLog.of(...)}: it is
+     * package-private, and a test in another package needs it to check what a close logs.
+     */
+    public static Class<?> documentBuffers() {
+        return DocumentBuffers.class;
+    }
+
+    /**
+     * Waits until the session's input thread has done the work queued before this call. Example: an
+     * editor's close queues its buffer's close ({@code closeBufferAsync}); a test that checks what
+     * that close logged waits here first. Any queued request is a barrier, since the input thread
+     * runs its work in order; a read of the quickfix list changes nothing.
+     */
+    public static void afterQueuedWork(NeovimSession session, long timeoutMs) {
+        try {
+            session.currentQuickfixAsync().get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            throw new AssertionError("The session's queued work did not finish", e);
+        }
+    }
 }

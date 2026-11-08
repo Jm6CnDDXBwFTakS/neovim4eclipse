@@ -6,11 +6,14 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.util.logging.Level;
+
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 
 /**
  * {@code :bd} with a buffer number or name closes that buffer's editor, not the one it was typed in
@@ -51,14 +54,20 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
 
     /**
      * A buffer Neovim deletes by itself (a Lua plug-in, {@code <Cmd>bd}) closes its editor too: the
-     * safety net of {@code LuaScripts.DOCUMENT_BUFFER}.
+     * safety net of {@code LuaScripts.DOCUMENT_BUFFER}. The buffer's close that follows finds it
+     * unloaded already and must not fail on that: it once logged "Closing buffer 3 (...) failed",
+     * with a stack trace, into the Error Log for every such delete.
      */
     @Test
     void aBufferNeovimDeletesByItselfClosesItsEditor() throws Exception {
         StyledText other = widgetOf(openOtherAndReturn());
         int bufnr = ((Number) SessionProbe.lua(session, "return vim.fn.bufnr('other.txt')")).intValue();
-        SessionProbe.lua(session, "vim.cmd.bdelete(" + bufnr + ")");
-        expectClosed(other, "other.txt's editor (buffer " + bufnr + ")");
+        try (ExpectedLog log = ExpectedLog.of(SessionProbe.documentBuffers())) {
+            SessionProbe.lua(session, "vim.cmd.bdelete(" + bufnr + ")");
+            expectClosed(other, "other.txt's editor (buffer " + bufnr + ")");
+            SessionProbe.afterQueuedWork(session, TIMEOUT_MS); // the buffer's close, queued by the editor's
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
         assertFalse(widget.isDisposed(), "test.txt stays open");
     }
 
