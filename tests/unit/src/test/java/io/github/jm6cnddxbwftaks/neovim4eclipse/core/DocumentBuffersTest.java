@@ -39,6 +39,7 @@ class DocumentBuffersTest {
             LuaScripts.DOCUMENT_BUFFER, "DOCUMENT_BUFFER",
             LuaScripts.SHOW_WINDOW, "SHOW_WINDOW",
             LuaScripts.OPEN_WINDOW, "OPEN_WINDOW",
+            LuaScripts.HOME_BUFFER, "HOME_BUFFER",
             LuaScripts.RELEASE_BUFFER, "RELEASE_BUFFER",
             LuaScripts.CLOSE_DOCUMENT_BUFFER, "CLOSE_DOCUMENT_BUFFER",
             LuaScripts.RENAME_DOCUMENT_BUFFER, "RENAME_DOCUMENT_BUFFER");
@@ -201,21 +202,44 @@ class DocumentBuffersTest {
     }
 
     /**
-     * The home buffer was wiped as well ({@code :bwipeout 1 6}): nothing can be shown, and the home
-     * window stays attached; the window id is never SHOW_WINDOW's -2.
+     * The home buffer was wiped as well ({@code :bwipeout 1 6}): Neovim makes a new one (9), which
+     * is attached for line events, shown in the home window and attached from then on.
      */
     @Test
-    void closingWhenTheHomeBufferWasWipedTooKeepsTheHomeWindowAttached() throws Exception {
+    void closingWhenTheHomeBufferWasWipedTooShowsANewHomeBuffer() throws Exception {
         DocumentBuffer a = shown("/ws/a.txt", 5);
         shown("/ws/b.txt", 6);
-        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? 1000L : -2L);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> switch ((String) args.get(1)) {
+            case "1", "6" -> -2L; // wiped
+            default -> 1000L;
+        });
+        answers.put("HOME_BUFFER", 9L);
 
         try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
             buffers.close(a);
             log.assertNothingAtOrAbove(Level.WARNING);
         }
 
-        assertEquals(1, buffers.attachedBufnr(), "the home buffer is attached");
+        assertEquals(9, buffers.attachedBufnr(), "the new home buffer is attached");
+        assertEquals(1000, buffers.attachedWin(), "in the home window");
+        assertTrue(calls.contains("nvim_buf_attach [" + Handle.buffer(9) + ", true, {}]"), calls.toString());
+        assertTrue(calls.contains("SHOW_WINDOW [-1, 9]"), calls.toString());
+    }
+
+    /** The new home buffer is wiped at once as well: nothing is shown, and the window id is never -2. */
+    @Test
+    void aNewHomeBufferWipedAtOnceLeavesTheHomeWindowAttached() throws Exception {
+        DocumentBuffer a = shown("/ws/a.txt", 5);
+        shown("/ws/b.txt", 6);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? 1000L : -2L);
+        answers.put("HOME_BUFFER", 9L);
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            buffers.close(a);
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+
+        assertEquals(9, buffers.attachedBufnr());
         assertEquals(1000, buffers.attachedWin(), "the home window, not -2");
     }
 

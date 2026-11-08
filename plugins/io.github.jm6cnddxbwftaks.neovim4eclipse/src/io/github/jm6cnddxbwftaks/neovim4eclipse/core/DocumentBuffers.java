@@ -31,7 +31,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedE
  *
  * <ul>
  *   <li>The <em>home</em> buffer is an unlisted scratch buffer, shown when no document is (at
- *       start-up, after the attached document's buffer was wiped).</li>
+ *       start-up, after the attached document's buffer was wiped). Should Neovim wipe it too, a new
+ *       one takes its place ({@link #renewHome}).</li>
  *   <li>The <em>attached</em> buffer is the one mirrored into the attached editor: buffer reads and
  *       writes go to it, and only its cursor positions reach Eclipse. Its line events go to the
  *       attached editor; those of the other document buffers to their own documents
@@ -64,7 +65,11 @@ final class DocumentBuffers {
     private static final int BUFFER_GONE = -2;
 
     private final NeovimApi api;
-    private final Handle home;
+    /**
+     * The home buffer: the one made at start, until Neovim wipes it ({@link #renewHome}). Volatile:
+     * read on the RPC threads ({@link #isAttached(int)} through {@link #attachedBufnr}).
+     */
+    private volatile Handle home;
     /** The editor windows (Java side); the home window is not one of them. */
     private final EditorWindows windows = new EditorWindows();
     /**
@@ -670,12 +675,37 @@ final class DocumentBuffers {
             shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
         }
         if (shown == BUFFER_GONE) {
-            // The home buffer was wiped as well (:bwipeout 1 5): nothing to show. The home window
-            // stays the attached one, so that the next show or BufEnter still finds a window id.
-            LOG.fine(() -> "The home buffer " + attachedBufnr + " was wiped in Neovim; nothing shown");
+            // The home buffer was wiped as well (:bwipeout 1 5): Neovim makes a new one, which is
+            // attached and shown from now on.
+            renewHome();
+            attachHome();
+            attachedWin = homeWin;
+            shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
+        }
+        if (shown == BUFFER_GONE) {
+            // Wiped again at once: nothing to show. The home window stays the attached one, so that
+            // the next show or BufEnter still finds a window id.
+            LOG.fine(() -> "The new home buffer " + attachedBufnr + " was wiped in Neovim too; nothing shown");
             return;
         }
         attachedWin = shown;
+    }
+
+    /**
+     * Takes the home buffer Neovim has now ({@link LuaScripts#HOME_BUFFER}), made anew there because
+     * the one this session knew was wiped, and attaches it for line events as the start-up does
+     * ({@code NeovimSession.start}). Example: a plug-in ran {@code :bwipeout 1}; the home buffer
+     * is 9 from then on.
+     */
+    private void renewHome() throws Exception {
+        Object answer = await(api.execLua(LuaScripts.HOME_BUFFER, List.of()));
+        if (!(answer instanceof Number n)) {
+            throw new IllegalStateException("Unexpected answer for the home buffer: " + answer);
+        }
+        int old = bufnr(home);
+        home = Handle.buffer(n.longValue());
+        LOG.fine(() -> "The home buffer " + old + " was wiped in Neovim; the home buffer is " + n + " now");
+        await(api.bufAttach(home, true));
     }
 
     /**

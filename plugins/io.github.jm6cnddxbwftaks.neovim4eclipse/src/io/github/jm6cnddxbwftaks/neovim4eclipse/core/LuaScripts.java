@@ -1074,10 +1074,21 @@ final class LuaScripts {
               return result
             end
 
+            --- The home buffer's number: made anew, an unlisted scratch buffer as at start, if Neovim
+            --- wiped it (a plug-in's :bwipeout 1, or one that wipes every buffer nvim_list_bufs() has),
+            --- and remembered, so that every later call and the home window agree on it. Eclipse
+            --- asks for it (HOME_BUFFER) when the home buffer it knows is gone.
+            function M.home_buffer()
+              if not vim.api.nvim_buf_is_valid(home_buf) then
+                home_buf = vim.api.nvim_create_buf(false, true)
+              end
+              return home_buf
+            end
+
             --- The home window, opened again (quietly, in a new tab) if the user closed it.
             function M.home()
               if not vim.api.nvim_win_is_valid(home) then
-                local buf = vim.api.nvim_buf_is_valid(home_buf) and home_buf or vim.api.nvim_create_buf(false, true)
+                local buf = M.home_buffer()
                 home = quietly(function()
                   return vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
                 end)
@@ -1356,6 +1367,15 @@ final class LuaScripts {
                 vim.keymap.set('n', lhs, quit(lhs), { expr = true, desc = 'Eclipse: close the editor' })
               end
             end
+            """;
+
+    /**
+     * The home buffer's number, made anew if Neovim wiped it ({@code M.home_buffer} in
+     * {@link #WINDOWS}). Example: a plug-in ran {@code :bwipeout 1}; Eclipse, finding the home buffer
+     * gone when it goes back to it, gets 9, a new unlisted scratch buffer, and shows that.
+     */
+    static final String HOME_BUFFER = """
+            return require('neovim4eclipse.windows').home_buffer()
             """;
 
     /**

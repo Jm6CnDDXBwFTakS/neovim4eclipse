@@ -22,6 +22,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A plug-in that wipes several buffers at once (`:bwipeout 4 5`), the one in the active editor
   among them, no longer puts "Closing buffer 4 (...) failed" with "E86: Buffer 5 does not exist" in
   the Error Log as the editors close.
+- A plug-in that wipes Eclipse's own scratch buffer, the one Neovim shows when no editor's
+  document is (`:bwipeout 1`), no longer leaves Neovim without one: a new one takes its place.
 - An editor whose buffer a plug-in wiped without telling Eclipse (`:noautocmd bwipeout 3`) works
   again when it is activated: Neovim gets a new buffer for it, instead of every activation failing.
 
