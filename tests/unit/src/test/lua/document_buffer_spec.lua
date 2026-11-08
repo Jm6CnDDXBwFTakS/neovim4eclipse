@@ -401,17 +401,26 @@ end)
 
 -- The BufUnload hook unloads with 'buftype' '' to keep the marks; a document's buffer that stays
 -- unloaded (a plug-in's :bunload, its editor still open) is an acwrite buffer again on the next loop.
-t.test('a document buffer unloaded on its own is acwrite again on the next loop, its marks kept', function()
+t.test('a document buffer unloaded on its own is acwrite again on the next loop, its marks kept, quietly', function()
   t.setup()
   local buf = t.document('Bunload.txt', { '1', '2' })
   vim.api.nvim_buf_set_mark(buf, 'a', 2, 0, {})
   vim.cmd('enew')
+  -- Another plug-in watching 'buftype' sees nothing of the switch to '' and back.
+  local seen = {}
+  local watcher = vim.api.nvim_create_autocmd('OptionSet', {
+    pattern = 'buftype',
+    callback = function() table.insert(seen, vim.v.option_new) end,
+  })
   vim.cmd('bunload! ' .. buf)
   local next_loop = false
   vim.schedule(function() next_loop = true end) -- after the hook's own scheduled clean-up
   t.wait_for("Neovim's next loop", function() return next_loop end)
+  vim.api.nvim_del_autocmd(watcher)
   t.eq('acwrite', vim.bo[buf].buftype)
   t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'))
+  t.eq({}, seen, 'no OptionSet for buftype')
+  t.eq('', vim.o.eventignore, "'eventignore' is put back")
 end)
 
 t.test('closing a buffer that is gone does nothing', function()

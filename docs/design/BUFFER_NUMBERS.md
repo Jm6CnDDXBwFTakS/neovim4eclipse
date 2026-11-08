@@ -92,7 +92,8 @@ returns to the attached buffer. Then `CLOSE_DOCUMENT_BUFFER`:
    net's `BufDelete` closes the editor, and this script runs on the unloaded buffer. Its marks are
    kept there too, because the document's `BufUnload` hook sets `'buftype'` to `''` for every
    unload (X5) and gives it `'acwrite'` back with the read, or on Neovim's next loop if it is still
-   a document's buffer.
+   a document's buffer. Both switches are made with `OptionSet` ignored: they are the plug-in's own
+   step, which other plug-ins watching `'buftype'` (a status line, say) should not react to.
 
 `b:neovim4eclipse_file` stays: it marks the buffer as a closed document's. The safety net's
 `BufDelete` notice from step 3 reaches Eclipse after Java has forgotten the buffer, and is ignored.

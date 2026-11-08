@@ -3802,6 +3802,21 @@ final class LuaScripts {
             -- /var/x on macOS); on Windows ev.match has / where the buffer name has \\ (C:/x/a.txt,
             -- C:\\x\\a.txt); and on Windows and macOS a name in other case is the same file.
             local canonical = require('neovim4eclipse.paths').canonical
+            -- Sets the buffer's 'buftype' without firing OptionSet. The hooks below switch it to ''
+            -- for an unload (the marks, X5) and back to 'acwrite' right after: a step of their own,
+            -- not a change another plug-in should react to (a status line that hides itself for
+            -- special buffers would flicker, one that tracks file buffers would take it for a file).
+            -- Example: :bunload 3 sets '' and, on Neovim's next loop, 'acwrite' again, and an
+            -- OptionSet autocommand for buftype runs neither time.
+            local function set_buftype(b, value)
+              local saved = vim.o.eventignore
+              vim.o.eventignore = saved == '' and 'OptionSet' or saved .. ',OptionSet'
+              local ok, err = pcall(function() vim.bo[b].buftype = value end)
+              vim.o.eventignore = saved
+              if not ok then
+                error(err, 0)
+              end
+            end
             -- Whether `name` is the editor's file, or the buffer's name (renamed by :saveas or :file).
             local function own(b, name)
               local c = canonical(name)
@@ -4006,12 +4021,12 @@ final class LuaScripts {
                 -- (BUFFER_NUMBERS.md, X5): for Neovim's own :bdelete (a Lua plug-in, <Cmd>bd!), whose
                 -- buffer Eclipse then closes (the safety net), as for CLOSE_DOCUMENT_BUFFER's unload.
                 -- 'acwrite' comes back with the read (BufReadCmd below) or on the next loop.
-                vim.bo[ev.buf].buftype = ''
+                set_buftype(ev.buf, '')
                 vim.schedule(function()
                   kept = nil
                   if vim.api.nvim_buf_is_valid(ev.buf)
                       and #vim.api.nvim_get_autocmds({ group = group, buf = ev.buf }) > 0 then
-                    vim.bo[ev.buf].buftype = 'acwrite' -- still a document's buffer (not closed meanwhile)
+                    set_buftype(ev.buf, 'acwrite') -- still a document's buffer (not closed meanwhile)
                   end
                 end)
               end,
@@ -4021,7 +4036,7 @@ final class LuaScripts {
               group = group,
               desc = 'Eclipse keeps the document',
               callback = function(ev)
-                vim.bo[ev.buf].buftype = 'acwrite' -- BufUnload made it '' for the unload
+                set_buftype(ev.buf, 'acwrite') -- BufUnload made it '' for the unload
                 local k = kept
                 kept = nil
                 if k then
