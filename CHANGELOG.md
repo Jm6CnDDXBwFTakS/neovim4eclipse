@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-08
+
 ### Changed
 
 - Search matches are highlighted in an amber of their own, darker in a dark editor (Eclipse's dark
