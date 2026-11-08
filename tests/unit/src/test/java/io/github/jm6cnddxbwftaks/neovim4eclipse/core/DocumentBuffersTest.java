@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Function;
 import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
@@ -43,9 +44,13 @@ class DocumentBuffersTest {
 
     /** The calls made, in order: {@code "DOCUMENT_BUFFER [5]"}, {@code "nvim_buf_delete ..."}. */
     private final List<String> calls = new CopyOnWriteArrayList<>();
-    /** The answer to each call, by its name; an Exception fails it. Unlisted calls answer null. */
+    /**
+     * The answer to each call, by its name; an Exception fails it, a {@link Function} gets the call's
+     * arguments and gives the answer. Unlisted calls answer null.
+     */
     private final Map<String, Object> answers = new HashMap<>();
 
+    @SuppressWarnings("unchecked") // the Function answers take the call's argument list
     private final DocumentBuffers buffers = new DocumentBuffers(new MsgpackNeovimApi((method, params) -> {
         String name = method;
         List<Object> args = new ArrayList<>(List.of(params));
@@ -55,6 +60,9 @@ class DocumentBuffersTest {
         }
         calls.add(name + " " + args);
         Object answer = answers.get(name);
+        if (answer instanceof Function<?, ?> byArgs) {
+            answer = ((Function<List<Object>, ?>) byArgs).apply(args); // an answer that depends on the arguments
+        }
         return answer instanceof Exception e ? CompletableFuture.failedFuture(e)
                 : CompletableFuture.completedFuture(answer);
     }), Handle.buffer(1), 1000);
@@ -165,6 +173,30 @@ class DocumentBuffersTest {
             assertTrue(e.getCause().getMessage().contains("release timed out"), e.getCause().toString());
             assertEquals(1, e.getCause().getSuppressed().length);
         }
+    }
+
+    /**
+     * A plug-in's {@code :bwipeout 5 6} took the attached buffer (6) as well. Closing 5's editor then
+     * comes back to the home buffer: going back to 6 failed with E86, and the close was logged as
+     * failed. SHOW_WINDOW answers -2 for a buffer that is gone.
+     */
+    @Test
+    void closingWhenTheAttachedBufferWasWipedInNeovimReturnsToTheHomeBuffer() throws Exception {
+        DocumentBuffer a = shown("/ws/a.txt", 5);
+        shown("/ws/b.txt", 6);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "6".equals(args.get(1)) ? -2L : 1000L);
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            buffers.close(a);
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+
+        // These documents have no editor window: both are shown in the home window (-1).
+        int back = calls.indexOf("SHOW_WINDOW [-1, 6]");
+        assertTrue(back >= 0, calls.toString());
+        assertEquals("SHOW_WINDOW [-1, 1]", calls.get(back + 1), "then the home buffer");
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer is attached");
+        assertTrue(calls.contains("CLOSE_DOCUMENT_BUFFER [5]"), calls.toString());
     }
 
     @Test

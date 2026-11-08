@@ -19,6 +19,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   editor", when its editor closes. The buffer was closed all the same.
 - Such a buffer also keeps its marks and last cursor position, as one whose editor Eclipse closes
   does: opening the file again brings back `'a` and puts the cursor where it was.
+- A plug-in that wipes several buffers at once (`:bwipeout 4 5`), the one in the active editor
+  among them, no longer puts "Closing buffer 4 (...) failed" with "E86: Buffer 5 does not exist" in
+  the Error Log as the editors close.
 
 ## [0.2.7] - 2026-11-08
 

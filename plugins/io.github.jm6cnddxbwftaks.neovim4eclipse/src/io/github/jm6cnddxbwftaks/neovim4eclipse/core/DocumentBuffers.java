@@ -56,6 +56,13 @@ final class DocumentBuffers {
 
     private static final Logger LOG = Logger.getLogger(DocumentBuffers.class.getName());
 
+    /**
+     * {@link LuaScripts#SHOW_WINDOW}'s answer, and {@link #showWindow}'s, for a buffer wiped in
+     * Neovim: nothing was shown. Not a window id (those are 1000 and up) nor
+     * {@link EditorWindow#UNKNOWN} (-1, a window closed in Neovim).
+     */
+    private static final int BUFFER_GONE = -2;
+
     private final NeovimApi api;
     private final Handle home;
     /** The editor windows (Java side); the home window is not one of them. */
@@ -235,6 +242,11 @@ final class DocumentBuffers {
             attachedWin = win;
             shown = showWindow(win, buffer.bufnr);
         }
+        if (shown == BUFFER_GONE) {
+            // Wiped in Neovim since this session made it; the safety net closes its editor.
+            throw new IllegalStateException("Buffer " + buffer.bufnr + " (" + buffer.name
+                    + ") was wiped in Neovim; its editor closes");
+        }
         attachedWin = shown;
     }
 
@@ -278,12 +290,16 @@ final class DocumentBuffers {
     /**
      * Enters window {@code win} showing buffer {@code bufnr} ({@link LuaScripts#SHOW_WINDOW}), and
      * returns the window shown: for the home window its (perhaps new) id, which is remembered; for
-     * an editor window {@link EditorWindow#UNKNOWN} when it was closed in Neovim.
+     * an editor window {@link EditorWindow#UNKNOWN} when it was closed in Neovim; and
+     * {@link #BUFFER_GONE}, nothing shown, when the buffer was wiped in Neovim.
      */
     private int showWindow(int win, int bufnr) throws Exception {
         boolean toHome = win == EditorWindow.UNKNOWN || win == homeWin;
         Object answer = await(api.execLua(LuaScripts.SHOW_WINDOW,
                 List.of(String.valueOf(toHome ? -1 : win), String.valueOf(bufnr))));
+        if (answer instanceof Number n && n.intValue() == BUFFER_GONE) {
+            return BUFFER_GONE;
+        }
         int shown = answer instanceof Number id && id.intValue() > 0 ? id.intValue() : EditorWindow.UNKNOWN;
         if (toHome && shown != EditorWindow.UNKNOWN) {
             homeWin = shown;
@@ -585,10 +601,23 @@ final class DocumentBuffers {
     /**
      * Switches Neovim back to the attached buffer in the attached window. If that window was closed
      * in Neovim, the home window shows the attached buffer from then on, until the editor's next
-     * show opens it a window again.
+     * show opens it a window again. If the attached buffer itself was wiped in Neovim, the home
+     * buffer in the home window is attached instead. Example: a plug-in runs {@code :bwipeout 4 5}
+     * while 5 is attached; closing 4's editor then comes back to the home buffer, not to 5 (which
+     * failed with "E86: Buffer 5 does not exist").
      */
     void returnToAttached() throws Exception {
         int shown = showWindow(attachedWin, attachedBufnr);
+        if (shown == BUFFER_GONE) {
+            // Wiped in Neovim behind Eclipse's back: a plug-in's :bwipeout of several buffers, the
+            // attached one among them. Its editor closes too (the safety net's BufWipeout notice),
+            // but that notice may come after this. Until the next show, the home buffer is attached.
+            attached = home;
+            attachedBufnr = bufnr(home);
+            attachedDocument = null;
+            attachedWin = homeWin;
+            shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);
+        }
         if (shown == EditorWindow.UNKNOWN) {
             attachedWin = homeWin;
             shown = showWindow(EditorWindow.UNKNOWN, attachedBufnr);

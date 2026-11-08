@@ -1141,6 +1141,9 @@ final class LuaScripts {
             end
 
             function M.show(win, buf)
+              if not vim.api.nvim_buf_is_valid(buf) then
+                return -2 -- wiped in Neovim (a plug-in's :bwipeout): Eclipse shows the home buffer
+              end
               if win < 0 then
                 win = M.home()
               elseif not vim.api.nvim_win_is_valid(win) then
@@ -1364,8 +1367,10 @@ final class LuaScripts {
 
     /**
      * Makes a window the current one, showing a buffer (arguments: the window id, -1 for the home
-     * window, and the buffer number), and returns the id of the window shown, or -1 without doing
-     * anything when that window was closed in Neovim (Eclipse then opens a new one). Example: {@code ("1001", "3")} enters editor B's
+     * window, and the buffer number), and returns the id of the window shown, or without doing
+     * anything -1 when that window was closed in Neovim (Eclipse then opens a new one), -2 when the
+     * buffer was wiped there (Eclipse goes back to the home buffer: {@code DocumentBuffers.returnToAttached}).
+     * Example: {@code ("1001", "3")} enters editor B's
      * window, which shows buffer 3 already; Neovim fires {@code BufEnter} for buffer 3 there, which
      * Eclipse recognizes as its own switch. See {@link #WINDOWS}.
      */

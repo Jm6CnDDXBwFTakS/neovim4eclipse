@@ -214,6 +214,17 @@ t.test('a window closed in Neovim is not shown: -1, and nothing changes', functi
   t.eq(home, vim.api.nvim_get_current_win())
 end)
 
+t.test('a buffer wiped in Neovim is not shown: -2, and nothing changes', function()
+  local home = start()
+  local a, b = buffer(3), buffer(3)
+  local win = open(a)
+  vim.api.nvim_buf_delete(b, { force = true })
+  t.eq(-2, show(win, b))
+  t.eq(-2, show(-1, b))
+  t.eq(home, vim.api.nvim_get_current_win())
+  t.eq(a, vim.api.nvim_win_get_buf(win))
+end)
+
 t.test('a window closed in Neovim by itself sends eclipse_window_closed: the safety net', function()
   local home = start()
   local win = open(buffer(3))
