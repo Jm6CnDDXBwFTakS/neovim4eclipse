@@ -367,7 +367,7 @@ final class DocumentBuffers {
         }
         Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW,
                 List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
-        WithHome closed;
+        WithHome<Number> closed;
         try {
             closed = WithHome.of("CLOSE_WINDOW", answer, Number.class);
         } catch (IllegalStateException e) {
@@ -377,7 +377,7 @@ final class DocumentBuffers {
             throw e;
         }
         boolean attachedHome = attachedWin == homeWin;
-        homeWin = ((Number) closed.first()).intValue();
+        homeWin = closed.first().intValue();
         if (attachedHome) {
             attachedWin = homeWin;
         }
@@ -572,7 +572,12 @@ final class DocumentBuffers {
         // still but no longer in `created`, and its closed document must not stay attached.
         boolean wasAttached = attachedBufnr == buffer.bufnr;
         if (wasAttached) {
+            // The home buffer is shown in the home window, as closeWindow does: set here, not after
+            // RELEASE_BUFFER's answer, so that a close failing on the way does not leave a window
+            // Neovim closed as the attached one. Example: the answer of a stale script cannot be
+            // read, so the closed windows are not known; the attached one is the home window anyway.
             attachHome();
+            attachedWin = homeWin;
         }
         if (doomed == null) {
             if (wasAttached) {
@@ -602,13 +607,14 @@ final class DocumentBuffers {
             Object answer = await(api.execLua(LuaScripts.RELEASE_BUFFER,
                     List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
             // The closed windows' ids and the home buffer's number, made anew if Neovim wiped it.
-            WithHome released = WithHome.of("RELEASE_BUFFER", answer, List.class);
-            // The windows first: should taking a new home buffer fail, none stays known after its close.
-            for (int winid : ids(released.first())) {
+            @SuppressWarnings("rawtypes") // List.class names no element type; ids checks each one
+            WithHome<List> released = WithHome.of("RELEASE_BUFFER", answer, List.class);
+            // The windows first: should taking a new home buffer fail, none stays known after its
+            // close. (An answer that cannot be read leaves them known: a later show of one finds it
+            // closed and opens a new one, SHOW_WINDOW answering UNKNOWN, and closing one asks
+            // CLOSE_WINDOW, which skips a window that is gone.)
+            for (int winid : ids("RELEASE_BUFFER", released.first())) {
                 windows.forget(winid);
-                if (winid == attachedWin) {
-                    attachedWin = homeWin;
-                }
             }
             adoptHome(released.homeBuf()); // before the switch back below, which shows the home buffer
             returnToAttached();
@@ -661,31 +667,38 @@ final class DocumentBuffers {
      * home window, then the home buffer); RELEASE_BUFFER {@code {{1001, 1002}, 2}} (the windows it
      * closed, then the home buffer).
      *
-     * <p>{@link #of} throws on any other shape, the first element's type included, rather than
-     * guess, as {@link #renewHome} does. A class compiled against an older script (AGENTS.md,
-     * "Pitfalls") may still send RELEASE_BUFFER's earlier answer, a bare list of window ids.
-     * Example: {@code {1001, 1002}} read without the type check would be windows 1001 and home
-     * buffer 1002, and the plug-in would attach a buffer that is not there. A close that throws
-     * here is logged as a failed close ({@link #closeFailure}).
+     * <p>{@link #of} throws on any other shape, the first element's type included; it does not
+     * guess (nor does {@link #renewHome}, which throws on an answer that is not a number). A class
+     * compiled against an older script (AGENTS.md, "Pitfalls") may still send RELEASE_BUFFER's
+     * earlier answer, a bare list of window ids. Example: {@code {1001, 1002}} read without the
+     * type check would be windows 1001 and home buffer 1002, and the plug-in would attach a buffer
+     * that is not there. A document close that throws here is logged as a failed close
+     * ({@link #closeFailure}); a window close logs it at WARNING itself.
+     *
+     * @param <T> the first element's type, as {@link #of} checked it
      */
-    private record WithHome(Object first, int homeBuf) {
-        static WithHome of(String script, Object answer, Class<?> first) {
+    private record WithHome<T>(T first, int homeBuf) {
+        static <T> WithHome<T> of(String script, Object answer, Class<T> first) {
             if (answer instanceof List<?> l && l.size() == 2 && first.isInstance(l.get(0))
                     && l.get(1) instanceof Number buf) {
-                return new WithHome(l.get(0), buf.intValue());
+                return new WithHome<>(first.cast(l.get(0)), buf.intValue());
             }
             throw new IllegalStateException("Unexpected answer from " + script + ": " + answer);
         }
     }
 
-    private static List<Integer> ids(Object answer) {
+    /**
+     * The window ids a script answered, such as RELEASE_BUFFER's {@code {1001, 1002}}. Throws on an
+     * entry that is not a number, as {@link WithHome#of} does on the answer's shape: skipping it
+     * would leave a window Neovim closed known to Eclipse without a word.
+     */
+    private static List<Integer> ids(String script, List<?> answer) {
         List<Integer> ids = new ArrayList<>();
-        if (answer instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof Number n) {
-                    ids.add(n.intValue());
-                }
+        for (Object o : answer) {
+            if (!(o instanceof Number n)) {
+                throw new IllegalStateException("Unexpected window id from " + script + ": " + answer);
             }
+            ids.add(n.intValue());
         }
         return ids;
     }

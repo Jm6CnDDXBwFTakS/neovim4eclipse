@@ -514,6 +514,39 @@ class DocumentBuffersTest {
     }
 
     /**
+     * A wrong answer when the attached editor's document closes: its window, which Neovim closed,
+     * is not left as the attached one; the home buffer is attached in the home window.
+     */
+    @Test
+    void anUnreadableReleaseOfTheAttachedDocumentLeavesTheHomeWindowAttached() throws Exception {
+        shownInWindow("/ws/a.txt", 5);
+        DocumentBuffer a = buffers.documentAt(5);
+        assertEquals(1001, buffers.attachedWin());
+        answers.put("RELEASE_BUFFER", List.of(1001L, 1002L));
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            assertThrows(IllegalStateException.class, () -> buffers.close(a));
+            log.assertLogged(Level.WARNING, "Closing buffer 5 (/ws/a.txt) failed");
+        }
+        assertEquals(1000, buffers.attachedWin(), "the home window, not the closed 1001");
+        assertEquals(1, buffers.attachedBufnr());
+    }
+
+    /** A window id that is not a number fails the close rather than being skipped. */
+    @Test
+    void aReleasedWindowIdThatIsNotANumberFailsTheClose() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        answers.put("RELEASE_BUFFER", List.of(List.of("1001"), 1L));
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            Exception e = assertThrows(IllegalStateException.class, () -> buffers.close(doc));
+            assertTrue(e.getCause().getMessage().contains("Unexpected window id from RELEASE_BUFFER"),
+                    e.getCause().getMessage());
+            log.assertLogged(Level.WARNING, "Closing buffer 5 (/ws/a.txt) failed");
+        }
+    }
+
+    /**
      * CLOSE_WINDOW's answer of the wrong shape fails the close with a warning (the session logs a
      * failed window close at FINE only); the home window stays known.
      */
