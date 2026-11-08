@@ -350,8 +350,8 @@ final class DocumentBuffers {
      * Closes an editor's window and its tabpage (its editor closed). The buffer stays, for the
      * document's other editors; {@link #close(DocumentBuffer)} wipes it after the last one. When it
      * was the attached window, the home buffer in the home window is attached until Eclipse shows the
-     * next editor; one Neovim wiped is made anew first ({@link #renewHome}), so that the home window
-     * shows it rather than the buffer Neovim chose. Example: a plug-in ran {@code :bwipeout 2}, then
+     * next editor. One Neovim wiped is made anew there (CLOSE_WINDOW answers its number with the home
+     * window's), and attached ({@link #adoptHome}). Example: a plug-in ran {@code :bwipeout 2}, then
      * the active editor closes: the home window shows the new home buffer 9, and keys typed before
      * the next editor's show go to 9, not to another document's buffer.
      */
@@ -362,18 +362,19 @@ final class DocumentBuffers {
         int win = window.winid;
         windows.forget(window);
         if (attachedWin == win) {
-            renewHome(); // one call, only for the attached window: the others leave the home buffer alone
-            attachHome();
+            attachHome(); // first, without a call: should the close fail, the closed editor is not attached
             attachedWin = homeWin;
         }
         Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW,
                 List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
-        if (answer instanceof Number id) {
+        if (answer instanceof List<?> ids && ids.size() == 2
+                && ids.get(0) instanceof Number id && ids.get(1) instanceof Number buf) {
             boolean attachedHome = attachedWin == homeWin;
             homeWin = id.intValue();
             if (attachedHome) {
                 attachedWin = homeWin;
             }
+            adoptHome(buf.intValue());
         }
     }
 
@@ -696,23 +697,36 @@ final class DocumentBuffers {
     }
 
     /**
-     * Takes the home buffer Neovim has now ({@link LuaScripts#HOME_BUFFER}), made anew there because
-     * the one this session knew was wiped, and attaches it for line events as the start-up does
-     * ({@code NeovimSession.start}); nothing if it is still the one this session knows. Example: a
-     * plug-in ran {@code :bwipeout 2} (the home buffer's usual number); the home buffer is 9 from
-     * then on.
+     * Asks Neovim for the home buffer ({@link LuaScripts#HOME_BUFFER}), made anew there because the
+     * one this session knew was wiped, and takes it ({@link #adoptHome}). Used where Neovim found the
+     * home buffer gone (SHOW_WINDOW answered -2); a close learns it from CLOSE_WINDOW's answer instead.
      */
     private void renewHome() throws Exception {
         Object answer = await(api.execLua(LuaScripts.HOME_BUFFER, List.of()));
         if (!(answer instanceof Number n)) {
             throw new IllegalStateException("Unexpected answer for the home buffer: " + answer);
         }
+        adoptHome(n.intValue());
+    }
+
+    /**
+     * Takes {@code bufnr} as the home buffer when Neovim made a new one (the old one was wiped):
+     * attached for line events as the start-up does ({@code NeovimSession.start}), and the attached
+     * buffer if the old home buffer was. Nothing if it is the one this session knows. Example: a
+     * plug-in ran {@code :bwipeout 2} (the home buffer's usual number); the home buffer is 9 from
+     * then on.
+     */
+    private void adoptHome(int bufnr) throws Exception {
         int old = bufnr(home);
-        if (n.intValue() == old) {
+        if (bufnr == old) {
             return;
         }
-        home = Handle.buffer(n.longValue());
-        LOG.fine(() -> "The home buffer " + old + " was wiped in Neovim; the home buffer is " + n + " now");
+        boolean homeAttached = attachedDocument == null && attachedBufnr == old;
+        home = Handle.buffer(bufnr);
+        if (homeAttached) {
+            attachHome();
+        }
+        LOG.fine(() -> "The home buffer " + old + " was wiped in Neovim; the home buffer is " + bufnr + " now");
         await(api.bufAttach(home, true));
     }
 

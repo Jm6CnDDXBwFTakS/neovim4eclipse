@@ -286,7 +286,7 @@ t.test('closing the current window enters the home window quietly with the buffe
   local win = open(a)
   show(win, a)
   t.forget()
-  t.eq(home, t.run('CLOSE_WINDOW', tostring(win), tostring(home_buf)), 'the home window id comes back')
+  t.eq({ home, home_buf }, t.run('CLOSE_WINDOW', tostring(win), tostring(home_buf)), 'the home window and buffer come back')
   t.ok(not vim.api.nvim_win_is_valid(win))
   t.eq(1, #vim.api.nvim_list_tabpages(), 'its tab is gone')
   t.eq(home, vim.api.nvim_get_current_win())
@@ -294,6 +294,34 @@ t.test('closing the current window enters the home window quietly with the buffe
   t.eq({}, t.sent('eclipse_window_closed'), "the plug-in's own close is not the safety net's business")
   t.eq({}, t.sent('eclipse_buf_enter'))
   t.ok(vim.api.nvim_buf_is_valid(a), 'the buffer stays, for the other editors on the file')
+end)
+
+t.test('closing the current window after the home buffer was wiped shows a new home buffer', function()
+  local home, home_buf = start()
+  local a = buffer(3)
+  local win = open(a)
+  show(win, a)
+  -- A plug-in's :bwipeout 2: Neovim closes the home window, which showed it, as well.
+  vim.api.nvim_buf_delete(home_buf, { force = true })
+  t.forget()
+  local answer = t.run('CLOSE_WINDOW', tostring(win), tostring(home_buf))
+  local again, new = answer[1], answer[2]
+  t.eq(true, again ~= home and vim.api.nvim_win_is_valid(again), 'the home window, opened again')
+  t.eq(true, new ~= home_buf and vim.api.nvim_buf_is_valid(new), 'a new home buffer, named in the answer')
+  t.eq(new, vim.api.nvim_win_get_buf(again), 'in the home window, not a buffer Neovim chose')
+  t.eq(again, vim.api.nvim_get_current_win())
+end)
+
+t.test('releasing a buffer the home window shows after the home buffer was wiped shows a new one', function()
+  local home, home_buf = start()
+  local a = buffer(3)
+  show(-1, a) -- a document whose own window was closed in Neovim
+  vim.api.nvim_buf_delete(home_buf, { force = true })
+  t.forget()
+  t.eq({}, t.run('RELEASE_BUFFER', tostring(a), tostring(home_buf)), 'no E86')
+  local new = t.run('HOME_BUFFER')
+  t.eq(true, new ~= home_buf, 'made anew')
+  t.eq(new, vim.api.nvim_win_get_buf(home))
 end)
 
 t.test('the home window is never closed, and is opened again when the user closed it', function()

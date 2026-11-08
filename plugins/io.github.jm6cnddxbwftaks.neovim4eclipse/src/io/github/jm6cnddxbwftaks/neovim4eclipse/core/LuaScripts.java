@@ -1179,15 +1179,23 @@ final class LuaScripts {
               end)
             end
 
+            --- The buffer the home window shows instead of one being closed: fallback, which Eclipse
+            --- names (the attached buffer, or the home buffer), or the home buffer, made anew if need
+            --- be, when Neovim wiped fallback. The one rule for every close (M.close, M.release), so
+            --- that none puts a wiped buffer in a window. Example: a plug-in ran :bwipeout 2, the
+            --- home buffer Eclipse still names; closing the active editor shows a new home buffer
+            --- instead of failing with E86 (or leaving Neovim's own choice in the home window).
+            local function fallback_buf(fallback)
+              return vim.api.nvim_buf_is_valid(fallback) and fallback or M.home_buffer()
+            end
+
             --- Leaves win (quietly) for the home window showing fallback, if win is the current one.
             local function leave(win, fallback)
               if win == vim.api.nvim_get_current_win() then
                 local to = M.home()
                 quietly(function()
                   vim.api.nvim_set_current_win(to)
-                  if vim.api.nvim_buf_is_valid(fallback) then
-                    put_buf(to, fallback)
-                  end
+                  put_buf(to, fallback_buf(fallback))
                 end)
               end
             end
@@ -1204,14 +1212,14 @@ final class LuaScripts {
                 leave(win, fallback)
                 close_quietly(win)
               end
-              return M.home()
+              return { M.home(), M.home_buffer() }
             end
 
             function M.release(buf, fallback)
               local closed = {}
               for _, win in ipairs(vim.fn.win_findbuf(buf)) do
                 if win == home then
-                  set_buf(win, fallback)
+                  set_buf(win, fallback_buf(fallback))
                 else
                   leave(win, fallback)
                   close_quietly(win)
@@ -1436,8 +1444,10 @@ final class LuaScripts {
 
     /**
      * Closes an editor's window and its tab quietly (arguments: the window id, and the buffer the
-     * home window shows if the closed window was the current one), and returns the home window's
-     * id (it may have been opened again). See {@link #WINDOWS}.
+     * home window shows if the closed window was the current one: the home buffer instead if that
+     * one was wiped), and returns the home window's id (it may have been opened again) and the home
+     * buffer's number (it may have been made anew: {@code M.home_buffer}). Example: {@code {1000, 2}};
+     * after a plug-in's {@code :bwipeout 2}, {@code {1000, 9}}. See {@link #WINDOWS}.
      */
     static final String CLOSE_WINDOW = """
             local win, fallback = tonumber((select(1, ...))), tonumber((select(2, ...)))
@@ -1942,7 +1952,7 @@ final class LuaScripts {
     /**
      * Before a document's buffer is closed (arguments: its number, and the buffer shown instead):
      * closes the editor windows that show it, quietly, and returns their ids; the home window shows
-     * the other buffer instead. Unloading a buffer shown in a window would make Neovim close that
+     * the other buffer instead (the home buffer if that one was wiped in Neovim). Unloading a buffer shown in a window would make Neovim close that
      * window or put some other buffer in it, by itself. See {@link #WINDOWS}.
      */
     static final String RELEASE_BUFFER = """

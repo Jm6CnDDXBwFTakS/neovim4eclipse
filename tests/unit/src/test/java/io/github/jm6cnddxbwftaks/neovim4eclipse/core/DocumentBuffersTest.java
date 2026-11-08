@@ -303,35 +303,104 @@ class DocumentBuffersTest {
 
     /**
      * The home buffer was wiped in Neovim ({@code :bwipeout 2}), then the active editor closes:
-     * Neovim makes a new home buffer (9), which the home window is given and Eclipse attaches,
-     * rather than the gone one, which left the home window on a buffer Neovim chose.
+     * Neovim makes a new home buffer (9) for the home window and names it in CLOSE_WINDOW's answer,
+     * and Eclipse attaches it, in the same one call, rather than the gone one.
      */
     @Test
     void closingTheActiveWindowAfterTheHomeBufferWasWipedAttachesANewOne() throws Exception {
         EditorWindow window = shownInWindow("/ws/a.txt", 5);
-        answers.put("HOME_BUFFER", 9L);
-        answers.put("CLOSE_WINDOW", 1000L);
+        answers.put("CLOSE_WINDOW", List.of(1000L, 9L));
 
         buffers.closeWindow(window);
 
         assertEquals(9, buffers.attachedBufnr(), "the new home buffer is attached");
+        assertNull(buffers.attachedDocument());
         assertEquals(1000, buffers.attachedWin(), "in the home window");
-        assertTrue(calls.contains("nvim_buf_attach [" + Handle.buffer(9) + ", true, {}]"), calls.toString());
-        assertTrue(calls.contains("CLOSE_WINDOW [1001, 9]"), "the home window shows it: " + calls);
+        assertEquals(List.of("CLOSE_WINDOW [1001, 1]", "nvim_buf_attach [" + Handle.buffer(9) + ", true, {}]"),
+                calls, "no call of its own to ask for the home buffer");
     }
 
     /** The home buffer is still there: it is not attached a second time. */
     @Test
     void closingTheActiveWindowKeepsAHomeBufferThatIsStillThere() throws Exception {
         EditorWindow window = shownInWindow("/ws/a.txt", 5);
-        answers.put("HOME_BUFFER", 1L);
-        answers.put("CLOSE_WINDOW", 1000L);
+        answers.put("CLOSE_WINDOW", List.of(1000L, 1L));
 
         buffers.closeWindow(window);
 
         assertEquals(1, buffers.attachedBufnr());
-        assertFalse(called("nvim_buf_attach"), calls.toString());
-        assertTrue(calls.contains("CLOSE_WINDOW [1001, 1]"), calls.toString());
+        assertEquals(List.of("CLOSE_WINDOW [1001, 1]"), calls);
+    }
+
+    /** Closing a window that is not the attached one leaves the attached document as it is. */
+    @Test
+    void closingAnotherWindowKeepsTheAttachedDocument() throws Exception {
+        EditorWindow other = shownInWindow("/ws/b.txt", 6);
+        answers.put("OPEN_WINDOW", 1002L);
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(5L, true, false));
+        DocumentBuffer a = new DocumentBuffer("/ws/a.txt");
+        buffers.show(a, new EditorWindow(), "/ws");
+        calls.clear();
+        answers.put("CLOSE_WINDOW", List.of(1000L, 1L));
+
+        buffers.closeWindow(other);
+
+        assertEquals(5, buffers.attachedBufnr());
+        assertEquals(a, buffers.attachedDocument());
+        assertEquals(1002, buffers.attachedWin());
+        assertEquals(List.of("CLOSE_WINDOW [1001, 5]"), calls);
+    }
+
+    /** Neovim does not answer the close: the closed editor's document is not left attached. */
+    @Test
+    void aFailedCloseOfTheActiveWindowLeavesTheHomeBufferAttached() throws Exception {
+        EditorWindow window = shownInWindow("/ws/a.txt", 5);
+        answers.put("CLOSE_WINDOW", new IllegalStateException("timed out"));
+
+        assertThrows(Exception.class, () -> buffers.closeWindow(window));
+
+        assertEquals(1, buffers.attachedBufnr());
+        assertNull(buffers.attachedDocument());
+        assertEquals(1000, buffers.attachedWin());
+    }
+
+    /**
+     * The home buffer is wiped while it is the attached one (no editor active): Neovim's BufEnter of
+     * the buffer it took instead brings Eclipse back (returnToAttached), which finds the home buffer
+     * gone and shows a new one.
+     */
+    @Test
+    void returningToAWipedAttachedHomeBufferShowsANewOne() throws Exception {
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "1".equals(args.get(1)) ? -2L : 1000L);
+        answers.put("HOME_BUFFER", 9L);
+
+        buffers.returnToAttached();
+
+        assertEquals(9, buffers.attachedBufnr());
+        assertEquals(1000, buffers.attachedWin());
+        assertTrue(calls.contains("SHOW_WINDOW [-1, 9]"), calls.toString());
+    }
+
+    /**
+     * The last editor of a document shown in the home window (its own window was closed in Neovim)
+     * closes after the home buffer was wiped: RELEASE_BUFFER puts a new home buffer there itself,
+     * and Eclipse, going back to the home buffer, takes that one; the close logs nothing.
+     */
+    @Test
+    void closingADocumentAfterTheHomeBufferWasWipedTakesTheNewOne() throws Exception {
+        DocumentBuffer a = shown("/ws/a.txt", 5);
+        answers.put("RELEASE_BUFFER", List.of());
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "1".equals(args.get(1)) ? -2L : 1000L);
+        answers.put("HOME_BUFFER", 9L);
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            buffers.close(a);
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+
+        assertTrue(calls.contains("RELEASE_BUFFER [5, 1]"), calls.toString());
+        assertEquals(9, buffers.attachedBufnr());
+        assertTrue(calls.contains("CLOSE_DOCUMENT_BUFFER [5]"), calls.toString());
     }
 
     /**
