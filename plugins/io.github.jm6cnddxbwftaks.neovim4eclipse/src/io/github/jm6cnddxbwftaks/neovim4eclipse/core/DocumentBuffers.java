@@ -561,8 +561,20 @@ final class DocumentBuffers {
         if (doomed == null) {
             if (wasAttached) {
                 // Neovim shows the home buffer too: its current window holds whatever buffer it took
-                // when the old one was wiped, and a key typed now would go there.
-                returnToAttached();
+                // when the old one was wiped, and a key typed now would go there. A failure is
+                // logged at WARNING, as a failed close is, but says what failed: the buffer itself
+                // is gone already (not in :ls), unlike the one closeFailure names.
+                try {
+                    returnToAttached();
+                } catch (Exception e) {
+                    IllegalStateException failure = new IllegalStateException("Showing the home buffer after "
+                            + "closing the editor of buffer " + buffer.bufnr + " (" + buffer.name
+                            + "), wiped in Neovim, failed; Neovim may show another buffer until the next editor", e);
+                    if (!connectionClosed(e)) {
+                        LOG.log(Level.WARNING, failure.getMessage(), e);
+                    }
+                    throw failure;
+                }
             }
             return;
         }

@@ -281,6 +281,22 @@ class DocumentBuffersTest {
         assertTrue(calls.contains("SHOW_WINDOW [-1, 1]"), "and Neovim shows it: " + calls);
     }
 
+    /** The switch to the home buffer in that close fails too: logged at WARNING, saying what failed. */
+    @Test
+    void aFailedSwitchToTheHomeBufferAfterAFailedMakingAnewIsLogged() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> "5".equals(args.get(1)) ? -2L : 1000L);
+        answers.put("CREATE_DOCUMENT_BUFFER", new IllegalStateException("timed out"));
+        assertThrows(Exception.class, () -> buffers.show(doc));
+        answers.put("SHOW_WINDOW", new IllegalStateException("timed out again"));
+
+        try (ExpectedLog log = ExpectedLog.of(DocumentBuffers.class)) {
+            assertThrows(IllegalStateException.class, () -> buffers.close(doc));
+            log.assertLogged(Level.WARNING, "Showing the home buffer after closing the editor of buffer 5 (/ws/a.txt)");
+        }
+        assertEquals(1, buffers.attachedBufnr(), "the home buffer is attached all the same");
+    }
+
     /** Wiped again as soon as it was made: the show fails, naming the buffer. */
     @Test
     void aBufferWipedAgainAsSoonAsItWasMadeFailsTheShow() throws Exception {
