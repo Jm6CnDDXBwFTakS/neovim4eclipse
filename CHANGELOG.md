@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-11-09
+
 ### Fixed
 
 - Eclipse's Delete Line run during an insert (from its menu, or with Ctrl+D given to Eclipse for
