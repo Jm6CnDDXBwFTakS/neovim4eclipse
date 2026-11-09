@@ -762,7 +762,7 @@ public final class EditorAttachManager {
             Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
             synchronized (this) {
                 session = followedSession;
-                showing = session == null ? Optional.empty() : documents.editorShowing(buffer.bufnr(), b -> b == buffer);
+                showing = session == null ? Optional.empty() : documents.editorShowing(buffer);
             }
             showing.ifPresent(s -> session.reloadDocumentAsync(buffer, BufferSynchronizer.documentToLines(s.document())));
         });
@@ -923,7 +923,7 @@ public final class EditorAttachManager {
         synchronized (this) {
             NeovimSession session = followedSession;
             showing = session == null ? Optional.empty()
-                    : documents.editorShowing(buffer.bufnr(), b -> b == buffer && b.isOpenIn(session));
+                    : documents.editorShowing(buffer).filter(s -> buffer.isOpenIn(session));
         }
         if (showing.isEmpty()) {
             return DocumentWrite.Result.failed("Eclipse has no editor open on " + buffer.name() + "; nothing was saved");
