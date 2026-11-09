@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-11-09
+
 ### Fixed
 
 - A buffer deleted from inside Neovim (a Lua plug-in, a mapping to `:bd 3`) no longer puts a
