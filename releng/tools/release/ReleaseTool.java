@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import checks.InstallCheckTool;
 
 import common.Ask;
+import common.EclipseRelease;
 import common.Folders;
 import common.Git;
 import common.GitHub;
@@ -35,6 +36,9 @@ import common.Shell;
 import common.ToolFailure;
 import common.UpdateSite;
 import common.Version;
+
+import eclipse.EclipseFiles;
+import eclipse.Platform;
 
 /**
  * The Release tool: CONTRIBUTING.md's "Releasing" as steps a person runs, each of which checks
@@ -47,7 +51,8 @@ import common.Version;
  *   <li><b>check</b>: on {@code release/0.2.3}, clean, not behind origin, the POM at
  *       {@code 0.2.3-SNAPSHOT}, changes listed under <i>Unreleased</i>. The six pinned Neovim
  *       archives still match their hashes ({@code UpdateNeovimDownloads.java --check}, as the
- *       Release workflow's first job), with a line when Neovim has a newer release; the manual
+ *       Release workflow's first job), with a line when Neovim has a newer release, and one when
+ *       Eclipse has a release newer than the smoke job's newest ({@code EclipseUpgrade.java}); the manual
  *       checks due ({@code ManualChecks.java due}). Then every test on this machine
  *       ({@code LikeCi.java --all}): the commit that passes is written to
  *       {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
@@ -256,6 +261,7 @@ public final class ReleaseTool {
         System.out.println();
         checkNeovimPins();
         newerNeovim();
+        newerEclipse();
 
         System.out.println();
         System.out.println("Manual checks due for this release (docs/MANUAL_CHECKS.md):");
@@ -325,6 +331,33 @@ public final class ReleaseTool {
             System.out.println("note: could not record the check in " + record + ": " + e.getMessage());
         }
         ok("the pinned Neovim archives match");
+    }
+
+    /**
+     * Prints a line when Eclipse has a release newer than the newest the smoke job installs into
+     * (the second entry of its matrix; docs/UPGRADING.md, "Eclipse release"). Not a blocker: the
+     * release is still tested up to that one, and the move is its own commit.
+     */
+    private void newerEclipse() {
+        List<EclipseRelease.SmokeEntry> smoke = EclipseRelease.smokeEntries(read(".github/workflows/update-site.yml"));
+        if (smoke.size() != 2) {
+            System.out.println("  (could not read the smoke job's newest Eclipse from update-site.yml)");
+            return;
+        }
+        EclipseRelease tested = EclipseRelease.ofNumber(smoke.get(1).eclipse());
+        EclipseRelease latest;
+        try {
+            latest = EclipseFiles.releaseOf(EclipseFiles.newestDrop(Platform.text(EclipseFiles.DATA_JSON)));
+        } catch (ToolFailure e) {
+            System.out.println("  (could not read Eclipse's newest release: " + e.getMessage() + ")");
+            return;
+        }
+        if (latest.compareTo(tested) > 0) {
+            System.out.println("  note: Eclipse " + latest + " is out (tested up to " + tested + "): java "
+                    + "releng/tools/eclipse/EclipseUpgrade.java newest (docs/UPGRADING.md, \"Eclipse release\"). Not a blocker.");
+        } else {
+            ok("Eclipse " + tested + ", the newest the smoke job installs into, is Eclipse's newest release");
+        }
     }
 
     /** Prints a line when Neovim has a release newer than the pinned one (docs/UPGRADING.md, "Following Neovim's releases"). */
