@@ -421,11 +421,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Whether Esc, or a sync point before its key, is being handled now: the typed text replayed into
-     * Neovim, the document pushed, Neovim's cursor and the editor's top line sent
+     * Whether Esc, or a sync point before its key, is queued or being handled now: the typed text
+     * replayed into Neovim, the document pushed, Neovim's cursor and the editor's top line sent
      * ({@link #setLeaveInsertPush}, {@code KeyInput#syncInsertThenInput}). What Neovim reports
      * meanwhile is of text it does not have yet or of a window about to be scrolled to the editor's
-     * view, so the editor ignores its cursors and top lines.
+     * view, so the editor ignores its cursors and top lines. From the moment the key is routed and
+     * Eclipse stops typing ({@code KeyInput#handOver}).
      */
     public boolean isLeavingInsertMode() {
         return keyInput.isLeavingInsertMode();
@@ -1533,8 +1534,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * @param replay what to re-type, or {@code null}
      */
     public void leaveInsertModeAsync(InsertReplay.Plan replay) {
-        state.pauseEclipseTyping();
-        submit("leave insert mode", Level.WARNING, () -> keyInput.leaveInsertMode(replay));
+        handOver("leave insert mode", () -> keyInput.leaveInsertMode(replay));
     }
 
     /**
@@ -1546,8 +1546,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * @param sync what to hand over, or {@code null} for nothing but the document
      */
     public void syncInsertThenInputAsync(InsertReplay.SyncPoint sync, String key) {
-        state.pauseEclipseTyping();
-        submit(key + " after the typed text", Level.WARNING, () -> keyInput.syncInsertThenInput(sync, key));
+        handOver(key + " after the typed text", () -> keyInput.syncInsertThenInput(sync, key));
+    }
+
+    /**
+     * Eclipse stops typing and {@code work} is queued, with Neovim's cursors and top lines ignored
+     * from this moment ({@code KeyInput#handOver}). UI thread.
+     */
+    private void handOver(String what, InputThread.Task work) {
+        keyInput.handOver(task -> submit(what, Level.WARNING, task), work);
     }
 
     /**

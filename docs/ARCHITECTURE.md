@@ -677,7 +677,9 @@ repeat an empty insert. At Esc `KeyInterceptor` asks the controller for a replay
 3. `NeovimSession.leaveInsertModeAsync(plan)` first stops Eclipse's typing, on the UI thread
    (`StateSync.pauseEclipseTyping`, as at a sync point): the mode is insert until Neovim reports Normal,
    and a key typed meanwhile (the `:` of a fast `<Esc>:w`) must go to Neovim behind the Esc, not into the
-   document. Then, on the input thread, it moves Neovim's cursor to the insertion point,
+   document. From that moment, not only once the input thread starts, the editor ignores Neovim's cursor
+   reports and top lines (`KeyInput.handOver`, `isLeavingInsertMode`): until then they are of
+   Neovim's old text and view. Then, on the input thread, it moves Neovim's cursor to the insertion point,
    types the text with `nvim_feedkeys(text, 'n')` (raw text, no mapping or abbreviation applied; each chunk
    followed by a cheap request, which Neovim only answers after consuming the keys), sends `<Esc>`, then pushes
    the lines changed since the insert began (`util/ChangedLines`, `BufferSynchronizer.pushChangedLinesToNeovim`,

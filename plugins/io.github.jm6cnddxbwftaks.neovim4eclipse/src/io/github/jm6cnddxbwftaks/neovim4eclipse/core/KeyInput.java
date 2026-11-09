@@ -6,8 +6,10 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -147,6 +149,17 @@ final class KeyInput {
      * make Eclipse reveal line 1 before the editor's view is sent.
      */
     private volatile boolean leavingInsert;
+    /**
+     * Esc and sync-point tasks queued on the UI thread that have not started yet
+     * ({@link #handOver}). Eclipse stops typing when such a key is routed
+     * ({@code StateSync.pauseEclipseTyping}), but {@link #leavingInsert} is set only once the input
+     * thread starts the task; Neovim's reports in between are the same echoes, of text it does not
+     * have yet, and are ignored as well ({@link #isLeavingInsertMode}). Example, on a loaded
+     * machine: the caret on line 13, the wheel scrolled the editor to line 4 in insert mode, Esc;
+     * before the task started, Neovim answered Eclipse's last caret move with its window's top line,
+     * line 1, and the editor scrolled back there, so line 1 was the view the task then sent to Neovim.
+     */
+    private final AtomicInteger handOversQueued = new AtomicInteger();
     /**
      * Runs at Esc once Neovim's cursor is final (after the push, the replay's cursor or the
      * {@code <Esc>}): the editor's view goes to Neovim ({@code NeovimSession.showTopLine}). After
@@ -462,6 +475,7 @@ final class KeyInput {
      */
     void leaveInsertMode(InsertReplay.Plan replay) throws Exception {
         leavingInsert = true;
+        handOverStarted();
         try {
             leaveInsertModeNow(replay);
         } finally {
@@ -478,9 +492,39 @@ final class KeyInput {
         this.leaveInsertView = view;
     }
 
-    /** Whether {@link #leaveInsertMode} runs now (see {@link #leavingInsert}). Any thread. */
+    /**
+     * Whether {@link #leaveInsertMode} or {@link #syncInsertThenInput} runs now, or is queued
+     * (see {@link #leavingInsert} and {@link #handOversQueued}). Any thread.
+     */
     boolean isLeavingInsertMode() {
-        return leavingInsert;
+        return leavingInsert || handOversQueued.get() > 0;
+    }
+
+    /**
+     * Eclipse stops typing and {@code queue} puts {@code work} on the input thread: the Esc
+     * ({@link #leaveInsertMode}) or the sync point ({@link #syncInsertThenInput}) that hands the
+     * typed text to Neovim. Neovim's reports are ignored from this moment until the work starts
+     * ({@link #handOversQueued}), and then while it runs ({@link #leavingInsert}). The count goes up
+     * before the pause, since the pause alone makes the editor take Neovim's reports again; so every
+     * moment is covered by one of the two. UI thread.
+     *
+     * @param queue queues the work, {@code false} if it will never run (the session is closed)
+     */
+    void handOver(Predicate<InputThread.Task> queue, InputThread.Task work) {
+        handOversQueued.incrementAndGet();
+        state.pauseEclipseTyping();
+        if (!queue.test(work)) {
+            handOverStarted(); // it never will: nothing to wait for
+        }
+    }
+
+    /**
+     * A queued Esc or sync point starts, with {@link #leavingInsert} already set, or was refused
+     * ({@link #handOver}). Never below 0: a call that was not queued (a test calls
+     * {@link #leaveInsertMode} itself) counts nothing.
+     */
+    private void handOverStarted() {
+        handOversQueued.updateAndGet(n -> Math.max(0, n - 1));
     }
 
     private void leaveInsertModeNow(InsertReplay.Plan replay) throws Exception {
@@ -593,6 +637,7 @@ final class KeyInput {
     void syncInsertThenInput(InsertReplay.SyncPoint sync, String key) throws Exception {
         boolean inInsert;
         leavingInsert = true;
+        handOverStarted();
         try {
             inInsert = handOverTypedText(sync);
         } finally {

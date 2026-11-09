@@ -18,6 +18,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   insert mode) no longer deletes the next line as well when the insert ends with Esc.
 - A Neovim plug-in's edit made just as Eclipse sends its text to Neovim (at Esc, or after a format)
   no longer leaves Eclipse and Neovim with different text until the next edit.
+- An editor scrolled in insert mode (the wheel, the scroll bar) stays where it was scrolled at Esc
+  on a busy machine too. Before, it could jump back to the view Neovim had before the insert.
 
 ## [0.2.8] - 2026-11-09
 

@@ -224,7 +224,11 @@ global-local, and an empty local value falls back to the global one.
   once the cursor is final (after the replay's `setCursor` or the `<Esc>`; earlier, that cursor
   would be put back off screen). Neovim's top lines and cursor reports are ignored while Esc is
   handled (`KeyInput.isLeavingInsertMode`): the replay of the typed text runs in Neovim's old view,
-  and its reports would scroll the editor back, or make Eclipse reveal the old caret, first.
+  and its reports would scroll the editor back, or make Eclipse reveal the old caret, first. That
+  span starts when Esc is routed on the UI thread, where Eclipse stops typing, not when the input
+  thread starts the leave (`KeyInput.handOver`): on a loaded machine, Neovim's answer to
+  Eclipse's last caret move came in between and scrolled the editor back to Neovim's old view,
+  which the leave then read as the editor's.
   Without `show`, the view went back to the caret at Esc, since Neovim keeps its cursor on screen,
   while Neovim's own wheel would have dragged the cursor along.
 

@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -264,6 +265,68 @@ class KeyInputTest {
         assertTrue(nvim.calls.contains("push, leaving true"),
                 "Neovim's top lines from the replay are ignored until the push: " + nvim.calls);
         assertFalse(keys.isLeavingInsertMode(), "Neovim's top lines count again");
+    }
+
+    /**
+     * Eclipse stops typing as soon as Esc is routed, on the UI thread, and the input thread starts
+     * the leave later. Neovim's reports in between are echoes of its old text and view: on a loaded
+     * machine one scrolled the editor back to Neovim's old top line, which the view step then sent.
+     */
+    @Test
+    void aQueuedEscIsHandledAsLeavingBeforeItsTaskStarts() throws Exception {
+        typingEclipse();
+        nvim.keyWithLineEvent = "abc";
+        push = () -> nvim.calls.add("push, leaving " + keys.isLeavingInsertMode());
+        List<InputThread.Task> queued = new ArrayList<>();
+
+        keys.handOver(queued::add, () -> keys.leaveInsertMode(new InsertReplay.Plan(List.of("abc"), 1, 0, 1, 2)));
+
+        assertFalse(state.isEclipseTypingReady(), "Eclipse stopped typing");
+        assertTrue(keys.isLeavingInsertMode(), "queued: Neovim's cursors and top lines are ignored already");
+        queued.get(0).run(); // the input thread, later
+        assertTrue(nvim.calls.contains("push, leaving true"), nvim.calls.toString());
+        assertFalse(keys.isLeavingInsertMode(), "Neovim's final cursor, read at the end, counts");
+    }
+
+    @Test
+    void aQueuedSyncPointIsHandledAsLeavingUntilItsKey() throws Exception {
+        typingEclipse();
+        List<InputThread.Task> queued = new ArrayList<>();
+
+        keys.handOver(queued::add, () -> keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 0), "<C-u>"));
+
+        assertTrue(keys.isLeavingInsertMode());
+        queued.get(0).run();
+        assertFalse(keys.isLeavingInsertMode(), "the key's own reports count");
+    }
+
+    @Test
+    void aHandOverThatWillNeverRunIsNotWaitedFor() throws Exception {
+        typingEclipse();
+
+        keys.handOver(task -> false, () -> fail("a closed session runs nothing"));
+
+        assertFalse(state.isEclipseTypingReady(), "Eclipse stopped typing all the same");
+        assertFalse(keys.isLeavingInsertMode(), "Neovim's reports count again");
+    }
+
+    @Test
+    void aLeaveThatWasNotQueuedLeavesNoCountBehind() throws Exception {
+        keys.leaveInsertMode(null); // not through handOver
+        List<InputThread.Task> queued = new ArrayList<>();
+
+        keys.handOver(queued::add, () -> { });
+
+        assertTrue(keys.isLeavingInsertMode(), "the count did not go below zero");
+    }
+
+    /** Insert mode with the editor's sync applied: Eclipse types. */
+    private void typingEclipse() throws Exception {
+        nvim.after.put("i", new Mode("i", false));
+        type("i");
+        editor.changes.get(editor.changes.size() - 1).afterApply().run();
+        assertTrue(state.isEclipseTypingReady());
+        nvim.calls.clear();
     }
 
     @Test
