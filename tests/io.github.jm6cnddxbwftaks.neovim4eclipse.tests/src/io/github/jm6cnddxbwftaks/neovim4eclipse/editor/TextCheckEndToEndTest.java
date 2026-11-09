@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
@@ -17,9 +18,33 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 /**
  * The text check that ends every UI test ({@link TextCheck}, run by {@code EndToEndTestBase}): that
  * it finds a difference and names it, and that a test left in insert mode is compared after its
- * {@code Esc}, when Neovim has the typed text.
+ * {@code Esc}, when Neovim has the typed text; and that {@link TextMayDiffer} leaves a test out.
  */
 class TextCheckEndToEndTest extends EndToEndTestBase {
+
+    /** A test left Eclipse mode on: the next test starts in Neovim mode again. */
+    private boolean eclipseModeLeftOn;
+
+    @AfterEach
+    void neovimModeBackOn() throws Exception {
+        if (eclipseModeLeftOn) {
+            runCommand(WelcomeNote.TOGGLE_COMMAND_ID);
+            settle();
+        }
+    }
+
+    /**
+     * Ends with the two copies different, which the check would fail: it passes only because the
+     * marker leaves it out. Neovim mode comes back on in the clean-up, after the check.
+     */
+    @Test
+    @TextMayDiffer("ends in Eclipse mode, with an edit Neovim has not been sent")
+    void aTestMarkedTextMayDifferIsNotCompared() throws Exception {
+        runCommand(WelcomeNote.TOGGLE_COMMAND_ID);
+        eclipseModeLeftOn = true;
+        document.replace(document.getLineOffset(1), 4, "BETA");
+        assertNotNull(TextCheck.differences(TIMEOUT_MS), "the copies differ when the test ends");
+    }
 
     /**
      * Eclipse mode: Eclipse's edits are not pushed until Neovim mode is back on, so the two copies

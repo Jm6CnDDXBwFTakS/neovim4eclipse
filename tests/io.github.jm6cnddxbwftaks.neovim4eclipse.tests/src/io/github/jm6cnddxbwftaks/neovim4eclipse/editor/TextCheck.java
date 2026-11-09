@@ -22,7 +22,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.TextRepairs;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.SyncProbe;
 
 /**
  * The comparison at the end of each UI test ({@code EndToEndTestBase.TextCheckAtEnd}): every open
@@ -30,13 +30,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.TextRepairs;
  *
  * <p>Steps, on the UI thread:
  * <ol>
- *   <li>Back to normal mode: a test may end in insert mode, and the text Eclipse typed reaches Neovim
- *       only at {@code Esc}. The {@code Esc} goes through the active editor's widget, as a user's
- *       would, so the editor ends insert mode and pushes; in another mode (visual, a pending
- *       operator) straight to Neovim.</li>
- *   <li>Wait for the queued work and the UI ({@link UiTestSupport#settle}).</li>
+ *   <li>Wait for the queued work and the UI ({@link UiTestSupport#settle}), so that the mode known
+ *       is Neovim's.</li>
+ *   <li>Back to normal mode: a test may end in insert or replace mode, and the text Eclipse typed
+ *       reaches Neovim only at {@code Esc}. While Eclipse types, the {@code Esc} goes through the
+ *       active editor's widget, as a user's would, so the editor ends the insert and pushes; in
+ *       another mode (visual, a pending operator) straight to Neovim. Then settle again.</li>
  *   <li>For each document with a buffer in the running Neovim (a clone's document once), compare
- *       the lines Neovim should hold ({@link TextRepairs#linesNeovimShouldHave}) with
+ *       the lines Neovim should hold ({@link SyncProbe#linesNeovimShouldHave}) with
  *       {@code nvim_buf_get_lines}.</li>
  * </ol>
  *
@@ -57,13 +58,16 @@ final class TextCheck {
         if (session == null) {
             return null;
         }
-        if (!"n".equals(session.getMode())) {
+        // Settled first: the mode the session knows is then the one Neovim is in, not one whose
+        // report is still on its way.
+        UiTestSupport.settle(session, timeoutMs);
+        if (session.isTypingMode() || !"n".equals(session.getMode())) {
             String left = backToNormalMode(session, timeoutMs);
             if (left != null) {
                 return left;
             }
+            UiTestSupport.settle(session, timeoutMs);
         }
-        UiTestSupport.settle(session, timeoutMs);
         EditorAttachManager manager = EditorAttachManager.getInstance();
         Set<IDocument> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         List<String> found = new ArrayList<>();
@@ -95,8 +99,9 @@ final class TextCheck {
         String mode = session.getMode();
         NeovimEditorController active = EditorAttachManager.getInstance().getActiveController();
         StyledText widget = active == null || active.isClosed() ? null : EndToEndTestBase.widgetOf(active.getEditor());
-        if (mode != null && mode.startsWith("i") && widget != null && !widget.isDisposed()) {
-            UiTestSupport.type(widget, (char) SWT.ESC); // the editor's own Esc: it ends insert mode and pushes
+        if (session.isTypingMode() && widget != null && !widget.isDisposed()) {
+            // Eclipse types (insert or replace mode): the editor's own Esc ends that and pushes.
+            UiTestSupport.type(widget, (char) SWT.ESC);
         } else {
             session.inputAsync("<Esc>");
         }
@@ -105,10 +110,7 @@ final class TextCheck {
     }
 
     private static String compare(NeovimSession session, int bufnr, IDocument document, String name) {
-        List<String> eclipse = TextRepairs.linesNeovimShouldHave(document);
-        if (eclipse.isEmpty()) {
-            eclipse = List.of(""); // a buffer always has one line
-        }
+        List<String> eclipse = SyncProbe.linesNeovimShouldHave(document);
         Object answer = SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(" + bufnr + ", 0, -1, false)");
         List<String> neovim = new ArrayList<>();
         if (answer instanceof List<?> lines) {

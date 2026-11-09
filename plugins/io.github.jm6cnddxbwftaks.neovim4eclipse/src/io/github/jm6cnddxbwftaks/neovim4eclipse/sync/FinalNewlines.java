@@ -43,7 +43,8 @@ final class FinalNewlines {
 
     /**
      * The document's lines for Neovim ({@link LineTextUtil#toNeovim}), keeping its final newline as
-     * decided before, without deciding it if it was not (a read, for a check). Read on the UI thread.
+     * decided before, without deciding it if it was not: a read, for the UI tests' text check at the
+     * end of each test ({@code SyncProbe} in the tests). Read on the UI thread.
      */
     static List<String> linesForNeovim(IDocument document) {
         return LineTextUtil.toNeovim(document.get(), KNOWN.get(document)).lines();

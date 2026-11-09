@@ -8,8 +8,6 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
-import org.eclipse.jface.text.IDocument;
-
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 
 /**
@@ -81,31 +79,18 @@ public final class TextRepairs {
      * @param neovim Neovim's buffer as the push found it
      * @param pushed the lines the push wrote
      * @param what   which buffer, for the message (example: {@code "buffer 3"})
-     * @return whether a repair was logged
      */
-    static boolean check(ChangedLines.Known known, List<String> neovim, List<String> pushed, String what) {
+    static void check(ChangedLines.Known known, List<String> neovim, List<String> pushed, String what) {
         ChangedLines.Unexplained found = known.firstUnexplained(neovim, pushed);
-        if (found == null) {
-            return false;
-        }
-        if (LOG.isLoggable(Level.FINE)) {
+        if (found != null && LOG.isLoggable(Level.FINE)) {
             LOG.log(new RepairRecord("A push repaired Neovim's " + what + ": its line "
                     + (found.neovimLine() + 1) + " differed from the document's line " + (found.pushedLine() + 1)
                     + ", which no change explains (Neovim had " + neovim.size() + " lines, the document "
                     + pushed.size() + ")", lineOrNone(neovim, found.neovimLine()), lineOrNone(pushed, found.pushedLine())));
         }
-        return true;
     }
 
     private static String lineOrNone(List<String> lines, int line) {
         return line < lines.size() ? lines.get(line) : "(no such line)";
-    }
-
-    /**
-     * The lines Neovim's buffer should hold for {@code document}, as a push would write them, without
-     * deciding its final newline (a read only). For the tests' check at the end of each test. UI thread.
-     */
-    public static List<String> linesNeovimShouldHave(IDocument document) {
-        return FinalNewlines.linesForNeovim(document);
     }
 }

@@ -296,7 +296,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             List<String> lines = push.lines();
             List<String> before = session.setBufferLines(lines);
             if (push.known() != null && before != null) {
-                TextRepairs.check(push.known(), before, lines.isEmpty() ? List.of("") : lines,
+                TextRepairs.check(push.known(), before, LineTextUtil.nonEmptyLines(lines), // as the push wrote them
                         buffer != null ? "buffer " + buffer.bufnr() : "attached buffer");
             }
             neovimBehind = false;
