@@ -5,7 +5,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 
 import org.eclipse.swt.custom.StyledText;
@@ -69,6 +71,65 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
             log.assertNothingAtOrAbove(Level.WARNING);
         }
         assertFalse(widget.isDisposed(), "test.txt stays open");
+    }
+
+    /**
+     * A plug-in wipes a document's buffer ({@code :bwipeout}, with autocommands, so the safety net's
+     * notice is sent) just as its editor is activated, its show queued already: the editor closes,
+     * as it does for the same wipe a moment later. The show finds the buffer gone and makes it anew
+     * under another number before the UI thread gets to the notice, which must still find the
+     * editor ({@code DocumentBuffers.onClosed}).
+     *
+     * <p>A UI test because three threads take part: the RPC reader reads the notice, the session's
+     * input thread runs the show, and the UI thread closes the editor. Their order is made certain
+     * here: the wipe is run from the UI thread, which then attaches the editor itself, as its
+     * activation does (queuing the show), and holds the event loop until the show has made the
+     * buffer anew; only then can the close the notice queued run. A close that looked the editor up
+     * by the wiped number would find none, and the editor would stay open.
+     * ({@code DocumentBuffersTest} replays the same order without Eclipse.)
+     */
+    @Test
+    void aBufferWipedJustAsItsEditorIsActivatedClosesTheEditor() throws Exception {
+        ITextEditor other = openOtherAndReturn();
+        StyledText otherWidget = widgetOf(other);
+        int bufnr = ((Number) SessionProbe.lua(session, "return vim.fn.bufnr('other.txt')")).intValue();
+        // Detaching test.txt's editor queues its document's push, which reads the document on the
+        // UI thread. Done first, so that no such work waits in front of the show while the event
+        // loop is held: the show needs no UI thread until it has made the buffer anew.
+        EditorAttachManager.getInstance().detach();
+        settle();
+        try (ExpectedLog log = ExpectedLog.of(SessionProbe.documentBuffers())) {
+            // The notice is read, and the editor's close queued for the UI thread, before this
+            // returns: Neovim sends it during the wipe, before its answer.
+            SessionProbe.lua(session, "vim.cmd.bwipeout(" + bufnr + ")");
+            EditorAttachManager.getInstance().attach(other, false);
+            // The new buffer gets a higher number (Neovim never reuses one), and the show attaches it.
+            holdEventLoopUntil("other.txt's buffer to be made anew", () -> session.getAttachedBufnr() > bufnr);
+            waitUntil("other.txt's editor to close", TIMEOUT_MS, otherWidget::isDisposed);
+            settle(); // the new buffer's close, queued by the editor's
+            log.assertNothingAtOrAbove(Level.WARNING);
+        } finally {
+            if (!otherWidget.isDisposed()) {
+                page().closeEditor(other, false); // the next test starts with test.txt alone
+            }
+        }
+        assertFalse(widget.isDisposed(), "test.txt stays open");
+    }
+
+    /**
+     * Waits for {@code condition} without running the event loop, so that the work other threads
+     * queue for the UI thread (with {@code asyncExec}) stays queued until it holds. Only for a
+     * condition that no work on the UI thread is needed for. Polls as {@code waitUntil} does, up to
+     * the same limit ({@code TestWait}).
+     */
+    private static void holdEventLoopUntil(String what, BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
+        while (!condition.getAsBoolean()) {
+            if (System.currentTimeMillis() > deadline) {
+                fail("Timed out after " + TIMEOUT_MS + " ms waiting, with the event loop held, for: " + what);
+            }
+            Thread.sleep(10);
+        }
     }
 
     @Test

@@ -583,7 +583,14 @@ view to the controller, which shows it in the box. The box edits nothing:
   the `|` of a command that keeps it, such as `:let x = 1 | q`): `BufDelete` / `BufWipeout` on a document buffer and `QuitPre` send `eclipse_buffer_closed`, and
   `EditorAttachManager` closes the editor showing that buffer (asking about changes). They cannot stop
   Neovim: on its last window a quit still ends it. Ignored while the session closes (its `:qa!`
-  fires `QuitPre` too) and for a buffer no editor shows (a closed file's kept buffer).
+  fires `QuitPre` too) and for a buffer no editor shows (a closed file's kept buffer). The buffer
+  number is turned into its document as the notice is read, on the RPC reader thread
+  (`DocumentBuffers.onClosed`), and the editor is found by that document, not by the number: a
+  show queued before the notice may find a wiped buffer gone and make it anew under another
+  number before the UI thread gets to the notice (a plug-in's `:bwipeout 5` just as that editor is
+  activated). Neovim sends the notice during the wipe, before any later answer, so the show
+  cannot have changed the number yet. A `:noautocmd bwipeout` sends no notice; there the editor
+  stays, and its next show makes the buffer anew (`DocumentBuffers.show`).
 - The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the attached editor
   (`NeovimSession.addHostCommandListener`), is turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked; `:wq other.txt` writes a copy instead,

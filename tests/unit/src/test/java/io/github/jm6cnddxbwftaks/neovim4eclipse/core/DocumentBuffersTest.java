@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -289,6 +290,64 @@ class DocumentBuffersTest {
         assertTrue(calls.stream().anyMatch(c -> c.startsWith("OPEN_WINDOW [7, ")), calls.toString());
         assertTrue(calls.contains("SHOW_WINDOW [1001, 7]"), calls.toString());
         assertEquals(1001, buffers.attachedWin(), "the editor's new window, not the home window");
+    }
+
+    // ---- a buffer Neovim closed by itself ----
+
+    /**
+     * A plug-in's {@code :bwipeout 5} (with autocommands, so the safety net's notice is sent) runs
+     * just as a.txt's editor is activated, its show queued already. Neovim sends the notice during
+     * the wipe, so the reader thread reads it before SHOW_WINDOW's answer -2; here it is delivered
+     * the same way, while the fake Neovim answers. The show then makes the buffer anew as 7, before
+     * the UI thread gets to the notice. The notice must have named a.txt's document all the same, so
+     * that its editor closes: looked up by the number 5 on the UI thread, it would be found no more,
+     * and the editor would stay open.
+     */
+    @Test
+    void aWipeNoticeReadBeforeAShowMakesTheBufferAnewNamesItsDocument() throws Exception {
+        EditorBuffers<String, String> editors = new EditorBuffers<>(); // the Eclipse side, as the attach manager keeps it
+        DocumentBuffer doc = editors.add("a.txt", "a.txt's editor", () -> "/ws/a.txt");
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(5L, true, false));
+        buffers.show(doc);
+        shown("/ws/b.txt", 6); // the active editor's
+        List<DocumentBuffer> closed = new ArrayList<>();
+        buffers.setClosedHandler(closed::add);
+        answers.put("SHOW_WINDOW", (Function<List<Object>, Object>) args -> {
+            if ("5".equals(args.get(1))) {
+                buffers.onClosed(5); // the BufWipeout notice, read before this answer
+                return -2L;
+            }
+            return 1000L;
+        });
+        answers.put("CREATE_DOCUMENT_BUFFER", List.of(7L, true, false));
+
+        buffers.show(doc);
+
+        assertEquals(7, doc.bufnr, "made anew by the show");
+        assertEquals(1, closed.size(), closed.toString());
+        assertSame(doc, closed.get(0), "the notice named a.txt's document");
+        // The UI thread, afterwards: the editor is found by the document, and not by the number.
+        assertEquals("a.txt's editor", editors.editorShowing(closed.get(0)).orElseThrow().editor());
+        assertTrue(editors.editorShowing(5, buffers::owns).isEmpty(), "5 is no document's buffer any more");
+    }
+
+    /**
+     * The notice of a buffer that is no document's reaches no handler: the home buffer, a buffer
+     * Neovim made for itself (help, {@code :enew}), or a document's buffer that Eclipse gave up
+     * already (its last editor closed).
+     */
+    @Test
+    void aCloseNoticeForABufferThatIsNoDocumentsIsDropped() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        List<DocumentBuffer> closed = new ArrayList<>();
+        buffers.setClosedHandler(closed::add);
+
+        buffers.onClosed(1); // the home buffer
+        buffers.onClosed(9); // help
+        buffers.close(doc);
+        buffers.onClosed(5);
+
+        assertTrue(closed.isEmpty(), closed.toString());
     }
 
     // ---- closing an editor's window ----

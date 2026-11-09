@@ -825,12 +825,17 @@ public final class EditorAttachManager {
     }
 
     /**
-     * Neovim deleted buffer {@code bufnr}, or quit its window, by itself ({@code <Cmd>bd},
-     * {@code vim.cmd.quit()}, {@code :bufdo bd}): closes the editor showing it, asking about changes
-     * as {@code :q} does. Nothing happens for a buffer no editor shows, such as one this class wiped
-     * after its last editor closed. RPC thread; the closing is done on the UI thread.
+     * Neovim deleted {@code buffer}'s Neovim buffer, or quit its window, by itself ({@code <Cmd>bd},
+     * {@code vim.cmd.quit()}, {@code :bufdo bd}, a plug-in's {@code :bwipeout}): closes the editor
+     * showing it, asking about changes as {@code :q} does. Nothing happens when no editor shows it
+     * any more. RPC thread; the closing is done on the UI thread.
+     *
+     * <p>The editor is found by the document buffer itself, which the session took from the number
+     * as Neovim's notice was read ({@code DocumentBuffers.onClosed}), not by that number: a show
+     * queued before the notice may have made a wiped buffer anew under another number by the time
+     * this runs on the UI thread (see {@link EditorBuffers#editorShowing(DocumentBuffer)}).
      */
-    private void onNeovimClosedBuffer(int bufnr) {
+    private void onNeovimClosedBuffer(DocumentBuffer buffer) {
         NeovimSession session;
         synchronized (this) {
             session = followedSession;
@@ -842,8 +847,9 @@ public final class EditorAttachManager {
         display.asyncExec(() -> {
             Optional<EditorBuffers.Showing<IDocument, IEditorPart>> showing;
             synchronized (this) {
-                showing = session != followedSession ? Optional.empty()
-                        : documents.editorShowing(bufnr, buffer -> buffer.isOpenIn(session));
+                // A notice from a Neovim since restarted is ignored: the restarted one makes the
+                // document's buffer anew, and nothing closed that.
+                showing = session != followedSession ? Optional.empty() : documents.editorShowing(buffer);
             }
             showing.ifPresent(s -> s.editor().getSite().getPage().closeEditor(s.editor(), true));
         });

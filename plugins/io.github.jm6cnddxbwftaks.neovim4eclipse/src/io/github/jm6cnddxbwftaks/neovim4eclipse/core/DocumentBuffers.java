@@ -96,6 +96,11 @@ final class DocumentBuffers {
      */
     private volatile BiConsumer<Integer, String> projectFileHandler;
     /**
+     * Called with the document whose buffer Neovim deleted or wiped, or whose window it is quitting,
+     * by itself ({@link #onClosed}).
+     */
+    private volatile Consumer<DocumentBuffer> closedHandler;
+    /**
      * The buffer Neovim entered last ({@code BufEnter}), that is, its current buffer as far as the
      * notifications read so far tell. Written on the RPC thread, read from any thread.
      */
@@ -223,10 +228,13 @@ final class DocumentBuffers {
         if (showOnce(buffer, window, folder) != BUFFER_GONE) {
             return;
         }
-        // Wiped in Neovim behind Eclipse's back, and no BufWipeout notice closed the editor (yet):
-        // a plug-in's :noautocmd bwipeout, say. Forget the buffer and make it anew, as a window
-        // closed in Neovim is opened anew; the document's push then fills it. A notice that still
-        // comes names the old number, no document's any more, and is ignored.
+        // Wiped in Neovim, and no BufWipeout notice closed the editor (yet): a plug-in's
+        // :noautocmd bwipeout, which sends none, or an ordinary :bwipeout whose notice the UI thread
+        // has not acted on yet. Forget the buffer and make it anew, as a window closed in Neovim is
+        // opened anew; the document's push then fills it. In the second case the editor closes all
+        // the same: the notice was read before the answer that found the buffer gone, and named
+        // this document then (onClosed), so its new number does not hide it. Until then, and if the
+        // user keeps the editor (Cancel when asked about unsaved changes), the new buffer serves it.
         LOG.fine(() -> "Buffer " + buffer.bufnr + " (" + buffer.name + ") was wiped in Neovim; made anew");
         forget(buffer.bufnr);
         if (showOnce(buffer, window, folder) == BUFFER_GONE) {
@@ -813,6 +821,38 @@ final class DocumentBuffers {
 
     void setProjectFileHandler(BiConsumer<Integer, String> handler) {
         this.projectFileHandler = handler;
+    }
+
+    void setClosedHandler(Consumer<DocumentBuffer> handler) {
+        this.closedHandler = handler;
+    }
+
+    /**
+     * Neovim deleted or wiped buffer {@code bufnr}, or is quitting a window showing it, by itself
+     * (the safety nets' {@code eclipse_buffer_closed}, {@link LuaScripts#DOCUMENT_BUFFER} and
+     * {@link LuaScripts#HOST_COMMANDS}). Hands the closed handler the document that buffer
+     * {@code bufnr} belongs to as the notice is read; nothing for a buffer that is no document's
+     * (the home buffer, help, a closed file's kept buffer, one Eclipse already gave up).
+     *
+     * <p>Why the document is looked up here, on the RPC reader thread, and not later where its editor
+     * is closed (the UI thread): a show queued before the notice may meanwhile find the buffer gone
+     * and make it anew under another number ({@link #show(DocumentBuffer, EditorWindow, String)}).
+     * Looked up by the reported number on the UI thread, the document would then not be found, and
+     * its editor would stay open. Here the number still names it: Neovim sends the notice during the
+     * wipe, so before its answer to any later request, and the reader reads Neovim's messages in
+     * order, completing that request (the show's) only after this returns. So the show cannot have
+     * forgotten the number yet. Example: a plug-in runs {@code :bwipeout 5} just as the editor of
+     * {@code a.txt} (buffer 5) is activated; its show finds 5 gone and makes the buffer anew as 7
+     * before the UI thread gets to the notice, and the editor still closes, as it does for the same
+     * wipe a moment later. (A {@code :noautocmd bwipeout} sends no notice: the editor stays, with
+     * the buffer made anew.)
+     */
+    void onClosed(int bufnr) {
+        DocumentBuffer document = documents.get(bufnr);
+        Consumer<DocumentBuffer> handler = closedHandler;
+        if (document != null && handler != null) {
+            handler.accept(document);
+        }
     }
 
     /** The document mirrored into buffer {@code bufnr}, or {@code null} when it is no document's. */

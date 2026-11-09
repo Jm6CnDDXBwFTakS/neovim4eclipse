@@ -101,6 +101,27 @@ public final class EditorBuffers<D, E> {
     }
 
     /**
+     * The editor showing {@code buffer} itself, whatever its number is now: the first one opened on
+     * its document that is still open, as for {@link #editorShowing(int, Predicate)}; empty when no
+     * open editor shows it (they all closed since, or the document has a new buffer).
+     *
+     * <p>Why by the buffer: for a buffer Neovim reported closed, the number may have changed between
+     * the report and this lookup. Example: a plug-in wipes buffer 5 of {@code A.java} while its
+     * editor's show is queued; the show makes the buffer anew as 7 ({@code DocumentBuffers.show}).
+     * The report named the document while it was 5 ({@code DocumentBuffers.onClosed}), and this
+     * finds its editor at 7, where {@code editorShowing(5, ...)} finds none.
+     */
+    public Optional<Showing<D, E>> editorShowing(DocumentBuffer buffer) {
+        for (Map.Entry<D, Entry<E>> e : documents.entrySet()) {
+            Entry<E> entry = e.getValue();
+            if (entry.buffer == buffer) {
+                return Optional.of(new Showing<>(e.getKey(), entry.editors.iterator().next()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Whether an editor other than {@code editor} shows {@code document}. Example: after
      * <em>Window → Editor → Clone</em> on {@code A.java} each of the two editors shares it; with one
      * editor, or for a document without a buffer, it is not shared.

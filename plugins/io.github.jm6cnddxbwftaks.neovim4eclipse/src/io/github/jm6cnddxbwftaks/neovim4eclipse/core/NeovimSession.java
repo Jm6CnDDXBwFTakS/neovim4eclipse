@@ -193,8 +193,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * timeout.
      */
     private final Set<CompletableFuture<?>> unanswered = ConcurrentHashMap.newKeySet();
-    /** Closes the editor of a buffer Neovim deleted by itself; see {@link #setBufferClosedHandler}. */
-    private volatile Consumer<Integer> bufferClosedHandler;
     /** Loads a document's text into its buffer again; see {@link #setReloadHandler}. */
     private volatile Consumer<DocumentBuffer> reloadHandler;
     /** Pushes the Eclipse document to Neovim just before leaving insert mode. */
@@ -726,11 +724,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Handles Neovim deleting a document's buffer, or quitting its window, by itself
      * ({@code <Cmd>bd}, {@code vim.cmd.quit()}; the safety nets of {@link LuaScripts#HOST_COMMANDS}).
-     * The handler should close the editor showing that buffer, if any. Called on an RPC thread; not
-     * while the session is closing (Eclipse's own {@code :qa!} fires {@code QuitPre} too).
+     * The handler gets the document whose buffer it was, as Neovim's notice is read
+     * ({@link DocumentBuffers#onClosed}), and should close the editor showing that document, if any:
+     * found by the document, not by its buffer number, which a show may have changed since (a
+     * buffer wiped in Neovim is made anew). Not called for a buffer that is no document's. Called on
+     * an RPC thread; not while the session is closing (Eclipse's own {@code :qa!} fires
+     * {@code QuitPre} too).
      */
-    public void setBufferClosedHandler(Consumer<Integer> handler) {
-        this.bufferClosedHandler = handler;
+    public void setBufferClosedHandler(Consumer<DocumentBuffer> handler) {
+        buffers.setClosedHandler(handler);
     }
 
     /**
@@ -1712,10 +1714,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void onBufferClosed(int bufnr) {
-            Consumer<Integer> handler = bufferClosedHandler;
-            if (!closed && handler != null) {
+            if (!closed) {
                 LOG.fine(() -> "Neovim closed buffer " + bufnr + " by itself");
-                handler.accept(bufnr);
+                // Here on the reader thread, not queued: the number is resolved to its document
+                // before a queued show can make the buffer anew under another one (onClosed).
+                buffers.onClosed(bufnr);
             }
         }
 

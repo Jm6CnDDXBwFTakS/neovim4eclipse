@@ -28,6 +28,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   buffer 3 (...) failed" with "E86: Buffer 2 does not exist" in the Error Log.
 - An editor whose buffer a plug-in wiped without telling Eclipse (`:noautocmd bwipeout 3`) works
   again when it is activated: Neovim gets a new buffer for it, instead of every activation failing.
+- An editor whose buffer a plug-in wiped (`:bwipeout 3`) just as the editor was being activated
+  now closes, as it does for a wipe a moment later, instead of staying open with a new buffer
+  made for it.
 
 ## [0.2.7] - 2026-11-08
 

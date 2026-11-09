@@ -87,6 +87,29 @@ class EditorBuffersTest {
         assertTrue(buffers.editorShowing(5, OPEN).isEmpty(), "help, :e of another file: no editor, Neovim is sent back");
     }
 
+    /**
+     * A buffer Neovim reported closed is looked up by itself: its number may have changed since the
+     * report. Example: buffer 5 of A.java wiped by a plug-in and made anew as 7 by its editor's
+     * queued show; the report named the buffer while it was 5.
+     */
+    @Test
+    void aClosedBufferIsFoundByItselfAfterItWasMadeAnewUnderAnotherNumber() {
+        DocumentBuffer a = numbered(buffers.add("A.java", "editor 1", () -> "A"), 5);
+        buffers.add("A.java", "editor 2", () -> "A"); // a clone
+        numbered(buffers.add("B.java", "editor 3", () -> "B"), 6);
+        numbered(a, 7);
+
+        assertEquals(new EditorBuffers.Showing<>("A.java", "editor 1"), buffers.editorShowing(a).orElseThrow(),
+                "the first editor opened, as for Neovim's switch");
+        assertTrue(buffers.editorShowing(5, OPEN).isEmpty(), "by the reported number it is found no more");
+        assertTrue(buffers.editorShowing(numbered(new DocumentBuffer("A"), 7)).isEmpty(),
+                "another buffer with the same number and name is not this one");
+
+        buffers.remove("editor 1");
+        buffers.remove("editor 2");
+        assertTrue(buffers.editorShowing(a).isEmpty(), "its editors closed since the report");
+    }
+
     @Test
     void aBufferFromARestartedNeovimIsNotFollowed() {
         DocumentBuffer stale = numbered(buffers.add("A.java", "editor 1", () -> "A"), 3);
