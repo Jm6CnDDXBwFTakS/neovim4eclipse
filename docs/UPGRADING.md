@@ -25,8 +25,8 @@ The safe loop for any upgrade:
 | What | Source of truth | Copies (checked by `VersionConsistencyTest` unless noted) |
 |------|-----------------|-----------------------------------------------------------|
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
-| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | release name (`2024-12`) in the same docs. Not checked: the `(4.34)` number next to it, the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties), and the 4.34 `platform-url` and `platform-sha512` of the smoke test in `update-site.yml` |
-| Eclipse release (newest tested) | the second `platform-url` (4.41) in the `smoke` job of `.github/workflows/update-site.yml` | not checked; see "Eclipse release", *Newest release* |
+| Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | the release name (`2024-12`) and its number (`4.34`) where `releng/version-copies.txt` lists them, sections `[eclipse.oldest]` and `[eclipse.oldest.number]` (docs, `feature.xml` with its `org.eclipse.platform` import, workflow comments); the first entry of the smoke job in `update-site.yml` and `rehearse-release.yml` (checked: its number and that its download is that release's). Not checked: the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties). `java releng/tools/eclipse/EclipseUpgrade.java oldest <release>` moves all of them |
+| Eclipse release (newest tested) | the second entry (`eclipse: '4.41'`, its `platform-url` and `platform-sha512`) of the `smoke` job in `.github/workflows/update-site.yml` | the same entry in `rehearse-release.yml`; the README's "tested up to 2026-09 (4.41)" and the copies in sections `[eclipse.newest]` and `[eclipse.newest.number]`. `java releng/tools/eclipse/EclipseUpgrade.java newest` moves them |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
 | Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform) |
@@ -81,54 +81,87 @@ requirement: osgi.ee"). Say so in the release notes.
 
 ## Eclipse release
 
-`eclipse-repo.url` is the p2 site the plug-in is compiled and tested against, so it is the **oldest**
-release that is known to work. Newer Eclipse releases normally keep these APIs.
+The plug-in supports a range of Eclipse releases, and each end lives in one place:
 
-To raise it (example: 2024-12 to 2025-12):
+- the **oldest supported**, `<eclipse-repo.url>` in the root `pom.xml`: the p2 site the plug-in is
+  compiled and tested against, so the oldest release known to work. Newer releases normally keep
+  the APIs it uses, which is the promise "2024-12 (4.34) or newer". Raise it only when an API, a
+  Java requirement or a bug forces it.
+- the **newest tested**, the second entry of the `smoke` job in
+  `.github/workflows/update-site.yml`: every release of the plug-in is installed into it (and into
+  the oldest, the first entry) right after it is published, so both ends of the range the
+  Marketplace listing claims are tried. Move it with each Eclipse release, every March, June,
+  September and December.
 
-1. Set `<eclipse-repo.url>https://download.eclipse.org/releases/2025-12</eclipse-repo.url>`.
-2. Update the release name and its `4.x` number in README, CONTRIBUTING and the feature's
-   description in `feature.xml` (each quarterly
-   release adds 1 to the `4.x` number; check <https://projects.eclipse.org/projects/eclipse>).
-3. Check the Java that release needs; raise the Java release with it if required.
-4. Set the `<eclipse.*.version>` properties next to `<eclipse.text.version>` (text, equinox.common,
-   core.commands, swt, jface, jface.text, core.runtime, osgi) to the versions in the new release.
-   `tests/text` and `tests/swt` run against these jars from Maven Central (not the p2 site), so they
-   should be the ones the plug-in is built with. SWT is published once per platform
-   (`org.eclipse.swt.gtk.linux.x86_64`, ...); one version property covers all of them. To find them: after a build, look in
-   `~/.m2/repository/p2/osgi/bundle/org.eclipse.text/` (the folder name is the version Tycho
-   resolved, for example `3.14.200.v20240915-0736` means `3.14.200`; the same for `org.eclipse.swt`
-   and the others), or open the release's `plugins/` folder on download.eclipse.org. Nothing checks
-   this automatically: a mismatch only means these tests run against slightly different jars.
-5. Set the 4.34 entry of the `smoke` job's matrix in `.github/workflows/update-site.yml` (`eclipse`,
-   `platform-url` and `platform-sha512`) to that release's Eclipse Platform download for Linux x86_64
-   (from <https://download.eclipse.org/eclipse/downloads/>): the update site's smoke test installs
-   into it, so it must be the oldest supported release too. The SHA-512 is the file's line in the
-   drop's `eclipse-<version>-checksums` (older drops: `checksum/eclipse-<version>-SUMSSHA512`). Set
-   the same three in `.github/workflows/rehearse-release.yml` (`RehearsalTest` checks they agree).
-6. Run everything, then try the ZIP in that Eclipse and in the newest one.
+Both are written into the docs by name and by number, `2024-12 (4.34)`: four releases a year, each
+adding 1 to the `4.x` number, so one gives the other (`common/EclipseRelease`).
+`releng/version-copies.txt` lists those copies (sections `[eclipse.oldest]`, `[eclipse.newest]` and
+their `.number` twins), and `VersionConsistencyTest` checks them.
 
-**Newest release.** The smoke test's second entry is the newest Eclipse release, so a release of the
-plug-in is also installed into the top of the range the Marketplace listing ticks. Move it when a
-new Eclipse ships (every March, June, September and December), as its own commit:
+**The tool** (a JDK of release 22 or newer runs it, as the Release tool):
 
-1. Find the new drop in <https://download.eclipse.org/eclipse/downloads/data.json>: the first entry
-   of `"releases"`, for example `drops4/R-4.41-202608281142`. The download is
-   `<that path>/eclipse-platform-4.41-linux-gtk-x86_64.tar.gz`.
-2. Set `eclipse`, `platform-url` and `platform-sha512` of the second matrix entry, in
-   `update-site.yml` and `rehearse-release.yml`. The SHA-512 is the download's line in
-   `<that path>/eclipse-4.41-checksums`, for example
-   `curl -sSfL https://download.eclipse.org/eclipse/downloads/drops4/R-4.41-202608281142/eclipse-4.41-checksums | grep platform-4.41-linux-gtk-x86_64`.
-   Check that release's `eclipse.ini`
-   still accepts the Java in `.java-version` (`-Dosgi.requiredJavaVersion`).
-3. Try it locally before the next release, with `releng/smoke-install.sh` against the live site
-   (docs/PACKAGING.md), then tick the release in the Marketplace listing.
+```bash
+java releng/tools/eclipse/EclipseUpgrade.java newest          # test with the newest Eclipse release
+java releng/tools/eclipse/EclipseUpgrade.java oldest 2025-12  # raise the oldest supported release
+java releng/tools/eclipse/EclipseUpgrade.java smoke           # install this checkout into both, on this machine
+```
 
-It is pinned rather than looked up at run time, so a release of the plug-in never fails just
-because Eclipse shipped that day.
+Each one asks before it commits (`--yes` skips the question, `--dry-run` only prints the plan),
+and puts the working tree back if a step fails. Downloads are kept in
+`target/eclipse-upgrade/downloads/` and checked against the drop's SHA-512 every time.
 
-`Require-Bundle` in `MANIFEST.MF` has no version ranges, so nothing else stops an install on an
-Eclipse older than the target; the target release is the promise.
+- **`newest`** reads the newest Platform release from
+  <https://download.eclipse.org/eclipse/downloads/data.json> (the first entry of `"releases"`, for
+  example `drops4/R-4.41-202608281142`) and does nothing if the smoke job has it. Otherwise it takes
+  the Linux x86_64 Platform's SHA-512 from the drop's checksums file for CI, downloads this
+  machine's Platform, stops if its `eclipse.ini` (`-Dosgi.requiredJavaVersion`) needs a newer Java
+  than `.java-version` (the smoke job runs it on that Java; raise the Java release first), sets the
+  smoke entry in `update-site.yml` and `rehearse-release.yml`, rewrites the `[eclipse.newest]`
+  copies, adds a changelog entry, builds the update site and installs it into that Eclipse, and
+  commits *Test with Eclipse 2026-12 (4.42)*. Once the plug-in is listed, tick the release in the
+  Marketplace listing.
+- **`oldest <release>`** finds the release's drop on its p2 repository's page
+  (`https://download.eclipse.org/eclipse/updates/4.38/`), downloads its Platform the same way,
+  stops if it needs a newer Java than the plug-in is built for (raise the Java release first, in a
+  commit of its own), and reads the eight `<eclipse.*.version>` properties (text, equinox.common,
+  core.commands, swt, jface, jface.text, core.runtime, osgi) from the Platform's `plugins/` folder:
+  `tests/text` and `tests/swt` take these jars from Maven Central, and they should be the ones the
+  plug-in is built against. Then it sets `<eclipse-repo.url>` and those properties, the first smoke
+  entry, the `[eclipse.oldest]` copies and the changelog, runs every test (`LikeCi --all`), installs
+  into the new oldest and the newest Eclipse, and commits. What stays yours: the release notes,
+  the workarounds for older releases, and the comments that name the old release for itself
+  (such as 4.34's `eclipse.ini`, which does not start on Java 24).
+- **`smoke`** builds the update site from this checkout and installs it into both pinned releases
+  with p2's director, as the smoke job does after a release, on Linux, macOS (from the `.dmg`) or
+  Windows (from the `.zip`). Run it on macOS and Windows after a move. A Platform brings no Java:
+  it runs on `--java <home>`, else `eclipse.java` in `releng/tools/common/local.properties`, else
+  `JAVA_HOME`, else the tool's own Java. Eclipse 4.34 needs Java 21 to 23 (its `eclipse.ini` asks
+  for a security manager, which Java 24 removed):
+
+  ```bash
+  java releng/tools/eclipse/EclipseUpgrade.java smoke --java /usr/lib/jvm/java-21-openjdk-amd64
+  ```
+
+The release names come from counting quarters; the tool checks each against its drop, which is
+built within two months of the release (`R-4.41-202608281142`, August, is 2026-09; a respin may
+come after it), and stops if Eclipse's cycle ever changes. The Release tool's `check` prints a line when Eclipse has a
+release newer than the smoke job's.
+
+The smoke entries are pinned rather than looked up at run time, so a release of the plug-in never
+fails just because Eclipse shipped that day. `Require-Bundle` in `MANIFEST.MF` has no version
+ranges, so nothing but the feature's `org.eclipse.platform` import (`version="4.34.0"
+match="greaterOrEqual"`) stops an install on an Eclipse older than the target; the target release
+is the promise.
+
+**By hand**, if the tool cannot run: the same edits. For the newest, the second smoke entry in both
+workflows (`eclipse`, `platform-url`, `platform-sha512`: the download's line in
+`<drop>/eclipse-4.41-checksums`, for example
+`curl -sSfL https://download.eclipse.org/eclipse/downloads/drops4/R-4.41-202608281142/eclipse-4.41-checksums | grep platform-4.41-linux-gtk-x86_64`)
+and the `[eclipse.newest]` copies; then `releng/smoke-install.sh` into that Eclipse
+(docs/PACKAGING.md). For the oldest, `<eclipse-repo.url>`, the eight jar versions (the folder names
+in the release's `plugins/`, `org.eclipse.text_3.14.200.v20240915-0736.jar` meaning `3.14.200`),
+the first smoke entry (older drops name their checksums `checksum/eclipse-<version>-SUMSSHA512`)
+and the `[eclipse.oldest]` copies. `VersionConsistencyTest` lists every copy still missed.
 
 ## Embedded library (msgpack-core)
 

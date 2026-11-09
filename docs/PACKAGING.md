@@ -92,6 +92,13 @@ releng/update-site.sh /tmp/zips /tmp/site
 JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 releng/smoke-install.sh ~/eclipse-4.34 file:///tmp/site 0.1.2
 ```
 
+To install this checkout instead of a release, into the same two Eclipses on any platform (it
+downloads and unpacks them for you), use the Eclipse tool (docs/UPGRADING.md, "Eclipse release"):
+
+```bash
+java releng/tools/eclipse/EclipseUpgrade.java smoke --java /usr/lib/jvm/java-21-openjdk-amd64
+```
+
 The repository needs two settings for it, made once: *Settings → Pages → Source: GitHub Actions*,
 and in *Settings → Environments → github-pages*, deployment tags `v*` allowed besides `main`
 (the Release workflow runs for a tag). The design and its decisions are in

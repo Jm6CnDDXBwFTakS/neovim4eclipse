@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -273,7 +274,16 @@ public final class EclipseCopy {
      * prints a "Picked up JAVA_TOOL_OPTIONS" line first.
      */
     public static String run(List<String> command, Path log) throws IOException, InterruptedException {
+        return run(command, log, Map.of());
+    }
+
+    /**
+     * {@link #run}, with {@code env} added to the environment. Example: the Eclipse tool sets
+     * {@code JAVA_HOME} for a Platform download, which brings no Java of its own.
+     */
+    public static String run(List<String> command, Path log, Map<String, String> env) throws IOException, InterruptedException {
         ProcessBuilder builder = new ProcessBuilder(command).directory(log.getParent().toFile()); // the log's folder: stray files land there
+        builder.environment().putAll(env);
         String options = builder.environment().getOrDefault("JAVA_TOOL_OPTIONS", "");
         builder.environment().put("JAVA_TOOL_OPTIONS", (options + " " + ENGLISH).strip());
         Process process = builder.redirectErrorStream(true).start();

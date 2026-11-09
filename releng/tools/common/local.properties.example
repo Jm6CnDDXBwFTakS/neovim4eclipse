@@ -12,3 +12,8 @@
 # Release tool.
 #site.url=https://<owner>.github.io/<repository>/
 #signing.key=releng/signing-key.asc
+
+# The Java home the Eclipse tool runs a downloaded Eclipse Platform on (it brings none): Eclipse
+# 4.34 needs Java 21 to 23 (its eclipse.ini asks for a security manager, which Java 24 removed).
+# Without it: JAVA_HOME, else the tool's own Java.
+#eclipse.java=/usr/lib/jvm/java-21-openjdk-amd64

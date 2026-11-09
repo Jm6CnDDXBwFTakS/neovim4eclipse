@@ -28,6 +28,7 @@ java releng/tools/ci/LikeCi.java --all            # the same with every test gro
 java releng/tools/checks/ManualChecks.java due    # the manual checks a release needs (docs/MANUAL_CHECKS.md; JDK 22+)
 java releng/tools/checks/InstallCheck.java        # install the newest release from the update site into a copy of your Eclipse (JDK 22+)
 java releng/tools/neovim/NeovimUpgrade.java 0.13.0  # move to a new Neovim release (data file, copies, checks, tests; docs/UPGRADING.md)
+java releng/tools/eclipse/EclipseUpgrade.java newest  # test with the newest Eclipse release; oldest <release> raises the floor; smoke installs into both (docs/UPGRADING.md)
 java releng/tools/release/Release.java            # a release, step by step: status and next step (a JDK of release 22 or newer; CONTRIBUTING.md, "Releasing")
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
 ./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)

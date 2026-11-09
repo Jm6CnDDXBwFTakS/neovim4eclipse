@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
+import common.EclipseRelease;
+
 /**
  * The release rehearsal ({@code .github/workflows/rehearse-release.yml}) is worth only as much as
  * it stays like the release it rehearses: the same Eclipses (and pinned SHA-512s) for the install
@@ -50,6 +52,8 @@ class RehearsalTest {
                 "update-site.yml: every platform-url needs a platform-sha512 on the next line");
         assertEquals(site, platforms(workflow("rehearse-release.yml")),
                 "rehearse-release.yml's smoke matrix (URLs, SHA-512s) differs from update-site.yml's: move both together");
+        assertEquals(EclipseRelease.smokeEntries(siteYml), EclipseRelease.smokeEntries(workflow("rehearse-release.yml")),
+                "rehearse-release.yml's smoke entries (eclipse numbers, URLs, SHA-512s) differ from update-site.yml's");
     }
 
     @Test
