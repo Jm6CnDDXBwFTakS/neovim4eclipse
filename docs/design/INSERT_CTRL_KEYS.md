@@ -118,9 +118,9 @@ no change has touched since Neovim's buffer last equaled it. Counted from their 
 true whatever later edits do elsewhere, so each change only lowers them (`BufferSynchronizer`
 records every change, Neovim's applied ones too: that only widens the range).
 `BufferSynchronizer.pushChangedLinesToNeovim` reads that range and clears it in one step on the UI
-thread, then `NeovimSession.setBufferRegion` reads the same range of Neovim's buffer
-(`nvim_buf_get_lines` with a negative end, counted from the buffer's end) and replaces the lines that
-differ, nothing when they are equal.
+thread, then `NeovimSession.setBufferRegion` has one script (`LuaScripts.SET_LINES_MARKED`) read the
+same range of Neovim's buffer, counted from its end, and replace the lines that differ, nothing when
+they are equal; a range that is not in the buffer is not written, and the whole document is pushed.
 
 The whole document is pushed instead when the last line may have changed (its final line break may
 have come or gone), before the first push, after a failed push, and when a Neovim change did not

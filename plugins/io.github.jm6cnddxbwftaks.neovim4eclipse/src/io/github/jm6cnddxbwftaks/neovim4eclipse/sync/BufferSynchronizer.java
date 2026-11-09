@@ -366,6 +366,9 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             neovimBehind = false;
             LOG.fine(() -> "Pushed lines " + push.region() + " to Neovim");
         } catch (Exception e) {
+            // As for a failed whole push: Neovim may lack the typed lines, so its whole-buffer text
+            // must not replace the document's, and the next push writes everything.
+            neovimBehind = true;
             onUi(() -> {
                 changedLines.forget();
                 return null;

@@ -536,9 +536,9 @@ them arrives: `:bufdo` edits each buffer in turn. `NeovimSession` sends the atta
 the editor and the others to their own document (`sync/UnattachedDocumentSync`). When Eclipse writes a
 buffer itself, Neovim reports that write too, as a line event, which must not come back to the
 document: it has those lines already, and an echo applied again can remove lines twice. So the write
-is one Lua script that sets only the lines that differ and sends a notification before and after
-(`eclipse_echo`): `LuaScripts.SET_DOCUMENT_LINES` for a buffer in the background, which also reads the
-buffer, and `SET_LINES_MARKED` for the attached one, whose differing lines Java has worked out. Neovim sends
+is one Lua script that reads the buffer, sets only the lines that differ, and sends a notification
+before and after (`eclipse_echo`): `LuaScripts.SET_DOCUMENT_LINES` for a buffer in the background,
+`SET_LINES_MARKED` for the attached one (all of it, or the part typed in insert mode). Neovim sends
 notifications and line events on one channel in the order they happen, and runs one script at a time,
 so the session drops exactly the events between the two (`setDocumentBufferLines`). A change a plug-in
 makes just before or after it still reaches the document. Example: a timer edits line 1 as Eclipse

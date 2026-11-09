@@ -236,6 +236,21 @@ t.test('a push of a part changes only that part, and one outside the buffer noth
   t.eq({ 'a', 'B', 'b2', 'c' }, lines())
 end)
 
+t.test('a whole push of equal lines answers the old lines, for the repair check', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a', 'b' })
+  t.eq({ 'equal', { 'a', 'b' } }, t.run('SET_LINES_MARKED', buf, 0, 0, { 'a', 'b' }, true))
+end)
+
+t.test('a push of a part deletes its lines, and one of an empty part inserts', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a', 'b', 'c', 'd' })
+  t.eq({ 'changed' }, t.run('SET_LINES_MARKED', buf, 1, 1, {}, false)) -- b and c go
+  t.eq({ 'a', 'd' }, lines())
+  t.eq({ 'changed' }, t.run('SET_LINES_MARKED', buf, 1, 1, { 'x' }, false)) -- first + keep == count
+  t.eq({ 'a', 'x', 'd' }, lines())
+end)
+
 t.test('a failed push into the attached buffer still ends its echo, then fails', function()
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'one' })

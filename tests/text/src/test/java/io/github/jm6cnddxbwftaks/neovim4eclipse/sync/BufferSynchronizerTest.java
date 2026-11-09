@@ -71,9 +71,14 @@ class BufferSynchronizerTest {
         final List<String> regions = new ArrayList<>();
         /** Whether a partial push is accepted (false: as a buffer not loaded yet). */
         boolean regionsAccepted = true;
+        /** A partial push fails, as one whose request timed out. */
+        boolean regionsFail;
 
         @Override
         public boolean setBufferRegion(int first, int unchangedAtEnd, List<String> lines) {
+            if (regionsFail) {
+                throw new IllegalStateException("Neovim did not answer");
+            }
             if (!regionsAccepted) {
                 return false;
             }
@@ -344,6 +349,29 @@ class BufferSynchronizerTest {
         document.replace(0, 0, "X");
         sync.pushChangedLinesToNeovim();
         assertEquals(List.of("Xalpha", "beta", "gamma"), neovim.pushed.get(neovim.pushed.size() - 1));
+    }
+
+    /**
+     * A failed partial push leaves Neovim without the typed lines: Neovim's whole-buffer text must
+     * not replace the document's then, and the next push writes everything.
+     */
+    @Test
+    void aFailedPartialPushKeepsNeovimsWholeBufferOut() throws Exception {
+        document.set("alpha\nbeta\ngamma\n");
+        sync.pushDocumentToNeovim();
+        sync.startRemoteListening();
+        document.replace(0, 0, "X");
+        neovim.regionsFail = true;
+        try (ExpectedLog log = ExpectedLog.of(BufferSynchronizer.class)) {
+            sync.pushChangedLinesToNeovim();
+            log.assertLogged(Level.SEVERE, "Failed to push the changed lines");
+        }
+        neovim.neovimChanged(new BufferChange(0, -1, List.of("alpha", "beta", "gamma")));
+        assertEquals("Xalpha\nbeta\ngamma\n", document.get(), "Neovim's stale buffer is not applied");
+        neovim.regionsFail = false;
+        sync.pushChangedLinesToNeovim();
+        assertEquals(List.of("Xalpha", "beta", "gamma"), neovim.pushed.get(neovim.pushed.size() - 1),
+                "the whole document next");
     }
 
     /** After a partial push, the next one starts from there: only what changed since. */

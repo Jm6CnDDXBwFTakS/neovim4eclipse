@@ -1984,8 +1984,8 @@ final class LuaScripts {
      * As for {@link #SET_DOCUMENT_LINES}: a change a plug-in makes between a read and a set in two
      * requests would reach the document (it is outside the echo) and be overwritten in Neovim, or
      * the set would meet lines that moved. The cost: the part's lines go to Neovim whole, not only
-     * the differing ones; the two-request push read Neovim's whole part back anyway, so each push
-     * moves its lines once each way, as before, plus Eclipse's once.
+     * the differing ones. A whole push also gets Neovim's old lines back, as its earlier read did;
+     * a part's push (insert mode's few typed lines) gets nothing back.
      */
     static final String SET_LINES_MARKED = """
             local buf, first, keep, lines, want_old = ...
