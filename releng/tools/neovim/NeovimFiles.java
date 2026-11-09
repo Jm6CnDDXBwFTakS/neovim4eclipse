@@ -3,12 +3,11 @@
 
 package neovim;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import common.Changelog;
 import common.ToolFailure;
 import common.Version;
 
@@ -18,7 +17,7 @@ import common.Version;
  *
  * <h2>The changelog entry</h2>
  * Moving to a new Neovim changes what users install, so {@code CHANGELOG.md} says so under
- * <i>Unreleased</i>, <i>Changed</i> ({@link #withChangedEntry}):
+ * <i>Unreleased</i>, <i>Changed</i> ({@link Changelog#withChangedEntry}):
  * <pre>
  *   ## [Unreleased]
  *
@@ -30,12 +29,6 @@ import common.Version;
  * What the new Neovim lets the plug-in drop or do better is added by hand, with those changes.
  */
 public final class NeovimFiles {
-
-    /** Groups of a Keep a Changelog section, in their order; Changed goes after Added and before the rest. */
-    private static final List<String> AFTER_CHANGED = List.of("### Deprecated", "### Removed", "### Fixed", "### Security");
-
-    /** The width the changelog's text is wrapped at. */
-    private static final int WIDTH = 100;
 
     private NeovimFiles() {
     }
@@ -56,53 +49,6 @@ public final class NeovimFiles {
                 + "). After updating the plug-in, Eclipse offers *Get Neovim* at its next start.";
     }
 
-    /**
-     * {@code changelog} with {@code entry} as the first item under <i>Unreleased</i>,
-     * <i>Changed</i>: in that group if it exists, else in a new one, after <i>Added</i> and before
-     * the other groups. Lines are wrapped at {@link #WIDTH}, continued with two spaces.
-     */
-    public static String withChangedEntry(String changelog, String entry) {
-        String nl = changelog.contains("\r\n") ? "\r\n" : "\n";
-        List<String> lines = new ArrayList<>(changelog.lines().toList());
-        int start = lines.indexOf("## [Unreleased]");
-        if (start < 0) {
-            throw new ToolFailure("CHANGELOG.md has no line ## [Unreleased]");
-        }
-        int end = start + 1;
-        while (end < lines.size() && !lines.get(end).startsWith("## [")) {
-            end++;
-        }
-        List<String> item = wrap("- " + entry);
-        int changed = lines.subList(start, end).indexOf("### Changed");
-        if (changed >= 0) {
-            int at = start + changed + 1;
-            List<String> block = new ArrayList<>(List.of(""));
-            block.addAll(item);
-            // "### Changed", "", then the items: the new one first, the blank line kept after the heading.
-            if (at < lines.size() && lines.get(at).isEmpty()) {
-                at++;
-                block = new ArrayList<>(item);
-            }
-            lines.addAll(at, block);
-        } else {
-            int at = end;
-            for (int i = start + 1; i < end; i++) {
-                if (AFTER_CHANGED.contains(lines.get(i))) {
-                    at = i;
-                    break;
-                }
-            }
-            // Back over blank lines, so the group sits after the previous one's last line.
-            while (at > start + 1 && lines.get(at - 1).isEmpty()) {
-                at--;
-            }
-            List<String> block = new ArrayList<>(List.of("", "### Changed", ""));
-            block.addAll(item);
-            lines.addAll(at, block);
-        }
-        return String.join(nl, lines) + (changelog.endsWith("\n") ? nl : "");
-    }
-
     /** How a Neovim move's entry starts ({@link #entry}), in its wording with and without the italics. */
     private static final Pattern ENTRY_START = Pattern.compile("^- \\*?Get Neovim\\*? installs Neovim ");
     private static final Pattern IT_WAS = Pattern.compile("\\(it was (\\d+\\.\\d+\\.\\d+)\\)");
@@ -111,47 +57,17 @@ public final class NeovimFiles {
      * {@code changelog} with the entry for a move to {@code to}. If <i>Unreleased</i> already has
      * a Neovim move's entry (two moves between releases: 0.12.6 to 0.12.7, then to 0.12.8), that
      * one is replaced, keeping its "it was": users go from the released Neovim straight to the new
-     * one, and never had the version in between. Otherwise as {@link #withChangedEntry}.
+     * one, and never had the version in between. Otherwise as {@link Changelog#withChangedEntry}.
      */
     public static String withNeovimEntry(String changelog, Version from, Version to) {
-        String nl = changelog.contains("\r\n") ? "\r\n" : "\n";
-        List<String> lines = new ArrayList<>(changelog.lines().toList());
-        int start = lines.indexOf("## [Unreleased]");
+        Changelog.Removed earlier = Changelog.withoutEntry(changelog, ENTRY_START);
         Version released = from;
-        if (start >= 0) {
-            for (int i = start + 1; i < lines.size() && !lines.get(i).startsWith("## ["); i++) {
-                if (ENTRY_START.matcher(lines.get(i)).find()) {
-                    int end = i + 1; // the item's continuation lines start with two spaces
-                    while (end < lines.size() && lines.get(end).startsWith("  ")) {
-                        end++;
-                    }
-                    Matcher was = IT_WAS.matcher(String.join(" ", lines.subList(i, end)));
-                    if (was.find()) {
-                        released = Version.parse(was.group(1));
-                    }
-                    lines.subList(i, end).clear();
-                    break;
-                }
+        if (earlier.entry() != null) {
+            Matcher was = IT_WAS.matcher(earlier.entry());
+            if (was.find()) {
+                released = Version.parse(was.group(1));
             }
         }
-        String rest = String.join(nl, lines) + (changelog.endsWith("\n") ? nl : "");
-        return withChangedEntry(rest, entry(released, to));
-    }
-
-    /** {@code text} as lines of at most {@link #WIDTH} characters, the later ones indented by two spaces. */
-    static List<String> wrap(String text) {
-        List<String> out = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        for (String word : text.split(" ")) {
-            if (line.length() > 0 && line.length() + 1 + word.length() > WIDTH) {
-                out.add(line.toString());
-                line = new StringBuilder("  ");
-            } else if (line.length() > 0 && !line.toString().equals("  ")) {
-                line.append(' ');
-            }
-            line.append(word);
-        }
-        out.add(line.toString());
-        return out;
+        return Changelog.withChangedEntry(earlier.changelog(), entry(released, to));
     }
 }

@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import common.Changelog;
 import common.ToolFailure;
 import common.Version;
 import common.VersionCopies;
@@ -63,7 +64,7 @@ class NeovimUpgradeTest {
     @Test
     void theEntryNamesBothVersionsAndIsWrapped() {
         assertTrue(ENTRY.contains("Neovim 0.13.0") && ENTRY.contains("it was 0.12.6"), ENTRY);
-        String changelog = NeovimFiles.withChangedEntry("## [Unreleased]\n\n## [0.2.3] - 2026-11-06\n", ENTRY);
+        String changelog = Changelog.withChangedEntry("## [Unreleased]\n\n## [0.2.3] - 2026-11-06\n", ENTRY);
         for (String line : changelog.lines().toList()) {
             assertTrue(line.length() <= 100, "longer than 100: " + line);
         }
@@ -73,69 +74,11 @@ class NeovimUpgradeTest {
     }
 
     @Test
-    void theEntryGoesFirstIntoAnExistingChangedGroup() {
-        String changelog = NeovimFiles.withChangedEntry("""
-                ## [Unreleased]
-
-                ### Changed
-
-                - Something else.
-
-                ## [0.2.3] - 2026-11-06
-                """, "New.");
-        assertEquals("""
-                ## [Unreleased]
-
-                ### Changed
-
-                - New.
-                - Something else.
-
-                ## [0.2.3] - 2026-11-06
-                """, changelog);
-    }
-
-    @Test
     void aSecondMoveBeforeTheReleaseReplacesTheFirstsEntry() {
         String once = NeovimFiles.withNeovimEntry("## [Unreleased]\n\n## [0.2.4] - 2026-11-20\n", FROM, Version.parse("0.12.7"));
         String twice = NeovimFiles.withNeovimEntry(once, Version.parse("0.12.7"), Version.parse("0.12.8"));
-        assertEquals(NeovimFiles.withChangedEntry("## [Unreleased]\n\n## [0.2.4] - 2026-11-20\n",
+        assertEquals(Changelog.withChangedEntry("## [Unreleased]\n\n## [0.2.4] - 2026-11-20\n",
                 NeovimFiles.entry(FROM, Version.parse("0.12.8"))), twice, "one entry, from the released 0.12.6");
         assertTrue(!twice.contains("0.12.7"), twice);
-    }
-
-    @Test
-    void aNewChangedGroupGoesAfterAddedAndBeforeFixed() {
-        String changelog = NeovimFiles.withChangedEntry("""
-                ## [Unreleased]
-
-                ### Added
-
-                - A tool.
-
-                ### Fixed
-
-                - A bug.
-
-                ## [0.2.3] - 2026-11-06
-                """, "New.");
-        assertEquals("""
-                ## [Unreleased]
-
-                ### Added
-
-                - A tool.
-
-                ### Changed
-
-                - New.
-
-                ### Fixed
-
-                - A bug.
-
-                ## [0.2.3] - 2026-11-06
-                """, changelog);
-        assertThrows(ToolFailure.class, () -> NeovimFiles.withChangedEntry("# Changelog\n", "New."));
     }
 }
