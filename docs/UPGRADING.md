@@ -133,7 +133,9 @@ and puts the working tree back if a step fails. Downloads are kept in
   (such as 4.34's `eclipse.ini`, which does not start on Java 24).
 - **`smoke`** builds the update site from this checkout and installs it into both pinned releases
   with p2's director, as the smoke job does after a release, on Linux, macOS (from the `.dmg`) or
-  Windows (from the `.zip`). Run it on macOS and Windows after a move. A Platform brings no Java:
+  Windows (from the `.zip`). Run it on macOS and Windows after a move. A release with no Platform
+  for this machine is skipped with a note (Eclipse 4.34 has no Windows on ARM build); it fails only
+  if none can be installed into. A Platform brings no Java:
   it runs on `--java <home>`, else `eclipse.java` in `releng/tools/common/local.properties`, else
   `JAVA_HOME`, else the tool's own Java. Eclipse 4.34 needs Java 21 to 23 (its `eclipse.ini` asks
   for a security manager, which Java 24 removed):

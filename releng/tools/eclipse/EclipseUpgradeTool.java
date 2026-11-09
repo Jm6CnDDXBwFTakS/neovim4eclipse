@@ -309,16 +309,35 @@ public final class EclipseUpgradeTool {
     private void smoke() {
         List<EclipseRelease.SmokeEntry> entries = List.of(smokeEntry(OLDEST), smokeEntry(NEWEST));
         buildSite();
+        List<String> installed = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
         for (EclipseRelease.SmokeEntry e : entries) {
-            smokeInto(EclipseRelease.ofNumber(e.eclipse()), dropOf(e));
+            EclipseRelease release = EclipseRelease.ofNumber(e.eclipse());
+            Downloads d = downloads(dropOf(e), release);
+            if (d.hostUrl() == null) {
+                // Eclipse 4.34 has no Windows on ARM build: try the other release rather than none.
+                System.out.println("  skipped: Eclipse " + release + " has no Platform for " + os + "-" + arch
+                        + " (" + EclipseFiles.platformFile(release, os, arch) + "); CI's smoke job still installs into it on Linux");
+                skipped.add(e.eclipse());
+                continue;
+            }
+            smokeInto(release, d);
+            installed.add(e.eclipse());
         }
-        ok("this checkout installs into Eclipse " + String.join(" and ", entries.stream().map(e -> e.eclipse()).toList())
-                + " on " + os + "-" + arch);
+        if (installed.isEmpty()) {
+            throw new ToolFailure("no pinned Eclipse has a Platform for " + os + "-" + arch + ", so nothing was installed; run smoke on another machine");
+        }
+        ok("this checkout installs into Eclipse " + String.join(" and ", installed) + " on " + os + "-" + arch
+                + (skipped.isEmpty() ? "" : " (skipped, no Platform here: " + String.join(", ", skipped) + ")"));
     }
 
     /** Downloads, unpacks and smoke-installs into one pinned release, on this machine. */
     private void smokeInto(EclipseRelease release, String drop) {
-        Platform.Installation eclipse = unpack(downloads(drop, release), release, true);
+        smokeInto(release, downloads(drop, release));
+    }
+
+    private void smokeInto(EclipseRelease release, Downloads d) {
+        Platform.Installation eclipse = unpack(d, release, true);
         checkJava(eclipse, release);
         Smoke.install(root, eclipse, javaHome(), os, version(), work(release).resolve("director.log"));
     }
