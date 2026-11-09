@@ -1965,26 +1965,57 @@ final class LuaScripts {
             """;
 
     /**
-     * Replaces lines of a buffer with Eclipse's, between two {@code eclipse_echo} notifications, so
-     * that the session drops the change's line events (arguments: the buffer's number, the first
-     * line, the end line, 0-based and exclusive, whether out-of-range lines are an error, the new
-     * lines). For the pushes into the attached buffer ({@code NeovimSession.setBufferLines},
-     * {@code setBufferRegion}), which compute the lines that differ themselves.
+     * Makes part of a buffer equal to Eclipse's lines, replacing only the lines that differ, between
+     * two {@code eclipse_echo} notifications, so that the session drops the change's line events. For
+     * the pushes into the attached buffer ({@code NeovimSession.setBufferLines}, {@code
+     * setBufferRegion}). Arguments: the buffer's number; the part, as its first line (0-based) and
+     * how many lines at the end stay as they are ({@code 0, 0}: the whole buffer); the lines; whether
+     * to answer the part's lines as they were. Answers {@code {"changed"}}, {@code {"equal"}} (nothing
+     * set), or {@code {"outside"}} when the part is not in the buffer; with the old lines second when
+     * asked. Example: {@code (3, 1, 1, {"B"}, false)} on {@code a, b, c} sets line 2 to {@code "B"}
+     * and answers {@code {"changed"}}.
      *
-     * <p>Why: the document has those lines already, and an echo that is applied again is not
-     * always harmless. One that removes lines removes them a second time: Eclipse's Delete Line in
-     * an insert on {@code "alpha"}, then Esc, deleted {@code "beta"} from the document too. See
-     * {@link #SET_DOCUMENT_LINES} for how the notifications bracket exactly the change's events.
+     * <h2>Why the echo is marked</h2>
+     * The document has those lines already, and an echo applied to it again is not always
+     * harmless: one that removes lines removes them a second time. Eclipse's Delete Line in an
+     * insert on {@code "alpha"}, then Esc, deleted {@code "beta"} from the document too.
+     *
+     * <h2>Why read and set in one script</h2>
+     * As for {@link #SET_DOCUMENT_LINES}: a change a plug-in makes between a read and a set in two
+     * requests would reach the document (it is outside the echo) and be overwritten in Neovim, or
+     * the set would meet lines that moved. The cost: the part's lines go to Neovim whole, not only
+     * the differing ones; the two-request push read Neovim's whole part back anyway, so each push
+     * moves its lines once each way, as before, plus Eclipse's once.
      */
     static final String SET_LINES_MARKED = """
-            local buf, first, last, strict, lines = ...
+            local buf, first, keep, lines, want_old = ...
+            local count = vim.api.nvim_buf_line_count(buf)
+            if first < 0 or keep < 0 or first + keep > count then
+              return { 'outside' }
+            end
+            local current = vim.api.nvim_buf_get_lines(buf, first, count - keep, true)
+            local old = want_old and current or nil
+            -- The lines that differ: past the common first lines, before the common last ones.
+            local from = 1
+            while from <= #current and from <= #lines and current[from] == lines[from] do
+              from = from + 1
+            end
+            if from > #current and from > #lines then
+              return { 'equal', old }
+            end
+            local old_end, new_end = #current, #lines
+            while old_end >= from and new_end >= from and current[old_end] == lines[new_end] do
+              old_end, new_end = old_end - 1, new_end - 1
+            end
             local chan = vim.g.neovim4eclipse_channel or 0 -- 0: every channel, Eclipse's among them
             vim.rpcnotify(chan, 'eclipse_echo', buf, true)
-            local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, first, last, strict, lines)
+            local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, first + from - 1, first + old_end, true,
+              vim.list_slice(lines, from, new_end))
             vim.rpcnotify(chan, 'eclipse_echo', buf, false)
             if not ok then
               error(err, 0)
             end
+            return { 'changed', old }
             """;
 
     /**

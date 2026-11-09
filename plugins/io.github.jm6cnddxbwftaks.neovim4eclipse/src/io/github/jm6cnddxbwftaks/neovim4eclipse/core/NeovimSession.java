@@ -32,7 +32,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
@@ -938,25 +937,32 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             applyModified(document);
             return null;
         }
-        List<String> before = getBufferLines();
-        LineDiff.Change change = LineDiff.between(before, target);
-        if (change != null) {
-            setAttachedLines(change.start(), change.end(), false, change.replacement());
-            if (document != null) {
-                applyModified(document); // the change set 'modified'; Eclipse decides (a revert is not dirty)
-            }
+        List<?> answer = setAttachedLines(0, 0, target, true);
+        if ("changed".equals(answer.get(0)) && document != null) {
+            applyModified(document); // the change set 'modified'; Eclipse decides (a revert is not dirty)
+        }
+        List<String> before = new ArrayList<>();
+        if (answer.size() > 1 && answer.get(1) instanceof List<?> old) {
+            old.forEach(line -> before.add(String.valueOf(line)));
         }
         return before;
     }
 
     /**
-     * Replaces the attached buffer's lines {@code [first, end)} with Eclipse's, marking the change's
-     * line events as its echo, which the session drops ({@link LuaScripts#SET_LINES_MARKED}): the
-     * document has those lines already, and an echo applied to it again could remove lines twice.
+     * Makes the attached buffer's lines from {@code first} up to its last {@code keep} equal to
+     * {@code lines}, in one script that reads, compares and sets them and marks the change's line
+     * events as its echo, which the session drops ({@link LuaScripts#SET_LINES_MARKED}).
+     *
+     * @return the script's answer: {@code "changed"}, {@code "equal"} or {@code "outside"} first, the
+     *         part's old lines second when {@code wantOld}
      */
-    private void setAttachedLines(int first, int end, boolean strict, List<String> replacement) throws Exception {
-        await(api.execLua(LuaScripts.SET_LINES_MARKED,
-                List.of(buffers.attachedBufnr(), first, end, strict, replacement)));
+    private List<?> setAttachedLines(int first, int keep, List<String> lines, boolean wantOld) throws Exception {
+        Object answer = await(api.execLua(LuaScripts.SET_LINES_MARKED,
+                List.of(buffers.attachedBufnr(), first, keep, lines, wantOld)));
+        if (answer instanceof List<?> list && !list.isEmpty()) {
+            return list;
+        }
+        throw new IllegalStateException("Unexpected answer from SET_LINES_MARKED: " + answer);
     }
 
     /**
@@ -985,12 +991,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * See {@link BufferPort#setBufferRegion}. Reads only that part of Neovim's buffer
-     * ({@code nvim_buf_get_lines} with a negative end: {@code -1} is past the last line, so
-     * {@code -1 - unchangedAtEnd} leaves the last {@code unchangedAtEnd} lines out) and replaces the
+     * See {@link BufferPort#setBufferRegion}. Reads only that part of Neovim's buffer and replaces the
      * lines that differ, as {@link #setBufferLines} does for the whole buffer: nothing when they are
-     * equal, so a push after a faithful re-typing adds no undo step. Strict indexes: a part outside
-     * the buffer is an error, and the caller pushes the whole document.
+     * equal, so a push after a faithful re-typing adds no undo step. A part outside the buffer is
+     * not written, and the caller pushes the whole document.
      */
     @Override
     public boolean setBufferRegion(int first, int unchangedAtEnd, List<String> lines) throws Exception {
@@ -999,19 +1003,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (handle == null || (document != null && !document.loaded)) {
             return false; // the first push loads the file (setBufferLines)
         }
-        List<String> current;
-        try {
-            current = await(api.bufGetLines(handle, first, -1 - unchangedAtEnd, true));
-        } catch (Exception e) {
-            LOG.log(Level.FINE, "lines " + first + " to end-" + unchangedAtEnd + " are not in the buffer", e);
+        String outcome = String.valueOf(setAttachedLines(first, unchangedAtEnd, lines, false).get(0));
+        if ("outside".equals(outcome)) {
+            LOG.fine(() -> "lines " + first + " to end-" + unchangedAtEnd + " are not in the buffer");
             return false;
         }
-        LineDiff.Change change = LineDiff.between(current, lines);
-        if (change != null) {
-            setAttachedLines(first + change.start(), first + change.end(), true, change.replacement());
-            if (document != null) {
-                applyModified(document);
-            }
+        if ("changed".equals(outcome) && document != null) {
+            applyModified(document);
         }
         return true;
     }

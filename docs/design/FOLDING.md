@@ -329,7 +329,7 @@ plug-in does. Lines are 1-based.
   edit. Eclipse drops or shrinks the annotations, and the next reconcile resends the regions.
 - **Typing in insert mode** happens in Eclipse, where annotation positions follow the text. On
   `Esc` the text reaches Neovim through `nvim_buf_set_lines` (only the lines that differ,
-  `util/LineDiff`), which moves Neovim's folds the same way (X1). The reconcile after typing resends
+  `LuaScripts.SET_LINES_MARKED`), which moves Neovim's folds the same way (X1). The reconcile after typing resends
   the regions anyway.
 - **Fold sends wait while Eclipse types.** Typing a new method in insert mode (`{`, Enter) makes
   JDT's reconcile add a fold. Neovim does not have the typed lines until `Esc`, so a fold sent then

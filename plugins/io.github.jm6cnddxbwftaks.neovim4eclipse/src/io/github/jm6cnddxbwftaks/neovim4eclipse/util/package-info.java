@@ -13,8 +13,8 @@
  *       (a command, the argument of {@code f}, text) is left to Neovim.</li>
  *   <li><b>Text:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineTextUtil} (lines versus one
  *       string), {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineRangeEdit} (a Neovim line event as
- *       one document replacement), {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineDiff} and
- *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.TextDiff} (minimal changes),
+ *       one document replacement), {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.TextDiff} (a
+ *       minimal change),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.Utf8Columns} (Neovim's UTF-8 byte columns
  *       versus Eclipse's UTF-16 character offsets).</li>
  *   <li><b>Modes and commands:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes},

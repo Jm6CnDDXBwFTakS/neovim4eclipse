@@ -46,7 +46,7 @@ in Eclipse's document after Esc.
 
 In **insert/replace mode Eclipse inserts the characters itself** (no flicker, content assist and IME
 keep working). On `Esc` the document is pushed to Neovim (`BufferSynchronizer.pushDocumentToNeovim`)
-and *then* `<Esc>` is sent. A push replaces only the lines that differ (`LineDiff`), so it adds no
+and *then* `<Esc>` is sent. A push replaces only the lines that differ (`LuaScripts.SET_LINES_MARKED`), so it adds no
 undo step when nothing changed and keeps the marks of untouched lines. A few keys (`p P x X s ~ . u <C-r>`) and every `:` command are followed by
 a full re-sync instead of trusting line events alone (`NvimKeys.isBufferMutating`).
 

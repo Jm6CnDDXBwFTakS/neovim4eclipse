@@ -206,19 +206,40 @@ t.test('a document write marks its echo on every channel when the channel is not
   t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
 end)
 
--- SET_LINES_MARKED: a push into the attached buffer, with its line events marked as its echo.
-t.test('a push into the attached buffer marks its echo', function()
+-- SET_LINES_MARKED: a push into the attached buffer, read, compared and set in one script, with its
+-- line events marked as its echo.
+t.test('a push into the attached buffer sets only the lines that differ and marks its echo', function()
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'alpha', 'beta', 'gamma' })
-  t.run('SET_LINES_MARKED', buf, 0, 1, true, {})
+  vim.api.nvim_buf_set_mark(buf, 'a', 3, 0, {})
+  t.eq({ 'changed', { 'alpha', 'beta', 'gamma' } }, t.run('SET_LINES_MARKED', buf, 0, 0, { 'beta', 'gamma' }, true))
   t.eq({ 'beta', 'gamma' }, lines())
+  t.eq({ 2, 0 }, vim.api.nvim_buf_get_mark(buf, 'a'), 'an unchanged line keeps its mark')
   t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
+end)
+
+t.test('a push of equal lines sets nothing and marks no echo', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'same' })
+  local tick = vim.api.nvim_buf_get_changedtick(buf)
+  t.eq({ 'equal' }, t.run('SET_LINES_MARKED', buf, 0, 0, { 'same' }, false))
+  t.eq(tick, vim.api.nvim_buf_get_changedtick(buf))
+  t.eq({}, t.sent('eclipse_echo'))
+end)
+
+t.test('a push of a part changes only that part, and one outside the buffer nothing', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'a', 'b', 'c' })
+  t.eq({ 'changed' }, t.run('SET_LINES_MARKED', buf, 1, 1, { 'B', 'b2' }, false))
+  t.eq({ 'a', 'B', 'b2', 'c' }, lines())
+  t.eq({ 'outside' }, t.run('SET_LINES_MARKED', buf, 3, 2, { 'x' }, false))
+  t.eq({ 'a', 'B', 'b2', 'c' }, lines())
 end)
 
 t.test('a failed push into the attached buffer still ends its echo, then fails', function()
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'one' })
-  local ok = pcall(t.run, 'SET_LINES_MARKED', buf, 5, 6, true, { 'x' }) -- line 6 is past the end
+  local ok = pcall(t.run, 'SET_LINES_MARKED', buf, 0, 0, { 'two\nlines' }, false) -- a line break in a line
   t.eq(false, ok)
   t.eq({ 'one' }, lines())
   t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
