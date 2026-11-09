@@ -114,7 +114,8 @@ and puts the working tree back if a step fails. Downloads are kept in
   <https://download.eclipse.org/eclipse/downloads/data.json> (the first entry of `"releases"`, for
   example `drops4/R-4.41-202608281142`) and does nothing if the smoke job has it. Otherwise it takes
   the Linux x86_64 Platform's SHA-512 from the drop's checksums file for CI, downloads this
-  machine's Platform, stops if its `eclipse.ini` (`-Dosgi.requiredJavaVersion`) needs a newer Java
+  machine's Platform (or only CI's, with `--no-tests` or where the drop has none for this
+  machine, which skips the local install), stops if its `eclipse.ini` (`-Dosgi.requiredJavaVersion`) needs a newer Java
   than `.java-version` (the smoke job runs it on that Java; raise the Java release first), sets the
   smoke entry in `update-site.yml` and `rehearse-release.yml`, rewrites the `[eclipse.newest]`
   copies, adds a changelog entry, builds the update site and installs it into that Eclipse, and

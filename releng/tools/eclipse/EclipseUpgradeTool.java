@@ -191,14 +191,20 @@ public final class EclipseUpgradeTool {
         }
         System.out.println("Eclipse " + to + " is out (" + drop + "); the newest tested is " + from + ".");
         Downloads d = downloads(drop, to);
-        // Unpacked even with --no-tests: its eclipse.ini says which Java it needs, which CI's smoke job must have.
-        Platform.Installation eclipse = unpack(d, to, tests);
+        // Installed into only where this machine has its Platform; as smoke does, a missing one is a note, not a stop.
+        boolean install = tests && d.hostUrl() != null;
+        if (tests && !install) {
+            System.out.println("  skipped: no install here, Eclipse " + to + " has no Platform for " + os + "-" + arch
+                    + "; CI's smoke job installs into it on Linux");
+        }
+        // Unpacked even without an install: its eclipse.ini says which Java it needs, which CI's smoke job must have.
+        Platform.Installation eclipse = unpack(d, to, install);
         OptionalInt needs = requiredJava(eclipse);
         if (needs.isPresent() && needs.getAsInt() > javaVersionFile()) {
             throw new ToolFailure("Eclipse " + to + " needs Java " + needs.getAsInt() + ", but the smoke job runs it on Java "
                     + javaVersionFile() + " (.java-version): raise the Java release first (docs/UPGRADING.md, \"JDK\")");
         }
-        if (tests) {
+        if (install) {
             checkJava(eclipse, to);
         }
         List<VersionCopies.Copy> names = copies("eclipse.newest");
@@ -208,7 +214,8 @@ public final class EclipseUpgradeTool {
                 "rewrite " + from.name() + " and " + from.number() + " to " + to.name() + " and " + to.number()
                         + " in " + files(names, numbers) + " (" + VersionCopies.FILE + ")",
                 Changelog.FILE + ", Unreleased, Changed: " + EclipseFiles.newestEntry(to)));
-        plan.add(tests ? "build the update site and install it into " + to + " (" + os + "-" + arch + ")" : "no install (--no-tests)");
+        plan.add(install ? "build the update site and install it into " + to + " (" + os + "-" + arch + ")"
+                : tests ? "no install (no Platform for " + os + "-" + arch + ")" : "no install (--no-tests)");
         boolean committed = commit("Test every release with Eclipse " + to + ", the newest, then commit", plan, "Test with Eclipse " + to, () -> {
             setSmokeEntry(NEWEST, new EclipseRelease.SmokeEntry(to.number(), d.ciUrl(), d.ciSha512()));
             rewrite(names, to.name());
@@ -216,7 +223,7 @@ public final class EclipseUpgradeTool {
             Changelog.Removed earlier = Changelog.withoutEntry(read(Changelog.FILE), EclipseFiles.NEWEST_ENTRY);
             write(Changelog.FILE, Changelog.withChangedEntry(earlier.changelog(), EclipseFiles.newestEntry(to)));
             ok(Changelog.FILE + ": the entry under Unreleased, Changed");
-            if (tests) {
+            if (install) {
                 buildSite();
                 Smoke.install(root, eclipse, javaHome(), os, version(), work(to).resolve("director.log"));
             }
