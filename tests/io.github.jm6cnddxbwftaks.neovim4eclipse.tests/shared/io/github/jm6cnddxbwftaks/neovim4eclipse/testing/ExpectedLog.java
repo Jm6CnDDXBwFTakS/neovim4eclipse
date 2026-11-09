@@ -135,6 +135,22 @@ public final class ExpectedLog implements AutoCloseable {
         }
     }
 
+    /**
+     * Each record captured so far, as its level and message, and its parameters when it has any.
+     * Example: {@code ["FINE A push repaired Neovim's buffer 3: ... [Neovim: gamma, Eclipse: GAMMA]"]}.
+     */
+    public List<String> describe() {
+        List<String> seen = new ArrayList<>();
+        synchronized (records) {
+            for (LogRecord logRecord : records) {
+                Object[] parameters = logRecord.getParameters();
+                seen.add(logRecord.getLevel() + " " + logRecord.getMessage()
+                        + (parameters == null ? "" : " " + java.util.Arrays.toString(parameters)));
+            }
+        }
+        return seen;
+    }
+
     /** Stops capturing; the logger prints to the console again. */
     @Override
     public void close() {

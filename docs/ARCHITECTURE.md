@@ -813,6 +813,17 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   such case:
   Neovim stores it as `\n` inside a line, but its API sends it to an RPC client as `\0`, an ordinary
   character in Eclipse, and turns a pushed `\0` back into a NUL.
+- **Repairs are reported:** a push of a document of up to 10,000 lines compares Neovim's whole
+  buffer with it and writes every difference (`ChangedLines.COMPARE_WHOLE_UP_TO_LINES`), so a drift
+  between the two copies, whatever caused it, lasts only until the next `Esc` or Eclipse change. A
+  drift still matters meanwhile: a Neovim command runs on its own copy, and `yy` then `p` can paste a
+  line Eclipse never showed. So a push that finds a line no recorded change explains (one of the
+  lines `util/ChangedLines` counts as unchanged since the buffer last equaled the document) logs
+  it (`sync/TextRepairs`, at `FINE`). Example: Eclipse typed in line 1, Neovim's line 3 differs: a
+  repair; only line 1 differs: an ordinary push. Checked are the push at `Esc` and at a sync point
+  and that of Eclipse's own changes, not the push at attach, which carries what changed while Neovim
+  was not followed. The UI tests fail on a repair, and also compare every open document with its
+  buffer when a test ends (CONTRIBUTING.md, "Test helpers and fakes").
 - **Paste, counts and `.`** are ordinary keys sent to Neovim; there is no Java-side emulation. Linewise
   paste arrives as a pure line insertion, which `LineRangeEdit` handles.
 - **Columns:** Neovim cursor/visual columns are UTF-8 byte offsets. `editor/DocumentPositions` converts

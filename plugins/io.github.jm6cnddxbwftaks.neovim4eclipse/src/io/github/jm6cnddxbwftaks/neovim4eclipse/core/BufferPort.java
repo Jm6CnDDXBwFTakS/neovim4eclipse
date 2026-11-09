@@ -20,8 +20,12 @@ public interface BufferPort {
     /**
      * Makes the attached buffer's text equal to {@code lines}. Blocking RPC: call on the session's
      * input thread, that is, from work given to {@link #runAsync}.
+     *
+     * @return the buffer's lines as the push found them, for telling a repair from an ordinary push
+     *         ({@code util/ChangedLines.Known}); {@code null} when the push loaded a new buffer, which
+     *         had nothing to compare
      */
-    void setBufferLines(List<String> lines) throws Exception;
+    List<String> setBufferLines(List<String> lines) throws Exception;
 
     /**
      * Makes part of the attached buffer equal to {@code lines}: its lines from {@code first} up to,

@@ -205,7 +205,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             boolean wasListening = listening;
             stopRemoteListening();
             try {
-                pushDocumentToNeovim();
+                pushWhole(true); // Eclipse's own change: a difference elsewhere is a repair
             } finally {
                 if (wasListening) {
                     startRemoteListening();
@@ -259,19 +259,46 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      */
     @Override
     public void pushDocumentToNeovim() {
+        pushWhole(false);
+    }
+
+    /** The document's lines for a whole push, and what {@link #changedLines} knew as they were read. */
+    private record WholePush(List<String> lines, ChangedLines.Known known) {
+    }
+
+    /**
+     * {@link #pushDocumentToNeovim}, and with {@code checkRepair} also reports a difference the push
+     * repaired in a line no recorded change explains ({@link TextRepairs}). Only a push whose
+     * {@link #changedLines} covers every change since the buffer last equaled the document can
+     * tell: the push at {@code Esc} or a sync point and that of Eclipse's own changes. Not the push
+     * at attach, which carries what changed while Neovim was not followed.
+     */
+    private void pushWhole(boolean checkRepair) {
         if (closed) {
             return;
         }
         try {
-            List<String> lines = onUi(() -> {
-                changedLines.clear(); // read in the same step as the lines: no edit falls between
+            WholePush push = onUi(() -> {
+                // Read in the same step as the lines, before the clear: no edit falls between. After
+                // linesToPush, which decides the final newline, so that FinalNewlines.of does not
+                // read the whole text a second time.
+                List<String> lines = FinalNewlines.linesToPush(document);
+                ChangedLines.Known known = checkRepair
+                        ? changedLines.known(endsWithLineBreak() && FinalNewlines.of(document))
+                        : null;
+                changedLines.clear();
                 splitLines.clear(); // Neovim gets the document's lines, split as Eclipse splits them
-                return FinalNewlines.linesToPush(document);
+                return new WholePush(lines, known);
             });
-            if (lines == null) {
+            if (push == null) {
                 return; // the UI is gone or the editor closed meanwhile
             }
-            session.setBufferLines(lines);
+            List<String> lines = push.lines();
+            List<String> before = session.setBufferLines(lines);
+            if (push.known() != null && before != null) {
+                TextRepairs.check(push.known(), before, lines.isEmpty() ? List.of("") : lines,
+                        buffer != null ? "buffer " + buffer.bufnr() : "attached buffer");
+            }
             neovimBehind = false;
             LOG.fine(() -> "Pushed " + lines.size() + " lines to Neovim");
         } catch (Exception e) {
@@ -328,12 +355,12 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                 return new RegionPush(region, region.isEmpty() ? List.of() : linesOf(region.first(), region.end()));
             });
             if (push == null) {
-                pushDocumentToNeovim(); // the whole document, or the UI is gone (then it does nothing)
+                pushWhole(true); // the whole document, or the UI is gone (then it does nothing)
                 return;
             }
             if (!push.region().isEmpty() && !session.setBufferRegion(push.region().first(),
                     push.region().unchangedAtEnd(), push.lines())) {
-                pushDocumentToNeovim();
+                pushDocumentToNeovim(); // the record was cleared with the region read: nothing to check
                 return;
             }
             neovimBehind = false;

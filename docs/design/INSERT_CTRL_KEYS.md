@@ -129,7 +129,10 @@ anywhere.
 
 **Documents up to `ChangedLines.COMPARE_WHOLE_UP_TO_LINES` (10,000) lines are compared whole**,
 at about 3 ms: the whole comparison is also a safety net, since whatever differed, anywhere, is
-repaired at the next `Esc`. Only longer documents push the changed lines. The same limit chooses the
+repaired at the next `Esc`. A repair is no longer silent: when the comparison finds a line no
+recorded change explains (`ChangedLines.Known.firstUnexplained`: one outside the two unchanged
+counts), `sync/TextRepairs` logs it at `FINE`, which users do not see and the UI tests fail on.
+Only longer documents push the changed lines. The same limit chooses the
 handshake after a sync point's key (section 2, step 5): a full sync for a short document; for a long
 one only a marker change (`BufferChange.marker`) that lets Eclipse type once the key's own line
 events are applied, without reading Neovim's whole buffer per `Ctrl` key.

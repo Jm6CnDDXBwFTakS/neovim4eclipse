@@ -212,6 +212,13 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed
   into the box; it fails with "lost keyboard focus" if the box closed before Enter), `statusLineTexts` (the window's status line, where Eclipse-side errors appear).
   `SessionProbe` runs Lua in Neovim, for what the editor cannot show (the buffer list).
+  Every test it runs is also a text check: a push that repairs a difference between Eclipse's
+  document and Neovim's buffer (`sync/TextRepairs`) fails the test, and right after the test's own
+  code every open document is compared with its buffer (`TextCheck`), in normal mode: a test left
+  in insert mode gets an `Esc` first. Why: the push at `Esc` used to repair a drift silently, so a
+  bug that made the two copies differ passed every test that did not look at the line it hit. A
+  test whose texts may rightly differ when it ends (Neovim mode switched off, say) says so with
+  `@TextMayDiffer("why")`; a repair still fails it.
 - `TestWait` (`tests/io...tests/shared`, used by every test module): how long a test waits for something it
   expects, 15 s unless `-Dtest.wait.seconds=N` says otherwise. Every wait uses it (`TestWait.millis()`,
   or `EndToEndTestBase.TIMEOUT_MS` in the UI tests), never a number of its own; see

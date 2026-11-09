@@ -928,22 +928,25 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * <p>The first push into a new buffer loads the file: like Vim reading a file, it is not an undo
      * step ({@link LuaScripts#LOAD_WITHOUT_UNDO}), so {@code u} right after opening does nothing.
      */
-    public void setBufferLines(List<String> lines) throws Exception {
+    @Override
+    public List<String> setBufferLines(List<String> lines) throws Exception {
         List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
         DocumentBuffer document = buffers.attachedDocument();
         if (document != null && !document.loaded) {
             await(api.execLua(LuaScripts.LOAD_WITHOUT_UNDO, List.of(target))); // one list, however long
             document.loaded = true;
             applyModified(document);
-            return;
+            return null;
         }
-        LineDiff.Change change = LineDiff.between(getBufferLines(), target);
+        List<String> before = getBufferLines();
+        LineDiff.Change change = LineDiff.between(before, target);
         if (change != null) {
             await(api.bufSetLines(buffers.attached(), change.start(), change.end(), false, change.replacement()));
             if (document != null) {
                 applyModified(document); // the change set 'modified'; Eclipse decides (a revert is not dirty)
             }
         }
+        return before;
     }
 
     /**

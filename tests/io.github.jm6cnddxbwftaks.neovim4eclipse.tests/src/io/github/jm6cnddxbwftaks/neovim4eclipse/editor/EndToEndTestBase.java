@@ -14,7 +14,9 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.lang.reflect.Method;
 import java.util.List;
+import java.util.logging.Level;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -42,10 +44,16 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.wizards.IWizardDescriptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.InvocationInterceptor;
+import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.TextRepairs;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -68,7 +76,22 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
  * so a test that starts without it fails at once with "lost keyboard focus" and where the focus is.
  * The {@code :} box helpers ({@link #openBox}, {@link #runInBox}) do the same for the box, which
  * closes whenever it loses focus.
+ *
+ * <p><b>The text check.</b> Every test also checks that Eclipse's text and Neovim's agree, two ways:
+ * <ul>
+ *   <li>A push that repairs a drift in Neovim's buffer fails the test ({@link TextRepairs}: a line
+ *       no change explains differed). Captured from the start of the setup to the end of the
+ *       clean-up.</li>
+ *   <li>Right after the test's own code, before any clean-up, every open editor's document is
+ *       compared with its buffer ({@link TextCheckAtEnd}), for a drift no push has repaired yet. A
+ *       test that ends in another mode is first brought back to normal mode with {@code Esc}, which
+ *       is also when Neovim gets the text typed in insert mode. {@link TextMayDiffer} leaves a test
+ *       out of this comparison.</li>
+ * </ul>
+ * Why: before the check, the push at {@code Esc} repaired any difference silently, so a bug that
+ * made the two copies drift passed every test that did not look at the line it hit.
  */
+@ExtendWith(EndToEndTestBase.TextCheckAtEnd.class)
 abstract class EndToEndTestBase {
 
     /**
@@ -86,9 +109,12 @@ abstract class EndToEndTestBase {
     protected StyledText widget;
     protected IDocument document;
     protected NeovimSession session;
+    /** The repairs pushes make during the test ({@link TextRepairs}); each fails the test. */
+    private ExpectedLog repairs;
 
     @BeforeEach
     void openEditor() throws Exception {
+        repairs = ExpectedLog.of(TextRepairs.class, Level.FINE);
         // An error dialog fails the test instead of stalling the run (UiTestSupport.watchForErrorDialogs).
         UiTestSupport.watchForErrorDialogs();
         // -Dnvim.path reaches the plug-in as its startup option -Dneovim4eclipse.nvim (the test pom's
@@ -219,7 +245,9 @@ abstract class EndToEndTestBase {
         // An error dialog the test's own waits did not report (it opened after the last one) fails
         // the test, but only after the cleanup, so the next test starts clean.
         String unreported = UiTestSupport.takeClosedErrorDialog();
-        if (editor != null) {
+        // No page: the editor is closed already (a test that closed its project; the text check's
+        // wait let that close finish).
+        if (editor != null && editor.getSite().getPage() != null) {
             editor.getSite().getPage().closeEditor(editor, false);
         }
         forgetClosedFilesBuffers();
@@ -227,10 +255,53 @@ abstract class EndToEndTestBase {
             project.delete(true, true, null);
         }
         String duringCleanup = UiTestSupport.stopWatchingForErrorDialogs();
+        List<String> repaired = stopCapturingRepairs();
         if (unreported != null || duringCleanup != null) {
             fail("An error dialog opened and was closed (not answered): "
                     + (unreported != null ? unreported : duringCleanup)
                     + ". See the test Eclipse's .metadata/.log for the error.");
+        }
+        if (!repaired.isEmpty()) {
+            fail("Eclipse's text and Neovim's drifted apart, and a push repaired it (TextRepairs; the"
+                    + " parameters are Neovim's line, then Eclipse's): " + repaired);
+        }
+    }
+
+    /** Ends the capture of repairs and returns what it caught (nothing if the setup never started it). */
+    private List<String> stopCapturingRepairs() {
+        if (repairs == null) {
+            return List.of();
+        }
+        try {
+            return repairs.describe();
+        } finally {
+            repairs.close();
+            repairs = null;
+        }
+    }
+
+    /**
+     * Runs the text comparison right after each test method, before any {@code @AfterEach} (which
+     * close editors and delete projects): an extension's interception of the test method itself
+     * is the one place JUnit offers for that. A test that failed is not compared: its failure says
+     * more.
+     */
+    static final class TextCheckAtEnd implements InvocationInterceptor {
+        @Override
+        public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
+                ExtensionContext extensionContext) throws Throwable {
+            invocation.proceed();
+            Method method = invocationContext.getExecutable();
+            if (method.isAnnotationPresent(TextMayDiffer.class)
+                    || method.getDeclaringClass().isAnnotationPresent(TextMayDiffer.class)
+                    || extensionContext.getRequiredTestClass().isAnnotationPresent(TextMayDiffer.class)) {
+                return;
+            }
+            String differences = TextCheck.differences(TIMEOUT_MS);
+            if (differences != null) {
+                fail("Eclipse's text and Neovim's differ when the test ends (EndToEndTestBase, the text"
+                        + " check; @TextMayDiffer leaves a test out): " + differences);
+            }
         }
     }
 

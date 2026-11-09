@@ -42,8 +42,16 @@ final class FinalNewlines {
     }
 
     /**
-     * The document's lines for Neovim, keeping its final newline as decided before
-     * ({@link LineTextUtil#toNeovim}), and remembers the result. Read on the UI thread.
+     * The document's lines for Neovim ({@link LineTextUtil#toNeovim}), keeping its final newline as
+     * decided before, without deciding it if it was not (a read, for a check). Read on the UI thread.
+     */
+    static List<String> linesForNeovim(IDocument document) {
+        return LineTextUtil.toNeovim(document.get(), KNOWN.get(document)).lines();
+    }
+
+    /**
+     * Like {@link #linesForNeovim}, for a push: also remembers the final newline decided, so that
+     * later reads and pushes keep it. Read on the UI thread.
      */
     static List<String> linesToPush(IDocument document) {
         LineTextUtil.NeovimLines push = LineTextUtil.toNeovim(document.get(), KNOWN.get(document));

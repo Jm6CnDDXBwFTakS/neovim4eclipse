@@ -47,10 +47,22 @@ class BufferSynchronizerTest {
         /** Runs inside each push, as if things happened while the input thread was writing the buffer. */
         Runnable duringPush = () -> { };
 
+        /**
+         * Neovim's buffer as the next whole push finds it, which the push answers; {@code null}: as
+         * a push that loaded a new buffer, with nothing to compare. Each push makes it the pushed
+         * lines, as Neovim's buffer would be then.
+         */
+        List<String> neovimLines;
+
         @Override
-        public void setBufferLines(List<String> lines) {
+        public List<String> setBufferLines(List<String> lines) {
             pushed.add(List.copyOf(lines));
             duringPush.run();
+            List<String> before = neovimLines;
+            if (before != null) {
+                neovimLines = List.copyOf(lines.isEmpty() ? List.of("") : lines);
+            }
+            return before;
         }
 
         /** Each partial push, as "first|unchangedAtEnd|lines". */
@@ -210,6 +222,79 @@ class BufferSynchronizerTest {
         sync.pushChangedLinesToNeovim();
         assertEquals(List.of(), neovim.regions);
         assertEquals(List.of("alpha", "beXYta", "gamma"), neovim.pushed.get(neovim.pushed.size() - 1));
+    }
+
+    // ---- a push that repairs a drift is reported (TextRepairs) ----
+
+    /** Compares whole, as on short documents, with Neovim's buffer equal to the document. */
+    private void startComparedWhole(String text) {
+        sync.setCompareWholeUpToLines(ChangedLines.COMPARE_WHOLE_UP_TO_LINES);
+        document.set(text);
+        neovim.neovimLines = List.of(); // known from here on: the push below makes it the document's
+        sync.pushDocumentToNeovim();
+    }
+
+    /** Neovim's buffer drifted in line 3, Eclipse typed in line 1: the push at Esc repairs line 3. */
+    @Test
+    void aPushAtEscThatRepairsAnotherLineIsReported() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        neovim.neovimLines = List.of("alpha", "beta", "GAMMA");
+        document.replace(0, 0, "X");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.pushChangedLinesToNeovim();
+            log.assertLogged(Level.FINE, "its line 3 differed from the document's line 3");
+        }
+        assertEquals(List.of("Xalpha", "beta", "gamma"), neovim.neovimLines, "repaired all the same");
+    }
+
+    @Test
+    void aPushAtEscOfOnlyTheTypedLinesReportsNothing() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        document.replace(6, 0, "X\nY");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.pushChangedLinesToNeovim();
+            log.assertNothingAtOrAbove(Level.FINE);
+        }
+        assertEquals(List.of("alpha", "X", "Ybeta", "gamma"), neovim.neovimLines);
+    }
+
+    /** The push of Eclipse's own change (a format, say) is checked too. */
+    @Test
+    void aPushOfAnEclipseChangeThatRepairsAnotherLineIsReported() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        sync.pushLocalChanges(() -> true, null);
+        neovim.neovimLines = List.of("ALPHA", "beta", "gamma");
+        document.replace(document.getLineOffset(2), 5, "GAMMA");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            neovim.runQueued();
+            log.assertLogged(Level.FINE, "its line 1 differed");
+        }
+    }
+
+    /** The push at attach carries what changed while Neovim was not followed: never a repair. */
+    @Test
+    void thePushAtAttachReportsNothing() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        neovim.neovimLines = List.of("ALPHA", "beta", "gamma");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.pushDocumentToNeovim();
+            log.assertNothingAtOrAbove(Level.FINE);
+        }
+    }
+
+    /** Neovim's own change, applied to the document, explains its lines: no repair. */
+    @Test
+    void aNeovimChangeAppliedToTheDocumentIsNoRepair() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        sync.startRemoteListening();
+        neovim.neovimLines = List.of("alpha", "beta", "GAMMA");
+        neovim.neovimChanged(new BufferChange(2, 3, List.of("GAMMA")));
+        document.replace(0, 0, "X");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.pushChangedLinesToNeovim();
+            log.assertNothingAtOrAbove(Level.FINE);
+        }
+        assertEquals("Xalpha\nbeta\nGAMMA\n", document.get());
     }
 
     /** A change of no line only runs its after-apply action, in order: the cheap sync-point handshake. */
