@@ -206,6 +206,24 @@ t.test('a document write marks its echo on every channel when the channel is not
   t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
 end)
 
+-- SET_LINES_MARKED: a push into the attached buffer, with its line events marked as its echo.
+t.test('a push into the attached buffer marks its echo', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'alpha', 'beta', 'gamma' })
+  t.run('SET_LINES_MARKED', buf, 0, 1, true, {})
+  t.eq({ 'beta', 'gamma' }, lines())
+  t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
+end)
+
+t.test('a failed push into the attached buffer still ends its echo, then fails', function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'one' })
+  local ok = pcall(t.run, 'SET_LINES_MARKED', buf, 5, 6, true, { 'x' }) -- line 6 is past the end
+  t.eq(false, ok)
+  t.eq({ 'one' }, lines())
+  t.eq({ { buf, true }, { buf, false } }, t.sent('eclipse_echo'))
+end)
+
 -- SPLIT_LINE_BREAKS: a line holding carriage returns becomes the lines Eclipse's document shows it as
 -- (the parts come from the document), and the cursor goes onto the part it was in (sync/SplitLines).
 t.test('a carriage return inside a line splits it, and the cursor follows its part', function()

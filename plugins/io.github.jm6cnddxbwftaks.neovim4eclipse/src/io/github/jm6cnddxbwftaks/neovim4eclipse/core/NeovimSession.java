@@ -941,12 +941,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         List<String> before = getBufferLines();
         LineDiff.Change change = LineDiff.between(before, target);
         if (change != null) {
-            await(api.bufSetLines(buffers.attached(), change.start(), change.end(), false, change.replacement()));
+            setAttachedLines(change.start(), change.end(), false, change.replacement());
             if (document != null) {
                 applyModified(document); // the change set 'modified'; Eclipse decides (a revert is not dirty)
             }
         }
         return before;
+    }
+
+    /**
+     * Replaces the attached buffer's lines {@code [first, end)} with Eclipse's, marking the change's
+     * line events as its echo, which the session drops ({@link LuaScripts#SET_LINES_MARKED}): the
+     * document has those lines already, and an echo applied to it again could remove lines twice.
+     */
+    private void setAttachedLines(int first, int end, boolean strict, List<String> replacement) throws Exception {
+        await(api.execLua(LuaScripts.SET_LINES_MARKED,
+                List.of(buffers.attachedBufnr(), first, end, strict, List.copyOf(replacement))));
     }
 
     /**
@@ -998,7 +1008,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
         LineDiff.Change change = LineDiff.between(current, lines);
         if (change != null) {
-            await(api.bufSetLines(handle, first + change.start(), first + change.end(), true, change.replacement()));
+            setAttachedLines(first + change.start(), first + change.end(), true, change.replacement());
             if (document != null) {
                 applyModified(document);
             }

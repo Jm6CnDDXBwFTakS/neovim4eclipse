@@ -813,6 +813,12 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   such case:
   Neovim stores it as `\n` inside a line, but its API sends it to an RPC client as `\0`, an ordinary
   character in Eclipse, and turns a pushed `\0` back into a NUL.
+- **A push's echo is dropped:** Neovim sends every change as line events, Eclipse's own pushes too.
+  The document has those lines already, and an echo applied again is not always harmless: one that
+  removes lines removes them twice (Eclipse's Delete Line in an insert, then Esc, deleted the next
+  line too). So every push brackets its change with two `eclipse_echo` notifications
+  (`LuaScripts.SET_LINES_MARKED` for the attached buffer, `SET_DOCUMENT_LINES` for the others), and
+  the session drops the line events between them.
 - **Repairs are reported:** a push of a document of up to 10,000 lines compares Neovim's whole
   buffer with it and writes every difference (`ChangedLines.COMPARE_WHOLE_UP_TO_LINES`), so a drift
   between the two copies, whatever caused it, lasts only until the next `Esc` or Eclipse change. A

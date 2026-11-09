@@ -1965,6 +1965,29 @@ final class LuaScripts {
             """;
 
     /**
+     * Replaces lines of a buffer with Eclipse's, between two {@code eclipse_echo} notifications, so
+     * that the session drops the change's line events (arguments: the buffer's number, the first
+     * line, the end line, 0-based and exclusive, whether out-of-range lines are an error, the new
+     * lines). For the pushes into the attached buffer ({@code NeovimSession.setBufferLines},
+     * {@code setBufferRegion}), which compute the lines that differ themselves.
+     *
+     * <p>Why: the document has those lines already, and an echo that is applied again is not
+     * always harmless. One that removes lines removes them a second time: Eclipse's Delete Line in
+     * an insert on {@code "alpha"}, then Esc, deleted {@code "beta"} from the document too. See
+     * {@link #SET_DOCUMENT_LINES} for how the notifications bracket exactly the change's events.
+     */
+    static final String SET_LINES_MARKED = """
+            local buf, first, last, strict, lines = ...
+            local chan = vim.g.neovim4eclipse_channel or 0 -- 0: every channel, Eclipse's among them
+            vim.rpcnotify(chan, 'eclipse_echo', buf, true)
+            local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, first, last, strict, lines)
+            vim.rpcnotify(chan, 'eclipse_echo', buf, false)
+            if not ok then
+              error(err, 0)
+            end
+            """;
+
+    /**
      * Makes a document's buffer that is not attached equal to the document's lines (arguments: its
      * number, the lines as one list), replacing only the lines that differ, so the marks and undo
      * history of the others stay (a refactoring's change in the background, {@code
