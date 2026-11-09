@@ -956,7 +956,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     private void setAttachedLines(int first, int end, boolean strict, List<String> replacement) throws Exception {
         await(api.execLua(LuaScripts.SET_LINES_MARKED,
-                List.of(buffers.attachedBufnr(), first, end, strict, List.copyOf(replacement))));
+                List.of(buffers.attachedBufnr(), first, end, strict, replacement)));
     }
 
     /**

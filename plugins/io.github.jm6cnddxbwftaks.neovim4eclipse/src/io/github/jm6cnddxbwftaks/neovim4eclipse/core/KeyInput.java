@@ -497,17 +497,7 @@ final class KeyInput {
             }
         } else {
             if (push != null) {
-                // As after a replay and at a sync point: Neovim echoes the push as line events, and
-                // the document has those lines already. Applied, an echo that removes lines removes
-                // them a second time. Example: Eclipse's Delete Line in an insert on "alpha" (no
-                // replay plan then), then Esc: the push deletes "alpha" in Neovim, and its echo
-                // deleted "beta" from the document too.
-                state.setSuppressBufferEvents(true);
-                try {
-                    push.run();
-                } finally {
-                    state.setSuppressBufferEvents(false); // the <Esc>'s own changes are Neovim's
-                }
+                push.run(); // its echo is dropped by the push itself (LuaScripts.SET_LINES_MARKED)
             }
             nvim.type("<Esc>");
         }

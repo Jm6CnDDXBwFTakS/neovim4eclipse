@@ -289,24 +289,6 @@ class KeyInputTest {
         assertEquals(List.of("push document", "type <Esc>", "snapshot"), nvim.calls);
     }
 
-    /**
-     * Without a replay plan (Eclipse's Delete Line in the insert makes none), the push's echo does
-     * not reach the editor either: applied, it deleted the line below the deleted one as well. The
-     * {@code <Esc>}'s own changes do.
-     */
-    @Test
-    void withoutAReplayPlanThePushsEchoIsNotAppliedButTheEscsChangesAre() throws Exception {
-        push = () -> {
-            nvim.calls.add("push document");
-            state.dispatchBufferChange(0, 1, List.of()); // the echo of the push: line 1 deleted
-        };
-        nvim.keyWithLineEvent = "<Esc>";
-
-        keys.leaveInsertMode(null);
-
-        assertEquals(List.of("buffer [event for <Esc>]"), heard.stream().filter(h -> h.startsWith("buffer")).toList());
-    }
-
     @Test
     void aFailedReplayFallsBackToPushThenEscAndResumesBufferEvents() throws Exception {
         try (ExpectedLog log = ExpectedLog.of(KeyInput.class)) {
