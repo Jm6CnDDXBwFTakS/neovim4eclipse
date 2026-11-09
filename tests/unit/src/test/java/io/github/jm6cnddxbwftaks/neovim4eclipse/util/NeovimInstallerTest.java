@@ -363,9 +363,24 @@ class NeovimInstallerTest {
                 }
                 """);
         String java = ProcessHandle.current().info().command().orElse("java");
+        // Only standard output is the answer: the JVM writes notes to standard error, such as
+        // "Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=1" in a one-core test run
+        // (CONTRIBUTING.md, "Tests on a loaded machine"). Standard error goes to a file, which a
+        // failed probe's message quotes (its stack trace says why).
+        Path errors = tmp.resolve("LockProbe.err");
         Process p = new ProcessBuilder(java, probe.toString(), folder.resolve(PluginNeovim.LOCK).toString())
-                .redirectErrorStream(true).start();
+                .redirectError(errors.toFile()).start();
         assertTrue(p.waitFor(TestWait.millis(), TimeUnit.MILLISECONDS), "the probe JVM did not finish");
-        return new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        String answer = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        assertEquals(0, p.exitValue(), () -> "the probe failed: " + readQuietly(errors));
+        return answer;
+    }
+
+    private static String readQuietly(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (IOException e) {
+            return "(its error output could not be read: " + e + ")";
+        }
     }
 }
