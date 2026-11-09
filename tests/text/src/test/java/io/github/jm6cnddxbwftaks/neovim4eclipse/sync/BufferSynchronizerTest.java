@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.sync;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -243,6 +245,13 @@ class BufferSynchronizerTest {
         try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
             sync.pushChangedLinesToNeovim();
             log.assertLogged(Level.FINE, "its line 3 differed from the document's line 3");
+            // The lines are for the tests, in the record's own fields: no log formatter prints
+            // them (an XMLFormatter prints every parameter of a message without placeholders).
+            TextRepairs.RepairRecord repair = (TextRepairs.RepairRecord) log.records().get(0);
+            assertEquals("GAMMA", repair.neovimLine());
+            assertEquals("gamma", repair.documentLine());
+            assertNull(repair.getParameters());
+            assertFalse(repair.getMessage().contains("amma"), "no file text in the message");
         }
         assertEquals(List.of("Xalpha", "beta", "gamma"), neovim.neovimLines, "repaired all the same");
     }

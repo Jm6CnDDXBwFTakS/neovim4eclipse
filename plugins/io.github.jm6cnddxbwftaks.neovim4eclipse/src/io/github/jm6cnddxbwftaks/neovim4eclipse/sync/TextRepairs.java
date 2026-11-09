@@ -30,8 +30,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
  * Logs each repair at {@code FINE} on this class's logger, so that users see nothing (FINE does
  * not reach the Error Log), and the UI tests, which capture this logger for every test, fail on it
  * ({@code EndToEndTestBase}). The message names the buffer and the line numbers, never any text:
- * a log may be shared. The two differing lines are the record's parameters, for a test's failure
- * message; the message has no {@code {0}} placeholders, so a log formatter never prints them.
+ * a log may be shared. The two differing lines travel in fields of the record's own class
+ * ({@link RepairRecord}), for a test's failure message. Not as the record's parameters: Java's
+ * {@code XMLFormatter} (a {@code FileHandler}'s default) writes every parameter of a message without
+ * placeholders, so a user logging at {@code FINE} to a file would have file text in it.
  *
  * <p>Which pushes are checked: those at {@code Esc} and at a sync point, and the push of Eclipse's
  * own changes in normal mode (a format, a refactoring, Eclipse's undo). Not the push when an editor
@@ -43,6 +45,33 @@ public final class TextRepairs {
     private static final Logger LOG = Logger.getLogger(TextRepairs.class.getName());
 
     private TextRepairs() {
+    }
+
+    /**
+     * A repair's log record, with the two lines that differed in fields no log formatter knows of:
+     * only code that looks for this class reads them (the UI tests' failure message).
+     */
+    public static final class RepairRecord extends LogRecord {
+        private static final long serialVersionUID = 1L;
+        /** The line as Neovim had it, or {@code "(no such line)"}. */
+        private final transient String neovimLine;
+        /** The line as the document has it, or {@code "(no such line)"}. */
+        private final transient String documentLine;
+
+        RepairRecord(String message, String neovimLine, String documentLine) {
+            super(Level.FINE, message);
+            this.neovimLine = neovimLine;
+            this.documentLine = documentLine;
+            setLoggerName(LOG.getName());
+        }
+
+        public String neovimLine() {
+            return neovimLine;
+        }
+
+        public String documentLine() {
+            return documentLine;
+        }
     }
 
     /**
@@ -60,14 +89,10 @@ public final class TextRepairs {
             return false;
         }
         if (LOG.isLoggable(Level.FINE)) {
-            LogRecord repair = new LogRecord(Level.FINE, "A push repaired Neovim's " + what + ": its line "
+            LOG.log(new RepairRecord("A push repaired Neovim's " + what + ": its line "
                     + (found.neovimLine() + 1) + " differed from the document's line " + (found.pushedLine() + 1)
                     + ", which no change explains (Neovim had " + neovim.size() + " lines, the document "
-                    + pushed.size() + ")");
-            repair.setLoggerName(LOG.getName());
-            repair.setParameters(new Object[] { lineOrNone(neovim, found.neovimLine()),
-                    lineOrNone(pushed, found.pushedLine()) });
-            LOG.log(repair);
+                    + pushed.size() + ")", lineOrNone(neovim, found.neovimLine()), lineOrNone(pushed, found.pushedLine())));
         }
         return true;
     }

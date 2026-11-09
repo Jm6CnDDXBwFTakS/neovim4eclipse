@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -262,8 +263,7 @@ abstract class EndToEndTestBase {
                     + ". See the test Eclipse's .metadata/.log for the error.");
         }
         if (!repaired.isEmpty()) {
-            fail("Eclipse's text and Neovim's drifted apart, and a push repaired it (TextRepairs; the"
-                    + " parameters are Neovim's line, then Eclipse's): " + repaired);
+            fail("Eclipse's text and Neovim's drifted apart, and a push repaired it (TextRepairs): " + repaired);
         }
     }
 
@@ -273,7 +273,13 @@ abstract class EndToEndTestBase {
             return List.of();
         }
         try {
-            return repairs.describe();
+            List<String> found = new ArrayList<>();
+            for (LogRecord logRecord : repairs.records()) {
+                found.add(logRecord.getMessage() + (logRecord instanceof TextRepairs.RepairRecord repair
+                        ? " (Neovim: \"" + repair.neovimLine() + "\", Eclipse: \"" + repair.documentLine() + "\")"
+                        : ""));
+            }
+            return found;
         } finally {
             repairs.close();
             repairs = null;
