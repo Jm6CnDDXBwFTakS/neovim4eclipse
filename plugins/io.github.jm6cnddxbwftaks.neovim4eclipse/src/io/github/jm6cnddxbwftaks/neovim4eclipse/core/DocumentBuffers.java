@@ -607,14 +607,18 @@ final class DocumentBuffers {
             Object answer = await(api.execLua(LuaScripts.RELEASE_BUFFER,
                     List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
             // The closed windows' ids and the home buffer's number, made anew if Neovim wiped it.
-            @SuppressWarnings("rawtypes") // List.class names no element type; ids checks each one
-            WithHome<List> released = WithHome.of("RELEASE_BUFFER", answer, List.class);
+            WithHome<List<?>> released = WithHome.of("RELEASE_BUFFER", answer, WithHome.LIST);
             // The windows first: should taking a new home buffer fail, none stays known after its
             // close. (An answer that cannot be read leaves them known: a later show of one finds it
             // closed and opens a new one, SHOW_WINDOW answering UNKNOWN, and closing one asks
             // CLOSE_WINDOW, which skips a window that is gone.)
             for (int winid : ids("RELEASE_BUFFER", released.first())) {
                 windows.forget(winid);
+                if (winid == attachedWin) {
+                    // Not the closed document's editor: Neovim switched the attached window to the
+                    // doomed buffer (:b 5 in it) and Eclipse had not followed yet when it closed.
+                    attachedWin = homeWin;
+                }
             }
             adoptHome(released.homeBuf()); // before the switch back below, which shows the home buffer
             returnToAttached();
@@ -678,6 +682,10 @@ final class DocumentBuffers {
      * @param <T> the first element's type, as {@link #of} checked it
      */
     private record WithHome<T>(T first, int homeBuf) {
+        /** {@code List.class} as the type of any list; {@link #ids} then checks each element. */
+        @SuppressWarnings("unchecked") // List.class stands for every List<?>: the cast is sound
+        static final Class<List<?>> LIST = (Class<List<?>>) (Class<?>) List.class;
+
         static <T> WithHome<T> of(String script, Object answer, Class<T> first) {
             if (answer instanceof List<?> l && l.size() == 2 && first.isInstance(l.get(0))
                     && l.get(1) instanceof Number buf) {

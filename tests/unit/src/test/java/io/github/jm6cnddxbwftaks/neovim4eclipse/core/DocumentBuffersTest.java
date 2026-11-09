@@ -460,6 +460,24 @@ class DocumentBuffersTest {
     }
 
     /**
+     * Neovim switched the attached window (A's, 1001) to another document's buffer ({@code :b 6}),
+     * and that document closes before Eclipse followed: RELEASE_BUFFER closes 1001, and A is shown
+     * in the home window from then on rather than in the closed window.
+     */
+    @Test
+    void anAttachedWindowClosedWithAnotherDocumentHandsOverToTheHomeWindow() throws Exception {
+        DocumentBuffer b = shown("/ws/b.txt", 6);
+        shownInWindow("/ws/a.txt", 5);
+        assertEquals(1001, buffers.attachedWin());
+        answers.put("RELEASE_BUFFER", List.of(List.of(1001L), 1L));
+
+        buffers.close(b);
+
+        assertEquals(1000, buffers.attachedWin(), "the home window, not the closed 1001");
+        assertEquals(5, buffers.attachedBufnr(), "A stays attached");
+    }
+
+    /**
      * The document's editor windows close with its buffer (RELEASE_BUFFER names them before the
      * home buffer): Eclipse forgets them, and the attached one hands over to the home window.
      */
