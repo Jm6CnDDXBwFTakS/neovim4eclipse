@@ -1403,7 +1403,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
      * A normal-mode binding that had not been switched off yet when a key came in insert mode (the
      * key contexts follow the mode a moment late): the letter is Eclipse's in insert mode, so
      * Eclipse's command runs. Ctrl+D, given to Eclipse for insert mode, is Delete Line, not Vim's
-     * unindent. The binding's delivery is simulated with the command's own entry point.
+     * unindent. The binding's delivery is simulated with the command's own entry point. The Esc
+     * after it leaves both copies with the two lines: the push of the deletion came back from Neovim
+     * as an echo, which deleted the next line too.
      */
     @Test
     void aNormalModeBindingStillOnInInsertModeRunsEclipsesCommand() {
@@ -1417,6 +1419,12 @@ class EditorEndToEndTest extends EndToEndTestBase {
             EditorAttachManager.getInstance().getActiveController().sendKey("<C-d>");
             expectText("beta\ngamma\n");
             assertTrue(session.isTypingMode(), "still in the insert");
+            // The Esc pushes the deletion to Neovim; its echo must not delete "beta" as well.
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            settle();
+            expectText("beta\ngamma\n");
+            assertEquals(List.of("beta", "gamma"), io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(0, 0, -1, false)"));
         } finally {
             store.setToDefault(PreferenceConstants.ctrlKeyInInsert('d'));
         }

@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- Eclipse's Delete Line run during an insert (from its menu, or with Ctrl+D given to Eclipse for
+  insert mode) no longer deletes the next line as well when the insert ends with Esc.
+
 ## [0.2.8] - 2026-11-09
 
 ### Fixed
