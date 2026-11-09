@@ -3,13 +3,15 @@
 #
 # Where a version number is copied by hand into text that Maven cannot fill in: the docs, the
 # feature's description, the update site's category. Each version has one source of truth (for
-# Neovim: version= in the plug-in's util/neovim-downloads.properties); this list names its copies.
+# Neovim: version= in the plug-in's util/neovim-downloads.properties; for Eclipse, see below); this
+# list names its copies.
 #
 #   [neovim]                         a section: one version's copies
 #   README.md  Get Neovim (\S+)…    a file, then a Java regular expression whose first group is
 #                                    the version, at every place it matches
 #
-# java releng/tools/neovim/NeovimUpgrade.java rewrites every match of a section's patterns, and
+# java releng/tools/neovim/NeovimUpgrade.java (and releng/tools/eclipse/EclipseUpgrade.java, for
+# the eclipse sections) rewrites every match of a section's patterns, and
 # VersionConsistencyTest fails unless each pattern matches at least once and every match holds
 # the source's version. A pattern names the version where it is a requirement or what the plug-in
 # installs; history ("as Neovim 0.12.6 sends it", "checked on 0.12.6"), the changelog and the
@@ -27,3 +29,37 @@ docs/PACKAGING.md  \bNeovim (\d+\.\d+\.\d+)
 features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  \bNeovim (\d+\.\d+\.\d+)
 features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  \b(\d+\.\d+\.\d+) or newer
 releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml  \bNeovim (\d+\.\d+\.\d+)
+
+# Eclipse: two releases, each by its name (2024-12) and its Platform number (4.34), one section
+# each (common/EclipseRelease maps one to the other). The oldest supported comes from
+# <eclipse-repo.url> in the root pom.xml; the newest tested from the second entry of the smoke
+# job's matrix in .github/workflows/update-site.yml (whose entries the Eclipse tool rewrites
+# itself, URL and SHA-512 with the number). Facts about one release that stay true for it ("4.34's
+# eclipse.ini does not start on Java 24+") are not copies.
+[eclipse.oldest]
+README.md  \*\*(20\d\d-\d\d) \(4\.\d+\) or newer\*\*
+CONTRIBUTING.md  development tools\), (20\d\d-\d\d) or\s+newer
+features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  Eclipse (20\d\d-\d\d) \(4\.\d+\) or newer
+.github/workflows/update-site.yml  The oldest supported release, (20\d\d-\d\d)\.
+releng/smoke-install.sh  \(4\.\d+, (20\d\d-\d\d)\)
+releng/smoke-install.sh  tests the "(20\d\d-\d\d) or newer"
+
+[eclipse.oldest.number]
+README.md  \*\*20\d\d-\d\d \((4\.\d+)\) or newer\*\*
+features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  Eclipse 20\d\d-\d\d \((4\.\d+)\) or newer
+features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml  "org\.eclipse\.platform" version="(4\.\d+)\.0"
+.github/workflows/update-site.yml  into Eclipse (4\.\d+), the oldest
+.github/workflows/release.yml  into Eclipse (4\.\d+) as a smoke test
+.github/workflows/rehearse-release.yml  Eclipse (4\.\d+) and the newest Eclipse
+docs/PACKAGING.md  into Eclipse (4\.\d+) \(the oldest supported\)
+docs/PACKAGING.md  Eclipse Platform (4\.\d+) \(it is changed\)
+docs/PACKAGING.md  ~/eclipse-(4\.\d+)\b
+releng/smoke-install.sh  ~/eclipse-(4\.\d+)\b
+releng/smoke-install.sh  \((4\.\d+), 20\d\d-\d\d\)
+
+[eclipse.newest]
+README.md  tested up to (20\d\d-\d\d) \(4\.\d+\)
+
+[eclipse.newest.number]
+README.md  tested up to 20\d\d-\d\d \((4\.\d+)\)
+docs/PACKAGING.md  newest Eclipse release \((4\.\d+)\)

@@ -16,7 +16,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.jar.Manifest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,6 +30,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import common.EclipseRelease;
 import common.VersionCopies;
 
 /**
@@ -137,13 +140,77 @@ class VersionConsistencyTest {
 
     // ---- Eclipse ----
 
-    @Test
-    void docsNameTheTargetEclipseRelease() throws Exception {
+    /** The oldest supported Eclipse: the release {@code <eclipse-repo.url>} in the root pom.xml names. */
+    private static EclipseRelease oldestEclipse() throws Exception {
         String url = property("eclipse-repo.url");
         Matcher release = ECLIPSE_RELEASE.matcher(url);
         assertTrue(release.find(), "eclipse-repo.url should end in a release name such as 2024-12: " + url);
-        List<String> wrong = mentionsOtherThan(ECLIPSE_RELEASE, release.group(1));
-        assertTrue(wrong.isEmpty(), "Eclipse release in the docs differs from eclipse-repo.url: " + wrong);
+        return EclipseRelease.ofName(release.group(1));
+    }
+
+    /** The newest tested Eclipse: the second entry of the smoke job's matrix in update-site.yml. */
+    private static EclipseRelease newestEclipse() throws Exception {
+        List<EclipseRelease.SmokeEntry> entries = EclipseRelease.smokeEntries(read(".github/workflows/update-site.yml"));
+        assertEquals(2, entries.size(), "update-site.yml's smoke matrix should have two entries, the oldest and the newest Eclipse");
+        return EclipseRelease.ofNumber(entries.get(1).eclipse());
+    }
+
+    /**
+     * The smoke job installs every release into the oldest supported Eclipse (its first entry) and
+     * the newest tested one (its second): the first must be the release the plug-in is built
+     * against, and each entry's download must be that entry's Platform. Example: {@code eclipse:
+     * '4.34'} with {@code R-4.34-202411201800/eclipse-platform-4.34-linux-gtk-x86_64.tar.gz}.
+     */
+    @Test
+    void theSmokeTestInstallsIntoTheOldestEclipseAndItsOwnDownloads() throws Exception {
+        List<EclipseRelease.SmokeEntry> entries = EclipseRelease.smokeEntries(read(".github/workflows/update-site.yml"));
+        assertEquals(oldestEclipse().number(), entries.get(0).eclipse(),
+                "update-site.yml's first smoke entry should be the oldest supported Eclipse (eclipse-repo.url)");
+        assertTrue(oldestEclipse().compareTo(newestEclipse()) < 0, "the newest tested Eclipse is not newer than the oldest");
+        for (EclipseRelease.SmokeEntry e : entries) {
+            assertTrue(e.platformUrl().contains("/R-" + e.eclipse() + "-") && e.platformUrl().endsWith(
+                    "/eclipse-platform-" + e.eclipse() + "-linux-gtk-x86_64.tar.gz"), "smoke entry " + e.eclipse() + " downloads " + e.platformUrl());
+        }
+    }
+
+    /**
+     * Every copy of the two Eclipse releases that {@code releng/version-copies.txt} lists, each by
+     * its name and by its number, holds that release, and every listed pattern still finds one.
+     */
+    @Test
+    void theListedCopiesNameTheOldestAndNewestEclipse() throws Exception {
+        Map<String, List<VersionCopies.Copy>> sections = VersionCopies.parse(read(VersionCopies.FILE));
+        Map<String, String> expected = Map.of(
+                "eclipse.oldest", oldestEclipse().name(), "eclipse.oldest.number", oldestEclipse().number(),
+                "eclipse.newest", newestEclipse().name(), "eclipse.newest.number", newestEclipse().number());
+        List<String> wrong = new ArrayList<>();
+        for (Map.Entry<String, String> section : expected.entrySet()) {
+            List<VersionCopies.Copy> copies = sections.get(section.getKey());
+            assertNotNull(copies, VersionCopies.FILE + " has no [" + section.getKey() + "] section");
+            for (VersionCopies.Copy copy : copies) {
+                List<String> found = VersionCopies.versionsIn(read(copy.file()), copy);
+                if (found.isEmpty()) {
+                    wrong.add(copy.file() + ": nothing matches " + copy.pattern());
+                }
+                for (String version : found) {
+                    if (!version.equals(section.getValue())) {
+                        wrong.add("[" + section.getKey() + "] " + copy.file() + ": " + copy.pattern() + " finds " + version
+                                + ", not " + section.getValue());
+                    }
+                }
+            }
+        }
+        assertTrue(wrong.isEmpty(), "Eclipse copies in " + VersionCopies.FILE + " differ: " + wrong);
+    }
+
+    /**
+     * A safety net for mentions no pattern lists: an Eclipse release name in the user-facing docs is
+     * the oldest supported or the newest tested one. Example: "2025-06" in the README fails.
+     */
+    @Test
+    void docsNameOnlyTheOldestAndNewestEclipse() throws Exception {
+        List<String> wrong = mentionsOtherThan(ECLIPSE_RELEASE, Set.of(oldestEclipse().name(), newestEclipse().name()));
+        assertTrue(wrong.isEmpty(), "Eclipse release in the docs is neither eclipse-repo.url's nor the newest smoke entry's: " + wrong);
     }
 
     // ---- Neovim ----
@@ -314,13 +381,17 @@ class VersionConsistencyTest {
 
     /** Every match of {@code pattern} in {@link #DOCS} whose first group is not {@code expected}. */
     private static List<String> mentionsOtherThan(Pattern pattern, String expected) throws IOException {
+        return mentionsOtherThan(pattern, Set.of(expected));
+    }
+
+    private static List<String> mentionsOtherThan(Pattern pattern, Set<String> expected) throws IOException {
         List<String> wrong = new ArrayList<>();
         for (String doc : DOCS) {
             String[] lines = read(doc).split("\n", -1);
             for (int i = 0; i < lines.length; i++) {
                 Matcher m = pattern.matcher(lines[i]);
                 while (m.find()) {
-                    if (!m.group(1).equals(expected)) {
+                    if (!expected.contains(m.group(1))) {
                         wrong.add(doc + ":" + (i + 1) + " '" + m.group() + "'");
                     }
                 }

@@ -53,7 +53,8 @@ To use the plug-in in your own Eclipse, without building it.
 **You need**
 
 - Eclipse IDE **2024-12 (4.34) or newer**, any package (Java, C/C++, Committers, ...), running on
-  Java 21 or newer (the Eclipse packages bring their own Java 21+).
+  Java 21 or newer (the Eclipse packages bring their own Java 21+). Every release is installed into
+  the oldest and the newest Eclipse before it is published: tested up to 2026-09 (4.41).
 - **Nothing else**: the plug-in installs the Neovim it runs, its *dedicated Neovim* (0.12.6), with
   **Get Neovim 0.12.6…**: offered in the "Neovim not started" notice, on
   *Window → Preferences → Neovim* and in the *Neovim* menu. It checks that Neovim's files at every
