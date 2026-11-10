@@ -16,6 +16,7 @@ import common.Folders;
 import common.Http;
 import common.Shell;
 import common.ToolFailure;
+import common.Version;
 
 /**
  * The PGP check of what the Maven tool downloads, made with {@code gpg} when it is installed.
@@ -31,8 +32,9 @@ import common.ToolFailure;
  * <p>How: the {@code KEYS} file goes into a keyring of the tool's own (a new temporary folder each
  * run, deleted when the tool ends), never the developer's, so nothing the
  * developer trusts counts and nothing is added to their keyring. Then
- * {@code gpg --status-fd 1 --verify file.asc file} must report {@code VALIDSIG}: a good signature by
- * a key in that keyring. Example of the lines read:
+ * {@code gpg --status-fd 1 --verify file.asc file} must exit 0 and report {@code VALIDSIG}: a good
+ * signature by a key in that keyring. What counts as a detached signature is gpg's to decide,
+ * which is why the gpg must be new enough ({@link #MIN_GPG}). Example of the lines read:
  * <pre>
  *   [GNUPG:] GOODSIG 9EB80E92EB2135B1 Slawomir Jaranowski &lt;sjaranowski@apache.org&gt;
  *   [GNUPG:] VALIDSIG 84789D24DF77A32433CE1F079EB80E92EB2135B1 2026-05-13 …
@@ -41,8 +43,9 @@ import common.ToolFailure;
  */
 final class Signatures {
 
-    private static final Pattern VALIDSIG = Pattern.compile("(?m)^\\[GNUPG:\\] VALIDSIG ([0-9A-F]{40}) ");
+    private static final Pattern VALIDSIG = Pattern.compile("(?m)^\\[GNUPG:\\] VALIDSIG ([0-9A-F]{40}|[0-9A-F]{64}) ");
     private static final Pattern SIGNER = Pattern.compile("(?m)^\\[GNUPG:\\] (?:GOODSIG|EXPKEYSIG) [0-9A-F]+ (.+)$");
+    private static final Pattern GPG_VERSION = Pattern.compile("^gpg \\(GnuPG\\S*\\) (\\d+\\.\\d+\\.\\d+)");
     private static final Pattern REFUSED = Pattern.compile("(?m)^\\[GNUPG:\\] (BADSIG|ERRSIG|REVKEYSIG|EXPSIG|NO_PUBKEY)\\b");
 
     /** Runs gpg inside its home folder: every path gpg sees is a plain name there (see {@link #prepare}). */
@@ -56,7 +59,7 @@ final class Signatures {
 
     /**
      * The check, ready: a keyring of its own holding only the keys of {@code keysUrl}; empty when
-     * {@code gpg} is not installed.
+     * {@code gpg} is not installed. A gpg older than {@link #MIN_GPG} stops the tool.
      *
      * <p>Every path gpg is given is relative to its home folder, which is also its working folder
      * ({@code --homedir .}, {@code KEYS}, {@code apache-maven-3.9.16-bin.zip}). Why: Git for Windows
@@ -79,6 +82,7 @@ final class Signatures {
                 s.gpg.capture(List.of("gpgconf", "--homedir", ".", "--kill", "all"));
                 Folders.deleteTree(home);
             }));
+            checkGpg(s.gpg.capture(List.of("gpg", "--version")).out());
             Files.writeString(home.resolve("KEYS"), Http.text(keysUrl));
         } catch (IOException e) {
             throw new ToolFailure("cannot prepare the PGP check: " + e.getMessage());
@@ -93,7 +97,8 @@ final class Signatures {
     /**
      * Checks {@code file} against its signature {@code url + ".asc"}; returns who signed it. Both
      * go into gpg's folder under the file's own name for the check (a copy: the plain names above),
-     * and are removed again after it.
+     * and are removed again after it. A signature counts only if gpg also exits 0: with a good
+     * signature followed by other data, gpg reports {@code VALIDSIG} but fails.
      */
     String verify(Path file, String url) {
         String name = file.getFileName().toString();
@@ -101,14 +106,10 @@ final class Signatures {
         Path asc = home.resolve(name + ".asc");
         try {
             Files.copy(file, copy, StandardCopyOption.REPLACE_EXISTING);
-            String signature = Http.text(url + ".asc");
-            if (!isDetachedSignature(signature)) {
-                // A signed message instead would carry its own data, which an old gpg checks in place of the archive.
-                throw new ToolFailure(url + ".asc is not a detached PGP signature; " + name + " was not used");
-            }
-            Files.writeString(asc, signature);
+            Files.writeString(asc, Http.text(url + ".asc"));
             Shell.Result r = gpg.capture(verifyCommand(name));
-            return signer(r.out()).orElseThrow(() -> new ToolFailure(name + ": its PGP signature does not check against "
+            Optional<String> signer = r.ok() ? signer(r.out()) : Optional.empty(); // gpg's own verdict too
+            return signer.orElseThrow(() -> new ToolFailure(name + ": its PGP signature does not check against "
                     + "a key of Maven's KEYS file; it was not used.\n" + r.out() + "\n" + r.err()));
         } catch (IOException e) {
             throw new ToolFailure("cannot prepare the PGP check of " + name + ": " + e.getMessage());
@@ -122,9 +123,36 @@ final class Signatures {
         }
     }
 
-    /** Whether {@code asc} is an armored detached signature, as Maven publishes: {@code -----BEGIN PGP SIGNATURE-----}. */
-    static boolean isDetachedSignature(String asc) {
-        return asc.strip().startsWith("-----BEGIN PGP SIGNATURE-----");
+    /**
+     * The oldest gpg the check runs with: 2.1.1 (2014), whose NEWS says "Detect faulty use of
+     * --verify on detached signatures". Why it matters: a {@code .asc} can be a signed message, which
+     * carries data of its own, instead of a detached signature. An older gpg then verifies that data
+     * in place of the archive and reports a good signature; from 2.1.1 on, gpg refuses such a file.
+     * (The fix also went into 2.0.27 and 1.4.19, which the tool refuses all the same: both lines
+     * are long out of support.)
+     * So the tool lets gpg decide what a detached signature is, and only makes sure it is a gpg
+     * that does.
+     */
+    static final Version MIN_GPG = Version.parse("2.1.1");
+
+    /**
+     * Stops the tool unless {@code versionOutput}, what {@code gpg --version} printed, names a
+     * GnuPG of at least {@link #MIN_GPG}. An unreadable version stops it too: skipping the check
+     * quietly would look like a check that passed.
+     */
+    static void checkGpg(String versionOutput) {
+        Version version = gpgVersion(versionOutput).orElseThrow(() -> new ToolFailure("cannot read gpg's version from \""
+                + versionOutput.lines().findFirst().orElse("") + "\"; the PGP check needs GnuPG " + MIN_GPG + " or newer"));
+        if (version.compareTo(MIN_GPG) < 0) {
+            throw new ToolFailure("gpg " + version + " is older than " + MIN_GPG + ", the first that refuses a signed message"
+                    + " in place of a detached signature: install a newer GnuPG, or take gpg off PATH to skip the PGP check");
+        }
+    }
+
+    /** The version in {@code gpg --version}'s first line, {@code gpg (GnuPG) 2.4.9}, or empty. */
+    static Optional<Version> gpgVersion(String versionOutput) {
+        Matcher m = GPG_VERSION.matcher(versionOutput.lines().findFirst().orElse(""));
+        return m.find() ? Optional.of(Version.parse(m.group(1))) : Optional.empty();
     }
 
     /** The import of Maven's keys into the keyring, run in gpg's home folder: plain names only. */
@@ -135,7 +163,7 @@ final class Signatures {
     /** The check of {@code name} against {@code name.asc}, both in gpg's home folder: plain names only. */
     static List<String> verifyCommand(String name) {
         if (name.isEmpty() || name.startsWith("-") || name.contains("/") || name.contains("\\") || name.contains(":")) {
-            throw new IllegalArgumentException("not a plain file name: " + name); // the archives' names never are
+            throw new ToolFailure("not a plain file name for gpg: " + name); // the archives' names never are
         }
         return List.of("gpg", "--homedir", ".", "--batch", "--status-fd", "1", "--verify", name + ".asc", name);
     }

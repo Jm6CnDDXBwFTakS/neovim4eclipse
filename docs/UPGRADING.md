@@ -219,7 +219,8 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
      `.sha512`, the wrapper's against its `.sha1` (Central has no SHA-512 for it), and, when `gpg`
      is installed, both `.asc` signatures against Maven's
      [KEYS](https://downloads.apache.org/maven/KEYS) file, in a keyring of its own (a temporary
-     folder, deleted at the end). Without `gpg` it says the PGP check was skipped.
+     folder, deleted at the end). Without `gpg` it says the PGP check was skipped; a GnuPG older
+     than 2.1.1, which would accept a signed message in place of a signature, stops the tool.
   2. Runs Maven's own setup goal, `maven-wrapper-plugin` at the wrapper's exact version, with
      Maven's version and the SHA-256 of its archive, which `./mvnw` checks before it runs a
      downloaded Maven:

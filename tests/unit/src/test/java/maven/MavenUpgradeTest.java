@@ -144,6 +144,8 @@ class MavenUpgradeTest {
                 """;
         assertEquals(Optional.of("Slawomir Jaranowski <sjaranowski@apache.org>, key 84789D24DF77A32433CE1F079EB80E92EB2135B1"),
                 Signatures.signer(status));
+        // A v5 or v6 key has a 64-digit fingerprint.
+        assertTrue(Signatures.signer("[GNUPG:] VALIDSIG " + "AB".repeat(32) + " 2026-05-13 1 0 6 0 1 10 00 x\n").isPresent());
         // A key that expired after it signed still counts: release managers' keys expire.
         assertTrue(Signatures.signer(status.replace("GOODSIG", "EXPKEYSIG")).isPresent());
     }
@@ -160,7 +162,7 @@ class MavenUpgradeTest {
         assertEquals(List.of("apache-maven-3.9.16-bin.zip.asc", "apache-maven-3.9.16-bin.zip"),
                 Signatures.verifyCommand("apache-maven-3.9.16-bin.zip").subList(7, 9));
         for (String bad : List.of("/tmp/a.zip", "C:\\a.zip", "sub/a.zip", "--import")) {
-            assertThrows(IllegalArgumentException.class, () -> Signatures.verifyCommand(bad), bad);
+            assertThrows(ToolFailure.class, () -> Signatures.verifyCommand(bad), bad);
         }
     }
 
@@ -180,10 +182,20 @@ class MavenUpgradeTest {
     }
 
     @Test
-    void onlyADetachedSignatureIsChecked() {
-        assertTrue(Signatures.isDetachedSignature("-----BEGIN PGP SIGNATURE-----\n\niQIz…\n-----END PGP SIGNATURE-----\n"));
-        // A signed message carries its own data: an old gpg would check that instead of the archive.
-        assertFalse(Signatures.isDetachedSignature("-----BEGIN PGP MESSAGE-----\n…"));
-        assertFalse(Signatures.isDetachedSignature("<html>Not Found</html>"));
+    void gpgsVersionIsReadFromItsFirstLine() {
+        assertEquals(Optional.of(Version.parse("2.4.9")), Signatures.gpgVersion("gpg (GnuPG) 2.4.9\nlibgcrypt 1.12.4\n"));
+        assertEquals(Optional.of(Version.parse("2.5.24")), Signatures.gpgVersion("gpg (GnuPG) 2.5.24\n"));
+        assertEquals(Optional.of(Version.parse("2.2.41")), Signatures.gpgVersion("gpg (GnuPG/MacGPG2) 2.2.41\n"));
+        assertEquals(Optional.empty(), Signatures.gpgVersion("gpg: command not found"));
+    }
+
+    @Test
+    void anOldOrUnreadableGpgStopsTheTool() {
+        // MIN_GPG is the first that refuses a signed message given as a detached signature.
+        Signatures.checkGpg("gpg (GnuPG) 2.4.9\n");
+        Signatures.checkGpg("gpg (GnuPG) " + Signatures.MIN_GPG + "\n");
+        for (String old : List.of("gpg (GnuPG) 2.0.30\n", "gpg (GnuPG) 1.4.23\n", "", "gpg: unknown option\n")) {
+            assertThrows(ToolFailure.class, () -> Signatures.checkGpg(old), old);
+        }
     }
 }
