@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -380,12 +381,28 @@ public final class WindowLayout {
             ids.add(w.id());
         }
         int steps = Math.max(count, 1) % ids.size();
-        java.util.Collections.rotate(ids, down ? steps : -steps);
+        Collections.rotate(ids, down ? steps : -steps);
         return ids;
     }
 
+    /** The node {@code id} of the tree, or {@code null}. */
+    public static Node find(Node node, int id) {
+        if (node.id() == id) {
+            return node;
+        }
+        if (node instanceof Group group) {
+            for (Node child : group.children()) {
+                Node found = find(child, id);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
     /** The group that holds the window {@code id} directly, or {@code null} (the window is the root). */
-    static Group parentOf(Node root, int id) {
+    public static Group parentOf(Node root, int id) {
         List<Group> path = pathTo(root, id);
         return path == null || path.isEmpty() ? null : path.get(path.size() - 1);
     }

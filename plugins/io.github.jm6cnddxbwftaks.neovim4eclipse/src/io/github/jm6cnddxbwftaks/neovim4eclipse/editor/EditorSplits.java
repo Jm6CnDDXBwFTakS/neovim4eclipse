@@ -381,7 +381,7 @@ final class EditorSplits {
         // Position i of the row gets the editor of window order[i].
         List<MPartStack> places = new ArrayList<>();
         List<MPartStack> from = new ArrayList<>();
-        WindowLayout.Group parent = (WindowLayout.Group) picture.parentOf(picture.current);
+        WindowLayout.Group parent = WindowLayout.parentOf(picture.root, picture.current);
         for (int i = 0; i < order.size(); i++) {
             MPartStack place = picture.stackOf(((WindowLayout.Window) parent.children().get(i)).id());
             MPartStack source = picture.stackOf(order.get(i));
@@ -559,46 +559,12 @@ final class EditorSplits {
         }
 
         WindowLayout.Rect boundsOf(int window) {
-            return find(root, window).bounds();
-        }
-
-        WindowLayout.Node parentOf(int window) {
-            return parent(root, window);
+            return WindowLayout.find(root, window).bounds();
         }
 
         /** The stack of a window that is a stack's front editor; {@code null} for one of Eclipse's halves. */
         MPartStack stackOf(int window) {
             return weighted.get(window) instanceof MPartStack stack ? stack : null;
-        }
-
-        private static WindowLayout.Node find(WindowLayout.Node node, int id) {
-            if (node.id() == id) {
-                return node;
-            }
-            if (node instanceof WindowLayout.Group group) {
-                for (WindowLayout.Node child : group.children()) {
-                    WindowLayout.Node found = find(child, id);
-                    if (found != null) {
-                        return found;
-                    }
-                }
-            }
-            return null;
-        }
-
-        private static WindowLayout.Node parent(WindowLayout.Node node, int id) {
-            if (node instanceof WindowLayout.Group group) {
-                for (WindowLayout.Node child : group.children()) {
-                    if (child.id() == id) {
-                        return group;
-                    }
-                    WindowLayout.Node found = parent(child, id);
-                    if (found != null) {
-                        return found;
-                    }
-                }
-            }
-            return null;
         }
     }
 }
