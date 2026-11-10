@@ -32,7 +32,7 @@ The safe loop for any upgrade:
 | Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform) |
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
-| Maven itself | `distributionUrl` and `distributionSha256Sum` in `.mvn/wrapper/maven-wrapper.properties` | none |
+| Maven itself, and the Maven wrapper | `distributionUrl` and `distributionSha256Sum` (Maven), `wrapperVersion` (the scripts `mvnw` and `mvnw.cmd`) in `.mvn/wrapper/maven-wrapper.properties`; the line Maven stays on is `maven.line` in `releng/tools/maven/settings.properties` | none; `java releng/tools/maven/MavenUpgrade.java` moves both |
 | Neovim (what *Get Neovim* installs, the oldest supported, and the one CI tests) | `version=` in the plug-in's `util/neovim-downloads.properties` (written by `releng/UpdateNeovimDownloads.java`; *Get Neovim* and CI both install from it; `NeovimVersion.MINIMUM` reads it) | the copies `releng/version-copies.txt` lists, section `[neovim]` (README, CONTRIBUTING, LEARNING, PACKAGING, `feature.xml`, the update site's `category.xml`); `java releng/tools/neovim/NeovimUpgrade.java` rewrites them |
 | GitHub Actions | `uses: ...@vN` lines in `.github/workflows/` | not checked; Dependabot proposes updates |
 | CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `platforms` job's matrix in `build.yml` adds `windows-latest` and `macos-latest` | not checked |
@@ -44,8 +44,8 @@ Neovim; those are upgraded by hand with the steps below. It also skips, on purpo
 - the `org.eclipse.platform` jars: they must match the Eclipse release, so they move with it;
 - the Maven wrapper (Maven itself and the wrapper scripts): Dependabot would update it by running
   `./mvnw wrapper:wrapper` on a copy of the repository without the `MANIFEST.MF` files, which
-  Tycho needs before it runs any goal, so every such job fails. Check for a new Maven 3.9 release
-  now and then, or with other upgrades, and follow "Maven" below.
+  Tycho needs before it runs any goal, so every such job fails. `MavenUpgrade.java` does it in
+  the real checkout (*Build tools* below); `Release.java check` says when there is something to do.
 
 The embedded msgpack-core comes as an ordinary pull request of its own; it has no partner
 libraries to keep in step since the plug-in's own RPC client replaced neovim-java and Jackson
@@ -209,13 +209,35 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
   `releng/sign.sh` has the commands at its top.
 - **Maven plug-ins**: change the matching `<maven-...-plugin.version>` property in the root
   `pom.xml` only.
-- **Maven**: `./mvnw -N wrapper:wrapper -Dmaven=3.9.16` rewrites
-  `.mvn/wrapper/maven-wrapper.properties` (use the version you want). Stay on the 3.9 line until
-  Tycho supports Maven 4 releases. Then add back `distributionSha256Sum=` with the new archive's
-  SHA-256, which `./mvnw` checks before it runs the downloaded Maven (the signing job runs it with
-  the PGP key at hand): download the archive, check it against Maven Central's `.sha512` file
-  next to it, and take `sha256sum` of it. Example for 3.9.16:
-  `curl -fsSLO https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.16/apache-maven-3.9.16-bin.zip`.
+- **Maven and the Maven wrapper**: `java releng/tools/maven/MavenUpgrade.java` (a JDK of release
+  22 or newer) moves Maven to the newest release on `maven.line` (3.9, in
+  `releng/tools/maven/settings.properties`) and the wrapper scripts to their newest release, one
+  commit each, after y/N. `--maven <version>` or `--wrapper <version>` picks a release; a release
+  under a week old is refused unless `--allow-young`; `--dry-run` shows the steps. Dependabot cannot
+  do this (`.github/dependabot.yml` says why). What it does:
+  1. Downloads each new archive from Maven Central and checks it: Maven's against Central's
+     `.sha512`, the wrapper's against its `.sha1` (Central has no SHA-512 for it), and, when `gpg`
+     is installed, both `.asc` signatures against Maven's
+     [KEYS](https://downloads.apache.org/maven/KEYS) file, in a keyring of its own (a temporary
+     folder, deleted at the end). Without `gpg` it says the PGP check was skipped.
+  2. Runs Maven's own setup goal, `maven-wrapper-plugin` at the wrapper's exact version, with
+     Maven's version and the SHA-256 of its archive, which `./mvnw` checks before it runs a
+     downloaded Maven:
+     `./mvnw -N -C org.apache.maven.plugins:maven-wrapper-plugin:<wrapper>:wrapper -Dtype=only-script -Dmaven=<maven> -DdistributionSha256Sum=<sha256>`.
+  3. Checks what the plug-in wrote: `mvnw` and `mvnw.cmd` must be the checked archive's, and the
+     settings file must name Maven's archive on Central (the plug-in takes the address from your
+     `~/.m2/settings.xml`, so a mirror there would end up in the file) with that SHA-256.
+  4. Runs every test (`LikeCi --all`, which downloads the new Maven through `./mvnw`) once, after
+     the last of the two moves, then commits *Move to Maven Wrapper …* and *Move to Maven …*.
+
+  Then read the release notes ([Maven](https://maven.apache.org/docs/history.html),
+  [wrapper](https://github.com/apache/maven-wrapper/releases)) and run `LikeCi --all` on macOS and
+  Windows. Stay on the 3.9 line until Tycho supports Maven 4; moving to it means changing
+  `maven.line`, deliberately. `Release.java check` prints a line when either has a newer release.
+
+  By hand, if the tool breaks: run the goal of step 2 with the versions you want, after taking the
+  SHA-256 of Maven's archive (`curl -fsSLO` its URL from Central, compare its SHA-512 with the
+  `.sha512` file next to it, then `sha256sum`), and check `git diff` as in step 3.
 - **JaCoCo**: change `<jacoco.version>`. A JaCoCo release supports class files only up to the Java
   version it knows: when the build JDK gets newer than that, the agent fails while the tests start
   ("Unsupported class file major version"), so upgrade JaCoCo together with the JDK.

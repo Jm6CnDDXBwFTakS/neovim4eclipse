@@ -10,7 +10,7 @@
 # What it does not cover (update by hand, see docs/UPGRADING.md): the JDK (.java-version), the
 # Eclipse release (eclipse-repo.url, a p2 site Dependabot cannot read), Neovim (NeovimVersion.MINIMUM and
 # util/neovim-downloads.properties) and
-# the Maven wrapper (ignored below, with the reason).
+# the Maven wrapper (ignored below, with the reason; releng/tools/maven/MavenUpgrade.java moves it).
 #
 # Each pull request still runs the Build workflow, so a broken update shows up as a red check.
 version: 2
@@ -42,7 +42,8 @@ updates:
       # copy of the repository that holds only the build files. Tycho reads every module's
       # META-INF/MANIFEST.MF before it runs any goal, finds none in that copy, and the job fails
       # ("OsgiManifestParserException: ... Manifest file not found"), for every release, patch
-      # releases too. They are updated by hand instead (docs/UPGRADING.md, "Maven").
+      # releases too. releng/tools/maven/MavenUpgrade.java updates them in the real checkout
+      # instead (docs/UPGRADING.md, "Build tools").
       - dependency-name: "org.apache.maven:apache-maven"
       - dependency-name: "org.apache.maven.wrapper:maven-wrapper"
 

@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: a new internal tool moves the build to the newest Maven
+  and Maven wrapper releases, with checked downloads.
+
 ## [0.2.10] - 2026-11-10
 
 ### Changed
