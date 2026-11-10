@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -262,7 +263,7 @@ public final class EclipseFileCommands {
      * halves), Eclipse is not asked about saving: the changes stay in the other editor, as Vim's
      * {@code :q} in one of two windows on a buffer closes that window without a word. Eclipse would
      * ask, since each editor counts as a thing to save of its own. Not for a multi-page editor,
-     * which may hold other documents too ({@link #isSafeToCloseUnasked}).
+     * which may hold other documents too ({@link #isKeptByAnotherEditor}).
      *
      * <p>Closing one of Eclipse's split halves leaves the focus outside the editor that stays; it
      * goes back to the editor in front, so the next key reaches Neovim.
@@ -275,7 +276,7 @@ public final class EclipseFileCommands {
             IWorkbenchPage page = editor.getEditorSite().getPage();
             if (page != null) {
                 IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
-                page.closeEditor(part, !force && !isSafeToCloseUnasked(part, editor));
+                page.closeEditor(part, !force && !isKeptByAnotherEditor(page, part, List.of()));
                 // Once Eclipse is done: joining its halves again happens after the close returns.
                 Display display = Display.getCurrent();
                 if (display != null) {
@@ -288,13 +289,38 @@ public final class EclipseFileCommands {
     }
 
     /**
-     * Whether closing {@code part} without Eclipse's question loses nothing: it is a plain text
-     * editor ({@code part} is {@code text} itself, one document) whose document another editor
-     * shows too, which keeps the changes. A multi-page editor (the plug-in manifest editor, the POM
-     * editor) may hold more documents than its text page's, so Eclipse asks for it as always.
+     * Whether closing {@code closing} without Eclipse's question loses nothing: it is a plain text
+     * editor (one document) and an editor that stays open shows that document too, so the changes
+     * stay there. Editors in {@code closingToo} close as well and keep nothing: two clones closed
+     * together by {@code :tabonly} are asked about. A multi-page editor (the plug-in manifest
+     * editor, the POM editor) may hold more documents than its text page's, so Eclipse asks for it
+     * as always. The one rule for {@code :q}, {@code :tabclose N} and {@code :tabonly}.
+     *
+     * <p>Two editors on one file share one document (the file buffer behind every text editor's
+     * document provider), so the documents are compared as objects. An editor Eclipse has not made
+     * yet (a tab never shown since the start) shows none.
      */
-    static boolean isSafeToCloseUnasked(IEditorPart part, ITextEditor text) {
-        return part == text && EditorAttachManager.getInstance().isShownInAnotherEditor(text);
+    static boolean isKeptByAnotherEditor(IWorkbenchPage page, IEditorPart closing, Collection<IEditorPart> closingToo) {
+        ITextEditor text = EditorAttachManager.textEditorOf(closing);
+        IDocument document = text == closing ? documentOf(text) : null;
+        if (document == null) {
+            return false;
+        }
+        for (IEditorReference reference : page.getEditorReferences()) {
+            IEditorPart open = reference.getEditor(false);
+            if (open != null && open != closing && !closingToo.contains(open)) {
+                ITextEditor other = EditorAttachManager.textEditorOf(open);
+                if (other != null && documentOf(other) == document) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The document a text editor shows, or {@code null}. */
+    private static IDocument documentOf(ITextEditor text) {
+        return text.getDocumentProvider() == null ? null : text.getDocumentProvider().getDocument(text.getEditorInput());
     }
 
     /**

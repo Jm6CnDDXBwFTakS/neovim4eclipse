@@ -7,6 +7,7 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,11 +23,14 @@ import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.handlers.IHandlerService;
+import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -381,5 +385,57 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         assertEquals(1, dialogs.size(), "one question for all");
         assertTrue(editor.isDirty(), "test.txt's change stays, in the tab that stays");
         waitForActive(editor, "test.txt in front");
+    }
+
+    /**
+     * Tabs whose editors Eclipse has not made yet (as after a restart: {@code openEditors} makes
+     * only the one it activates) close with {@code :tabclose N} and {@code :tabonly} without being
+     * made: they hold no changes.
+     */
+    @Test
+    void tabsNeverShownCloseWithoutBeingMade() throws Exception {
+        IEditorInput[] inputs = new IEditorInput[3];
+        String[] ids = new String[3];
+        for (int i = 0; i < 3; i++) {
+            inputs[i] = new FileEditorInput(createFile("lazy" + i + ".txt", "lazy\n"));
+            ids[i] = TEXT_EDITOR;
+        }
+        // In test.txt's stack; only the first is made, as activated.
+        IEditorReference[] lazy = page().openEditors(inputs, ids, null, IWorkbenchPage.MATCH_NONE, 0);
+        ITextEditor first = (ITextEditor) lazy[0].getEditor(false);
+        waitForActive(first, "lazy0.txt");
+        assertNull(lazy[2].getEditor(false), "lazy2.txt's editor not made yet");
+        int before = page().getEditorReferences().length;
+
+        ex("tabclose $"); // lazy2.txt, the last tab
+        waitUntil("lazy2.txt to close", TIMEOUT_MS, () -> page().getEditorReferences().length == before - 1);
+        assertNull(lazy[1].getEditor(false), "lazy1.txt still not made");
+
+        ex("tabonly");
+        waitUntil("only lazy0.txt left in the stack", TIMEOUT_MS, () -> page().getEditorReferences().length == 1,
+                () -> "; open: " + page().getEditorReferences().length);
+        assertSame(first, page().getActiveEditor());
+        editor = null; // test.txt closed with the others
+    }
+
+    /**
+     * {@code :tabonly 2} keeps tab 2 and closes the others, the editor it was typed in too; tab 2
+     * is then in front, with Neovim attached.
+     */
+    @Test
+    void tabonlyNKeepsThatTabAndClosesThisOne() throws Exception {
+        createFile("other.txt", "other\n");
+        createFile("third.txt", "third\n");
+        ex("tabedit other.txt");
+        ITextEditor other = waitForNewEditor(editor, "other.txt as tab 2");
+        ex("tabedit third.txt");
+        waitForNewEditor(other, "third.txt as tab 3");
+
+        ex("tabonly 2");
+        waitUntil("only other.txt left", TIMEOUT_MS, () -> page().getEditorReferences().length == 1);
+        waitForActive(other, "other.txt in front");
+        type(widgetOf(other), "x");
+        expectText(other, "ther\n");
+        editor = null; // test.txt closed with the others
     }
 }

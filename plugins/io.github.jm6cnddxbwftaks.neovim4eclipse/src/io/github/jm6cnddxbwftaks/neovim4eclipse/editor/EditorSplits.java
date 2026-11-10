@@ -25,7 +25,6 @@ import org.eclipse.e4.ui.model.application.ui.basic.MStackElement;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
-import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
@@ -291,8 +290,9 @@ final class EditorSplits {
     /**
      * {@code :tabclose 2}, {@code :tabclose $}, {@code :tabclose +}: closes that editor tab of this
      * stack, counted as {@code :tabnext} counts them ({@link TabNavigation#closeTarget}). Eclipse
-     * asks about its changes, unless {@code !} or another editor shows the same document
-     * ({@link EclipseFileCommands#close}, which this editor's own tab goes through).
+     * asks about its changes, unless {@code !} or an editor that stays open shows the same
+     * document ({@link EclipseFileCommands#isKeptByAnotherEditor}; this editor's own tab goes
+     * through {@link EclipseFileCommands#close}).
      */
     private static void tabClose(ITextEditor editor, IEditorPart part, WindowCommand command) {
         MPartStack stack = stackOf(part.getSite().getService(MPart.class));
@@ -311,14 +311,12 @@ final class EditorSplits {
             return;
         }
         IWorkbenchPage page = part.getSite().getPage();
-        IEditorPart closing = editorOf(page, part, tabs.get(target));
+        IEditorPart closing = madeEditorOf(page, partsOf(part, tabs.get(target)));
         if (closing == null) {
-            HostCommands.showError(editor, "Cannot close that tab: it is not an editor");
+            closeUnmade(part, List.of(tabs.get(target)));
             return;
         }
-        ITextEditor text = EditorAttachManager.textEditorOf(closing);
-        boolean unasked = text != null && EclipseFileCommands.isSafeToCloseUnasked(closing, text);
-        page.closeEditor(closing, !command.force() && !unasked);
+        page.closeEditor(closing, !command.force() && !EclipseFileCommands.isKeptByAnotherEditor(page, closing, List.of()));
     }
 
     /**
@@ -331,8 +329,9 @@ final class EditorSplits {
      * editor, so it asks about them, once for all, as when several editors close together
      * ({@code IWorkbenchPage.closeEditors}). It does not ask about a plain text editor whose
      * document an editor that stays open shows too (a clone of the tab that stays, a split): the
-     * changes stay there. Two clones that both close keep nothing, so they are asked about.
-     * {@code :tabonly!}, which would discard them all at once, is refused in Neovim.
+     * changes stay there. Two clones that both close keep nothing, so they are asked about
+     * ({@link EclipseFileCommands#isKeptByAnotherEditor}). {@code :tabonly!}, which would discard
+     * them all at once, is refused in Neovim.
      */
     private static void tabOnly(ITextEditor editor, IEditorPart part, WindowCommand command) {
         MPartStack stack = stackOf(part.getSite().getService(MPart.class));
@@ -348,61 +347,58 @@ final class EditorSplits {
             return;
         }
         IWorkbenchPage page = part.getSite().getPage();
-        IEditorPart keeper = keep == index ? part : editorOf(page, part, tabs.get(keep));
-        if (keeper == null) {
-            HostCommands.showError(editor, "Cannot keep that tab: it is not an editor");
-            return;
-        }
         List<IEditorPart> closing = new ArrayList<>();
+        List<MPart> unmade = new ArrayList<>();
         for (int i = 0; i < tabs.size(); i++) {
-            IEditorPart other = i == keep ? null : i == index ? part : editorOf(page, part, tabs.get(i));
-            if (other != null) {
-                closing.add(other);
-            }
-        }
-        // The documents that stay shown: by any editor open after the close.
-        List<IDocument> kept = new ArrayList<>();
-        for (IEditorReference reference : page.getEditorReferences()) {
-            IEditorPart open = reference.getEditor(false);
-            ITextEditor text = open == null || closing.contains(open) ? null : EditorAttachManager.textEditorOf(open);
-            IDocument document = text == null ? null : text.getDocumentProvider().getDocument(text.getEditorInput());
-            if (document != null) {
-                kept.add(document);
+            if (i != keep) {
+                IEditorPart other = madeEditorOf(page, partsOf(part, tabs.get(i)));
+                if (other != null) {
+                    closing.add(other);
+                } else {
+                    unmade.add(tabs.get(i));
+                }
             }
         }
         List<IEditorReference> unasked = new ArrayList<>();
         List<IEditorReference> asked = new ArrayList<>();
         for (IEditorPart other : closing) {
-            ITextEditor text = EditorAttachManager.textEditorOf(other);
-            boolean keptElsewhere = text == other
-                    && kept.contains(text.getDocumentProvider().getDocument(text.getEditorInput()));
-            (keptElsewhere ? unasked : asked).add((IEditorReference) page.getReference(other));
+            boolean kept = EclipseFileCommands.isKeptByAnotherEditor(page, other, closing);
+            (kept ? unasked : asked).add((IEditorReference) page.getReference(other));
         }
+        EPartService parts = part.getSite().getService(EPartService.class);
+        MPart keeper = tabs.get(keep);
+        closeUnmade(part, unmade);
         if (!unasked.isEmpty()) {
             page.closeEditors(unasked.toArray(IEditorReference[]::new), false);
         }
         if (!asked.isEmpty()) {
             page.closeEditors(asked.toArray(IEditorReference[]::new), true); // one question for all
         }
-        activate(page, keeper);
+        parts.activate(keeper, true); // made now if it never was
+        if (page.getActiveEditor() != null) {
+            page.getActiveEditor().setFocus();
+        }
+    }
+
+    /** A tab's editor parts: the tab itself, or for Eclipse's split halves the halves. */
+    private static List<MPart> partsOf(IEditorPart part, MPart tab) {
+        EModelService models = part.getSite().getService(EModelService.class);
+        return models.findElements(tab, null, MPart.class, null).stream()
+                .filter(p -> !(p instanceof MCompositePart)).toList();
     }
 
     /**
-     * The editor of a tab: the tab's own part, or for Eclipse's split halves the first half's. An
-     * editor whose tab was never shown has not been made yet (Eclipse makes editors when they are
-     * first shown); only that one is made now ({@code PartState.CREATE}: made, not shown), so
-     * the close can go through Eclipse's editor API.
+     * Closes tabs whose editors Eclipse has not made yet (Eclipse makes an editor when its tab is
+     * first shown; a workspace restored at the start has many such tabs). Such an editor holds no
+     * changes, so there is nothing to ask about, and making it only to close it would cost what
+     * opening it does (a Java editor's parsing): its model part is taken away instead
+     * ({@code EPartService.hidePart}), which Eclipse's workbench page follows.
      */
-    private static IEditorPart editorOf(IWorkbenchPage page, IEditorPart part, MPart tab) {
-        EModelService models = part.getSite().getService(EModelService.class);
-        List<MPart> parts = models.findElements(tab, null, MPart.class, null).stream()
-                .filter(p -> !(p instanceof MCompositePart)).toList();
-        IEditorPart found = madeEditorOf(page, parts);
-        if (found == null && !parts.isEmpty()) {
-            part.getSite().getService(EPartService.class).showPart(parts.get(0), EPartService.PartState.CREATE);
-            found = madeEditorOf(page, parts);
+    private static void closeUnmade(IEditorPart part, List<MPart> tabs) {
+        EPartService parts = part.getSite().getService(EPartService.class);
+        for (MPart tab : tabs) {
+            parts.hidePart(tab, true);
         }
-        return found;
     }
 
     /** The editor, among those Eclipse has made, whose model part is one of {@code parts}. */

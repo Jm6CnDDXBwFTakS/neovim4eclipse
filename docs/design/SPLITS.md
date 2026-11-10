@@ -93,7 +93,14 @@ them. A plain text editor whose document an editor that stays open shows too (a 
 that stays, a split) closes without a question: the changes stay there. Two clones that both close
 keep nothing, so they are asked about. A multi-page editor is always asked about: it may hold more
 documents than its text page's. `:tabonly!`, which would discard every other tab's changes at
-once, is refused.
+once, is refused. `:q`, `:tabclose N` and `:tabonly` share that one rule
+(`EclipseFileCommands.isKeptByAnotherEditor`): two editors on one file share one document object
+(the file buffer), so the documents are compared as objects.
+
+A tab whose editor Eclipse has not made yet (Eclipse makes an editor when its tab is first shown;
+a workspace restored at the start has many) holds no changes. `:tabclose N` and `:tabonly` take
+its model part away (`EPartService.hidePart`) instead of making the editor only to close it,
+which would cost what opening it does.
 
 A count in front of `:tabclose` or `:tabonly` (`:2tabclose`, `:$tabclose`, `:+tabclose`) is refused with a
 hint: Neovim has turned it into one of its hidden tab pages before the plug-in sees the line, which
@@ -197,6 +204,6 @@ After a restart Eclipse brings the stacks and their clones back, as it does any 
 - `TabNavigationTest` (tests/unit): which tab `:tabclose 2`, `$`, `+` and `-2` name.
 - `SplitsEndToEndTest` (UI tests): `:vsplit`, `:split file`, `Ctrl-W` moves, `:only`, the sizes,
   `Ctrl-W x`, `:tabedit`, `:tab split`, `Ctrl-W T`, `:tabclose 2` (with and without `!`), `:tabonly` (one question, clones of the tab
-  that stays unasked),
+  that stays unasked; `:tabonly 2`), tabs never shown closing without being made,
   *Toggle Split Editor* both ways, the hidden preference's halves, and `:q` in a half
   (the focus goes back to the other).
