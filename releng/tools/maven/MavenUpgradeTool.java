@@ -177,7 +177,7 @@ public final class MavenUpgradeTool {
         }
 
         Path work = root.resolve("target/maven-upgrade");
-        Optional<Signatures> pgp = Signatures.prepare(shell, work, settings.get("maven.keys"));
+        Optional<Signatures> pgp = Signatures.prepare(settings.get("maven.keys"));
         if (pgp.isEmpty()) {
             System.out.println("  skipped: the PGP check (no gpg on PATH); the downloads are checked against Central's hashes only");
         }

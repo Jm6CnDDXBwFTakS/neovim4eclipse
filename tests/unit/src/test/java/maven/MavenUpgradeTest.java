@@ -149,6 +149,22 @@ class MavenUpgradeTest {
     }
 
     @Test
+    void gpgIsGivenOnlyPlainNamesInItsOwnFolder() {
+        // Git for Windows' gpg (MSYS) misreads C:\Users\… as a relative path: no argument may be absolute.
+        for (List<String> command : List.of(Signatures.importCommand(), Signatures.verifyCommand("apache-maven-3.9.16-bin.zip"))) {
+            for (String arg : command) {
+                assertFalse(arg.startsWith("/") || arg.contains("\\") || arg.matches("(?i)[a-z]:.*"), arg + " in " + command);
+            }
+            assertEquals(List.of("--homedir", "."), command.subList(1, 3), command.toString());
+        }
+        assertEquals(List.of("apache-maven-3.9.16-bin.zip.asc", "apache-maven-3.9.16-bin.zip"),
+                Signatures.verifyCommand("apache-maven-3.9.16-bin.zip").subList(7, 9));
+        for (String bad : List.of("/tmp/a.zip", "C:\\a.zip", "sub/a.zip", "--import")) {
+            assertThrows(IllegalArgumentException.class, () -> Signatures.verifyCommand(bad), bad);
+        }
+    }
+
+    @Test
     void aBadOrUnknownOrRevokedSignatureIsRefused() {
         assertEquals(Optional.empty(), Signatures.signer("[GNUPG:] BADSIG 9EB80E92EB2135B1 Someone\n"));
         assertEquals(Optional.empty(), Signatures.signer("[GNUPG:] ERRSIG 9EB80E92EB2135B1 1 10 00 1778708341 9\n[GNUPG:] NO_PUBKEY 9EB80E92EB2135B1\n"));
@@ -157,5 +173,17 @@ class MavenUpgradeTest {
                 [GNUPG:] VALIDSIG 84789D24DF77A32433CE1F079EB80E92EB2135B1 2026-05-13 1778708341 0 4 0 1 10 00 84789D24DF77A32433CE1F079EB80E92EB2135B1
                 """));
         assertEquals(Optional.empty(), Signatures.signer("")); // gpg said nothing: no check passed
+        assertEquals(Optional.empty(), Signatures.signer("""
+                [GNUPG:] EXPSIG 9EB80E92EB2135B1 Someone
+                [GNUPG:] VALIDSIG 84789D24DF77A32433CE1F079EB80E92EB2135B1 2026-05-13 1778708341 0 4 0 1 10 00 84789D24DF77A32433CE1F079EB80E92EB2135B1
+                """), "an expired signature");
+    }
+
+    @Test
+    void onlyADetachedSignatureIsChecked() {
+        assertTrue(Signatures.isDetachedSignature("-----BEGIN PGP SIGNATURE-----\n\niQIz…\n-----END PGP SIGNATURE-----\n"));
+        // A signed message carries its own data: an old gpg would check that instead of the archive.
+        assertFalse(Signatures.isDetachedSignature("-----BEGIN PGP MESSAGE-----\n…"));
+        assertFalse(Signatures.isDetachedSignature("<html>Not Found</html>"));
     }
 }
