@@ -24,6 +24,7 @@ import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
 import org.eclipse.e4.ui.model.application.ui.basic.MStackElement;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
+import org.eclipse.e4.ui.workbench.modeling.EPartService;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
@@ -37,6 +38,7 @@ import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowLayout;
 
@@ -120,6 +122,9 @@ final class EditorSplits {
                 case SIZE -> size(editor, part, command);
                 case EXCHANGE -> exchange(editor, part, command.count());
                 case ROTATE -> rotate(editor, part, command.key() == 'r', command.count());
+                case TAB -> tab(editor, part, command);
+                case TO_TAB -> toTab(editor, part);
+                case TAB_CLOSE -> tabClose(editor, part, command);
             }
         } catch (IllegalStateException e) {
             HostCommands.showError(editor, e.getMessage()); // Vim's own error (E443)
@@ -234,6 +239,113 @@ final class EditorSplits {
             }
         }
         return page.getActiveEditor();
+    }
+
+    // ---- :tabedit, :tabnew, :tab split, Ctrl-W T, :tabclose 2 ----
+
+    /**
+     * Vim's tab pages are Eclipse's editor tabs here: {@code :tabedit b.txt} opens b.txt as a new
+     * editor tab of this stack, as {@link #openFor} opens a split's editor (a new one even when an
+     * editor has the file open, as a tab page of its own would show it), and leaves it there.
+     */
+    private static void tab(ITextEditor editor, IEditorPart from, WindowCommand command) {
+        IEditorPart opened = openFor(editor, from, command);
+        if (opened != null && opened != from) {
+            activate(from.getSite().getPage(), opened);
+        }
+    }
+
+    /**
+     * Vim's {@code Ctrl-W T}, which moves a window into a tab page of its own: this editor leaves
+     * its split, as a tab of the first other stack on screen (top left), and stays the active one.
+     * Alone on screen it is a tab already, and nothing changes.
+     */
+    private static void toTab(ITextEditor editor, IEditorPart part) {
+        Picture picture = Picture.of(part);
+        if (picture == null || picture.current < 0) {
+            return;
+        }
+        MPartStack own = picture.stackOf(picture.current);
+        if (own == null) {
+            HostCommands.showError(editor, "Eclipse's split halves cannot move to another stack");
+            return;
+        }
+        MPartStack target = null;
+        for (WindowLayout.Window window : WindowLayout.windows(picture.root)) {
+            MPartStack stack = picture.stackOf(window.id());
+            if (stack != null && stack != own) {
+                target = stack;
+                break;
+            }
+        }
+        if (target == null) {
+            return;
+        }
+        EModelService models = part.getSite().getService(EModelService.class);
+        moveTabs(part, models, List.of(own), List.of(target));
+        activate(part.getSite().getPage(), part);
+    }
+
+    /**
+     * {@code :tabclose 2}, {@code :tabclose $}, {@code :tabclose +}: closes that editor tab of this
+     * stack, counted as {@code :tabnext} counts them ({@link TabNavigation#closeTarget}). Eclipse
+     * asks about its changes, unless {@code !} or another editor shows the same document
+     * ({@link EclipseFileCommands#close}, which this editor's own tab goes through).
+     */
+    private static void tabClose(ITextEditor editor, IEditorPart part, WindowCommand command) {
+        MPartStack stack = stackOf(part.getSite().getService(MPart.class));
+        if (stack == null) {
+            return;
+        }
+        List<MPart> tabs = EditorTabs.visibleParts(stack);
+        int index = tabs.indexOf(stack.getSelectedElement());
+        int target = TabNavigation.closeTarget(command.key(), command.count(), index, tabs.size());
+        if (target < 0) {
+            HostCommands.showError(editor, "E16: Invalid range");
+            return;
+        }
+        if (target == index) {
+            EclipseFileCommands.close(editor, command.force());
+            return;
+        }
+        IWorkbenchPage page = part.getSite().getPage();
+        IEditorPart closing = editorOf(page, part, tabs.get(target));
+        if (closing == null) {
+            HostCommands.showError(editor, "Cannot close that tab: it is not an editor");
+            return;
+        }
+        ITextEditor text = EditorAttachManager.textEditorOf(closing);
+        boolean shared = text != null && EditorAttachManager.getInstance().isShownInAnotherEditor(text);
+        page.closeEditor(closing, !command.force() && !shared);
+    }
+
+    /**
+     * The editor of a tab: the tab's own part, or for Eclipse's split halves the first half's. An
+     * editor whose tab was never shown has not been made yet (Eclipse makes editors when they are
+     * first shown); only that one is made now ({@code PartState.CREATE}: made, not shown), so
+     * the close can go through Eclipse's editor API.
+     */
+    private static IEditorPart editorOf(IWorkbenchPage page, IEditorPart part, MPart tab) {
+        EModelService models = part.getSite().getService(EModelService.class);
+        List<MPart> parts = models.findElements(tab, null, MPart.class, null).stream()
+                .filter(p -> !(p instanceof MCompositePart)).toList();
+        IEditorPart found = madeEditorOf(page, parts);
+        if (found == null && !parts.isEmpty()) {
+            part.getSite().getService(EPartService.class).showPart(parts.get(0), EPartService.PartState.CREATE);
+            found = madeEditorOf(page, parts);
+        }
+        return found;
+    }
+
+    /** The editor, among those Eclipse has made, whose model part is one of {@code parts}. */
+    private static IEditorPart madeEditorOf(IWorkbenchPage page, List<MPart> parts) {
+        for (IEditorReference reference : page.getEditorReferences()) {
+            IEditorPart editor = reference.getEditor(false);
+            if (editor != null && parts.contains(editor.getSite().getService(MPart.class))) {
+                return editor;
+            }
+        }
+        return null;
     }
 
     // ---- :only, Ctrl-W o ----

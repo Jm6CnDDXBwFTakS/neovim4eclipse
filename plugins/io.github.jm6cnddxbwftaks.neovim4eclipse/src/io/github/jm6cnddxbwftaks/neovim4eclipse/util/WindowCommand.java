@@ -27,6 +27,13 @@ import java.util.Locale;
  *   <tr><td>{@code size + 5}</td><td>{@code 5 Ctrl-W +}, {@code :resize +5}; keys {@code = + - < > _ |}</td></tr>
  *   <tr><td>{@code exchange 0}</td><td>{@code Ctrl-W x}</td></tr>
  *   <tr><td>{@code rotate down 1}</td><td>{@code Ctrl-W r}; {@code up} for {@code Ctrl-W R}</td></tr>
+ *   <tr><td>{@code tab file /ws/app/b.txt}, {@code tab new}, {@code tab same}</td><td>{@code :tabedit b.txt},
+ *       {@code :tabnew}, {@code :tab split}: a new editor tab in this stack (Vim's tab pages are
+ *       Eclipse's editor tabs here)</td></tr>
+ *   <tr><td>{@code totab}</td><td>{@code Ctrl-W T}: this editor out of its split, as a tab of the first other stack</td></tr>
+ *   <tr><td>{@code tabclose 2 0}, {@code tabclose $ 0}, {@code tabclose +1 1}</td><td>{@code :tabclose 2},
+ *       {@code :tabclose $}, {@code :tabclose! +1}: another editor tab of this stack; the last word
+ *       is the {@code !}</td></tr>
  * </table>
  *
  * <p>A count of 0 means none was given, as Vim's {@code v:count}: {@code Ctrl-W w} goes to the next
@@ -34,14 +41,18 @@ import java.util.Locale;
  *
  * @param action what to do
  * @param where  for {@link Action#SPLIT}: the side of the current editor the new one goes to
- * @param target for {@link Action#SPLIT}: what the new editor shows
+ * @param target for {@link Action#SPLIT} and {@link Action#TAB}: what the new editor shows
  * @param file   for {@link Target#FILE}: the file's full path (Neovim made it absolute); "" otherwise
  * @param key    for {@link Action#FOCUS} and {@link Action#SIZE}: Vim's key after {@code Ctrl-W}
  *               ({@code 'l'}, {@code '+'}); for {@link Action#ROTATE} {@code 'r'} (down or right) or
- *               {@code 'R'} (up or left); 0 otherwise
+ *               {@code 'R'} (up or left); for {@link Action#TAB_CLOSE} {@code '$'} (the last tab),
+ *               {@code '+'} or {@code '-'} (that many tabs on or back) or 0 (tab number
+ *               {@code count}); 0 otherwise
  * @param count  Vim's count, 0 when none was given
+ * @param force  for {@link Action#TAB_CLOSE}: the {@code !}, which discards the tab's changes
  */
-public record WindowCommand(Action action, Where where, Target target, String file, char key, int count) {
+public record WindowCommand(Action action, Where where, Target target, String file, char key, int count,
+        boolean force) {
 
     /** What the command does. */
     public enum Action {
@@ -56,7 +67,13 @@ public record WindowCommand(Action action, Where where, Target target, String fi
         /** Swap the current editor with the next one in its row or column. */
         EXCHANGE,
         /** Move every editor in the row or column one place on. */
-        ROTATE
+        ROTATE,
+        /** A new editor tab in this editor's stack ({@code :tabedit}, {@code :tabnew}, {@code :tab split}). */
+        TAB,
+        /** This editor out of its split, as a tab of another stack ({@code Ctrl-W T}). */
+        TO_TAB,
+        /** Close another editor tab of this stack ({@code :tabclose 2}). */
+        TAB_CLOSE
     }
 
     /** The side of the current editor a split goes to. */
@@ -67,6 +84,11 @@ public record WindowCommand(Action action, Where where, Target target, String fi
         public boolean sideBySide() {
             return this == LEFT || this == RIGHT;
         }
+    }
+
+    /** A command of {@code action} with only a key and a count. */
+    private static WindowCommand of(Action action, char key, int count) {
+        return new WindowCommand(action, null, null, "", key, count, false);
     }
 
     /** What a split's new editor shows. */
@@ -104,10 +126,12 @@ public record WindowCommand(Action action, Where where, Target target, String fi
                 case "split" -> split(words);
                 case "focus" -> keyed(Action.FOCUS, FOCUS_KEYS, words);
                 case "size" -> keyed(Action.SIZE, SIZE_KEYS, words);
-                case "only" -> words.size() == 1 ? new WindowCommand(Action.ONLY, null, null, "", (char) 0, 0) : null;
-                case "exchange" -> words.size() == 2
-                        ? new WindowCommand(Action.EXCHANGE, null, null, "", (char) 0, count(words.get(1))) : null;
+                case "only" -> words.size() == 1 ? of(Action.ONLY, (char) 0, 0) : null;
+                case "exchange" -> words.size() == 2 ? of(Action.EXCHANGE, (char) 0, count(words.get(1))) : null;
                 case "rotate" -> rotate(words);
+                case "tab" -> opening(Action.TAB, null, words, 1);
+                case "totab" -> words.size() == 1 ? of(Action.TO_TAB, (char) 0, 0) : null;
+                case "tabclose" -> tabClose(words);
                 default -> null;
             };
         } catch (IllegalArgumentException e) {
@@ -116,25 +140,49 @@ public record WindowCommand(Action action, Where where, Target target, String fi
     }
 
     private static WindowCommand split(List<String> words) {
-        if (words.size() < 3) {
+        if (words.size() < 2) {
             return null;
         }
-        Where where = Where.valueOf(words.get(1).toUpperCase(Locale.ROOT));
-        return switch (words.get(2)) {
-            case "same" -> words.size() == 3 ? new WindowCommand(Action.SPLIT, where, Target.SAME, "", (char) 0, 0) : null;
-            case "new" -> words.size() == 3 ? new WindowCommand(Action.SPLIT, where, Target.NEW, "", (char) 0, 0) : null;
+        return opening(Action.SPLIT, Where.valueOf(words.get(1).toUpperCase(Locale.ROOT)), words, 2);
+    }
+
+    /** A split or a tab: what it shows is at {@code at} ({@code same}, {@code new}, {@code file path}). */
+    private static WindowCommand opening(Action action, Where where, List<String> words, int at) {
+        if (words.size() <= at) {
+            return null;
+        }
+        int rest = words.size() - at;
+        return switch (words.get(at)) {
+            case "same" -> rest == 1 ? new WindowCommand(action, where, Target.SAME, "", (char) 0, 0, false) : null;
+            case "new" -> rest == 1 ? new WindowCommand(action, where, Target.NEW, "", (char) 0, 0, false) : null;
             // The path is one word: Neovim's :Eclipse line backslashes its spaces (fargs).
-            case "file" -> words.size() == 4 && !words.get(3).isEmpty()
-                    ? new WindowCommand(Action.SPLIT, where, Target.FILE, words.get(3), (char) 0, 0) : null;
+            case "file" -> rest == 2 && !words.get(at + 1).isEmpty()
+                    ? new WindowCommand(action, where, Target.FILE, words.get(at + 1), (char) 0, 0, false) : null;
             default -> null;
         };
+    }
+
+    /** {@code tabclose 2 0}: the tab ({@code N}, {@code $}, {@code +N}, {@code -N}, {@code +}, {@code -}) and the {@code !}. */
+    private static WindowCommand tabClose(List<String> words) {
+        if (words.size() != 3 || !(words.get(2).equals("0") || words.get(2).equals("1"))) {
+            return null;
+        }
+        String tab = words.get(1);
+        boolean force = words.get(2).equals("1");
+        if (tab.equals("$")) {
+            return new WindowCommand(Action.TAB_CLOSE, null, null, "", '$', 0, force);
+        }
+        char key = tab.startsWith("+") || tab.startsWith("-") ? tab.charAt(0) : 0;
+        String number = key == 0 ? tab : tab.substring(1);
+        int count = number.isEmpty() && key != 0 ? 0 : count(number);
+        return new WindowCommand(Action.TAB_CLOSE, null, null, "", key, count, force);
     }
 
     private static WindowCommand keyed(Action action, String keys, List<String> words) {
         if (words.size() != 3 || words.get(1).length() != 1 || keys.indexOf(words.get(1).charAt(0)) < 0) {
             return null;
         }
-        return new WindowCommand(action, null, null, "", words.get(1).charAt(0), count(words.get(2)));
+        return of(action, words.get(1).charAt(0), count(words.get(2)));
     }
 
     private static WindowCommand rotate(List<String> words) {
@@ -146,7 +194,7 @@ public record WindowCommand(Action action, Where where, Target target, String fi
             case "up" -> 'R';
             default -> 0;
         };
-        return key == 0 ? null : new WindowCommand(Action.ROTATE, null, null, "", key, count(words.get(2)));
+        return key == 0 ? null : of(Action.ROTATE, key, count(words.get(2)));
     }
 
     /** A count word: digits only, at most 6 of them (Vim's counts are small). */

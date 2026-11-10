@@ -459,9 +459,21 @@ in Eclipse mode, or one Neovim does not drive, it makes Eclipse's two halves of 
 always. Such halves (from a workspace that had them) are windows too: `Ctrl-W h/j/k/l`, the sizes
 and `:only` work on them; `Ctrl-W x` and `r` do not, and say so.
 
-Refused, with a message: the tab commands (`:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]`,
-`:tab split`, `Ctrl-W T`), since every editor tab is a window already; and the splits that jump
-first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
+**Vim's tabs are Eclipse's editor tabs** here (each editor is a Neovim window in a hidden tab page
+of its own), so the tab commands work on the editor tabs of this stack:
+
+| Command | Eclipse does |
+|---------|--------------|
+| `:tabe[dit] file`, `:tabf[ind] file`, `:tab split`, `:tab sb N` | the file in a new editor tab of this stack, named as for `:split` (a new editor even if another has it open) |
+| `:tabnew`, `:tabe[dit]` alone, `:tab new` | a new untitled editor tab |
+| `Ctrl-W T` | this editor out of its split, as a tab of the first other stack on screen (top left) |
+| `:tabc[lose] 2`, `:tabc $`, `:tabc +`, `:tabc -2` | close that editor tab of this stack (counted as `:tabn` counts); Eclipse asks about changes, `:tabclose!` discards them |
+
+Write the tab after `:tabclose`: a count in front (`:2tabclose`, `:$tabclose`) is refused, since
+Neovim turns it into one of its hidden tab pages before the plug-in sees it.
+
+Refused, with a message: `:tabo[nly]`, which would close every other editor's window, and the
+splits that jump first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
 (its own `vim.cmd.split()`) is closed again, with a message: Eclipse would not show it.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
@@ -522,7 +534,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:w`, `:up[date]` | save the editor, with Vim's message (`"A.java" 12L, 340B written`); these are Neovim's own writes, see below |
 | `:wa[ll]` | *File > Save All* |
 | `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them). When another editor shows the same file (a split, a clone), it closes without asking, as Vim closes one of two windows: the changes stay in the other |
-| `:clo[se]`, `:tabc[lose]` | close the editor, as `:q`: the editor is its Neovim window and tab (`:close!` discards changes). `:tabclose` with a number (`:tabclose 2`, `:2tabclose`, `:tabclose +`) is refused: it would close another editor's window and leave that editor without it. In a floating window you entered (hover documentation), `:q`, `:close`, `Ctrl+W q` and `Ctrl+W c` close that window, as in Neovim |
+| `:clo[se]`, `:tabc[lose]` | close the editor, as `:q`: the editor is its Neovim window and tab (`:close!` discards changes). `:tabclose 2` closes another editor tab (see [Splits](#splits-split-vsplit-ctrl-w)). In a floating window you entered (hover documentation), `:q`, `:close`, `Ctrl+W q` and `Ctrl+W c` close that window, as in Neovim |
 | `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes). The buffer is kept, as after Vim's `:bd`: `:b 3` (its number) or Ctrl-^ opens the file again |
 | `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). A range closes the editors of the buffers it covers (`:3,5bd`); `:%bd` closes all editors |
 | `:qa[ll]`, `:quita[ll]` | close all editors (`:qa!` without asking) |
@@ -535,7 +547,8 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
-| `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]`, `:stag` | refused, with a message: every editor tab is a window already, and `:tabonly` would close the other editors' windows. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:tabnew`, `:tabe[dit]`, `:tabf[ind]` | a new editor tab: see [Splits](#splits-split-vsplit-ctrl-w) |
+| `:tabo[nly]`, `:stag` | refused, with a message: `:tabonly` would close the other editors' windows. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
@@ -1042,8 +1055,8 @@ These are real and deliberate to know about before extending the code:
    other editors are active. Two editors on one file (*Window → Editor → Clone*) share its text, undo
    history and marks, and each has its own cursor, as two Vim windows on one buffer. Only the
    active editor is attached. Vim's splits are editors in stacks of their own
-   ([Splits](#splits-split-vsplit-ctrl-w)); Vim's tab pages (`:tabnew`) are not something Eclipse
-   shows, since each editor tab is a window already.
+   ([Splits](#splits-split-vsplit-ctrl-w)); Vim's tab commands (`:tabedit`, `:tabclose 2`) work
+   on Eclipse's editor tabs, since each editor tab is a window already.
    Jumps into another open file (Ctrl-O, Ctrl-^, `'A`, `:b`, and `:e` of a file that has an editor)
    activate its editor (after `:bufdo` or `:argdo`,
    only the editor of the file they end in), and the window goes along: the two editors swap

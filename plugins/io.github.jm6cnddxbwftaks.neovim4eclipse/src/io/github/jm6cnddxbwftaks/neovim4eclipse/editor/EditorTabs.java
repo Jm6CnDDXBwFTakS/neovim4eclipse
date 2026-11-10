@@ -73,7 +73,7 @@ final class EditorTabs {
     }
 
     /** The parts of a tab stack that have a tab: rendered and visible, in tab order. */
-    private static List<MPart> visibleParts(MElementContainer<MUIElement> stack) {
+    static List<MPart> visibleParts(MElementContainer<? extends MUIElement> stack) {
         List<MPart> parts = new ArrayList<>();
         for (MUIElement child : stack.getChildren()) {
             if (child instanceof MPart part && part.isToBeRendered() && part.isVisible()) {

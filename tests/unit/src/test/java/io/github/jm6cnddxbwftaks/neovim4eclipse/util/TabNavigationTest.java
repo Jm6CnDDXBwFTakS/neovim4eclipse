@@ -47,4 +47,18 @@ class TabNavigationTest {
         assertEquals(2, target(PREVIOUS, -1, 3, 0));
         assertEquals(-1, target(NEXT, -1, 0, 0));
     }
+
+    /** {@code :tabclose 2}, {@code $}, {@code +}, {@code -2} among 4 tabs with tab 2 (index 1) active. */
+    @Test
+    void tabcloseNamesATabByNumberOrFromTheActiveOneWithoutWrapping() {
+        assertEquals(1, TabNavigation.closeTarget((char) 0, 2, 1, 4));
+        assertEquals(3, TabNavigation.closeTarget('$', 0, 1, 4));
+        assertEquals(2, TabNavigation.closeTarget('+', 0, 1, 4));
+        assertEquals(3, TabNavigation.closeTarget('+', 2, 1, 4));
+        assertEquals(0, TabNavigation.closeTarget('-', 0, 1, 4));
+        assertEquals(-1, TabNavigation.closeTarget('-', 2, 1, 4), "no tab two back: Vim's E16");
+        assertEquals(-1, TabNavigation.closeTarget('+', 3, 1, 4), "no wrapping");
+        assertEquals(-1, TabNavigation.closeTarget((char) 0, 5, 1, 4));
+        assertEquals(-1, TabNavigation.closeTarget((char) 0, 0, 1, 4), "no tab 0");
+    }
 }

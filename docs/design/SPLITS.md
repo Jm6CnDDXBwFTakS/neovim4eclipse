@@ -74,10 +74,23 @@ Neovim works out everything Vim would, before it sends one:
 So Eclipse gets plain words and needs no Vim knowledge. A `+cmd` (`:split +10 b.txt`) is refused:
 Eclipse would have to run it in the new editor only, once Neovim attaches there.
 
-**Refused**, with a message: Vim's tab pages (`:tabnew`, `:tabedit`, `:tabfind`, `:tabonly`,
-`:tab split`, `Ctrl-W T`), since every editor tab is a window already and `:tabonly` would close
-the other editors' windows; and the splits that jump first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`; see
-"Not done"). A window a plug-in opens in Neovim beside an editor's is still closed by the `WinNew`
+**Vim's tab pages are Eclipse's editor tabs.** Each editor is a Neovim window alone in a hidden
+tab page, so Neovim's own tab pages are the plug-in's plumbing; the tab commands work on the
+editor tabs of this stack instead, which are what a Vim user sees as tabs:
+
+| Command | Eclipse does |
+|---------|--------------|
+| `:tabedit file`, `:tabfind file`, `:tab split`, `:tab sbuffer N` | a new editor tab in this stack, by the same rules for the file as a split's (a new editor even when one has the file open) |
+| `:tabnew`, `:tabedit` alone, `:tab new` | a new untitled editor tab |
+| `Ctrl-W T` | this editor leaves its split, as a tab of the first other stack on screen (top left), and stays the active one: Vim moves the window into a tab page of its own |
+| `:tabclose 2`, `:tabclose $`, `:tabclose +`, `:tabclose -2` | closes that editor tab of this stack, counted as `:tabnext` counts them (`TabNavigation.closeTarget`; no wrapping, Vim's `E16`). Eclipse asks about its changes unless `!`, or another editor shows the document |
+
+A count in front of `:tabclose` (`:2tabclose`, `:$tabclose`, `:+tabclose`) is refused with a
+hint: Neovim has turned it into one of its hidden tab pages before the plug-in sees the line, which
+says nothing about the editor tabs. `:tabclose` alone closes this editor, as before.
+
+**Refused**, with a message: `:tabonly`, which would close every other editor's window, and the
+splits that jump first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`; see "Not done"). A window a plug-in opens in Neovim beside an editor's is still closed by the `WinNew`
 safety net of `LuaScripts.WINDOWS`: Eclipse never heard of it.
 
 ## 3. The window commands on the editor area
@@ -164,14 +177,16 @@ After a restart Eclipse brings the stacks and their clones back, as it does any 
   `:split +cmd file`.
 - A multi-page editor (the POM editor): its clone opens on its first page, where Neovim is not
   attached until its text page is chosen.
-- Moving a split to a new tab page (`Ctrl-W T`), and Vim's tab pages in general.
+- `:tabonly` as Eclipse's *Close Others*: it closes editors, so it waits for its own decision.
 
 ## 8. Tests
 
 - `WindowLayoutTest` (tests/unit): the neighbors, the order, the sizes, exchange and rotate.
 - `WindowCommandTest` (tests/unit): the words Neovim sends, read.
 - `windows_spec.lua` (tests/unit, a headless Neovim): which words each command and key sends, the
-  side rule, `'path'`, buffers, the refusals.
+  side rule, `'path'`, buffers, the tab commands, the refusals.
+- `TabNavigationTest` (tests/unit): which tab `:tabclose 2`, `$`, `+` and `-2` name.
 - `SplitsEndToEndTest` (UI tests): `:vsplit`, `:split file`, `Ctrl-W` moves, `:only`, the sizes,
-  `Ctrl-W x`, *Toggle Split Editor* both ways, the hidden preference's halves, and `:q` in a half
+  `Ctrl-W x`, `:tabedit`, `:tab split`, `Ctrl-W T`, `:tabclose 2` (with and without `!`),
+  *Toggle Split Editor* both ways, the hidden preference's halves, and `:q` in a half
   (the focus goes back to the other).

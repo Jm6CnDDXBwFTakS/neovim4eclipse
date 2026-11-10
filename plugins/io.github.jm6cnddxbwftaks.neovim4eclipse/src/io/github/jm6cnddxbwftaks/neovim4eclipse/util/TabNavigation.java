@@ -56,4 +56,25 @@ public final class TabNavigation {
             }
         };
     }
+
+    /**
+     * The tab {@code :tabclose} with an argument closes, as Vim counts: {@code :tabclose 2} the
+     * second tab, {@code :tabclose $} the last, {@code :tabclose +} the next, {@code :tabclose -2}
+     * two back. No wrapping: {@code :tabclose +} on the last tab names none, as in Vim (E16).
+     *
+     * @param key     {@code '$'}, {@code '+'}, {@code '-'}, or 0 for tab number {@code count}
+     * @param count   the number after the key (0 for none: one tab on or back)
+     * @param current index of the active tab
+     * @param size    number of tabs
+     * @return the index to close, or -1 when there is no such tab
+     */
+    public static int closeTarget(char key, int count, int current, int size) {
+        int target = switch (key) {
+            case '$' -> size - 1;
+            case '+' -> current + Math.max(count, 1);
+            case '-' -> current - Math.max(count, 1);
+            default -> count - 1;
+        };
+        return target >= 0 && target < size ? target : -1;
+    }
 }

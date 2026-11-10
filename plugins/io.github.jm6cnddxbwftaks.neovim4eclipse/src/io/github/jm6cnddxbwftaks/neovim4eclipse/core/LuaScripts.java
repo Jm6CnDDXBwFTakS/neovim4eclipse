@@ -390,12 +390,13 @@ final class LuaScripts {
      *       one. Example: {@link #FOLDS} refuses {@code :fold} in buffers
      *       whose folds are Eclipse's, so {@code :3,5fold} shows
      *       {@code fold: Eclipse defines the folds in this editor}; {@link #WINDOW_COMMANDS}
-     *       refuses {@code :tabclose 2}, but not {@code :tabclose}.</li>
+     *       refuses {@code :tabonly}.</li>
      *   <li><b>Translated commands.</b> {@code translate(name, fn)}: a built-in command that
      *       Eclipse carries out in a form of its own. {@code fn(p)} returns the words of the
      *       {@code :Eclipse} line to run instead, or {@code nil} and why the command may not run, or
-     *       nothing to leave it to Neovim. Example: {@link #WINDOW_COMMANDS} turns {@code :vsplit}
-     *       into {@code :Eclipse window split left same}, having read {@code 'splitright'}. The
+     *       nothing for the usual handling (the table's command of that name, else Neovim).
+     *       Example: {@link #WINDOW_COMMANDS} turns {@code :vsplit} into
+     *       {@code :Eclipse window split left same}, having read {@code 'splitright'}. The
      *       words are written so that {@code :Eclipse}'s arguments give them back (a space in a
      *       file name is escaped), and they are not expanded again. {@code file_name(args)} reads a
      *       file argument as {@code :e} reads its name, for such a script.</li>
@@ -450,7 +451,7 @@ final class LuaScripts {
             -- at all to leave the command to Neovim
             local translations = {}
             -- The reasons eclipse_form found in the line about to run, by name: its :Eclipse form
-            -- carries only the name, and the reason may depend on the rest (:tabclose 2).
+            -- carries only the name, and the reason may depend on the rest (:2tabclose).
             local refusing = {}
             -- The +cmd of :e +cmd name (:e +10 a.txt, :e + a.txt), waiting for Eclipse to show the
             -- file: { file = its full path (PATHS canonical), command = '10' }. The attach push of
@@ -728,7 +729,7 @@ final class LuaScripts {
                   refusing[p.cmd] = why
                   return 'Eclipse ' .. p.cmd -- with any range and arguments: none of it runs
                 end
-                return nil
+                -- Nothing: the usual handling below (:tabclose alone is the table's tabclose).
               end
               local open = open_document_edited(p)
               if open then
@@ -1294,9 +1295,9 @@ final class LuaScripts {
               return not own[win] and vim.fn.win_gettype(win) ~= ''
             end
 
-            --- Why Vim's tab commands do not run (WINDOW_COMMANDS refuses them): each Eclipse editor
-            --- tab is a window of its own already.
-            M.TABS = "Eclipse's editor tabs are the windows here: :e opens a file in a tab, :split beside this one"
+            --- Why :tabonly does not run (WINDOW_COMMANDS refuses it): each editor's window is alone in a
+            --- tab page of its own, so it would close every other editor's window.
+            M.TABS = "would close every other editor's window; the editor tab's menu has Close Others"
             --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
             --- opened without the command line, which Eclipse never heard of).
             local why_closed = {
@@ -1385,19 +1386,29 @@ final class LuaScripts {
      *   <tr><td>{@code Ctrl-W x}, {@code Ctrl-W r}, {@code Ctrl-W R}</td><td>{@code window exchange 0},
      *       {@code window rotate down 0}</td></tr>
      *   <tr><td>{@code Ctrl-W q ^Q c}, {@code :wincmd q}</td><td>{@code quit}: the editor closes, as for {@code :q}</td></tr>
+     *   <tr><td>{@code :tabedit b.txt}, {@code :tabfind b.txt}, {@code :tabnew}, {@code :tab split}</td>
+     *       <td>{@code window tab file /ws/app/b.txt}, {@code window tab new}, {@code window tab same}:
+     *       a new editor tab in this stack</td></tr>
+     *   <tr><td>{@code Ctrl-W T}</td><td>{@code window totab}</td></tr>
+     *   <tr><td>{@code :tabclose 2}, {@code :tabclose! $}, {@code :tabclose +}</td><td>{@code window
+     *       tabclose 2 0}, {@code window tabclose $ 1}: that editor tab of this stack</td></tr>
      * </table>
+     *
+     * <p><b>Vim's tab pages are Eclipse's editor tabs</b> here, since each editor is a Neovim window
+     * alone in a hidden tab page of its own: the tab commands work on the editor tabs of this
+     * stack, counted as {@code :tabnext} counts them. A count in front of {@code :tabclose}
+     * ({@code :2tabclose}, {@code :$tabclose}) is refused: Neovim has turned it into one of its
+     * hidden tab pages already, which says nothing about the editor tabs.
      *
      * <p><b>Where a split goes</b> is Vim's rule: above, or to the left for {@code :vsplit}, unless
      * {@code 'splitbelow'} or {@code 'splitright'} is set; {@code :aboveleft} and {@code :belowright}
      * (and {@code :topleft}, {@code :botright}, taken as those two) say it for one command. A
      * height or width given with the split ({@code :5split}) is not used: the new editor takes half.
      *
-     * <p><b>Refused</b>, with a message: the tab commands ({@code :tabnew}, {@code :tabedit},
-     * {@code :tabfind}, {@code :tabonly}, {@code :tab split}, {@code Ctrl-W T}), since every editor
-     * tab is a window already and {@code :tabonly} would close the other editors' windows (E4);
-     * {@code :tabclose} with a number; and the splits that jump somewhere first, which need more
-     * than a split ({@code :stag}, {@code Ctrl-W ]}, {@code Ctrl-W F}). {@code :close} and
-     * {@code :tabclose} close the editor: {@code util/HostCommand}.
+     * <p><b>Refused</b>, with a message: {@code :tabonly}, which would close every other editor's
+     * window (E4); and the splits that jump somewhere first, which need more than a split
+     * ({@code :stag}, {@code Ctrl-W ]}, {@code Ctrl-W F}). {@code :close} and {@code :tabclose}
+     * close the editor: {@code util/HostCommand}.
      *
      * <p>The keys are mapped only where the user's config maps none of them itself, and reach Neovim
      * only when Ctrl+W does (the default on macOS; on Windows and Linux a tick under Ctrl Keys:
@@ -1415,19 +1426,11 @@ final class LuaScripts {
             local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
             local M = {}
 
-            for _, name in ipairs({ 'tabnew', 'tabedit', 'tabfind', 'tabonly' }) do
-              host.refuse(name, function() return windows.TABS end)
-            end
+            host.refuse('tabonly', function() return windows.TABS end)
             local JUMP_FIRST = 'a split that jumps to a tag is not supported; Ctrl-] goes to the declaration in this editor'
             for _, name in ipairs({ 'stag', 'stjump', 'stselect' }) do
               host.refuse(name, function() return JUMP_FIRST end)
             end
-            -- p is the parsed command (nil for :Eclipse tabclose typed or mapped as such).
-            host.refuse('tabclose', function(p)
-              if p and (#p.args > 0 or (p.range and #p.range > 0)) then
-                return 'closes this editor only; close another with its tab, or with :bd and its buffer number'
-              end
-            end)
             host.leave_to_neovim(function(name)
               return (name == 'quit' or name == 'close') and windows.is_side_window(0)
             end)
@@ -1453,9 +1456,12 @@ final class LuaScripts {
             end
 
             --- The words of a split showing `file` (a full path): this buffer when it is this
-            --- buffer's file or nil, a new untitled editor for 'new'.
+            --- buffer's file or nil, a new untitled editor for 'new'. With :tab in front (mods.tab),
+            --- or for :tabedit, a new editor tab in this stack instead: Eclipse's editor tabs are
+            --- Vim's tab pages here.
             local function split(vertical, mods, file)
-              local words = { 'window', 'split', side(vertical, mods) }
+              local words = (mods and mods.tab and mods.tab >= 0) and { 'window', 'tab' }
+                  or { 'window', 'split', side(vertical, mods) }
               if file == 'new' then
                 words[#words + 1] = 'new'
               elseif not file or canonical(file) == canonical(vim.api.nvim_buf_get_name(0)) then
@@ -1507,9 +1513,10 @@ final class LuaScripts {
             --- The words for a split of the file p names: found in 'path' when `find` (:sfind; a
             --- name that is not there is Vim's E345), else read as :e reads its name. `empty` is
             --- what a split without a name shows (nil: this buffer; 'new' for :new).
-            local function named(p, vertical, find, empty)
+            local function named(p, vertical, find, empty, mods)
+              mods = mods or p.mods
               if #p.args == 0 then
-                return split(vertical, p.mods, empty)
+                return split(vertical, mods, empty)
               end
               if find then
                 -- Expanded as Vim's :sfind does (%:h/x, ~, #), once, from the line as typed.
@@ -1521,13 +1528,13 @@ final class LuaScripts {
                 if found == '' then
                   return nil, 'E345: Can\\'t find file "' .. name .. '" in path'
                 end
-                return split(vertical, p.mods, full(found))
+                return split(vertical, mods, full(found))
               end
               local file, why = host.file_name(p.args)
               if why then
                 return nil, why
               end
-              return split(vertical, p.mods, file or empty) -- only ++opt words: as without a name
+              return split(vertical, mods, file or empty) -- only ++opt words: as without a name
             end
 
             for name, how in pairs({
@@ -1539,13 +1546,39 @@ final class LuaScripts {
               vnew = function(p) return named(p, true, false, 'new') end,
               sbuffer = sbuffer,
             }) do
-              host.translate(name, function(p)
-                if p.mods.tab and p.mods.tab >= 0 then
-                  return nil, windows.TABS -- :tab split
-                end
-                return how(p)
-              end)
+              host.translate(name, how) -- :tab split too: mods.tab makes it a tab (split above)
             end
+
+            -- Vim's tab pages are Eclipse's editor tabs here: :tabedit file opens the file in a new
+            -- editor tab of this stack (a new editor even when one has it open, as a tab page of
+            -- its own would show it), :tabnew and :tabedit alone a new untitled one.
+            local TAB = { tab = 1 }
+            host.translate('tabedit', function(p) return named(p, false, false, 'new', TAB) end)
+            host.translate('tabnew', function(p) return named(p, false, false, 'new', TAB) end)
+            host.translate('tabfind', function(p)
+              if #p.args == 0 then
+                return nil, 'E471: Argument required'
+              end
+              return named(p, false, true, nil, TAB)
+            end)
+            -- :tabclose 2, :tabclose $, :tabclose +, :tabclose -2: the editor tab of this stack that
+            -- many tabs on, or the Nth, as :tabnext counts them. A count in front (:2tabclose,
+            -- :$tabclose) is refused: Neovim has already turned it into one of its own tab pages,
+            -- the editors' hidden ones, which say nothing about the editor tabs. :tabclose alone is
+            -- the table's: this editor closes.
+            host.translate('tabclose', function(p)
+              if p.range and #p.range > 0 then
+                return nil, 'write the tab after the command: :tabclose 2, :tabclose $, :tabclose +'
+              end
+              local arg = p.args[1]
+              if not arg then
+                return nil -- the usual handling: close this editor
+              end
+              if not (arg == '$' or arg:match('^[+-]?%d+$') or arg == '+' or arg == '-') then
+                return nil, 'E475: Invalid argument: ' .. arg
+              end
+              return { 'window', 'tabclose', arg, p.bang and '1' or '0' }
+            end)
 
             -- Ctrl-W's control forms as the letters they stand for: Ctrl-W Ctrl-S is Ctrl-W s.
             local CONTROL = { ['<C-^>'] = '^', ['<C-_>'] = '_', ['<C-]>'] = ']' }
@@ -1595,7 +1628,7 @@ final class LuaScripts {
               elseif key == 'q' or key == 'c' then
                 return { 'quit' }
               elseif key == 'T' then
-                return nil, windows.TABS
+                return { 'window', 'totab' }
               elseif key == 'F' or key == ']' or key == 'g]' or key == '}' then
                 return nil, JUMP_FIRST
               end

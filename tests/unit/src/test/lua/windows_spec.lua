@@ -510,7 +510,7 @@ t.test('the Ctrl-W keys send their window command, with the count', function()
   vim.o.splitbelow, vim.o.splitright = false, false
   for _, keys in ipairs({ '<C-w>s', '<C-w>v', '<C-w>n', '<C-w>l', '3<C-w>w', '<C-w><C-j>', '<C-w><Up>',
                           '<C-w>W', '<C-w>t', '<C-w>b', '<C-w>p', '<C-w>o', '5<C-w>+', '<C-w>-', '<C-w>=',
-                          '2<C-w><', '<C-w>>', '<C-w>_', '10<C-w>|', '<C-w>x', '<C-w>r', '2<C-w>R' }) do
+                          '2<C-w><', '<C-w>>', '<C-w>_', '10<C-w>|', '<C-w>x', '<C-w>r', '2<C-w>R', '<C-w>T' }) do
     t.type(keys)
   end
   t.eq({
@@ -536,6 +536,7 @@ t.test('the Ctrl-W keys send their window command, with the count', function()
     { 'window', 'exchange', '0' },
     { 'window', 'rotate', 'down', '0' },
     { 'window', 'rotate', 'up', '2' },
+    { 'window', 'totab' },
   }, sent_windows())
   t.eq(1, windows_in_tab())
   t.forget()
@@ -591,14 +592,42 @@ t.test(':wincmd, :only and :resize send the same as the keys', function()
   t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
 end)
 
-t.test('tab commands and splits that jump to a tag are refused, with why', function()
+-- Vim's tab pages are Eclipse's editor tabs: a new editor tab of this stack, with the same rules
+-- for the file as a split's.
+t.test(':tabedit, :tabnew, :tabfind and :tab split open a new editor tab', function()
+  commands()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  vim.fn.writefile({ 'x' }, dir .. '/found.txt')
+  vim.o.path = dir
+  for _, line in ipairs({ 'tabedit b.txt', 'tabe', 'tabnew c.txt', 'tabnew', 'tabfind found.txt', 'tab split',
+                          'tab new', 'tab sbuffer' }) do
+    t.type(':' .. line .. '<CR>')
+  end
+  t.eq({
+    { 'window', 'tab', 'file', sent_path(vim.fn.getcwd() .. '/b.txt') },
+    { 'window', 'tab', 'new' },
+    { 'window', 'tab', 'file', sent_path(vim.fn.getcwd() .. '/c.txt') },
+    { 'window', 'tab', 'new' },
+    { 'window', 'tab', 'file', sent_path(dir .. '/found.txt') },
+    { 'window', 'tab', 'same' },
+    { 'window', 'tab', 'new' },
+    { 'window', 'tab', 'same' },
+  }, sent_windows())
+  t.eq(2, #vim.api.nvim_list_tabpages(), 'no tab page opened')
+  t.forget()
+  vim.v.errmsg = ''
+  t.type(':tabfind<CR>')
+  t.ok(vim.v.errmsg:find('E471', 1, true), vim.v.errmsg)
+  t.eq({}, sent_windows())
+end)
+
+t.test(':tabonly and splits that jump to a tag are refused, with why', function()
   commands()
   local tabs = #vim.api.nvim_list_tabpages()
-  for _, keys in ipairs({ ':tabnew<CR>', ':tabe x.txt<CR>', ':tabonly<CR>', ':tab split<CR>', '<C-w>T' }) do
-    vim.v.errmsg = ''
-    t.type(keys)
-    t.ok(vim.v.errmsg:find('editor tabs are the windows', 1, true), keys .. ': ' .. vim.v.errmsg)
-  end
+  vim.v.errmsg = ''
+  t.type(':tabonly<CR>')
+  t.ok(vim.v.errmsg:find('Close Others', 1, true), vim.v.errmsg)
   for _, keys in ipairs({ ':stag main<CR>', '<C-w>]', '<C-w><C-]>', '<C-w>F' }) do
     vim.v.errmsg = ''
     t.type(keys)
@@ -694,13 +723,25 @@ t.test(':q, :close, Ctrl-W q and Ctrl-W c in a floating window close it, not the
   t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
 end)
 
-t.test(':tabclose with a tab number or count is refused; :tabclose alone closes the editor', function()
+-- A count in front reaches Eclipse already turned into one of Neovim's hidden tab pages, which says
+-- nothing about the editor tabs; the tab written after the command does.
+t.test(':tabclose 2 names an editor tab; a count in front is refused; :tabclose alone closes the editor', function()
   commands()
   local tabs = #vim.api.nvim_list_tabpages()
-  for _, line in ipairs({ 'tabclose 1', '1tabclose', 'tabclose +', '$tabc' }) do
+  for _, line in ipairs({ 'tabclose 2', 'tabclose +', 'tabc! $', 'tabclose -2' }) do
+    t.type(':' .. line .. '<CR>')
+  end
+  t.eq({
+    { 'window', 'tabclose', '2', '0' },
+    { 'window', 'tabclose', '+', '0' },
+    { 'window', 'tabclose', '$', '1' },
+    { 'window', 'tabclose', '-2', '0' },
+  }, sent_windows())
+  t.forget()
+  for _, line in ipairs({ '1tabclose', '$tabc', 'tabclose x' }) do
     vim.v.errmsg = ''
     t.type(':' .. line .. '<CR>')
-    t.ok(vim.v.errmsg:find('closes this editor only', 1, true), line .. ': ' .. vim.v.errmsg)
+    t.ok(vim.v.errmsg:find('tabclose', 1, true), line .. ': ' .. vim.v.errmsg)
   end
   t.eq(tabs, #vim.api.nvim_list_tabpages(), 'Neovim closed no tab')
   t.eq({}, t.sent('eclipse_command'))

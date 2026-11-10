@@ -294,4 +294,60 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         type(widgetOf(left), "x");
         expectText(left, "lpha\nbeta\ngamma\n");
     }
+
+    /** {@code :tabedit other.txt} and {@code :tab split}: new editor tabs in this stack, no new stack. */
+    @Test
+    void tabeditAndTabSplitOpenEditorTabsInThisStack() throws Exception {
+        createFile("other.txt", "other\n");
+        ex("tabedit other.txt");
+        ITextEditor other = waitForNewEditor(editor, "other.txt as a tab");
+        assertEquals("other.txt", other.getEditorInput().getName());
+        ex("tab split");
+        ITextEditor clone = waitForNewEditor(other, "a second other.txt as a tab");
+        assertEquals(other.getEditorInput(), clone.getEditorInput());
+        assertEquals(1, stacks(editor).size(), "tabs of one stack");
+        assertEquals(3, page().getEditorReferences().length);
+    }
+
+    /** {@code Ctrl-W T}: the editor leaves its split, as a tab of the other stack, and keeps the cursor. */
+    @Test
+    void ctrlWTMovesTheEditorOutOfItsSplitAsATab() throws Exception {
+        createFile("other.txt", "other\n");
+        ex("vsplit other.txt");
+        ITextEditor other = waitForNewEditor(editor, "other.txt to the left");
+        assertEquals(2, stacks(editor).size());
+
+        keys("<C-w>T");
+        waitUntil("one stack", TIMEOUT_MS, () -> stacks(editor).size() == 1);
+        waitForActive(other, "other.txt, still the active one");
+        assertSame(EditorSplits.stackOf(editor.getSite().getService(MPart.class)),
+                EditorSplits.stackOf(other.getSite().getService(MPart.class)));
+    }
+
+    /**
+     * {@code :tabclose 2} closes the second editor tab: with changes Eclipse asks first (answered
+     * Cancel here, so it stays), {@code :tabclose! 2} discards them.
+     */
+    @Test
+    void tabcloseNClosesThatEditorTabAskingAboutChangesUnlessBang() throws Exception {
+        createFile("other.txt", "other\n");
+        createFile("third.txt", "third\n");
+        ex("tabedit other.txt");
+        ITextEditor other = waitForNewEditor(editor, "other.txt as tab 2");
+        type(widgetOf(other), "x");
+        expectText(other, "ther\n");
+        ex("tabedit third.txt");
+        ITextEditor third = waitForNewEditor(other, "third.txt as tab 3");
+
+        List<String> dialogs = closeModalDialogsWhile(widgetOf(third));
+        ex("tabclose 2");
+        waitUntil("Eclipse's question about other.txt's changes", TIMEOUT_MS, () -> !dialogs.isEmpty());
+        settle();
+        assertEquals(3, page().getEditorReferences().length, "Cancel: other.txt stays");
+
+        ex("tabclose! 2");
+        waitUntil("other.txt to close", TIMEOUT_MS, () -> page().getEditorReferences().length == 2);
+        assertSame(third, page().getActiveEditor(), "the tab :tabclose was typed in stays in front");
+        assertEquals(1, dialogs.size(), "no question for the !");
+    }
 }
