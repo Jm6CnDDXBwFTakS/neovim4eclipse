@@ -383,14 +383,15 @@ final class EditorSplits {
                 } // else a part that is not an editor (another plug-in's): it stays, unasked about
             }
         }
+        // Taken before the close: with :tabonly 2 this editor closes too, and its site's services go.
         EPartService parts = part.getSite().getService(EPartService.class);
-        MPart keeper = tabs.get(keep);
+        MPart keeper = partsOf(part, tabs.get(keep)).get(0);
         closeUnmade(part, unmade);
         closeAsking(page, closing, false);
         if (keep == index) {
             activate(page, part); // this editor, also when it is one of Eclipse's halves
         } else {
-            parts.activate(partsOf(part, keeper).get(0), true); // made now if it never was
+            parts.activate(keeper, true); // made now if it never was
             if (page.getActiveEditor() != null) {
                 page.getActiveEditor().setFocus();
             }
