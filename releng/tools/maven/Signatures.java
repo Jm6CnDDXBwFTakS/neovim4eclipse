@@ -65,9 +65,14 @@ final class Signatures {
      * ({@code --homedir .}, {@code KEYS}, {@code apache-maven-3.9.16-bin.zip}). Why: Git for Windows
      * ships a gpg built for its Unix layer (MSYS), which does not read {@code C:\Users\…} as an
      * absolute path and joins it to its current folder instead; a plain name means the same to it,
-     * to Gpg4win's gpg and to gpg on Linux and macOS. The folder is a short temporary one, not one
-     * under {@code target/}: GnuPG 2.4 may put sockets in it, and macOS limits a socket's path to 104
-     * bytes. It is deleted when the tool ends.
+     * to Gpg4win's gpg and to gpg on Linux and macOS. The folder is a temporary one, deleted when
+     * the tool ends.
+     *
+     * <p>Every gpg call has {@code --no-autostart}: importing public keys and checking a signature
+     * need none of gpg's helpers (gpg-agent, keyboxd, dirmngr), which talk through sockets in the
+     * home folder. Without it, an import asks gpg-agent about secret keys and starts it; on macOS
+     * the temporary folder's path (/private/var/folders/…) is so long that the agent's socket path
+     * passes the 104-byte limit, the agent cannot start, and each key waits ten seconds for it.
      */
     static Optional<Signatures> prepare(String keysUrl) {
         if (!Shell.onPath("gpg")) {
@@ -157,7 +162,7 @@ final class Signatures {
 
     /** The import of Maven's keys into the keyring, run in gpg's home folder: plain names only. */
     static List<String> importCommand() {
-        return List.of("gpg", "--homedir", ".", "--batch", "--quiet", "--import", "KEYS");
+        return List.of("gpg", "--no-autostart", "--homedir", ".", "--batch", "--quiet", "--import", "KEYS");
     }
 
     /** The check of {@code name} against {@code name.asc}, both in gpg's home folder: plain names only. */
@@ -165,7 +170,7 @@ final class Signatures {
         if (name.isEmpty() || name.startsWith("-") || name.contains("/") || name.contains("\\") || name.contains(":")) {
             throw new ToolFailure("not a plain file name for gpg: " + name); // the archives' names never are
         }
-        return List.of("gpg", "--homedir", ".", "--batch", "--status-fd", "1", "--verify", name + ".asc", name);
+        return List.of("gpg", "--no-autostart", "--homedir", ".", "--batch", "--status-fd", "1", "--verify", name + ".asc", name);
     }
 
     /**

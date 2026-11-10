@@ -157,10 +157,11 @@ class MavenUpgradeTest {
             for (String arg : command) {
                 assertFalse(arg.startsWith("/") || arg.contains("\\") || arg.matches("(?i)[a-z]:.*"), arg + " in " + command);
             }
-            assertEquals(List.of("--homedir", "."), command.subList(1, 3), command.toString());
+            // No helper (gpg-agent, keyboxd) is started: their sockets do not fit macOS's path limit there.
+            assertEquals(List.of("--no-autostart", "--homedir", "."), command.subList(1, 4), command.toString());
         }
         assertEquals(List.of("apache-maven-3.9.16-bin.zip.asc", "apache-maven-3.9.16-bin.zip"),
-                Signatures.verifyCommand("apache-maven-3.9.16-bin.zip").subList(7, 9));
+                Signatures.verifyCommand("apache-maven-3.9.16-bin.zip").subList(8, 10));
         for (String bad : List.of("/tmp/a.zip", "C:\\a.zip", "sub/a.zip", "--import")) {
             assertThrows(ToolFailure.class, () -> Signatures.verifyCommand(bad), bad);
         }
