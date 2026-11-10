@@ -18,6 +18,7 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.viewers.StructuredSelection;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -255,6 +256,14 @@ public final class EclipseFileCommands {
     /**
      * {@code :q}.
      *
+     * <p>When another editor shows the same document (a split, a clone, one of Eclipse's split
+     * halves), Eclipse is not asked about saving: the changes stay in the other editor, as Vim's
+     * {@code :q} in one of two windows on a buffer closes that window without a word. Eclipse would
+     * ask, since each editor counts as a thing to save of its own.
+     *
+     * <p>Closing one of Eclipse's split halves leaves the focus on nothing; it goes back to the
+     * editor in front, so the next key reaches Neovim.
+     *
      * @param force {@code true} closes without prompting to save (discarding changes);
      *              {@code false} lets Eclipse ask
      */
@@ -262,7 +271,13 @@ public final class EclipseFileCommands {
         try {
             IWorkbenchPage page = editor.getEditorSite().getPage();
             if (page != null) {
-                page.closeEditor(EditorAttachManager.getInstance().workbenchPartOf(editor), !force);
+                boolean shared = EditorAttachManager.getInstance().isShownInAnotherEditor(editor);
+                page.closeEditor(EditorAttachManager.getInstance().workbenchPartOf(editor), !force && !shared);
+                IEditorPart next = page.getActiveEditor();
+                if (next != null && Display.getCurrent() != null && Display.getCurrent().getFocusControl() == null) {
+                    page.activate(next);
+                    next.setFocus();
+                }
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Eclipse close failed", e);

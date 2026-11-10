@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- `:q` in one of two editors on a file (*Clone*) closes it without Eclipse's question about saving,
+  as Vim closes one of two windows: the changes stay in the other editor.
+
 ## [0.2.11] - 2026-11-10
 
 ### Changed

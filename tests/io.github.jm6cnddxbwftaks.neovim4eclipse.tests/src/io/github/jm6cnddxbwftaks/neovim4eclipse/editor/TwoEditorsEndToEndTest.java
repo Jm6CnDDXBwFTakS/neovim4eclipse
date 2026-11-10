@@ -8,6 +8,9 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.ui.IEditorPart;
@@ -92,6 +95,26 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
         type(widgetOf(second), 'u');
         expectText(second, "alpha\nbeta\ngamma\n");
         page().closeEditor(second, false);
+    }
+
+    /**
+     * {@code :q} in one of two editors on a modified file closes it without Eclipse's question about
+     * saving, as Vim closes one of two windows on a buffer: the change stays, in the other editor.
+     */
+    @Test
+    void quitInOneOfTwoEditorsOnAChangedFileClosesItWithoutAsking() throws Exception {
+        ITextEditor second = openSecondEditor();
+        type(widgetOf(second), "ggdd");
+        expectText(second, "beta\ngamma\n");
+        // A question would wait for an answer: closed (as Cancel), the editor stays and the wait fails.
+        List<String> dialogs = closeModalDialogsWhile(widgetOf(second));
+        session.commandAsync("q");
+        waitUntil("the second editor to close", TIMEOUT_MS, () -> page().getEditorReferences().length == 1,
+                () -> "; dialogs: " + dialogs);
+        assertEquals(List.of(), dialogs, "no question about saving");
+        waitForAttach(editor, "the first editor");
+        expectText("beta\ngamma\n");
+        assertTrue(editor.isDirty(), "the change is still there, unsaved");
     }
 
     /**

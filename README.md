@@ -471,7 +471,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 |---------|--------------|
 | `:w`, `:up[date]` | save the editor, with Vim's message (`"A.java" 12L, 340B written`); these are Neovim's own writes, see below |
 | `:wa[ll]` | *File > Save All* |
-| `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them) |
+| `:q[uit]` | close the editor (Eclipse asks about changes; `:q!` discards them). When another editor shows the same file (a split, a clone), it closes without asking, as Vim closes one of two windows: the changes stay in the other |
 | `:clo[se]`, `:tabc[lose]` | close the editor, as `:q`: the editor is its Neovim window and tab (`:close!` discards changes). `:tabclose` with a number (`:tabclose 2`, `:2tabclose`, `:tabclose +`) is refused: it would close another editor's window and leave that editor without it. In a floating window you entered (hover documentation), `:q`, `:close`, `Ctrl+W q` and `Ctrl+W c` close that window, as in Neovim |
 | `:bd[elete]`, `:bw[ipeout]`, `:bun[load]` | close the editor, as `:q` (each buffer is an editor; `:bd!` discards changes). The buffer is kept, as after Vim's `:bd`: `:b 3` (its number) or Ctrl-^ opens the file again |
 | `:bd N`, `:bd name` (also `:bw`, `:bun`) | close the editor of buffer `N` or of the buffer called `name` (a unique part is enough, as with `:b`); several may follow (`:bd 3 other.txt`). A range closes the editors of the buffers it covers (`:3,5bd`); `:%bd` closes all editors |
