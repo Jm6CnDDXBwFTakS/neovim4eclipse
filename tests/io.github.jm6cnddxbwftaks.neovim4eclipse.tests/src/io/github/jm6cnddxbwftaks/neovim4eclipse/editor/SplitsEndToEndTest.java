@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.eclipse.core.commands.Command;
@@ -22,6 +24,8 @@ import org.eclipse.e4.ui.model.application.ui.advanced.MArea;
 import org.eclipse.e4.ui.model.application.ui.basic.MPart;
 import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
+import org.eclipse.swt.custom.CTabFolder;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.ui.IEditorInput;
@@ -159,6 +163,54 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         ex("q");
         waitForActive(editor, "test.txt again");
         assertEquals(1, stacks(editor).size(), "the emptied stack went away");
+    }
+
+    /**
+     * A stack a split makes is one of Eclipse's editor stacks, as one made by dragging a tab to the
+     * edge of the editor area: the same tags ({@link #kindTags}), so Eclipse's styling (the tags are CSS classes) and
+     * its drag and drop (which reads the tags and the area) treat it as theirs. What the styling
+     * gives is compared too, each stack while the other is the active one, since the active stack
+     * is drawn apart.
+     */
+    @Test
+    void aSplitsStackIsOneOfEclipsesEditorStacksAndLooksLikeTheFirst() throws Exception {
+        MPartStack first = stacks(editor).get(0);
+        ex("vsplit");
+        ITextEditor clone = waitForNewEditor(editor, "the clone of :vsplit");
+        MPartStack made = EditorSplits.stackOf(clone.getSite().getService(MPart.class));
+        assertNotSame(first, made);
+        assertEquals(kindTags(first), kindTags(made), "the tags of Eclipse's editor stacks");
+
+        String firstLook = look(first); // while the new stack is active
+        keys("<C-w>l");
+        waitForActive(editor, "test.txt, on the right");
+        waitUntil("the new stack drawn as the first one", TIMEOUT_MS, () -> look(made).equals(firstLook),
+                () -> "\n  first: " + firstLook + "\n  made:  " + look(made));
+    }
+
+    /**
+     * A stack's tags that say what kind of stack it is: not {@code active} (the active stack's,
+     * which moves) nor the editor area's first stack's {@code org.eclipse.e4.primaryDataStack}.
+     */
+    private static Set<String> kindTags(MPartStack stack) {
+        Set<String> tags = new TreeSet<>(stack.getTags());
+        tags.removeAll(Set.of("active", "org.eclipse.e4.primaryDataStack"));
+        return tags;
+    }
+
+    /** What Eclipse's styling sets on a stack's tab folder, as one line, to compare two stacks. */
+    private static String look(MPartStack stack) {
+        CTabFolder folder = (CTabFolder) stack.getWidget();
+        return String.join(" ", folder.getClass().getSimpleName(), folder.getRenderer().getClass().getSimpleName(),
+                "style=" + folder.getStyle(), "simple=" + folder.getSimple(), "tabHeight=" + folder.getTabHeight(),
+                "font=" + folder.getFont().getFontData()[0], "bg=" + rgb(folder.getBackground()),
+                "fg=" + rgb(folder.getForeground()), "selectionBg=" + rgb(folder.getSelectionBackground()),
+                "selectionFg=" + rgb(folder.getSelectionForeground()), "minimize=" + folder.getMinimizeVisible(),
+                "maximize=" + folder.getMaximizeVisible(), "closeUnselected=" + folder.getUnselectedCloseVisible());
+    }
+
+    private static String rgb(Color color) {
+        return color == null ? "none" : color.getRGB().toString();
     }
 
     /**
