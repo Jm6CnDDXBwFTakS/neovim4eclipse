@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -82,11 +83,7 @@ final class Signatures {
         try {
             Path home = Files.createTempDirectory("n4e-gpg");
             s = new Signatures(home);
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                // gpg may have started a helper (gpg-agent, keyboxd) for this folder: stop it first.
-                s.gpg.capture(List.of("gpgconf", "--homedir", ".", "--kill", "all"));
-                Folders.deleteTree(home);
-            }));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> Folders.deleteTree(home))); // no helper runs: --no-autostart
             checkGpg(s.gpg.capture(List.of("gpg", "--version")).out());
             Files.writeString(home.resolve("KEYS"), Http.text(keysUrl));
         } catch (IOException e) {
@@ -160,9 +157,18 @@ final class Signatures {
         return m.find() ? Optional.of(Version.parse(m.group(1))) : Optional.empty();
     }
 
+    /** What every gpg call starts with: its home folder as a plain name, no helper started, no questions. */
+    private static final List<String> GPG = List.of("gpg", "--no-autostart", "--homedir", ".", "--batch");
+
     /** The import of Maven's keys into the keyring, run in gpg's home folder: plain names only. */
     static List<String> importCommand() {
-        return List.of("gpg", "--no-autostart", "--homedir", ".", "--batch", "--quiet", "--import", "KEYS");
+        return gpg("--quiet", "--import", "KEYS");
+    }
+
+    private static List<String> gpg(String... args) {
+        List<String> command = new ArrayList<>(GPG);
+        command.addAll(List.of(args));
+        return List.copyOf(command);
     }
 
     /** The check of {@code name} against {@code name.asc}, both in gpg's home folder: plain names only. */
@@ -170,7 +176,7 @@ final class Signatures {
         if (name.isEmpty() || name.startsWith("-") || name.contains("/") || name.contains("\\") || name.contains(":")) {
             throw new ToolFailure("not a plain file name for gpg: " + name); // the archives' names never are
         }
-        return List.of("gpg", "--no-autostart", "--homedir", ".", "--batch", "--status-fd", "1", "--verify", name + ".asc", name);
+        return gpg("--status-fd", "1", "--verify", name + ".asc", name);
     }
 
     /**
