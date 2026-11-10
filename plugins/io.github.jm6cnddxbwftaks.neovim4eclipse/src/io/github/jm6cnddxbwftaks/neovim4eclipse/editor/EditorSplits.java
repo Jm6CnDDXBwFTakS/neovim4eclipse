@@ -114,6 +114,7 @@ final class EditorSplits {
             return;
         }
         IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
+        LOG.fine(() -> "Window command " + command + " typed in " + editor + " (part " + part + ")");
         try {
             switch (command.action()) {
                 case SPLIT -> split(editor, part, command);
@@ -499,6 +500,9 @@ final class EditorSplits {
         int previousId = before == null ? -1 : picture.idOf(before);
         int target = WindowLayout.focus(picture.root, picture.current, previousId, command.key(), command.count(),
                 caret.x, caret.y);
+        // Each step, for a report when Ctrl-W goes elsewhere than expected (the UI tests show it).
+        LOG.fine(() -> "Ctrl-W " + command.key() + " from window " + picture.current + " " + picture.editors
+                + " in " + picture.root + ", caret " + caret + ": window " + target);
         if (target != picture.current) {
             IEditorPart next = picture.editors.get(target);
             part.getSite().getPage().activate(next);
@@ -676,6 +680,16 @@ final class EditorSplits {
         return element.getCurSharedRef() == null ? null : element.getCurSharedRef().getParent();
     }
 
+    /** Where a part is on screen, in display pixels; {@code null} when it is not drawn. Tests report it too. */
+    static WindowLayout.Rect onScreen(MPart part) {
+        if (!(part.getWidget() instanceof Control control) || control.isDisposed() || !control.isVisible()) {
+            return null;
+        }
+        Rectangle r = control.getParent() == null ? control.getBounds()
+                : control.getDisplay().map(control.getParent(), null, control.getBounds());
+        return r.width <= 0 || r.height <= 0 ? null : new WindowLayout.Rect(r.x, r.y, r.width, r.height);
+    }
+
     /**
      * The editor area drawn as a {@link WindowLayout} tree, with each node's model element: what
      * the area shows now (each stack's front editor, the visible children of each sash container).
@@ -727,7 +741,7 @@ final class EditorSplits {
             }
             if (element instanceof MPart part && !(element instanceof MCompositePart)) {
                 IEditorPart editor = partsToEditors.get(part);
-                WindowLayout.Rect bounds = boundsOf(part);
+                WindowLayout.Rect bounds = onScreen(part);
                 if (editor == null || bounds == null) {
                     return null; // a view in the editor area, or an editor not drawn
                 }
@@ -756,16 +770,6 @@ final class EditorSplits {
                 return new WindowLayout.Group(id, sideBySide, children);
             }
             return null;
-        }
-
-        /** An editor's bounds in display pixels, or {@code null} when it is not drawn. */
-        private static WindowLayout.Rect boundsOf(MPart part) {
-            if (!(part.getWidget() instanceof Control control) || control.isDisposed() || !control.isVisible()) {
-                return null;
-            }
-            Rectangle r = control.getParent() == null ? control.getBounds()
-                    : control.getDisplay().map(control.getParent(), null, control.getBounds());
-            return r.width <= 0 || r.height <= 0 ? null : new WindowLayout.Rect(r.x, r.y, r.width, r.height);
         }
 
         int idOf(IEditorPart editor) {

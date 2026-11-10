@@ -119,7 +119,7 @@ extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a clic
 
 ### 5. Auto-attach
 
-`EditorAttachManager` + `EarlyStartup` register `IPartListener2` so opening/activating a text editor attaches Neovim. One controller is active at a time (switching editors detaches/reattaches).
+`EditorAttachManager` + `EarlyStartup` register `IPartListener2` so opening/activating a text editor attaches Neovim, once it is the page's active editor: Neovim follows the editor Eclipse makes active. An editor that only opens is left alone, such as the new half of Eclipse's *Toggle Split Editor* on macOS, where the first half stays active. One controller is active at a time (switching editors detaches/reattaches).
 
 ### 6. One Neovim buffer per document
 

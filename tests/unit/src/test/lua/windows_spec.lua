@@ -371,9 +371,12 @@ local function windows_in_tab()
   return #vim.api.nvim_tabpage_list_wins(0)
 end
 
---- A full path as Eclipse gets it (vim.fs.normalize'd: / only; see host_commands_spec.lua).
-local function sent_path(path)
-  return vim.fs.normalize(path, { expand_env = false })
+-- A file's name in an expected window command, compared by the plug-in's rule (t.same_file), never
+-- as text: on macOS a temporary file is /var/... or /private/var/..., on Windows \ or /. Eclipse
+-- gets it vim.fs.normalize'd, with / only (see host_commands_spec.lua), which is checked as well.
+local FILE = {}
+local function file_at(path)
+  return setmetatable({ path = path }, FILE)
 end
 
 --- The words of each window command sent since the last t.forget(), as { name, args... }.
@@ -383,6 +386,24 @@ local function sent_windows()
     found[#found + 1] = vim.list_extend({ c[1] }, c[3])
   end
   return found
+end
+
+-- Checks that the window commands sent since the last t.forget() are expected, word by word; a
+-- file_at(path) word is compared as a file.
+local function expect_windows(expected)
+  local actual = sent_windows()
+  t.eq(#expected, #actual, vim.inspect(actual))
+  for i, words in ipairs(expected) do
+    t.eq(#words, #actual[i], vim.inspect(actual[i]))
+    for j, word in ipairs(words) do
+      if getmetatable(word) == FILE then
+        t.same_file(word.path, actual[i][j], 'not the same file in ' .. vim.inspect(actual[i]))
+        t.ok(not actual[i][j]:find('\\', 1, true), 'sent with / only: ' .. actual[i][j])
+      else
+        t.eq(word, actual[i][j], vim.inspect(actual[i]))
+      end
+    end
+  end
 end
 
 -- Vim's rule for the side: above and left, unless 'splitbelow' or 'splitright', or a modifier.
@@ -426,13 +447,13 @@ t.test('a split of a file sends its full path; of this buffer\'s own file, a clo
   t.type(':split %<CR>')
   t.type(':split ++ff=unix<CR>')
   t.type(':new c.txt<CR>')
-  t.eq({
-    { 'window', 'split', 'above', 'file', sent_path(vim.fn.getcwd() .. '/b.txt') },
-    { 'window', 'split', 'above', 'file', sent_path(vim.fn.getcwd() .. '/my b.txt') },
+  expect_windows({
+    { 'window', 'split', 'above', 'file', file_at(vim.fn.getcwd() .. '/b.txt') },
+    { 'window', 'split', 'above', 'file', file_at(vim.fn.getcwd() .. '/my b.txt') },
     { 'window', 'split', 'above', 'same' },
     { 'window', 'split', 'above', 'same' },
-    { 'window', 'split', 'above', 'file', sent_path(vim.fn.getcwd() .. '/c.txt') },
-  }, sent_windows())
+    { 'window', 'split', 'above', 'file', file_at(vim.fn.getcwd() .. '/c.txt') },
+  })
   t.same_file(name, vim.api.nvim_buf_get_name(0), 'still in a.txt: Eclipse opens the new editor')
   vim.v.errmsg = ''
   t.forget()
@@ -448,13 +469,13 @@ t.test(':sfind looks in \'path\', as Vim does', function()
   vim.fn.writefile({ 'x' }, dir .. '/found.txt')
   vim.o.path = dir
   t.type(':sfind found.txt<CR>')
-  t.eq({ { 'window', 'split', 'above', 'file', sent_path(dir .. '/found.txt') } }, sent_windows())
+  expect_windows({ { 'window', 'split', 'above', 'file', file_at(dir .. '/found.txt') } })
   t.forget()
   local _, name = t.document('a.txt', { 'a' })
   vim.fn.writefile({ 'n' }, vim.fs.dirname(name) .. '/near.txt')
   t.forget()
   t.type(':sfind %:h/near.txt<CR>') -- expanded first, as Vim's :sfind does
-  t.eq({ { 'window', 'split', 'above', 'file', sent_path(vim.fs.dirname(name) .. '/near.txt') } }, sent_windows())
+  expect_windows({ { 'window', 'split', 'above', 'file', file_at(vim.fs.dirname(name) .. '/near.txt') } })
   t.forget()
   vim.v.errmsg = ''
   t.type(':sfind missing.txt<CR>')
@@ -472,12 +493,12 @@ t.test(':sbuffer sends the buffer\'s file; a buffer without one is refused', fun
   t.type(':sb other<CR>') -- by name, as :buffer matches it
   t.type(':sbuffer<CR>')
   t.type(':sbuffer ' .. vim.api.nvim_get_current_buf() .. '<CR>')
-  t.eq({
-    { 'window', 'split', 'above', 'file', sent_path(other_name) },
-    { 'window', 'split', 'above', 'file', sent_path(other_name) },
+  expect_windows({
+    { 'window', 'split', 'above', 'file', file_at(other_name) },
+    { 'window', 'split', 'above', 'file', file_at(other_name) },
     { 'window', 'split', 'above', 'same' },
     { 'window', 'split', 'above', 'same' },
-  }, sent_windows())
+  })
   t.forget()
   vim.v.errmsg = ''
   t.type(':sbuffer 999<CR>')
@@ -556,10 +577,10 @@ t.test('Ctrl-W ^ splits onto the alternate file, Ctrl-W f onto the file under th
   t.forget()
   t.type('<C-w>^')
   t.type('gg<C-w>f')
-  t.eq({
-    { 'window', 'split', 'above', 'file', sent_path(first) },
-    { 'window', 'split', 'above', 'file', sent_path(dir .. '/named.txt') },
-  }, sent_windows())
+  expect_windows({
+    { 'window', 'split', 'above', 'file', file_at(first) },
+    { 'window', 'split', 'above', 'file', file_at(dir .. '/named.txt') },
+  })
   t.forget()
   vim.v.errmsg = ''
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'missing.txt' })
@@ -604,16 +625,16 @@ t.test(':tabedit, :tabnew, :tabfind and :tab split open a new editor tab', funct
                           'tab new', 'tab sbuffer' }) do
     t.type(':' .. line .. '<CR>')
   end
-  t.eq({
-    { 'window', 'tab', 'file', sent_path(vim.fn.getcwd() .. '/b.txt') },
+  expect_windows({
+    { 'window', 'tab', 'file', file_at(vim.fn.getcwd() .. '/b.txt') },
     { 'window', 'tab', 'new' },
-    { 'window', 'tab', 'file', sent_path(vim.fn.getcwd() .. '/c.txt') },
+    { 'window', 'tab', 'file', file_at(vim.fn.getcwd() .. '/c.txt') },
     { 'window', 'tab', 'new' },
-    { 'window', 'tab', 'file', sent_path(dir .. '/found.txt') },
+    { 'window', 'tab', 'file', file_at(dir .. '/found.txt') },
     { 'window', 'tab', 'same' },
     { 'window', 'tab', 'new' },
     { 'window', 'tab', 'same' },
-  }, sent_windows())
+  })
   t.eq(2, #vim.api.nvim_list_tabpages(), 'no tab page opened')
   t.forget()
   vim.v.errmsg = ''

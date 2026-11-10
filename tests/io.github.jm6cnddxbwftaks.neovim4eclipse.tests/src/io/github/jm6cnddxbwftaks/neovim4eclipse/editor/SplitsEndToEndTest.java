@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Level;
 
 import org.eclipse.core.commands.Command;
 import org.eclipse.core.commands.ParameterizedCommand;
@@ -41,6 +42,8 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowLayout;
 
 /**
  * Vim's splits as Eclipse editor stacks (docs/design/SPLITS.md): {@code :split} and {@code :vsplit}
@@ -102,6 +105,11 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         waitUntil(what, TIMEOUT_MS, () -> page().getActiveEditor() == wanted);
         waitForAttach(wanted, what);
         settle();
+    }
+
+    /** Where Ctrl-W sees the editor on screen: its model part, as EditorSplits draws its picture. */
+    private static WindowLayout.Rect partBounds(ITextEditor target) {
+        return EditorSplits.onScreen(target.getSite().getService(MPart.class));
     }
 
     /** The editor's text widget on screen, in display pixels. */
@@ -291,7 +299,8 @@ class SplitsEndToEndTest extends EndToEndTestBase {
 
     /**
      * The hidden preference gives Toggle Split Editor back to Eclipse: two halves in one stack, one
-     * above the other for Ctrl+_. {@code Ctrl-W j} and {@code k} still go between them; pressed
+     * above the other for Ctrl+_. Neovim stays in the half Eclipse leaves active (on macOS the first
+     * half: the new one only opens). {@code Ctrl-W j} and {@code k} still go between them; pressed
      * again, the command joins them.
      */
     @Test
@@ -311,11 +320,21 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         assertEquals(onScreen(other).x, onScreen(editor).x, "one above the other");
         ITextEditor upper = onScreen(other).y < onScreen(editor).y ? other : editor;
         ITextEditor lower = upper == other ? editor : other;
+        settle();
+        NeovimEditorController attached = EditorAttachManager.getInstance().getActiveController();
+        assertSame(page().getActiveEditor(), attached == null ? null : attached.getEditor(),
+                "Neovim in the half Eclipse made active");
 
         page().activate(upper);
         waitForActive(upper, "the upper half");
-        keys("<C-w>j");
-        waitForActive(lower, "Ctrl-W j: the lower half");
+        try (ExpectedLog steps = ExpectedLog.of(EditorSplits.class, Level.FINE)) {
+            keys("<C-w>j");
+            waitUntil("Ctrl-W j: the lower half", TIMEOUT_MS, () -> page().getActiveEditor() == lower,
+                    () -> "; upper " + upper + " at " + partBounds(upper) + ", lower " + lower + " at "
+                            + partBounds(lower) + "; active: " + page().getActiveEditor() + "; EditorSplits: "
+                            + steps.records().stream().map(r -> r.getMessage()).toList());
+        }
+        waitForAttach(lower, "Ctrl-W j: the lower half");
         keys("<C-w>k");
         waitForActive(upper, "Ctrl-W k: the upper half");
 

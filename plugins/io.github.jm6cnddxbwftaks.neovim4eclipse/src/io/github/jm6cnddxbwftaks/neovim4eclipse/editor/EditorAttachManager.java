@@ -364,6 +364,14 @@ public final class EditorAttachManager {
         }
     }
 
+    /**
+     * Attaches to {@code partRef}'s editor, opened or activated, once the events of the moment are
+     * through, and only if it is then the page's active editor: Neovim follows the editor Eclipse
+     * makes active. On macOS, Toggle Split Editor opens its new half without activating either
+     * half: the first half stays the active editor, and the new half only sends {@code partOpened}.
+     * Attached to the new half, Neovim would work there while Eclipse takes the first as current,
+     * and {@code Ctrl-W j} would start from the wrong half.
+     */
     private void maybeAutoAttach(IWorkbenchPartReference partRef) {
         if (!autoAttach) {
             return;
@@ -375,7 +383,7 @@ public final class EditorAttachManager {
             try {
                 IEditorPart editor = eref.getEditor(false);
                 watchPageChanges(editor);
-                if (textEditorOf(editor) != null) {
+                if (textEditorOf(editor) != null && editor == eref.getPage().getActiveEditor()) {
                     attach(editor, false);
                 }
             } catch (Exception e) {
