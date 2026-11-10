@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: a new internal tool helps manage the newest and the oldest
+  Eclipse versions the plug-in is tested with.
+
 ## [0.2.9] - 2026-11-09
 
 ### Fixed
