@@ -228,11 +228,9 @@ final class EditorSplits {
                     HostCommands.showError(editor, "\"" + shown + "\" is a directory");
                     return null;
                 }
-                if (!Files.exists(file)) {
-                    NewFiles.open(page, file, shown); // a dangling link too, as for :e (Files.exists follows links)
-                } else {
-                    return EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE);
-                }
+                // A dangling link is missing too, as for :e (Files.exists follows links).
+                return Files.exists(file) ? EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE)
+                        : NewFiles.open(page, file, shown, IWorkbenchPage.MATCH_NONE);
             }
         }
         return page.getActiveEditor();

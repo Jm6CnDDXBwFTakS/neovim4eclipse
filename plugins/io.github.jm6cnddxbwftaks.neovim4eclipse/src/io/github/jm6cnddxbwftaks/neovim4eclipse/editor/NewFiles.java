@@ -239,12 +239,23 @@ final class NewFiles {
      * @param name the name as typed after {@code :e}, for the message
      */
     static void open(IWorkbenchPage page, Path path, String name) {
+        open(page, path, name, IWorkbenchPage.MATCH_INPUT);
+    }
+
+    /**
+     * {@link #open(IWorkbenchPage, Path, String)} with Eclipse's rule for reusing an editor:
+     * {@code MATCH_NONE} gives a new editor even when one has this new file open already, as a Vim
+     * split of it ({@code :split new.txt}) needs.
+     *
+     * @return the editor, or {@code null} when it could not be opened (the reason shown)
+     */
+    static IEditorPart open(IWorkbenchPage page, Path path, String name, int matchFlags) {
         try {
             String editorId = editorIdFor(path.getFileName().toString());
             Path target = DanglingLinks.finalTarget(path);
             IEditorInput input = target != null ? new DanglingLinkInput(path, target)
                     : new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(path.toUri()));
-            IEditorPart opened = page.openEditor(input, editorId, true);
+            IEditorPart opened = page.openEditor(input, editorId, true, matchFlags);
             ITextEditor text = EditorAttachManager.textEditorOf(opened);
             if (text != null) {
                 useWorkspaceEncoding(text, workspaceFileAt(path));
@@ -254,10 +265,12 @@ final class NewFiles {
                 // After the plug-in attaches, which the editor's activation has queued.
                 Display.getCurrent().asyncExec(() -> HostCommands.showMessage(text, message, false));
             }
+            return opened;
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not open a new editor on " + path, e);
             HostCommands.showError(EditorAttachManager.textEditorOf(page.getActiveEditor()),
                     "Could not open \"" + name + "\": " + e.getMessage());
+            return null;
         }
     }
 
