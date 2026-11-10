@@ -118,6 +118,33 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * The only editor on a changed file still asks before {@code :q} closes it, a multi-page editor
+     * too (the POM editor's kind): its text page, where Neovim is, is not "another editor" on the
+     * document. The question is closed here as Cancel, so the editor stays, with its change.
+     */
+    @Test
+    void quitInTheOnlyEditorOfAChangedFileStillAsksAMultiPageEditorToo() throws Exception {
+        IFile file = createFile("pom.mpage", "<project/>\n");
+        IEditorPart multiPage = IDE.openEditor(page(), file, true);
+        assertTrue(multiPage instanceof TestMultiPageEditor, "opened in " + multiPage);
+        ITextEditor sourcePage = EditorAttachManager.textEditorOf(multiPage);
+        waitForAttach(sourcePage, "the Source page");
+        try {
+            type(widgetOf(sourcePage), 'x');
+            expectText(sourcePage, "project/>\n");
+            List<String> dialogs = closeModalDialogsWhile(widgetOf(sourcePage));
+            session.commandAsync("q");
+            waitUntil("Eclipse's question about saving", TIMEOUT_MS, () -> !dialogs.isEmpty());
+            settle();
+            assertTrue(multiPage.getSite().getPage() != null && page().findEditor(multiPage.getEditorInput()) == multiPage,
+                    "still open after Cancel");
+            assertTrue(multiPage.isDirty(), "with its change");
+        } finally {
+            page().closeEditor(multiPage, false);
+        }
+    }
+
+    /**
      * Closing both editors unloads the buffer, as Vim's {@code :bd} (gone from {@code :ls}, kept in
      * {@code :ls!}); reopening gives the same buffer number back (docs/design/BUFFER_NUMBERS.md), and
      * {@code u} undoes nothing: the history starts fresh with the saved file, as in Vim.

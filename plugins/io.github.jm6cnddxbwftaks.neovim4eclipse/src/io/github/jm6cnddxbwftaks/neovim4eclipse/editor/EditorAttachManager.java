@@ -1327,11 +1327,20 @@ public final class EditorAttachManager {
                 && !(input instanceof IURIEditorInput uriInput && uriInput.getURI() != null);
     }
 
-    /** Whether another editor shows {@code editor}'s document too (Window › Editor › Clone). UI thread. */
+    /**
+     * Whether another editor shows {@code editor}'s document too (Window › Editor › Clone). UI thread.
+     *
+     * <p>The editors are counted as workbench parts, as the attach registers them: a multi-page
+     * editor's text page is its multi-page part here. Compared with the page itself, the part would
+     * count as "another editor", and {@code :q} in the POM editor's source page would close it
+     * without asking about its changes ({@code EclipseFileCommands.close}).
+     */
     boolean isShownInAnotherEditor(ITextEditor editor) {
         IDocument document = documentOf(editor);
         synchronized (this) {
-            return document != null && documents.isSharedWithAnotherEditor(document, editor);
+            Bound bound = boundDocuments.get(editor);
+            IEditorPart part = bound == null ? editor : bound.part();
+            return document != null && documents.isSharedWithAnotherEditor(document, part);
         }
     }
 
