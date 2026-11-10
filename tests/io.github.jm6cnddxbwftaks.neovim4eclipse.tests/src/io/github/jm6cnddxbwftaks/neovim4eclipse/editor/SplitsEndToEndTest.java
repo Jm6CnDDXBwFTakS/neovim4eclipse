@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.logging.Level;
 
 import org.eclipse.core.commands.Command;
 import org.eclipse.core.commands.ParameterizedCommand;
@@ -38,12 +37,10 @@ import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 
 /**
  * Vim's splits as Eclipse editor stacks (docs/design/SPLITS.md): {@code :split} and {@code :vsplit}
@@ -54,21 +51,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
  */
 class SplitsEndToEndTest extends EndToEndTestBase {
 
-    /**
-     * What EditorSplits logs. A window command that throws is only logged (the user sees nothing),
-     * and Eclipse often hides the damage, as when it brings the one editor left to the front by
-     * itself: so any warning fails the test.
-     */
-    private ExpectedLog splitsLog;
-
-    @BeforeEach
-    void captureTheLog() {
-        splitsLog = ExpectedLog.of(EditorSplits.class);
-    }
-
     @AfterEach
     void closeTheSplits() {
-        splitsLog.close(); // what the cleanup below logs is not the test's
         Activator.getDefault().getPreferenceStore().setToDefault(PreferenceConstants.ECLIPSE_SPLITS);
         // Every editor but test.txt's own: their stacks go with them, as an emptied stack does.
         List<IEditorReference> others = new ArrayList<>();
@@ -81,7 +65,6 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         if (session != null) {
             ex("set nosplitbelow nosplitright"); // one Neovim serves every test
         }
-        splitsLog.assertNothingAtOrAbove(Level.WARNING); // after the cleanup, which a failure would skip
     }
 
     /** Runs {@code :line} in Neovim, through its command line, as typed, and waits for the result. */
@@ -181,7 +164,10 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         assertNotSame(first, made);
         assertEquals(kindTags(first), kindTags(made), "the tags of Eclipse's editor stacks");
 
-        String firstLook = look(first); // while the new stack is active
+        // The active stack is drawn apart, and Eclipse restyles the first one when it stops being it.
+        waitUntil("the first stack no longer the active one", TIMEOUT_MS, () -> !first.getTags().contains("active"));
+        settle();
+        String firstLook = look(first); // while the new stack is the active one
         keys("<C-w>l");
         waitForActive(editor, "test.txt, on the right");
         waitUntil("the new stack drawn as the first one", TIMEOUT_MS, () -> look(made).equals(firstLook),

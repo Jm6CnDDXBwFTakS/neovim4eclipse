@@ -5,6 +5,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.testing;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Handler;
@@ -109,7 +111,7 @@ public final class ExpectedLog implements AutoCloseable {
         synchronized (records) {
             for (LogRecord logRecord : records) {
                 if (logRecord.getLevel().intValue() >= level.intValue()) {
-                    seen.add(logRecord.getLevel() + " " + logRecord.getMessage());
+                    seen.add(describe(logRecord));
                 }
             }
         }
@@ -133,6 +135,21 @@ public final class ExpectedLog implements AutoCloseable {
                 }
             }
         }
+    }
+
+    /**
+     * A record as a failure shows it: level, message and, when one was logged with it, the
+     * exception's stack trace, since a capture keeps the record off the console where it would
+     * otherwise print.
+     */
+    private static String describe(LogRecord logRecord) {
+        String text = logRecord.getLevel() + " " + logRecord.getMessage();
+        if (logRecord.getThrown() == null) {
+            return text;
+        }
+        StringWriter trace = new StringWriter();
+        logRecord.getThrown().printStackTrace(new PrintWriter(trace));
+        return text + "\n" + trace;
     }
 
     /** Each record captured so far, in order. */

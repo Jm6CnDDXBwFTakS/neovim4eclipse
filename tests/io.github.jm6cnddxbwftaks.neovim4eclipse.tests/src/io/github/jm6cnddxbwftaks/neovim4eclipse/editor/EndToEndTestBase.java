@@ -112,10 +112,17 @@ abstract class EndToEndTestBase {
     protected NeovimSession session;
     /** The repairs pushes make during the test ({@link TextRepairs}); each fails the test. */
     private ExpectedLog repairs;
+    /**
+     * What {@link EditorSplits} logs during the test; a warning fails it. A window command that
+     * throws is only logged (the user sees nothing), and Eclipse often hides the damage, as when
+     * it brings the one editor left to the front by itself.
+     */
+    private ExpectedLog splitsLog;
 
     @BeforeEach
     void openEditor() throws Exception {
         repairs = ExpectedLog.of(TextRepairs.class, Level.FINE);
+        splitsLog = ExpectedLog.of(EditorSplits.class);
         // An error dialog fails the test instead of stalling the run (UiTestSupport.watchForErrorDialogs).
         UiTestSupport.watchForErrorDialogs();
         // -Dnvim.path reaches the plug-in as its startup option -Dneovim4eclipse.nvim (the test pom's
@@ -257,6 +264,11 @@ abstract class EndToEndTestBase {
         }
         String duringCleanup = UiTestSupport.stopWatchingForErrorDialogs();
         List<String> repaired = stopCapturingRepairs();
+        ExpectedLog splits = splitsLog; // null if the setup never started it
+        splitsLog = null;
+        if (splits != null) {
+            splits.close();
+        }
         if (unreported != null || duringCleanup != null) {
             fail("An error dialog opened and was closed (not answered): "
                     + (unreported != null ? unreported : duringCleanup)
@@ -264,6 +276,9 @@ abstract class EndToEndTestBase {
         }
         if (!repaired.isEmpty()) {
             fail("Eclipse's text and Neovim's drifted apart, and a push repaired it (TextRepairs): " + repaired);
+        }
+        if (splits != null) {
+            splits.assertNothingAtOrAbove(Level.WARNING);
         }
     }
 

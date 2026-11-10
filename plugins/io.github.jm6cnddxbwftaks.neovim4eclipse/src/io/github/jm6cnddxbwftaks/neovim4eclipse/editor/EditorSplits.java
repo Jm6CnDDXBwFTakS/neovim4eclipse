@@ -385,7 +385,7 @@ final class EditorSplits {
         }
         // Taken before the close: with :tabonly 2 this editor closes too, and its site's services go.
         EPartService parts = part.getSite().getService(EPartService.class);
-        MPart keeper = partsOf(part, tabs.get(keep)).get(0);
+        MPart keeper = keep == index ? null : partsOf(part, tabs.get(keep)).get(0);
         closeUnmade(part, unmade);
         closeAsking(page, closing, false);
         if (keep == index) {
