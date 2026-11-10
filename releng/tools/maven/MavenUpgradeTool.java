@@ -148,7 +148,7 @@ public final class MavenUpgradeTool {
     }
 
     private void run() {
-        checkBranch();
+        git.checkWorkBranch("move Maven");
         if (!git.isClean()) {
             throw new ToolFailure("the working tree has changes (git status); commit or stash them first");
         }
@@ -358,14 +358,6 @@ public final class MavenUpgradeTool {
             }
             return changed;
         });
-    }
-
-    private void checkBranch() {
-        String branch = git.branch();
-        if (!branch.startsWith("release/") && !branch.startsWith("fix/") && !branch.startsWith("feature/")) {
-            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch)
-                    + "; move Maven on the release branch or a fix/ branch cut from it (CONTRIBUTING.md, \"Branches\")");
-        }
     }
 
     private String read(String file) {

@@ -181,7 +181,7 @@ public final class EclipseUpgradeTool {
     // ------------------------------------------------------------ newest
 
     private void newest() {
-        checkBranch();
+        git.checkWorkBranch("move Eclipse");
         String drop = EclipseFiles.newestDrop(Http.text(EclipseFiles.DATA_JSON));
         EclipseFiles.checkDropDate(drop);
         EclipseRelease to = EclipseFiles.releaseOf(drop);
@@ -241,7 +241,7 @@ public final class EclipseUpgradeTool {
     // ------------------------------------------------------------ oldest
 
     private void oldest(EclipseRelease to) {
-        checkBranch();
+        git.checkWorkBranch("move Eclipse");
         EclipseRelease from = oldestNow();
         EclipseRelease newest = EclipseRelease.ofNumber(smokeEntry(NEWEST).eclipse());
         if (to.compareTo(from) <= 0) {
@@ -436,14 +436,6 @@ public final class EclipseUpgradeTool {
             edit.run();
             return git.out("diff", "--name-only").lines().toList();
         });
-    }
-
-    private void checkBranch() {
-        String branch = git.branch();
-        if (!branch.startsWith("release/") && !branch.startsWith("fix/") && !branch.startsWith("feature/")) {
-            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch)
-                    + "; move Eclipse on the release branch or a fix/ branch cut from it (CONTRIBUTING.md, \"Branches\")");
-        }
     }
 
     private EclipseRelease oldestNow() {

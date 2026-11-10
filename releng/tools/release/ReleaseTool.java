@@ -801,7 +801,7 @@ public final class ReleaseTool {
         String rehearsePrefix = settings.get("rehearse.prefix");
         for (String ref : git.out("branch", "-r", "--merged", main, "--format=%(refname:short)").lines().toList()) {
             String name = ref.startsWith("origin/") ? ref.substring("origin/".length()) : null;
-            if (name != null && (name.startsWith("fix/") || name.startsWith("feature/") || name.startsWith(rehearsePrefix))) {
+            if (name != null && (Git.isTopicBranch(name) || name.startsWith(rehearsePrefix))) {
                 remote.add(name);
             }
         }
@@ -810,7 +810,7 @@ public final class ReleaseTool {
         }
         String current = git.branch();
         for (String name : git.out("branch", "--merged", main, "--format=%(refname:short)").lines().toList()) {
-            boolean finished = name.equals(v.branch()) || name.startsWith("fix/") || name.startsWith("feature/");
+            boolean finished = name.equals(v.branch()) || Git.isTopicBranch(name);
             if (finished && !name.equals(current)) {
                 List<String> delete = List.of("git", "branch", "-d", name);
                 if (ask.confirm("Delete the local branch " + name + " (main has all of it)", List.of(Shell.display(delete)))) {

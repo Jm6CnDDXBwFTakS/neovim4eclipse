@@ -47,6 +47,38 @@ public final class Git {
         return out("branch", "--show-current");
     }
 
+    /**
+     * The branches an upgrade tool may commit on (CONTRIBUTING.md, "Branches"): the release
+     * branch, or a {@code fix/} or {@code feature/} branch cut from it. Never {@code main}, which
+     * moves only at a release, and never a detached HEAD, where a commit belongs to no branch.
+     * Example: {@code release/0.2.11} and {@code feature/maven-tool} are, {@code main} and
+     * {@code releases/x} are not.
+     */
+    public static boolean isWorkBranch(String branch) {
+        return branch.startsWith("release/") || isTopicBranch(branch);
+    }
+
+    /**
+     * A {@code fix/} or {@code feature/} branch: one piece of work, merged into the release branch
+     * and then deleted (the Release tool's {@code next} step deletes those {@code main} has).
+     */
+    public static boolean isTopicBranch(String branch) {
+        return branch.startsWith("fix/") || branch.startsWith("feature/");
+    }
+
+    /**
+     * Stops the tool unless the current branch is a work branch ({@link #isWorkBranch}); {@code what}
+     * names the move in the message: {@code "move Maven"} gives "this is main; move Maven on the
+     * release branch, or on a fix/ or feature/ branch cut from it".
+     */
+    public void checkWorkBranch(String what) {
+        String branch = branch();
+        if (!isWorkBranch(branch)) {
+            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch) + "; " + what
+                    + " on the release branch, or on a fix/ or feature/ branch cut from it (CONTRIBUTING.md, \"Branches\")");
+        }
+    }
+
     /** No changes, staged or not, and no untracked files (ignored ones do not count). */
     public boolean isClean() {
         return out("status", "--porcelain").isEmpty();

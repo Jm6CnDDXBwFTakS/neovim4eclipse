@@ -124,11 +124,7 @@ public final class NeovimUpgradeTool {
     }
 
     private void run() {
-        String branch = git.branch();
-        if (!branch.startsWith("release/") && !branch.startsWith("fix/") && !branch.startsWith("feature/")) {
-            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch)
-                    + "; move Neovim on the release branch or a fix/ branch cut from it (CONTRIBUTING.md, \"Branches\")");
-        }
+        git.checkWorkBranch("move Neovim");
         Version from = NeovimFiles.pinnedVersion(pins());
         if (target.compareTo(from) <= 0) {
             throw new ToolFailure("the plug-in is at Neovim " + from + " already; " + target + " is not newer");

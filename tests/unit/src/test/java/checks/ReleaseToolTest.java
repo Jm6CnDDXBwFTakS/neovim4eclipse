@@ -288,6 +288,36 @@ class ReleaseToolTest {
     }
 
     @Test
+    void theUpgradeToolsCommitOnlyOnAWorkBranch() {
+        assertTrue(Git.isWorkBranch("release/0.2.11"));
+        assertTrue(Git.isWorkBranch("fix/maven-tool"));
+        assertTrue(Git.isWorkBranch("feature/maven-tool"));
+        assertFalse(Git.isWorkBranch("main"), "main moves only at a release");
+        assertFalse(Git.isWorkBranch(""), "a detached HEAD");
+        assertFalse(Git.isWorkBranch("releases/x"));
+        assertFalse(Git.isWorkBranch("rehearse/0.2.11"));
+        // The Release tool deletes merged topic branches, never the release branch through this rule.
+        assertTrue(Git.isTopicBranch("fix/maven-tool") && Git.isTopicBranch("feature/maven-tool"));
+        assertFalse(Git.isTopicBranch("release/0.2.11"));
+    }
+
+    @Test
+    void aDetachedHeadOrMainStopsAnUpgradeTool(@TempDir Path dir) throws Exception {
+        assumeTrue(repository(dir), "git is not installed");
+        Shell shell = new Shell(dir);
+        Git git = new Git(shell);
+        // -C, not -c: git may have named the first branch main already (init.defaultBranch).
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "-C", "main")).ok());
+        ToolFailure onMain = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven"));
+        assertTrue(onMain.getMessage().startsWith("this is main; move Maven on the release branch"), onMain.getMessage());
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "--detach")).ok());
+        ToolFailure detached = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven"));
+        assertTrue(detached.getMessage().startsWith("this is a detached HEAD;"), detached.getMessage());
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "-c", "fix/x")).ok());
+        git.checkWorkBranch("move Maven"); // no failure
+    }
+
+    @Test
     void anEditIsCommittedInUtc(@TempDir Path dir) throws Exception {
         assumeTrue(repository(dir), "git is not installed");
         Git git = new Git(new Shell(dir));
