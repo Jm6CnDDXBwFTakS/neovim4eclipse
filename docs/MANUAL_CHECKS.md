@@ -219,6 +219,33 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 
 **Expect:** each step's result, after its ⇒.
 
+## Splits
+
+### `sp-restart` Split stacks look like Eclipse's own and come back after a restart
+
+- **On:** any
+- **Launch:** normal
+- **Areas:** editor/EditorSplits.java, editor/SplitEditorHandler.java
+
+What the splits do is tested (`SplitsEndToEndTest`, `WindowLayoutTest`); how a stack the plug-in
+made looks next to Eclipse's, and Eclipse's restore of it at the next start, need a person and a
+restart.
+
+1. Open `n4e-alpha`'s `notes.txt`, type `:vsplit` and Enter, then `:split ideas.txt` and Enter.
+   ⇒ Three editors on screen: a second `notes.txt` on the left with `ideas.txt` (a new file, `[New]`)
+   above it, the first `notes.txt` on the right; Neovim's cursor is in `ideas.txt`.
+2. Look at the tabs of the three stacks.
+   ⇒ The new stacks' tabs look like the first stack's (an editor's tab style, not a view's), and a
+   tab dragged from one stack to another moves there.
+3. *File › Exit*, then start the checks' Eclipse again the same way.
+   ⇒ The stacks are back, with their editors (`ideas.txt` too, if Eclipse keeps a new file's
+   editor; it was never saved). A click into each puts Neovim's cursor there, and `:wincmd l` and
+   `:wincmd h` move between the left and the right stacks.
+4. Type `:only` and Enter.
+   ⇒ One stack, holding every editor as a tab; none was closed.
+
+**Expect:** each step's result, after its ⇒.
+
 ## Input method and accent menu in the `:` box
 
 ### `ime-compose` Japanese typing in the `:` box reaches Neovim once

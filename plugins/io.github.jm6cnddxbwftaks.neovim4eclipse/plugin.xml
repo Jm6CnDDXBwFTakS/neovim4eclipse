@@ -365,6 +365,20 @@
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ToggleNeovimModeHandler"
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode">
       </handler>
+      <!--
+         Eclipse's Toggle Split Editor (Ctrl+_, Ctrl+{) makes a Vim split in an editor Neovim
+         drives, and Eclipse's two halves elsewhere (SplitEditorHandler). Eclipse's own handler has
+         no activeWhen, only an enabledWhen; one with an activeWhen that holds wins over it.
+      -->
+      <handler
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.SplitEditorHandler"
+            commandId="org.eclipse.ui.window.splitEditor">
+         <activeWhen>
+            <with variable="activeEditor">
+               <instanceof value="org.eclipse.ui.IEditorPart"/>
+            </with>
+         </activeWhen>
+      </handler>
       <handler
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.SendKeyHandler"
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.a">

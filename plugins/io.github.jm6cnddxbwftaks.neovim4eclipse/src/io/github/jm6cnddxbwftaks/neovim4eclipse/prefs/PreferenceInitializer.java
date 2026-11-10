@@ -25,6 +25,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         IEclipsePreferences defaults = DefaultScope.INSTANCE.getNode(Activator.PLUGIN_ID);
         defaults.putBoolean(PreferenceConstants.SHOW_TOOLBAR, PreferenceConstants.SHOW_TOOLBAR_DEFAULT);
         defaults.putBoolean(PreferenceConstants.SHOW_MENU, PreferenceConstants.SHOW_MENU_DEFAULT);
+        defaults.putBoolean(PreferenceConstants.ECLIPSE_SPLITS, PreferenceConstants.ECLIPSE_SPLITS_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_MODE, PreferenceConstants.STATUS_ITEM_MODE_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_CMD, PreferenceConstants.STATUS_ITEM_CMD_DEFAULT);
         defaults.putBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE,
@@ -36,7 +37,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         // default: Eclipse applies it after this initializer. The UI tests set it to false that way.
         defaults.putBoolean(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
+            defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter, PlatformUtil.isMac()));
             defaults.putBoolean(PreferenceConstants.ctrlKeyInInsert(letter),
                     VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()));
         }

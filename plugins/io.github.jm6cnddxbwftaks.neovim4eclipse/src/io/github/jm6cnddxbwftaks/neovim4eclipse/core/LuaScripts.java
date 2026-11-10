@@ -391,6 +391,14 @@ final class LuaScripts {
      *       whose folds are Eclipse's, so {@code :3,5fold} shows
      *       {@code fold: Eclipse defines the folds in this editor}; {@link #WINDOW_COMMANDS}
      *       refuses {@code :tabclose 2}, but not {@code :tabclose}.</li>
+     *   <li><b>Translated commands.</b> {@code translate(name, fn)}: a built-in command that
+     *       Eclipse carries out in a form of its own. {@code fn(p)} returns the words of the
+     *       {@code :Eclipse} line to run instead, or {@code nil} and why the command may not run, or
+     *       nothing to leave it to Neovim. Example: {@link #WINDOW_COMMANDS} turns {@code :vsplit}
+     *       into {@code :Eclipse window split left same}, having read {@code 'splitright'}. The
+     *       words are written so that {@code :Eclipse}'s arguments give them back (a space in a
+     *       file name is escaped), and they are not expanded again. {@code file_name(args)} reads a
+     *       file argument as {@code :e} reads its name, for such a script.</li>
      *   <li><b>Commands left to Neovim.</b> {@code leave_to_neovim(fn)}: when {@code fn(name)}
      *       returns true, the command is not replaced and runs as Neovim's, and the {@code QuitPre}
      *       safety net below says nothing for a {@code :quit}. Example: {@link #WINDOW_COMMANDS}
@@ -437,6 +445,10 @@ final class LuaScripts {
             local typed -- the line as typed while its :Eclipse replacement runs (for the history)
             local refusals = {} -- built-in command name -> function(p) returning why it may not run, or nil
             local leaves = {} -- functions(name) returning true to leave that command to Neovim
+            -- built-in command name -> function(p) returning the :Eclipse words to run instead
+            -- ({ 'window', 'split', 'below', 'same' }), or nil and why it may not run, or nothing
+            -- at all to leave the command to Neovim
+            local translations = {}
             -- The reasons eclipse_form found in the line about to run, by name: its :Eclipse form
             -- carries only the name, and the reason may depend on the rest (:tabclose 2).
             local refusing = {}
@@ -456,6 +468,9 @@ final class LuaScripts {
               end,
               leave_to_neovim = function(fn)
                 leaves[#leaves + 1] = fn
+              end,
+              translate = function(name, fn)
+                translations[name] = fn
               end,
             }
             local function refused(name, p)
@@ -656,6 +671,26 @@ final class LuaScripts {
               return words
             end
 
+            -- The file a split command names ({ '++opt', 'name' } as nvim_parse_cmd gives its args),
+            -- as :e's name is read (file_words): the full path, or nil when it names none, or nil
+            -- and why. A +cmd is refused: Eclipse would have to run it in the new editor only.
+            package.loaded['neovim4eclipse.host_commands'].file_name = function(args)
+              local words, why = file_words(table.concat(args, ' '), true)
+              if not words then
+                return nil, why
+              end
+              local last = words[#words]
+              for _, word in ipairs(words) do
+                if word:sub(1, 1) == '+' and word:sub(1, 2) ~= '++' then
+                  return nil, 'a +cmd is not supported here; run it in the new window'
+                end
+              end
+              if not last or last:sub(1, 2) == '++' then
+                return nil
+              end
+              return last
+            end
+
             -- One word as :Eclipse's line must spell it so that its fargs give the word back: a
             -- backslash before each space, backslash, | and " (bar = true takes the one before | and
             -- " away, splitting into fargs the one before a space or a backslash). Example:
@@ -676,6 +711,24 @@ final class LuaScripts {
               end
               if left_to_neovim(p.cmd) then
                 return nil -- :q in a floating window: Neovim closes that window
+              end
+              if translations[p.cmd] then
+                local words, why = translations[p.cmd](p)
+                for _, word in ipairs(words or {}) do
+                  -- A line break would end the :Eclipse line there and run the rest as a command
+                  -- (a buffer named after a cloned repository's file with one in its name), as for :e.
+                  if word:find(LINE_BREAK) then
+                    words, why = nil, 'a name with a line break is not supported'
+                    break
+                  end
+                end
+                if words then
+                  return 'Eclipse ' .. table.concat(vim.tbl_map(fargs_word, words), ' ')
+                elseif why then
+                  refusing[p.cmd] = why
+                  return 'Eclipse ' .. p.cmd -- with any range and arguments: none of it runs
+                end
+                return nil
               end
               local open = open_document_edited(p)
               if open then
@@ -1241,11 +1294,13 @@ final class LuaScripts {
               return not own[win] and vim.fn.win_gettype(win) ~= ''
             end
 
-            --- Why Vim's split and tab commands do not run (WINDOW_COMMANDS refuses them).
-            M.REFUSED = "Eclipse shows one window per editor: use Window > Editor > Toggle Split Editor, or Window > Editor > Clone"
-            --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split).
+            --- Why Vim's tab commands do not run (WINDOW_COMMANDS refuses them): each Eclipse editor
+            --- tab is a window of its own already.
+            M.TABS = "Eclipse's editor tabs are the windows here: :e opens a file in a tab, :split beside this one"
+            --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
+            --- opened without the command line, which Eclipse never heard of).
             local why_closed = {
-              [''] = M.REFUSED,
+              [''] = 'Eclipse shows each window as an editor; :split and :vsplit make one',
               quickfix = 'Eclipse cannot show the quickfix window; :cnext, :cprevious and :cc still work',
               loclist = 'Eclipse cannot show the location list window; :lnext, :lprevious and :ll still work',
               preview = 'Eclipse cannot show the preview window',
@@ -1304,43 +1359,68 @@ final class LuaScripts {
             """;
 
     /**
-     * Refuses Vim's commands that would open a second window next to an editor's, or a tab, or
-     * close the other editors' tabs (docs/design/WINDOWS.md, E4), through the host commands'
-     * {@code refuse} hook ({@link #HOST_COMMANDS}), and maps the {@code Ctrl-W} keys that do the
-     * same. Run after {@link #HOST_COMMANDS} and {@link #WINDOWS}.
+     * Vim's window commands, carried out on Eclipse's editors: each Vim window is an editor, and a
+     * split is a new editor stack beside the current one (docs/design/SPLITS.md). Run after
+     * {@link #HOST_COMMANDS} (its {@code translate} and {@code refuse} hooks) and {@link #WINDOWS}.
      *
-     * <ul>
-     *   <li>Refused, with {@code name: Eclipse shows one window per editor: use Window > Editor >
-     *       Toggle Split Editor, or Window > Editor > Clone}: {@code :split}, {@code :vsplit},
-     *       {@code :new}, {@code :vnew}, {@code :sview}, {@code :sfind}, {@code :sbuffer},
-     *       {@code :tabnew}, {@code :tabedit}, {@code :tabfind}, {@code :tabonly}. A second
-     *       window would be invisible and take the keys; {@code :tabonly} would close every other
-     *       editor's window. Mapping them onto Eclipse's split editor is a later plan.</li>
-     *   <li>{@code :close} and {@code :tabclose} close the editor: {@code util/HostCommand}.
-     *       {@code :tabclose} with a tab number or count ({@code :tabclose 2}, {@code :2tabclose},
-     *       {@code :tabclose +}) is refused: Neovim would close another editor's window, and that
-     *       editor would stay open in Eclipse without its jumps, folds and options.</li>
-     *   <li>{@code Ctrl-W s}, {@code S}, {@code Ctrl-S}, {@code v}, {@code Ctrl-V}, {@code n},
-     *       {@code Ctrl-N} and {@code T} show the same error; {@code Ctrl-W q}, {@code Ctrl-Q} and
-     *       {@code c} close the editor ({@code :Eclipse quit}). Only where the user's config maps none
-     *       of them itself. These keys reach Neovim only when Ctrl+W goes to Neovim in the
-     *       preferences (docs/KEYBOARD.md).</li>
-     *   <li>In a <em>side window</em> ({@code is_side_window} of {@link #WINDOWS}: a floating
-     *       window the user entered, such as hover documentation), {@code :q}, {@code :close},
-     *       {@code Ctrl-W q} and {@code Ctrl-W c} are Neovim's again, through the host commands'
-     *       {@code leave_to_neovim} hook: they close that window, as in Neovim, not the editor.</li>
-     * </ul>
+     * <p>Neovim works out what each command means, as Vim would, and hands Eclipse the result as
+     * {@code :Eclipse window} words ({@code util/WindowCommand} reads them): where a split goes,
+     * which file it shows, the count. A typed line goes through the {@code translate} hook, so
+     * {@code @:} repeats it; a {@code Ctrl-W} key sends the same words itself.
      *
-     * <p>What gets past (a plug-in's {@code :split}) is closed by the {@code WinNew} safety net of
-     * {@link #WINDOWS}.
+     * <table>
+     *   <caption>What each command becomes</caption>
+     *   <tr><th>Vim</th><th>Sent</th></tr>
+     *   <tr><td>{@code :split}, {@code :sview}, {@code :sbuffer} of this buffer, {@code Ctrl-W s S ^S}</td>
+     *       <td>{@code window split above same}: a clone of this editor</td></tr>
+     *   <tr><td>{@code :vsplit}, {@code :vertical split}, {@code Ctrl-W v ^V}</td><td>{@code window split left same}</td></tr>
+     *   <tr><td>{@code :split b.txt}, {@code :sfind b.txt}, {@code :sbuffer 3}, {@code Ctrl-W ^}, {@code Ctrl-W f}</td>
+     *       <td>{@code window split above file /ws/app/b.txt}</td></tr>
+     *   <tr><td>{@code :new}, {@code :vnew}, {@code Ctrl-W n}</td><td>{@code window split above new}</td></tr>
+     *   <tr><td>{@code Ctrl-W h j k l w W t b p} (and the Ctrl and arrow forms), {@code :wincmd l}</td>
+     *       <td>{@code window focus l 0}</td></tr>
+     *   <tr><td>{@code Ctrl-W o}, {@code :only}</td><td>{@code window only}</td></tr>
+     *   <tr><td>{@code Ctrl-W = + - < > _ |}, {@code :resize +5}, {@code :vertical resize 80}</td>
+     *       <td>{@code window size + 5}</td></tr>
+     *   <tr><td>{@code Ctrl-W x}, {@code Ctrl-W r}, {@code Ctrl-W R}</td><td>{@code window exchange 0},
+     *       {@code window rotate down 0}</td></tr>
+     *   <tr><td>{@code Ctrl-W q ^Q c}, {@code :wincmd q}</td><td>{@code quit}: the editor closes, as for {@code :q}</td></tr>
+     * </table>
+     *
+     * <p><b>Where a split goes</b> is Vim's rule: above, or to the left for {@code :vsplit}, unless
+     * {@code 'splitbelow'} or {@code 'splitright'} is set; {@code :aboveleft} and {@code :belowright}
+     * (and {@code :topleft}, {@code :botright}, taken as those two) say it for one command. A
+     * height or width given with the split ({@code :5split}) is not used: the new editor takes half.
+     *
+     * <p><b>Refused</b>, with a message: the tab commands ({@code :tabnew}, {@code :tabedit},
+     * {@code :tabfind}, {@code :tabonly}, {@code :tab split}, {@code Ctrl-W T}), since every editor
+     * tab is a window already and {@code :tabonly} would close the other editors' windows (E4);
+     * {@code :tabclose} with a number; and the splits that jump somewhere first, which need more
+     * than a split ({@code :stag}, {@code Ctrl-W ]}, {@code Ctrl-W F}). {@code :close} and
+     * {@code :tabclose} close the editor: {@code util/HostCommand}.
+     *
+     * <p>The keys are mapped only where the user's config maps none of them itself, and reach Neovim
+     * only when Ctrl+W does (the default on macOS; on Windows and Linux a tick under Ctrl Keys:
+     * docs/KEYBOARD.md). In a <em>side window</em> ({@code is_side_window} of {@link #WINDOWS}: a
+     * floating window the user entered), {@code :q}, {@code :close}, {@code Ctrl-W q} and
+     * {@code Ctrl-W c} are Neovim's again: they close that window, as in Neovim, not the editor.
+     *
+     * <p>A window opened some other way (a plug-in's {@code vim.cmd.split()}) is closed by the
+     * {@code WinNew} safety net of {@link #WINDOWS}. The module is
+     * {@code require('neovim4eclipse.window_commands')}; {@link #SPLIT_WINDOW} calls it.
      */
     static final String WINDOW_COMMANDS = """
             local windows = require('neovim4eclipse.windows')
-            local why = windows.REFUSED
             local host = require('neovim4eclipse.host_commands')
-            for _, name in ipairs({ 'split', 'vsplit', 'new', 'vnew', 'sview', 'sfind', 'sbuffer',
-                                    'tabnew', 'tabedit', 'tabfind', 'tabonly' }) do
-              host.refuse(name, function() return why end)
+            local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
+            local M = {}
+
+            for _, name in ipairs({ 'tabnew', 'tabedit', 'tabfind', 'tabonly' }) do
+              host.refuse(name, function() return windows.TABS end)
+            end
+            local JUMP_FIRST = 'a split that jumps to a tag is not supported; Ctrl-] goes to the declaration in this editor'
+            for _, name in ipairs({ 'stag', 'stjump', 'stselect' }) do
+              host.refuse(name, function() return JUMP_FIRST end)
             end
             -- p is the parsed command (nil for :Eclipse tabclose typed or mapped as such).
             host.refuse('tabclose', function(p)
@@ -1351,9 +1431,213 @@ final class LuaScripts {
             host.leave_to_neovim(function(name)
               return (name == 'quit' or name == 'close') and windows.is_side_window(0)
             end)
-            local function refused()
-              vim.api.nvim_echo({ { why } }, true, { err = true })
+
+            --- The side a split goes to: Vim's 'splitbelow' and 'splitright', unless a modifier of
+            --- the command says otherwise (mods as nvim_parse_cmd gives them; nil for a key).
+            local function side(vertical, mods)
+              local split = mods and mods.split or ''
+              local after
+              if split == 'aboveleft' or split == 'topleft' then
+                after = false
+              elseif split == 'belowright' or split == 'botright' then
+                after = true
+              elseif vertical then -- not `vertical and splitright or splitbelow`: false would fall through
+                after = vim.o.splitright
+              else
+                after = vim.o.splitbelow
+              end
+              if vertical then
+                return after and 'right' or 'left'
+              end
+              return after and 'below' or 'above'
             end
+
+            --- The words of a split showing `file` (a full path): this buffer when it is this
+            --- buffer's file or nil, a new untitled editor for 'new'.
+            local function split(vertical, mods, file)
+              local words = { 'window', 'split', side(vertical, mods) }
+              if file == 'new' then
+                words[#words + 1] = 'new'
+              elseif not file or canonical(file) == canonical(vim.api.nvim_buf_get_name(0)) then
+                words[#words + 1] = 'same'
+              else
+                words[#words + 1] = 'file'
+                words[#words + 1] = file
+              end
+              return words
+            end
+
+            --- A full path as :e's names are sent: with / only, $NAME not expanded again.
+            local function full(name)
+              return vim.fs.normalize(vim.fn.fnamemodify(name, ':p'), { expand_env = false })
+            end
+
+            --- The file of buffer `buf` for a split (:sbuffer 3, Ctrl-W ^), or nil and why (`what`
+            --- when there is no such buffer). Only a buffer with a file: an untitled editor's buffer
+            --- has a name and no file.
+            local function buffer_file(buf, what)
+              if not buf or buf <= 0 or not vim.api.nvim_buf_is_valid(buf) then
+                return nil, what
+              end
+              if buf == vim.api.nvim_get_current_buf() then
+                return vim.api.nvim_buf_get_name(0)
+              end
+              local name = vim.b[buf].neovim4eclipse_file or vim.api.nvim_buf_get_name(buf)
+              if name == '' or vim.fn.isabsolutepath(name) == 0 or name:match('^%a[%w+.-]*://') then
+                return nil, 'buffer ' .. buf .. ' has no file to open beside this one'
+              end
+              return full(name)
+            end
+
+            --- The words for :sbuffer: a buffer number, a name (as :buffer matches it), or none.
+            local function sbuffer(p)
+              local arg = p.args[1] or (p.range and p.range[1] and tostring(p.range[1]))
+              if not arg then
+                return split(p.mods.vertical, p.mods, nil)
+              end
+              local buf = tonumber(arg) or vim.fn.bufnr(arg)
+              local file, why = buffer_file(buf, tonumber(arg) and ('E86: Buffer ' .. arg .. ' does not exist')
+                  or ('E94: No matching buffer for ' .. arg))
+              if not file then
+                return nil, why
+              end
+              return split(p.mods.vertical, p.mods, file)
+            end
+
+            --- The words for a split of the file p names: found in 'path' when `find` (:sfind; a
+            --- name that is not there is Vim's E345), else read as :e reads its name. `empty` is
+            --- what a split without a name shows (nil: this buffer; 'new' for :new).
+            local function named(p, vertical, find, empty)
+              if #p.args == 0 then
+                return split(vertical, p.mods, empty)
+              end
+              if find then
+                local name = table.concat(p.args, ' ')
+                local found = vim.fn.findfile(name)
+                if found == '' then
+                  return nil, 'E345: Can\\'t find file "' .. name .. '" in path'
+                end
+                return split(vertical, p.mods, full(found))
+              end
+              local file, why = host.file_name(p.args)
+              if why then
+                return nil, why
+              end
+              return split(vertical, p.mods, file or empty) -- only ++opt words: as without a name
+            end
+
+            for name, how in pairs({
+              split = function(p) return named(p, p.mods.vertical, false, nil) end,
+              vsplit = function(p) return named(p, true, false, nil) end,
+              sview = function(p) return named(p, p.mods.vertical, false, nil) end,
+              sfind = function(p) return named(p, p.mods.vertical, true, nil) end,
+              new = function(p) return named(p, p.mods.vertical, false, 'new') end,
+              vnew = function(p) return named(p, true, false, 'new') end,
+              sbuffer = sbuffer,
+            }) do
+              host.translate(name, function(p)
+                if p.mods.tab and p.mods.tab >= 0 then
+                  return nil, windows.TABS -- :tab split
+                end
+                return how(p)
+              end)
+            end
+
+            -- Ctrl-W's control forms as the letters they stand for: Ctrl-W Ctrl-S is Ctrl-W s.
+            local CONTROL = { ['<C-^>'] = '^', ['<C-_>'] = '_', ['<C-]>'] = ']' }
+            for c in ('abcdefghijklmnopqrstuvwxyz'):gmatch('.') do
+              CONTROL['<C-' .. c .. '>'] = c
+            end
+            local ARROWS = { ['<Left>'] = 'h', ['<Down>'] = 'j', ['<Up>'] = 'k', ['<Right>'] = 'l', ['<BS>'] = 'h' }
+
+            --- The words for Ctrl-W followed by `key` with `count` (0: none), or nil and why, or
+            --- nothing for a key left to Neovim. Example: ('l', 2) gives { 'window', 'focus', 'l', '2' }.
+            function M.wincmd(key, count)
+              key = CONTROL[key] or ARROWS[key] or key
+              if key == 's' or key == 'S' then
+                return split(false, nil, nil)
+              elseif key == 'v' then
+                return split(true, nil, nil)
+              elseif key == 'n' then
+                return split(false, nil, 'new')
+              elseif key == '^' then
+                local buf = count > 0 and count or vim.fn.bufnr('#')
+                local file, why = buffer_file(buf, count > 0 and ('E86: Buffer ' .. count .. ' does not exist')
+                    or 'E23: No alternate file')
+                if not file then
+                  return nil, why
+                end
+                return split(false, nil, file)
+              elseif key == 'f' then
+                local name = vim.fn.expand('<cfile>')
+                if name == '' then
+                  return nil, 'E446: No file name under cursor'
+                end
+                local found = vim.fn.findfile(name)
+                if found == '' then
+                  return nil, 'E447: Can\\'t find file "' .. name .. '" in path'
+                end
+                return split(false, nil, full(found))
+              elseif #key == 1 and ('hjklwWtbp'):find(key, 1, true) then
+                return { 'window', 'focus', key, tostring(count) }
+              elseif key == 'o' then
+                return { 'window', 'only' }
+              elseif #key == 1 and ('=+-<>_|'):find(key, 1, true) then
+                return { 'window', 'size', key, tostring(count) }
+              elseif key == 'x' then
+                return { 'window', 'exchange', tostring(count) }
+              elseif key == 'r' or key == 'R' then
+                return { 'window', 'rotate', key == 'r' and 'down' or 'up', tostring(count) }
+              elseif key == 'q' or key == 'c' then
+                return { 'quit' }
+              elseif key == 'T' then
+                return nil, windows.TABS
+              elseif key == 'F' or key == ']' or key == 'g]' or key == '}' then
+                return nil, JUMP_FIRST
+              end
+            end
+
+            local function send(words)
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_command', words[1], false, vim.list_slice(words, 2))
+            end
+
+            --- Toggle Split Editor in an editor Neovim drives (SPLIT_WINDOW): :split, or :vsplit
+            --- when `vertical`.
+            function M.split(vertical)
+              send(split(vertical, nil, nil))
+            end
+
+            -- :wincmd {key}, :3wincmd l: the same as the key.
+            host.translate('wincmd', function(p)
+              local key = p.args[1] or ''
+              local byte = key:byte()
+              if #key == 1 and byte and byte < 32 then -- :exe "wincmd \\<C-W>": a control character
+                key = byte == 30 and '^' or byte == 31 and '_' or byte == 29 and ']' or string.char(byte + 96)
+              end
+              local count = p.count and p.count > 0 and p.count or (p.range and p.range[1]) or 0
+              local words, why = M.wincmd(key, count)
+              if not words and not why then
+                return nil, 'E474: Invalid argument' -- a key Eclipse has nothing for (:wincmd z)
+              end
+              return words, why
+            end)
+            -- :only (! changes nothing: no editor is closed).
+            host.translate('only', function()
+              return { 'window', 'only' }
+            end)
+            -- :resize [+-]N, :vertical resize N; :resize alone makes the window as high as it can be.
+            host.translate('resize', function(p)
+              local arg = p.args[1] or (p.range and p.range[1] and tostring(p.range[1])) or ''
+              local sign, number = arg:match('^([+-]?)(%d*)$')
+              if not sign then
+                return nil, 'E475: Invalid argument: ' .. arg
+              end
+              local key = p.mods.vertical and ({ ['+'] = '>', ['-'] = '<', [''] = '|' })[sign]
+                  or ({ ['+'] = '+', ['-'] = '-', [''] = '_' })[sign]
+              local count = number == '' and (sign == '' and 0 or 1) or tonumber(number)
+              return { 'window', 'size', key, tostring(count) }
+            end)
+
             --- Closes the editor, or in a side window, the window: the key as Neovim has it (the
             --- mapping is not recursive, so the key is Neovim's own there).
             local function quit(key)
@@ -1361,22 +1645,44 @@ final class LuaScripts {
                 return windows.is_side_window(0) and key or '<Cmd>Eclipse quit<CR>'
               end
             end
-            local keys = {
-              ['<C-w>s'] = refused, ['<C-w>S'] = refused, ['<C-w><C-s>'] = refused,
-              ['<C-w>v'] = refused, ['<C-w><C-v>'] = refused, ['<C-w>n'] = refused,
-              ['<C-w><C-n>'] = refused, ['<C-w>T'] = refused,
-            }
-            local quits = { '<C-w>q', '<C-w><C-q>', '<C-w>c' }
-            for lhs, rhs in pairs(keys) do
-              if vim.fn.maparg(lhs, 'n') == '' then
-                vim.keymap.set('n', lhs, rhs, { desc = 'Eclipse: one window per editor' })
+            local function key_command(key)
+              return function()
+                local words, why = M.wincmd(key, vim.v.count)
+                if words then
+                  send(words)
+                elseif why then
+                  vim.api.nvim_echo({ { why } }, true, { err = true })
+                end
               end
             end
-            for _, lhs in ipairs(quits) do
+            local keys = { 's', 'S', '<C-s>', 'v', '<C-v>', 'n', '<C-n>', '^', '<C-^>', 'f', '<C-f>',
+                           'h', 'j', 'k', 'l', '<C-h>', '<C-j>', '<C-k>', '<C-l>',
+                           '<Left>', '<Down>', '<Up>', '<Right>', '<BS>',
+                           'w', '<C-w>', 'W', 'p', '<C-p>', 't', '<C-t>', 'b', '<C-b>',
+                           'o', '<C-o>', '=', '+', '-', '<', '>', '_', '<C-_>', '|',
+                           'x', '<C-x>', 'r', '<C-r>', 'R', 'T', 'F', ']', '<C-]>', 'g]', '}' }
+            for _, key in ipairs(keys) do
+              local lhs = '<C-w>' .. key
+              if vim.fn.maparg(lhs, 'n') == '' then
+                vim.keymap.set('n', lhs, key_command(key), { desc = 'Eclipse: window command' })
+              end
+            end
+            for _, lhs in ipairs({ '<C-w>q', '<C-w><C-q>', '<C-w>c' }) do
               if vim.fn.maparg(lhs, 'n') == '' then
                 vim.keymap.set('n', lhs, quit(lhs), { expr = true, desc = 'Eclipse: close the editor' })
               end
             end
+            package.loaded['neovim4eclipse.window_commands'] = M
+            """;
+
+    /**
+     * Eclipse's <i>Toggle Split Editor</i> in an editor Neovim drives (argument: "1" for side by
+     * side, "0" for one above the other): Neovim sends the split back as {@code :vsplit} or
+     * {@code :split} would, so {@code 'splitright'} and {@code 'splitbelow'} decide the side
+     * ({@link #WINDOW_COMMANDS}; {@code editor/SplitEditorHandler}).
+     */
+    static final String SPLIT_WINDOW = """
+            require('neovim4eclipse.window_commands').split(select(1, ...) == '1')
             """;
 
     /**

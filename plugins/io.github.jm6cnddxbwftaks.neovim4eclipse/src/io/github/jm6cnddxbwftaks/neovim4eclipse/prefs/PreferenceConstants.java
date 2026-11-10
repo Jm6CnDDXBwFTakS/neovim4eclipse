@@ -30,6 +30,25 @@ public final class PreferenceConstants {
 
     public static final boolean SHOW_MENU_DEFAULT = true;
 
+    /**
+     * <b>Unsupported, with no control on any preference page:</b> whether Eclipse's <i>Toggle Split
+     * Editor</i> (Ctrl+_, Ctrl+{) makes Eclipse's own two halves of one editor in an editor Neovim
+     * drives, instead of a Vim split (a new editor stack, as {@code :split} and {@code :vsplit}
+     * make; docs/design/SPLITS.md). Kept in case the halves turn out to be wanted, so that offering
+     * the choice later takes one checkbox: the key, the default and the handler's check
+     * ({@code editor/SplitEditorHandler}) are already here, and a UI test keeps the halves working.
+     * It may change or go away until then, and the settings the plug-in promises to keep leave it
+     * out.
+     *
+     * <p>Read each time the command runs, from the preference store (no Neovim call), so a change
+     * applies at once. It can be set by hand (the workspace's
+     * {@code .metadata/.plugins/org.eclipse.core.runtime/.settings/io.github.jm6cnddxbwftaks.neovim4eclipse.prefs},
+     * an {@code .epf} import, a {@code plugin_customization.ini}): it only picks the kind of split.
+     */
+    public static final String ECLIPSE_SPLITS = "eclipseSplits";
+
+    public static final boolean ECLIPSE_SPLITS_DEFAULT = false;
+
     // ---- Which parts of the Vim status information the Eclipse status bar shows ----
 
     /** Show the mode ({@code INSERT}, {@code INSERT rec @q}). */

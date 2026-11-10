@@ -12,10 +12,25 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Vim's splits, as Eclipse editors: `:split`, `:vsplit`, `:new`, `:sbuffer`, `:sfind` and
+  `Ctrl-W s`, `v`, `n`, `^`, `f` put an editor beside this one, in an editor stack of its own, on
+  the side `'splitbelow'` and `'splitright'` say. `Ctrl-W h/j/k/l`, `w`, `p` and the others move
+  between the editors on screen, `Ctrl-W + - < > _ | =` and `:resize` size them, `Ctrl-W x`, `r`
+  and `R` swap them, and `Ctrl-W o` and `:only` gather them into one stack again, closing nothing.
+  `:wincmd` works too. See the README, "Splits".
+
 ### Changed
 
-- `:q` in one of two editors on a file (*Clone*) closes it without Eclipse's question about saving,
-  as Vim closes one of two windows: the changes stay in the other editor.
+- Eclipse's *Toggle Split Editor* (`Ctrl+_`, `Ctrl+{`) makes the same Vim split in an editor
+  Neovim drives, and `:only` when pressed again; other editors keep Eclipse's two halves.
+- On macOS, `Control+W` goes to Neovim by default, for Vim's window commands (Eclipse closes an
+  editor with `Cmd+W` there). On Windows and Linux `Ctrl+W` still closes the editor unless ticked
+  under *Ctrl Keys*.
+- The tab commands (`:tabnew`, `:tabonly`, `Ctrl-W T`) and `:stag` say why they are refused.
+- `:q` in one of two editors on a file (a split, *Clone*) closes it without Eclipse's question
+  about saving, as Vim closes one of two windows: the changes stay in the other editor.
 
 ## [0.2.11] - 2026-11-10
 

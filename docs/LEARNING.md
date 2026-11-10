@@ -121,6 +121,16 @@ the page holds *parts*, which are either *views* (Package Explorer, Console) or 
 Services are looked up from the workbench by interface: `getService(IContextService.class)`,
 `getService(IHandlerService.class)`, and so on.
 
+**The application model.** Since Eclipse 4 the window is also described by a model of plain
+objects, which the renderer draws: an editor is an `MPart`, a row of editor tabs an `MPartStack`,
+and the editor area (`MArea`) a sash container whose children sit side by side or one above the
+other, each with a weight (`containerData`). An editor's model part is a service of its site
+(`editor.getSite().getService(MPart.class)`). Change the model and the screen follows:
+`EModelService.insert(stack, beside, EModelService.RIGHT_OF, 0.5f)` puts a new stack beside
+another, `move(part, stack)` moves an editor into it, as dragging its tab does, and new weights move
+the sashes. `EditorTabs` (`gt`) and `EditorSplits` (`:split`, `Ctrl-W l`) work this way; see
+[SPLITS.md](design/SPLITS.md).
+
 ### 1.4 Text editors: four layers
 
 A text editor is several objects stacked on each other. Knowing which layer to talk to is most of
@@ -838,6 +848,29 @@ registry still holds a default, the editor's own background has the last word
 (`OverlayColors.searchMatch`), for dark editors outside Eclipse's dark theme. Design:
 [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
 
+### 3.2f `:vsplit`: a Vim split as an editor stack
+
+`test.txt` is open and attached; the user types `:vsplit` and Enter.
+
+1. Neovim's `CmdlineLeavePre` parses the line (`nvim_parse_cmd()`: `cmd = 'vsplit'`). Its
+   `translate` hook, from `LuaScripts.WINDOW_COMMANDS`, reads `'splitright'` (off: the left) and
+   sees no file, so the line becomes `:Eclipse window split left same`, which sends
+   `eclipse_command` with those words. No Neovim window opens.
+2. `HostCommand.of` makes it a `WINDOW` command, `util/WindowCommand` reads the words, and
+   `HostCommands` hands it to `EditorSplits.run` on the UI thread.
+3. `same` means a clone: *Window › Editor › Clone* opens a second editor on the file, in the same
+   stack, with the caret and scroll position copied. With the screen's redraw held, a new
+   `MPartStack` goes to the left of the old one (`EModelService.insert`), the clone moves into it,
+   and the old stack shows `test.txt` in front again.
+4. The clone is activated. The part listener attaches Neovim to it, with a window of its own on
+   the same buffer, its cursor at the copied caret (section 2.7a).
+5. `Ctrl-W l` (with `Ctrl+W` ticked) sends `window focus l 0`; `EditorSplits` draws the area as a
+   `util/WindowLayout` tree, which finds the editor to the right, level with the caret, and
+   activates it. `:q` in the clone closes it, and its emptied stack goes away by itself.
+
+Design: [SPLITS.md](design/SPLITS.md). Tests: `windows_spec.lua`, `WindowLayoutTest`,
+`SplitsEndToEndTest`.
+
 ### 3.3 Insert mode
 
 `i` goes to Neovim like any key; its `ModeChanged` notification switches the plug-in to "typing".
@@ -1061,6 +1094,14 @@ arguments it takes (unit-test it in `HostCommandTest`); Neovim's side gets the t
 `util/HostCommandRunner`, adding a method to its `Ide` interface if the IDE
 must do something new (unit-test that in `HostCommandRunnerTest` with the fake `Ide`); then implement
 the method in `editor/HostCommands` with Eclipse's API (`editor/EclipseFileCommands`, `EditorTabs`).
+
+**Carry out a command whose meaning Neovim must work out first.** Some commands need Neovim's
+state to mean anything (`:vsplit` reads `'splitright'`, `:sfind` searches `'path'`, `:sbuffer 3`
+names buffer 3's file). Register a `translate` hook for Neovim's name of it, as
+`LuaScripts.WINDOW_COMMANDS` does (`host.translate('sfind', function(p) ... end)`): it returns the
+words of the `:Eclipse` line to run instead (`{ 'window', 'split', 'above', 'file', path }`), or
+`nil` and Vim's error. Eclipse then gets plain words; read them in a small `util` record
+(`WindowCommand`) and test both sides: the words in a Lua spec, the reading in `tests/unit`.
 
 **Put a decision where it can be tested.** If logic does not need SWT or Eclipse, put it in `util`
 (or `core` for Neovim logic) and test it in `tests/unit`. That module compiles `util` and `core`

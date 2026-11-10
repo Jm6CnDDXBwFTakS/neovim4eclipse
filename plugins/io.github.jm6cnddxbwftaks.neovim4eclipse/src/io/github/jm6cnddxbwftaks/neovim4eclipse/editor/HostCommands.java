@@ -14,10 +14,12 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommandRunner;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowCommand;
 
 /**
  * Carries out the {@code :} commands that belong to the IDE (see {@link HostCommand} for the
- * list): files through {@link EclipseFileCommands}, tabs through {@link EditorTabs}.
+ * list): files through {@link EclipseFileCommands}, tabs through {@link EditorTabs}, Vim's windows
+ * (splits) through {@link EditorSplits}.
  *
  * <p>What each command does (save before close, a failed save keeps the file open, ...) is decided
  * by {@link HostCommandRunner}, which has no Eclipse code and is unit-tested; this class only
@@ -94,6 +96,11 @@ public final class HostCommands {
         @Override
         public void goToTab(TabNavigation.Action action, int count) {
             EditorTabs.go(editor, action, count);
+        }
+
+        @Override
+        public void window(WindowCommand command) {
+            EditorSplits.run(editor, command);
         }
     }
 

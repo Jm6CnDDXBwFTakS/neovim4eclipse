@@ -37,6 +37,7 @@ import java.util.TreeMap;
  *   <tr><td>{@code edit file}, {@code edit!}</td><td>{@link Kind#EDIT}</td><td>open a file; revert</td></tr>
  *   <tr><td>{@code enew}, {@code enew!}</td><td>{@link Kind#NEW_UNTITLED}</td><td>File &gt; New &gt; Untitled Text File</td></tr>
  *   <tr><td>{@code tabnext}, {@code tabprevious}, ...</td><td>{@code TAB_*}</td><td>switch editor tabs</td></tr>
+ *   <tr><td>{@code window ...} (from {@code :split}, {@code :only}, {@code Ctrl-W l}, ...)</td><td>{@link Kind#WINDOW}</td><td>split, move between and size the editors ({@link WindowCommand})</td></tr>
  * </table>
  *
  * <p>Writes ({@code :w}, {@code :update}) are not in the table: Neovim runs them, and its write
@@ -107,7 +108,15 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         /** {@code :tabfirst}, {@code :tabrewind}. */
         TAB_FIRST,
         /** {@code :tablast}. */
-        TAB_LAST
+        TAB_LAST,
+        /**
+         * Vim's window commands ({@code :split}, {@code :vsplit}, {@code :new}, {@code :only},
+         * {@code :resize}, {@code :wincmd}, the {@code Ctrl-W} keys), where each window is an editor
+         * and each split an editor stack (docs/design/SPLITS.md). Neovim sends them as
+         * {@code :Eclipse window} with words it has worked out ({@link WindowCommand}): no Vim
+         * command has that name, so a typed line never arrives as one by mistake.
+         */
+        WINDOW
     }
 
     /**
@@ -162,6 +171,9 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
             return null;
         }
         Kind kind = entry.kind() == Kind.QUIT && !list.isEmpty() ? Kind.BUFFER_DELETE : entry.kind();
+        if (kind == Kind.WINDOW && WindowCommand.parse(list) == null) {
+            return null; // :Eclipse window typed by hand, with words Eclipse does not know
+        }
         return new HostCommand(kind, bang, list, entry.writesUnchanged());
     }
 
@@ -207,6 +219,11 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         return String.join(" ", args.stream().filter(word -> !word.startsWith("++")).toList());
     }
 
+    /** The window command of a {@link Kind#WINDOW}, or {@code null} for any other kind. */
+    public WindowCommand window() {
+        return kind == Kind.WINDOW ? WindowCommand.parse(args) : null;
+    }
+
     /** The tab count ({@code :tabn 3}): the number, or 0 when there is none. */
     public int count() {
         return args.isEmpty() ? 0 : Integer.parseInt(args.get(0));
@@ -246,6 +263,7 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         table.put("tabfirst", new Entry(Kind.TAB_FIRST, Arguments.NONE, false));
         table.put("tabrewind", new Entry(Kind.TAB_FIRST, Arguments.NONE, false));
         table.put("tablast", new Entry(Kind.TAB_LAST, Arguments.NONE, false));
+        table.put("window", new Entry(Kind.WINDOW, Arguments.ANY, false));
         return Map.copyOf(table);
     }
 }

@@ -76,11 +76,11 @@ The Eclipse side:
   gives the rules. There is no per-attach folder script. A folder that does not exist yet (a new
   file in a missing folder, written with `:w ++p`) is skipped: `:lcd` to it failed the open, and
   with it the attach (`NewFileEndToEndTest`).
-- **Window commands.** `:close` and `:tabclose` are host commands (`QUIT`). `LuaScripts.WINDOW_COMMANDS`
-  refuses `:split`, `:vsplit`, `:new`, `:vnew`, `:sview`, `:sfind`, `:sbuffer`, `:tabnew`,
-  `:tabedit`, `:tabfind` and `:tabonly`, and maps `Ctrl-W s`, `S`, `Ctrl-S`, `v`, `Ctrl-V`, `n`,
-  `Ctrl-N`, `T` (refused) and `Ctrl-W q`, `Ctrl-Q`, `c` (`:Eclipse quit`), unless the user's config
-  maps them. `:tabclose` with a number or count is refused (Neovim would close another editor's
+- **Window commands.** `:close` and `:tabclose` are host commands (`QUIT`). Vim's splits
+  (`:split`, `:vsplit`, `:new`, `:sbuffer`, the `Ctrl-W` keys, `:only`, `:resize`, `:wincmd`) are
+  Eclipse editors in stacks of their own, each with its own Neovim window as any editor
+  ([SPLITS.md](SPLITS.md)). `LuaScripts.WINDOW_COMMANDS` refuses `:tabnew`, `:tabedit`, `:tabfind`
+  and `:tabonly`, and maps the `Ctrl-W` keys, unless the user's config maps them. `:tabclose` with a number or count is refused (Neovim would close another editor's
   window). In a *side window* (floating, such as hover documentation the user entered;
   `is_side_window`), `:q`, `:close` and the `Ctrl-W q` / `c` keys are Neovim's again, through the
   host commands' `leave_to_neovim` hook, and close that window, not the editor.
@@ -103,14 +103,14 @@ The Eclipse side:
 | Layout | A tabpage per editor, `'showtabline'` 0 | One full window per tab, so the viewport's size and scroll sync work unchanged and `H`/`M`/`L` and `Ctrl-D` match the editor; window commands stay inside the editor's tab (E1). |
 | `Ctrl-O` across files | The window travels | History stays continuous, as with one window. Per-editor lists bounce between editors and cannot be repaired (E2). |
 | `:close`, `<C-w>q`, `:tabclose` | Close the editor, like `:q`: Eclipse asks about unsaved changes, `:close!` discards them | In Vim, closing the window closes the view; here the editor is the view. Closing only the window would leave the editor without one, and the safety net would reopen it at once. Vim's `:close` keeps a modified buffer hidden; Eclipse cannot keep an unsaved document without an editor, so asking is the safe equivalent, as for `:bd`. |
-| `:split`, `:vsplit`, `:new`, `:tabnew`, `:tabonly` | Refused with a message naming Eclipse's split editor and *Window → Editor → Clone* | A second Neovim window would be invisible and take the keys; `:tabonly` would delete every other editor's window (E4). |
+| `:split`, `:vsplit`, `:new` | A new Eclipse editor in a stack beside this one, with its own window ([SPLITS.md](SPLITS.md)) | A second Neovim window in the editor's tab would be invisible and take the keys (E4); an editor beside this one is what a Vim split shows. |
+| `:tabnew`, `:tabonly` | Refused, with a message | Every editor tab is a window already; `:tabonly` would delete every other editor's window (E4). |
 | Two editors on one file | A window each, one shared buffer | Neovim's model, and Eclipse's agrees on every point: shared text, undo and marks; cursor, column memory, scroll position, folds, window options and jump history per editor. Rejected: one shared window (the editors fight over one cursor) and a buffer per editor (separate undo and marks). |
 | What travels on `Ctrl-O` | The whole window | Location list and jump history included; the two editors swap windows (E2). |
 | Untitled documents' folder | The selected project's root, else the folder of the editor attached before, else the home folder | See section 3. |
 | After Restart Neovim | Windows are rebuilt lazily, each at its editor's next attach | A restarted Neovim does not own the old window ids. |
 
-**Not done:** per-editor grid sizes (`ext_multigrid`, see section 4); mapping Vim's splits onto
-Eclipse editors (Toggle Split Editor, Clone); honoring a `'showtabline'` the user set
+**Not done:** per-editor grid sizes (`ext_multigrid`, see section 4); honoring a `'showtabline'` the user set
 (`nvim_get_option_info2().was_set` would tell), which the plug-in overrides with 0.
 
 ## 2. The experiments
@@ -234,10 +234,10 @@ that Back reopened (fights Eclipse).
 | Command | Result with a tab per editor | Handling |
 |---|---|---|
 | `:close`, `<C-w>q`, `:tabclose` | The editor's tab closes; Neovim enters another editor's window; the buffer stays listed (E7). | Host command: close the editor |
-| `:split`, `:vsplit`, `<C-w>s` | A hidden second window in the tab (`WinNew`, E7). | Refuse |
-| `:new`, `:tabnew` | A new empty buffer and window (and tab). | Refuse |
+| `:split`, `:vsplit`, `<C-w>s` | A hidden second window in the tab (`WinNew`, E7). | An Eclipse editor in a new stack, with a window of its own ([SPLITS.md](SPLITS.md)) |
+| `:new`, `:tabnew` | A new empty buffer and window (and tab). | `:new`: a new untitled editor beside this one ([SPLITS.md](SPLITS.md)); `:tabnew`: refuse |
 | `:tabonly` | Every other tab closed, home window included. | Refuse |
-| `:only`, `<C-w>o`, `<C-w>w`, `:windo` | No effect (one window per tab). | Leave alone |
+| `:only`, `<C-w>o`, `<C-w>w`, `:windo` | No effect (one window per tab). | Carried out on Eclipse's editors ([SPLITS.md](SPLITS.md)); `:windo` left alone |
 | `:bufdo`, `:argdo` | The editor's window ends on the last buffer. | Follow, as any buffer change |
 | `:e name` of a file that has an editor | Neovim's `:edit` would enter its buffer in this window. | Neovim enters its buffer with `:buffer` (`LuaScripts.HOST_COMMANDS`, `open_document_edited`; `:buffer`, not the `:edit` as typed, since the paths rule found the buffer and Neovim on Windows does not match a junction name for a file not on disk yet): the window travels as for `:b` (E2), so `:e #` toggles and `Ctrl-O` goes back, as in one Vim window. Rejected: letting Eclipse switch editors, where each kept its own `#`, so a second `:e #` found none. A file with no editor, `:e!`, `:e +cmd`, `:e ++opt` and `:e %` stay Eclipse's. |
 

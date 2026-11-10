@@ -1442,6 +1442,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * Eclipse's <i>Toggle Split Editor</i> as a Vim split ({@link LuaScripts#SPLIT_WINDOW}): Neovim
+     * works out the side from {@code 'splitright'} or {@code 'splitbelow'} and sends the split back
+     * as {@code :Eclipse window}, which the attached editor carries out. In order with the keys.
+     *
+     * @param sideBySide {@code :vsplit}; {@code false} for {@code :split}
+     */
+    public void splitWindowAsync(boolean sideBySide) {
+        submit("split", Level.WARNING,
+                () -> await(api.execLua(LuaScripts.SPLIT_WINDOW, List.of(sideBySide ? "1" : "0"))));
+    }
+
+    /**
      * Evaluates a Vim expression ({@code bufnr('other.txt')}, {@link LuaScripts#EVAL}) and passes its
      * value as text, or the error message, to {@code onResult}, on a session thread. Not typed: it
      * asks Neovim something, so it belongs in no macro or history.

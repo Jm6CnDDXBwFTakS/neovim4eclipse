@@ -19,7 +19,7 @@ map to Eclipse commands instead (section 6).
 meaning beside it, and *Select All* / *Deselect All* per column:
 
 ```
-Ctrl+W  [ ] window commands        [x] delete word before the cursor
+Ctrl+W  [ ] window commands: splits  [x] delete word before the cursor
 ```
 
 The 26 rows are one column: two halves side by side measured 950 px, wider than the Preferences

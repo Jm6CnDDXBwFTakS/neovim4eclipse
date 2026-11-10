@@ -16,6 +16,7 @@ and [KEYBOARD.md](../KEYBOARD.md)).
 | [FOLDING.md](FOLDING.md) | Folding with `zo`, `zc` and the other `z` commands, mirroring Eclipse's folds into Neovim |
 | [VIEWPORT.md](VIEWPORT.md) | Neovim's window follows the editor's size and scroll position, so `H`, `L`, `Ctrl-D`, `zz` act on what is on screen |
 | [WINDOWS.md](WINDOWS.md) | One Neovim window per Eclipse editor, each alone in a hidden tabpage: per-editor cursors, views, folds and jump history; `Ctrl-O` takes the window along |
+| [SPLITS.md](SPLITS.md) | Vim's splits as Eclipse editor stacks: `:split` and `Ctrl-W s` put an editor beside this one, `Ctrl-W h/j/k/l`, the sizes and `:only` work on the editor area, Toggle Split Editor makes the same split |
 | [BUFFER_NUMBERS.md](BUFFER_NUMBERS.md) | A closed file keeps its buffer number, marks and last position, as with Vim's `:bd`; Neovim moving into a file without an editor opens it; Neovim reads no project file itself |
 | [STATUS_BAR.md](STATUS_BAR.md) | The status bar's three labels: the mode's names (lualine's), widths in characters, the cap, Neovim fitting the statusline |
 | [DOWNLOAD_NEOVIM.md](DOWNLOAD_NEOVIM.md) | *Get Neovim*: download the pinned Neovim release or install it from a file, check its SHA-256, unpack it into `neovim/<platform code>/`; Eclipse's proxy setting; the plug-in folder layout |

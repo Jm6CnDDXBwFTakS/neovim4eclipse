@@ -371,13 +371,232 @@ local function windows_in_tab()
   return #vim.api.nvim_tabpage_list_wins(0)
 end
 
-t.test(':split, :vsplit, :tabnew and :tabonly are refused with Eclipse\'s way to do it', function()
+--- A full path as Eclipse gets it (vim.fs.normalize'd: / only; see host_commands_spec.lua).
+local function sent_path(path)
+  return vim.fs.normalize(path, { expand_env = false })
+end
+
+--- The words of each window command sent since the last t.forget(), as { name, args... }.
+local function sent_windows()
+  local found = {}
+  for _, c in ipairs(t.sent('eclipse_command')) do
+    found[#found + 1] = vim.list_extend({ c[1] }, c[3])
+  end
+  return found
+end
+
+-- Vim's rule for the side: above and left, unless 'splitbelow' or 'splitright', or a modifier.
+t.test(':split, :vsplit, :new and :vnew go to Eclipse, on the side Vim would put them', function()
+  commands()
+  vim.o.splitbelow, vim.o.splitright = false, false
+  for _, line in ipairs({ 'split', 'vs', 'new', 'vnew', 'vertical new', 'belowright split', 'botright vsplit' }) do
+    t.type(':' .. line .. '<CR>')
+  end
+  vim.o.splitbelow, vim.o.splitright = true, true
+  for _, line in ipairs({ 'sp', 'vsp', 'aboveleft split', 'topleft vnew' }) do
+    t.type(':' .. line .. '<CR>')
+  end
+  t.eq({
+    { 'window', 'split', 'above', 'same' },
+    { 'window', 'split', 'left', 'same' },
+    { 'window', 'split', 'above', 'new' },
+    { 'window', 'split', 'left', 'new' },
+    { 'window', 'split', 'left', 'new' },
+    { 'window', 'split', 'below', 'same' },
+    { 'window', 'split', 'right', 'same' },
+    { 'window', 'split', 'below', 'same' },
+    { 'window', 'split', 'right', 'same' },
+    { 'window', 'split', 'above', 'same' },
+    { 'window', 'split', 'left', 'new' },
+  }, sent_windows())
+  t.eq(1, windows_in_tab(), 'Neovim opened no window itself')
+  t.eq('topleft vnew', vim.fn.histget(':', -1), 'the history keeps the line as typed')
+  t.forget()
+  t.type('@:')
+  t.eq({ { 'window', 'split', 'left', 'new' } }, sent_windows(), '@: repeats it')
+end)
+
+t.test('a split of a file sends its full path; of this buffer\'s own file, a clone', function()
+  commands()
+  local _, name = t.document('a.txt', { 'a' })
+  t.forget()
+  vim.o.splitbelow = false
+  t.type(':split b.txt<CR>')
+  t.type(':sview my\\ b.txt<CR>')
+  t.type(':split %<CR>')
+  t.type(':split ++ff=unix<CR>')
+  t.type(':new c.txt<CR>')
+  t.eq({
+    { 'window', 'split', 'above', 'file', sent_path(vim.fn.getcwd() .. '/b.txt') },
+    { 'window', 'split', 'above', 'file', sent_path(vim.fn.getcwd() .. '/my b.txt') },
+    { 'window', 'split', 'above', 'same' },
+    { 'window', 'split', 'above', 'same' },
+    { 'window', 'split', 'above', 'file', sent_path(vim.fn.getcwd() .. '/c.txt') },
+  }, sent_windows())
+  t.same_file(name, vim.api.nvim_buf_get_name(0), 'still in a.txt: Eclipse opens the new editor')
+  vim.v.errmsg = ''
+  t.forget()
+  t.type(':split +10 b.txt<CR>')
+  t.ok(vim.v.errmsg:find('+cmd is not supported', 1, true), vim.v.errmsg)
+  t.eq({}, sent_windows())
+end)
+
+t.test(':sfind looks in \'path\', as Vim does', function()
+  commands()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  vim.fn.writefile({ 'x' }, dir .. '/found.txt')
+  vim.o.path = dir
+  t.type(':sfind found.txt<CR>')
+  t.eq({ { 'window', 'split', 'above', 'file', sent_path(dir .. '/found.txt') } }, sent_windows())
+  t.forget()
+  vim.v.errmsg = ''
+  t.type(':sfind missing.txt<CR>')
+  t.ok(vim.v.errmsg:find('E345', 1, true), vim.v.errmsg)
+  t.eq({}, sent_windows())
+end)
+
+t.test(':sbuffer sends the buffer\'s file; a buffer without one is refused', function()
+  commands()
+  local other, other_name = t.document('other.txt', { 'o' })
+  local _, name = t.document('a.txt', { 'a' })
+  local scratch = buffer(1)
+  t.forget()
+  t.type(':sbuffer ' .. other .. '<CR>')
+  t.type(':sb other<CR>') -- by name, as :buffer matches it
+  t.type(':sbuffer<CR>')
+  t.type(':sbuffer ' .. vim.api.nvim_get_current_buf() .. '<CR>')
+  t.eq({
+    { 'window', 'split', 'above', 'file', sent_path(other_name) },
+    { 'window', 'split', 'above', 'file', sent_path(other_name) },
+    { 'window', 'split', 'above', 'same' },
+    { 'window', 'split', 'above', 'same' },
+  }, sent_windows())
+  t.forget()
+  vim.v.errmsg = ''
+  t.type(':sbuffer 999<CR>')
+  t.ok(vim.v.errmsg:find('E86', 1, true), vim.v.errmsg)
+  t.type(':sbuffer ' .. scratch .. '<CR>')
+  t.ok(vim.v.errmsg:find('has no file', 1, true), vim.v.errmsg)
+  t.eq({}, sent_windows())
+  t.same_file(name, vim.api.nvim_buf_get_name(0))
+end)
+
+-- A buffer named after a cloned repository's file with a line break in its name: the :Eclipse line
+-- would end at the break, and the rest of the name would run as a command.
+t.test('a split of a name with a line break is refused, and nothing of it runs', function()
+  if vim.fn.has('win32') == 1 then
+    t.skip('Windows names cannot hold a line break')
+  end
+  commands()
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. '/x' .. string.char(10) .. 'lua vim.g.ran = 1')
+  t.forget()
+  vim.v.errmsg = ''
+  t.type(':sbuffer ' .. buf .. '<CR>')
+  t.ok(vim.v.errmsg:find('line break', 1, true), vim.v.errmsg)
+  t.eq(nil, vim.g.ran, 'the rest of the name did not run')
+  t.eq({}, sent_windows())
+end)
+
+t.test('the Ctrl-W keys send their window command, with the count', function()
+  commands()
+  vim.o.splitbelow, vim.o.splitright = false, false
+  for _, keys in ipairs({ '<C-w>s', '<C-w>v', '<C-w>n', '<C-w>l', '3<C-w>w', '<C-w><C-j>', '<C-w><Up>',
+                          '<C-w>W', '<C-w>t', '<C-w>b', '<C-w>p', '<C-w>o', '5<C-w>+', '<C-w>-', '<C-w>=',
+                          '2<C-w><', '<C-w>>', '<C-w>_', '10<C-w>|', '<C-w>x', '<C-w>r', '2<C-w>R' }) do
+    t.type(keys)
+  end
+  t.eq({
+    { 'window', 'split', 'above', 'same' },
+    { 'window', 'split', 'left', 'same' },
+    { 'window', 'split', 'above', 'new' },
+    { 'window', 'focus', 'l', '0' },
+    { 'window', 'focus', 'w', '3' },
+    { 'window', 'focus', 'j', '0' },
+    { 'window', 'focus', 'k', '0' },
+    { 'window', 'focus', 'W', '0' },
+    { 'window', 'focus', 't', '0' },
+    { 'window', 'focus', 'b', '0' },
+    { 'window', 'focus', 'p', '0' },
+    { 'window', 'only' },
+    { 'window', 'size', '+', '5' },
+    { 'window', 'size', '-', '0' },
+    { 'window', 'size', '=', '0' },
+    { 'window', 'size', '<', '2' },
+    { 'window', 'size', '>', '0' },
+    { 'window', 'size', '_', '0' },
+    { 'window', 'size', '|', '10' },
+    { 'window', 'exchange', '0' },
+    { 'window', 'rotate', 'down', '0' },
+    { 'window', 'rotate', 'up', '2' },
+  }, sent_windows())
+  t.eq(1, windows_in_tab())
+  t.forget()
+  t.type('<C-w>q')
+  t.type('<C-w>c')
+  t.eq({ { 'quit', false, {} }, { 'quit', false, {} } }, t.sent('eclipse_command'))
+end)
+
+t.test('Ctrl-W ^ splits onto the alternate file, Ctrl-W f onto the file under the cursor', function()
+  commands()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  vim.fn.writefile({ 'x' }, dir .. '/named.txt')
+  local _, first = t.document('first.txt', { 'f' })
+  t.document('second.txt', { 'named.txt' })
+  vim.o.path = dir
+  t.forget()
+  t.type('<C-w>^')
+  t.type('gg<C-w>f')
+  t.eq({
+    { 'window', 'split', 'above', 'file', sent_path(first) },
+    { 'window', 'split', 'above', 'file', sent_path(dir .. '/named.txt') },
+  }, sent_windows())
+  t.forget()
+  vim.v.errmsg = ''
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'missing.txt' })
+  t.type('gg<C-w>f')
+  t.ok(vim.v.errmsg:find('E447', 1, true), vim.v.errmsg)
+  t.eq({}, sent_windows())
+end)
+
+t.test(':wincmd, :only and :resize send the same as the keys', function()
+  commands()
+  for _, line in ipairs({ 'wincmd l', '2wincmd w', 'only', 'only!', 'resize +5', 'resize -2', 'resize 10',
+                          'resize', 'vertical resize -3', 'vertical resize 80', 'wincmd <C-v><C-w>' }) do
+    t.type(':' .. line .. '<CR>')
+  end
+  t.eq({
+    { 'window', 'focus', 'l', '0' },
+    { 'window', 'focus', 'w', '2' },
+    { 'window', 'only' },
+    { 'window', 'only' },
+    { 'window', 'size', '+', '5' },
+    { 'window', 'size', '-', '2' },
+    { 'window', 'size', '_', '10' },
+    { 'window', 'size', '_', '0' },
+    { 'window', 'size', '<', '3' },
+    { 'window', 'size', '|', '80' },
+    { 'window', 'focus', 'w', '0' }, -- a typed Ctrl-W character, as :wincmd takes it
+  }, sent_windows())
+  t.forget()
+  t.type(':wincmd q<CR>')
+  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+end)
+
+t.test('tab commands and splits that jump to a tag are refused, with why', function()
   commands()
   local tabs = #vim.api.nvim_list_tabpages()
-  for _, line in ipairs({ 'split', 'vs', 'new', 'tabnew', 'tabe x.txt', 'tabonly', 'tab split' }) do
+  for _, keys in ipairs({ ':tabnew<CR>', ':tabe x.txt<CR>', ':tabonly<CR>', ':tab split<CR>', '<C-w>T' }) do
     vim.v.errmsg = ''
-    t.type(':' .. line .. '<CR>')
-    t.ok(vim.v.errmsg:find('Toggle Split Editor', 1, true), line .. ': ' .. vim.v.errmsg)
+    t.type(keys)
+    t.ok(vim.v.errmsg:find('editor tabs are the windows', 1, true), keys .. ': ' .. vim.v.errmsg)
+  end
+  for _, keys in ipairs({ ':stag main<CR>', '<C-w>]', '<C-w><C-]>', '<C-w>F' }) do
+    vim.v.errmsg = ''
+    t.type(keys)
+    t.ok(vim.v.errmsg:find('jumps to a tag', 1, true), keys .. ': ' .. vim.v.errmsg)
   end
   t.eq(1, windows_in_tab(), 'no second window')
   t.eq(tabs, #vim.api.nvim_list_tabpages(), 'no tab opened or closed')
@@ -392,15 +611,12 @@ t.test(':close and :tabclose go to Eclipse, which closes the editor', function()
   t.eq(2, #vim.api.nvim_list_tabpages(), 'Neovim closed nothing itself')
 end)
 
-t.test('Ctrl-W s and v are refused, Ctrl-W q and c close the editor', function()
+t.test('Toggle Split Editor asks for :split or :vsplit, on the side the options say', function()
   commands()
-  vim.v.errmsg = ''
-  t.type('<C-w>s')
-  t.type('<C-w>v')
-  t.eq(1, windows_in_tab())
-  t.type('<C-w>q')
-  t.type('<C-w>c')
-  t.eq({ { 'quit', false, {} }, { 'quit', false, {} } }, t.sent('eclipse_command'))
+  vim.o.splitbelow, vim.o.splitright = true, false
+  t.run('SPLIT_WINDOW', '0')
+  t.run('SPLIT_WINDOW', '1')
+  t.eq({ { 'window', 'split', 'below', 'same' }, { 'window', 'split', 'left', 'same' } }, sent_windows())
 end)
 
 t.test("a Ctrl-W key the user's config maps is left to it", function()

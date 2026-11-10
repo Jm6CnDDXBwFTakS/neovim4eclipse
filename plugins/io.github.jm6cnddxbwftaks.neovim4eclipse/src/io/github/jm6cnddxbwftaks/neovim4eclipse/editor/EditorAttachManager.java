@@ -226,6 +226,9 @@ public final class EditorAttachManager {
                 // A tab click or F3 forgets the Ctrl-O steps Ctrl-I would undo (NavigationHistorySteps).
                 NavigationHistorySteps.afterSwitch(partRef.getPage(), NavigationHistorySteps.trailOf(session));
             }
+            if (partRef instanceof IEditorReference eref) {
+                EditorSplits.activated(eref.getEditor(false)); // the editor before is Ctrl-W p's
+            }
             maybeAutoAttach(partRef);
             ToggleButtonRefresh.request(); // the button is about the editor in front, Neovim or not
         }

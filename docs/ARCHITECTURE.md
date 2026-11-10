@@ -245,8 +245,11 @@ document is shown in the *home window*, the one Neovim starts with, which only t
 window closed in Neovim by itself sends `eclipse_window_closed` (`WinClosed`) and is opened again
 at its editor's next show; closing an editor closes its window (`closeWindowAsync`) before its
 buffer may be unloaded. Vim's window commands: `:close` and `:tabclose` are host commands that close
-the editor (`util/HostCommand`, `QUIT`); `LuaScripts.WINDOW_COMMANDS` refuses the split and tab
-commands through the host commands' `refuse` hook and maps the `Ctrl-W` keys; a `WinNew` safety
+the editor (`util/HostCommand`, `QUIT`); Vim's splits are Eclipse editors in stacks of their own
+(`:split`, the `Ctrl-W` keys, `:only`: `LuaScripts.WINDOW_COMMANDS` sends them through the host
+commands' `translate` hook as `:Eclipse window`, and `editor/EditorSplits` does them to the editor
+area; [design/SPLITS.md](design/SPLITS.md)); the tab commands are refused through the `refuse`
+hook; a `WinNew` safety
 net closes any other window that is not the plug-in's, floating or special, and the quickfix,
 location list and preview windows, which Eclipse cannot show (the quickfix and location list
 windows are then shown the Eclipse way, section 8); in a floating window the user

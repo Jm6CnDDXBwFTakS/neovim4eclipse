@@ -30,6 +30,7 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.editors.text.IEncodingSupport;
 import org.eclipse.ui.ide.FileStoreEditorInput;
 import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.wizards.IWizardDescriptor;
 
@@ -426,18 +427,30 @@ public final class EclipseFileCommands {
      * ({@code ProjectFileEditors}) and a new file does ({@link NewFiles#internalOr}).
      */
     private static void open(IWorkbenchPage page, Path file) {
+        open(page, file, IWorkbenchPage.MATCH_INPUT);
+    }
+
+    /**
+     * {@link #open(IWorkbenchPage, Path)} with Eclipse's rule for reusing an editor: with
+     * {@code MATCH_INPUT} an editor that has the file open already comes to the front, as for
+     * {@code :e}; with {@code MATCH_NONE} the file gets a new editor even then, as a Vim window of
+     * its own does ({@code :split other.txt}; see {@link EditorSplits}).
+     *
+     * @return the editor that shows the file, or {@code null} if it could not be opened (logged)
+     */
+    static IEditorPart open(IWorkbenchPage page, Path file, int matchFlags) {
         try {
             IFile candidate = NewFiles.workspaceFileAt(file);
             if (candidate != null && candidate.isAccessible()) {
                 // By the file's content type as its project has it, not by its name alone (NewFiles.internalOr).
-                IDE.openEditor(page, candidate, NewFiles.internalOr(IDE.getEditorDescriptor(candidate, true, false),
-                        candidate), true);
-                return;
+                String editorId = NewFiles.internalOr(IDE.getEditorDescriptor(candidate, true, false), candidate);
+                return page.openEditor(new FileEditorInput(candidate), editorId, true, matchFlags);
             }
-            page.openEditor(new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri())),
-                    NewFiles.editorIdFor(file.getFileName().toString()), true);
+            return page.openEditor(new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri())),
+                    NewFiles.editorIdFor(file.getFileName().toString()), true, matchFlags);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not open " + file, e);
+            return null;
         }
     }
 

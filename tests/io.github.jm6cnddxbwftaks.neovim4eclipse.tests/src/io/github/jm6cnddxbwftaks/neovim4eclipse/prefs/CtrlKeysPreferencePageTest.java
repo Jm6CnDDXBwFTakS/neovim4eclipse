@@ -82,7 +82,7 @@ class CtrlKeysPreferencePageTest {
     @Test
     void eachRowSaysWhatTheKeyDoesInBothModes() {
         List<String> texts = buttons(SWT.CHECK).stream().map(Button::getText).toList();
-        assertTrue(texts.contains("window commands") && texts.contains("delete the word before"), texts.toString());
+        assertTrue(texts.contains("window commands: splits") && texts.contains("delete the word before"), texts.toString());
     }
 
     @Test
@@ -92,7 +92,7 @@ class CtrlKeysPreferencePageTest {
         page.performDefaults();
         page.performOk();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertEquals(VimCtrlKeys.toNeovimByDefault(letter), store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)),
+            assertEquals(VimCtrlKeys.toNeovimByDefault(letter, PlatformUtil.isMac()), store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)),
                     "normal " + letter);
             assertEquals(VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()),
                     store.getBoolean(PreferenceConstants.ctrlKeyInInsert(letter)), "insert " + letter);

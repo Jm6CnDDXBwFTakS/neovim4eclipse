@@ -73,6 +73,11 @@ class HostCommandRunnerTest {
         public void goToTab(TabNavigation.Action action, int count) {
             calls.add("tab " + action + " " + count);
         }
+
+        @Override
+        public void window(WindowCommand command) {
+            calls.add("window " + command.action() + " " + command.key() + " " + command.count());
+        }
     }
 
     private final FakeIde ide = new FakeIde();
@@ -266,14 +271,15 @@ class HostCommandRunnerTest {
 
         // Every kind of command: none may touch the IDE from the calling thread.
         for (String command : List.of("wall", "quit", "qall", "wq", "xall", "edit x.txt", "tabnext",
-                "tabprevious", "tabfirst", "tablast")) {
+                "tabprevious", "tabfirst", "tablast", "window focus l 2")) {
             later.run(command(command));
         }
         assertEquals(List.of(), ide.calls, "nothing happens until the UI thread runs the work");
 
         queued.forEach(Runnable::run);
         assertEquals(List.of("saveAll", "close", "closeAll", "save", "close!", "saveAll", "closeAll!",
-                "edit [x.txt]", "tab NEXT 0", "tab PREVIOUS 0", "tab FIRST 0", "tab LAST 0"), ide.calls,
+                "edit [x.txt]", "tab NEXT 0", "tab PREVIOUS 0", "tab FIRST 0", "tab LAST 0", "window FOCUS l 2"),
+                ide.calls,
                 "in order, and a save and its close in one piece of work");
     }
 }

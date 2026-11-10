@@ -37,6 +37,7 @@ edges, see [Known limitations](#known-limitations).
 | Displaying text, caret, visual selection, status line | Motions, text objects, operators, macros, marks, registers, counts, undo |
 | Typing in **insert/replace** mode (so content assist and IME keep working) | Everything in normal / visual / operator-pending mode, the mouse included (see [Mouse](#mouse)) |
 | File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:bd`, `:e file`, `:e!`, `:enew`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
+| Vim's windows as editors: `:split`, `:vsplit` and `Ctrl-W s` put an editor beside this one, in an editor stack of its own; `Ctrl-W h/j/k/l` move between them, `Ctrl-W +` sizes them, `:only` gathers them again (see [Splits](#splits-split-vsplit-ctrl-w)) | Where a split goes (`'splitbelow'`, `'splitright'`), which file it shows, the counts |
 | `gd` and `Ctrl-]` (Open Declaration), `K` (hover information), and Neovim's language keys `grn` (Rename), `gra` (Quick Fix), `grr` (References), `gri` (Open Implementation), `grt` (Open Declared Type), `gO` (Quick Outline), through the editor's own commands (see [docs/KEYBOARD.md](docs/KEYBOARD.md)) | Counts and the `g` prefix of those keys |
 | The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
@@ -416,6 +417,55 @@ send the `wheel count=… detail=…` lines from the Error Log with your system 
 - At the end of a file Neovim can scroll further than Eclipse (`Ctrl-E` until the last line is at
   the top); the editor stops at its own end, and `H` then goes to a line above the editor's top.
 
+## Splits (`:split`, `:vsplit`, `Ctrl-W`)
+
+Each Vim window is an Eclipse editor here, so a Vim split is an editor beside this one: `:split`
+and `:vsplit` put a second editor on the file into a new editor stack, as dragging its tab to the
+edge of the editor area would, and the cursor goes there. Neovim drives each editor with a window
+of its own, so the two have their own cursor and scroll position, and share the text and the undo
+history, as two Vim windows on one buffer. Close a split with `:q` (or `Ctrl-W q`, or its tab's
+close button); its stack goes with its last editor. A file opened from Eclipse (Package
+Explorer, *Open Type*) goes into the stack you were last in, as in Eclipse.
+
+| Command | Eclipse does |
+|---------|--------------|
+| `:sp[lit]`, `:sv[iew]`, `Ctrl-W s` / `S` / `Ctrl-S` | a second editor on this file (*Window › Editor › Clone*) in a new stack above, or below with `'splitbelow'` |
+| `:vs[plit]`, `:vert[ical] split`, `Ctrl-W v` / `Ctrl-V` | the same to the left, or to the right with `'splitright'` |
+| `:sp file`, `:vs file`, `:sf[ind] file`, `:sb[uffer] N` | `file` (named as `:e` names it; `:sfind` looks in `'path'`), or buffer `N`'s file, in a new editor beside this one, even if another editor has it open. A file that does not exist opens as a new one, as for `:e` |
+| `:new`, `:vne[w]`, `Ctrl-W n` | a new untitled editor beside this one (with a name, `:new file` is `:split file`) |
+| `Ctrl-W ^`, `Ctrl-W f` | a split of the alternate file (with a count, of buffer N), or of the file under the cursor, found in `'path'` |
+| `Ctrl-W h` / `j` / `k` / `l` (and `Ctrl-H`, the arrows, `Backspace`) | the editor to the left, below, above or to the right, the one level with the cursor; with a count, that many editors on |
+| `Ctrl-W w` / `W`, `t` / `b`, `p` | the next or previous editor, top-left to bottom-right (with a count, editor N), the first or last one, the one you were in before |
+| `Ctrl-W o`, `:on[ly]` | this editor alone on screen: the other stacks' editors become tabs of this stack. Nothing is closed, since an editor may hold unsaved changes |
+| `Ctrl-W +` / `-`, `Ctrl-W _` | N lines taller or shorter (1 without a count); N lines high, or as high as it can be. `:res[ize] +N`, `:res -N`, `:res N` too |
+| `Ctrl-W >` / `<`, `Ctrl-W \|` | the same for the width, in characters; `:vert[ical] res[ize] N` too |
+| `Ctrl-W =` | all editors as equal as they can be |
+| `Ctrl-W x`, `Ctrl-W r` / `R` | swap this editor with the next one in its row or column (the cursor stays where it was on screen); move every editor of the row or column one place on |
+| `:wincmd {key}` | the same as `Ctrl-W` and the key (`:3wincmd l`) |
+
+`:aboveleft`, `:belowright`, `:topleft` and `:botright` in front of a split put it above or below
+(left or right) this editor for that one command. A size given with the split (`:5split`) is not
+used: the new editor takes half of this one.
+
+**`Ctrl+W`** closes the editor in Eclipse on Windows and Linux, and stays so unless you tick it
+under *Window → Preferences → Neovim → Ctrl Keys* (Normal); then the `Ctrl-W` keys above work.
+`:wincmd` and the `:` commands work either way. On macOS Eclipse closes with `Cmd+W`, so
+`Control+W` goes to Neovim by default. Your own mappings of a `Ctrl-W` key win.
+
+**Eclipse's *Toggle Split Editor*** (*Window › Editor*, `Ctrl+_` one above the other, `Ctrl+{` side
+by side) makes the same Vim split in an editor Neovim drives, on the side `'splitbelow'` or
+`'splitright'` says; pressed while more than one editor is on screen, it is `:only`. In an editor
+in Eclipse mode, or one Neovim does not drive, it makes Eclipse's two halves of the editor, as
+always. Such halves (from a workspace that had them) are windows too: `Ctrl-W h/j/k/l`, the sizes
+and `:only` work on them; `Ctrl-W x` and `r` do not, and say so.
+
+Refused, with a message: the tab commands (`:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]`,
+`:tab split`, `Ctrl-W T`), since every editor tab is a window already; and the splits that jump
+first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
+(its own `vim.cmd.split()`) is closed again, with a message: Eclipse would not show it.
+
+After a restart, Eclipse brings the stacks back as it does any layout you dragged.
+
 ## Command line (`:`, `/`, `?`)
 
 `:`, `/` and `?` open Neovim's own command line, shown in a single text box near the bottom edge of
@@ -484,7 +534,8 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:ene[w]` | open a new untitled editor (*File → New → Untitled Text File*), working in this editor's folder (its `:lcd` too), so `:w notes.txt` saves it there. Unlike Vim's `:enew`, which empties the window, this editor stays open (so `:enew!` is the same). `Ctrl-^` goes back |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
-| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]` | refused, with a message: Eclipse shows one Neovim window per editor; use *Window › Editor › Toggle Split Editor*, or *Window › Editor › Clone*. A window opened some other way (a plug-in's `:split`, `:help`) is closed again with the same message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
+| `:tabnew`, `:tabe[dit]`, `:tabf[ind]`, `:tabo[nly]`, `:stag` | refused, with a message: every editor tab is a window already, and `:tabonly` would close the other editors' windows. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
@@ -654,7 +705,7 @@ Neovim's `tabstop` is set to the editor's tab width so both agree.
 Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that sends the key to Neovim.
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
 of the letters you send to Neovim in the current mode (*Window → Preferences → Neovim → Ctrl Keys*;
-in normal mode by default every letter except `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, in insert mode
+in normal mode by default every letter except `Ctrl+S`, `Ctrl+W` (on macOS it goes to Neovim) and `Ctrl+Z`, in insert mode
 `Ctrl+W`, `U`, `R`, `O`, `T` and `D`; see [docs/KEYBOARD.md](docs/KEYBOARD.md)). The bindings work
 only while Neovim owns the editor's keys and the editor has focus; for the other letters, and in
 Eclipse mode (toggle with the toolbar button: color logo in Neovim mode, grey in Eclipse mode),
@@ -826,7 +877,7 @@ beside it. Ticked `Ctrl+letter` keys go to Neovim, in normal and visual mode (**
 insert mode (**Insert**); cleared ones keep their Eclipse shortcut. In an insert Eclipse types, an
 Insert key first hands Neovim the typed text, so `Ctrl+W` deletes the word just typed, and `.`
 repeats the whole insert. *Select All* and *Deselect All* set a column; *Restore Defaults* ticks
-every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z`, and the Insert boxes of `Ctrl+W`, `U`, `R`,
+every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z` (on macOS `Ctrl+W` too), and the Insert boxes of `Ctrl+W`, `U`, `R`,
 `O`, `T` and `D` (on macOS every letter with an insert meaning). Changes apply immediately.
 [docs/KEYBOARD.md](docs/KEYBOARD.md) explains the defaults and which keys go where.
 
@@ -990,8 +1041,9 @@ These are real and deliberate to know about before extending the code:
    folds, window options (`:setlocal`), jump history, location list and folder (`:lcd`) while
    other editors are active. Two editors on one file (*Window → Editor → Clone*) share its text, undo
    history and marks, and each has its own cursor, as two Vim windows on one buffer. Only the
-   active editor is attached. Vim's own window layout (`:split`, `:vsplit`, `:tabnew`,
-   `Ctrl+W s`) is not something Eclipse shows; use Eclipse's split editor or *Clone*.
+   active editor is attached. Vim's splits are editors in stacks of their own
+   ([Splits](#splits-split-vsplit-ctrl-w)); Vim's tab pages (`:tabnew`) are not something Eclipse
+   shows, since each editor tab is a window already.
    Jumps into another open file (Ctrl-O, Ctrl-^, `'A`, `:b`, and `:e` of a file that has an editor)
    activate its editor (after `:bufdo` or `:argdo`,
    only the editor of the file they end in), and the window goes along: the two editors swap
