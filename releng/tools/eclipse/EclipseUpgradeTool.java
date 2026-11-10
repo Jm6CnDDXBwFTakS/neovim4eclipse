@@ -24,6 +24,7 @@ import common.Http;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
+import common.Version;
 import common.VersionCopies;
 
 /**
@@ -80,7 +81,6 @@ public final class EclipseUpgradeTool {
     static final String REHEARSAL_YML = ".github/workflows/rehearse-release.yml";
     private static final List<String> WORKFLOWS = List.of(UPDATE_SITE_YML, REHEARSAL_YML);
     private static final Pattern REPO_RELEASE = Pattern.compile("/releases/(20\\d\\d-\\d\\d)$");
-    private static final Pattern POM_VERSION = Pattern.compile("<artifactId>neovim4eclipse</artifactId>\\s*<version>([^<]+)</version>");
     private static final Pattern DROP_IN_URL = Pattern.compile("/(R-4\\.\\d+-\\d{12})/");
     private static final String USAGE = "Usage: java " + TOOL + " newest | oldest <release> | smoke"
             + " [--no-tests] [--java <Java home>] [--yes] [--dry-run]";
@@ -181,7 +181,7 @@ public final class EclipseUpgradeTool {
     // ------------------------------------------------------------ newest
 
     private void newest() {
-        git.checkWorkBranch("move Eclipse");
+        git.checkWorkBranch("move Eclipse", Version.inPom(read("pom.xml")));
         String drop = EclipseFiles.newestDrop(Http.text(EclipseFiles.DATA_JSON));
         EclipseFiles.checkDropDate(drop);
         EclipseRelease to = EclipseFiles.releaseOf(drop);
@@ -241,7 +241,7 @@ public final class EclipseUpgradeTool {
     // ------------------------------------------------------------ oldest
 
     private void oldest(EclipseRelease to) {
-        git.checkWorkBranch("move Eclipse");
+        git.checkWorkBranch("move Eclipse", Version.inPom(read("pom.xml")));
         EclipseRelease from = oldestNow();
         EclipseRelease newest = EclipseRelease.ofNumber(smokeEntry(NEWEST).eclipse());
         if (to.compareTo(from) <= 0) {
@@ -502,11 +502,7 @@ public final class EclipseUpgradeTool {
 
     /** This checkout's version without {@code -SNAPSHOT}, as p2 has it before the qualifier: {@code 0.2.10}. */
     private String version() {
-        Matcher m = POM_VERSION.matcher(read("pom.xml"));
-        if (!m.find()) {
-            throw new ToolFailure("pom.xml has no version for neovim4eclipse");
-        }
-        return m.group(1).replace("-SNAPSHOT", "");
+        return Version.inPom(read("pom.xml")).replace("-SNAPSHOT", "");
     }
 
     private int javaVersionFile() {

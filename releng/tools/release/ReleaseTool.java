@@ -21,8 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import checks.InstallCheckTool;
 
@@ -88,7 +86,6 @@ public final class ReleaseTool {
     static final String TOOL = "releng/tools/release/Release.java";
     static final String INSTALL_CHECK = "releng/tools/checks/InstallCheck.java";
     static final String NEOVIM_PINS = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src/io/github/jm6cnddxbwftaks/neovim4eclipse/util/neovim-downloads.properties";
-    private static final Pattern POM_VERSION = Pattern.compile("<artifactId>neovim4eclipse</artifactId>\\s*<version>([^<]+)</version>");
     private static final int LOG_LINES = 40;
 
     private final Path root;
@@ -788,8 +785,12 @@ public final class ReleaseTool {
 
     /** The POM version on the tip of local {@code branch}. */
     private String branchVersion(String branch) {
-        Matcher m = POM_VERSION.matcher(git.out("show", branch + ":pom.xml"));
-        return m.find() ? m.group(1).strip() : "";
+        String pom = git.out("show", branch + ":pom.xml"); // a failing git stops the step, as before
+        try {
+            return Version.inPom(pom);
+        } catch (ToolFailure e) {
+            return ""; // a POM without the project's version: not the branch next sets up
+        }
     }
 
     /** Deletes, each after asking, the old release branch and the branches {@code main} already has. */
@@ -850,11 +851,7 @@ public final class ReleaseTool {
     }
 
     private String pomVersionText() {
-        Matcher m = POM_VERSION.matcher(read("pom.xml"));
-        if (!m.find()) {
-            throw new ToolFailure("pom.xml has no project version");
-        }
-        return m.group(1).strip();
+        return Version.inPom(read("pom.xml"));
     }
 
     private Version requireReleaseBranch() {

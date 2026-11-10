@@ -48,14 +48,43 @@ public final class Git {
     }
 
     /**
-     * The branches an upgrade tool may commit on (CONTRIBUTING.md, "Branches"): the release
-     * branch, or a {@code fix/} or {@code feature/} branch cut from it. Never {@code main}, which
-     * moves only at a release, and never a detached HEAD, where a commit belongs to no branch.
-     * Example: {@code release/0.2.11} and {@code feature/maven-tool} are, {@code main} and
-     * {@code releases/x} are not.
+     * The branches an upgrade tool may commit on (CONTRIBUTING.md, "Branches"): the branch of the
+     * release being made, {@code release}'s, or a {@code fix/} or {@code feature/} branch cut from
+     * it. Never {@code main}, which moves only at a release; never a detached HEAD, where a commit
+     * belongs to no branch; and never an earlier release's branch, which is finished: a move
+     * committed there would not reach the next release. Example, while 0.2.11 is made:
+     * {@code release/0.2.11} and {@code feature/maven-tool} are, {@code main} and
+     * {@code release/0.2.10} are not.
      */
-    public static boolean isWorkBranch(String branch) {
-        return branch.startsWith("release/") || isTopicBranch(branch);
+    public static boolean isWorkBranch(String branch, Version release) {
+        return branch.equals(release.branch()) || isTopicBranch(branch);
+    }
+
+    /**
+     * Stops the tool unless the current branch is a work branch ({@link #isWorkBranch}) for the
+     * release the root POM's version {@code pomVersion} names ({@link Version#inPom}); {@code what}
+     * names the move in the message: {@code "move Maven"} on {@code main} gives "this is main; move
+     * Maven on release/0.2.11, or on a fix/ or feature/ branch cut from it". A POM version without
+     * {@code -SNAPSHOT} (on {@code main} after a release) names no release being made, so then only
+     * a {@code fix/} or {@code feature/} branch would pass, and the message says "the release branch".
+     * A version whose tag exists ({@code v0.2.10}) is finished: the tool stops on any branch.
+     */
+    public void checkWorkBranch(String what, String pomVersion) {
+        String branch = branch();
+        Version release = pomVersion.endsWith("-SNAPSHOT") ? Version.ofSnapshot(pomVersion) : null;
+        // A release keeps its -SNAPSHOT version in the POM (the tag marks it), so a finished
+        // release's branch, or a fix/ branch cut from it, still names that release: its tag tells
+        // (once fetched: a clone that has not fetched since the release does not know it yet).
+        if (release != null && commitOf("refs/tags/" + release.tag()) != null) {
+            throw new ToolFailure("this checkout is of " + release + ", which is released (tag " + release.tag() + "); " + what
+                    + " on the next release's branch, release/<next version>, or a fix/ or feature/ branch cut from it"
+                    + " (CONTRIBUTING.md, \"Branches\")");
+        }
+        if (release == null ? !isTopicBranch(branch) : !isWorkBranch(branch, release)) {
+            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch) + "; " + what + " on "
+                    + (release == null ? "the release branch" : release.branch())
+                    + ", or on a fix/ or feature/ branch cut from it (CONTRIBUTING.md, \"Branches\")");
+        }
     }
 
     /**
@@ -64,19 +93,6 @@ public final class Git {
      */
     public static boolean isTopicBranch(String branch) {
         return branch.startsWith("fix/") || branch.startsWith("feature/");
-    }
-
-    /**
-     * Stops the tool unless the current branch is a work branch ({@link #isWorkBranch}); {@code what}
-     * names the move in the message: {@code "move Maven"} gives "this is main; move Maven on the
-     * release branch, or on a fix/ or feature/ branch cut from it".
-     */
-    public void checkWorkBranch(String what) {
-        String branch = branch();
-        if (!isWorkBranch(branch)) {
-            throw new ToolFailure("this is " + (branch.isEmpty() ? "a detached HEAD" : branch) + "; " + what
-                    + " on the release branch, or on a fix/ or feature/ branch cut from it (CONTRIBUTING.md, \"Branches\")");
-        }
     }
 
     /** No changes, staged or not, and no untracked files (ignored ones do not count). */

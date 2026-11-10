@@ -124,7 +124,7 @@ public final class NeovimUpgradeTool {
     }
 
     private void run() {
-        git.checkWorkBranch("move Neovim");
+        git.checkWorkBranch("move Neovim", Version.inPom(read("pom.xml")));
         Version from = NeovimFiles.pinnedVersion(pins());
         if (target.compareTo(from) <= 0) {
             throw new ToolFailure("the plug-in is at Neovim " + from + " already; " + target + " is not newer");

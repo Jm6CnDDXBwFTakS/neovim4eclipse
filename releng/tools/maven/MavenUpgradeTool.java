@@ -148,7 +148,7 @@ public final class MavenUpgradeTool {
     }
 
     private void run() {
-        git.checkWorkBranch("move Maven");
+        git.checkWorkBranch("move Maven", Version.inPom(read("pom.xml")));
         if (!git.isClean()) {
             throw new ToolFailure("the working tree has changes (git status); commit or stash them first");
         }

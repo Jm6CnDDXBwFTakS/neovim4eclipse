@@ -531,6 +531,13 @@ fix/<name>, feature/<name>  ──►  release/<next version>  ──►  main  
   `main` could not fast-forward to it at the next release. The rebase rewrites the branch, so
   anyone with a clone of it resets theirs (`git reset --hard origin/release/0.1.3`).
 
+The upgrade tools (`releng/tools/neovim`, `eclipse`, `maven`) commit only on the release branch
+the POM's version names (`release/0.2.11` while the POM says `0.2.11-SNAPSHOT`) or on a `fix/` or
+`feature/` branch. On `main`, a detached HEAD or an earlier release's branch they stop before any
+change, and also on any branch whose POM version is released already (its tag `v<version>`
+exists, as far as the clone knows: `git fetch` brings new tags; a release keeps the `-SNAPSHOT`
+version): a move committed there would never reach the next release.
+
 Pull requests are optional: merging directly keeps the same flow.
 
 **History stays linear: no merge commits.** A straight line of commits reads like a story in

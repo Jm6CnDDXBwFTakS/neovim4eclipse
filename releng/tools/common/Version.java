@@ -31,6 +31,21 @@ public record Version(int major, int minor, int patch) implements Comparable<Ver
         return new Version(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
     }
 
+    /** The project's own version in the root POM, after its artifactId (a parent or plug-in version comes elsewhere). */
+    private static final Pattern POM_VERSION = Pattern.compile("<artifactId>neovim4eclipse</artifactId>\\s*<version>([^<]+)</version>");
+
+    /**
+     * The version text of the root {@code pom.xml}, {@code pomXml}: {@code 0.2.11-SNAPSHOT} on a
+     * release branch, {@code 0.2.10} on {@code main} after a release.
+     */
+    public static String inPom(String pomXml) {
+        Matcher m = POM_VERSION.matcher(pomXml);
+        if (!m.find()) {
+            throw new ToolFailure("pom.xml has no version for neovim4eclipse");
+        }
+        return m.group(1).strip();
+    }
+
     /** The version of a POM's {@code 0.2.3-SNAPSHOT}; fails on a version without {@code -SNAPSHOT}. */
     public static Version ofSnapshot(String pomVersion) {
         if (!pomVersion.endsWith("-SNAPSHOT")) {

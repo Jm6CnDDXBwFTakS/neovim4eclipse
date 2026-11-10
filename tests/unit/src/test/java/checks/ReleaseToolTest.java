@@ -289,32 +289,62 @@ class ReleaseToolTest {
 
     @Test
     void theUpgradeToolsCommitOnlyOnAWorkBranch() {
-        assertTrue(Git.isWorkBranch("release/0.2.11"));
-        assertTrue(Git.isWorkBranch("fix/maven-tool"));
-        assertTrue(Git.isWorkBranch("feature/maven-tool"));
-        assertFalse(Git.isWorkBranch("main"), "main moves only at a release");
-        assertFalse(Git.isWorkBranch(""), "a detached HEAD");
-        assertFalse(Git.isWorkBranch("releases/x"));
-        assertFalse(Git.isWorkBranch("rehearse/0.2.11"));
+        Version making = Version.parse("0.2.11");
+        assertTrue(Git.isWorkBranch("release/0.2.11", making));
+        assertTrue(Git.isWorkBranch("fix/maven-tool", making));
+        assertTrue(Git.isWorkBranch("feature/maven-tool", making));
+        assertFalse(Git.isWorkBranch("release/0.2.10", making), "an earlier release's branch is finished");
+        assertFalse(Git.isWorkBranch("release/0.2.12", making), "a branch the POM does not name");
+        assertFalse(Git.isWorkBranch("main", making), "main moves only at a release");
+        assertFalse(Git.isWorkBranch("", making), "a detached HEAD");
+        assertFalse(Git.isWorkBranch("rehearse/0.2.11", making));
         // The Release tool deletes merged topic branches, never the release branch through this rule.
         assertTrue(Git.isTopicBranch("fix/maven-tool") && Git.isTopicBranch("feature/maven-tool"));
         assertFalse(Git.isTopicBranch("release/0.2.11"));
     }
 
     @Test
-    void aDetachedHeadOrMainStopsAnUpgradeTool(@TempDir Path dir) throws Exception {
+    void anUpgradeToolStopsOffTheCurrentReleasesBranches(@TempDir Path dir) throws Exception {
         assumeTrue(repository(dir), "git is not installed");
         Shell shell = new Shell(dir);
         Git git = new Git(shell);
+        Version making = Version.parse("0.2.11");
         // -C, not -c: git may have named the first branch main already (init.defaultBranch).
         assertTrue(shell.capture(List.of("git", "switch", "-q", "-C", "main")).ok());
-        ToolFailure onMain = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven"));
-        assertTrue(onMain.getMessage().startsWith("this is main; move Maven on the release branch"), onMain.getMessage());
+        ToolFailure onMain = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven", making.snapshot()));
+        assertTrue(onMain.getMessage().startsWith("this is main; move Maven on release/0.2.11, or on a fix/ or feature/ branch"),
+                onMain.getMessage());
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "-c", "release/0.2.10")).ok());
+        assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven", making.snapshot()));
         assertTrue(shell.capture(List.of("git", "switch", "-q", "--detach")).ok());
-        ToolFailure detached = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven"));
+        ToolFailure detached = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven", making.snapshot()));
         assertTrue(detached.getMessage().startsWith("this is a detached HEAD;"), detached.getMessage());
-        assertTrue(shell.capture(List.of("git", "switch", "-q", "-c", "fix/x")).ok());
-        git.checkWorkBranch("move Maven"); // no failure
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "-c", "release/0.2.11")).ok());
+        git.checkWorkBranch("move Maven", making.snapshot()); // no failure
+        // After a release the POM says 0.2.11 on main: the branch is what is wrong, and the message says so.
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "main")).ok());
+        ToolFailure released = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven", "0.2.11"));
+        assertTrue(released.getMessage().startsWith("this is main; move Maven on the release branch,"), released.getMessage());
+        assertTrue(shell.capture(List.of("git", "switch", "-q", "-c", "fix/y")).ok());
+        git.checkWorkBranch("move Maven", "0.2.11"); // a fix branch needs no release in the POM
+        // 0.2.10 is released (its tag exists): a checkout still at 0.2.10-SNAPSHOT is finished work, on any branch.
+        assertTrue(shell.capture(List.of("git", "tag", "v0.2.10")).ok());
+        for (String branch : List.of("release/0.2.10", "fix/z")) {
+            assertTrue(shell.capture(List.of("git", "switch", "-q", "-C", branch)).ok());
+            ToolFailure finished = assertThrows(ToolFailure.class, () -> git.checkWorkBranch("move Maven", "0.2.10-SNAPSHOT"));
+            assertTrue(finished.getMessage().contains("0.2.10, which is released (tag v0.2.10)"), finished.getMessage());
+        }
+    }
+
+    @Test
+    void theProjectVersionIsReadFromTheRootPom() throws IOException {
+        assertEquals("0.2.11-SNAPSHOT", Version.inPom("""
+                <parent><artifactId>other</artifactId><version>9.9.9</version></parent>
+                <artifactId>neovim4eclipse</artifactId>
+                <version>0.2.11-SNAPSHOT</version>
+                """));
+        assertThrows(ToolFailure.class, () -> Version.inPom("<project/>"));
+        Version.ofSnapshot(Version.inPom(Files.readString(Path.of("../../pom.xml")))); // the repository's own, a -SNAPSHOT
     }
 
     @Test
