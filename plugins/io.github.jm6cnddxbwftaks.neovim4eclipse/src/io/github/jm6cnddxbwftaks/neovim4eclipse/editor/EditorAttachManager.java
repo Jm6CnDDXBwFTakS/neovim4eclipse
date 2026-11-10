@@ -1009,7 +1009,7 @@ public final class EditorAttachManager {
         IDocument old = documentOf(editor);
         boolean wasAttached;
         synchronized (this) {
-            if (old != null && documents.isSharedWithAnotherEditor(old, editor)) {
+            if (old != null && isShownInAnotherEditor(editor)) {
                 return false;
             }
             wasAttached = isAttachedTo(editor);
