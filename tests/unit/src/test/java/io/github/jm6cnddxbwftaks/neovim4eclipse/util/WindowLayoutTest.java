@@ -158,6 +158,16 @@ class WindowLayoutTest {
                 "from C: the row that holds its column; nothing after it, so A gives the space");
     }
 
+    /** A view in the editor area beside the editors keeps its weight, so the sizes go on its scale. */
+    @Test
+    void newSizesBecomeWeightsOnTheScaleTheChildrenHave() {
+        assertArrayEquals(new int[] { 6667, 3333 },
+                WindowLayout.weights(new int[] { 400, 200 }, new int[] { 300, 300 }, new int[] { 5000, 5000 }));
+        assertArrayEquals(new int[] { 400, 200 },
+                WindowLayout.weights(new int[] { 400, 200 }, new int[] { 300, 300 }, new int[] { 5000, -1 }),
+                "a weight that cannot be read: the pixels");
+    }
+
     @Test
     void equalMakesEveryRowAndColumnShareEqually() {
         assertEquals(List.of(new Sizes(0, new int[] { 148, 148 }), new Sizes(2, new int[] { 148, 148 })),

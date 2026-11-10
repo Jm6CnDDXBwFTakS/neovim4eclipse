@@ -336,9 +336,23 @@ final class EditorSplits {
         for (WindowLayout.Sizes sizes : WindowLayout.resize(picture.root, picture.current, command.key(),
                 command.count(), metrics, minimum)) {
             List<MUIElement> children = picture.groupChildren.get(sizes.group());
+            WindowLayout.Group group = (WindowLayout.Group) WindowLayout.find(picture.root, sizes.group());
+            int[] before = group.children().stream()
+                    .mapToInt(n -> group.sideBySide() ? n.bounds().width() : n.bounds().height()).toArray();
+            int[] weights = WindowLayout.weights(sizes.sizes(), before,
+                    children.stream().mapToInt(EditorSplits::weightOf).toArray());
             for (int i = 0; i < children.size(); i++) {
-                children.get(i).setContainerData(String.valueOf(sizes.sizes()[i]));
+                children.get(i).setContainerData(String.valueOf(weights[i]));
             }
+        }
+    }
+
+    /** An element's weight in its sash container ({@code containerData}), or -1 when it has none. */
+    private static int weightOf(MUIElement element) {
+        try {
+            return element.getContainerData() == null ? -1 : Integer.parseInt(element.getContainerData().trim());
+        } catch (NumberFormatException e) {
+            return -1;
         }
     }
 

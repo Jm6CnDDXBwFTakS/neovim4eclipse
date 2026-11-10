@@ -328,6 +328,37 @@ public final class WindowLayout {
         return out;
     }
 
+    /**
+     * The weights ({@code containerData}) that give a group's children the new pixel sizes
+     * {@code pixels}, on the scale of their weights now ({@code weights}, at the sizes
+     * {@code before}). Eclipse shares a sash container's space by its visible children's weights,
+     * and a child the picture leaves out (a view dropped into the editor area) keeps its own; on
+     * the same scale it keeps its share. A weight that cannot be read ({@code <= 0}) gives the
+     * pixels themselves.
+     *
+     * <p>Example: weights {@code [5000, 5000]} at {@code [300, 300]} pixels, made {@code [400, 200]}:
+     * {@code [6667, 3333]}.
+     */
+    public static int[] weights(int[] pixels, int[] before, int[] weights) {
+        long oldWeights = 0;
+        long oldPixels = 0;
+        for (int i = 0; i < weights.length; i++) {
+            if (weights[i] <= 0) {
+                return pixels.clone();
+            }
+            oldWeights += weights[i];
+            oldPixels += before[i];
+        }
+        if (oldPixels <= 0) {
+            return pixels.clone();
+        }
+        int[] out = new int[pixels.length];
+        for (int i = 0; i < pixels.length; i++) {
+            out[i] = (int) Math.max(1, Math.round((double) pixels[i] * oldWeights / oldPixels));
+        }
+        return out;
+    }
+
     /** Takes up to {@code needed} from {@code sizes[i]}, down to {@code minimum}; returns what it took. */
     private static int give(int[] sizes, int i, int needed, int minimum) {
         int taken = Math.max(0, Math.min(needed, sizes[i] - minimum));
