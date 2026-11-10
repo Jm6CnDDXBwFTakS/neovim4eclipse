@@ -23,7 +23,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - Vim's tab commands work on Eclipse's editor tabs: `:tabedit file`, `:tabfind file`, `:tab split`
   and `:tabnew` open a new editor tab, `Ctrl-W T` moves an editor out of its split as a tab, and
   `:tabclose 2`, `:tabclose $`, `:tabclose +` close another editor tab (asking about changes unless
-  `!`).
+  `!`), and `:tabonly` closes the other editor tabs of the stack, asking once about the changes
+  that would be lost (`:tabonly!` is refused).
 
 ### Changed
 
@@ -32,7 +33,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - On macOS, `Control+W` goes to Neovim by default, for Vim's window commands (Eclipse closes an
   editor with `Cmd+W` there). On Windows and Linux `Ctrl+W` still closes the editor unless ticked
   under *Ctrl Keys*.
-- `:tabonly` and `:stag` say why they are refused.
+- `:tabonly!` and `:stag` say why they are refused.
 - `:q` in one of two editors on a file (a split, *Clone*) closes it without Eclipse's question
   about saving, as Vim closes one of two windows: the changes stay in the other editor.
 

@@ -58,6 +58,11 @@ class WindowCommandTest {
         assertNull(parse("tabclose", "2"), "the ! word is missing");
         assertNull(parse("tab", "file"));
         assertNull(parse("totab", "now"));
+        assertEquals(new WindowCommand(Action.TAB_ONLY, null, null, "", '.', 0, false), parse("tabonly", "."));
+        assertEquals(new WindowCommand(Action.TAB_ONLY, null, null, "", (char) 0, 2, false), parse("tabonly", "2"));
+        assertEquals(new WindowCommand(Action.TAB_ONLY, null, null, "", '$', 0, false), parse("tabonly", "$"));
+        assertNull(parse("tabonly"), "the tab word is missing");
+        assertNull(parse("tabonly", "x"));
     }
 
     @Test

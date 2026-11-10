@@ -622,19 +622,37 @@ t.test(':tabedit, :tabnew, :tabfind and :tab split open a new editor tab', funct
   t.eq({}, sent_windows())
 end)
 
-t.test(':tabonly and splits that jump to a tag are refused, with why', function()
+t.test(':tabonly closes the other editor tabs; :tabonly! and a count in front are refused', function()
   commands()
+  for _, line in ipairs({ 'tabonly', 'tabo 2', 'tabonly $', 'tabonly -1' }) do
+    t.type(':' .. line .. '<CR>')
+  end
+  t.eq({
+    { 'window', 'tabonly', '.' },
+    { 'window', 'tabonly', '2' },
+    { 'window', 'tabonly', '$' },
+    { 'window', 'tabonly', '-1' },
+  }, sent_windows())
+  t.forget()
   local tabs = #vim.api.nvim_list_tabpages()
   vim.v.errmsg = ''
-  t.type(':tabonly<CR>')
-  t.ok(vim.v.errmsg:find('Close Others', 1, true), vim.v.errmsg)
+  t.type(':tabonly!<CR>')
+  t.ok(vim.v.errmsg:find('discard every other', 1, true), vim.v.errmsg)
+  vim.v.errmsg = ''
+  t.type(':2tabonly<CR>')
+  t.ok(vim.v.errmsg:find('write the tab after', 1, true), vim.v.errmsg)
+  t.eq(tabs, #vim.api.nvim_list_tabpages(), 'Neovim closed no tab page')
+  t.eq({}, t.sent('eclipse_command'))
+end)
+
+t.test('splits that jump to a tag are refused, with why', function()
+  commands()
   for _, keys in ipairs({ ':stag main<CR>', '<C-w>]', '<C-w><C-]>', '<C-w>F' }) do
     vim.v.errmsg = ''
     t.type(keys)
     t.ok(vim.v.errmsg:find('jumps to a tag', 1, true), keys .. ': ' .. vim.v.errmsg)
   end
   t.eq(1, windows_in_tab(), 'no second window')
-  t.eq(tabs, #vim.api.nvim_list_tabpages(), 'no tab opened or closed')
   t.eq({}, t.sent('eclipse_command'))
 end)
 

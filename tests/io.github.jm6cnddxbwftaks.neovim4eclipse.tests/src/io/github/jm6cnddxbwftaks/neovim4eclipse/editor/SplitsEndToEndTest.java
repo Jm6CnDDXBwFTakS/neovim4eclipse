@@ -350,4 +350,36 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         assertSame(third, page().getActiveEditor(), "the tab :tabclose was typed in stays in front");
         assertEquals(1, dialogs.size(), "no question for the !");
     }
+
+    /**
+     * {@code :tabonly}: the other editor tabs of this stack close. Eclipse asks once about the
+     * changes it would lose (two clones of other.txt keep nothing when both close; answered Cancel
+     * here, so they stay), but not about a clone of the tab that stays, whose changes stay there.
+     */
+    @Test
+    void tabonlyClosesTheOtherTabsAskingOnceAboutChangesThatWouldBeLost() throws Exception {
+        createFile("other.txt", "other\n");
+        ex("tab split");
+        ITextEditor clone = waitForNewEditor(editor, "a clone of test.txt as a tab");
+        type(widgetOf(clone), "x");
+        expectText(clone, "lpha\nbeta\ngamma\n");
+        ex("tabedit other.txt");
+        ITextEditor other = waitForNewEditor(clone, "other.txt as a tab");
+        ex("tab split");
+        ITextEditor otherClone = waitForNewEditor(other, "a clone of other.txt as a tab");
+        type(widgetOf(otherClone), "x");
+        expectText(otherClone, "ther\n");
+        page().activate(editor);
+        waitForActive(editor, "test.txt's first editor");
+        assertEquals(4, page().getEditorReferences().length);
+
+        List<String> dialogs = closeModalDialogsWhile(widget);
+        ex("tabonly");
+        waitUntil("Eclipse's question about other.txt's changes", TIMEOUT_MS, () -> !dialogs.isEmpty());
+        settle();
+        waitUntil("the clone of test.txt to close, unasked", TIMEOUT_MS, () -> page().getEditorReferences().length == 3);
+        assertEquals(1, dialogs.size(), "one question for all");
+        assertTrue(editor.isDirty(), "test.txt's change stays, in the tab that stays");
+        waitForActive(editor, "test.txt in front");
+    }
 }

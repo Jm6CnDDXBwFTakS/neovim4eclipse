@@ -84,13 +84,23 @@ editor tabs of this stack instead, which are what a Vim user sees as tabs:
 | `:tabnew`, `:tabedit` alone, `:tab new` | a new untitled editor tab |
 | `Ctrl-W T` | this editor leaves its split, as a tab of the first other stack on screen (top left), and stays the active one: Vim moves the window into a tab page of its own |
 | `:tabclose 2`, `:tabclose $`, `:tabclose +`, `:tabclose -2` | closes that editor tab of this stack, counted as `:tabnext` counts them (`TabNavigation.closeTarget`; no wrapping, Vim's `E16`). Eclipse asks about its changes unless `!`, or another editor shows the document |
+| `:tabonly`, `:tabonly 2` | the other editor tabs of this stack close, as Eclipse's *Close Others* closes them, and the one named stays in front. Splits in other stacks stay |
 
-A count in front of `:tabclose` (`:2tabclose`, `:$tabclose`, `:+tabclose`) is refused with a
+**`:tabonly` loses nothing without a question.** Vim keeps the buffers of the tab pages it closes
+(`'hidden'`); Eclipse cannot keep unsaved changes without an editor. So the editors whose changes
+would be lost close in one `IWorkbenchPage.closeEditors` call, and Eclipse asks once for all of
+them. A plain text editor whose document an editor that stays open shows too (a clone of the tab
+that stays, a split) closes without a question: the changes stay there. Two clones that both close
+keep nothing, so they are asked about. A multi-page editor is always asked about: it may hold more
+documents than its text page's. `:tabonly!`, which would discard every other tab's changes at
+once, is refused.
+
+A count in front of `:tabclose` or `:tabonly` (`:2tabclose`, `:$tabclose`, `:+tabclose`) is refused with a
 hint: Neovim has turned it into one of its hidden tab pages before the plug-in sees the line, which
 says nothing about the editor tabs. `:tabclose` alone closes this editor, as before.
 
-**Refused**, with a message: `:tabonly`, which would close every other editor's window, and the
-splits that jump first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`; see "Not done"). A window a plug-in opens in Neovim beside an editor's is still closed by the `WinNew`
+**Refused**, with a message: `:tabonly!`, and the splits that jump first (`:stag`, `Ctrl-W ]`,
+`Ctrl-W F`; see "Not done"). A window a plug-in opens in Neovim beside an editor's is still closed by the `WinNew`
 safety net of `LuaScripts.WINDOWS`: Eclipse never heard of it.
 
 ## 3. The window commands on the editor area
@@ -177,7 +187,6 @@ After a restart Eclipse brings the stacks and their clones back, as it does any 
   `:split +cmd file`.
 - A multi-page editor (the POM editor): its clone opens on its first page, where Neovim is not
   attached until its text page is chosen.
-- `:tabonly` as Eclipse's *Close Others*: it closes editors, so it waits for its own decision.
 
 ## 8. Tests
 
@@ -187,6 +196,7 @@ After a restart Eclipse brings the stacks and their clones back, as it does any 
   side rule, `'path'`, buffers, the tab commands, the refusals.
 - `TabNavigationTest` (tests/unit): which tab `:tabclose 2`, `$`, `+` and `-2` name.
 - `SplitsEndToEndTest` (UI tests): `:vsplit`, `:split file`, `Ctrl-W` moves, `:only`, the sizes,
-  `Ctrl-W x`, `:tabedit`, `:tab split`, `Ctrl-W T`, `:tabclose 2` (with and without `!`),
+  `Ctrl-W x`, `:tabedit`, `:tab split`, `Ctrl-W T`, `:tabclose 2` (with and without `!`), `:tabonly` (one question, clones of the tab
+  that stays unasked),
   *Toggle Split Editor* both ways, the hidden preference's halves, and `:q` in a half
   (the focus goes back to the other).

@@ -79,9 +79,9 @@ The Eclipse side:
 - **Window commands.** `:close` and `:tabclose` are host commands (`QUIT`). Vim's splits
   (`:split`, `:vsplit`, `:new`, `:sbuffer`, the `Ctrl-W` keys, `:only`, `:resize`, `:wincmd`) are
   Eclipse editors in stacks of their own, each with its own Neovim window as any editor
-  ([SPLITS.md](SPLITS.md)). Vim's tab commands work on the editor tabs (`:tabedit`, `:tabclose 2`).
-  `LuaScripts.WINDOW_COMMANDS` refuses `:tabonly`, and maps the `Ctrl-W` keys, unless the user's
-  config maps them. `:tabclose` with a number or count is refused (Neovim would close another editor's
+  ([SPLITS.md](SPLITS.md)). Vim's tab commands work on the editor tabs (`:tabedit`, `:tabclose 2`,
+  `:tabonly`). `LuaScripts.WINDOW_COMMANDS` refuses `:tabonly!`, and maps the `Ctrl-W` keys, unless
+  the user's config maps them. `:tabclose` with a number or count is refused (Neovim would close another editor's
   window). In a *side window* (floating, such as hover documentation the user entered;
   `is_side_window`), `:q`, `:close` and the `Ctrl-W q` / `c` keys are Neovim's again, through the
   host commands' `leave_to_neovim` hook, and close that window, not the editor.
@@ -106,7 +106,7 @@ The Eclipse side:
 | `:close`, `<C-w>q`, `:tabclose` | Close the editor, like `:q`: Eclipse asks about unsaved changes, `:close!` discards them | In Vim, closing the window closes the view; here the editor is the view. Closing only the window would leave the editor without one, and the safety net would reopen it at once. Vim's `:close` keeps a modified buffer hidden; Eclipse cannot keep an unsaved document without an editor, so asking is the safe equivalent, as for `:bd`. |
 | `:split`, `:vsplit`, `:new` | A new Eclipse editor in a stack beside this one, with its own window ([SPLITS.md](SPLITS.md)) | A second Neovim window in the editor's tab would be invisible and take the keys (E4); an editor beside this one is what a Vim split shows. |
 | `:tabnew`, `:tabedit` | A new Eclipse editor tab in this stack ([SPLITS.md](SPLITS.md)) | Every editor tab is a window already; a Neovim tab page of its own would have no editor. |
-| `:tabonly` | Refused, with a message | It would delete every other editor's window (E4). |
+| `:tabonly` | The other editor tabs of this stack close, Eclipse asking about their changes ([SPLITS.md](SPLITS.md)) | Neovim's own would delete every other editor's window (E4). `:tabonly!` is refused: it would discard them all at once. |
 | Two editors on one file | A window each, one shared buffer | Neovim's model, and Eclipse's agrees on every point: shared text, undo and marks; cursor, column memory, scroll position, folds, window options and jump history per editor. Rejected: one shared window (the editors fight over one cursor) and a buffer per editor (separate undo and marks). |
 | What travels on `Ctrl-O` | The whole window | Location list and jump history included; the two editors swap windows (E2). |
 | Untitled documents' folder | The selected project's root, else the folder of the editor attached before, else the home folder | See section 3. |
@@ -238,7 +238,7 @@ that Back reopened (fights Eclipse).
 | `:close`, `<C-w>q`, `:tabclose` | The editor's tab closes; Neovim enters another editor's window; the buffer stays listed (E7). | Host command: close the editor |
 | `:split`, `:vsplit`, `<C-w>s` | A hidden second window in the tab (`WinNew`, E7). | An Eclipse editor in a new stack, with a window of its own ([SPLITS.md](SPLITS.md)) |
 | `:new`, `:tabnew` | A new empty buffer and window (and tab). | `:new`: a new untitled editor beside this one; `:tabnew`: a new untitled editor tab ([SPLITS.md](SPLITS.md)) |
-| `:tabonly` | Every other tab closed, home window included. | Refuse |
+| `:tabonly` | Every other tab closed, home window included. | Close the other editor tabs instead ([SPLITS.md](SPLITS.md)); `:tabonly!` refused |
 | `:only`, `<C-w>o`, `<C-w>w`, `:windo` | No effect (one window per tab). | Carried out on Eclipse's editors ([SPLITS.md](SPLITS.md)); `:windo` left alone |
 | `:bufdo`, `:argdo` | The editor's window ends on the last buffer. | Follow, as any buffer change |
 | `:e name` of a file that has an editor | Neovim's `:edit` would enter its buffer in this window. | Neovim enters its buffer with `:buffer` (`LuaScripts.HOST_COMMANDS`, `open_document_edited`; `:buffer`, not the `:edit` as typed, since the paths rule found the buffer and Neovim on Windows does not match a junction name for a file not on disk yet): the window travels as for `:b` (E2), so `:e #` toggles and `Ctrl-O` goes back, as in one Vim window. Rejected: letting Eclipse switch editors, where each kept its own `#`, so a second `:e #` found none. A file with no editor, `:e!`, `:e +cmd`, `:e ++opt` and `:e %` stay Eclipse's. |

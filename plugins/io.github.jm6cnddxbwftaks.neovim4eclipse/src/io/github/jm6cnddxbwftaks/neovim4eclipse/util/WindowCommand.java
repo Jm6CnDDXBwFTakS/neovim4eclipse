@@ -34,6 +34,8 @@ import java.util.Locale;
  *   <tr><td>{@code tabclose 2 0}, {@code tabclose $ 0}, {@code tabclose +1 1}</td><td>{@code :tabclose 2},
  *       {@code :tabclose $}, {@code :tabclose! +1}: another editor tab of this stack; the last word
  *       is the {@code !}</td></tr>
+ *   <tr><td>{@code tabonly .}, {@code tabonly 2}</td><td>{@code :tabonly}, {@code :tabonly 2}: the other
+ *       editor tabs of this stack close ({@code .} keeps this one)</td></tr>
  * </table>
  *
  * <p>A count of 0 means none was given, as Vim's {@code v:count}: {@code Ctrl-W w} goes to the next
@@ -47,7 +49,8 @@ import java.util.Locale;
  *               ({@code 'l'}, {@code '+'}); for {@link Action#ROTATE} {@code 'r'} (down or right) or
  *               {@code 'R'} (up or left); for {@link Action#TAB_CLOSE} {@code '$'} (the last tab),
  *               {@code '+'} or {@code '-'} (that many tabs on or back) or 0 (tab number
- *               {@code count}); 0 otherwise
+ *               {@code count}); for {@link Action#TAB_ONLY} the same, or {@code '.'} for this
+ *               tab; 0 otherwise
  * @param count  Vim's count, 0 when none was given
  * @param force  for {@link Action#TAB_CLOSE}: the {@code !}, which discards the tab's changes
  */
@@ -73,7 +76,9 @@ public record WindowCommand(Action action, Where where, Target target, String fi
         /** This editor out of its split, as a tab of another stack ({@code Ctrl-W T}). */
         TO_TAB,
         /** Close another editor tab of this stack ({@code :tabclose 2}). */
-        TAB_CLOSE
+        TAB_CLOSE,
+        /** Close the other editor tabs of this stack ({@code :tabonly}), asking about their changes. */
+        TAB_ONLY
     }
 
     /** The side of the current editor a split goes to. */
@@ -132,6 +137,7 @@ public record WindowCommand(Action action, Where where, Target target, String fi
                 case "tab" -> opening(Action.TAB, null, words, 1);
                 case "totab" -> words.size() == 1 ? of(Action.TO_TAB, (char) 0, 0) : null;
                 case "tabclose" -> tabClose(words);
+                case "tabonly" -> tabOnly(words);
                 default -> null;
             };
         } catch (IllegalArgumentException e) {
@@ -167,15 +173,26 @@ public record WindowCommand(Action action, Where where, Target target, String fi
         if (words.size() != 3 || !(words.get(2).equals("0") || words.get(2).equals("1"))) {
             return null;
         }
-        String tab = words.get(1);
-        boolean force = words.get(2).equals("1");
+        return tab(Action.TAB_CLOSE, words.get(1), words.get(2).equals("1"));
+    }
+
+    /** {@code tabonly .}, {@code tabonly 2}: the tab that stays. */
+    private static WindowCommand tabOnly(List<String> words) {
+        if (words.size() != 2) {
+            return null;
+        }
+        return words.get(1).equals(".") ? of(Action.TAB_ONLY, '.', 0) : tab(Action.TAB_ONLY, words.get(1), false);
+    }
+
+    /** A command naming a tab as Vim writes it after the command: {@code 2}, {@code $}, {@code +N}, {@code -N}. */
+    private static WindowCommand tab(Action action, String tab, boolean force) {
         if (tab.equals("$")) {
-            return new WindowCommand(Action.TAB_CLOSE, null, null, "", '$', 0, force);
+            return new WindowCommand(action, null, null, "", '$', 0, force);
         }
         char key = tab.startsWith("+") || tab.startsWith("-") ? tab.charAt(0) : 0;
         String number = key == 0 ? tab : tab.substring(1);
         int count = number.isEmpty() && key != 0 ? 0 : count(number);
-        return new WindowCommand(Action.TAB_CLOSE, null, null, "", key, count, force);
+        return new WindowCommand(action, null, null, "", key, count, force);
     }
 
     private static WindowCommand keyed(Action action, String keys, List<String> words) {

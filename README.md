@@ -468,12 +468,14 @@ of its own), so the tab commands work on the editor tabs of this stack:
 | `:tabnew`, `:tabe[dit]` alone, `:tab new` | a new untitled editor tab |
 | `Ctrl-W T` | this editor out of its split, as a tab of the first other stack on screen (top left) |
 | `:tabc[lose] 2`, `:tabc $`, `:tabc +`, `:tabc -2` | close that editor tab of this stack (counted as `:tabn` counts); Eclipse asks about changes, `:tabclose!` discards them |
+| `:tabo[nly]`, `:tabo 2` | close the other editor tabs of this stack (Eclipse's *Close Others*), keeping this one or tab 2. Eclipse asks once about the changes that would be lost; a clone of the tab that stays closes without asking, its changes stay there. Splits in other stacks stay |
 
-Write the tab after `:tabclose`: a count in front (`:2tabclose`, `:$tabclose`) is refused, since
-Neovim turns it into one of its hidden tab pages before the plug-in sees it.
+Write the tab after `:tabclose` or `:tabonly`: a count in front (`:2tabclose`, `:$tabclose`) is
+refused, since Neovim turns it into one of its hidden tab pages before the plug-in sees it.
 
-Refused, with a message: `:tabo[nly]`, which would close every other editor's window, and the
-splits that jump first (`:stag`, `Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
+Refused, with a message: `:tabonly!`, which would discard every other tab's changes at once (Vim's
+keeps their buffers hidden; `:tabonly` asks about them), and the splits that jump first (`:stag`,
+`Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
 (its own `vim.cmd.split()`) is closed again, with a message: Eclipse would not show it.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
@@ -548,7 +550,8 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabnew`, `:tabe[dit]`, `:tabf[ind]` | a new editor tab: see [Splits](#splits-split-vsplit-ctrl-w) |
-| `:tabo[nly]`, `:stag` | refused, with a message: `:tabonly` would close the other editors' windows. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:tabo[nly]` | close the other editor tabs: see [Splits](#splits-split-vsplit-ctrl-w) |
+| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →

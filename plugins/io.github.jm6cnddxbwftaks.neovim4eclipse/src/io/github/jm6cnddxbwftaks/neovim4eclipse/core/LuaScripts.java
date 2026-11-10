@@ -1295,9 +1295,9 @@ final class LuaScripts {
               return not own[win] and vim.fn.win_gettype(win) ~= ''
             end
 
-            --- Why :tabonly does not run (WINDOW_COMMANDS refuses it): each editor's window is alone in a
-            --- tab page of its own, so it would close every other editor's window.
-            M.TABS = "would close every other editor's window; the editor tab's menu has Close Others"
+            --- Why :tabonly! does not run (WINDOW_COMMANDS refuses it): it would discard the changes of
+            --- every other editor tab at once, where Vim's keeps their buffers hidden.
+            M.TABS = "with ! it would discard every other editor tab's changes; :tabonly asks about them"
             --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
             --- opened without the command line, which Eclipse never heard of).
             local why_closed = {
@@ -1392,12 +1392,14 @@ final class LuaScripts {
      *   <tr><td>{@code Ctrl-W T}</td><td>{@code window totab}</td></tr>
      *   <tr><td>{@code :tabclose 2}, {@code :tabclose! $}, {@code :tabclose +}</td><td>{@code window
      *       tabclose 2 0}, {@code window tabclose $ 1}: that editor tab of this stack</td></tr>
+     *   <tr><td>{@code :tabonly}, {@code :tabonly 2}</td><td>{@code window tabonly .},
+     *       {@code window tabonly 2}: the other editor tabs of this stack close</td></tr>
      * </table>
      *
      * <p><b>Vim's tab pages are Eclipse's editor tabs</b> here, since each editor is a Neovim window
      * alone in a hidden tab page of its own: the tab commands work on the editor tabs of this
-     * stack, counted as {@code :tabnext} counts them. A count in front of {@code :tabclose}
-     * ({@code :2tabclose}, {@code :$tabclose}) is refused: Neovim has turned it into one of its
+     * stack, counted as {@code :tabnext} counts them. A count in front of {@code :tabclose} or
+     * {@code :tabonly} ({@code :2tabclose}, {@code :$tabclose}) is refused: Neovim has turned it into one of its
      * hidden tab pages already, which says nothing about the editor tabs.
      *
      * <p><b>Where a split goes</b> is Vim's rule: above, or to the left for {@code :vsplit}, unless
@@ -1405,10 +1407,10 @@ final class LuaScripts {
      * (and {@code :topleft}, {@code :botright}, taken as those two) say it for one command. A
      * height or width given with the split ({@code :5split}) is not used: the new editor takes half.
      *
-     * <p><b>Refused</b>, with a message: {@code :tabonly}, which would close every other editor's
-     * window (E4); and the splits that jump somewhere first, which need more than a split
-     * ({@code :stag}, {@code Ctrl-W ]}, {@code Ctrl-W F}). {@code :close} and {@code :tabclose}
-     * close the editor: {@code util/HostCommand}.
+     * <p><b>Refused</b>, with a message: {@code :tabonly!}, which would discard every other editor
+     * tab's changes at once (Vim's keeps their buffers hidden); and the splits that jump somewhere
+     * first, which need more than a split ({@code :stag}, {@code Ctrl-W ]}, {@code Ctrl-W F}).
+     * {@code :close} and {@code :tabclose} close the editor: {@code util/HostCommand}.
      *
      * <p>The keys are mapped only where the user's config maps none of them itself, and reach Neovim
      * only when Ctrl+W does (the default on macOS; on Windows and Linux a tick under Ctrl Keys:
@@ -1426,7 +1428,6 @@ final class LuaScripts {
             local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
             local M = {}
 
-            host.refuse('tabonly', function() return windows.TABS end)
             local JUMP_FIRST = 'a split that jumps to a tag is not supported; Ctrl-] goes to the declaration in this editor'
             for _, name in ipairs({ 'stag', 'stjump', 'stselect' }) do
               host.refuse(name, function() return JUMP_FIRST end)
@@ -1561,21 +1562,45 @@ final class LuaScripts {
               end
               return named(p, false, true, nil, TAB)
             end)
-            -- :tabclose 2, :tabclose $, :tabclose +, :tabclose -2: the editor tab of this stack that
-            -- many tabs on, or the Nth, as :tabnext counts them. A count in front (:2tabclose,
-            -- :$tabclose) is refused: Neovim has already turned it into one of its own tab pages,
-            -- the editors' hidden ones, which say nothing about the editor tabs. :tabclose alone is
-            -- the table's: this editor closes.
-            host.translate('tabclose', function(p)
+            --- The words for a tab named after :tabclose or :tabonly (2, $, +, -2), or nil and why. A
+            --- count in front (:2tabclose, :$tabclose) is refused: Neovim has already turned it into
+            --- one of its own tab pages, the editors' hidden ones, which say nothing about the editor
+            --- tabs.
+            local function tab_named(p)
               if p.range and #p.range > 0 then
-                return nil, 'write the tab after the command: :tabclose 2, :tabclose $, :tabclose +'
+                return nil, 'write the tab after the command: :' .. p.cmd .. ' 2, :' .. p.cmd .. ' $, :' .. p.cmd .. ' +'
               end
               local arg = p.args[1]
+              if arg and not (arg == '$' or arg:match('^[+-]?%d+$') or arg == '+' or arg == '-') then
+                return nil, 'E475: Invalid argument: ' .. arg
+              end
+              return arg
+            end
+
+            -- :tabonly, :tabonly 2: the other editor tabs of this stack close, as Eclipse's Close
+            -- Others closes them (the one named stays and comes to the front); Eclipse asks once
+            -- about the changes of those it would lose. :tabonly! is refused (windows.TABS).
+            host.translate('tabonly', function(p)
+              if p.bang then
+                return nil, windows.TABS
+              end
+              local arg, why = tab_named(p)
+              if why then
+                return nil, why
+              end
+              return { 'window', 'tabonly', arg or '.' }
+            end)
+
+            -- :tabclose 2, :tabclose $, :tabclose +, :tabclose -2: the editor tab of this stack that
+            -- many tabs on, or the Nth, as :tabnext counts them. :tabclose alone is the table's:
+            -- this editor closes.
+            host.translate('tabclose', function(p)
+              local arg, why = tab_named(p)
+              if why then
+                return nil, why
+              end
               if not arg then
                 return nil -- the usual handling: close this editor
-              end
-              if not (arg == '$' or arg:match('^[+-]?%d+$') or arg == '+' or arg == '-') then
-                return nil, 'E475: Invalid argument: ' .. arg
               end
               return { 'window', 'tabclose', arg, p.bang and '1' or '0' }
             end)

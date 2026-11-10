@@ -25,6 +25,7 @@ import org.eclipse.e4.ui.model.application.ui.basic.MStackElement;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
@@ -125,6 +126,7 @@ final class EditorSplits {
                 case TAB -> tab(editor, part, command);
                 case TO_TAB -> toTab(editor, part);
                 case TAB_CLOSE -> tabClose(editor, part, command);
+                case TAB_ONLY -> tabOnly(editor, part, command);
             }
         } catch (IllegalStateException e) {
             HostCommands.showError(editor, e.getMessage()); // Vim's own error (E443)
@@ -317,6 +319,72 @@ final class EditorSplits {
         ITextEditor text = EditorAttachManager.textEditorOf(closing);
         boolean unasked = text != null && EclipseFileCommands.isSafeToCloseUnasked(closing, text);
         page.closeEditor(closing, !command.force() && !unasked);
+    }
+
+    /**
+     * {@code :tabonly}, {@code :tabonly 2}: the other editor tabs of this stack close, as Eclipse's
+     * <i>Close Others</i> closes them, and the one named stays, in front. Splits in other stacks
+     * stay: Vim's tab pages are the editor tabs of one stack here.
+     *
+     * <p><b>Nothing is lost without a question.</b> Vim keeps the buffers of the tab pages
+     * {@code :tabonly} closes ({@code 'hidden'}); Eclipse cannot keep unsaved changes without an
+     * editor, so it asks about them, once for all, as when several editors close together
+     * ({@code IWorkbenchPage.closeEditors}). It does not ask about a plain text editor whose
+     * document an editor that stays open shows too (a clone of the tab that stays, a split): the
+     * changes stay there. Two clones that both close keep nothing, so they are asked about.
+     * {@code :tabonly!}, which would discard them all at once, is refused in Neovim.
+     */
+    private static void tabOnly(ITextEditor editor, IEditorPart part, WindowCommand command) {
+        MPartStack stack = stackOf(part.getSite().getService(MPart.class));
+        if (stack == null) {
+            return;
+        }
+        List<MPart> tabs = EditorTabs.visibleParts(stack);
+        int index = tabs.indexOf(stack.getSelectedElement());
+        int keep = command.key() == '.' ? index
+                : TabNavigation.closeTarget(command.key(), command.count(), index, tabs.size());
+        if (keep < 0) {
+            HostCommands.showError(editor, "E16: Invalid range");
+            return;
+        }
+        IWorkbenchPage page = part.getSite().getPage();
+        IEditorPart keeper = keep == index ? part : editorOf(page, part, tabs.get(keep));
+        if (keeper == null) {
+            HostCommands.showError(editor, "Cannot keep that tab: it is not an editor");
+            return;
+        }
+        List<IEditorPart> closing = new ArrayList<>();
+        for (int i = 0; i < tabs.size(); i++) {
+            IEditorPart other = i == keep ? null : i == index ? part : editorOf(page, part, tabs.get(i));
+            if (other != null) {
+                closing.add(other);
+            }
+        }
+        // The documents that stay shown: by any editor open after the close.
+        List<IDocument> kept = new ArrayList<>();
+        for (IEditorReference reference : page.getEditorReferences()) {
+            IEditorPart open = reference.getEditor(false);
+            ITextEditor text = open == null || closing.contains(open) ? null : EditorAttachManager.textEditorOf(open);
+            IDocument document = text == null ? null : text.getDocumentProvider().getDocument(text.getEditorInput());
+            if (document != null) {
+                kept.add(document);
+            }
+        }
+        List<IEditorReference> unasked = new ArrayList<>();
+        List<IEditorReference> asked = new ArrayList<>();
+        for (IEditorPart other : closing) {
+            ITextEditor text = EditorAttachManager.textEditorOf(other);
+            boolean keptElsewhere = text == other
+                    && kept.contains(text.getDocumentProvider().getDocument(text.getEditorInput()));
+            (keptElsewhere ? unasked : asked).add((IEditorReference) page.getReference(other));
+        }
+        if (!unasked.isEmpty()) {
+            page.closeEditors(unasked.toArray(IEditorReference[]::new), false);
+        }
+        if (!asked.isEmpty()) {
+            page.closeEditors(asked.toArray(IEditorReference[]::new), true); // one question for all
+        }
+        activate(page, keeper);
     }
 
     /**
