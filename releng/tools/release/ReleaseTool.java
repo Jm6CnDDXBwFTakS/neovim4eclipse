@@ -39,6 +39,7 @@ import common.UpdateSite;
 import common.Version;
 
 import eclipse.EclipseFiles;
+import maven.MavenFiles;
 
 /**
  * The Release tool: CONTRIBUTING.md's "Releasing" as steps a person runs, each of which checks
@@ -52,10 +53,10 @@ import eclipse.EclipseFiles;
  *       {@code 0.2.3-SNAPSHOT}, changes listed under <i>Unreleased</i>. The six pinned Neovim
  *       archives still match their hashes ({@code UpdateNeovimDownloads.java --check}, as the
  *       Release workflow's first job), with a line when Neovim has a newer release, and one when
- *       Eclipse has a release newer than the smoke job's newest ({@code EclipseUpgrade.java}); the manual
- *       checks due ({@code ManualChecks.java due}). Then every test on this machine
- *       ({@code LikeCi.java --all}): the commit that passes is written to
- *       {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
+ *       Eclipse has a release newer than the smoke job's newest ({@code EclipseUpgrade.java}), and
+ *       one when Maven or its wrapper has ({@code MavenUpgrade.java}); the manual checks due
+ *       ({@code ManualChecks.java due}). Then every test on this machine ({@code LikeCi.java --all}):
+ *       the commit that passes is written to {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
  *       command for macOS and Windows, a reminder only: CI's macOS and Windows jobs are the gate.</li>
  *   <li><b>prepare</b>: dates the changelog section, names the version in the README's status line
  *       ({@link ReleaseFiles}), and commits that.</li>
@@ -262,6 +263,7 @@ public final class ReleaseTool {
         checkNeovimPins();
         newerNeovim();
         newerEclipse();
+        newerMaven();
 
         System.out.println();
         System.out.println("Manual checks due for this release (docs/MANUAL_CHECKS.md):");
@@ -357,6 +359,38 @@ public final class ReleaseTool {
                     + "releng/tools/eclipse/EclipseUpgrade.java newest (docs/UPGRADING.md, \"Eclipse release\"). Not a blocker.");
         } else {
             ok("Eclipse " + tested + ", the newest the smoke job installs into, is Eclipse's newest release");
+        }
+    }
+
+    /**
+     * Prints a line when Maven on its line ({@code maven.line} in releng/tools/maven/settings.properties)
+     * or the Maven wrapper has a release newer than the build's ({@code .mvn/wrapper/maven-wrapper.properties}).
+     */
+    private void newerMaven() {
+        MavenFiles.WrapperSettings now;
+        Optional<Version> maven;
+        Version wrapper;
+        try {
+            now = MavenFiles.settings(read(MavenFiles.PROPERTIES));
+            String line = Settings.load(root.resolve("releng/tools/maven"), Map.of()).get("maven.line");
+            maven = MavenFiles.newestOn(MavenFiles.releases(Http.text(MavenFiles.MAVEN + "maven-metadata.xml")), line);
+            wrapper = MavenFiles.releases(Http.text(MavenFiles.WRAPPER + "maven-metadata.xml")).getLast();
+        } catch (ToolFailure e) {
+            System.out.println("  (could not read Maven's newest release: " + e.getMessage() + ")");
+            return;
+        }
+        List<String> newer = new ArrayList<>();
+        if (maven.isPresent() && maven.get().compareTo(now.maven()) > 0) {
+            newer.add("Maven " + maven.get() + " (in use: " + now.maven() + ")");
+        }
+        if (wrapper.compareTo(now.wrapper()) > 0) {
+            newer.add("Maven Wrapper " + wrapper + " (in use: " + now.wrapper() + ")");
+        }
+        if (newer.isEmpty()) {
+            ok("Maven " + now.maven() + " and Maven Wrapper " + now.wrapper() + " are the newest");
+        } else {
+            System.out.println("  note: " + String.join(" and ", newer) + " is out; once a week old: java "
+                    + "releng/tools/maven/MavenUpgrade.java (docs/UPGRADING.md, \"Build tools\"). Not a blocker.");
         }
     }
 
