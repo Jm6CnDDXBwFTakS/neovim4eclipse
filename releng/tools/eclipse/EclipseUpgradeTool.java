@@ -20,6 +20,7 @@ import common.Ask;
 import common.Changelog;
 import common.EclipseRelease;
 import common.Git;
+import common.Http;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
@@ -181,7 +182,7 @@ public final class EclipseUpgradeTool {
 
     private void newest() {
         checkBranch();
-        String drop = EclipseFiles.newestDrop(Platform.text(EclipseFiles.DATA_JSON));
+        String drop = EclipseFiles.newestDrop(Http.text(EclipseFiles.DATA_JSON));
         EclipseFiles.checkDropDate(drop);
         EclipseRelease to = EclipseFiles.releaseOf(drop);
         EclipseRelease from = EclipseRelease.ofNumber(smokeEntry(NEWEST).eclipse());
@@ -249,7 +250,7 @@ public final class EclipseUpgradeTool {
         if (to.compareTo(newest) >= 0) {
             throw new ToolFailure(to + " is not older than the newest tested Eclipse, " + newest + ": move that first (newest)");
         }
-        String drop = EclipseFiles.dropIn(Platform.text(EclipseFiles.UPDATES + to.number() + "/"), to);
+        String drop = EclipseFiles.dropIn(Http.text(EclipseFiles.UPDATES + to.number() + "/"), to);
         EclipseFiles.checkDropDate(drop);
         Downloads d = downloads(drop, to);
         // Always unpacked: the test jars' versions come from its plugins/ folder.
@@ -359,9 +360,9 @@ public final class EclipseUpgradeTool {
     }
 
     private Downloads downloads(String drop, EclipseRelease release) {
-        String checksums = Platform.textOrNull(EclipseFiles.checksums(drop));
+        String checksums = Http.textOrNull(EclipseFiles.checksums(drop));
         if (checksums == null) {
-            checksums = Platform.textOrNull(EclipseFiles.oldChecksums(drop));
+            checksums = Http.textOrNull(EclipseFiles.oldChecksums(drop));
         }
         if (checksums == null) {
             throw new ToolFailure(drop + " has no checksums file (" + EclipseFiles.checksums(drop) + ", or "
@@ -389,7 +390,7 @@ public final class EclipseUpgradeTool {
             throw new ToolFailure("Eclipse " + release + " has no Platform for this machine (" + EclipseFiles.platformFile(release, os, arch)
                     + "), so nothing can be installed into it here: run this on another machine, or newest/oldest with --no-tests");
         }
-        Path archive = Platform.download(url, sha, root.resolve("target/eclipse-upgrade/downloads"));
+        Path archive = Http.download(url, new Http.Digest("SHA-512", sha), root.resolve("target/eclipse-upgrade/downloads"));
         Platform.Installation eclipse = Platform.unpack(archive, work(release).resolve(runs ? "platform" : "ci-platform"), shell); // CI's is Linux x86_64 whatever this machine is
         ok("Eclipse " + release + " unpacked: " + eclipse.program());
         return eclipse;

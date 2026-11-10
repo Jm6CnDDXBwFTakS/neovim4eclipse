@@ -31,6 +31,7 @@ import common.EclipseRelease;
 import common.Folders;
 import common.Git;
 import common.GitHub;
+import common.Http;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
@@ -38,7 +39,6 @@ import common.UpdateSite;
 import common.Version;
 
 import eclipse.EclipseFiles;
-import eclipse.Platform;
 
 /**
  * The Release tool: CONTRIBUTING.md's "Releasing" as steps a person runs, each of which checks
@@ -347,7 +347,7 @@ public final class ReleaseTool {
         EclipseRelease tested = EclipseRelease.ofNumber(smoke.get(1).eclipse());
         EclipseRelease latest;
         try {
-            latest = EclipseFiles.releaseOf(EclipseFiles.newestDrop(Platform.text(EclipseFiles.DATA_JSON)));
+            latest = EclipseFiles.releaseOf(EclipseFiles.newestDrop(Http.text(EclipseFiles.DATA_JSON)));
         } catch (ToolFailure e) {
             System.out.println("  (could not read Eclipse's newest release: " + e.getMessage() + ")");
             return;
