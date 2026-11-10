@@ -313,6 +313,10 @@ final class EditorSplits {
         IWorkbenchPage page = part.getSite().getPage();
         List<IEditorPart> closing = madeEditorsOf(page, partsOf(part, tabs.get(target)));
         if (closing.isEmpty()) {
+            if (!isUnmade(tabs.get(target))) {
+                HostCommands.showError(editor, "Cannot close that tab: it is not an editor");
+                return;
+            }
             closeUnmade(part, List.of(tabs.get(target)));
             return;
         }
@@ -372,11 +376,11 @@ final class EditorSplits {
         for (int i = 0; i < tabs.size(); i++) {
             if (i != keep) {
                 List<IEditorPart> editors = madeEditorsOf(page, partsOf(part, tabs.get(i))); // both halves too
-                if (editors.isEmpty()) {
-                    unmade.add(tabs.get(i));
-                } else {
+                if (!editors.isEmpty()) {
                     closing.addAll(editors);
-                }
+                } else if (isUnmade(tabs.get(i))) {
+                    unmade.add(tabs.get(i));
+                } // else a part that is not an editor (another plug-in's): it stays, unasked about
             }
         }
         EPartService parts = part.getSite().getService(EPartService.class);
@@ -398,6 +402,15 @@ final class EditorSplits {
         EModelService models = part.getSite().getService(EModelService.class);
         return models.findElements(tab, null, MPart.class, null).stream()
                 .filter(p -> !(p instanceof MCompositePart)).toList();
+    }
+
+    /**
+     * Whether a tab's part was never made: Eclipse makes it when the tab is first shown, and until
+     * then it has no object behind it. A part with one that is no Eclipse editor (a plug-in's own
+     * part in the editor area) is not taken away unasked: it may hold changes of its own.
+     */
+    private static boolean isUnmade(MPart tab) {
+        return tab.getObject() == null;
     }
 
     /**
