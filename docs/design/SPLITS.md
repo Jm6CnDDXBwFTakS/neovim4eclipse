@@ -173,4 +173,5 @@ After a restart Eclipse brings the stacks and their clones back, as it does any 
 - `windows_spec.lua` (tests/unit, a headless Neovim): which words each command and key sends, the
   side rule, `'path'`, buffers, the refusals.
 - `SplitsEndToEndTest` (UI tests): `:vsplit`, `:split file`, `Ctrl-W` moves, `:only`, the sizes,
-  `Ctrl-W x`, *Toggle Split Editor* both ways, and the hidden preference's halves.
+  `Ctrl-W x`, *Toggle Split Editor* both ways, the hidden preference's halves, and `:q` in a half
+  (the focus goes back to the other).

@@ -265,4 +265,33 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         toggleSplitEditor(true);
         waitUntil("the halves joined", TIMEOUT_MS, () -> page().getEditorReferences().length == 1);
     }
+
+    /**
+     * {@code :q} in one of Eclipse's halves closes that half; the focus goes back to the half that
+     * stays, so the next key reaches Neovim there.
+     */
+    @Test
+    void quitInOneOfEclipsesHalvesLeavesTheOtherWithTheFocus() throws Exception {
+        Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.ECLIPSE_SPLITS, true);
+        toggleSplitEditor(false);
+        waitUntil("Eclipse's second half", TIMEOUT_MS, () -> page().getEditorReferences().length == 2);
+        ITextEditor half = null;
+        for (IEditorReference reference : page().getEditorReferences()) {
+            if (reference.getEditor(false) != editor) {
+                half = (ITextEditor) reference.getEditor(false);
+            }
+        }
+        ITextEditor other = half;
+        page().activate(other);
+        waitForActive(other, "the second half");
+
+        ex("q");
+        waitUntil("one editor again", TIMEOUT_MS, () -> page().getEditorReferences().length == 1);
+        ITextEditor left = (ITextEditor) page().getEditorReferences()[0].getEditor(false);
+        waitForActive(left, "the half that stays");
+        waitUntil("the focus in it", TIMEOUT_MS, () -> widgetOf(left).isFocusControl(),
+                () -> "; the focus is on " + UiTestSupport.focusReport(widgetOf(left)));
+        type(widgetOf(left), "x");
+        expectText(left, "lpha\nbeta\ngamma\n");
+    }
 }

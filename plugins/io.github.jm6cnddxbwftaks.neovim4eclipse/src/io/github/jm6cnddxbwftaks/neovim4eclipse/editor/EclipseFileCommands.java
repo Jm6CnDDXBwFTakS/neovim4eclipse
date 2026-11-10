@@ -18,6 +18,7 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.viewers.StructuredSelection;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -262,8 +263,8 @@ public final class EclipseFileCommands {
      * {@code :q} in one of two windows on a buffer closes that window without a word. Eclipse would
      * ask, since each editor counts as a thing to save of its own.
      *
-     * <p>Closing one of Eclipse's split halves leaves the focus on nothing; it goes back to the
-     * editor in front, so the next key reaches Neovim.
+     * <p>Closing one of Eclipse's split halves leaves the focus outside the editor that stays; it
+     * goes back to the editor in front, so the next key reaches Neovim.
      *
      * @param force {@code true} closes without prompting to save (discarding changes);
      *              {@code false} lets Eclipse ask
@@ -274,14 +275,33 @@ public final class EclipseFileCommands {
             if (page != null) {
                 boolean shared = EditorAttachManager.getInstance().isShownInAnotherEditor(editor);
                 page.closeEditor(EditorAttachManager.getInstance().workbenchPartOf(editor), !force && !shared);
-                IEditorPart next = page.getActiveEditor();
-                if (next != null && Display.getCurrent() != null && Display.getCurrent().getFocusControl() == null) {
-                    page.activate(next);
-                    next.setFocus();
+                // Once Eclipse is done: joining its halves again happens after the close returns.
+                Display display = Display.getCurrent();
+                if (display != null) {
+                    display.asyncExec(() -> focusActiveEditor(page));
                 }
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Eclipse close failed", e);
+        }
+    }
+
+    /**
+     * Gives the keyboard focus to the editor in front after {@link #close}, when no control has it
+     * (a closed split half leaves it so) or the editor is the active part without its text having
+     * it. A view Eclipse made active instead keeps it.
+     */
+    private static void focusActiveEditor(IWorkbenchPage page) {
+        IEditorPart next = page.getActiveEditor();
+        if (next == null) {
+            return;
+        }
+        Control focus = Display.getCurrent().getFocusControl();
+        boolean nowhere = focus == null;
+        boolean notInItsText = page.getActivePart() == next && focus != next.getAdapter(Control.class);
+        if (nowhere || notInItsText) {
+            page.activate(next);
+            next.setFocus();
         }
     }
 
