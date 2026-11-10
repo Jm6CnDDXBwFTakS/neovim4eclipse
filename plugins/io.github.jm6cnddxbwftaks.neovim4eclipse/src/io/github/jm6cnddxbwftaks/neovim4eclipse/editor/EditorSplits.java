@@ -315,8 +315,8 @@ final class EditorSplits {
             return;
         }
         ITextEditor text = EditorAttachManager.textEditorOf(closing);
-        boolean shared = text != null && EditorAttachManager.getInstance().isShownInAnotherEditor(text);
-        page.closeEditor(closing, !command.force() && !shared);
+        boolean unasked = text != null && EclipseFileCommands.isSafeToCloseUnasked(closing, text);
+        page.closeEditor(closing, !command.force() && !unasked);
     }
 
     /**

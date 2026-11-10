@@ -14,6 +14,7 @@ import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -140,6 +141,38 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
                     "still open after Cancel");
             assertTrue(multiPage.isDirty(), "with its change");
         } finally {
+            page().closeEditor(multiPage, false);
+        }
+    }
+
+    /**
+     * A multi-page editor asks before {@code :q} closes it with changes even while a Text Editor
+     * shows its text page's document: it may hold other documents, whose changes nothing else
+     * keeps (the plug-in manifest editor's plugin.xml page, say).
+     */
+    @Test
+    void quitInAMultiPageEditorAsksEvenWhenAnotherEditorShowsItsDocument() throws Exception {
+        IFile file = createFile("pom.mpage", "<project/>\n");
+        IEditorPart multiPage = IDE.openEditor(page(), file, true);
+        assertTrue(multiPage instanceof TestMultiPageEditor, "opened in " + multiPage);
+        ITextEditor plain = (ITextEditor) page().openEditor(multiPage.getEditorInput(), TEXT_EDITOR, true,
+                IWorkbenchPage.MATCH_INPUT | IWorkbenchPage.MATCH_ID);
+        try {
+            assertNotSame(multiPage, plain, "a second editor on the file");
+            waitForAttach(plain, "the Text Editor");
+            page().activate(multiPage);
+            ITextEditor sourcePage = EditorAttachManager.textEditorOf(multiPage);
+            waitForAttach(sourcePage, "the Source page");
+            type(widgetOf(sourcePage), 'x');
+            expectText(sourcePage, "project/>\n");
+            List<String> dialogs = closeModalDialogsWhile(widgetOf(sourcePage));
+            session.commandAsync("q");
+            waitUntil("Eclipse's question about saving", TIMEOUT_MS, () -> !dialogs.isEmpty());
+            settle();
+            assertTrue(List.of(page().getEditorReferences()).stream().anyMatch(r -> r.getEditor(false) == multiPage),
+                    "still open after Cancel");
+        } finally {
+            page().closeEditor(plain, false);
             page().closeEditor(multiPage, false);
         }
     }

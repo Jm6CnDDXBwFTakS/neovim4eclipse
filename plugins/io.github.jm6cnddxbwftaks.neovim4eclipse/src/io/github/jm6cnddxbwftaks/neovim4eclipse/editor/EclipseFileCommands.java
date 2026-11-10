@@ -261,7 +261,8 @@ public final class EclipseFileCommands {
      * <p>When another editor shows the same document (a split, a clone, one of Eclipse's split
      * halves), Eclipse is not asked about saving: the changes stay in the other editor, as Vim's
      * {@code :q} in one of two windows on a buffer closes that window without a word. Eclipse would
-     * ask, since each editor counts as a thing to save of its own.
+     * ask, since each editor counts as a thing to save of its own. Not for a multi-page editor,
+     * which may hold other documents too ({@link #isSafeToCloseUnasked}).
      *
      * <p>Closing one of Eclipse's split halves leaves the focus outside the editor that stays; it
      * goes back to the editor in front, so the next key reaches Neovim.
@@ -273,8 +274,8 @@ public final class EclipseFileCommands {
         try {
             IWorkbenchPage page = editor.getEditorSite().getPage();
             if (page != null) {
-                boolean shared = EditorAttachManager.getInstance().isShownInAnotherEditor(editor);
-                page.closeEditor(EditorAttachManager.getInstance().workbenchPartOf(editor), !force && !shared);
+                IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
+                page.closeEditor(part, !force && !isSafeToCloseUnasked(part, editor));
                 // Once Eclipse is done: joining its halves again happens after the close returns.
                 Display display = Display.getCurrent();
                 if (display != null) {
@@ -284,6 +285,16 @@ public final class EclipseFileCommands {
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Eclipse close failed", e);
         }
+    }
+
+    /**
+     * Whether closing {@code part} without Eclipse's question loses nothing: it is a plain text
+     * editor ({@code part} is {@code text} itself, one document) whose document another editor
+     * shows too, which keeps the changes. A multi-page editor (the plug-in manifest editor, the POM
+     * editor) may hold more documents than its text page's, so Eclipse asks for it as always.
+     */
+    static boolean isSafeToCloseUnasked(IEditorPart part, ITextEditor text) {
+        return part == text && EditorAttachManager.getInstance().isShownInAnotherEditor(text);
     }
 
     /**
