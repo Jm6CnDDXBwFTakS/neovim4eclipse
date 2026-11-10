@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-11-10
+
 ### Changed
 
 - Nothing changes in the plug-in itself: a new internal tool helps manage the newest and the oldest
