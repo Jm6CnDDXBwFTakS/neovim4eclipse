@@ -374,9 +374,13 @@ final class EditorSplits {
         if (!asked.isEmpty()) {
             page.closeEditors(asked.toArray(IEditorReference[]::new), true); // one question for all
         }
-        parts.activate(keeper, true); // made now if it never was
-        if (page.getActiveEditor() != null) {
-            page.getActiveEditor().setFocus();
+        if (keep == index) {
+            activate(page, part); // this editor, also when it is one of Eclipse's halves
+        } else {
+            parts.activate(partsOf(part, keeper).get(0), true); // made now if it never was
+            if (page.getActiveEditor() != null) {
+                page.getActiveEditor().setFocus();
+            }
         }
     }
 
