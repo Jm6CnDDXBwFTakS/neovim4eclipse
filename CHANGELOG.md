@@ -37,6 +37,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `:q` in one of two editors on a file (a split, *Clone*) closes it without Eclipse's question
   about saving, as Vim closes one of two windows: the changes stay in the other editor.
 
+### Fixed
+
+- After Eclipse's *Toggle Split Editor* makes its two halves, the active half has the keyboard
+  focus. On macOS no half had it, so a click was needed before typing.
+
 ## [0.2.11] - 2026-11-10
 
 ### Changed

@@ -481,11 +481,8 @@ final class EditorSplits {
         } finally {
             shell.setRedraw(true);
         }
-        IWorkbenchPage page = part.getSite().getPage();
-        if (page.getActiveEditor() != null) {
-            page.activate(page.getActiveEditor()); // joining halves may have closed the active one
-            page.getActiveEditor().setFocus();
-        }
+        // Joining the halves may have closed the active one.
+        EclipseFileCommands.focusActiveEditor(part.getSite().getPage());
     }
 
     // ---- Ctrl-W h j k l w W t b p ----

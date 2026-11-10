@@ -14,6 +14,7 @@ import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
@@ -75,7 +76,8 @@ public final class SplitEditorHandler extends AbstractHandler {
      * Eclipse's own Toggle Split Editor: the halves of one editor, made or taken away. As Eclipse's
      * handler does it: the stack's front tab (the editor, or the composite part holding its two
      * halves) is searched for the editor's model part, whose split tag is then toggled; a split the
-     * other way round is turned into this one.
+     * other way round is turned into this one. Then, unlike Eclipse's handler, the active editor
+     * gets the keyboard focus if nothing else does ({@link EclipseFileCommands#focusActiveEditor}).
      */
     static void toggleHalves(IEditorPart editor, boolean oneAboveTheOther) {
         MPart part = editor.getSite().getService(MPart.class);
@@ -90,6 +92,7 @@ public final class SplitEditorHandler extends AbstractHandler {
         String wanted = oneAboveTheOther ? IPresentationEngine.SPLIT_HORIZONTAL : IPresentationEngine.SPLIT_VERTICAL;
         String other = oneAboveTheOther ? IPresentationEngine.SPLIT_VERTICAL : IPresentationEngine.SPLIT_HORIZONTAL;
         Shell shell = editor.getSite().getShell();
+        IWorkbenchPage page = editor.getSite().getPage(); // taken first: joining may close this editor
         shell.setRedraw(false);
         try {
             if (target.getTags().contains(wanted)) {
@@ -101,5 +104,8 @@ public final class SplitEditorHandler extends AbstractHandler {
         } finally {
             shell.setRedraw(true);
         }
+        // Eclipse's own handler stops here; on macOS that leaves no half with the keyboard focus,
+        // and a click was needed before typing.
+        EclipseFileCommands.focusActiveEditor(page);
     }
 }

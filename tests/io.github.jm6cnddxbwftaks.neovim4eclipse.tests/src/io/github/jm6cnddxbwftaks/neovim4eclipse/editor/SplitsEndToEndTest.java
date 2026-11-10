@@ -300,8 +300,9 @@ class SplitsEndToEndTest extends EndToEndTestBase {
     /**
      * The hidden preference gives Toggle Split Editor back to Eclipse: two halves in one stack, one
      * above the other for Ctrl+_. Neovim stays in the half Eclipse leaves active (on macOS the first
-     * half: the new one only opens). {@code Ctrl-W j} and {@code k} still go between them; pressed
-     * again, the command joins them.
+     * half: the new one only opens), and that half has the keyboard focus, so typing needs no click
+     * first. {@code Ctrl-W j} and {@code k} still go between them; pressed again in the second half,
+     * the command joins them, and the editor that stays has the focus.
      */
     @Test
     void withTheHiddenPreferenceToggleSplitEditorMakesEclipsesHalves() throws Exception {
@@ -324,6 +325,9 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         NeovimEditorController attached = EditorAttachManager.getInstance().getActiveController();
         assertSame(page().getActiveEditor(), attached == null ? null : attached.getEditor(),
                 "Neovim in the half Eclipse made active");
+        ITextEditor active = (ITextEditor) page().getActiveEditor();
+        waitUntil("the focus in the active half", TIMEOUT_MS, () -> widgetOf(active).isFocusControl(),
+                () -> "; the focus is on " + UiTestSupport.focusReport(widgetOf(active)));
 
         page().activate(upper);
         waitForActive(upper, "the upper half");
@@ -338,10 +342,14 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         keys("<C-w>k");
         waitForActive(upper, "Ctrl-W k: the upper half");
 
-        page().activate(editor);
-        waitForActive(editor, "test.txt's first editor");
+        // Joined from the second half, which closes: the focus must not go with it.
+        page().activate(other);
+        waitForActive(other, "test.txt's second half");
         toggleSplitEditor(true);
         waitUntil("the halves joined", TIMEOUT_MS, () -> page().getEditorReferences().length == 1);
+        ITextEditor joined = (ITextEditor) page().getEditorReferences()[0].getEditor(false);
+        waitUntil("the focus in the joined editor", TIMEOUT_MS, () -> widgetOf(joined).isFocusControl(),
+                () -> "; the focus is on " + UiTestSupport.focusReport(widgetOf(joined)));
     }
 
     /**

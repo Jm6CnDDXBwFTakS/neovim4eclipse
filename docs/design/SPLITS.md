@@ -145,7 +145,10 @@ Neovim does not drive) it makes Eclipse's halves, as always.
 - **Eclipse's halves, done again.** Eclipse's handler is internal, so the plug-in does what it does
   by the same public means: it toggles a tag on the editor's model part
   (`IPresentationEngine.SPLIT_HORIZONTAL` or `SPLIT_VERTICAL`), and Eclipse's splitter add-on makes
-  or removes the halves. `:only` removes the tags too.
+  or removes the halves. `:only` removes the tags too. One thing goes beyond Eclipse's handler:
+  afterwards the active editor gets the keyboard focus (`EclipseFileCommands.focusActiveEditor`, as
+  after `:only` and `:q`), unless a view has it. On macOS, Eclipse's handler leaves it on no control,
+  since the first half stays active and the new one only opens, so a click was needed before typing.
 - **The hidden preference `eclipseSplits`** (`PreferenceConstants.ECLIPSE_SPLITS`, default
   `false`, no control on any page): `true` gives the command back to Eclipse's halves in Neovim's
   editors too. It is kept in case the halves turn out to be wanted: the key, the default, the
