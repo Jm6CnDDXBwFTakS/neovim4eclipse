@@ -60,5 +60,7 @@ class TabNavigationTest {
         assertEquals(-1, TabNavigation.closeTarget('+', 3, 1, 4), "no wrapping");
         assertEquals(-1, TabNavigation.closeTarget((char) 0, 5, 1, 4));
         assertEquals(-1, TabNavigation.closeTarget((char) 0, 0, 1, 4), "no tab 0");
+        assertEquals(-1, TabNavigation.closeTarget('+', 0, -1, 4), "no active tab to count from");
+        assertEquals(1, TabNavigation.closeTarget((char) 0, 2, -1, 4), "a number needs none");
     }
 }

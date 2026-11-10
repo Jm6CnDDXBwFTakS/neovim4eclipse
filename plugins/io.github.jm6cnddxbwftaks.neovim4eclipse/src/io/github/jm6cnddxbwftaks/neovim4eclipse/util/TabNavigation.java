@@ -64,11 +64,14 @@ public final class TabNavigation {
      *
      * @param key     {@code '$'}, {@code '+'}, {@code '-'}, or 0 for tab number {@code count}
      * @param count   the number after the key (0 for none: one tab on or back)
-     * @param current index of the active tab
+     * @param current index of the active tab, or -1 if unknown (then {@code +} and {@code -} name none)
      * @param size    number of tabs
      * @return the index to close, or -1 when there is no such tab
      */
     public static int closeTarget(char key, int count, int current, int size) {
+        if (current < 0 && (key == '+' || key == '-')) {
+            return -1; // no active tab to count from
+        }
         int target = switch (key) {
             case '$' -> size - 1;
             case '+' -> current + Math.max(count, 1);
