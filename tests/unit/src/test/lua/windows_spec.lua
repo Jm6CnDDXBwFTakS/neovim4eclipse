@@ -450,6 +450,12 @@ t.test(':sfind looks in \'path\', as Vim does', function()
   t.type(':sfind found.txt<CR>')
   t.eq({ { 'window', 'split', 'above', 'file', sent_path(dir .. '/found.txt') } }, sent_windows())
   t.forget()
+  local _, name = t.document('a.txt', { 'a' })
+  vim.fn.writefile({ 'n' }, vim.fs.dirname(name) .. '/near.txt')
+  t.forget()
+  t.type(':sfind %:h/near.txt<CR>') -- expanded first, as Vim's :sfind does
+  t.eq({ { 'window', 'split', 'above', 'file', sent_path(vim.fs.dirname(name) .. '/near.txt') } }, sent_windows())
+  t.forget()
   vim.v.errmsg = ''
   t.type(':sfind missing.txt<CR>')
   t.ok(vim.v.errmsg:find('E345', 1, true), vim.v.errmsg)

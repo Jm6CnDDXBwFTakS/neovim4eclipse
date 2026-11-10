@@ -1512,7 +1512,11 @@ final class LuaScripts {
                 return split(vertical, p.mods, empty)
               end
               if find then
-                local name = table.concat(p.args, ' ')
+                -- Expanded as Vim's :sfind does (%:h/x, ~, #), once, from the line as typed.
+                local ok, name = pcall(vim.fn.expandcmd, table.concat(p.args, ' '), { errmsg = true })
+                if not ok then
+                  return nil, (tostring(name):gsub('^Vim:', ''))
+                end
                 local found = vim.fn.findfile(name)
                 if found == '' then
                   return nil, 'E345: Can\\'t find file "' .. name .. '" in path'
