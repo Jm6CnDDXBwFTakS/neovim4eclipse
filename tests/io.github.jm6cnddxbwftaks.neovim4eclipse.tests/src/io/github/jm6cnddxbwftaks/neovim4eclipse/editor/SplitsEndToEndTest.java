@@ -438,4 +438,23 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         expectText(other, "ther\n");
         editor = null; // test.txt closed with the others
     }
+
+    /** {@code :tabclose 2} of a tab that holds Eclipse's split halves closes both halves. */
+    @Test
+    void tabcloseOfATabWithEclipsesHalvesClosesBothHalves() throws Exception {
+        createFile("other.txt", "other\n");
+        ex("tabedit other.txt");
+        ITextEditor other = waitForNewEditor(editor, "other.txt as tab 2");
+        Activator.getDefault().getPreferenceStore().setValue(PreferenceConstants.ECLIPSE_SPLITS, true);
+        toggleSplitEditor(true);
+        waitUntil("other.txt's second half", TIMEOUT_MS, () -> page().getEditorReferences().length == 3);
+        page().activate(editor);
+        waitForActive(editor, "test.txt, tab 1");
+
+        ex("tabclose 2");
+        waitUntil("both halves of other.txt to close", TIMEOUT_MS, () -> page().getEditorReferences().length == 1,
+                () -> "; open: " + page().getEditorReferences().length);
+        assertSame(editor, page().getActiveEditor());
+        assertNull(page().findEditor(other.getEditorInput()), "no half of other.txt left");
+    }
 }

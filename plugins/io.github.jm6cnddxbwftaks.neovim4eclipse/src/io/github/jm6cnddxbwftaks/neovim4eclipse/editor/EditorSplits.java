@@ -311,12 +311,32 @@ final class EditorSplits {
             return;
         }
         IWorkbenchPage page = part.getSite().getPage();
-        IEditorPart closing = madeEditorOf(page, partsOf(part, tabs.get(target)));
-        if (closing == null) {
+        List<IEditorPart> closing = madeEditorsOf(page, partsOf(part, tabs.get(target)));
+        if (closing.isEmpty()) {
             closeUnmade(part, List.of(tabs.get(target)));
             return;
         }
-        page.closeEditor(closing, !command.force() && !EclipseFileCommands.isKeptByAnotherEditor(page, closing, List.of()));
+        closeAsking(page, closing, command.force());
+    }
+
+    /**
+     * Closes {@code closing} (the editors of one tab or several), asking once about the changes
+     * that would be lost, unless {@code force}; an editor whose document an editor that stays open
+     * shows too closes without a question ({@link EclipseFileCommands#isKeptByAnotherEditor}).
+     */
+    private static void closeAsking(IWorkbenchPage page, List<IEditorPart> closing, boolean force) {
+        List<IEditorReference> unasked = new ArrayList<>();
+        List<IEditorReference> asked = new ArrayList<>();
+        for (IEditorPart other : closing) {
+            boolean kept = force || EclipseFileCommands.isKeptByAnotherEditor(page, other, closing);
+            (kept ? unasked : asked).add((IEditorReference) page.getReference(other));
+        }
+        if (!unasked.isEmpty()) {
+            page.closeEditors(unasked.toArray(IEditorReference[]::new), false);
+        }
+        if (!asked.isEmpty()) {
+            page.closeEditors(asked.toArray(IEditorReference[]::new), true); // one question for all
+        }
     }
 
     /**
@@ -351,29 +371,18 @@ final class EditorSplits {
         List<MPart> unmade = new ArrayList<>();
         for (int i = 0; i < tabs.size(); i++) {
             if (i != keep) {
-                IEditorPart other = madeEditorOf(page, partsOf(part, tabs.get(i)));
-                if (other != null) {
-                    closing.add(other);
-                } else {
+                List<IEditorPart> editors = madeEditorsOf(page, partsOf(part, tabs.get(i))); // both halves too
+                if (editors.isEmpty()) {
                     unmade.add(tabs.get(i));
+                } else {
+                    closing.addAll(editors);
                 }
             }
-        }
-        List<IEditorReference> unasked = new ArrayList<>();
-        List<IEditorReference> asked = new ArrayList<>();
-        for (IEditorPart other : closing) {
-            boolean kept = EclipseFileCommands.isKeptByAnotherEditor(page, other, closing);
-            (kept ? unasked : asked).add((IEditorReference) page.getReference(other));
         }
         EPartService parts = part.getSite().getService(EPartService.class);
         MPart keeper = tabs.get(keep);
         closeUnmade(part, unmade);
-        if (!unasked.isEmpty()) {
-            page.closeEditors(unasked.toArray(IEditorReference[]::new), false);
-        }
-        if (!asked.isEmpty()) {
-            page.closeEditors(asked.toArray(IEditorReference[]::new), true); // one question for all
-        }
+        closeAsking(page, closing, false);
         if (keep == index) {
             activate(page, part); // this editor, also when it is one of Eclipse's halves
         } else {
@@ -405,15 +414,19 @@ final class EditorSplits {
         }
     }
 
-    /** The editor, among those Eclipse has made, whose model part is one of {@code parts}. */
-    private static IEditorPart madeEditorOf(IWorkbenchPage page, List<MPart> parts) {
+    /**
+     * The editors, among those Eclipse has made, whose model parts are {@code parts}: one for a tab,
+     * two for a tab holding Eclipse's split halves.
+     */
+    private static List<IEditorPart> madeEditorsOf(IWorkbenchPage page, List<MPart> parts) {
+        List<IEditorPart> found = new ArrayList<>();
         for (IEditorReference reference : page.getEditorReferences()) {
             IEditorPart editor = reference.getEditor(false);
             if (editor != null && parts.contains(editor.getSite().getService(MPart.class))) {
-                return editor;
+                found.add(editor);
             }
         }
-        return null;
+        return found;
     }
 
     // ---- :only, Ctrl-W o ----
