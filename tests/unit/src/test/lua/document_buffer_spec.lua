@@ -99,6 +99,24 @@ t.test('a write under another name asks Eclipse for a copy and leaves the buffer
   t.wait_for('no buffer left of other.txt', function() return vim.fn.bufexists(other) == 0 end)
 end)
 
+-- Neovim refuses, as Vim does, to write a file another of its loaded buffers has (E139): an editor
+-- on that file has its own buffer, which a copy would leave out of date. Eclipse is not asked.
+t.test('a copy to a file another document buffer has is Neovim\'s E139, even with !', function()
+  t.setup()
+  local asked = eclipse()
+  local _, other = t.document('Other.txt', { 'other' })
+  vim.fn.writefile({ 'other' }, other) -- the file is on disk, as an open editor's is
+  local buf = t.document('A.txt', { 'changed' })
+  vim.bo[buf].modified = true
+  t.eq(1, vim.fn.bufloaded(other), 'the reason for the refusal: Other.txt has a loaded buffer')
+  local ok, err = pcall(vim.cmd, 'write! ' .. vim.fn.fnameescape(other))
+  t.eq(false, ok)
+  t.ok(tostring(err):find('E139', 1, true), tostring(err))
+  t.eq({}, asked, 'Eclipse is not asked for a copy')
+  t.eq(true, vim.bo[buf].modified, 'the editor\'s own changes are still unsaved')
+  t.eq({ 'other' }, vim.fn.readfile(other), 'the file keeps its text')
+end)
+
 t.test('a copy over an existing file needs !, as in Vim (E13, before Eclipse is asked)', function()
   t.setup()
   local asked = eclipse()

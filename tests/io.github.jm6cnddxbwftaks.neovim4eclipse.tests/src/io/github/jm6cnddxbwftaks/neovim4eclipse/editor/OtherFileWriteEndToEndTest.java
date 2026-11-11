@@ -155,18 +155,6 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals(List.of(), dialogs, "no File Changed");
     }
 
-    /** As in Vim: Neovim refuses to write a file that another of its buffers has (E139). */
-    @Test
-    void aCopyToAFileWithANeovimBufferIsNeovimsE139() throws Exception {
-        openOtherFile();
-        backToTheTestFile();
-        change();
-        runInBox(widget, "w! other.txt");
-
-        waitUntil("E139", TIMEOUT_MS, () -> errmsg().startsWith("E139"), () -> ": " + errmsg());
-        assertEquals("other\n", fileText("other.txt"));
-    }
-
     @Test
     void aCopyNeverGoesOverUnsavedChangesInAnotherEditor() throws Exception {
         ITextEditor other = openInTheBackground(createFile("unsaved.txt", "unsaved\n"));
