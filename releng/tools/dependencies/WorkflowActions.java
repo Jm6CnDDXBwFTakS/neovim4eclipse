@@ -130,7 +130,7 @@ public final class WorkflowActions {
 
     /**
      * The commit a release tag points to now, and that commit's date, as
-     * {@code gh api repos/<owner>/<repo>/commits/refs/tags/<tag> --jq '"\(.sha)\t\(.commit.committer.date)"'}
+     * {@code gh api repos/<owner>/<repo>/commits/refs/tags/<tag> --jq '[.sha, .commit.committer.date] | @tsv'}
      * answers: {@code 77dd5b2c…\t2026-11-04T21:58:10Z}.
      */
     public record TagCommit(String sha, Instant date) {

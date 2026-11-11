@@ -17,8 +17,12 @@ import java.util.regex.Pattern;
  * JSON library: for example {@link #runs} asks for
  * <pre>
  *   gh run list --workflow build.yml --commit 9c7d0d2… --json databaseId,status,conclusion,url,event,headBranch
- *               --jq '.[] | "\(.databaseId)\t\(.status)\t…"'
+ *               --jq '.[] | [.databaseId, .status, …] | @tsv'
  * </pre>
+ * The filters use {@code @tsv}, never a {@code "…"} string: on Windows, Java joins the arguments
+ * into one command line without escaping the double quotes inside one, and {@code gh} then takes
+ * them away, so jq would get {@code \(.status)…} with no string around it and fail. A null value
+ * ({@code conclusion} while a run is going) is an empty field.
  * and reads {@code 42186112399	completed	success	https://github.com/…/runs/42186112399	push	main}.
  */
 public final class GitHub {
@@ -59,7 +63,7 @@ public final class GitHub {
     public List<Run> runs(String workflow, String commit, String event, String branch) {
         String out = shell.out(List.of("gh", "run", "list", "--workflow", workflow, "--commit", commit, "--event", event,
                 "--branch", branch, "--limit", "20", "--json", "databaseId,status,conclusion,url,event,headBranch",
-                "--jq", ".[] | \"\\(.databaseId)\\t\\(.status)\\t\\(.conclusion)\\t\\(.url)\\t\\(.event)\\t\\(.headBranch)\""));
+                "--jq", ".[] | [.databaseId, .status, .conclusion, .url, .event, .headBranch] | @tsv"));
         List<Run> runs = new ArrayList<>();
         for (String line : out.lines().toList()) {
             parseRun(line).ifPresent(runs::add);
@@ -129,7 +133,7 @@ public final class GitHub {
         System.out.println("watching " + run.url());
         for (int i = 0; i <= WATCH_TRIES; i++) {
             String[] state = shell.out(List.of("gh", "run", "view", Long.toString(run.id()), "--json", "status,conclusion",
-                    "--jq", ".status + \"\\t\" + .conclusion")).split("\t", -1);
+                    "--jq", "[.status, .conclusion] | @tsv")).split("\t", -1);
             if (state[0].equals("completed")) {
                 return state.length > 1 && state[1].equals("success");
             }

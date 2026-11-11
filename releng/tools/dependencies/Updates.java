@@ -251,7 +251,8 @@ public final class Updates {
             ReleaseNumber now = ReleaseNumber.parse(oldest.release()).orElseThrow();
             Map<ReleaseNumber, WorkflowActions.Tag> tags = new LinkedHashMap<>();
             for (WorkflowActions.Tag t : WorkflowActions.tags(shell.out(List.of("gh", "api", "repos/" + repository + "/releases?per_page=100",
-                    "--jq", ".[] | select(.draft | not) | select(.prerelease | not) | \"\\(.tag_name)\\t\\(.published_at)\"")))) {
+                    // @tsv, not a "…" string: Windows would lose its quotes (common/GitHub says why)
+                    "--jq", ".[] | select(.draft | not) | select(.prerelease | not) | [.tag_name, .published_at] | @tsv")))) {
                 t.number().ifPresent(n -> tags.putIfAbsent(n, t));
             }
             // The SHA the tag points to is what gets pinned, so it is looked up with the release's
@@ -288,7 +289,7 @@ public final class Updates {
         Instant released = parseInstant(tag.published()).orElseThrow(() -> new ToolFailure(what + " has no publish date"));
         WorkflowActions.TagCommit commit = WorkflowActions.TagCommit.parse(shell.out(List.of("gh", "api",
                 // refs/tags/: only a tag, never a branch of the same name
-                "repos/" + repository + "/commits/refs/tags/" + tag.name(), "--jq", "\"\\(.sha)\\t\\(.commit.committer.date)\"")), what);
+                "repos/" + repository + "/commits/refs/tags/" + tag.name(), "--jq", "[.sha, .commit.committer.date] | @tsv")), what);
         if (WorkflowActions.looksMoved(released, commit.date())) {
             throw new ToolFailure(what + " came out " + released + ", but its tag points to " + commit.sha() + ", a commit of "
                     + commit.date() + ": the tag was moved after the release. Check the release on GitHub before pinning anything"
