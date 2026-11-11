@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-11-11
+
 ### Added
 
 - Vim's splits, as Eclipse editors: `:split`, `:vsplit`, `:new`, `:sbuffer`, `:sfind` and
