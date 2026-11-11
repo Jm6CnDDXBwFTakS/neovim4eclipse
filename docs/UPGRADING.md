@@ -27,35 +27,73 @@ The safe loop for any upgrade:
 | Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
 | Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | the release name (`2024-12`) and its number (`4.34`) where `releng/version-copies.txt` lists them, sections `[eclipse.oldest]` and `[eclipse.oldest.number]` (docs, `feature.xml` with its `org.eclipse.platform` import, workflow comments); the first entry of the smoke job in `update-site.yml` and `rehearse-release.yml` (checked: its number and that its download is that release's). Not checked: the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties). `java releng/tools/eclipse/EclipseUpgrade.java oldest <release>` moves all of them |
 | Eclipse release (newest tested) | the second entry (`eclipse: '4.41'`, its `platform-url` and `platform-sha512`) of the `smoke` job in `.github/workflows/update-site.yml` | the same entry in `rehearse-release.yml`; the README's "tested up to 2026-09 (4.41)" and the copies in sections `[eclipse.newest]` and `[eclipse.newest.number]`. `java releng/tools/eclipse/EclipseUpgrade.java newest` moves them |
-| Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. By hand: `plugins/.../licenses/` |
+| Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. `plugins/.../licenses/` is compared by `Dependencies.java` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
-| Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform) |
+| Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform); `Dependencies.java` moves it with the property (`copies.tycho.version` in its settings) |
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself, and the Maven wrapper | `distributionUrl` and `distributionSha256Sum` (Maven), `wrapperVersion` (the scripts `mvnw` and `mvnw.cmd`) in `.mvn/wrapper/maven-wrapper.properties`; the line Maven stays on is `maven.line` in `releng/tools/maven/settings.properties` | none; `java releng/tools/maven/MavenUpgrade.java` moves both |
 | Neovim (what *Get Neovim* installs, the oldest supported, and the one CI tests) | `version=` in the plug-in's `util/neovim-downloads.properties` (written by `releng/UpdateNeovimDownloads.java`; *Get Neovim* and CI both install from it; `NeovimVersion.MINIMUM` reads it) | the copies `releng/version-copies.txt` lists, section `[neovim]` (README, CONTRIBUTING, LEARNING, PACKAGING, `feature.xml`, the update site's `category.xml`); `java releng/tools/neovim/NeovimUpgrade.java` rewrites them |
-| GitHub Actions | `uses: ...@vN` lines in `.github/workflows/` | not checked; Dependabot proposes updates |
+| GitHub Actions | `uses: owner/repo@<commit SHA> # vX.Y.Z` lines in `.github/workflows/` | not checked by `VersionConsistencyTest`; `DependenciesTest` fails on a line that is not pinned this way |
 | CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `platforms` job's matrix in `build.yml` adds `windows-latest` and `macos-latest` | not checked |
 
-Dependabot (`.github/dependabot.yml`) opens weekly pull requests for the Maven properties (not for
-major library versions) and the GitHub Actions. It cannot see the JDK, the Eclipse release or
-Neovim; those are upgraded by hand with the steps below. It also skips, on purpose:
+The libraries, the Maven plug-ins (Tycho among them) and the GitHub Actions move with
+`java releng/tools/dependencies/Dependencies.java` (*Libraries, plug-ins and actions* below),
+which follows the rules in `.github/dependabot.yml`. Dependabot reads the same file and would
+open pull requests for the same updates. Neither covers the JDK, the Eclipse release or Neovim;
+those are upgraded with the steps below. Both skip, on purpose:
 
 - the `org.eclipse.platform` jars: they must match the Eclipse release, so they move with it;
 - the Maven wrapper (Maven itself and the wrapper scripts): Dependabot would update it by running
   `./mvnw wrapper:wrapper` on a copy of the repository without the `MANIFEST.MF` files, which
   Tycho needs before it runs any goal, so every such job fails. `MavenUpgrade.java` does it in
-  the real checkout (*Build tools* below); `Release.java check` says when there is something to do.
+  the real checkout (*Build tools* below); `Release.java check` says when there is something to do;
+- major releases of the libraries and plug-ins: they change APIs and need a deliberate upgrade.
 
-The embedded msgpack-core comes as an ordinary pull request of its own; it has no partner
-libraries to keep in step since the plug-in's own RPC client replaced neovim-java and Jackson
-(`docs/design/RPC_CLIENT.md`).
+Dependabot's pull requests target `main`, the default branch, which moves only at a release; the
+tool commits on the current release branch (`release/<next version>`, see CONTRIBUTING.md,
+"Branches") instead. A pull request Dependabot opens anyway can be left alone: it closes by itself
+once `main` has the version, at the next release. GitHub reads `dependabot.yml` from `main` only,
+so a change to it reaches Dependabot at the next release; the tool reads the checkout's copy.
 
-Its pull requests target `main`, the default branch. Rather than merging them there, apply an
-accepted update on the current release branch (`release/<next version>`, see CONTRIBUTING.md, "Branches")
-as its own commit (with the checks below); Dependabot closes its pull request by itself once
-`main` has the new version, at the next release. GitHub reads `dependabot.yml` from `main` only,
-so a change to it takes effect at the next release too.
+## Libraries, plug-ins and actions
+
+`java releng/tools/dependencies/Dependencies.java` (a JDK of release 22 or newer, and `gh` signed
+in) looks where Dependabot looks and commits what it would propose:
+
+1. **Find the updates.** Each version property of the root `pom.xml`, with every artifact that uses
+   it in any POM of the build, against Maven Central's `maven-metadata.xml` (a property moves only
+   to a release all its artifacts have: Tycho's plug-ins share one); each action of the workflows
+   against its GitHub releases. Previews (`4.0.0-beta-2`, `3.6.0-M1`) never count. The rules of
+   `.github/dependabot.yml` apply, read by a small reader of its own: a key it does not know
+   (`allow`, `cooldown`, `versions` in an ignore entry) stops the tool rather than be skipped.
+2. **A week old.** A release younger than seven days is passed over for the newest one that is old
+   enough, and named in a note; `--allow-young` takes it. The date is the POM's on Central, the
+   release's on GitHub.
+3. **Majors of the libraries and plug-ins are only named**, in a note ("junit 6.1.3 is out, a
+   major release …"): `dependabot.yml` ignores them. `--major junit` (the property without
+   `.version`) takes one, in a commit of its own; read its migration notes first. The file ignores
+   no action's majors, as Dependabot would propose them too, so an action's major release moves
+   with the others; the plan marks it, and its release notes say what changed.
+4. **One commit per Dependabot group** (`build-tools`: Tycho, the Maven plug-ins, the codehaus
+   mojos; `actions`: every action), **one per dependency in no group** (msgpack-core, JUnit,
+   JaCoCo), each after y/N. A copy moves with its property (Tycho's in `releng/sign/pom.xml`). An
+   action moves on every line that uses it: the tool asks GitHub for the commit of the new tag
+   and writes SHA and comment together.
+5. **The embedded library is checked first** (*Embedded library* below): the new jar must carry no
+   license file, the `NOTICE` and `LICENSE.txt` at the new version's tag of msgpack-java must be
+   the same as the copies in `plugins/.../licenses/` (else the diff is shown and the tool stops),
+   and its POM must need no new jar at run time. Its commit adds a changelog line, since it ships
+   inside the plug-in; the others change only the build.
+6. **Every test once**, after the last commit (`LikeCi --all`); on a failure the tool lists the
+   commits, to find the one at fault and `git revert` it. With only actions moved, no test runs
+   here: they run on GitHub, so the next CI run is their test.
+
+`--dry-run` shows every step; `--no-tests` skips step 6. Then read each release's notes and run
+`LikeCi --all` on macOS and Windows; after a Tycho move, test signing as *Build tools* says.
+`Release.java check` prints a line when there are updates to make. The tool's settings
+(`releng/tools/dependencies/settings.properties`) list the copies and the embedded library's
+license files.
 
 ## JDK / Java release
 
@@ -171,7 +209,8 @@ and the `[eclipse.oldest]` copies. `VersionConsistencyTest` lists every copy sti
 The plug-in embeds one library, msgpack-core, under its own RPC client in `core/rpc`. The jars are copied into `plugins/.../lib/` by the plug-in's `pom.xml` and redistributed inside the
 plug-in, so their license files ship with it.
 
-To change a version:
+`Dependencies.java` (*Libraries, plug-ins and actions* above) makes steps 1 to 3 and runs step 5;
+step 4 stays yours. By hand, to change a version:
 
 1. Change its property in the root `pom.xml`. The jar names in `lib/` carry no version, so
    `MANIFEST.MF` does not change.
@@ -201,6 +240,9 @@ Avoid `./mvnw clean` while a runtime Eclipse started from the IDE is running: it
 `lib/*.jar`, which that Eclipse has open (on Windows the files are locked).
 
 ## Build tools
+
+Tycho, the Maven plug-ins, JaCoCo and JUnit move with `Dependencies.java` (*Libraries, plug-ins
+and actions* above); the bullets say what each needs besides, and how to move it by hand.
 
 - **Tycho**: change `<tycho.version>`, and the same version in `releng/sign/pom.xml`. Read the
   release notes for removed parameters; Tycho also sets which Java the build itself needs. A new
@@ -341,8 +383,8 @@ compares all six archives with the file before anything is published.
   `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`. A tag such as `v7` can be
   moved by whoever controls the action's repository, a commit SHA cannot; the `sign` job, which
   holds the PGP key, runs these actions, so a moved tag would run someone else's code next to the
-  key. Dependabot (`github-actions` in `.github/dependabot.yml`) proposes new SHAs and updates the
-  comment; read their release notes (for example `upload-artifact`'s `archive: false` needs v7). To
-  pin a new action by hand: `gh api repos/actions/checkout/commits/v7 --jq .sha`.
+  key. `Dependencies.java` moves them, SHA and comment together (*Libraries, plug-ins and actions*
+  above); read their release notes (for example `upload-artifact`'s `archive: false` needs v7). To
+  pin a new action by hand: `gh api repos/actions/checkout/commits/v7.0.1 --jq .sha`.
 - `ubuntu-latest` moves to a new Ubuntu now and then (to Ubuntu 26 from October 19, 2026). If a run
   breaks after such a move, pin `runs-on: ubuntu-24.04` until it is fixed.

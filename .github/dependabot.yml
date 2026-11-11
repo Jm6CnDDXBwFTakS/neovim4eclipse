@@ -13,6 +13,12 @@
 # the Maven wrapper (ignored below, with the reason; releng/tools/maven/MavenUpgrade.java moves it).
 #
 # Each pull request still runs the Build workflow, so a broken update shows up as a red check.
+#
+# releng/tools/dependencies/Dependencies.java reads this file too and makes the same updates on the
+# release branch, one commit per group (docs/UPGRADING.md, "Libraries, plug-ins and actions"). Its
+# reader knows the keys used here and the ones that change nothing about which versions are taken
+# (labels, reviewers, ...); a new key that does (allow, cooldown, versions) stops it until it is
+# taught to follow that key.
 version: 2
 updates:
   - package-ecosystem: maven

@@ -30,6 +30,7 @@ java releng/tools/checks/InstallCheck.java        # install the newest release f
 java releng/tools/neovim/NeovimUpgrade.java 0.13.0  # move to a new Neovim release (data file, copies, checks, tests; docs/UPGRADING.md)
 java releng/tools/eclipse/EclipseUpgrade.java newest  # test with the newest Eclipse release; oldest <release> raises the floor; smoke installs into both (docs/UPGRADING.md)
 java releng/tools/maven/MavenUpgrade.java        # move to the newest Maven 3.9.x and Maven wrapper (checked downloads, tests, one commit each; docs/UPGRADING.md)
+java releng/tools/dependencies/Dependencies.java  # move libraries, Maven plug-ins and GitHub Actions to their newest releases, by dependabot.yml's rules (docs/UPGRADING.md)
 java releng/tools/release/Release.java            # a release, step by step: status and next step (a JDK of release 22 or newer; CONTRIBUTING.md, "Releasing")
 ./mvnw test -f tests/unit/pom.xml                 # unit tests (no Eclipse, no Neovim)
 ./mvnw test -f tests/text/pom.xml                 # text-model tests (IDocument; no workbench, no display)

@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: a new internal tool moves the build's libraries, Maven
+  plug-ins and GitHub Actions to their newest releases, by the rules Dependabot follows.
+
 ## [0.2.12] - 2026-11-11
 
 ### Added
