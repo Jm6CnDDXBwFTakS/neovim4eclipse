@@ -10,8 +10,9 @@
 #   README.md  Get Neovim (\S+)…    a file, then a Java regular expression whose first group is
 #                                    the version, at every place it matches
 #
-# java releng/tools/neovim/NeovimUpgrade.java (and releng/tools/eclipse/EclipseUpgrade.java, for
-# the eclipse sections) rewrites every match of a section's patterns, and
+# java releng/tools/neovim/NeovimUpgrade.java (releng/tools/eclipse/EclipseUpgrade.java for the
+# eclipse sections, releng/tools/dependencies/Dependencies.java for a POM property's section)
+# rewrites every match of a section's patterns, and
 # VersionConsistencyTest fails unless each pattern matches at least once and every match holds
 # the source's version. A pattern names the version where it is a requirement or what the plug-in
 # installs; history ("as Neovim 0.12.6 sends it", "checked on 0.12.6"), the changelog and the
@@ -63,3 +64,10 @@ README.md  tested up to (20\d\d-\d\d) \(4\.\d+\)
 [eclipse.newest.number]
 README.md  tested up to 20\d\d-\d\d \((4\.\d+)\)
 docs/PACKAGING.md  newest Eclipse release \((4\.\d+)\)
+
+# A version property of the root pom.xml, where a POM cannot use ${...}: the section is named after
+# the property. releng/sign/pom.xml has no parent (inheriting the root POM would load Tycho as a
+# build extension and resolve the whole target platform just to sign), so its tycho-gpg-plugin
+# names Tycho's version itself. (?s) lets the pattern reach over the comment between the lines.
+[tycho.version]
+releng/sign/pom.xml  (?s)<artifactId>tycho-gpg-plugin</artifactId>.*?<version>([^<]+)</version>

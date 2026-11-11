@@ -205,14 +205,10 @@ class DependenciesTest {
             """;
 
     @Test
-    void aCopyMovesWithItsPropertyOnlyWhenNothingElseSharesTheNumber() {
+    void aCopyInAPomNamesItsArtifactsOfThePropertysGroups() {
         assertEquals(List.of(new PomVersions.Artifact("org.eclipse.tycho", "tycho-gpg-plugin")),
                 PomVersions.literalCopies(SIGN_POM, "sign", Set.of("org.eclipse.tycho"), "5.0.4"));
         assertEquals(List.of(), PomVersions.literalCopies(SIGN_POM, "sign", Set.of("org.jacoco"), "5.0.4"));
-        assertTrue(PomVersions.withCopies(SIGN_POM, "sign", 1, "5.0.4", "5.0.5").contains("<version>5.0.5</version>"));
-        // Another artifact at the same number would move with it: refused.
-        String two = SIGN_POM.replace("</plugins>", "<plugin><artifactId>x</artifactId><version>5.0.4</version></plugin></plugins>");
-        assertThrows(ToolFailure.class, () -> PomVersions.withCopies(two, "sign", 1, "5.0.4", "5.0.5"));
     }
 
     @Test
@@ -342,7 +338,7 @@ class DependenciesTest {
     }
 
     private static Updates.MavenMove maven(String property, Optional<String> group) {
-        return new Updates.MavenMove(property, "1.0.0", "1.1.0", Set.of(), Map.of(), group, false);
+        return new Updates.MavenMove(property, "1.0.0", "1.1.0", Set.of(), List.of(), group, false);
     }
 
     @Test

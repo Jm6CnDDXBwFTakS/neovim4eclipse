@@ -22,6 +22,7 @@ import common.GitHub;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
+import common.VersionCopies;
 import common.Version;
 
 /**
@@ -218,9 +219,9 @@ public final class DependenciesTool {
         for (Updates.MavenMove m : c.maven()) {
             edit(edits, "pom.xml", text -> PomVersions.withProperty(text, m.property(), m.from(), m.to()));
             plan.add("pom.xml: <" + m.property() + "> " + m.from() + " to " + m.to() + (m.major() ? " (a major release, --major)" : ""));
-            for (Map.Entry<String, Integer> copy : m.copies().entrySet()) {
-                edit(edits, copy.getKey(), text -> PomVersions.withCopies(text, copy.getKey(), copy.getValue(), m.from(), m.to()));
-                plan.add(copy.getKey() + ": " + copy.getValue() + " × <version>" + m.from() + "</version> to " + m.to());
+            for (VersionCopies.Copy copy : m.copies()) {
+                edit(edits, copy.file(), text -> VersionCopies.rewrite(text, copy, m.to()));
+                plan.add(copy.file() + ": the copy " + VersionCopies.FILE + " [" + m.property() + "] lists, " + m.from() + " to " + m.to());
             }
             body.add("- " + m.label() + " " + m.from() + " to " + m.to());
             for (PomVersions.Artifact a : m.artifacts()) {

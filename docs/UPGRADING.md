@@ -29,7 +29,7 @@ The safe loop for any upgrade:
 | Eclipse release (newest tested) | the second entry (`eclipse: '4.41'`, its `platform-url` and `platform-sha512`) of the `smoke` job in `.github/workflows/update-site.yml` | the same entry in `rehearse-release.yml`; the README's "tested up to 2026-09 (4.41)" and the copies in sections `[eclipse.newest]` and `[eclipse.newest.number]`. `java releng/tools/eclipse/EclipseUpgrade.java newest` moves them |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. `plugins/.../licenses/` is compared by `Dependencies.java` |
 | JUnit | `<junit.version>` in the root `pom.xml` | none |
-| Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform); `Dependencies.java` moves it with the property (`copies.tycho.version` in its settings) |
+| Tycho | `<tycho.version>` in the root `pom.xml` | `tycho-gpg-plugin`'s `<version>` in `releng/sign/pom.xml`, which has no parent (it signs releases without loading the target platform); listed as section `[tycho.version]` of `releng/version-copies.txt`, which `Dependencies.java` rewrites with the property |
 | JaCoCo (coverage) | `<jacoco.version>` in the root `pom.xml` | none; used by the coverage agent and the UI tests' Ant report |
 | Maven plug-ins | `<maven-*-plugin.version>` properties in the root `pom.xml` | none; child POMs may not pin one (checked) |
 | Maven itself, and the Maven wrapper | `distributionUrl` and `distributionSha256Sum` (Maven), `wrapperVersion` (the scripts `mvnw` and `mvnw.cmd`) in `.mvn/wrapper/maven-wrapper.properties`; the line Maven stays on is `maven.line` in `releng/tools/maven/settings.properties` | none; `java releng/tools/maven/MavenUpgrade.java` moves both |
@@ -92,8 +92,8 @@ in) looks where Dependabot looks and commits what it would propose:
 `--dry-run` shows every step; `--no-tests` skips step 6. Then read each release's notes and run
 `LikeCi --all` on macOS and Windows; after a Tycho move, test signing as *Build tools* says.
 `Release.java check` prints a line when there are updates to make. The tool's settings
-(`releng/tools/dependencies/settings.properties`) list the copies and the embedded library's
-license files.
+(`releng/tools/dependencies/settings.properties`) name the embedded library's license files; a
+property's copies are its section in `releng/version-copies.txt` (`[tycho.version]`).
 
 ## JDK / Java release
 

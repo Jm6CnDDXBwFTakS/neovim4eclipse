@@ -26,6 +26,7 @@ import common.ReleaseAge;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
+import common.VersionCopies;
 
 import dependencies.ReleaseNumber.UpdateType;
 
@@ -43,7 +44,7 @@ import dependencies.ReleaseNumber.UpdateType;
 public final class Updates {
 
     /** A move of one version property of the root POM, with the artifacts that use it and its copies. */
-    public record MavenMove(String property, String from, String to, Set<PomVersions.Artifact> artifacts, Map<String, Integer> copies,
+    public record MavenMove(String property, String from, String to, Set<PomVersions.Artifact> artifacts, List<VersionCopies.Copy> copies,
             Optional<String> group, boolean major) {
         /** The name in messages and commits: {@code jacoco}, {@code maven-surefire-plugin}. */
         public String label() {
@@ -114,6 +115,7 @@ public final class Updates {
     private final Shell shell;
     private final Settings settings;
     private final DependabotRules rules;
+    private final Map<String, List<VersionCopies.Copy>> copySections;
     private final boolean allowYoung;
     private final Set<String> majors;
 
@@ -127,6 +129,7 @@ public final class Updates {
         this.shell = shell;
         this.settings = settings;
         this.rules = DependabotRules.parse(read(DependabotRules.FILE));
+        this.copySections = VersionCopies.parse(read(VersionCopies.FILE));
         this.allowYoung = allowYoung;
         this.majors = majors;
     }
@@ -161,7 +164,7 @@ public final class Updates {
             String label = label(property);
             Set<PomVersions.Artifact> artifacts = new LinkedHashSet<>(e.getValue());
             // The copies' artifacts count as the property's: the same rules, the same new release.
-            Map<String, Integer> copies = copies(property, artifacts, current);
+            List<VersionCopies.Copy> copies = copies(property, artifacts, current);
             List<String> names = artifacts.stream().map(Object::toString).toList();
             boolean major = unusedMajors.remove(label);
             if (names.stream().allMatch(eco::ignoresAll)) {
@@ -202,21 +205,26 @@ public final class Updates {
         return moves;
     }
 
-    /** The copies of {@code property} the settings name ({@code copies.tycho.version}), and how many literal versions each has. */
-    private Map<String, Integer> copies(String property, Set<PomVersions.Artifact> artifacts, String current) {
-        Map<String, Integer> copies = new LinkedHashMap<>();
+    /**
+     * The copies of {@code property}: the section named after it in {@code releng/version-copies.txt}
+     * ({@code [tycho.version]}), each of which must hold {@code current} now. A copy in a POM adds
+     * its artifacts of the property's groups to {@code artifacts}, so the new release must exist
+     * for them too ({@code tycho-gpg-plugin} with Tycho's other plug-ins).
+     */
+    private List<VersionCopies.Copy> copies(String property, Set<PomVersions.Artifact> artifacts, String current) {
+        List<VersionCopies.Copy> copies = copySections.getOrDefault(property, List.of());
         Set<String> groups = new LinkedHashSet<>(artifacts.stream().map(PomVersions.Artifact::group).toList());
-        for (String file : settings.get("copies." + property, "").split("[,\\s]+")) {
-            if (file.isEmpty()) {
-                continue;
+        for (VersionCopies.Copy copy : copies) {
+            String text = read(copy.file());
+            List<String> found = VersionCopies.versionsIn(text, copy);
+            if (found.isEmpty() || found.stream().anyMatch(v -> !v.equals(current))) {
+                throw new ToolFailure(VersionCopies.FILE + " [" + property + "]: " + copy.file() + " should hold " + current + " where "
+                        + copy.pattern() + " matches, but has " + (found.isEmpty() ? "no match" : found)
+                        + " (VersionConsistencyTest says the same); put it right first");
             }
-            List<PomVersions.Artifact> found = PomVersions.literalCopies(read(file), file, groups, current);
-            if (found.isEmpty()) {
-                throw new ToolFailure(file + " should name " + property + "'s version " + current + " (copies." + property
-                        + " in releng/tools/dependencies/settings.properties) but has no artifact of " + groups + " at it");
+            if (copy.file().endsWith("pom.xml")) {
+                artifacts.addAll(PomVersions.literalCopies(text, copy.file(), groups, current));
             }
-            artifacts.addAll(found); // they must exist at the new version too
-            copies.put(file, found.size());
         }
         return copies;
     }

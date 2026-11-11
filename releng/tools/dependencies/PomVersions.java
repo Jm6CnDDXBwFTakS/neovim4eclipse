@@ -33,8 +33,8 @@ import common.ToolFailure;
  *
  * <p>A <i>copy</i> is a literal version in a POM that cannot use the property: {@code releng/sign/pom.xml}
  * has no parent (it signs releases without loading the target platform), so its
- * {@code tycho-gpg-plugin} names {@code 5.0.4} itself. The tool's {@code settings.properties}
- * lists the copies of each property, and they move with it.
+ * {@code tycho-gpg-plugin} names {@code 5.0.4} itself. {@code releng/version-copies.txt} lists the
+ * copies of each property in a section named after it, and they move with it.
  */
 public final class PomVersions {
 
@@ -156,20 +156,6 @@ public final class PomVersions {
         }
         String old = "<" + property + ">" + from + "</" + property + ">";
         return replaceOnce(pomXml, old, "<" + property + ">" + to + "</" + property + ">", "pom.xml");
-    }
-
-    /**
-     * A copy POM with {@code count} literal versions {@code <version>from</version>} set to
-     * {@code to}; the file must hold exactly that many, so no other artifact that happens to be
-     * at the same version is moved with them.
-     */
-    public static String withCopies(String pomXml, String where, int count, String from, String to) {
-        String old = "<version>" + from + "</version>";
-        int found = occurrences(pomXml, old);
-        if (found != count) {
-            throw new ToolFailure(where + " has " + found + " × " + old + ", expected " + count + " (the copies of the property); move it by hand");
-        }
-        return pomXml.replace(old, "<version>" + to + "</version>");
     }
 
     /**

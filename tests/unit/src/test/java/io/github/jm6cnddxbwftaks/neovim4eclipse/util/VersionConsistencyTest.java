@@ -325,26 +325,37 @@ class VersionConsistencyTest {
     }
 
     /**
+     * A section of {@code releng/version-copies.txt} named after a property of the root POM lists
+     * that property's copies in POMs that cannot use it, and each must hold the property's value.
      * {@code releng/sign/pom.xml} has no parent (inheriting the root POM would load Tycho as a
      * build extension and resolve the whole target platform just to sign), so it holds a literal
-     * copy of the Tycho version. Example: after setting {@code <tycho.version>5.1.0</tycho.version>},
-     * this fails until the signing POM says 5.1.0 too.
+     * copy of the Tycho version, section {@code [tycho.version]}. Example: after setting
+     * {@code <tycho.version>5.1.0</tycho.version>} by hand, this fails until the signing POM says
+     * 5.1.0 too; {@code releng/tools/dependencies/Dependencies.java} moves both.
      */
     @Test
-    void signingPomUsesTheRootPomsTycho() throws Exception {
-        String expected = property("tycho.version");
-        assertNotNull(expected, "<tycho.version> missing from the root pom.xml");
-        NodeList plugins = xml("releng/sign/pom.xml").getElementsByTagName("plugin");
-        int found = 0;
-        for (int i = 0; i < plugins.getLength(); i++) {
-            Element plugin = (Element) plugins.item(i);
-            if ("tycho-gpg-plugin".equals(directChildText(plugin, "artifactId"))) {
-                assertEquals(expected, directChildText(plugin, "version"),
-                        "releng/sign/pom.xml: tycho-gpg-plugin's version differs from the root pom.xml's tycho.version");
-                found++;
+    void propertySectionsHoldTheRootPomsValues() throws Exception {
+        Map<String, List<VersionCopies.Copy>> sections = VersionCopies.parse(read(VersionCopies.FILE));
+        assertTrue(sections.containsKey("tycho.version"), VersionCopies.FILE + " has no [tycho.version] section (releng/sign/pom.xml)");
+        List<String> wrong = new ArrayList<>();
+        for (Map.Entry<String, List<VersionCopies.Copy>> section : sections.entrySet()) {
+            String expected = property(section.getKey());
+            if (expected == null) {
+                continue; // not a POM property: [neovim], [eclipse.oldest], ... have tests of their own
+            }
+            for (VersionCopies.Copy copy : section.getValue()) {
+                List<String> found = VersionCopies.versionsIn(read(copy.file()), copy);
+                if (found.isEmpty()) {
+                    wrong.add(copy.file() + ": nothing matches " + copy.pattern());
+                }
+                for (String version : found) {
+                    if (!version.equals(expected)) {
+                        wrong.add("[" + section.getKey() + "] " + copy.file() + " has " + version + ", not " + expected);
+                    }
+                }
             }
         }
-        assertEquals(1, found, "releng/sign/pom.xml should declare tycho-gpg-plugin once");
+        assertTrue(wrong.isEmpty(), "copies of root POM properties differ: " + wrong);
     }
 
     @Test
