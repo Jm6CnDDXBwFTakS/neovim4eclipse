@@ -18,6 +18,7 @@ import common.Ask;
 import common.Folders;
 import common.Git;
 import common.Http;
+import common.ReleaseAge;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
@@ -256,7 +257,7 @@ public final class MavenUpgradeTool {
     private void checkAge(Move m, String zip) {
         Instant published = Http.lastModified(zip)
                 .orElseThrow(() -> new ToolFailure("Maven Central gives no date for " + zip + "; the week-old rule cannot be checked"));
-        if (MavenFiles.isYoung(published, Instant.now())) {
+        if (ReleaseAge.isYoung(published, Instant.now())) {
             if (!allowYoung) {
                 throw new ToolFailure(m.name() + " " + m.to() + " came out " + published + ", less than a week ago; wait, or run"
                         + " with --allow-young if it fixes something the build needs now");

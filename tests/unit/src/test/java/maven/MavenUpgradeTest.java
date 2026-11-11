@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import common.ReleaseAge;
 import common.ToolFailure;
 import common.Version;
 
@@ -128,8 +129,8 @@ class MavenUpgradeTest {
     @Test
     void aReleaseUnderAWeekOldIsYoung() {
         Instant now = Instant.parse("2026-11-10T12:00:00Z");
-        assertTrue(MavenFiles.isYoung(now.minus(Duration.ofDays(6)), now));
-        assertFalse(MavenFiles.isYoung(now.minus(Duration.ofDays(7)), now));
+        assertTrue(ReleaseAge.isYoung(now.minus(Duration.ofDays(6)), now));
+        assertFalse(ReleaseAge.isYoung(now.minus(Duration.ofDays(7)), now));
     }
 
     @Test

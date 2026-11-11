@@ -6,7 +6,6 @@ package dependencies;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -23,6 +22,7 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import common.Http;
+import common.ReleaseAge;
 import common.Settings;
 import common.Shell;
 import common.ToolFailure;
@@ -33,7 +33,7 @@ import dependencies.ReleaseNumber.UpdateType;
  * Finds the updates Dependabot would propose, by asking the same two places it asks: Maven
  * Central for the root {@code pom.xml}'s version properties, GitHub's releases for the actions
  * the workflows use. It follows {@code .github/dependabot.yml}'s rules ({@link DependabotRules})
- * and one of its own: a release must be a week old ({@link #MIN_AGE}), as the Neovim and Maven
+ * and one of its own: a release must be a week old ({@link ReleaseAge}), as the Neovim and Maven
  * tools ask, since a broken release is usually replaced within days. A younger one is skipped for
  * the newest that is old enough, and named in a note.
  *
@@ -41,9 +41,6 @@ import dependencies.ReleaseNumber.UpdateType;
  * and {@code Release.java check} prints how many there are.
  */
 public final class Updates {
-
-    /** A release younger than this is not moved to, unless {@code --allow-young}. */
-    public static final Duration MIN_AGE = Duration.ofDays(7);
 
     /** A move of one version property of the root POM, with the artifacts that use it and its copies. */
     public record MavenMove(String property, String from, String to, Set<PomVersions.Artifact> artifacts, Map<String, Integer> copies,
@@ -98,7 +95,7 @@ public final class Updates {
                     left = left.isPresent() ? left : Optional.of(r);
                     continue;
                 }
-                if (!allowYoung && isYoung(published.apply(r), now)) {
+                if (!allowYoung && ReleaseAge.isYoung(published.apply(r), now)) {
                     young = young.isPresent() ? young : Optional.of(r);
                     continue;
                 }
@@ -106,11 +103,6 @@ public final class Updates {
             }
             return new Choice(Optional.empty(), young, left);
         }
-    }
-
-    /** Whether something published at {@code published} is younger than {@link #MIN_AGE} on {@code now}. */
-    public static boolean isYoung(Instant published, Instant now) {
-        return Duration.between(published, now).compareTo(MIN_AGE) < 0;
     }
 
     /** A property's name in messages: {@code jacoco.version} is {@code jacoco}. */

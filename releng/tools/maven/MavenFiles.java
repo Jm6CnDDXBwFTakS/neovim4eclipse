@@ -5,8 +5,6 @@ package maven;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -59,9 +57,6 @@ public final class MavenFiles {
 
     /** The plug-in that writes the wrapper: Maven's own way, {@code mvn wrapper:wrapper}. */
     public static final String PLUGIN = "org.apache.maven.plugins:maven-wrapper-plugin";
-
-    /** A release younger than this is refused unless {@code --allow-young}, as the Neovim tool does. */
-    public static final Duration MIN_AGE = Duration.ofDays(7);
 
     private static final Pattern VERSION_TAG = Pattern.compile("<version>\\s*([^<\\s]+)\\s*</version>");
     private static final Pattern MAVEN_IN_URL = Pattern.compile("/apache-maven/(\\d+\\.\\d+\\.\\d+)/apache-maven-\\1-bin\\.zip$");
@@ -195,10 +190,5 @@ public final class MavenFiles {
     public static List<String> wrapperGoal(Version wrapper, Version maven, String sha256) {
         return List.of("-N", "-B", "-ntp", "-C", PLUGIN + ":" + wrapper + ":wrapper", "-Dtype=only-script", "-Dmaven=" + maven,
                 "-DdistributionSha256Sum=" + sha256);
-    }
-
-    /** Whether something published at {@code published} is too young on {@code now} ({@link #MIN_AGE}). */
-    public static boolean isYoung(Instant published, Instant now) {
-        return Duration.between(published, now).compareTo(MIN_AGE) < 0;
     }
 }

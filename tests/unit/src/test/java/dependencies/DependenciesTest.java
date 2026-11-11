@@ -22,6 +22,7 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
+import common.ReleaseAge;
 import common.Settings;
 import common.ToolFailure;
 
@@ -335,8 +336,8 @@ class DependenciesTest {
 
     @Test
     void theWeekIsCountedToTheSecond() {
-        assertTrue(Updates.isYoung(NOW.minus(Duration.ofDays(7)).plusSeconds(1), NOW));
-        assertFalse(Updates.isYoung(NOW.minus(Duration.ofDays(7)), NOW));
+        assertTrue(ReleaseAge.isYoung(NOW.minus(Duration.ofDays(7)).plusSeconds(1), NOW));
+        assertFalse(ReleaseAge.isYoung(NOW.minus(Duration.ofDays(7)), NOW));
         assertEquals("maven-surefire-plugin", Updates.label("maven-surefire-plugin.version"));
     }
 
