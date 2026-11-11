@@ -123,8 +123,9 @@ numbers sent (section 3.1).
 
 ### 3.1 Size (Eclipse to Neovim)
 
-- `editor/ViewportFollower.cells` (SWT only, tested in `tests/swt`, `ViewportFollowerTest`)
-  measures the `StyledText` in cells: the text area's width over the font's average character width
+- `editor/ViewportFollower.cells` (SWT, tested in `tests/swt`, `ViewportFollowerTest`) reads the
+  `StyledText`'s area, margins and line height, and `util/ViewportSize.editorCells` (tested in
+  `tests/unit`) turns them into cells: the text area's width over the font's average character width
   (`GC.getFontMetrics().getAverageCharacterWidth()`), its height over the line height. Only whole
   characters and whole lines count (a partly visible last line does not, as in Vim). Example:
   720 × 520 pixels of a font 9 pixels wide and 13 high are 80 columns and 40 rows.
@@ -308,7 +309,7 @@ conversion (bytes, cells, pixels) is its own work.
 ## 5. Tests
 
 - `tests/unit`: `ViewportSizeTest` (grid from cells and overhead, the minimum, impossible sizes
-  refused); `WheelScrollTest` (the X10 and X11 events as cases, a page as `Ctrl-F`);
+  refused, an editor's cells: whole characters and lines, at least 1 × 1); `WheelScrollTest` (the X10 and X11 events as cases, a page as `Ctrl-F`);
   `LatestValueTest`.
 - Lua (`tests/unit/src/test/lua/viewport_spec.lua`): the opt-out; `VIEWPORT_OVERHEAD` with the
   user's status line and number column; `SET_WRAP` with `'linebreak'`, `'breakindent'` and

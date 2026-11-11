@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -38,6 +39,23 @@ class ViewportSizeTest {
     void impossibleSizesAreRefused() {
         assertThrows(IllegalArgumentException.class, () -> new ViewportSize(0, 10));
         assertThrows(IllegalArgumentException.class, () -> new ViewportSize.Overhead(-1, 0));
+    }
+
+    /** Whole characters and whole lines: a partly visible last line or column does not count, as in Vim. */
+    @Test
+    void anEditorsCellsAreWholeCharactersAndWholeLines() {
+        assertArrayEquals(new int[] { 80, 40 }, ViewportSize.editorCells(720, 520, 9, 13));
+        assertArrayEquals(new int[] { 80, 40 }, ViewportSize.editorCells(728, 525, 9, 13), "8 and 5 pixels left over");
+        assertArrayEquals(new int[] { 80, 40 }, ViewportSize.editorCells(600, 520, 7.5, 13), "a fractional width");
+    }
+
+    /** Never below one cell: before the font is measured, or with margins that leave no room. */
+    @Test
+    void anEditorAlwaysHasOneCell() {
+        assertArrayEquals(new int[] { 1, 40 }, ViewportSize.editorCells(720, 520, 0, 13), "no character width yet");
+        assertArrayEquals(new int[] { 80, 1 }, ViewportSize.editorCells(720, 520, 9, 0), "no line height yet");
+        assertArrayEquals(new int[] { 1, 1 }, ViewportSize.editorCells(0, 0, 9, 13));
+        assertArrayEquals(new int[] { 1, 1 }, ViewportSize.editorCells(-20, -4, 9, 13), "margins wider than the area");
     }
 
     @Test

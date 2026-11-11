@@ -11,6 +11,8 @@ import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
+
 /**
  * Keeps Neovim's window the size of the editor's text area, Neovim's {@code 'wrap'} the same as the
  * editor's word wrap, in both directions, and the editor scrolled to Neovim's top line
@@ -232,16 +234,14 @@ final class ViewportFollower {
     /**
      * The text area of {@code text} in cells, {@code {columns, rows}}: whole characters of
      * {@code charWidth} pixels and whole lines (a partly visible last line does not count, as in Vim),
-     * inside the widget's margins. At least 1 × 1.
+     * inside the widget's margins. At least 1 × 1. The arithmetic is {@link ViewportSize#editorCells}
+     * (tested in tests/unit); this reads the widget's area, margins and line height for it.
      */
     static int[] cells(StyledText text, double charWidth) {
         Rectangle area = text.getClientArea();
         int width = area.width - text.getLeftMargin() - text.getRightMargin();
         int height = area.height - text.getTopMargin() - text.getBottomMargin();
-        int columns = charWidth > 0 ? (int) Math.floor(width / charWidth) : 1;
-        int lineHeight = text.getLineHeight();
-        int rows = lineHeight > 0 ? height / lineHeight : 1;
-        return new int[] { Math.max(1, columns), Math.max(1, rows) };
+        return ViewportSize.editorCells(width, height, charWidth, text.getLineHeight());
     }
 
     /** The average character width of the widget's font, in pixels (for a monospace font, every one). */

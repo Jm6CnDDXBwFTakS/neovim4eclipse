@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -206,16 +205,15 @@ class ViewportFollowerTest {
     }
 
     @Test
-    void theCellsAreWholeCharactersAndWholeLinesInsideTheMargins() {
+    void theCellsAreCountedInsideTheMargins() {
+        // The arithmetic (whole characters and lines, at least 1 × 1) is ViewportSizeTest; here the
+        // widget's area, margins and line height are what it is given.
         text.setMargins(10, 0, 10, 0);
         Rectangle area = text.getClientArea();
         double charWidth = (area.width - 20) / 80.0;
         int[] cells = ViewportFollower.cells(text, charWidth);
-        assertEquals(80, cells[0]);
-        assertEquals(area.height / text.getLineHeight(), cells[1], "a partly visible last line does not count");
-        assertEquals(1, ViewportFollower.cells(text, 0)[0], "no character width yet: one column");
-        text.setMargins(area.width, area.height, 0, 0); // margins that leave no room (a window manager may not shrink the shell)
-        assertArrayEquals(new int[] { 1, 1 }, ViewportFollower.cells(text, charWidth), "never below one cell");
+        assertEquals(80, cells[0], "the left and right margins are left out");
+        assertEquals(area.height / text.getLineHeight(), cells[1], "the widget's line height");
     }
 
     /**

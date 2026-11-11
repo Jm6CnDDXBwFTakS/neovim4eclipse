@@ -69,6 +69,22 @@ public record ViewportSize(int columns, int rows) {
                 Math.max(MIN_TEXT_ROWS, editorRows) + overhead.rows());
     }
 
+    /**
+     * An editor's text area in cells, {@code {columns, rows}}: whole characters of {@code charWidth}
+     * pixels across {@code widthPixels}, whole lines of {@code lineHeight} pixels down
+     * {@code heightPixels} (a partly visible last line does not count, as in Vim). At least 1 × 1,
+     * also before the font is measured (a width or height of 0). The pixels are the area inside the
+     * widget's margins ({@code editor/ViewportFollower} subtracts them).
+     *
+     * <p>Example: 720 × 520 pixels of a font 9 pixels wide and 13 high are 80 columns and 40 rows; at
+     * 525 pixels high the 41st line shows only in part and is not counted.
+     */
+    public static int[] editorCells(int widthPixels, int heightPixels, double charWidth, int lineHeight) {
+        int columns = charWidth > 0 ? (int) Math.floor(widthPixels / charWidth) : 1;
+        int rows = lineHeight > 0 ? heightPixels / lineHeight : 1;
+        return new int[] { Math.max(1, columns), Math.max(1, rows) };
+    }
+
     @Override
     public String toString() {
         return columns + "×" + rows;
