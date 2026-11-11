@@ -841,8 +841,13 @@ class CommandLineBoxTest {
     // macOS's accent menu (press-and-hold): the box's part of PressAndHold, with the sequences
     // SWT's macOS port sends. Only there: on Linux and Windows a held key just repeats.
 
+    /** Skips the test except on SWT's macOS port, where the box's macOS-only paths run. */
+    private static void assumeMac(String why) {
+        assumeTrue("cocoa".equals(SWT.getPlatform()), why);
+    }
+
     private void assumeMacWithPressAndHold() {
-        assumeTrue("cocoa".equals(SWT.getPlatform()), "the accent menu is macOS's");
+        assumeMac("the accent menu is macOS's");
         pressAndHold = true;
     }
 
@@ -1041,5 +1046,182 @@ class CommandLineBoxTest {
         key(box, SWT.TAB, '\t', 0);
         assertEquals(List.of(), commands.calls);
         assertTrue(box.isFocusControl(), "the box keeps the focus");
+    }
+
+    // macOS's input method and Cmd keys: the rest of the box's macOS-only paths, with the events
+    // SWT's macOS port sends (MarkedTextInput's javadoc has the logged sequences). A Verify event
+    // sent with notifyListeners reaches the box's listener only and changes no text, so the field
+    // keeps the text the box last set, as it does on macOS while marked text is only drawn over it.
+
+    /**
+     * An edit of the field, as macOS sends it: {@code text} over {@code start} to {@code end},
+     * carrying the key that made it (0 for none). The event comes back for its {@code doit}.
+     */
+    private static Event edit(Text box, int keyCode, int stateMask, String text, int start, int end) {
+        Event event = new Event();
+        event.keyCode = keyCode;
+        event.stateMask = stateMask;
+        event.text = text;
+        event.start = start;
+        event.end = end;
+        event.doit = true;
+        box.notifyListeners(SWT.Verify, event);
+        return event;
+    }
+
+    /** Japanese input, {@code k} after the {@code :}: marked text, shown in the box and not sent. */
+    private static void composeK(Text box) {
+        assertTrue(edit(box, 'k', 0, "k", 1, 1).doit, "marked text is shown by the field");
+    }
+
+    /**
+     * A Vim Ctrl key from the workbench (Ctrl+U) while composing is dropped: Neovim's line would
+     * change behind the box, which still shows the old one, and the commit would land in the
+     * changed line ({@code MarkedTextInput.sendsBoundKey}). Once the composition ends (Esc takes
+     * the marked text away) the keys go to Neovim again; no view came meanwhile, so the box's text
+     * stays as it is.
+     */
+    @Test
+    void aVimCtrlKeyWhileComposingIsDropped() {
+        assumeMac("marked text is macOS's");
+        Text box = show(line(":ab", 3));
+        assertTrue(edit(box, 'k', 0, "k", 3, 3).doit, "marked text");
+        commandLine.ctrlKey("<C-u>");
+        assertEquals(List.of(), commands.calls);
+        edit(box, SWT.ESC, 0, "", 3, 4); // Esc: the marked k goes, and with it the composition
+        commandLine.ctrlKey("<C-u>");
+        assertEquals(List.of("type <C-u>"), commands.calls);
+        assertEquals(":ab", box.getText());
+    }
+
+    /**
+     * Neovim's view while composing waits: setting the field's text would end the composition
+     * (macOS commits the marked text). An edit that changes the marked text (k, then a: か over the
+     * k) keeps composing. When the composition ends (Backspace on the last kana), the newest view
+     * held meanwhile is shown.
+     */
+    @Test
+    void aViewWhileComposingIsShownWhenTheCompositionEnds() {
+        assumeMac("marked text is macOS's");
+        Text box = show(line(":", 1));
+        composeK(box);
+        commandLine.show(line(":ab", 3)); // a timer's change to the line
+        assertTrue(edit(box, 'a', 0, "か", 1, 2).doit, "か over the marked k: still marked");
+        commandLine.show(line(":abc", 4)); // the newest wins
+        assertEquals(":", box.getText(), "held while composing");
+        assertTrue(edit(box, SWT.BS, 0, "", 1, 2).doit, "the field removes the marked か");
+        waitUntil("the held view shown", () -> ":abc".equals(box.getText()));
+        assertEquals(4, box.getCaretPosition());
+        assertEquals(List.of(), commands.calls, "the marked text was never Neovim's");
+    }
+
+    /**
+     * A view of Neovim's that comes between the end of a composition and the showing of the view
+     * held during it is the newer one: the held view is dropped, not shown over it.
+     */
+    @Test
+    void aViewAfterTheCompositionEndsWinsOverTheHeldOne() {
+        assumeMac("marked text is macOS's");
+        Text box = show(line(":", 1));
+        composeK(box);
+        commandLine.show(line(":old", 4));
+        edit(box, SWT.BS, 0, "", 1, 2); // the composition ends; the held view is posted for later
+        commandLine.show(line(":new", 4));
+        // The posted view runs on the next pass of the event loop; one more async runnable after it
+        // marks that pass done.
+        boolean[] passed = { false };
+        Display.getDefault().asyncExec(() -> passed[0] = true);
+        waitUntil("the posted view run", () -> passed[0]);
+        assertEquals(":new", box.getText());
+    }
+
+    /**
+     * An edit that carries a key with Cmd held is the platform's, never an input method's (whose
+     * edits carry their key without Cmd): it is sent to Neovim as a paste and refused in the field,
+     * and no composition starts.
+     */
+    @Test
+    void anEditWithCmdHeldIsAPasteNotMarkedText() {
+        assumeMac("the Cmd key is macOS's");
+        Text box = show(line(":", 1));
+        assertFalse(edit(box, 'v', SWT.COMMAND, "src", 1, 1).doit, "Neovim's view shows the paste");
+        assertEquals(List.of("paste src"), commands.calls);
+        commandLine.ctrlKey("<C-u>");
+        assertEquals(List.of("paste src", "type <C-u>"), commands.calls, "not composing afterwards");
+    }
+
+    /** Cmd+V pressed while a digit is held back for the accent menu: the digit first, as typed. */
+    @Test
+    void aHeldBackDigitGoesBeforeAPaste() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, '2', '2', 3000);
+        assertTrue(key(box, 'v', 'v', SWT.COMMAND).doit, "the platform pastes");
+        assertEquals(List.of("type e", "type 2"), commands.calls);
+    }
+
+    /** A click in the box while a digit is held back closes the menu: the digit is sent. */
+    @Test
+    void aClickInTheBoxSendsAHeldBackDigit() {
+        assumeMacWithPressAndHold();
+        Text box = show(line(":", 1));
+        holdE(box, 1000);
+        keyAt(box, '2', '2', 3000);
+        Event click = new Event();
+        click.button = 1;
+        box.notifyListeners(SWT.MouseDown, click);
+        assertEquals(List.of("type e", "type 2"), commands.calls);
+    }
+
+    /**
+     * Cmd shortcuts other than copy and paste (Cmd+Z, Cmd+A) mean nothing on Neovim's line: nothing
+     * is sent, and the field does not act on them either.
+     */
+    @Test
+    void aCmdShortcutSendsNothing() {
+        assumeMac("the Cmd key is macOS's");
+        Text box = show(line(":abc", 4));
+        assertFalse(key(box, 'z', 'z', SWT.COMMAND).doit, "the field does not undo");
+        assertFalse(key(box, 'a', 'a', SWT.COMMAND).doit);
+        assertEquals(List.of(), commands.calls);
+        assertEquals(":abc", box.getText());
+    }
+
+    /**
+     * A key press while the box itself sets the text (Neovim's view) is macOS committing again
+     * because the text changed: cancelled, and not sent. It comes inside the setting of the text, as
+     * the edit that setting makes.
+     */
+    @Test
+    void aKeyPressWhileTheBoxSetsTheTextIsCancelled() {
+        assumeMac("macOS commits again while the text is set");
+        Text box = show(line(":", 1));
+        List<Boolean> doits = new ArrayList<>();
+        box.addListener(SWT.Verify, e -> {
+            if (doits.isEmpty()) {
+                doits.add(key(box, 'x', 'x', 0).doit); // inside the box's setText
+            }
+        });
+        commandLine.show(line(":ab", 3));
+        assertEquals(List.of(false), doits, "cancelled");
+        assertEquals(List.of(), commands.calls);
+        assertEquals(":ab", box.getText());
+    }
+
+    /**
+     * Neovim's line closing while marked text is in the box: macOS commits it as the field goes. That
+     * commit is not sent, as a paste would reach Neovim back in normal mode.
+     */
+    @Test
+    void aCommitAsTheBoxClosesIsNotSent() {
+        assumeMac("marked text is macOS's");
+        Text box = show(line(":", 1));
+        composeK(box);
+        List<Boolean> doits = new ArrayList<>();
+        box.addListener(SWT.Dispose, e -> doits.add(edit(box, 0, 0, "k", 1, 1).doit)); // the commit
+        commandLine.show(View.CLOSED);
+        assertEquals(List.of(false), doits, "refused");
+        assertEquals(List.of(), commands.calls);
     }
 }
