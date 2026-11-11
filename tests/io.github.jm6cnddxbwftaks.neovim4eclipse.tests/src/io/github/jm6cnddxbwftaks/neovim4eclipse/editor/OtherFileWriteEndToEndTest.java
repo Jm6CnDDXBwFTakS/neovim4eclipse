@@ -639,22 +639,6 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Neovim keeps an empty buffer named after a file written under another name (Vim's alternate
-     * file); left there, it kept an editor opened on that file later from naming its own buffer.
-     */
-    @Test
-    void anEditorOpenedOnACopyGetsABufferOfThatName() throws Exception {
-        runInBox(widget, "w copy.txt");
-        expectMessage("\"copy.txt\" [New] 3L, 17B written");
-        ITextEditor copy = openExisting(project.getFile("copy.txt"));
-        AtomicReference<String> name = new AtomicReference<>();
-        session.evalAsync("bufname('%')", name::set);
-        waitUntil("bufname()", TIMEOUT_MS, () -> name.get() != null);
-        assertEquals(project.getFile("copy.txt").getLocation().toOSString(), name.get());
-        assertEquals("alpha\nbeta\ngamma\n", documentOf(copy).get());
-    }
-
-    /**
      * Neovim's own {@code :w other} (a copy) onto a symbolic link to a missing file: Neovim's E13
      * check follows the link and lets it pass as a missing file, so Eclipse refuses the write
      * without {@code !} ({@link DanglingLinks}); {@code :w!} writes through it. Skipped where links

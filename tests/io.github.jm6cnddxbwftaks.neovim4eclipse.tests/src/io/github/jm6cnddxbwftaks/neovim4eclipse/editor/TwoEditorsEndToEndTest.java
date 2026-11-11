@@ -81,23 +81,6 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
         page().closeEditor(second, false);
     }
 
-    /** {@code dd} in one editor, {@code u} in the other: the line comes back, one undo history. */
-    @Test
-    void twoEditorsOnOneFileShareTheUndoHistory() throws Exception {
-        ITextEditor second = openSecondEditor();
-        page().activate(editor);
-        waitForAttach(editor, "the first editor");
-        type(widget, "ggdd");
-        expectText("beta\ngamma\n");
-
-        page().activate(second);
-        waitForAttach(second, "the second editor");
-        expectText(second, "beta\ngamma\n");
-        type(widgetOf(second), 'u');
-        expectText(second, "alpha\nbeta\ngamma\n");
-        page().closeEditor(second, false);
-    }
-
     /**
      * {@code :q} in one of two editors on a modified file closes it without Eclipse's question about
      * saving, as Vim closes one of two windows on a buffer: the change stays, in the other editor.

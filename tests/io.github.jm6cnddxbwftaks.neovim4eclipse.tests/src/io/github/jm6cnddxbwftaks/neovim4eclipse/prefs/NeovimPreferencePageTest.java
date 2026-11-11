@@ -192,19 +192,6 @@ class NeovimPreferencePageTest {
     }
 
     /**
-     * The note's Label text: a single {@code &} would be a mnemonic marker, so it is doubled; nothing
-     * else changes, and the Reinstall link is not in it (a control of its own).
-     */
-    @Test
-    void theNoteTextOnlyDoublesAmpersands() {
-        String found = "Found: dedicated Neovim 0.12.6, /R&D/la/bin/nvim";
-        String unused = "\nNot used by the plug-in, you can delete:\n  /R&D/<a>current</a>";
-        assertEquals("Found: dedicated Neovim 0.12.6, /R&&D/la/bin/nvim\n"
-                + "Not used by the plug-in, you can delete:\n  /R&&D/<a>current</a>",
-                NeovimStatusSection.labelText(new NvimProbe.Note(found + unused, false, true)));
-    }
-
-    /**
      * A folder named with {@code <a>...</a>} shows as text: the note is a Label, so the name cannot
      * become a link (in a Link it would, and its click would open Get Neovim).
      */

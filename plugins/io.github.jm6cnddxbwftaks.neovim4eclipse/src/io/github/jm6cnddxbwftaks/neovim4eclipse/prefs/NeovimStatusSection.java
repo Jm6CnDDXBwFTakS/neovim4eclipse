@@ -247,7 +247,7 @@ final class NeovimStatusSection {
      * marker (a folder may be called {@code R&D}). Everything else shows as it is, {@code <a>} too.
      * Example: {@code Found: Neovim 0.12.6, /R&&D/bin/nvim, from -Dneovim4eclipse.nvim. ...}.
      */
-    static String labelText(NvimProbe.Note shown) {
+    private static String labelText(NvimProbe.Note shown) {
         return LabelText.literal(shown.text());
     }
 

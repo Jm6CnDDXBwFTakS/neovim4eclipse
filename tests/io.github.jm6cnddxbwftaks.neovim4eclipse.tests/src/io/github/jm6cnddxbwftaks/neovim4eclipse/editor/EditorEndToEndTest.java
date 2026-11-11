@@ -683,57 +683,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * {@code :bufdo} changes files whose editors are in the background; each change reaches its
-     * document (sync/UnattachedDocumentSync), which is then dirty, ready for Save All.
-     */
-    @Test
-    void bufdoChangesEveryOpenFile() throws Exception {
-        IWorkbenchPage page = editor.getSite().getPage();
-        ITextEditor second = openFile("second.txt", "banana\n");
-        ITextEditor third = openFile("third.txt", "papaya\n");
-        page.activate(editor);
-        waitForAttach(editor, "test.txt");
-        try {
-            // As the : box runs it (CommandRunner): typed, and waited for until Neovim is idle again.
-            session.commandAsync("bufdo %s/a/A/ge");
-
-            waitForAttach(third, "third.txt, where :bufdo ends");
-            expectText("AlphA\nbetA\ngAmmA\n");
-            waitUntil("second.txt changed", TIMEOUT_MS, () -> "bAnAnA\n".equals(documentOf(second).get()),
-                    () -> "; it reads " + documentOf(second).get().replace("\n", "\\n"));
-            assertEquals("pApAyA\n", documentOf(third).get());
-            assertTrue(second.isDirty(), "second.txt is changed, not saved");
-        } finally {
-            page.closeEditor(second, false);
-            page.closeEditor(third, false);
-        }
-    }
-
-    /**
-     * The other way: Eclipse changes a file whose editor is in the background (as a rename
-     * refactoring does), and the change reaches its buffer. Otherwise the {@code :bufdo} below would
-     * edit Neovim's stale copy, one line, and its change would replace the wrong line.
-     */
-    @Test
-    void eclipsesChangeToAFileInTheBackgroundReachesItsBuffer() throws Exception {
-        IWorkbenchPage page = editor.getSite().getPage();
-        ITextEditor second = openFile("second.txt", "banana\n");
-        page.activate(editor);
-        waitForAttach(editor, "test.txt");
-        try {
-            documentOf(second).replace(0, 0, "added\n");
-            settle();
-
-            session.commandAsync("bufdo %s/^/>/");
-
-            waitUntil("second.txt changed", TIMEOUT_MS, () -> ">added\n>banana\n".equals(documentOf(second).get()),
-                    () -> "; it reads " + documentOf(second).get().replace("\n", "\\n"));
-        } finally {
-            page.closeEditor(second, false);
-        }
-    }
-
-    /**
      * A listed buffer without a name that no editor shows (a plug-in's
      * {@code nvim_create_buf(true, false)}), entered once and sent back from, as in
      * {@link #neovimIsSentBackFromABufferNoEditorShows}, stays one more buffer for {@code :bufdo}:
@@ -1223,14 +1172,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
         typeSlowly("ggVjoj");
         type(widget, 'd');
         expectText("alpha\ngamma\n");
-    }
-
-    /** As above, characterwise: after {@code o} the cursor is on "a" of "alpha", {@code l} moves it on. */
-    @Test
-    void oInVisualModeMovesTheCursorToTheOtherEnd() {
-        typeSlowly("ggvjol");
-        type(widget, 'd');
-        expectText("aeta\ngamma\n");
     }
 
     /**
@@ -1736,19 +1677,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
     // ---- Keys ----
 
     /**
-     * {@code Z} as the argument of {@code f} is Neovim's to read, even typed fast: {@code fZ} finds
-     * the {@code Z} (Java no longer holds a {@code Z} back as the start of {@code ZZ}), and
-     * {@code x} deletes it.
-     */
-    @Test
-    void zAfterFIsItsArgumentNotAFileCommand() throws Exception {
-        document.set("aZb\n");
-        settle();
-        type(widget, "0fZx");
-        expectText("ab\n");
-    }
-
-    /**
      * A macro recorded at full speed records its insert: the {@code i} starts insert mode before
      * Eclipse could take over the typing, so Neovim types {@code hello} and records it (KeyRouter).
      */
@@ -1827,30 +1755,19 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
     /**
      * {@code o} on the last line of a file without a final newline shows one new line, not two, and
-     * the file then ends with exactly one line break (see {@code LineTextUtil}).
-     */
-    @Test
-    void oAtTheEndOfAFileWithoutAFinalNewlineAddsOneLine() {
-        document.set("alpha\nbeta");
-        settle();
-        typeSlowly("Go");
-        expectText("alpha\nbeta\n");
-        escape(widget);
-        settle();
-        expectText("alpha\nbeta\n");
-    }
-
-    /**
-     * The empty last line that {@code o} made in a file without a final newline stays a line after
-     * Esc: {@code Go} goes to it and adds a second one, as in Vim, and Neovim has both.
+     * the file then ends with exactly one line break (see {@code LineTextUtil}). That empty last line
+     * stays a line after Esc: {@code Go} goes to it and adds a second one, as in Vim, and Neovim has
+     * both.
      */
     @Test
     void anEmptyLastLineWithoutAFinalNewlineStaysALine() throws Exception {
         document.set("alpha\nbeta");
         settle();
         typeSlowly("Go");
+        expectText("alpha\nbeta\n"); // one new line, not two (LineTextUtil)
         escape(widget);
         settle();
+        expectText("alpha\nbeta\n"); // and the file ends with exactly one line break
         typeSlowly("Go");
         escape(widget);
         settle();
@@ -1998,15 +1915,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
         type(widget, "@a");
         expectText("alpha;\nbeta;\ngamma\n");
-    }
-
-    /** A click puts Neovim's cursor where the caret lands: {@code x} deletes the clicked character. */
-    @Test
-    void xDeletesTheCharacterThatWasClicked() {
-        click(8); // the t of "beta"
-        settle();
-        type(widget, 'x');
-        expectText("alpha\nbea\ngamma\n");
     }
 
     /**

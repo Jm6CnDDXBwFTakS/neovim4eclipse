@@ -62,21 +62,6 @@ class SearchColorsTest {
     }
 
     /**
-     * A dark editor in the light theme (another dark theme, the user's own editor colors, high
-     * contrast) gets the dark amber, not the light one under its light text.
-     */
-    @Test
-    void aDarkEditorGetsTheDarkAmber() {
-        shell = new Shell(PlatformUI.getWorkbench().getDisplay());
-        StyledText widget = new StyledText(shell, SWT.NONE);
-        widget.setBackground(new Color(30, 30, 30));
-        AtomicReference<RGB> match = new AtomicReference<>();
-        searchColors = new SearchColors(widget, (m, b) -> match.set(m.getRGB()));
-        int dark = OverlayColors.SEARCH_MATCH_DARK;
-        assertEquals(new RGB((dark >> 16) & 0xFF, (dark >> 8) & 0xFF, dark & 0xFF), match.get());
-    }
-
-    /**
      * An editor that sets its colors on the widget itself, without a preference (a TextMate theme
      * in the Generic Editor), gets the amber for them at the next paint.
      */

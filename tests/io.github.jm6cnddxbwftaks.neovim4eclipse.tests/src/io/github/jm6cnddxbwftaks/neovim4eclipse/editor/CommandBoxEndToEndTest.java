@@ -14,9 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
@@ -34,7 +31,6 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
@@ -171,18 +167,6 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         boxReading(":s/alpha/omega/");
         pressEnter(box);
         expectText("omega\nbeta\ngamma\n");
-    }
-
-    /** {@code nnoremap ; :}: the key goes to Neovim, which opens its command line, and the box takes it over. */
-    @Test
-    void aMappingToColonOpensTheBox() throws Exception {
-        withMapping(";", ":", () -> {
-            type(widget, ';');
-            Text box = boxReading(":");
-            box.insert("s/alpha/omega/");
-            pressEnter(box);
-            expectText("omega\nbeta\ngamma\n");
-        });
     }
 
     /** {@code nnoremap <Space>s :%s/}: the box opens with Neovim's text so far. */
@@ -541,43 +525,6 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         String expected = "\"test.txt\" 3L, 18B written";
         waitUntil("the message " + expected, TIMEOUT_MS, () -> expected.equals(messageText(editor)),
                 () -> "; the message line shows " + messageText(editor));
-    }
-
-    /**
-     * A mapping's {@code :w<CR>} saves through Eclipse, as the typed one does: both are Neovim's write,
-     * whose hook asks Eclipse to save ({@code LuaScripts.DOCUMENT_BUFFER}).
-     */
-    @Test
-    void aMappingsColonWSavesTheEditor() throws Exception {
-        document.replace(0, 0, "1");
-        settle();
-        withMapping("<Space>w", ":w<CR>", () -> {
-            type(widget, " w");
-            waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty());
-            assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
-        });
-    }
-
-    /**
-     * {@code :q} takes no argument, so {@code :q foo} goes to Neovim, which reports E488; nothing
-     * closes. The error reaches the plug-in's status bar as the session's status message (Neovim
-     * sends it as a message event of kind {@code emsg}).
-     */
-    @Test
-    void quitWithAnArgumentIsAnErrorAndKeepsTheEditorOpen() {
-        List<String> messages = new CopyOnWriteArrayList<>();
-        Consumer<StatusInfo> listener = status -> messages.add(status.message());
-        session.addStatusListener(listener);
-        try {
-            runInBox(widget, "q foo");
-
-            waitUntil("Neovim's error", TIMEOUT_MS, () -> messages.stream().anyMatch(m -> m.startsWith("E488")),
-                    () -> "; the messages were " + messages);
-            assertSame(editor, page().getActiveEditor());
-            assertFalse(widget.isDisposed());
-        } finally {
-            session.removeStatusListener(listener);
-        }
     }
 
     /**

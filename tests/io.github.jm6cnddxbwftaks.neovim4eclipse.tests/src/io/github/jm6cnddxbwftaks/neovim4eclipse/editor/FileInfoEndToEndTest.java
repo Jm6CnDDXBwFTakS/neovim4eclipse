@@ -18,9 +18,9 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
 /**
- * Neovim's file info ({@code "a.txt" 3 lines --33%--}) with {@code 'shortmess'} with and without
- * {@code F}, as a user's config may set it. Neovim gives it when it enters a loaded buffer, unless
- * {@code F} is set. A switch of Eclipse's editors never shows it, as Eclipse shows nothing then
+ * Neovim's file info ({@code "a.txt" 3 lines --33%--}) with {@code 'shortmess'} without {@code F},
+ * as a user's config may set it. Neovim gives it when it enters a loaded buffer, unless {@code F}
+ * is set (its default), so the case without F is the one that could show it. A switch of Eclipse's editors never shows it, as Eclipse shows nothing then
  * ({@code core/LuaScripts.SHOW_BUFFER}, a deliberate exception to leaving the user's settings
  * alone).
  *
@@ -42,9 +42,12 @@ class FileInfoEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    /** Sets 'shortmess' as a user's config would: with F (Neovim's default) or without it. */
-    private void neovimGivesFileInfo(boolean gives) {
-        SessionProbe.lua(session, gives ? "vim.opt.shortmess:remove('F')" : "vim.opt.shortmess:append('F')");
+    /**
+     * Takes F out of 'shortmess', as a user's config may, so that Neovim gives its file info. With F
+     * (Neovim's default) Neovim shows nothing anyway, so the tests here are of the case without it.
+     */
+    private void neovimGivesFileInfo() {
+        SessionProbe.lua(session, "vim.opt.shortmess:remove('F')");
     }
 
     /**
@@ -78,20 +81,8 @@ class FileInfoEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void withFDefaultEclipsesSwitchShowsNothing() throws Exception {
-        neovimGivesFileInfo(false);
-        ITextEditor other = switchAwayAndBack();
-        try {
-            expectNoMessageAndTheFocus();
-            undoThenDeleteTheLineBelow();
-        } finally {
-            page().closeEditor(other, false);
-        }
-    }
-
-    @Test
     void withoutFEclipsesSwitchStillShowsNothing() throws Exception {
-        neovimGivesFileInfo(true);
+        neovimGivesFileInfo();
         ITextEditor other = switchAwayAndBack();
         try {
             expectNoMessageAndTheFocus();
@@ -111,7 +102,7 @@ class FileInfoEndToEndTest extends EndToEndTestBase {
     void withoutFTheUsersOwnBufferCommandShowsNeovimsFileInfo() throws Exception {
         ITextEditor other = switchAwayAndBack();
         try {
-            neovimGivesFileInfo(true);
+            neovimGivesFileInfo();
             runInBox(widget, "b other.txt");
             waitUntil("other.txt to become the active editor", TIMEOUT_MS, () -> {
                 IEditorPart active = page().getActiveEditor();

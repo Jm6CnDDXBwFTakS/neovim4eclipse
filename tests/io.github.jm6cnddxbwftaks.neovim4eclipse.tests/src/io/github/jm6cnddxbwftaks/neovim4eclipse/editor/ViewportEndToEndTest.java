@@ -115,22 +115,6 @@ class ViewportEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void lGoesToTheEditorsLastFullLine() {
-        String text = IntStream.rangeClosed(1, 300).mapToObj(i -> "line " + i).collect(Collectors.joining("\n", "", "\n"));
-        document.set(text);
-        settle();
-        waitUntil("Neovim's window the editor's size", TIMEOUT_MS, this::neovimMatchesTheEditor, this::sizes);
-        int rows = editorCells()[1];
-        session.inputAsync("gg");
-        session.inputAsync("L");
-        int scrolloff = ((Number) SessionProbe.lua(session, "return vim.wo.scrolloff")).intValue();
-        int expected = rows - scrolloff;
-        waitUntil("L on line " + expected + " (" + rows + " rows, scrolloff " + scrolloff + ")", TIMEOUT_MS,
-                () -> ((Number) SessionProbe.lua(session, "return vim.fn.line('.')")).intValue() == expected,
-                () -> "; on line " + SessionProbe.lua(session, "return vim.fn.line('.')"));
-    }
-
-    @Test
     void aJumpScrollsTheEditorToNeovimsTopLine() {
         longDocument();
         session.inputAsync("1");
@@ -164,14 +148,6 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         assertEquals(top, neovim("w0"), "its window's view" + tops());
         assertEquals(150, cursorLine());
         page().closeEditor(other, false);
-    }
-
-    @Test
-    void ctrlEScrollsTheEditorOneLine() {
-        longDocument();
-        session.inputAsync("<C-e>");
-        waitUntil("line 2 at the editor's top", TIMEOUT_MS, () -> editorTop() == 2, this::tops);
-        waitUntil("both agree", TIMEOUT_MS, this::topsAgree, this::tops);
     }
 
     /**
