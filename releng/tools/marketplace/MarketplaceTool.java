@@ -75,6 +75,8 @@ public final class MarketplaceTool {
     static final String LOGO_SVG = "docs/images/logo.svg";
     static final String MARKETPLACE_LOGO = "docs/images/marketplace-logo.png";
     static final String DEMO = "docs/images/demo.gif";
+    /** The font DemoRecordingTest uses, which must be installed for pictures. */
+    static final String DEMO_FONT = "JetBrains Mono NL";
     /** Where pictures puts a new recording of the demo, in {@link #OUT}, apart from the committed one's copy. */
     static final String NEW_DEMO = "demo-new.gif";
     static final String ICONS = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/";
@@ -195,6 +197,11 @@ public final class MarketplaceTool {
         }
         if (!Shell.onPath("xvfb-run")) {
             throw new ToolFailure("no xvfb-run on PATH; on Debian or Ubuntu: sudo apt install xvfb");
+        }
+        // DemoRecordingTest draws the demo in this font; fontconfig would quietly put another in its place.
+        if (!Shell.onPath("fc-match") || !shell.out(List.of("fc-match", DEMO_FONT)).contains(DEMO_FONT)) {
+            throw new ToolFailure("the demo's font, " + DEMO_FONT + ", is not installed; on Debian or Ubuntu: sudo apt install"
+                    + " fonts-jetbrains-mono, elsewhere https://www.jetbrains.com/lp/mono/");
         }
         // Before the long run: the demo is committed at the end, on a work branch.
         git.checkWorkBranch("record the demo", Version.inPom(Facts.text(root, "pom.xml")));

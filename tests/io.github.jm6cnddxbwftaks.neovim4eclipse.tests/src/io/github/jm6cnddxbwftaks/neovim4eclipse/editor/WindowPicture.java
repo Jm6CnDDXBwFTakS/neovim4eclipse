@@ -32,11 +32,17 @@ final class WindowPicture {
     private WindowPicture() {
     }
 
+    /** The screen y where a picture of {@code shell} starts: row 0 of {@link #take}'s image. */
+    static int top(Shell shell) {
+        Rectangle client = shell.getDisplay().map(shell, null, shell.getClientArea());
+        return Math.min(shell.getBounds().y, client.y);
+    }
+
     /** What {@code shell} shows on screen now. The caller disposes of the image. */
     static Image take(Shell shell) {
         Display display = shell.getDisplay();
         Rectangle client = display.map(shell, null, shell.getClientArea());
-        int top = Math.min(shell.getBounds().y, client.y);
+        int top = top(shell);
         Rectangle bounds = new Rectangle(client.x, top, client.width, client.y + client.height - top);
         Image image = new Image(display, bounds.width, bounds.height);
         GC gc = new GC(display);

@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.eclipse.core.resources.IFile;
@@ -19,10 +21,12 @@ import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.jface.resource.FontRegistry;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
@@ -35,6 +39,7 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IViewReference;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
@@ -62,9 +67,13 @@ import org.junit.jupiter.api.Test;
 @Tag("screenshots")
 class DemoRecordingTest extends EndToEndTestBase {
 
-    /** The window size: the README shows the GIF about this wide, so nothing is scaled. */
+    /**
+     * The window size: the README shows the GIF about this wide, so nothing is scaled; this tall,
+     * the editor shows the file's 24 lines (23, and one more once content assist adds it) in
+     * {@link #FONT} at {@link #FONT_POINTS}.
+     */
     private static final int WIDTH = 1000;
-    private static final int HEIGHT = 680;
+    private static final int HEIGHT = 700;
 
     /**
      * The typing rhythm: after a key, the picture stays a random time between these, in
@@ -84,6 +93,19 @@ class DemoRecordingTest extends EndToEndTestBase {
     private static final int STEP_MS = 1400;
 
     private static final String JAVA_EDITOR = "org.eclipse.jdt.ui.CompilationUnitEditor";
+    /** Window &gt; Appearance &gt; Hide Toolbar (and Show Toolbar: the same command toggles it). */
+    private static final String TOGGLE_TOOLBAR = "org.eclipse.ui.ToggleCoolbarAction";
+
+    /**
+     * The demo's font, in the editor and the captions: JetBrains Mono NL, a monospaced font made
+     * for code (the NL variant has no ligatures, so {@code !=} shows as typed). The Marketplace
+     * tool checks that it is installed; on Debian and Ubuntu it is {@code fonts-jetbrains-mono}.
+     * 14 points fills the window's height with the file ({@link #HEIGHT}).
+     */
+    private static final String FONT = "JetBrains Mono NL";
+    private static final int FONT_POINTS = 14;
+    /** The text font every editor uses, and the Java editor's own, which follows it unless set. */
+    private static final List<String> EDITOR_FONTS = List.of("org.eclipse.jface.textfont", "org.eclipse.jdt.ui.editors.textfont");
     /**
      * JDT's preference for opening content assist by itself after a {@code .}: off while the demo
      * runs, so the list opens only for Ctrl+Space, at a known moment ({@code PreferenceConstants.
@@ -125,6 +147,8 @@ class DemoRecordingTest extends EndToEndTestBase {
     private final List<String> frameNames = new ArrayList<>();
     private final List<Integer> frameMillis = new ArrayList<>();
     private final Random rhythm = new Random(RHYTHM_SEED);
+    /** The caption band's top in the picture ({@link #captionTop(StyledText)}). */
+    private int captionTop;
     /** The current step's keys as the caption shows them. */
     private final StringBuilder caption = new StringBuilder();
 
@@ -151,6 +175,18 @@ class DemoRecordingTest extends EndToEndTestBase {
         IWorkbenchPage page = page();
         // The base class opens test.txt for every UI test; the demo shows only its own file.
         page.closeEditor(editor, false);
+        // Only the editor: no toolbar, no views (closed rather than the editor maximized, which
+        // would leave the minimized views as icon bars down both sides).
+        runCommand(TOGGLE_TOOLBAR);
+        for (IViewReference view : page.getViewReferences()) {
+            page.hideView(view);
+        }
+        FontRegistry fonts = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getFontRegistry();
+        Map<String, FontData[]> fontsBefore = new HashMap<>();
+        for (String key : EDITOR_FONTS) {
+            fontsBefore.put(key, fonts.getFontData(key));
+            fonts.put(key, new FontData[] { new FontData(FONT, FONT_POINTS, SWT.NORMAL) });
+        }
         IEditorPart opened = null;
         try {
             IFile file = demo.getFile("src/demo/Greeter.java");
@@ -160,21 +196,39 @@ class DemoRecordingTest extends EndToEndTestBase {
                 throw new AssertionError("not a text editor (is JDT installed? use -Pscreenshots): " + opened);
             }
             waitForAttach(java, "Greeter.java");
-            // Only the editor, as large as the window allows: the demo is about the text.
-            page.setPartState(page.getReference(java), IWorkbenchPage.STATE_MAXIMIZED);
             text = widgetOf(java);
             doc = documentOf(java);
+            // A clean start, which the last picture comes back to: no search left from an earlier
+            // run (the pictures' Neovim keeps its history under pictures.home), and Eclipse's
+            // build of the new Java project done, so no "Building" shows in the status bar.
+            session.commandAsync("let @/ = '' | nohlsearch");
+            waitUntil("the workspace build", TIMEOUT_MS,
+                    () -> Job.getJobManager().find(ResourcesPlugin.FAMILY_AUTO_BUILD).length == 0
+                            && Job.getJobManager().find(ResourcesPlugin.FAMILY_MANUAL_BUILD).length == 0);
             settle();
+            captionTop = captionTop(text);
             play(new File(WindowPicture.folder(), "demo"));
         } finally {
             // Also after a failed step: ScreenshotCaptureTest runs next in this Eclipse, and its
             // pictures need the workbench as it was.
             if (opened != null) {
-                page.setPartState(page.getReference(opened), IWorkbenchPage.STATE_RESTORED);
                 page.closeEditor(opened, false);
             }
             demo.delete(true, true, null);
+            fontsBefore.forEach(fonts::put);
+            page.resetPerspective(); // the views back where they were
+            runCommand(TOGGLE_TOOLBAR);
         }
+    }
+
+    /**
+     * Where the caption band goes, in the picture: centered on the file's fourth line, which is
+     * empty, so the band covers only the right part of the short lines around it.
+     */
+    private int captionTop(StyledText editorText) {
+        int lineCenter = editorText.getLinePixel(3) + editorText.getLineHeight() / 2;
+        int onScreen = editorText.getDisplay().map(editorText, null, 0, lineCenter).y;
+        return onScreen - WindowPicture.top(window) - CAPTION_HEIGHT / 2;
     }
 
     /** The demo, a picture after every key, into {@code folder}. */
@@ -402,7 +456,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         Image image = WindowPicture.take(window);
         try {
             if (caption.length() > 0) {
-                drawCaption(image, caption.toString());
+                drawCaption(image, caption.toString(), captionTop);
             }
             String name = String.format("frame-%04d.png", frameNames.size() + 1);
             WindowPicture.savePng(image.getImageData(), new File(folder, name));
@@ -416,22 +470,23 @@ class DemoRecordingTest extends EndToEndTestBase {
     /** The longest caption shown: older keys of a long step scroll off to the left. */
     private static final int CAPTION_CHARS = 30;
 
+    private static final int CAPTION_HEIGHT = 34;
+
     /**
-     * Draws {@code keys} centered in a dark band over the right part of the editor's first lines,
-     * below the toolbar and the tabs, where the short lines of the demo file leave room.
+     * Draws {@code keys} centered in a dark band from {@code top} down, over the right part of the
+     * editor, where the short lines of the demo file leave room.
      */
-    private static void drawCaption(Image image, String keys) {
+    private static void drawCaption(Image image, String keys, int top) {
         String shown = keys.length() > CAPTION_CHARS ? "…" + keys.substring(keys.length() - CAPTION_CHARS + 1) : keys;
         Display display = Display.getCurrent();
         GC gc = new GC(image);
-        Font font = new Font(display, new FontData("Monospace", 20, SWT.BOLD));
+        Font font = new Font(display, new FontData(FONT, 20, SWT.BOLD));
         Color band = new Color(display, 0x55, 0x55, 0x55);
         Color white = new Color(display, 0xff, 0xff, 0xff);
         try {
             int width = image.getBounds().width;
             int left = width * 36 / 100;
-            int top = 160;
-            int height = 34;
+            int height = CAPTION_HEIGHT;
             gc.setAntialias(SWT.ON);
             gc.setTextAntialias(SWT.ON);
             gc.setBackground(band);
