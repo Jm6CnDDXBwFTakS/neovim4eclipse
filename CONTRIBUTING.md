@@ -249,7 +249,11 @@ waiting longer:
   test waits for the whole of it (several lines), not for the first part.
 - **Neovim settings that count real time.** `'mousetime'` (500 ms) decides whether two clicks are a
   double click; on a loaded machine two clicks sent at once can arrive further apart. The mouse
-  tests set it to 10 s for themselves.
+  tests set it to 10 s for themselves. `'timeoutlen'` (1 s) is how long Neovim waits for the rest
+  of a mapping before it runs its own keys: a test that types `Z`, lets Neovim finish, then types
+  `Z` again can be slower than that, and Neovim's own `ZZ` then quits the Neovim every later test
+  uses. The end-to-end tests set it to twice the `TestWait` limit before each test
+  (`EndToEndTestBase`), so no test can come to depend on it running out.
 - **A clock in the code under test.** When the code itself measures time (Get Neovim gives up a
   download after 60 s without a byte), let it take the clock as a parameter and give the test a
   fake one that moves only when the test says. `NeovimDownloadTest` moves its clock a full stall

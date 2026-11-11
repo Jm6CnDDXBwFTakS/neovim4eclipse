@@ -170,8 +170,33 @@ abstract class EndToEndTestBase {
         // One Neovim serves the whole IDE, so a previous test may have left it in another mode.
         session.inputAsync("<Esc>");
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        // After the Esc: it ends the rest of a mapping a failed test left Neovim waiting for, which
+        // would hold back this request (Neovim answers it only once it has the whole mapping).
+        waitForTheRestOfAMapping(session);
         settle(); // let the initial document push and cursor placement finish
         waitForNeovimIn(file);
+    }
+
+    /**
+     * Lets Neovim wait for the rest of a mapping longer than any test waits for anything (twice
+     * {@link TestWait}'s limit), instead of its default {@code 'timeoutlen'} of 1 s.
+     *
+     * <p>Why: after a key that may begin a longer mapping, Neovim waits {@code 'timeoutlen'} for the
+     * next one, and when none comes it gives up on the mapping and runs its own keys instead. A test
+     * types one key at a time and lets Neovim finish each ({@link #typeSlowly}), and on a loaded
+     * machine that gap can be longer than a second. Example: the plug-in's {@code ZZ} (Eclipse
+     * saves and closes the editor) became Neovim's own {@code ZZ}, which quits the one Neovim every
+     * later test uses; {@code grn} (Eclipse's Rename) became Neovim's {@code gr}, which replaces the
+     * character under the cursor with {@code n}. A person types a mapping's keys within the second;
+     * a test machine may not.
+     *
+     * <p>Longer than any test wait, so that no test can come to depend on the wait running out: one
+     * that did would time out first. The one test about {@code 'timeoutlen'} itself
+     * ({@code NeovimFoldsIntegrationTest.aSlowZEIsRefusedToo}) has a Neovim of its own. Set before
+     * every test, as a restarted Neovim starts with the default again.
+     */
+    private static void waitForTheRestOfAMapping(NeovimSession session) {
+        SessionProbe.lua(session, "vim.o.timeoutlen = " + 2 * TestWait.millis() + "; return 0");
     }
 
     /**
@@ -339,6 +364,10 @@ abstract class EndToEndTestBase {
         if (running == null) {
             return;
         }
+        // Esc first: a test that failed after the first key of a mapping (Z of ZZ) leaves Neovim
+        // waiting for the rest, as long as 'timeoutlen' (waitForTheRestOfAMapping), and until then it
+        // holds back the request below. Esc is input, which Neovim reads at once, and ends the wait.
+        running.inputAsync("<Esc>");
         UiTestSupport.settle(running, TIMEOUT_MS); // the closes are queued in the session: let them happen first
         String folder = project == null || project.getLocation() == null ? "" : project.getLocation().toOSString();
         SessionProbe.lua(running, """
