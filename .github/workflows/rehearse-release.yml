@@ -24,8 +24,9 @@
 #   3. sign:     releng/sign.sh with a throwaway key made in the job, in place of the project's,
 #                then the publish job's checks and the release notes. Nothing is published.
 #   4. site:     the update site twice, as update-site.yml builds it: from every published release
-#                with the project's key (so a published ZIP that changed shows here too), and from
-#                the rehearsed ZIP alone with the throwaway key. Not deployed.
+#                with the project's key (so a published ZIP that changed shows here too; skipped,
+#                with a notice, while no release is published), and from the rehearsed ZIP alone
+#                with the throwaway key. Not deployed.
 #   5. smoke:    the director installs the rehearsed ZIP from that second site (a file: URL) into
 #                Eclipse 4.34 and the newest Eclipse, as update-site.yml does from the live site.
 # Left out: creating the GitHub Release and deploying GitHub Pages, which need write access.
@@ -173,10 +174,19 @@ jobs:
       - name: The site from every published release, with the project's key
         env:
           GH_TOKEN: ${{ github.token }}
+        # With no release published yet (the first, or after releases were deleted), there is no
+        # published site to rebuild: update-site.sh rightly refuses an empty one, as an update
+        # site without a release must never be deployed. The real Release workflow builds the
+        # site only after it has published this release, so it always has one.
         run: |
           mkdir dist
-          for tag in $(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases \
-                         --json tagName --jq '.[].tagName'); do
+          tags=$(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases \
+                   --json tagName --jq '.[].tagName')
+          if [ -z "$tags" ]; then
+            echo "::notice::No release is published yet, so there is no published site to rebuild; skipped."
+            exit 0
+          fi
+          for tag in $tags; do
             for try in 1 2 3; do
               gh release download "$tag" --pattern 'neovim4eclipse-*.zip' --pattern 'neovim4eclipse-*.zip.asc' \
                 --dir dist --clobber && break
