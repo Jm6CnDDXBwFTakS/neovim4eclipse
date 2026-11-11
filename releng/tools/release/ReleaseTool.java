@@ -36,6 +36,8 @@ import common.ToolFailure;
 import common.UpdateSite;
 import common.Version;
 
+import dependencies.DependabotRules;
+import dependencies.Updates;
 import eclipse.EclipseFiles;
 import maven.MavenFiles;
 
@@ -52,7 +54,8 @@ import maven.MavenFiles;
  *       archives still match their hashes ({@code UpdateNeovimDownloads.java --check}, as the
  *       Release workflow's first job), with a line when Neovim has a newer release, and one when
  *       Eclipse has a release newer than the smoke job's newest ({@code EclipseUpgrade.java}), and
- *       one when Maven or its wrapper has ({@code MavenUpgrade.java}); the manual checks due
+ *       one when Maven or its wrapper has ({@code MavenUpgrade.java}), and one when a library, a
+ *       Maven plug-in or an action has ({@code Dependencies.java}); the manual checks due
  *       ({@code ManualChecks.java due}). Then every test on this machine ({@code LikeCi.java --all}):
  *       the commit that passes is written to {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
  *       command for macOS and Windows, a reminder only: CI's macOS and Windows jobs are the gate.</li>
@@ -261,6 +264,7 @@ public final class ReleaseTool {
         newerNeovim();
         newerEclipse();
         newerMaven();
+        newerDependencies();
 
         System.out.println();
         System.out.println("Manual checks due for this release (docs/MANUAL_CHECKS.md):");
@@ -388,6 +392,28 @@ public final class ReleaseTool {
         } else {
             System.out.println("  note: " + String.join(" and ", newer) + " is out; once a week old: java "
                     + "releng/tools/maven/MavenUpgrade.java (docs/UPGRADING.md, \"Build tools\"). Not a blocker.");
+        }
+    }
+
+    /**
+     * Prints a line with the updates the Dependency tool would make: libraries, Maven plug-ins and
+     * GitHub Actions with a newer release, a week old, that {@code .github/dependabot.yml} allows
+     * ({@link Updates}). Like the lines above it, a note, never a blocker.
+     */
+    private void newerDependencies() {
+        Updates.Found found;
+        try {
+            Settings tool = Settings.load(List.of(root.resolve(Settings.COMMON), root.resolve("releng/tools/dependencies")), Map.of());
+            found = new Updates(root, shell, tool, false, Set.of()).find();
+        } catch (ToolFailure e) {
+            System.out.println("  (could not look for dependency updates: " + e.getMessage() + ")");
+            return;
+        }
+        if (found.count() == 0) {
+            ok("the libraries, Maven plug-ins and GitHub Actions are the newest " + DependabotRules.FILE + " allows");
+        } else {
+            System.out.println("  note: " + found.count() + " dependency update" + (found.count() == 1 ? " is" : "s are") + " out ("
+                    + found.summary() + "): java releng/tools/dependencies/Dependencies.java (docs/UPGRADING.md). Not a blocker.");
         }
     }
 

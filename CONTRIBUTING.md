@@ -600,7 +600,8 @@ release 0.2.3, on `release/0.2.3`:
    [CHANGELOG.md](CHANGELOG.md) lists the changes, the six pinned Neovim archives still match (downloaded in
    full, so at most once a day for the same pins)
    (and a line when Neovim has a newer release: move the pin once it is a week old,
-   [docs/UPGRADING.md](docs/UPGRADING.md), "Following Neovim's releases"). It lists the manual
+   [docs/UPGRADING.md](docs/UPGRADING.md), "Following Neovim's releases"; likewise for Eclipse,
+   Maven, and the libraries, plug-ins and actions, each with the tool that moves it). It lists the manual
    checks this release needs ([docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md)); do them. Then it
    runs every test on this machine, those CI leaves out included (`LikeCi.java --all`; see [Tests
    on a loaded machine](#tests-on-a-loaded-machine)), and records the commit that passed. It prints
