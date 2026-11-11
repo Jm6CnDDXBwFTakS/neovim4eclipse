@@ -31,6 +31,23 @@ class LocalFilesTest {
         assertFalse(LocalFiles.isMissing(URI.create("jar:file:/lib/a.jar!/gone.txt")));
     }
 
+    /** A buffer's name after its file was renamed or moved: an absolute path no file has. */
+    @Test
+    void aBuffersPathIsMissingOnceItsFileIsGone(@TempDir Path folder) throws Exception {
+        Path there = Files.writeString(folder.resolve("a.txt"), "x");
+        assertFalse(LocalFiles.isMissingPath(there.toString()));
+        assertTrue(LocalFiles.isMissingPath(folder.resolve("b.txt").toString()));
+    }
+
+    /** A name that is no absolute path (an untitled document's, a URI, none) counts as there. */
+    @Test
+    void aNameThatIsNoPathIsNeverMissing() {
+        assertFalse(LocalFiles.isMissingPath(""));
+        assertFalse(LocalFiles.isMissingPath("Untitled 1"));
+        assertFalse(LocalFiles.isMissingPath("relative/gone.txt"));
+        assertFalse(LocalFiles.isMissingPath("jar:file:/lib/a.jar!/gone.txt"));
+    }
+
     /**
      * {@code Path.of} refuses a {@code file:} URI with a host outside Windows (on Windows it is a
      * UNC path, and checked); the step must not break off with that exception.

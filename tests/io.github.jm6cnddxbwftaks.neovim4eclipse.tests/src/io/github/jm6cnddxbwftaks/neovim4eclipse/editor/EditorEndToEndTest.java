@@ -878,7 +878,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
      * An editor Eclipse reuses for another file (as for search results, with "reuse editors") gets
      * a new input and a new document, as a rename does, but the old file is still there. Even when
      * the other file has the same text, it gets a Neovim buffer of its own: with the old one, its
-     * {@code u} would undo the old file's change, and turn it into what that file was before.
+     * {@code u} would undo the old file's change, and turn it into what that file was before. Every
+     * case of the rule is {@code InputRebindTest} (tests/unit); this one goes through the
+     * workbench's reuse of an editor, the case a rename and a Save As do not reach.
      */
     @Test
     void anEditorReusedForAFileWithTheSameTextGetsABufferOfItsOwn() throws Exception {

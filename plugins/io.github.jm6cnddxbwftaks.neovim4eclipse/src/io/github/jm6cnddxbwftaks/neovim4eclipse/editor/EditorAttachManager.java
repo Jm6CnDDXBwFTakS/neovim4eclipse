@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -55,6 +54,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InputRebind;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LocalFiles;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimNotFoundException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 
@@ -1160,7 +1161,8 @@ public final class EditorAttachManager {
      *   <li>The new document has no buffer yet.</li>
      * </ul>
      * Otherwise only this editor gives up the old document (its buffer is closed once no editor
-     * shows it), and the new document gets its own buffer at the next attach.
+     * shows it), and the new document gets its own buffer at the next attach. The rules themselves
+     * are {@link InputRebind}; this finds the facts and carries the answer out.
      */
     private Rebound rebind(ITextEditor editor, IDocument fresh, NeovimSession session) {
         boolean wasSavedAs = savedAs.remove(editor);
@@ -1172,14 +1174,18 @@ public final class EditorAttachManager {
         IEditorPart part = bound.part();
         DocumentBuffer buffer = documents.bufferOf(old).orElse(null);
         List<IEditorPart> sharing = documents.editorsOf(old);
-        // Not from the text: an editor reused for another file with the same text (two empty
-        // files) would look like a Save As, and that file would get the old one's undo history.
-        boolean moved = buffer != null && (isGone(buffer.name()) || wasSavedAs);
-        boolean kept = moved && documents.bufferOf(fresh).isEmpty()
-                && sharing.stream().allMatch(other -> other == part || showsDocument(other, fresh));
+        // The rules are InputRebind (tested in tests/unit). Not from the text: an editor reused for
+        // another file with the same text (two empty files) would look like a Save As, and that
+        // file would get the old one's undo history.
+        boolean kept = InputRebind.keepsBuffer(new InputRebind.Facts(
+                buffer != null,
+                buffer != null && LocalFiles.isMissingPath(buffer.name()),
+                wasSavedAs,
+                documents.bufferOf(fresh).isPresent(),
+                sharing.stream().allMatch(other -> other == part || showsDocument(other, fresh))));
         IEditorPart reattach = null;
-        if (activeController != null && attachedDocument == old
-                && (kept ? sharing.contains(attachedPart) : attachedPart == part)) {
+        if (InputRebind.reattaches(activeController != null && attachedDocument == old, kept,
+                sharing.contains(attachedPart), attachedPart == part)) {
             reattach = attachedPart;
             closeControllerQuietly(); // its sync is closed below, not handed the old document
             attachedPart = null;
@@ -1214,18 +1220,6 @@ public final class EditorAttachManager {
     private static boolean showsDocument(IEditorPart part, IDocument document) {
         ITextEditor text = textEditorOf(part);
         return text != null && documentOf(text) == document;
-    }
-
-    /**
-     * Whether the file a buffer is named after ({@link #bufferName}: its path) no longer exists:
-     * renamed or moved. A name that is no path (a URI, an untitled document's) counts as there.
-     */
-    private static boolean isGone(String name) {
-        try {
-            return !name.isEmpty() && Path.of(name).isAbsolute() && !Files.exists(Path.of(name));
-        } catch (InvalidPathException e) {
-            return false;
-        }
     }
 
     /** Closes in Neovim the buffers no editor shows any more, as {@link #releaseDocumentsOf} does. */
