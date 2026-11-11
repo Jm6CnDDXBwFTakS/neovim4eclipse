@@ -69,6 +69,44 @@ final class KeyboardFocus {
     }
 
     /**
+     * Activates {@code shell} again if another window took the activation, and runs the event loop
+     * until a control in it has the keyboard focus; returns that control. Unlike {@link #require}
+     * it gives no control the focus: an activated window hands it back to the control last given
+     * it, so the answer is where the code under test left it.
+     *
+     * <p>Why: on a desktop with a window manager, the test's window can lose the activation while a
+     * test runs, with no other window of the test's own active; the focus is then nowhere
+     * ({@code getFocusControl()} null), though the window still knows which control had it. Under
+     * {@code xvfb-run} (no window manager) it does not happen. Example: after the {@code :} box
+     * closed, {@code assertSame(other, KeyboardFocus.afterActivation(shell, TestWait.millis()))}.
+     */
+    static Control afterActivation(Shell shell, long timeoutMs) {
+        Display display = shell.getDisplay();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        long nextRequest = 0;
+        while (display.getActiveShell() != shell || display.getFocusControl() == null) {
+            long now = System.currentTimeMillis();
+            if (now > deadline) {
+                fail("Timed out after " + timeoutMs + " ms: the test's window did not get the focus back; "
+                        + report(display, shell));
+            }
+            if (now >= nextRequest && display.getActiveShell() != shell) {
+                shell.forceActive();
+                nextRequest = now + RETRY_MS;
+            }
+            if (!display.readAndDispatch()) {
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    fail("interrupted");
+                }
+            }
+        }
+        return display.getFocusControl();
+    }
+
+    /**
      * Where the keyboard focus is, for a failure message. Example: {@code "active shell: none (not
      * the test's shell); focus control: none"}: another window has the focus, or none does.
      */

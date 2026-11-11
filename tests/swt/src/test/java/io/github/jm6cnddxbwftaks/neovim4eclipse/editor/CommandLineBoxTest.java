@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -428,7 +429,9 @@ class CommandLineBoxTest {
         while (Display.getDefault().readAndDispatch()) {
             // the focus events of the box going away
         }
-        assertTrue(other.isFocusControl(), "the new editor keeps the focus");
+        // Where the focus is once the window has it: a desktop's window manager may have taken the
+        // activation meanwhile, and the window then gives the focus back to the control that had it.
+        assertSame(other, KeyboardFocus.afterActivation(shell, TIMEOUT_MS), "the new editor keeps the focus");
         assertEquals(List.of("type <CR>"), commands.calls);
     }
 
