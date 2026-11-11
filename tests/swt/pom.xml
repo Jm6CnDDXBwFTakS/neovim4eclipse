@@ -12,7 +12,9 @@
        Tests of editor/ classes that work on SWT widgets (StyledText, painting, folded-code offsets)
        but not on the workbench: StyledTextCaret, CursorStyleController, BlockOverlay, OverlayFrame,
        WidgetOffsets, and
-       CommandLineBox with OutputPopup (Neovim and the IDE behind its Commands interface). They
+       CommandLineBox with OutputPopup (Neovim and the IDE behind its Commands interface); and the
+       preference pages' bodies (prefs/NeovimPage, StatusBarPage, CtrlKeysPage, with
+       NeovimStatusSection), on an in-memory preference store. They
        need SWT and a display, like the UI tests, but not a started Eclipse: plain JUnit creates
        the SWT Display on its own thread, which saves the workbench start and lets them run in the
        IDE as ordinary JUnit tests. On a machine without a display run them under xvfb-run.
@@ -35,8 +37,8 @@
 
   <name>Neovim for Eclipse SWT Tests</name>
   <description>
-    Tests of editor/ code that uses SWT widgets but not the workbench: plain JUnit with the SWT jar
-    and a display.
+    Tests of editor/, dialogs/ and prefs/ code that uses SWT widgets but not the workbench: plain
+    JUnit with the SWT jar and a display.
   </description>
 
   <properties>
@@ -194,6 +196,15 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWheel.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusBarLabels.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/SearchHighlighter.java</include>
+            <!-- The pages' bodies; the classes plugin.xml names, their workbench subclasses, are not
+                 here (prefs/package-info, "Two classes per page"). -->
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/PreferenceConstants.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/PreferenceDefaults.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/PageLayout.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/NeovimStatusSection.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/NeovimPage.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/StatusBarPage.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/CtrlKeysPage.java</include>
           </includes>
         </configuration>
       </plugin>
@@ -218,7 +229,7 @@
           </execution>
         </executions>
       </plugin>
-      <!-- Coverage, as in tests/unit; the report is target/site/jacoco/index.html (editor/ only). -->
+      <!-- Coverage, as in tests/unit; the report is target/site/jacoco/index.html (editor/, dialogs/ and prefs/). -->
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
@@ -243,6 +254,7 @@
               <includes>
                 <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/**</include>
                 <include>io/github/jm6cnddxbwftaks/neovim4eclipse/dialogs/**</include>
+                <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/**</include>
               </includes>
             </configuration>
           </execution>

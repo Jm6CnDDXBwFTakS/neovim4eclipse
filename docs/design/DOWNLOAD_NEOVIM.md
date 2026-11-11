@@ -394,6 +394,7 @@ for a permanent setting; editing `eclipse.ini` inside a signed macOS `Eclipse.ap
   to use, SOCKS only), `NeovimInstaller`, `NeovimProcesses`, `NeovimOption`, `NvimExecutable`,
   `OldNeovimProgram`, `GetNeovimText` (the dialogs' words, values and links).
 - `prefs/`: `GetNeovim` (flow and Job), `EclipseProxies`, `GetNeovimOffer` (the menu's
-  `visibleWhen`), `NeovimStatusSection`, `ExternalBrowser`. In `prefs/` rather than `editor/`
+  `visibleWhen`), `NeovimStatusSection` (its button and links through `WorkbenchSectionActions`),
+  `ExternalBrowser`. In `prefs/` rather than `editor/`
   because the preference page uses them and `prefs/` does not depend on `editor/`.
 - `editor/`: `GetNeovimHandler`, `OldNeovimProgramNotice`. `dialogs/`: `HeadedMessageDialog`.

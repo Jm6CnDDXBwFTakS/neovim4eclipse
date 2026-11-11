@@ -281,12 +281,21 @@ again (`removeFilter`) when it is no longer needed.
 - Values live in an `IPreferenceStore` (`Activator.getDefault().getPreferenceStore()`), saved per
   workspace.
 - Defaults are set by an `AbstractPreferenceInitializer` in the `DefaultScope`. A stored value that
-  equals its default is not written to disk.
+  equals its default is not written to disk. The values themselves are `prefs/PreferenceDefaults`'s,
+  which the SWT tests also write into a store of their own.
 - Pages are `PreferencePage` subclasses. `FieldEditorPreferencePage` builds a form from field
-  editors (`NeovimPreferencePage`); a hand-written page builds its own widgets (`CtrlKeysPreferencePage`).
-  A page can also hold plain controls next to its field editors: the *Neovim* group of
-  `NeovimPreferencePage` is `prefs/NeovimStatusSection`, a note, a button and a link with no
+  editors (`NeovimPage`); a hand-written page builds its own widgets (`CtrlKeysPage`).
+- Each page is two classes. The body (`NeovimPage`, `StatusBarPage`, `CtrlKeysPage`) uses JFace
+  alone and takes its store through its constructor. The class `plugin.xml` names
+  (`NeovimPreferencePage`, ...) is a subclass a few lines long: it adds `IWorkbenchPreferencePage`,
+  which the extension point wants and which lives in the workbench jar, and passes the plug-in's
+  store. So `tests/swt` builds a body without a workbench, on an in-memory store:
+  `new StatusBarPage(store).createControl(shell)` (`prefs/package-info`, "Two classes per page").
+- A page can also hold plain controls next to its field editors: the *Neovim* group of
+  `NeovimPage` is `prefs/NeovimStatusSection`, a note, a button and a link with no
   preference behind them (the program to run is a startup option, `util/NeovimOption`, below).
+  What the button and links do comes in as `NeovimStatusSection.Actions`: in Eclipse
+  `WorkbenchSectionActions` (Get Neovim, the external browser), in `NeovimPageTest` a recorder.
   The note's work (hashing the dedicated Neovim, running `nvim --version`) happens on a background
   thread; `Display.asyncExec` brings the answer back to the UI thread, and a counter drops answers
   older than the newest probe.
@@ -296,7 +305,7 @@ again (`removeFilter`) when it is no longer needed.
   or in `eclipse.ini`) is set only by whoever starts Eclipse. `System.getProperty` reads it; it is
   fixed for the run, so changing it means a restart. The UI tests get theirs from Tycho's
   `<systemProperties>`, before the plug-in starts.
-- Field editors can sit in a `Group` box (`NeovimPreferencePage`: *Neovim* and *Workbench*):
+- Field editors can sit in a `Group` box (`NeovimPage`: *Neovim* and *Workbench*):
   create each one on the group instead of `getFieldEditorParent()`. The catch: a field editor sets a
   fresh `GridLayout` on its parent (no margins), and the page adjusts columns only on its own parent,
   so the page overrides `adjustGridLayout` to give each group its columns and margins back. A text
@@ -970,7 +979,8 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 ## Part 4: Recipes
 
 **Add a preference.** Add a key and default to `PreferenceConstants`; set the default in
-`PreferenceInitializer`; add a field to a preference page; read it with
+`PreferenceDefaults`; add a field to a preference page's body (`NeovimPage`, `StatusBarPage`,
+`CtrlKeysPage`) and test it in its `tests/swt` test; read it with
 `Activator.getDefault().getPreferenceStore()`; if it must apply at once, handle it in the
 `Activator`'s property-change listener.
 

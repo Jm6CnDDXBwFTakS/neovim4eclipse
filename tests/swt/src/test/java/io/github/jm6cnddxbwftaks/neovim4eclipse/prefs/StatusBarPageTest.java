@@ -3,49 +3,48 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PageTesting.all;
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PageTesting.press;
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PageTesting.pushButton;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Predicate;
 
+import org.eclipse.jface.preference.PreferenceStore;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.ui.PlatformUI;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The Status Bar page refuses numbers out of their range, and the page stays invalid (Eclipse
- * disables OK and Apply) until they are fixed; Restore Defaults brings back the default width.
- * The page has no mode style to choose: the mode has one set of names (util/ModeLabels). The manual tests "Preferences apply at once" and "The preference pages".
+ * The Status Bar page ({@link StatusBarPage}) refuses numbers out of their range, and the page stays
+ * invalid (Eclipse disables OK and Apply) until they are fixed; Restore Defaults brings back the
+ * default width; Apply stores what the page shows. The page has no mode style to choose: the mode
+ * has one set of names (util/ModeLabels).
  *
- * <p>The page is never applied, so nothing reaches the preference store: the field editors keep
- * their values until OK or Apply ({@link org.eclipse.jface.preference.FieldEditorPreferencePage}),
- * and Restore Defaults only fills them with the defaults. How the bar follows a stored change is
- * {@code StatusBarEndToEndTest}'s.
+ * <p>The page works on a store of its own ({@link PageTesting#store}). How the bar follows a stored
+ * change is {@code StatusBarEndToEndTest}'s, in the UI tests.
  */
-class StatusBarPreferencePageTest {
+class StatusBarPageTest {
 
     private Shell shell;
-    private StatusBarPreferencePage page;
+    private PreferenceStore store;
+    private StatusBarPage page;
 
     @BeforeEach
     void open() {
-        shell = new Shell(Display.getCurrent());
+        shell = new Shell(Display.getDefault());
         shell.setLayout(new FillLayout());
-        page = new StatusBarPreferencePage();
-        page.init(PlatformUI.getWorkbench());
+        store = PageTesting.store();
+        page = new StatusBarPage(store);
         page.createControl(shell);
         shell.setSize(600, 500);
         shell.layout(true, true);
@@ -87,22 +86,30 @@ class StatusBarPreferencePageTest {
         Text width = all(page.getControl(), Text.class, t -> true).get(0);
         enter(width, "120");
 
-        press(button("Defaults"));
+        press(pushButton(shell, "Restore Defaults"));
 
         assertEquals(String.valueOf(PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT), width.getText());
         assertTrue(page.isValid());
     }
 
     /**
-     * The page's push button whose label contains {@code word}, mnemonic marks ({@code &}) left out:
-     * Restore Defaults is made by {@link org.eclipse.jface.preference.PreferencePage} itself, below
-     * the field editors.
+     * Until OK or Apply the field editors keep their values to themselves; Apply then writes them to
+     * the store, which the plug-in listens to.
      */
-    private Button button(String word) {
-        List<Button> found = all(shell, Button.class,
-                b -> (b.getStyle() & SWT.PUSH) != 0 && b.getText().replace("&", "").contains(word));
-        assertEquals(1, found.size(), "one button with " + word);
-        return found.get(0);
+    @Test
+    void applyStoresTheWidthAndTheParts() {
+        Text width = all(page.getControl(), Text.class, t -> true).get(0);
+        Button statusline = PageTesting.find(page.getControl(), Button.class, b -> b.getText().startsWith("statusline"));
+        enter(width, "120");
+        statusline.setSelection(!statusline.getSelection());
+        press(statusline);
+        assertEquals(PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT, store.getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH),
+                "nothing stored before Apply");
+
+        press(pushButton(shell, "Apply"));
+
+        assertEquals(120, store.getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH));
+        assertEquals(!PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT, store.getBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE));
     }
 
     /**
@@ -113,29 +120,5 @@ class StatusBarPreferencePageTest {
     private static void enter(Text field, String value) {
         field.setText(value);
         field.notifyListeners(SWT.KeyUp, new Event());
-    }
-
-    private static void press(Button button) {
-        Event click = new Event();
-        click.widget = button;
-        button.notifyListeners(SWT.Selection, click);
-    }
-
-    /** Every control of {@code type} under {@code root} that passes {@code test}, in layout order. */
-    private static <T extends Control> List<T> all(Control root, Class<T> type, Predicate<T> test) {
-        List<T> found = new ArrayList<>();
-        collect(root, type, test, found);
-        return found;
-    }
-
-    private static <T extends Control> void collect(Control root, Class<T> type, Predicate<T> test, List<T> found) {
-        if (type.isInstance(root) && test.test(type.cast(root))) {
-            found.add(type.cast(root));
-        }
-        if (root instanceof Composite composite) {
-            for (Control child : composite.getChildren()) {
-                collect(child, type, test, found);
-            }
-        }
     }
 }

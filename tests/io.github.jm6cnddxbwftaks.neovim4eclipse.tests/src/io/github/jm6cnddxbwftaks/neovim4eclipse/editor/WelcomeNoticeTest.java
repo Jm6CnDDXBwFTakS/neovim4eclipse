@@ -17,7 +17,6 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.PlatformUI;
@@ -26,7 +25,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.NeovimPreferencePage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
@@ -103,22 +101,6 @@ class WelcomeNoticeTest {
         Command welcome = commands.getCommand("io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome");
         assertTrue(welcome.isDefined());
         assertTrue(welcome.isHandled());
-    }
-
-    @Test
-    void theNeovimPageHasACheckboxForIt() {
-        Shell shell = new Shell(Display.getCurrent());
-        NeovimPreferencePage page = new NeovimPreferencePage();
-        try {
-            page.init(PlatformUI.getWorkbench());
-            page.createControl(shell);
-            List<String> labels = buttonLabels(page.getControl());
-            assertTrue(labels.stream().anyMatch(l -> l.startsWith("Show a welcome after installing")),
-                    "checkboxes: " + labels);
-        } finally {
-            page.dispose();
-            shell.dispose();
-        }
     }
 
     // ---- helpers ----

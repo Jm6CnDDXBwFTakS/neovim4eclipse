@@ -100,7 +100,7 @@ text file and the Java editor into `search.html`; the profile then starts a seco
 with Eclipse's dark theme (`-cssTheme org.eclipse.e4.ui.css.theme.e4_dark`, as a user's Eclipse
 starts after choosing Dark), which takes those pictures again, so the page shows each in both
 themes. The profile adds the Java development tools and the theme plug-in to the test Eclipse. Whether any text is cut off, overlaps or hangs over a window's edge is not left
-to the eyes: `DialogLayoutTest` (`tests/swt`) and `NeovimPreferencePageTest` (UI tests) check the
+to the eyes: `DialogLayoutTest` and `NeovimPageTest` (both `tests/swt`) check the
 same dialogs and notes with `LayoutCheck` (the fragment's `shared-swt/` folder) on every run. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
 platform, since each draws its own fonts and spacing. The windows draw themselves into the
 pictures (`gallery/GalleryCamera`; nothing is read from the screen), so another program's window
@@ -137,15 +137,18 @@ does nothing for these settings on macOS.
    its test needs the text model, not an editor. The class must also be listed in the compiler
    includes of `tests/text/pom.xml`.
 3. `tests/swt` when the code works on SWT widgets (a `StyledText`, painting, folded-code offsets)
-   but not on the workbench (no `ITextEditor`, `IWorkbenchPage`, preferences). These tests create
+   but not on the workbench (no `ITextEditor`, `IWorkbenchPage`, the plug-in's preference store).
+   A preference page's body belongs here too, on an in-memory `PreferenceStore` (`NeovimPageTest`;
+   `prefs/package-info`, "Two classes per page"). These tests create
    their own `Display` and `Shell` (`new Shell(Display.getDefault())`), so they run as plain JUnit,
    without starting Eclipse; they still need a display (`xvfb-run` on a headless machine). Example:
    `BlockOverlayTest` paints the overlay into an image and checks the pixels. A class that also
    needs Neovim or the editor can still go here once those are behind a small interface:
    `CommandLineBoxTest` drives the real `:` box with a fake `CommandLineBox.Commands`. List the class in
    the compiler includes of `tests/swt/pom.xml`.
-4. The UI tests only for what really needs the workbench: editors and their commands, preference
-   pages, key bindings, and the end-to-end tests with Neovim.
+4. The UI tests only for what really needs the workbench: editors and their commands, the
+   Preferences dialog Eclipse opens (`OpenPreferencesHandlerTest`), menus, key bindings, and the
+   end-to-end tests with Neovim.
 
 The compiler keeps 1 to 3 honest: each module has only the jars its tier may use (none, the text
 model, SWT and JFace), so a class that starts using more no longer compiles there.

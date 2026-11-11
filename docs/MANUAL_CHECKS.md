@@ -106,7 +106,7 @@ is shown on those platforms only.
 
 - **On:** linux, macos, windows
 - **Launch:** none
-- **Areas:** dialogs/**, prefs/NeovimStatusSection.java, prefs/NeovimPreferencePage.java, prefs/GetNeovim.java, prefs/PageLayout.java, util/GetNeovimText.java, util/StartFailureReport.java, util/OldNeovimProgram.java, util/NvimProbe.java, util/HeadedMessage.java, util/LabelText.java, editor/StartFailureNotice.java, editor/OldNeovimProgramNotice.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/ChecksGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java, /pom.xml
+- **Areas:** dialogs/**, prefs/NeovimStatusSection.java, prefs/NeovimPage.java, prefs/NeovimPreferencePage.java, prefs/GetNeovim.java, prefs/PageLayout.java, util/GetNeovimText.java, util/StartFailureReport.java, util/OldNeovimProgram.java, util/NvimProbe.java, util/HeadedMessage.java, util/LabelText.java, editor/StartFailureNotice.java, editor/OldNeovimProgramNotice.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/ChecksGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java, /pom.xml
 
 The gallery draws the dialogs and preference-page notes that used to be checked by opening each
 one by hand (`ChecksGalleryTest`, CONTRIBUTING.md, "Build and test"). Pictures are not stored or
@@ -136,8 +136,8 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 fresh start and with changed files, the done note with and without `-Dneovim4eclipse.nvim`, the
 "Neovim not started" notice and the page note for each refused value, the old-preference note, the
 leftovers note. The wording reads right, no stray `&` or markup, rows a little apart. (Text cut
-off, over a window's edge or on top of other text fails the tests already: `DialogLayoutTest` in
-`tests/swt` and `NeovimPreferencePageTest` check every one of these dialogs with `LayoutCheck`.) (On macOS with *Show
+off, over a window's edge or on top of other text fails the tests already: `DialogLayoutTest` and
+`NeovimPageTest` in `tests/swt` check every one of these dialogs with `LayoutCheck`.) (On macOS with *Show
 borders* on and a Java built for macOS 26 or later, such as Homebrew's, a frame around the page's
 links is expected; Eclipse.app's own Java shows none, nor does any Java with the setting off.)
 

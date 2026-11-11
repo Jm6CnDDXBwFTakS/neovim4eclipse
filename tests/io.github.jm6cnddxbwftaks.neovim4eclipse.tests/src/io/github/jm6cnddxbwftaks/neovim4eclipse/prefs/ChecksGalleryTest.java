@@ -79,7 +79,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
  * {@link StartFailureReport}, {@link OldNeovimProgram}), with the buttons their callers give
  * ({@code prefs/GetNeovim}, {@code editor/StartFailureNotice}); a change of buttons there must be
  * copied here. The preference page's Neovim group is a {@link NeovimStatusSection} given the value
- * of the option to show, as {@code NeovimPreferencePageTest} does: this test Eclipse runs with one
+ * of the option to show, as {@code NeovimPageTest} (tests/swt) does: this test Eclipse runs with one
  * fixed {@code -Dneovim4eclipse.nvim}, and the blank value finds no dedicated Neovim (the UI tests'
  * data folder is their own, see the test pom's {@code XDG_*}).
  */

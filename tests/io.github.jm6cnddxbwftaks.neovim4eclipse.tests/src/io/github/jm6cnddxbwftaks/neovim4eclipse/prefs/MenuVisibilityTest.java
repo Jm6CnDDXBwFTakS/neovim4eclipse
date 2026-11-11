@@ -16,14 +16,10 @@ import java.util.function.BooleanSupplier;
 
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
-import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.PlatformUI;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -186,22 +182,6 @@ class MenuVisibilityTest {
         return 0;
     }
 
-    @Test
-    void thePageHasACheckboxForIt() {
-        Shell shell = new Shell(Display.getCurrent());
-        NeovimPreferencePage page = new NeovimPreferencePage();
-        try {
-            page.init(PlatformUI.getWorkbench());
-            page.createControl(shell);
-            List<String> labels = new ArrayList<>();
-            collectCheckboxLabels(page.getControl(), labels);
-            assertTrue(labels.contains("Show Neovim menu in the menu bar"), "checkboxes: " + labels);
-        } finally {
-            page.dispose();
-            shell.dispose();
-        }
-    }
-
     /** Whether the workbench window's menu bar has a "Neovim" entry (SWT drops hidden ones). */
     private boolean neovimMenuShown() {
         Menu bar = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
@@ -211,17 +191,6 @@ class MenuVisibilityTest {
             }
         }
         return false;
-    }
-
-    private static void collectCheckboxLabels(Control control, List<String> labels) {
-        if (control instanceof Button b && (b.getStyle() & SWT.CHECK) != 0) {
-            labels.add(b.getText());
-        }
-        if (control instanceof Composite c) {
-            for (Control child : c.getChildren()) {
-                collectCheckboxLabels(child, labels);
-            }
-        }
     }
 
     /** Runs the event loop until {@code condition} holds: the menu bar is updated asynchronously. */

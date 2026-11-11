@@ -76,8 +76,8 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - `util/` and `core/` must not import `org.eclipse.*` (they are compiled and unit-tested without
   Eclipse). `sync/` and the `editor/` classes listed in `tests/text/pom.xml` may use only the text
   model (`org.eclipse.jface.text` types from the `org.eclipse.text` jar), no SWT or workbench. The
-  `editor/` classes listed in `tests/swt/pom.xml`, and `dialogs/`, may use SWT and JFace, not the
-  workbench.
+  `editor/` and `prefs/` classes listed in `tests/swt/pom.xml`, and `dialogs/`, may use SWT and
+  JFace, not the workbench (a preference page's body: `prefs/package-info`, "Two classes per page").
 - A test waits with `TestWait` (`-Dtest.wait.seconds`, default 15) for an outcome, never with a
   fixed sleep or a limit of its own; to check that nothing more arrived, an integration test uses
   `NeovimBarrier.pass`, not a sleep. A test that must depend on the machine's speed is tagged

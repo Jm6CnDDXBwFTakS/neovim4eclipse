@@ -3,64 +3,24 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.prefs;
 
-import org.eclipse.jface.preference.BooleanFieldEditor;
-import org.eclipse.jface.preference.FieldEditorPreferencePage;
-import org.eclipse.jface.preference.IntegerFieldEditor;
-import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 
 /**
- * Window > Preferences > Neovim > Status Bar: which parts of Vim's status information the Eclipse
- * status bar shows, and how wide the parts may be. Changes apply at once (the
- * {@link Activator} listens to the preference store).
- *
- * <p>Like {@link NeovimPreferencePage}, a {@link FieldEditorPreferencePage}: each control is a field
- * editor that loads, stores and restores its preference by itself. An {@link IntegerFieldEditor}
- * refuses a value outside its range and disables OK until it is fixed.
+ * Window > Preferences > Neovim > Status Bar, as Eclipse opens it: {@link StatusBarPage} on the
+ * plug-in's preference store, which the {@link Activator} listens to, so a change reaches the
+ * status bar at once. {@code plugin.xml} registers this class.
  */
-public class StatusBarPreferencePage extends FieldEditorPreferencePage implements IWorkbenchPreferencePage {
+public class StatusBarPreferencePage extends StatusBarPage implements IWorkbenchPreferencePage {
 
     public StatusBarPreferencePage() {
-        super(GRID);
-        setDescription("Parts of Vim's status information shown in the Eclipse status bar. Messages and errors appear at the bottom of the editor.");
+        super(Activator.getDefault().getPreferenceStore());
     }
 
     @Override
     public void init(IWorkbench workbench) {
-        setPreferenceStore(Activator.getDefault().getPreferenceStore());
-    }
-
-    @Override
-    protected void createFieldEditors() {
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_MODE,
-                "mode  (INSERT, V-BLOCK, rec @q)", getFieldEditorParent()));
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_CMD,
-                "cmd  (pending command, e.g. 2d)", getFieldEditorParent()));
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_STATUSLINE,
-                "statusline  (Neovim's 'statusline')", getFieldEditorParent()));
-        IntegerFieldEditor width = new IntegerFieldEditor(PreferenceConstants.STATUS_STATUSLINE_WIDTH,
-                "Statusline width (characters):", getFieldEditorParent());
-        width.setValidRange(PreferenceConstants.STATUS_STATUSLINE_WIDTH_MIN, PreferenceConstants.STATUS_STATUSLINE_WIDTH_MAX);
-        addField(width);
-        IntegerFieldEditor share = new IntegerFieldEditor(PreferenceConstants.STATUS_MAX_SHARE,
-                "At most this share of the status bar (%):", getFieldEditorParent());
-        share.setValidRange(PreferenceConstants.STATUS_MAX_SHARE_MIN, PreferenceConstants.STATUS_MAX_SHARE_MAX);
-        addField(share);
-    }
-
-    /**
-     * {@link FieldEditorPreferencePage} lays its editors out in a {@link GridLayout} on
-     * {@link #getFieldEditorParent()} and sets its columns here, after every editor was added; the
-     * row gap ({@link PageLayout#ROW_SPACING_DLUS}) is set at the same place, on the same layout.
-     */
-    @Override
-    protected void adjustGridLayout() {
-        super.adjustGridLayout();
-        if (getFieldEditorParent().getLayout() instanceof GridLayout layout) {
-            layout.verticalSpacing = convertVerticalDLUsToPixels(PageLayout.ROW_SPACING_DLUS);
-        }
+        // no-op: the store is set in the constructor
     }
 }

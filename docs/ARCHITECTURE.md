@@ -931,7 +931,7 @@ reason is gone.
 | Session facade | `core/NeovimSession` | `NeovimSessionIntegrationTest` (needs nvim) |
 | Overlay colors | `util/OverlayColors` | `OverlayColorsTest` |
 | Ctrl-key ids and defaults | `util/VimCtrlKeys` | `VimCtrlKeysTest`, `PluginXmlConsistencyTest` |
-| Eclipse glue | `editor/*`, `prefs/*` | `tests/swt` for widgets (`OverlayFrameTest`, `BlockOverlayTest`, `WidgetOffsetsTest`, `OutputPopupTest`); UI test fragment `tests/...neovim4eclipse.tests` for the workbench (`VimKeyContextsTest`, `CtrlKeysPreferencePageTest`, ...) |
+| Eclipse glue | `editor/*`, `prefs/*` | `tests/swt` for widgets and the preference pages' bodies (`OverlayFrameTest`, `BlockOverlayTest`, `WidgetOffsetsTest`, `OutputPopupTest`, `CtrlKeysPageTest`); UI test fragment `tests/...neovim4eclipse.tests` for the workbench (`VimKeyContextsTest`, `MenuVisibilityTest`, ...) |
 | Whole plug-in in a real editor | all of the above | `EditorEndToEndTest` (needs nvim and a display) |
 
 When adding behavior, prefer putting the decision in a pure `util` class and leaving the Eclipse class

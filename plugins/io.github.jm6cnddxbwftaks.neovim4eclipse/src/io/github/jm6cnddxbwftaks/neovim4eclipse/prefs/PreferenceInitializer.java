@@ -8,11 +8,10 @@ import org.eclipse.core.runtime.preferences.DefaultScope;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
- * Sets default values in the plug-in preference store.
+ * Sets default values in the plug-in preference store: the values are {@link PreferenceDefaults}'s,
+ * which the SWT tests write into a store of their own.
  *
  * <p>Writes to the {@link DefaultScope} node directly instead of going through
  * {@code Activator.getDefault()}: the platform may run initializers before the bundle is
@@ -23,23 +22,16 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
     @Override
     public void initializeDefaultPreferences() {
         IEclipsePreferences defaults = DefaultScope.INSTANCE.getNode(Activator.PLUGIN_ID);
-        defaults.putBoolean(PreferenceConstants.SHOW_TOOLBAR, PreferenceConstants.SHOW_TOOLBAR_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.SHOW_MENU, PreferenceConstants.SHOW_MENU_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.ECLIPSE_SPLITS, PreferenceConstants.ECLIPSE_SPLITS_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.STATUS_ITEM_MODE, PreferenceConstants.STATUS_ITEM_MODE_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.STATUS_ITEM_CMD, PreferenceConstants.STATUS_ITEM_CMD_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE,
-                PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT);
-        defaults.putInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH, PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT);
-        defaults.putInt(PreferenceConstants.STATUS_MAX_SHARE, PreferenceConstants.STATUS_MAX_SHARE_DEFAULT);
-        defaults.putBoolean(PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.FLASH_ON_ERROR_DEFAULT);
-        // A plugin_customization.ini (a product's, or -pluginCustomization <file>) can still change this
-        // default: Eclipse applies it after this initializer. The UI tests set it to false that way.
-        defaults.putBoolean(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);
-        for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
-            defaults.putBoolean(PreferenceConstants.ctrlKeyInInsert(letter),
-                    VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()));
-        }
+        PreferenceDefaults.fill(new PreferenceDefaults.Sink() {
+            @Override
+            public void put(String key, boolean value) {
+                defaults.putBoolean(key, value);
+            }
+
+            @Override
+            public void put(String key, int value) {
+                defaults.putInt(key, value);
+            }
+        });
     }
 }
