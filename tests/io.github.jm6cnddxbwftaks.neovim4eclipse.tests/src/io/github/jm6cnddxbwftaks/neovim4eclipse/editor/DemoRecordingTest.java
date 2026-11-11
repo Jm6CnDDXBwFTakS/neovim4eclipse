@@ -78,8 +78,9 @@ class DemoRecordingTest extends EndToEndTestBase {
 
     /**
      * The typing rhythm: after a key, the picture stays a random time between these, in
-     * milliseconds (before the stretch to {@link #DEMO_MS}), as a person types unevenly; after a space, Enter or Esc it stays longer, as a
-     * person pauses between words and commands. A fixed seed gives the same rhythm on every run.
+     * milliseconds (before the stretch to {@link #DEMO_MS}), as a person types unevenly; after a
+     * space, Enter or Esc it stays longer, as a person pauses between words and commands. A fixed
+     * seed gives the same rhythm on every run.
      * The pictures still differ a little between runs (the caret's blink, and when Eclipse's own
      * updates land, such as Java's error underline while a line is half typed), so record the
      * demo again only when what it shows has changed. The rhythm is made up, not anyone's
@@ -170,24 +171,27 @@ class DemoRecordingTest extends EndToEndTestBase {
     private void record() throws Exception {
         window = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
         window.setBounds(0, 0, WIDTH, HEIGHT);
-        IProject demo = javaProject("demo");
         IWorkbenchPage page = page();
         // The base class opens test.txt for every UI test; the demo shows only its own file.
         page.closeEditor(editor, false);
-        // The editor and the toolbar, with the plug-in's Neovim button; no views (closed rather
-        // than the editor maximized, which would leave the minimized views as icon bars down both
-        // sides).
-        for (IViewReference view : page.getViewReferences()) {
-            page.hideView(view);
-        }
         FontRegistry fonts = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getFontRegistry();
         Map<String, FontData[]> fontsBefore = new HashMap<>();
-        for (String key : EDITOR_FONTS) {
-            fontsBefore.put(key, fonts.getFontData(key));
-            fonts.put(key, new FontData[] { new FontData(FONT, FONT_POINTS, SWT.NORMAL) });
-        }
+        IProject demo = null;
         IEditorPart opened = null;
         try {
+            // Everything the finally below puts back is changed inside this try, so a failure
+            // anywhere leaves ScreenshotCaptureTest the workbench as it was.
+            // The editor and the toolbar, with the plug-in's Neovim button; no views (closed rather
+            // than the editor maximized, which would leave the minimized views as icon bars down
+            // both sides).
+            for (IViewReference view : page.getViewReferences()) {
+                page.hideView(view);
+            }
+            for (String key : EDITOR_FONTS) {
+                fontsBefore.put(key, fonts.getFontData(key));
+                fonts.put(key, new FontData[] { new FontData(FONT, FONT_POINTS, SWT.NORMAL) });
+            }
+            demo = javaProject("demo");
             IFile file = demo.getFile("src/demo/Greeter.java");
             file.create(new ByteArrayInputStream(SOURCE.getBytes(StandardCharsets.UTF_8)), true, null);
             opened = IDE.openEditor(page, file, JAVA_EDITOR, true);
@@ -213,7 +217,9 @@ class DemoRecordingTest extends EndToEndTestBase {
             if (opened != null) {
                 page.closeEditor(opened, false);
             }
-            demo.delete(true, true, null);
+            if (demo != null) {
+                demo.delete(true, true, null);
+            }
             fontsBefore.forEach(fonts::put);
             page.resetPerspective(); // the views back where they were
         }
