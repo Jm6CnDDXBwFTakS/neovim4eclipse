@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
@@ -65,8 +66,20 @@ class DemoRecordingTest extends EndToEndTestBase {
     private static final int WIDTH = 1000;
     private static final int HEIGHT = 680;
 
-    /** How long a picture stays after a key, in milliseconds: a brisk but readable typing speed. */
-    private static final int KEY_MS = 130;
+    /**
+     * The typing rhythm: after a key, the picture stays a random time between these, in
+     * milliseconds (before the stretch to {@link #DEMO_MS}), as a person types unevenly; after a space, Enter or Esc it stays longer, as a
+     * person pauses between words and commands. A fixed seed gives the same rhythm on every run.
+     * The pictures still differ a little between runs (the caret's blink, and when Eclipse's own
+     * updates land, such as Java's error underline while a line is half typed), so record the
+     * demo again only when what it shows has changed. The rhythm is made up, not anyone's
+     * measured typing: typing rhythm can identify a person, and the GIF is public.
+     */
+    private static final int KEY_MIN_MS = 70;
+    private static final int KEY_MAX_MS = 220;
+    private static final int PAUSE_MIN_MS = 300;
+    private static final int PAUSE_MAX_MS = 450;
+    private static final long RHYTHM_SEED = 20261111L;
     /** How long the result of a step stays before the next one starts. */
     private static final int STEP_MS = 1400;
 
@@ -108,7 +121,10 @@ class DemoRecordingTest extends EndToEndTestBase {
     private Shell window;
     private StyledText text;
     private org.eclipse.jface.text.IDocument doc;
-    private final List<String> frames = new ArrayList<>();
+    /** The pictures' files and their times on screen, in milliseconds, in order. */
+    private final List<String> frameNames = new ArrayList<>();
+    private final List<Integer> frameMillis = new ArrayList<>();
+    private final Random rhythm = new Random(RHYTHM_SEED);
     /** The current step's keys as the caption shows them. */
     private final StringBuilder caption = new StringBuilder();
 
@@ -133,6 +149,8 @@ class DemoRecordingTest extends EndToEndTestBase {
         window.setBounds(0, 0, WIDTH, HEIGHT);
         IProject demo = javaProject("demo");
         IWorkbenchPage page = page();
+        // The base class opens test.txt for every UI test; the demo shows only its own file.
+        page.closeEditor(editor, false);
         IEditorPart opened = null;
         try {
             IFile file = demo.getFile("src/demo/Greeter.java");
@@ -206,7 +224,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         caption.setLength(0);
         picture(folder, STEP_MS); // the same as the first picture
 
-        Files.write(new File(folder, "frames.tsv").toPath(), frames, StandardCharsets.UTF_8);
+        Files.write(new File(folder, "frames.tsv").toPath(), timedFrames(), StandardCharsets.UTF_8);
     }
 
     /**
@@ -240,19 +258,42 @@ class DemoRecordingTest extends EndToEndTestBase {
         return p;
     }
 
+    /**
+     * The demo's whole length, in milliseconds: every picture's time is stretched by the same
+     * factor to reach it, so the rhythm keeps its shape. 40 seconds reads at ease without dragging.
+     */
+    private static final int DEMO_MS = 40_000;
+
+    /** The {@code frames.tsv} lines: each picture and its time, stretched so the demo lasts {@link #DEMO_MS}. */
+    private List<String> timedFrames() {
+        long total = frameMillis.stream().mapToLong(Integer::longValue).sum();
+        List<String> lines = new ArrayList<>();
+        for (int i = 0; i < frameNames.size(); i++) {
+            lines.add(frameNames.get(i) + "\t" + Math.round((double) frameMillis.get(i) * DEMO_MS / total));
+        }
+        return lines;
+    }
+
     /** Types {@code keys} into the editor one at a time, a picture after each. */
     private void keys(File folder, String keys) {
         for (char key : keys.toCharArray()) {
             UiTestSupport.type(text, key);
             caption.append(key);
-            picture(folder, KEY_MS);
+            picture(folder, after(key));
         }
     }
 
     private void escape(File folder) {
         UiTestSupport.escape(text);
         caption.append(" Esc ");
-        picture(folder, KEY_MS);
+        picture(folder, after(SWT.ESC));
+    }
+
+    /** How long the picture after {@code key} stays: the next step of {@link #rhythm}. */
+    private int after(char key) {
+        boolean pause = key == ' ' || key == '⏎' || key == SWT.ESC;
+        return pause ? PAUSE_MIN_MS + rhythm.nextInt(PAUSE_MAX_MS - PAUSE_MIN_MS + 1)
+                : KEY_MIN_MS + rhythm.nextInt(KEY_MAX_MS - KEY_MIN_MS + 1);
     }
 
     /** A search, {@code /} then the pattern then Enter, typed into the box it opens. */
@@ -270,7 +311,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         waitUntil("the " + first + " box to open", TIMEOUT_MS, () -> textChildOf(text) != null);
         Text box = textChildOf(text);
         caption.append(first);
-        picture(folder, KEY_MS);
+        picture(folder, after(first));
         StringBuilder typed = new StringBuilder().append(first);
         for (char key : line.toCharArray()) {
             requireOpen(box, text).insert(String.valueOf(key));
@@ -278,7 +319,7 @@ class DemoRecordingTest extends EndToEndTestBase {
             String expected = typed.toString();
             waitUntil("the box to show " + expected, TIMEOUT_MS, () -> requireOpen(box, text).getText().equals(expected));
             caption.append(key);
-            picture(folder, KEY_MS);
+            picture(folder, after(key));
         }
         Event enter = new Event();
         enter.keyCode = SWT.CR;
@@ -287,7 +328,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         requireOpen(box, text).notifyListeners(SWT.KeyDown, enter);
         waitUntil("the box to close", TIMEOUT_MS, () -> box.isDisposed() || !box.isVisible());
         caption.append('⏎');
-        picture(folder, KEY_MS);
+        picture(folder, after('⏎'));
     }
 
     /**
@@ -313,7 +354,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         text.notifyListeners(SWT.KeyDown, enter);
         waitUntil("the proposal inserted", TIMEOUT_MS, () -> !doc.get().equals(before) && proposalList() == null);
         caption.append('⏎');
-        picture(folder, KEY_MS);
+        picture(folder, after('⏎'));
     }
 
     /** The table of the open content assist list, if one is open. */
@@ -363,9 +404,10 @@ class DemoRecordingTest extends EndToEndTestBase {
             if (caption.length() > 0) {
                 drawCaption(image, caption.toString());
             }
-            String name = String.format("frame-%04d.png", frames.size() + 1);
+            String name = String.format("frame-%04d.png", frameNames.size() + 1);
             WindowPicture.savePng(image.getImageData(), new File(folder, name));
-            frames.add(name + "\t" + millis);
+            frameNames.add(name);
+            frameMillis.add(millis);
         } finally {
             image.dispose();
         }
