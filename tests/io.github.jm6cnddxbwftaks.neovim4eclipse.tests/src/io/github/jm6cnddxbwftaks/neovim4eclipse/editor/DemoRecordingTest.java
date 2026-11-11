@@ -68,11 +68,12 @@ import org.junit.jupiter.api.Test;
 class DemoRecordingTest extends EndToEndTestBase {
 
     /**
-     * The window size: the README shows the GIF about this wide, so nothing is scaled; this tall,
-     * the editor shows the file's 24 lines (23, and one more once content assist adds it) in
-     * {@link #FONT} at {@link #FONT_POINTS}.
+     * The window size. This wide, the status bar keeps the plug-in's mode label whole while a macro
+     * records ("INSERT rec @q"): JFace keeps a third of the status line for Eclipse's messages and
+     * shrinks the last item, the mode label, first. This tall, the editor shows the file's 24 lines
+     * (23, and one more once content assist adds it) in {@link #FONT} at {@link #FONT_POINTS}.
      */
-    private static final int WIDTH = 1000;
+    private static final int WIDTH = 1100;
     private static final int HEIGHT = 700;
 
     /**
@@ -93,17 +94,15 @@ class DemoRecordingTest extends EndToEndTestBase {
     private static final int STEP_MS = 1400;
 
     private static final String JAVA_EDITOR = "org.eclipse.jdt.ui.CompilationUnitEditor";
-    /** Window &gt; Appearance &gt; Hide Toolbar (and Show Toolbar: the same command toggles it). */
-    private static final String TOGGLE_TOOLBAR = "org.eclipse.ui.ToggleCoolbarAction";
 
     /**
      * The demo's font, in the editor and the captions: JetBrains Mono NL, a monospaced font made
      * for code (the NL variant has no ligatures, so {@code !=} shows as typed). The Marketplace
      * tool checks that it is installed; on Debian and Ubuntu it is {@code fonts-jetbrains-mono}.
-     * 14 points fills the window's height with the file ({@link #HEIGHT}).
+     * 13 points fills the window's height, below the toolbar, with the file ({@link #HEIGHT}).
      */
     private static final String FONT = "JetBrains Mono NL";
-    private static final int FONT_POINTS = 14;
+    private static final int FONT_POINTS = 13;
     /** The text font every editor uses, and the Java editor's own, which follows it unless set. */
     private static final List<String> EDITOR_FONTS = List.of("org.eclipse.jface.textfont", "org.eclipse.jdt.ui.editors.textfont");
     /**
@@ -175,9 +174,9 @@ class DemoRecordingTest extends EndToEndTestBase {
         IWorkbenchPage page = page();
         // The base class opens test.txt for every UI test; the demo shows only its own file.
         page.closeEditor(editor, false);
-        // Only the editor: no toolbar, no views (closed rather than the editor maximized, which
-        // would leave the minimized views as icon bars down both sides).
-        runCommand(TOGGLE_TOOLBAR);
+        // The editor and the toolbar, with the plug-in's Neovim button; no views (closed rather
+        // than the editor maximized, which would leave the minimized views as icon bars down both
+        // sides).
         for (IViewReference view : page.getViewReferences()) {
             page.hideView(view);
         }
@@ -217,7 +216,6 @@ class DemoRecordingTest extends EndToEndTestBase {
             demo.delete(true, true, null);
             fontsBefore.forEach(fonts::put);
             page.resetPerspective(); // the views back where they were
-            runCommand(TOGGLE_TOOLBAR);
         }
     }
 

@@ -217,7 +217,7 @@ a checklist, to fill in the form from. Why the values are what they are:
   visual line mode (the mode in the status bar), the `:` box with a substitution typed, and the
   Neovim preference page. `DemoRecordingTest` plays the README's demo a key at a time, with the
   keys drawn in a band near the top, and the tool joins its pictures into `demo.gif`, keeping in
-  each frame only what changed. The demo shows only the editor (no toolbar, no views), in
+  each frame only what changed. The demo shows the editor and the toolbar (no views), in
   JetBrains Mono NL (`fonts-jetbrains-mono` on Debian and Ubuntu; the tool stops without it), with
   a made-up, uneven typing rhythm stretched to 40 seconds.
 
