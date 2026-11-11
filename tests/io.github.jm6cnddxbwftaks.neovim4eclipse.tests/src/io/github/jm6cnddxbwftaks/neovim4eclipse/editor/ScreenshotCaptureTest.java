@@ -12,12 +12,7 @@ import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.preference.PreferenceDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
-import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.graphics.ImageData;
-import org.eclipse.swt.graphics.ImageLoader;
-import org.eclipse.swt.graphics.Rectangle;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
@@ -50,10 +45,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
  * 8 bits per pixel, would cut the window off and lose the colors. Without a window manager the
  * window has no title bar, which suits a listing image.
  *
- * <p>How a screenshot is taken: SWT's {@link GC} on the {@link Display} draws the screen, and
- * {@link GC#copyArea(Image, int, int)} copies the window's rectangle into an image, which
- * {@link ImageLoader} saves as PNG. This reads the X server's pixels, so it works under Xvfb and
- * X11; it would not on Wayland, where applications cannot read the screen.
+ * <p>How a screenshot is taken: {@link WindowPicture}.
  */
 @Tag("screenshots")
 class ScreenshotCaptureTest extends EndToEndTestBase {
@@ -154,30 +146,14 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
         return java;
     }
 
-    /**
-     * Saves what {@code shell} shows on screen as {@code target/screenshots/<name>}. The rectangle runs
-     * from the top of the shell (so the menu bar, which GTK keeps outside the client area, is in it)
-     * to the bottom of its client area, mapped to screen coordinates: the shell's own bounds also
-     * hold GTK's invisible frame, which came out as a black band along the bottom.
-     */
+    /** Saves what {@code shell} shows on screen as {@code target/screenshots/<name>} ({@link WindowPicture}). */
     private void capture(Shell shell, String name) {
         settle();
         UiTestSupport.spin(300); // let the last paint reach the screen
-        Display display = shell.getDisplay();
-        Rectangle client = display.map(shell, null, shell.getClientArea());
-        int top = Math.min(shell.getBounds().y, client.y);
-        Rectangle bounds = new Rectangle(client.x, top, client.width, client.y + client.height - top);
-        Image image = new Image(display, bounds.width, bounds.height);
-        GC gc = new GC(display);
+        Image image = WindowPicture.take(shell);
         try {
-            gc.copyArea(image, bounds.x, bounds.y);
-            File dir = new File(System.getProperty("screenshots.dir", "target/screenshots"));
-            dir.mkdirs();
-            ImageLoader loader = new ImageLoader();
-            loader.data = new ImageData[] { image.getImageData() };
-            loader.save(new File(dir, name).getPath(), SWT.IMAGE_PNG);
+            WindowPicture.savePng(image.getImageData(), new File(WindowPicture.folder(), name));
         } finally {
-            gc.dispose();
             image.dispose();
         }
     }

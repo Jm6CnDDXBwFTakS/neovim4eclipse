@@ -39,6 +39,8 @@ import common.Version;
 import dependencies.DependabotRules;
 import dependencies.Updates;
 import eclipse.EclipseFiles;
+import marketplace.Listing;
+import marketplace.MarketplaceTool;
 import maven.MavenFiles;
 
 /**
@@ -55,7 +57,8 @@ import maven.MavenFiles;
  *       Release workflow's first job), with a line when Neovim has a newer release, and one when
  *       Eclipse has a release newer than the smoke job's newest ({@code EclipseUpgrade.java}), and
  *       one when Maven or its wrapper has ({@code MavenUpgrade.java}), and one when a library, a
- *       Maven plug-in or an action has ({@code Dependencies.java}); the manual checks due
+ *       Maven plug-in or an action has ({@code Dependencies.java}), and one when the Marketplace
+ *       listing's facts differ from the one last submitted ({@code Marketplace.java}); the manual checks due
  *       ({@code ManualChecks.java due}). Then every test on this machine ({@code LikeCi.java --all}):
  *       the commit that passes is written to {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
  *       command for macOS and Windows, a reminder only: CI's macOS and Windows jobs are the gate.</li>
@@ -292,6 +295,7 @@ public final class ReleaseTool {
         newerEclipse();
         newerMaven();
         newerDependencies();
+        marketplaceListing();
 
         System.out.println();
         System.out.println("Manual checks due for this release (docs/MANUAL_CHECKS.md):");
@@ -440,6 +444,31 @@ public final class ReleaseTool {
         } else {
             System.out.println("  note: " + found.count() + " dependency update" + (found.count() == 1 ? " is" : "s are") + " out ("
                     + found.summary() + "): java releng/tools/dependencies/Dependencies.java (docs/UPGRADING.md). Not a blocker.");
+        }
+    }
+
+    /**
+     * Prints a line when the Marketplace listing's facts differ from the copy kept when it was last
+     * submitted ({@code releng/marketplace/submitted/}): the release that changes the Neovim
+     * minimum, say, should also change the listing on the website. Not a blocker.
+     */
+    private void marketplaceListing() {
+        List<String> changes;
+        try {
+            if (MarketplaceTool.submitted(root).isEmpty()) {
+                System.out.println("  (no Marketplace listing submitted yet: java " + MarketplaceTool.TOOL + ")");
+                return;
+            }
+            changes = MarketplaceTool.changes(root);
+        } catch (ToolFailure e) {
+            System.out.println("  (could not compare the Marketplace listing: " + e.getMessage() + ")");
+            return;
+        }
+        if (changes.isEmpty()) {
+            ok("the Marketplace listing on the website is the one " + Listing.SUBMITTED + "/ holds");
+        } else {
+            System.out.println("  note: the Marketplace listing differs from the one submitted (" + String.join("; ", changes)
+                    + "): java " + MarketplaceTool.TOOL + ", update it on the website, then submitted. Not a blocker.");
         }
     }
 

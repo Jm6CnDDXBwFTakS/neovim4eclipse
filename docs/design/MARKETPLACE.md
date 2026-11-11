@@ -160,36 +160,31 @@ way. The Marketplace badge and drag-to-install link go there once the listing ex
 `<description>` saying what it does, which Neovim it needs and how it gets one, and the supported
 Eclipse (2024-12 / 4.34 or newer); `<license>` EPL-2.0, matching the listing.
 
-**The listing's fields.** The rows follow marketplace.eclipse.org's *Create Solution* form, top to
-bottom; `*` marks a field the form requires. The form may change; it is the final word.
+**The listing's fields** are in [releng/marketplace/listing.txt](../../releng/marketplace/listing.txt),
+one line per field of marketplace.eclipse.org's *Create Solution* form, top to bottom; the form may
+change, and it is the final word. Facts such as the Neovim and Java versions are never typed there:
+`{neovim}`, `{java}` and the others are filled in from each version's source of truth, so the
+listing cannot fall behind the build. `java releng/tools/marketplace/Marketplace.java` writes
+`target/marketplace/listing.html`: each field with a Copy button, the description, the pictures and
+a checklist, to fill in the form from. Why the values are what they are:
 
-| Form field | Value |
-|------------|-------|
-| Solution Name `*` | Neovim for Eclipse (the form asks for the product name only, no tagline) |
-| Solution URL | https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse |
-| Organization Name | empty (a personal project) |
-| Eclipse Foundation Member Organization `*` | No |
-| Solution Logo | [docs/images/marketplace-logo.png](../images/marketplace-logo.png): the form scales every logo to 110×80 pixels (png, gif or jpg), so this is `logo.svg` centered on white at exactly that size (*Images*, below) |
-| Summary | one sentence, like `feature.xml`'s first line |
-| Solution Description `*` | formatted text; see below |
-| Status | Beta, or the closest choice the list offers: the README calls it an early release |
-| License Type | EPL 2.0 |
-| Solution Type | This product requires an existing Eclipse installation to function |
-| Support URL | https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues |
-| RSS Feed | https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases.atom (GitHub's feed of the releases) |
-| Categories `*` (5 or fewer) | Editor, plus whichever others in the list fit a key-binding/editing tool |
-| Markets `*` | Tools |
-| Tags | vim, neovim, vi, modal editing, keybindings |
-| **Solution version:** Version number | the current release, or empty: the update site always offers the latest |
-| Update Site URL `*` | https://jm6cnddxbwftaks.github.io/neovim4eclipse/ (the composite site; never changes) |
-| Supported Eclipse Release(s) `*` | 2024-12 (4.34) and later; tick a release only once it is out and tested on |
-| Supported Platform(s) `*` | Windows, Mac, Linux/GTK |
-| Minimum Java Version `*` | Java 21 |
-| Feature ID `*` / Install state | `io.github.jm6cnddxbwftaks.neovim4eclipse.feature` / Required (the feature's ID, without the `.feature.group` suffix p2 adds) |
-| Screenshot (up to 4; png, gif or jpg; 16 MB) | in this order: [demo.gif](../images/demo.gif) (the README's demo), then `01-visual-mode.png`, `02-command-line.png` and `03-preferences.png`, taken fresh for each upload and not kept in the repository (*Images*, below) |
-| Additional Editors | none |
+- **Solution Name:** the product name only; the form asks for no tagline.
+- **Organization Name** empty, **Eclipse Foundation Member Organization** No: a personal project.
+- **Solution Logo:** `docs/images/marketplace-logo.png`. The form scales every logo to 110×80
+  pixels (png, gif or jpg), so this is `logo.svg` centered on white at exactly that size.
+- **Summary:** one sentence, like `feature.xml`'s first line.
+- **Status:** Beta until 1.0.0: the README calls it an early release.
+- **Categories:** Editor, General Purpose Tools, Tools (at most 5, from a fixed list per market).
+  **Tags** are free: vim, neovim, vi, modal editing, keybindings.
+- **Version number:** empty: the update site always offers the latest.
+- **Update Site URL:** the composite site, which never changes.
+- **Supported Eclipse Release(s):** tick a release only once it is out and tested on.
+- **Feature ID:** the feature's ID, without the `.feature.group` suffix p2 adds; Required.
+- **Screenshots** (up to 4; png, gif or jpg; 16 MB): the README's demo, then the three screenshots
+  (*Images*, below).
 
-**The description** says, up front:
+**The description**, [releng/marketplace/description.md](../../releng/marketplace/description.md)
+(a small Markdown the tool turns into HTML for the form's source view), says, up front:
 
 - what the plug-in does (Neovim owns the editing; Eclipse keeps owning files, rendering, content
   assist and its own commands);
@@ -209,40 +204,33 @@ bottom; `*` marks a field the form requires. The form may change; it is the fina
   hint of "E". It borrows nothing from the Eclipse or Neovim logos, which are their owners' marks;
   a draft with the Eclipse logo's stripes was dropped for that reason. With the name beside it in
   the logo's green (`logo-wordmark.svg`, one file for light and dark themes) it heads the README.
-  For the listing: `marketplace-logo.png`, 110×80 pixels, the size the form scales every logo to.
-  To render it again after changing `logo.svg` (no SVG tool is needed besides Firefox and Python's
-  Pillow):
+  After changing `logo.svg`, `java releng/tools/marketplace/Marketplace.java logo` renders the
+  toolbar icons (16 and 32 pixels, in color and in grey) and `marketplace-logo.png`, and commits
+  them after y/N. It needs `rsvg-convert` (`librsvg2-bin` on Debian and Ubuntu, `brew install
+  librsvg` on macOS) and ImageMagick's `magick`: `rsvg-convert` draws the SVG large, `magick`
+  shrinks it with the Lanczos filter. ImageMagick's own SVG reader is not enough: it drops strokes
+  (the diagonal and the border vanish).
+- **Screenshots and the demo**, taken by the UI tests of the `screenshots` group rather than by
+  hand, so they show the current UI each time: `java releng/tools/marketplace/Marketplace.java
+  pictures` (Linux) runs them with the pinned Neovim under `xvfb-run`, at a screen of a known size,
+  and copies the results to `target/marketplace/`. `ScreenshotCaptureTest` takes a Java editor in
+  visual line mode (the mode in the status bar), the `:` box with a substitution typed, and the
+  Neovim preference page. `DemoRecordingTest` plays the README's demo a key at a time, with the
+  keys drawn in a band near the top, and the tool joins its pictures into `demo.gif`, keeping in
+  each frame only what changed.
 
-  ```bash
-  printf '<body style="margin:0;background:#fff;width:440px;height:320px;display:flex;align-items:center;justify-content:center"><img src="logo.svg" width="304" height="304">' > docs/images/page.html
-  firefox --headless --window-size=440,320 --screenshot /tmp/big.png "file://$PWD/docs/images/page.html"
-  rm docs/images/page.html
-  python3 -c "from PIL import Image; Image.open('/tmp/big.png').convert('RGB').resize((110, 80), Image.LANCZOS).save('docs/images/marketplace-logo.png', optimize=True)"
-  ```
-- **Screenshots**, taken by `ScreenshotCaptureTest` in the UI test module rather than by hand, so
-  they show the current UI each time: a Java editor in visual line mode (the mode in the status
-  bar), the `:` box with a substitution typed, and the Neovim preference page. Nothing shows them
-  from the repository (the README has the demo GIF), so they are not committed: take them when the
-  listing is submitted or refreshed, and upload them from
-  `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/screenshots/`. A picture in the
-  repository stays in its history for good, along with anything it shows by mistake. The test runs
-  only with its own profile, which adds the Java tools for a highlighted Java editor:
-
-  ```bash
-  xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pscreenshots -Dnvim.path="$PWD"/target/like-ci/nvim-linux-x86_64/bin/nvim
-  ```
-
-  Xvfb's `-screen` gives it room for the 1280×800 window in full color (its default is 640×480 at
-  8 bits). They show Eclipse's default light theme on Linux/GTK, without a window title bar.
+  The three screenshots are not committed: nothing shows them from the repository, so they are
+  taken when the listing is submitted or refreshed and uploaded from `target/marketplace/`. A
+  picture in the repository stays in its history for good, along with anything it shows by
+  mistake. The demo is committed (the README shows it), after y/N, once you have looked at it.
+  They show Eclipse's default light theme on Linux/GTK, without a window title bar.
 
   The preference page is taken as a user's Eclipse shows it: with the dedicated Neovim (a copy of
-  the `-Dnvim.path` release, so use the pinned one from `LikeCi`, under `target/like-ci/`) and
-  without `-Dneovim4eclipse.nvim`. Its *Found:* note names the dedicated Neovim's folder, which the
-  `screenshots` profile keeps under `pictures.home` (`/tmp/neovim4eclipse-pictures`; on Windows
-  `C:\Users\Public\neovim4eclipse-pictures`) instead of `target/`, so no picture shows a home
-  folder and with it an account name (`gallery/PicturesFolder` in the test fragment). Look at the
-  pictures before uploading them all the same: they are public.
-- The README demo GIF, recorded by hand.
+  the pinned release) and without `-Dneovim4eclipse.nvim`. Its *Found:* note names the dedicated
+  Neovim's folder, which the `screenshots` profile keeps under `pictures.home`
+  (`/tmp/neovim4eclipse-pictures`) instead of `target/`, so no picture shows a home folder and with
+  it an account name (`gallery/PicturesFolder` in the test fragment). Look at the pictures before
+  uploading them all the same: they are public.
 
 ## Phase 3: account, submission, test
 
@@ -250,7 +238,8 @@ All maintainer steps: they need an Eclipse Foundation account and its sign-in.
 
 1. Create an **Eclipse Foundation account** at accounts.eclipse.org (the project has one).
 2. On marketplace.eclipse.org, log in, *Add Content → Solution*, and fill in the fields from
-   phase 2's table.
+   the listing page (`java releng/tools/marketplace/Marketplace.java`, phase 2). After saving, run
+   it with `submitted`, so later runs list only what changed.
 3. Listings go through **moderation** before they appear (the Marketplace quickstart says about one
    business day).
 4. Test the listing from a clean Eclipse on **Windows, Linux and macOS**: *Help → Eclipse
@@ -470,6 +459,9 @@ sets `-Djava.security.manager=allow`, which Java 24 and newer refuse at start-up
 Nothing new by hand: the tag's Release workflow publishes the GitHub Release and rebuilds the site,
 so *Check for Updates* and the Marketplace see the new version. Update the listing only when its
 facts change (supported Eclipse versions, description), and answer reviews and questions there.
+After saving it on the website, `java releng/tools/marketplace/Marketplace.java submitted` keeps a
+copy in `releng/marketplace/submitted/`; the Release tool's `check` prints a line when the listing's
+facts no longer match that copy, and the listing page lists the fields to change.
 
 Sources: [Eclipse Marketplace quickstart](https://marketplace.eclipse.org/quickstart). It is short;
 the *Add Content* form is the final word on what a listing needs.

@@ -40,9 +40,10 @@
        Tests tagged "timeoutReliant" depend on how fast the machine is; -Pui leaves them out and
        ./mvnw verify -PtimeoutReliant runs only them (here and in tests/unit). Not run in CI.
 
-       ScreenshotCaptureTest (tagged "screenshots") is not a test: it takes the Marketplace
-       screenshots. Only ./mvnw verify -Pscreenshots runs it, with the Java tools for a highlighted
-       Java editor; see that class for the xvfb-run command. -->
+       ScreenshotCaptureTest and DemoRecordingTest (tagged "screenshots") are not tests: they take
+       the Marketplace screenshots and the README demo's pictures. Only ./mvnw verify -Pscreenshots
+       runs them, with the Java tools for a highlighted Java editor; java
+       releng/tools/marketplace/Marketplace.java pictures runs it under xvfb-run. -->
 
   <build>
     <plugins>
@@ -360,8 +361,9 @@
         <failIfNoTests>false</failIfNoTests>
       </properties>
     </profile>
-    <!-- ./mvnw verify -Pscreenshots: runs only ScreenshotCaptureTest, with the Java development tools
-         (the same extra requirement as uiHeavyJava), and writes target/screenshots/*.png. -->
+    <!-- ./mvnw verify -Pscreenshots: runs only ScreenshotCaptureTest and DemoRecordingTest, with the
+         Java development tools (the same extra requirement as uiHeavyJava), and writes
+         target/screenshots/*.png and target/screenshots/demo/ (the demo's pictures). -->
     <profile>
       <id>screenshots</id>
       <properties>

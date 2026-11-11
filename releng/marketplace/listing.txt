@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# The Eclipse Marketplace listing: one line per field of marketplace.eclipse.org's "Create
+# Solution" form, top to bottom, as "Field: value" (an empty value leaves the field empty). The
+# form may change; it is the final word. The description is description.md, beside this file.
+#
+# Facts are never typed here: {name} is filled in from the version's one source of truth, so the
+# listing cannot fall behind the build (java releng/tools/marketplace/Marketplace.java):
+#   {neovim}                 version= in the plug-in's util/neovim-downloads.properties
+#   {eclipse.oldest}         the release <eclipse-repo.url> in the root pom.xml names, 2024-12
+#   {eclipse.oldest.number}  its Platform number, 4.34
+#   {eclipse.newest}         the newest tested release (the smoke job's second entry), 2026-09
+#   {eclipse.newest.number}  its Platform number, 4.41
+#   {java}                   <java.release> in the root pom.xml, 21
+#   {fingerprint}            the release key's fingerprint (releng/signing-key.asc), grouped
+#
+# Why these values: docs/design/MARKETPLACE.md, "The listing's fields".
+
+Solution Name: Neovim for Eclipse
+Solution URL: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse
+Organization Name:
+Eclipse Foundation Member Organization: No
+Solution Logo: docs/images/marketplace-logo.png
+Summary: Vim mode for Eclipse, powered by a real Neovim: motions, operators, text objects, macros, registers and : commands, with your own init.lua, in Eclipse's text editors.
+Status: Beta
+License Type: EPL 2.0
+Solution Type: This product requires an existing Eclipse installation to function
+Support URL: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues
+RSS Feed: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases.atom
+Categories: Editor, General Purpose Tools, Tools
+Markets: Tools
+Tags: vim, neovim, vi, modal editing, keybindings
+Version number:
+Update Site URL: https://jm6cnddxbwftaks.github.io/neovim4eclipse/
+Supported Eclipse Release(s): {eclipse.oldest} ({eclipse.oldest.number}) to {eclipse.newest} ({eclipse.newest.number}); tick each release up to the newest tested
+Supported Platform(s): Windows, Mac, Linux/GTK
+Minimum Java Version: Java {java}
+Feature ID: io.github.jm6cnddxbwftaks.neovim4eclipse.feature
+Install state: Required
+Screenshots: demo.gif, 01-visual-mode.png, 02-command-line.png, 03-preferences.png
+Additional Editors:
