@@ -767,11 +767,11 @@ class CommandLineBoxTest {
      * Ex mode: the editor taking the keys back (a click on its tab) leaves the line open, and the box
      * takes the focus again, after the focus event.
      *
-     * <p>The editor is given the focus once, not with {@link KeyboardFocus#require}: that gives it the
-     * focus again until it is seen holding it, and the box takes it back each time, as it should. On
-     * macOS the focus event comes within {@code forceFocus}, and the box's answer on the next pass of
-     * the event loop, so the editor was hardly ever seen with the focus. Its focus event is what the
-     * test waits for instead.
+     * <p>The editor is given the focus with {@link KeyboardFocus#give} until its focus event comes, not
+     * with {@link KeyboardFocus#require}: that gives it the focus again until it is seen holding it,
+     * and the box takes it back each time, as it should. On macOS the focus event comes within
+     * {@code forceFocus}, and the box's answer on the next pass of the event loop, so the editor was
+     * hardly ever seen with the focus.
      */
     @Test
     void inExModeTheEditorTakingTheFocusGivesItBackToTheBox() {
@@ -782,10 +782,9 @@ class CommandLineBoxTest {
         }
         boolean[] editorTookIt = { false };
         host.addListener(SWT.FocusIn, e -> editorTookIt[0] = true);
-        KeyboardFocus.afterActivation(shell, TIMEOUT_MS); // a focus change counts only in the active window
-        host.forceFocus(); // the editor takes the keys, as after a click on its tab
-        waitUntil("the editor's focus event (" + KeyboardFocus.report(host.getDisplay(), shell) + ")", () -> editorTookIt[0]);
-        waitUntil("the box's focus again (" + KeyboardFocus.report(host.getDisplay(), shell) + ")", box::isFocusControl);
+        // the editor takes the keys, as after a click on its tab
+        KeyboardFocus.give(host, () -> editorTookIt[0], () -> "the editor's focus event", TIMEOUT_MS);
+        KeyboardFocus.whileActive(shell, box::isFocusControl, () -> "the box's focus again", TIMEOUT_MS);
         assertTrue(commandLine.isOpen());
         assertEquals(List.of(), commands.calls, "no <C-c>");
     }

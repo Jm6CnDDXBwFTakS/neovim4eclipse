@@ -213,7 +213,10 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   To check where code under test left the focus, ask `KeyboardFocus.afterActivation(shell, timeout)`
   instead of `isFocusControl()`: on a desktop the window manager can take the activation from the
   test's window mid-test (the focus is then nowhere), and the window, activated again, gives the
-  focus back to the control that had it.
+  focus back to the control that had it. When the code under test moves the focus on as soon as a
+  control gets it (the box in Ex mode takes it back from the editor), give it with
+  `KeyboardFocus.give(control, done, what, timeout)` and wait for its focus event in `done`: the
+  control may never be seen holding the focus, so `require` would time out.
 - `EndToEndTestBase` (UI tests): the setup of the end-to-end tests (`test.txt` open and attached,
   Neovim in normal mode) and their helpers: `expectText`, `openFile`, `waitForAttach`, `runCommand`
   (an Eclipse command by ID, for what a key binding would run), `runInBox` (a `:` command typed

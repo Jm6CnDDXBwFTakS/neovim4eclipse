@@ -5,6 +5,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
@@ -20,12 +23,14 @@ import org.eclipse.swt.widgets.Shell;
  * as soon as it loses focus, so the test's next call on it fails with an unexplained "Widget is
  * disposed".
  *
- * <p>The UI test fragment has the same helper in {@code UiTestSupport}; the two modules cannot share
- * test code (one is plain JUnit, the other an OSGi fragment), and this one is small.
+ * <p>The UI test fragment has {@link #require}'s counterpart in {@code UiTestSupport}; the two
+ * modules cannot share test code (one is plain JUnit, the other an OSGi fragment), and this one is
+ * small. The other helpers here serve the {@code :} box's tests, which check where its code moves
+ * the focus.
  */
 final class KeyboardFocus {
 
-    /** How often {@link #require} asks again while the focus has not arrived. */
+    /** How often {@link #require}, {@link #give} and {@link #whileActive} ask again while the focus has not arrived. */
     private static final long RETRY_MS = 250;
 
     private KeyboardFocus() {
@@ -40,32 +45,29 @@ final class KeyboardFocus {
      * <p>Example: {@code KeyboardFocus.require(box, TestWait.millis());} right after the box opened.
      */
     static void require(Control control, long timeoutMs) {
-        Display display = control.getDisplay();
+        give(control, control::isFocusControl,
+                () -> describe(control) + " lost keyboard focus and did not get it back", timeoutMs);
+    }
+
+    /**
+     * Gives {@code control} the keyboard focus, activating its shell first, again every
+     * {@value #RETRY_MS} ms until {@code done} holds; fails with {@code what} and a {@link #report}
+     * after {@code timeoutMs}.
+     *
+     * <p>Why not {@link #require} when code under test moves the focus on at once: require waits to
+     * see {@code control} holding the focus, which it may never be seen doing. Waiting for its focus
+     * event instead ends at the first one. Giving it again matters on a desktop with a window
+     * manager: SWT can report the window active before the activation has arrived, and a focus
+     * given then is replaced by the window's own last one when it does arrive, with no focus event.
+     * Example: the {@code :} box in Ex mode takes the focus back from the editor on its focus event:
+     * {@code KeyboardFocus.give(host, () -> tookIt[0], () -> "the editor's focus event", TestWait.millis())}.
+     */
+    static void give(Control control, BooleanSupplier done, Supplier<String> what, long timeoutMs) {
         Shell shell = control.getShell();
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        long nextRequest = 0;
-        while (!control.isFocusControl()) {
-            long now = System.currentTimeMillis();
-            if (now > deadline) {
-                fail("Timed out after " + timeoutMs + " ms: " + describe(control)
-                        + " lost keyboard focus and did not get it back; " + report(display, shell));
-            }
-            if (now >= nextRequest) {
-                if (display.getActiveShell() != shell) {
-                    shell.forceActive();
-                }
-                control.forceFocus();
-                nextRequest = now + RETRY_MS;
-            }
-            if (!display.readAndDispatch()) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    fail("interrupted");
-                }
-            }
-        }
+        loop(shell, done, what, timeoutMs, () -> {
+            activate(shell);
+            control.forceFocus();
+        });
     }
 
     /**
@@ -82,16 +84,47 @@ final class KeyboardFocus {
      */
     static Control afterActivation(Shell shell, long timeoutMs) {
         Display display = shell.getDisplay();
+        whileActive(shell, () -> display.getActiveShell() == shell && display.getFocusControl() != null,
+                () -> "the test's window did not get the focus back", timeoutMs);
+        return display.getFocusControl();
+    }
+
+    /**
+     * Runs the event loop until {@code done} holds, activating {@code shell} again every
+     * {@value #RETRY_MS} ms while another window has the activation; fails with {@code what} and a
+     * {@link #report} taken at the time out. It gives no control the focus.
+     *
+     * <p>Why: a focus that code under test gives (an {@code asyncExec} that focuses the box) counts
+     * only in the active window, and on a desktop the window manager can take the activation from
+     * the test's window mid-test. Example:
+     * {@code KeyboardFocus.whileActive(shell, box::isFocusControl, () -> "the box's focus", TestWait.millis())}.
+     */
+    static void whileActive(Shell shell, BooleanSupplier done, Supplier<String> what, long timeoutMs) {
+        loop(shell, done, what, timeoutMs, () -> activate(shell));
+    }
+
+    /** {@code Shell.forceActive()} unless {@code shell} is the active one already. */
+    private static void activate(Shell shell) {
+        if (shell.getDisplay().getActiveShell() != shell) {
+            shell.forceActive();
+        }
+    }
+
+    /**
+     * The event loop of {@link #give} and {@link #whileActive}: runs {@code retry} at once and then
+     * every {@value #RETRY_MS} ms until {@code done} holds; sleeps 10 ms when no event is waiting.
+     */
+    private static void loop(Shell shell, BooleanSupplier done, Supplier<String> what, long timeoutMs, Runnable retry) {
+        Display display = shell.getDisplay();
         long deadline = System.currentTimeMillis() + timeoutMs;
         long nextRequest = 0;
-        while (display.getActiveShell() != shell || display.getFocusControl() == null) {
+        while (!done.getAsBoolean()) {
             long now = System.currentTimeMillis();
             if (now > deadline) {
-                fail("Timed out after " + timeoutMs + " ms: the test's window did not get the focus back; "
-                        + report(display, shell));
+                fail("Timed out after " + timeoutMs + " ms: " + what.get() + "; " + report(display, shell));
             }
-            if (now >= nextRequest && display.getActiveShell() != shell) {
-                shell.forceActive();
+            if (now >= nextRequest) {
+                retry.run();
                 nextRequest = now + RETRY_MS;
             }
             if (!display.readAndDispatch()) {
@@ -103,7 +136,6 @@ final class KeyboardFocus {
                 }
             }
         }
-        return display.getFocusControl();
     }
 
     /**
