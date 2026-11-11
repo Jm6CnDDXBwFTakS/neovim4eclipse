@@ -1233,17 +1233,15 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
     /**
      * The Vim key contexts switch on the letters chosen for the mode (KeyContextRule): in normal mode
-     * the Normal choices (Ctrl+F on; Ctrl+W Eclipse's by default, Neovim's on macOS, where Eclipse
-     * closes with Cmd+W: {@link VimCtrlKeys#toNeovimByDefault}), in insert mode the Insert choices
-     * (Ctrl+W on, Ctrl+F Eclipse's), whether Eclipse types or Neovim drives the insert (block-visual
-     * {@code I}).
+     * the Normal choices (Ctrl+F and Ctrl+W on, Ctrl+S off: {@link VimCtrlKeys#toNeovimByDefault}),
+     * in insert mode the Insert choices (Ctrl+W on, Ctrl+F Eclipse's), whether Eclipse types or
+     * Neovim drives the insert (block-visual {@code I}).
      */
     @Test
     void theKeyContextsSwitchOnTheLettersChosenForTheMode() {
         IContextService contexts = PlatformUI.getWorkbench().getService(IContextService.class);
         Predicate<Character> on = letter -> contexts.getActiveContextIds().contains(VimCtrlKeys.contextId(letter));
-        boolean wInNormal = PlatformUtil.isMac(); // Control+W is Neovim's by default on macOS only
-        waitUntil("normal mode's letters", TIMEOUT_MS, () -> on.test('f') && on.test('w') == wInNormal);
+        waitUntil("normal mode's letters", TIMEOUT_MS, () -> on.test('f') && on.test('w') && !on.test('s'));
 
         type(widget, "gg");
         type(widget, 'A');
@@ -1251,7 +1249,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         waitUntil("insert mode's letters while Eclipse types", TIMEOUT_MS, () -> on.test('w') && !on.test('f'));
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
-        waitUntil("normal mode's letters again", TIMEOUT_MS, () -> on.test('f') && on.test('w') == wInNormal);
+        waitUntil("normal mode's letters again", TIMEOUT_MS, () -> on.test('f') && on.test('w') && !on.test('s'));
 
         session.inputAsync("<C-v>");
         waitUntil("visual block mode", TIMEOUT_MS, () -> "\u0016".equals(session.getMode()));

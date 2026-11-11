@@ -27,7 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * {@code Ctrl+letter} to Neovim there; a cleared one leaves Eclipse's shortcut. Example row:
  *
  * <pre>
- *   Ctrl+W   [ ] window commands        [x] delete the word before
+ *   Ctrl+W   [x] window commands        [x] delete the word before
  * </pre>
  *
  * <h2>How a preference page works</h2>

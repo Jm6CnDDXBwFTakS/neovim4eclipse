@@ -864,9 +864,9 @@ registry still holds a default, the editor's own background has the last word
    and the old stack shows `test.txt` in front again.
 4. The clone is activated. The part listener attaches Neovim to it, with a window of its own on
    the same buffer, its cursor at the copied caret (section 2.7a).
-5. `Ctrl-W l` (with `Ctrl+W` ticked) sends `window focus l 0`; `EditorSplits` draws the area as a
-   `util/WindowLayout` tree, which finds the editor to the right, level with the caret, and
-   activates it. `:q` in the clone closes it, and its emptied stack goes away by itself.
+5. `Ctrl-W l` (`Ctrl+W` goes to Neovim by default) sends `window focus l 0`; `EditorSplits` draws
+   the area as a `util/WindowLayout` tree, which finds the editor to the right, level with the
+   caret, and activates it. `:q` in the clone closes it, and its emptied stack goes away by itself.
 
 Design: [SPLITS.md](design/SPLITS.md). Tests: `windows_spec.lua`, `WindowLayoutTest`,
 `SplitsEndToEndTest`.

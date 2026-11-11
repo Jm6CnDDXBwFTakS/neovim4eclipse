@@ -30,14 +30,22 @@ and replace mode, below). Ticked letters go to Neovim there, cleared ones keep t
 In the box, `Ctrl+V` pastes and `Ctrl+C` with text selected copies (on Windows and Linux). Changes
 apply at once.
 
-In normal mode, by default every letter goes to Neovim **except these three** (on macOS only
-`Ctrl+S` and `Ctrl+Z`; see [macOS](#macos)):
+In normal mode, by default every letter goes to Neovim **except these two**, on every system:
 
 | Key | Eclipse (Windows, Linux) | Vim | Why it stays with Eclipse |
 |-----|--------------------------|-----|---------------------------|
 | `Ctrl+S` | Save | nothing in normal mode | Saving with the usual shortcut matters more than a key Vim does not use. |
-| `Ctrl+W` | Close editor | window commands (`Ctrl+W s`, `Ctrl+W l`, `Ctrl+W q`, ...) | Closing the editor is what Eclipse users expect of it. Given to Neovim, the window commands work on Eclipse's editors, each Vim window being an editor and each split an editor stack (README, "Splits"; docs/design/SPLITS.md): `Ctrl+W s` and `v` split, `Ctrl+W h/j/k/l` move, `Ctrl+W +` sizes, `Ctrl+W o` is `:only`; `Ctrl+W q`, `Ctrl+W Ctrl+Q` and `Ctrl+W c` close the editor (as `:q` and `:close` do; in a floating window you entered, they close that window, as in Neovim); `Ctrl+W T` moves the editor out of its split, as a tab. Your own mappings of these keys win. `:wincmd l` and `:split` work without the tick. On macOS, where Eclipse closes with `Cmd+W`, `Control+W` goes to Neovim by default. |
 | `Ctrl+Z` | Undo | suspend Neovim | Suspending makes no sense for an embedded Neovim, and Vim's undo is `u`. Eclipse's undo also undoes Neovim's changes, because they are applied to the Eclipse document, and the result is pushed back to Neovim. |
+
+**`Ctrl+W`** goes to Neovim, though Eclipse closes the editor with it on Windows and Linux: it starts
+Vim's window commands, which work on Eclipse's editors, each Vim window being an editor and each split
+an editor stack (README, "Splits"; docs/design/SPLITS.md). `Ctrl+W s` and `v` split, `Ctrl+W h/j/k/l`
+move, `Ctrl+W +` sizes, `Ctrl+W o` is `:only`; `Ctrl+W q`, `Ctrl+W Ctrl+Q` and `Ctrl+W c` close the
+editor (as `:q` and `:close` do; in a floating window you entered, they close that window, as in
+Neovim); `Ctrl+W T` moves the editor out of its split, as a tab. Your own mappings of these keys win.
+Eclipse's *Close* is still `Ctrl+F4` (and `Cmd+W` on macOS), the tab's close button, or `:q`; clear
+the Normal box of `Ctrl+W` to give it back its Eclipse meaning (`:wincmd l` and `:split` work either
+way).
 
 Tick any of them to send it to Neovim instead.
 
@@ -68,9 +76,9 @@ many keyboards, so a key with both is typed, not read as one of these.
 ### macOS
 
 The bindings use the physical **Control** key on macOS, while Eclipse's shortcuts use **Command**
-(`Cmd+S` saves, `Cmd+W` closes). So on a Mac all `Ctrl` letters can safely go to Neovim, and
-`Control+W` (Vim's window commands) does by default; `Control+S` and `Control+Z` stay unticked, as
-elsewhere. A letter left to Eclipse there usually has no Eclipse binding, and then does nothing.
+(`Cmd+S` saves, `Cmd+W` closes). So on a Mac all `Ctrl` letters can safely go to Neovim;
+`Control+S` and `Control+Z` stay unticked, as elsewhere. A letter left to Eclipse there usually has
+no Eclipse binding, and then does nothing.
 
 `Cmd` keys never reach Neovim (`util/KeyMapping`). One that Eclipse has no binding for (say `Cmd+U`)
 is left to Eclipse and does nothing; it used to reach Neovim as the bare letter, so `Cmd+U` undid

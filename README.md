@@ -447,10 +447,10 @@ Explorer, *Open Type*) goes into the stack you were last in, as in Eclipse.
 (left or right) this editor for that one command. A size given with the split (`:5split`) is not
 used: the new editor takes half of this one.
 
-**`Ctrl+W`** closes the editor in Eclipse on Windows and Linux, and stays so unless you tick it
-under *Window → Preferences → Neovim → Ctrl Keys* (Normal); then the `Ctrl-W` keys above work.
-`:wincmd` and the `:` commands work either way. On macOS Eclipse closes with `Cmd+W`, so
-`Control+W` goes to Neovim by default. Your own mappings of a `Ctrl-W` key win.
+**`Ctrl+W`** goes to Neovim by default, for the `Ctrl-W` keys above; Eclipse's *Close* is still
+`Ctrl+F4` (`Cmd+W` on macOS), or `:q`. To have `Ctrl+W` close the editor again, clear its Normal box
+under *Window → Preferences → Neovim → Ctrl Keys*; `:wincmd` and the `:` commands work either way.
+Your own mappings of a `Ctrl-W` key win.
 
 **Eclipse's *Toggle Split Editor*** (*Window › Editor*, `Ctrl+_` one above the other, `Ctrl+{` side
 by side) makes the same Vim split in an editor Neovim drives, on the side `'splitbelow'` or
@@ -721,7 +721,7 @@ Neovim's `tabstop` is set to the editor's tab width so both agree.
 Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that sends the key to Neovim.
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
 of the letters you send to Neovim in the current mode (*Window → Preferences → Neovim → Ctrl Keys*;
-in normal mode by default every letter except `Ctrl+S`, `Ctrl+W` (on macOS it goes to Neovim) and `Ctrl+Z`, in insert mode
+in normal mode by default every letter except `Ctrl+S` and `Ctrl+Z`, in insert mode
 `Ctrl+W`, `U`, `R`, `O`, `T` and `D`; see [docs/KEYBOARD.md](docs/KEYBOARD.md)). The bindings work
 only while Neovim owns the editor's keys and the editor has focus; for the other letters, and in
 Eclipse mode (toggle with the toolbar button: color logo in Neovim mode, grey in Eclipse mode),
@@ -893,7 +893,7 @@ beside it. Ticked `Ctrl+letter` keys go to Neovim, in normal and visual mode (**
 insert mode (**Insert**); cleared ones keep their Eclipse shortcut. In an insert Eclipse types, an
 Insert key first hands Neovim the typed text, so `Ctrl+W` deletes the word just typed, and `.`
 repeats the whole insert. *Select All* and *Deselect All* set a column; *Restore Defaults* ticks
-every Normal box but `Ctrl+S`, `Ctrl+W` and `Ctrl+Z` (on macOS `Ctrl+W` too), and the Insert boxes of `Ctrl+W`, `U`, `R`,
+every Normal box but `Ctrl+S` and `Ctrl+Z`, and the Insert boxes of `Ctrl+W`, `U`, `R`,
 `O`, `T` and `D` (on macOS every letter with an insert meaning). Changes apply immediately.
 [docs/KEYBOARD.md](docs/KEYBOARD.md) explains the defaults and which keys go where.
 

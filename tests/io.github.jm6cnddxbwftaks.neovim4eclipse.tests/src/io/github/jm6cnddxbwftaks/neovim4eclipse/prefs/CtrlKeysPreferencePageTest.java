@@ -92,7 +92,7 @@ class CtrlKeysPreferencePageTest {
         page.performDefaults();
         page.performOk();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertEquals(VimCtrlKeys.toNeovimByDefault(letter, PlatformUtil.isMac()), store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)),
+            assertEquals(VimCtrlKeys.toNeovimByDefault(letter), store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)),
                     "normal " + letter);
             assertEquals(VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()),
                     store.getBoolean(PreferenceConstants.ctrlKeyInInsert(letter)), "insert " + letter);

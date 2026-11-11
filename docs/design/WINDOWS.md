@@ -243,8 +243,8 @@ that Back reopened (fights Eclipse).
 | `:bufdo`, `:argdo` | The editor's window ends on the last buffer. | Follow, as any buffer change |
 | `:e name` of a file that has an editor | Neovim's `:edit` would enter its buffer in this window. | Neovim enters its buffer with `:buffer` (`LuaScripts.HOST_COMMANDS`, `open_document_edited`; `:buffer`, not the `:edit` as typed, since the paths rule found the buffer and Neovim on Windows does not match a junction name for a file not on disk yet): the window travels as for `:b` (E2), so `:e #` toggles and `Ctrl-O` goes back, as in one Vim window. Rejected: letting Eclipse switch editors, where each kept its own `#`, so a second `:e #` found none. A file with no editor, `:e!`, `:e +cmd`, `:e ++opt` and `:e %` stay Eclipse's. |
 
-`:q` never reaches Neovim; the plug-in already handles it. `Ctrl+W` keys reach Neovim only when the
-user gives `Ctrl+W` to Neovim in the preferences (KEYBOARD.md).
+`:q` never reaches Neovim; the plug-in already handles it. `Ctrl+W` keys reach Neovim while
+`Ctrl+W`'s Normal box under *Ctrl Keys* is ticked, the default (KEYBOARD.md).
 
 ### E5 Folds
 

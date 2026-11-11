@@ -166,10 +166,12 @@ stacks, and say that the halves cannot.
 
 ## 5. `Ctrl+W`
 
-On Windows and Linux `Ctrl+W` closes the editor, and stays Eclipse's by default: it is what Eclipse
-users expect of it. Ticked under *Ctrl Keys*, it goes to Neovim, and the `Ctrl-W` keys work. On
-macOS Eclipse closes with `Cmd+W`, so `Control+W` goes to Neovim by default
-(`VimCtrlKeys.ECLIPSE_BY_DEFAULT_MAC`). `:wincmd` and the `:` commands work either way. The keys are
+`Ctrl+W` goes to Neovim by default on every system (`VimCtrlKeys.ECLIPSE_BY_DEFAULT` leaves only
+`Ctrl+S` and `Ctrl+Z` to Eclipse), so the `Ctrl-W` keys work. On Windows and Linux that takes Eclipse's
+*Close* shortcut from editors Neovim drives; *Close* stays on `Ctrl+F4`, and the splits are the reason
+the plug-in exists to be used with, so the window keys win. On macOS Eclipse closes with `Cmd+W`
+anyway. A cleared Normal box under *Ctrl Keys* gives `Ctrl+W` back to Eclipse; `:wincmd` and the `:`
+commands work either way. The keys are
 Neovim mappings, made only where the user's config maps none of them itself.
 
 ## 6. Experiments

@@ -30,9 +30,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - Eclipse's *Toggle Split Editor* (`Ctrl+_`, `Ctrl+{`) makes the same Vim split in an editor
   Neovim drives, and `:only` when pressed again; other editors keep Eclipse's two halves.
-- On macOS, `Control+W` goes to Neovim by default, for Vim's window commands (Eclipse closes an
-  editor with `Cmd+W` there). On Windows and Linux `Ctrl+W` still closes the editor unless ticked
-  under *Ctrl Keys*.
+- `Ctrl+W` goes to Neovim by default in normal mode, on every system, for Vim's window commands
+  (`Ctrl-W s`, `Ctrl-W l`, ...). Eclipse's *Close* is still `Ctrl+F4` (`Cmd+W` on macOS) or `:q`;
+  clearing `Ctrl+W`'s Normal box under *Ctrl Keys* gives it back to Eclipse.
 - `:tabonly!` and `:stag` say why they are refused.
 - `:q` in one of two editors on a file (a split, *Clone*) closes it without Eclipse's question
   about saving, as Vim closes one of two windows: the changes stay in the other editor.

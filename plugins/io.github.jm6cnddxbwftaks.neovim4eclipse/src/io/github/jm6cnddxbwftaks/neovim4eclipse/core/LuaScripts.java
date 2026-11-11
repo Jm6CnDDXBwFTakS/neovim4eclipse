@@ -1413,8 +1413,8 @@ final class LuaScripts {
      * {@code :close} and {@code :tabclose} close the editor: {@code util/HostCommand}.
      *
      * <p>The keys are mapped only where the user's config maps none of them itself, and reach Neovim
-     * only when Ctrl+W does (the default on macOS; on Windows and Linux a tick under Ctrl Keys:
-     * docs/KEYBOARD.md). In a <em>side window</em> ({@code is_side_window} of {@link #WINDOWS}: a
+     * only when Ctrl+W does (the default; its Normal box under Ctrl Keys: docs/KEYBOARD.md). In a
+     * <em>side window</em> ({@code is_side_window} of {@link #WINDOWS}: a
      * floating window the user entered), {@code :q}, {@code :close}, {@code Ctrl-W q} and
      * {@code Ctrl-W c} are Neovim's again: they close that window, as in Neovim, not the editor.
      *

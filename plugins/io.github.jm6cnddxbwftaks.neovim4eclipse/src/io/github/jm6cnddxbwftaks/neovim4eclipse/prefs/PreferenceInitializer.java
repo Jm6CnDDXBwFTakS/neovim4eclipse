@@ -37,7 +37,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         // default: Eclipse applies it after this initializer. The UI tests set it to false that way.
         defaults.putBoolean(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter, PlatformUtil.isMac()));
+            defaults.putBoolean(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
             defaults.putBoolean(PreferenceConstants.ctrlKeyInInsert(letter),
                     VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()));
         }

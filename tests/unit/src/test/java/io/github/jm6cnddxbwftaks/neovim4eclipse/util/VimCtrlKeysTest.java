@@ -75,21 +75,17 @@ class VimCtrlKeysTest {
         assertTrue(VimCtrlKeys.inInsertByDefault('a', true) && VimCtrlKeys.inInsertByDefault('k', true));
     }
 
+    /**
+     * Only Ctrl+S (save) and Ctrl+Z (undo) stay with Eclipse in normal mode by default, on every
+     * system: Ctrl+W gives Vim's window commands (the splits), and Eclipse closes with Ctrl+F4.
+     */
     @Test
-    void ctrlSWAndZStayWithEclipseByDefault() {
-        for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            boolean eclipse = letter == 's' || letter == 'w' || letter == 'z';
-            assertEquals(!eclipse, VimCtrlKeys.toNeovimByDefault(letter, false), "letter " + letter);
-        }
-    }
-
-    /** On macOS Eclipse closes with Cmd+W, so Control+W gives Vim's window commands by default. */
-    @Test
-    void onMacOnlyCtrlSAndZStayWithEclipseByDefault() {
+    void onlyCtrlSAndZStayWithEclipseByDefault() {
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
             boolean eclipse = letter == 's' || letter == 'z';
-            assertEquals(!eclipse, VimCtrlKeys.toNeovimByDefault(letter, true), "letter " + letter);
+            assertEquals(!eclipse, VimCtrlKeys.toNeovimByDefault(letter), "letter " + letter);
         }
+        assertTrue(VimCtrlKeys.toNeovimByDefault('W'), "either case");
     }
 
     @Test

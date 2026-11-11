@@ -69,18 +69,13 @@ public final class VimCtrlKeys {
     public static final String LETTERS = "abcdefghijklmnopqrstuvwxyz";
 
     /**
-     * Letters that stay with Eclipse on Windows and Linux unless the user changes it: Ctrl+S saves,
-     * Ctrl+W closes the editor (what Eclipse users expect of it; ticked, it gives Vim's window
-     * commands, docs/design/SPLITS.md), Ctrl+Z undoes (Vim's suspend is meaningless when embedded).
-     * See {@code docs/KEYBOARD.md}.
+     * Letters that stay with Eclipse in normal mode unless the user changes it, on every system:
+     * Ctrl+S saves, Ctrl+Z undoes (Vim's suspend is meaningless when embedded). Ctrl+W goes to
+     * Neovim, for Vim's window commands ({@code Ctrl-W l}, {@code Ctrl-W s}: each Vim window is an
+     * editor, each split an editor stack, docs/design/SPLITS.md); Eclipse's Close is still Ctrl+F4
+     * or {@code :q}, and on macOS Cmd+W. See {@code docs/KEYBOARD.md}.
      */
-    public static final String ECLIPSE_BY_DEFAULT = "swz";
-
-    /**
-     * The same on macOS, without {@code w}: Eclipse closes an editor with Cmd+W there, so
-     * Control+W is free for Vim's window commands ({@code Ctrl-W l}, {@code Ctrl-W s}) by default.
-     */
-    public static final String ECLIPSE_BY_DEFAULT_MAC = "sz";
+    public static final String ECLIPSE_BY_DEFAULT = "sz";
 
     /** What each key does in Vim's normal mode, indexed like {@link #LETTERS}; shown in the preferences. */
     private static final String[] VIM_MEANINGS = {
@@ -179,9 +174,9 @@ public final class VimCtrlKeys {
         return COMPLETION_CONTEXT_PREFIX + Character.toLowerCase(letter);
     }
 
-    /** Whether the letter goes to Neovim when the user has not chosen otherwise, on macOS or elsewhere. */
-    public static boolean toNeovimByDefault(char letter, boolean mac) {
-        return (mac ? ECLIPSE_BY_DEFAULT_MAC : ECLIPSE_BY_DEFAULT).indexOf(Character.toLowerCase(letter)) < 0;
+    /** Whether the letter goes to Neovim in normal mode when the user has not chosen otherwise. */
+    public static boolean toNeovimByDefault(char letter) {
+        return ECLIPSE_BY_DEFAULT.indexOf(Character.toLowerCase(letter)) < 0;
     }
 
     /** Whether the letter goes to Neovim in insert mode when the user has not chosen otherwise. */
