@@ -552,6 +552,11 @@ view to the controller, which shows it in the box. The box edits nothing:
   ignored until Neovim reports it closed. Focus that leaves Eclipse altogether (another application, an
   input method's switcher window such as Super+Space on Linux) keeps the line, and the box has the focus
   again when Eclipse's window does.
+- **After Enter** the line is Neovim's to close: the focus moving away then abandons nothing, since the
+  command itself may have moved it (`:e new.txt`, `:vsplit`). When the box closes it gives the focus back
+  to its editor unless another control of the same window took it; otherwise `:vsplit` would make its
+  own editor active again over the new one, and the next command would run in the wrong editor. Focus
+  in another window (a dialog asking about changes) does not count: the editor has it again after.
 - **Candidates** are fitted into one line above the box around the selected one (`util/CandidateLine`).
 - **Search preview:** while a `/` or `?` line is open, `win_viewport` carries Neovim's `'incsearch'`
   match (no `CursorMoved` fires then); the session dispatches it as the cursor, so the caret and view

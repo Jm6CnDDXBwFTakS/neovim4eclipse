@@ -407,6 +407,41 @@ class CommandLineBoxTest {
         assertFalse(commandLine.isOpen());
     }
 
+    /**
+     * A command run with Enter that gives the focus to another control ({@code :vsplit} makes the
+     * new editor beside this one the active one) keeps it there when Neovim then reports the line
+     * closed: the box does not hand it back to its own editor, which would make that one active
+     * again.
+     */
+    @Test
+    void theFocusAnotherControlTookAfterEnterStaysThereWhenTheBoxCloses() {
+        StyledText other = new StyledText(shell, SWT.MULTI); // the split's new editor
+        other.setBounds(0, 250, 400, 50);
+        Text box = show(line(":vsplit", 7));
+        key(box, SWT.CR, '\r', 0);
+        KeyboardFocus.require(other, TIMEOUT_MS);
+
+        commandLine.show(View.CLOSED); // Neovim's report arrives
+        assertFalse(commandLine.isOpen());
+        while (Display.getDefault().readAndDispatch()) {
+            // the focus events of the box going away
+        }
+        assertTrue(other.isFocusControl(), "the new editor keeps the focus");
+        assertEquals(List.of("type <CR>"), commands.calls);
+    }
+
+    /** The editor going away while its box is open ({@code :q} typed in the box) closes the box without a fault. */
+    @Test
+    void theEditorGoingAwayWithTheBoxOpenClosesIt() {
+        StyledText other = new StyledText(shell, SWT.MULTI); // where the focus goes as the editor closes
+        other.setBounds(0, 250, 400, 50);
+        show(line(":q", 2));
+        KeyboardFocus.require(other, TIMEOUT_MS);
+        host.dispose();
+        commandLine.dispose();
+        assertFalse(commandLine.isOpen());
+    }
+
     /** A key typed after Enter (the line stayed open, as after {@code <C-v><CR>}) makes a click away abandon it again. */
     @Test
     void aKeyAfterEnterMakesAClickAwayAbandonTheLineAgain() {

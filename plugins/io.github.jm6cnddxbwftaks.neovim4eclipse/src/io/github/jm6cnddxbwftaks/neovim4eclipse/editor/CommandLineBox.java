@@ -765,12 +765,24 @@ final class CommandLineBox {
     /**
      * Closes the box (not Neovim's line: that is closed, or {@link #abandon} closes it).
      *
-     * @param refocusEditor whether to give focus back to the editor
+     * <p>The focus goes back to the editor unless another control of the editor's window took it.
+     * A command run with Enter may have given it to one before Neovim reports the line closed:
+     * {@code :vsplit} makes the new editor beside this one the active one, and taking the focus back
+     * here would make this editor active again, so the next command would run in the wrong one.
+     * ({@code :e other.txt} never showed it: the editor it replaces is hidden, and a hidden control
+     * does not take the focus.) Focus in another window, such as the dialog of Eclipse's question
+     * about unsaved changes, is not kept from the editor, as before: the editor has it once the
+     * dialog is gone.
+     *
+     * @param refocusEditor whether to give focus back to the editor, if no control beside it took it
      */
     private void close(boolean refocusEditor) {
         if (box == null) {
             return;
         }
+        // Asked before the box goes, which moves the focus. Not when the editor is gone (dispose).
+        Control focus = refocusEditor && !host.isDisposed() ? display.getFocusControl() : null;
+        boolean takenBeside = focus != null && focus != host && !isInBox(focus) && focus.getShell() == host.getShell();
         display.removeFilter(SWT.FocusIn, abandonOnFocusElsewhere);
         display.removeFilter(SWT.MouseDown, keepClicksInExMode);
         display.removeFilter(SWT.MouseDoubleClick, keepClicksInExMode);
@@ -794,7 +806,7 @@ final class CommandLineBox {
             host.removeControlListener(repositionOnResize);
         }
         old.dispose(); // disposes the text field too
-        if (refocusEditor && !host.isDisposed()) {
+        if (refocusEditor && !takenBeside && !host.isDisposed()) {
             host.setFocus();
         }
         stateListener.run();

@@ -26,6 +26,7 @@ import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.swt.custom.CTabFolder;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
@@ -229,6 +230,40 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         waitForActive(editor, "Ctrl-W p: the one before");
         keys("<C-w>w");
         waitForActive(other, "Ctrl-W w: the next one");
+    }
+
+    /**
+     * Typed through the {@code :} box, as a person types them: {@code :vsplit}, then
+     * {@code :split other.txt}. The new editor keeps the focus each time, so the second split is
+     * made from the clone: the clone on the left with other.txt above it, test.txt on the right, and
+     * Neovim in other.txt. The box closes after the command has moved the focus; it gave the focus
+     * back to the editor it was typed in, which then made the second split on the right.
+     */
+    @Test
+    void splitsTypedInTheBoxLeaveTheNewEditorActive() throws Exception {
+        createFile("other.txt", "other\n");
+        runInBox(widget, "vsplit");
+        ITextEditor clone = waitForNewEditor(editor, "the clone of :vsplit");
+        stillActiveOnceTheBoxCloses(clone, widget, "the clone of :vsplit");
+
+        runInBox(widgetOf(clone), "split other.txt");
+        ITextEditor other = waitForNewEditor(clone, "other.txt of :split");
+        assertEquals("other.txt", other.getEditorInput().getName());
+        stillActiveOnceTheBoxCloses(other, widgetOf(clone), "other.txt of :split");
+
+        assertTrue(onScreen(clone).x < onScreen(editor).x, "the clone on the left");
+        assertEquals(onScreen(clone).x, onScreen(other).x, "other.txt over the clone");
+        assertTrue(onScreen(other).y < onScreen(clone).y, "other.txt above the clone");
+    }
+
+    /** Once the box typed in {@code typedIn} has closed, {@code opened} is still active and has the focus. */
+    private void stillActiveOnceTheBoxCloses(ITextEditor opened, StyledText typedIn, String what) {
+        waitUntil("the : box closed", TIMEOUT_MS, () -> textChildOf(typedIn) == null);
+        settle();
+        assertSame(opened, page().getActiveEditor(), what + " still the active editor");
+        waitUntil(what + " with the focus", TIMEOUT_MS, () -> widgetOf(opened).isFocusControl(),
+                () -> "; the focus is on " + UiTestSupport.focusReport(widgetOf(opened)));
+        waitForAttach(opened, what);
     }
 
     /** {@code :only} keeps every editor: the other stack's become tabs of this one. */
