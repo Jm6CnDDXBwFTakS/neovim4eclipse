@@ -39,6 +39,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Neovim stays in the active editor when Eclipse opens another one without making it active. On
+  macOS the new half of Eclipse's own split does that (*Toggle Split Editor* with the hidden
+  preference `eclipseSplits`, docs/design/SPLITS.md): Neovim went into the new half while Eclipse
+  kept the first one active, so `Ctrl-W j` started from the wrong half.
 - After Eclipse's split halves are made (*Toggle Split Editor*, or another plug-in that makes
   them), the active half has the keyboard focus. On macOS no half had it, so a click was needed
   before typing.
@@ -61,10 +65,6 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
-- Neovim stays in the active editor when Eclipse opens another one without making it active. On
-  macOS the new half of Eclipse's own split does that (*Toggle Split Editor* with the hidden
-  preference `eclipseSplits`, docs/design/SPLITS.md): Neovim went into the new half while Eclipse
-  kept the first one active, so `Ctrl-W j` started from the wrong half.
 - Eclipse's Delete Line run during an insert (from its menu, or with Ctrl+D given to Eclipse for
   insert mode) no longer deletes the next line as well when the insert ends with Esc.
 - A Neovim plug-in's edit made just as Eclipse sends its text to Neovim (at Esc, or after a format)
