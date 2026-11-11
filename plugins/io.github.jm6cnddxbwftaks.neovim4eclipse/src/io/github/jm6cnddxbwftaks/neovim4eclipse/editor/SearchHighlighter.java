@@ -10,7 +10,6 @@ import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
@@ -21,7 +20,6 @@ import org.eclipse.jface.text.ITextViewerExtension2;
 import org.eclipse.jface.text.ITextViewerExtension4;
 import org.eclipse.jface.text.ITextViewerExtension5;
 import org.eclipse.jface.text.IViewportListener;
-import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.TextPresentation;
 import org.eclipse.swt.custom.CaretListener;
 import org.eclipse.swt.custom.StyleRange;
@@ -80,7 +78,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  *
  * <p>Matches arrive in Neovim's units (lines from 1, UTF-8 byte columns) and become document
  * offsets with {@link DocumentPositions#byteColToOffset}. Example: {@code foo} after {@code é } on
- * line 1 is bytes 3 to 6, characters 2 to 5. Only the lines Neovim's window shows are sent, which
+ * line 1 is bytes 3 to 6, characters 2 to 5. That arithmetic, which match is current and how the
+ * matches move with Eclipse's edits are {@link SearchRegions}, on the text model alone (tested in
+ * tests/text); this class keeps the widget's side. Only the lines Neovim's window shows are sent, which
  * are the lines the editor shows. UI thread only, except the document listener, which runs on the
  * thread that changed the document ({@link #lock}).
  */
@@ -182,7 +182,7 @@ final class SearchHighlighter implements ITextPresentationListener {
 
     /** Shows {@code matches} (Neovim's units) in place of the ones shown before; empty clears. */
     void show(List<SearchMatch> matches) {
-        List<IRegion> next = document == null ? List.of() : toRegions(document, matches);
+        List<IRegion> next = document == null ? List.of() : SearchRegions.toRegions(document, matches);
         if (next.equals(regions)) {
             return; // the same matches: nothing to paint again
         }
@@ -410,29 +410,11 @@ final class SearchHighlighter implements ITextPresentationListener {
             if (regions.isEmpty()) {
                 return;
             }
-            int delta = inserted - removed;
-            int oldCurrent = current;
-            int newCurrent = -1;
-            List<IRegion> moved = new ArrayList<>(regions.size());
-            for (int i = 0; i < regions.size(); i++) {
-                IRegion r = regions.get(i);
-                int start = r.getOffset();
-                int end = start + r.getLength();
-                if (end <= offset) {
-                    moved.add(r); // before the change
-                } else if (start >= offset + removed) {
-                    moved.add(new Region(start + delta, r.getLength())); // after it (text typed right before it included)
-                } else {
-                    continue; // the change touches the match, which is dropped
-                }
-                if (i == oldCurrent) {
-                    newCurrent = moved.size() - 1;
-                }
-            }
+            SearchRegions.Moved moved = SearchRegions.moved(regions, current, offset, removed, inserted);
             // The current match keeps its box where it moved (or loses it when dropped), so that a
             // paint before the refresh below draws no box around another match.
-            this.regions = List.copyOf(moved);
-            current = newCurrent;
+            this.regions = moved.regions();
+            current = moved.current();
         }
         // The current match: once the widget has the change, and on its thread. The listener runs
         // before the widget applies the change (the caret is still the old one) and on the thread
@@ -474,58 +456,8 @@ final class SearchHighlighter implements ITextPresentationListener {
         return viewer instanceof ITextViewerExtension5 extension ? extension.widgetOffset2ModelOffset(caret) : caret;
     }
 
-    /**
-     * The index of the current match for a caret at {@code offset}: the region that holds it, or,
-     * while a search is typed, the one that ends there ({@link #searchTyped}); -1 for none.
-     */
+    /** The index of the current match for a caret at {@code offset} ({@link SearchRegions#currentAt}). */
     private int currentAt(List<IRegion> list, int offset) {
-        int index = indexAt(list, offset);
-        if (index < 0 && searchTyped) {
-            for (int i = 0; i < list.size(); i++) {
-                if (list.get(i).getOffset() + list.get(i).getLength() == offset) {
-                    return i;
-                }
-            }
-        }
-        return index;
-    }
-
-    /**
-     * The index of the region that holds {@code offset} (from its start up to, not including, its
-     * end), or -1. Neovim's cursor sits on a match's first character after {@code n}, so the match
-     * it lands on is the current one.
-     */
-    static int indexAt(List<IRegion> regions, int offset) {
-        for (int i = 0; i < regions.size(); i++) {
-            IRegion r = regions.get(i);
-            if (offset >= r.getOffset() && offset < r.getOffset() + r.getLength()) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * The matches as document regions; a match the document does not have (it changed since Neovim
-     * looked) or that comes out empty is left out.
-     */
-    static List<IRegion> toRegions(IDocument document, List<SearchMatch> matches) {
-        List<IRegion> out = new ArrayList<>(matches.size());
-        int lines = document.getNumberOfLines();
-        for (SearchMatch m : matches) {
-            if (m.startLine1() < 1 || m.endLine1() > lines) {
-                continue; // byteColToOffset would clamp it onto another line
-            }
-            try {
-                int start = DocumentPositions.byteColToOffset(document, m.startLine1(), m.startByte());
-                int end = DocumentPositions.byteColToOffset(document, m.endLine1(), m.endByte());
-                if (end > start) {
-                    out.add(new Region(start, end - start));
-                }
-            } catch (BadLocationException e) {
-                // A line the document does not have: skipped.
-            }
-        }
-        return List.copyOf(out);
+        return SearchRegions.currentAt(list, offset, searchTyped);
     }
 }

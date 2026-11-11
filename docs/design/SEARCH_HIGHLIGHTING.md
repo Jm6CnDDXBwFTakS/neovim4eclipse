@@ -222,8 +222,10 @@ editor's theme.
 - `NotificationBridgeTest.searchMatchesComeInGroupsOfFour`: the payload.
 - `SearchHighlighterTest` (`tests/swt`): on a real source viewer, the backgrounds in the widget's
   style ranges, the box around the current match (painted into an image, one per wrapped row),
-  matches following Eclipse's edits, the view reports, clear and dispose, a match the document no
-  longer has.
+  matches following Eclipse's edits, the view reports, clear and dispose.
+- `SearchRegionsTest` (`tests/text`, no display): byte columns to document offsets, a match across
+  lines, past the document or empty, the current match (while a search is typed too), and each
+  case of the matches moving with an edit (`editor/SearchRegions`).
 - `OverlayColorsTest.theSearchBoxMovesTowardTheText`.
 - `SearchHighlightingEndToEndTest`: a search, `n`, `:noh`, Eclipse mode and back, another editor
   and back, Detach and Attach, typing in insert mode with a scroll to another match before `Esc`

@@ -827,7 +827,8 @@ The editor shows the text `a foo b foo`, and the user types `/foo` and Enter.
 4. `NotificationBridge` turns the numbers into `util/SearchMatch` records; the session passes them
    on for the attached window only (`SearchPort`); `NeovimEditorController.onSearchMatches` hops to
    the UI thread.
-5. `editor/SearchHighlighter` turns byte columns into document offsets (2.8) and asks the viewer to
+5. `editor/SearchHighlighter` turns byte columns into document offsets (2.8, through
+   `editor/SearchRegions`, which needs only the text model) and asks the viewer to
    rebuild the presentation of that region (`invalidateTextPresentation`). The viewer runs the
    syntax coloring again for it, then calls the highlighter's `applyTextPresentation`, which merges
    a background into the ranges of the matches. The text keeps its colors. A paint listener then

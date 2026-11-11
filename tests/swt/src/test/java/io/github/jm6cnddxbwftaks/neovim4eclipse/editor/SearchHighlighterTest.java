@@ -32,7 +32,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  * {@link SearchHighlighter} on a real source viewer, configured as an editor's is (a presentation
  * reconciler, which builds what the widget shows): the matches become backgrounds in the widget's
  * style ranges, all in one color, the one under the caret gets a box around it, and nothing of the
- * text's own colors is lost.
+ * text's own colors is lost. Where the matches are, which is current and how they move with an
+ * edit is {@code SearchRegionsTest} (tests/text); here one case each shows the highlighter uses it.
  */
 class SearchHighlighterTest {
 
@@ -171,20 +172,7 @@ class SearchHighlighterTest {
         assertNull(backgroundAt(2));
     }
 
-    @Test
-    void aMatchAcrossLinesCoversTheLineBreak() {
-        highlighter.show(List.of(new SearchMatch(1, 6, 2, 2))); // to after é, two bytes
-        assertEquals(List.of(new Region(6, 3)), highlighter.regions(), "b, the line break and é");
-    }
-
-    /** A match the document no longer has (it changed since Neovim looked) is left out, not moved. */
-    @Test
-    void aMatchPastTheDocumentIsLeftOut() {
-        highlighter.show(List.of(new SearchMatch(9, 0, 9, 3), new SearchMatch(1, 2, 1, 5)));
-        assertEquals(List.of(new Region(2, 3)), highlighter.regions());
-    }
-
-    /** Text typed before a match moves it; text typed in it drops it (Neovim has not matched the new text). */
+    /** The highlighter follows the document's changes: text typed before a match moves it, text typed in it drops it. */
     @Test
     void theMatchesFollowEclipsesEdits() throws Exception {
         highlighter.show(List.of(new SearchMatch(1, 2, 1, 5), new SearchMatch(2, 3, 2, 6)));
@@ -194,8 +182,7 @@ class SearchHighlighterTest {
         assertNull(backgroundAt(2));
         viewer.getDocument().replace(5, 1, "O"); // inside the first foo
         assertEquals(List.of(new Region(12, 3)), highlighter.regions(), "the touched match is dropped");
-        viewer.getDocument().replace(15, 0, "!"); // right after the second
-        assertEquals(List.of(new Region(12, 3)), highlighter.regions(), "an edit after a match leaves it");
+        // The other cases of the arithmetic are SearchRegionsTest (tests/text).
     }
 
     /**
@@ -273,15 +260,5 @@ class SearchHighlighterTest {
             assertEquals(widget.getLineHeight(), box.height, "each box one row high: " + boxes);
         }
         fresh.dispose();
-    }
-
-    @Test
-    void theRegionHoldingTheOffsetIsFound() {
-        List<IRegion> regions = List.of(new Region(2, 3), new Region(10, 3));
-        assertEquals(0, SearchHighlighter.indexAt(regions, 2));
-        assertEquals(0, SearchHighlighter.indexAt(regions, 4));
-        assertEquals(-1, SearchHighlighter.indexAt(regions, 5), "just after the end");
-        assertEquals(1, SearchHighlighter.indexAt(regions, 12));
-        assertEquals(-1, SearchHighlighter.indexAt(List.of(), 0));
     }
 }
