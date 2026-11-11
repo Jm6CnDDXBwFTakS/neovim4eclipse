@@ -57,9 +57,14 @@ public final class GetNeovimText {
     private GetNeovimText() {
     }
 
-    /** {@code Get Neovim 0.12.6}, for buttons and the menu (without the ellipsis). */
+    /**
+     * {@code Get Neovim 0.12.6...}, the label of the Get Neovim buttons (the preference page, the
+     * "Neovim not started" notice). The ellipsis says a dialog follows before anything is done, as
+     * for any command that asks first. The menu entry is {@code plugin.xml}'s fixed
+     * {@code Get Neovim...}: a menu label cannot follow the release.
+     */
     public static String label(NeovimRelease release) {
-        return "Get Neovim " + release.version();
+        return "Get Neovim " + release.version() + "...";
     }
 
     /** The confirmation, before anything is downloaded or unpacked: where it goes, from where, and the check. */

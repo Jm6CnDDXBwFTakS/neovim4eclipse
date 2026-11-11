@@ -17,6 +17,7 @@ import org.eclipse.ui.PlatformUI;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ExternalBrowser;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.GetNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InstalledVersions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
@@ -131,7 +132,7 @@ final class StartFailureNotice {
         HeadedMessage message = notice.message();
         boolean getNeovim = notice.offersGetNeovim();
         // Get Neovim, the default where it is offered: for a missing or older Neovim it is the simplest fix.
-        String[] buttons = getNeovim ? new String[] { GetNeovim.label(), "Open Preferences", "Close" }
+        String[] buttons = getNeovim ? new String[] { GetNeovimText.label(NeovimRelease.bundled()), "Open Preferences", "Close" }
                 : new String[] { "Open Preferences", "Close" };
         MessageDialog dialog = new HeadedMessageDialog(shell, StartFailureReport.TITLE, MessageDialog.ERROR, message,
                 0, buttons).openLinksWith(ExternalBrowser::open);

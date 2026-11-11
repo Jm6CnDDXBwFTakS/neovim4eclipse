@@ -88,11 +88,6 @@ public final class GetNeovim {
         LISTENERS.remove(listener);
     }
 
-    /** {@code Get Neovim 0.12.6…}, the label of every entry. */
-    public static String label() {
-        return GetNeovimText.label(NeovimRelease.bundled()) + "...";
-    }
-
     /** What the user chose. */
     private enum Source {
         DOWNLOAD, FILE

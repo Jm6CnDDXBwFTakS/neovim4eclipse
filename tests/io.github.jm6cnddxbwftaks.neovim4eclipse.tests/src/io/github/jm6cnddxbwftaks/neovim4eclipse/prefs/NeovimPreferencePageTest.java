@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.CopyField;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.LayoutCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
@@ -186,7 +187,7 @@ class NeovimPreferencePageTest {
         Group group = sectionFor(WINDOWS ? "C:\\no\\such\\nvim.exe" : "/no/such/nvim");
         waitUntil("the note to report the missing program", () -> find(group, Label.class,
                 label -> label.getText().startsWith("No Neovim program at")) != null);
-        Button getNeovim = find(group, Button.class, b -> b.getText().equals(GetNeovim.label()));
+        Button getNeovim = find(group, Button.class, b -> b.getText().equals(GetNeovimText.label(NeovimRelease.bundled())));
         assertNotNull(getNeovim, "no Get Neovim button");
         return getNeovim;
     }

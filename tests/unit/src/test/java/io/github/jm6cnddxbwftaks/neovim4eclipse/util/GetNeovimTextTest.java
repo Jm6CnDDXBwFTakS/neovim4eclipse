@@ -147,7 +147,7 @@ class GetNeovimTextTest {
 
     @Test
     void labelsAndLinks() {
-        assertEquals("Get Neovim " + RELEASE.version(), GetNeovimText.label(RELEASE));
+        assertEquals("Get Neovim " + RELEASE.version() + "...", GetNeovimText.label(RELEASE));
         assertEquals(URI.create("https://www.virustotal.com/gui/file/" + "ab".repeat(32)),
                 GetNeovimText.virusTotal("AB".repeat(32)));
         assertEquals("10.8 MB", GetNeovimText.megabytes(11367117));

@@ -23,8 +23,10 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.CopyField;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimRelease;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 
@@ -175,7 +177,7 @@ final class NeovimStatusSection {
         // Shown only when the note offers it (show): not with Reinstall, and not while the option names
         // another program and the dedicated Neovim checks out. After an install the note probes again.
         getNeovim = new Button(parent, SWT.PUSH);
-        getNeovim.setText(GetNeovim.label());
+        getNeovim.setText(GetNeovimText.label(NeovimRelease.bundled()));
         getNeovim.setToolTipText("Install the dedicated Neovim the plug-in needs, downloaded or from a file, "
                 + "into " + NvimExecutable.dedicatedFolder());
         getNeovim.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false));
