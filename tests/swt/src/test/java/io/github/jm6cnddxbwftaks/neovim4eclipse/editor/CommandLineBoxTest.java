@@ -109,13 +109,15 @@ class CommandLineBoxTest {
         return box;
     }
 
-    private static void key(Text box, int keyCode, char character, int stateMask) {
+    /** A key press in the box; the event comes back, so a test can read {@code doit} (whether the field acts on it). */
+    private static Event key(Text box, int keyCode, char character, int stateMask) {
         Event event = new Event();
         event.keyCode = keyCode;
         event.character = character;
         event.stateMask = stateMask;
         event.doit = true;
         box.notifyListeners(SWT.KeyDown, event);
+        return event;
     }
 
     /** A press at {@code time} (ms): the accent menu's rules go by the time between presses. */
@@ -645,6 +647,182 @@ class CommandLineBoxTest {
         colon.doit = true;
         popup.notifyListeners(SWT.KeyDown, colon);
         assertEquals(List.of("type :"), commands.calls);
+    }
+
+    // Its place, the focus and the edges of its life
+
+    /**
+     * The box, and the candidate list above it, sit at the editor's bottom edge, and follow it when
+     * the editor is resized (a view docked below it grows). Both are placed inside the editor, so the
+     * editor moving as a whole moves them with it.
+     */
+    @Test
+    void theBoxAndItsListFollowTheEditorsBottomEdge() {
+        Text box = show(new View(true, ":", ":colo b", 7, List.of("blue", "darkblue"), -1));
+        StyledText list = findList(host);
+        assertNotNull(list, "the candidate list");
+        assertAtTheBottom(box, list);
+
+        host.setSize(400, 200); // what a view docked below the editor does to it
+        assertAtTheBottom(box, list);
+    }
+
+    /** The box's frame ends at the editor's bottom edge, the list's frame above it, both inside the editor. */
+    private void assertAtTheBottom(Text box, StyledText list) {
+        Rectangle area = host.getClientArea();
+        Rectangle frame = box.getParent().getBounds();
+        Rectangle listFrame = list.getParent().getBounds();
+        int gap = area.y + area.height - (frame.y + frame.height);
+        assertTrue(gap >= 0 && gap <= OverlayFrame.bottomGap(host), "the box at the editor's bottom: " + frame + " in " + area);
+        assertTrue(listFrame.y + listFrame.height <= frame.y && listFrame.y >= area.y, "the list above it: " + listFrame);
+    }
+
+    /**
+     * {@link CommandLineBox#hasFocus}, which the controller asks to switch its key contexts: the box
+     * open and holding the keys. In Ex mode the line stays open while another control has them.
+     */
+    @Test
+    void hasFocusIsTheOpenBoxHoldingTheKeys() {
+        assertFalse(commandLine.hasFocus(), "no box");
+        commands.cancellable = false; // Ex mode: the line stays open when the focus goes
+        show(line(":abc", 4));
+        assertTrue(commandLine.hasFocus());
+        StyledText other = new StyledText(shell, SWT.MULTI); // another editor beside this one
+        other.setBounds(0, 250, 400, 50);
+        KeyboardFocus.require(other, TIMEOUT_MS);
+        assertTrue(commandLine.isOpen() && !commandLine.hasFocus(), "open, the keys elsewhere");
+        commandLine.show(View.CLOSED);
+        assertFalse(commandLine.hasFocus(), "closed");
+    }
+
+    /** Select All selects the box's text for copying; Neovim's line does not change, nothing is sent. */
+    @Test
+    void selectAllSelectsTheTextAndSendsNothing() {
+        Text box = show(line(":echo", 5));
+        commandLine.selectAll();
+        assertEquals(":echo", box.getSelectionText());
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /** With no line open, the edit commands the controller passes on (Paste, Copy, Select All) do nothing. */
+    @Test
+    void editCommandsWithNoLineOpenDoNothing() {
+        commandLine.paste();
+        commandLine.copy();
+        commandLine.selectAll();
+        commandLine.closeForEclipseMode();
+        assertFalse(commandLine.isOpen());
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /**
+     * An edit of the platform that only removes text (a cut, a drop moving the selection away) is
+     * refused like any other, and sends nothing: Neovim's line is what the box shows.
+     */
+    @Test
+    void aDeletionOfThePlatformChangesNothingAndSendsNothing() {
+        Text box = show(line(":echo", 5));
+        box.setSelection(1, 5);
+        box.insert("");
+        assertEquals(":echo", box.getText());
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /**
+     * Tab's own key press sends nothing: its traversal does, once
+     * ({@link #tabAndShiftTabGoToNeovimAndKeepTheFocus}); the press sending it too would complete twice.
+     */
+    @Test
+    void theTabKeyPressSendsNothing() {
+        Text box = show(line(":e ", 3));
+        key(box, SWT.TAB, '\t', 0);
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /**
+     * Shift+Insert is the platform's paste too (Windows, Linux): left to the platform, as Ctrl+V is.
+     * The field acts on it, and its paste then reaches Neovim as an edit
+     * ({@link #anEditOfThePlatformIsSentAsAPaste}); the key itself is not sent.
+     */
+    @Test
+    void shiftInsertIsLeftToThePlatform() {
+        Text box = show(line(":e ", 3));
+        Event press = key(box, SWT.INSERT, (char) 0, SWT.SHIFT);
+        assertTrue(press.doit, "the field pastes");
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /** A key with no Neovim name, such as Shift pressed alone, sends nothing. */
+    @Test
+    void aKeyWithNoNeovimNameSendsNothing() {
+        Text box = show(line(":e ", 3));
+        key(box, SWT.SHIFT, (char) 0, 0);
+        assertEquals(List.of(), commands.calls);
+    }
+
+    /**
+     * Ex mode: the editor taking the keys back (a click on its tab) leaves the line open, and the box
+     * takes the focus again, after the focus event.
+     */
+    @Test
+    void inExModeTheEditorTakingTheFocusGivesItBackToTheBox() {
+        commands.cancellable = false;
+        Text box = show(line(":abc", 4));
+        while (host.getDisplay().readAndDispatch()) {
+            // the box's own focus events, so the editor's below come after them
+        }
+        KeyboardFocus.require(host, TIMEOUT_MS); // the editor takes the keys, as after a click on its tab
+        waitUntil("the box's focus again (" + KeyboardFocus.report(host.getDisplay(), shell) + ")", box::isFocusControl);
+        assertTrue(commandLine.isOpen());
+        assertEquals(List.of(), commands.calls, "no <C-c>");
+    }
+
+    /**
+     * Outside Ex mode a click in the editor is the editor's: it goes on (the focus then abandons the
+     * line, {@link #anotherControlTakingTheFocusAbandonsTheLine}).
+     */
+    @Test
+    void outsideExModeAClickInTheEditorGoesOn() {
+        show(line(":abc", 4));
+        Event click = new Event();
+        click.button = 1;
+        click.x = 50;
+        click.y = 5;
+        host.notifyListeners(SWT.MouseDown, click);
+        assertEquals(SWT.MouseDown, click.type, "not swallowed");
+    }
+
+    /**
+     * The candidate list stays one widget while the views change: with nothing selected nothing is
+     * highlighted, and the next view's selection is. The line closing takes the list with it.
+     */
+    @Test
+    void theListFollowsTheSelectionAndGoesWithTheLine() {
+        show(new View(true, ":", ":colo ", 6, List.of("blue", "darkblue"), -1));
+        StyledText list = findList(host);
+        assertNotNull(list, "the candidate list");
+        assertEquals(0, list.getStyleRanges().length, "nothing selected, nothing highlighted");
+
+        show(new View(true, ":", ":colo darkblue", 14, List.of("blue", "darkblue"), 1));
+        assertEquals(list, findList(host), "the same list");
+        StyleRange[] ranges = list.getStyleRanges();
+        assertEquals(1, ranges.length);
+        assertEquals("darkblue", list.getText().substring(ranges[0].start, ranges[0].start + ranges[0].length));
+
+        commandLine.show(View.CLOSED);
+        assertNull(findList(host), "the list is gone with the box");
+        assertTrue(list.isDisposed());
+    }
+
+    /** The editor gone under an open box (its window closing): the box counts as closed, and a late view shows nothing. */
+    @Test
+    void aViewAfterTheEditorIsGoneShowsNothing() {
+        show(line(":q", 2));
+        host.dispose();
+        assertFalse(commandLine.isOpen(), "the box went with the editor");
+        commandLine.show(line(":q", 2)); // a view on its way
+        assertFalse(commandLine.isOpen());
+        assertEquals(List.of(), commands.calls);
     }
 
     // macOS's accent menu (press-and-hold): the box's part of PressAndHold, with the sequences
