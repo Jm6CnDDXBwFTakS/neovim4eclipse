@@ -3,18 +3,14 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.Collection;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyContextBatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -33,7 +29,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * <h2>Two sets of letters</h2>
  * The Ctrl Keys preference page has a Normal and an Insert choice per letter, so a mode change
  * between insert and normal mode switches the letters whose two choices differ, and only those:
- * {@link #apply} compares the letters wanted now with the ones active and changes the difference.
+ * {@link #apply} compares the letters wanted now with the ones active and changes the difference
+ * ({@link KeyContextBatch}, which holds that decision and the batching without Eclipse).
  * Example: Ctrl+W ticked for insert mode only, Ctrl+R ticked for both: at {@code i}, Ctrl+W's
  * context is activated and Ctrl+R's stays as it is.
  *
@@ -50,11 +47,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  */
 final class VimKeyContexts {
 
-    /** The active contexts by id: the normal-mode parent and the letters'. */
-    private final Map<String, IContextActivation> activations = new HashMap<>();
+    /** Which contexts are active, and the batching (tested in tests/unit, KeyContextBatchTest). */
+    private final KeyContextBatch<IContextActivation> batch = new KeyContextBatch<>();
 
     boolean isActive() {
-        return !activations.isEmpty();
+        return batch.isActive();
     }
 
     /**
@@ -71,46 +68,34 @@ final class VimKeyContexts {
      * Makes the active contexts the normal-mode parent and, for each letter {@code toNeovim} accepts,
      * the context {@code contextOf} names (its letter context, or in an insert Eclipse types the
      * Word Completion context of {@code Ctrl-N}, {@code Ctrl-P}), changing only the difference to what
-     * is active now, in one batch.
+     * is active now, in one batch ({@link KeyContextBatch#apply}).
      */
     void apply(IContextService service, Predicate<Character> toNeovim, Function<Character, String> contextOf) {
-        Set<String> wanted = new HashSet<>();
-        wanted.add(VimCtrlKeys.NORMAL_CONTEXT_ID);
-        for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            if (toNeovim.test(letter)) {
-                wanted.add(contextOf.apply(letter));
-            }
-        }
-        if (wanted.equals(activations.keySet())) {
-            return;
-        }
-        service.deferUpdates(true); // one recomputation of the bindings for the whole batch
-        try {
-            List<IContextActivation> off = new ArrayList<>();
-            activations.entrySet().removeIf(e -> !wanted.contains(e.getKey()) && off.add(e.getValue()));
-            if (!off.isEmpty()) {
-                service.deactivateContexts(off);
-            }
-            for (String id : wanted) {
-                if (!activations.containsKey(id)) {
-                    activations.put(id, service.activateContext(id));
-                }
-            }
-        } finally {
-            service.deferUpdates(false);
-        }
+        batch.apply(switchOf(service), KeyContextBatch.wanted(toNeovim, contextOf));
     }
 
     /** Deactivates every context {@link #apply} activated. */
     void deactivate(IContextService service) {
-        if (isActive()) {
-            service.deferUpdates(true);
-            try {
-                service.deactivateContexts(List.copyOf(activations.values()));
-                activations.clear();
-            } finally {
-                service.deferUpdates(false);
+        batch.deactivate(switchOf(service));
+    }
+
+    /** Eclipse's context service as the batch's {@link KeyContextBatch.Switch}: a thin adapter. */
+    private static KeyContextBatch.Switch<IContextActivation> switchOf(IContextService service) {
+        return new KeyContextBatch.Switch<>() {
+            @Override
+            public void deferUpdates(boolean defer) {
+                service.deferUpdates(defer);
             }
-        }
+
+            @Override
+            public IContextActivation activate(String contextId) {
+                return service.activateContext(contextId);
+            }
+
+            @Override
+            public void deactivate(Collection<IContextActivation> tokens) {
+                service.deactivateContexts(tokens);
+            }
+        };
     }
 }
