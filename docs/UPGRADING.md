@@ -39,8 +39,9 @@ The safe loop for any upgrade:
 
 The libraries, the Maven plug-ins (Tycho among them) and the GitHub Actions move with
 `java releng/tools/dependencies/Dependencies.java` (*Libraries, plug-ins and actions* below),
-which follows the rules in `.github/dependabot.yml`. Dependabot reads the same file and would
-open pull requests for the same updates. Neither covers the JDK, the Eclipse release or Neovim;
+which follows the rules in `.github/dependabot.yml`. Dependabot reads the same file; its
+version-update pull requests are turned off there (`open-pull-requests-limit: 0`), and only its
+security updates open pull requests (*Security updates* below). Neither covers the JDK, the Eclipse release or Neovim;
 those are upgraded with the steps below. Both skip, on purpose:
 
 - the `org.eclipse.platform` jars: they must match the Eclipse release, so they move with it;
@@ -52,9 +53,16 @@ those are upgraded with the steps below. Both skip, on purpose:
 
 Dependabot's pull requests target `main`, the default branch, which moves only at a release; the
 tool commits on the current release branch (`release/<next version>`, see CONTRIBUTING.md,
-"Branches") instead. A pull request Dependabot opens anyway can be left alone: it closes by itself
-once `main` has the version, at the next release. GitHub reads `dependabot.yml` from `main` only,
-so a change to it reaches Dependabot at the next release; the tool reads the checkout's copy.
+"Branches") instead. GitHub reads `dependabot.yml` from `main` only, so a change to it reaches
+Dependabot at the next release; the tool reads the checkout's copy.
+
+**Security updates**: when a dependency has a known vulnerability, Dependabot opens a pull request
+against `main` (on in the repository's security settings). Apply the version it
+names on the release branch, with the tool (`--allow-young` if the fix is new) or by hand, and
+release; the pull request closes by itself once `main` has it. Dependabot's branches
+(`dependabot/maven/…`) are left out of the ruleset that lets only the owner create branches:
+the pattern is `refs/heads/dependabot/**/*`, since GitHub's `**` at the end of a pattern stands
+for one folder only.
 
 ## Libraries, plug-ins and actions
 
