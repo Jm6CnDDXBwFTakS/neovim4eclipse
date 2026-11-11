@@ -166,10 +166,17 @@ function t.during(keys, check)
   return result
 end
 
+--- How long t.wait_for waits at most: the limit every test waits with (TestWait in Java,
+--- -Dtest.wait.seconds, 15 s by default), which LuaScriptsInNeovimTest passes in $TEST_WAIT_MS. A
+--- limit of the harness's own would fail a spec on a slow machine with nothing wrong, as 5 s once
+--- could. Run by hand, without the variable, it is TestWait's default.
+local WAIT_MS = tonumber(vim.env.TEST_WAIT_MS) or 15000
+
 --- Runs Neovim's event loop until condition() holds (work deferred with vim.schedule, a timer), and
---- fails after 5 s.
+--- fails after WAIT_MS. It returns as soon as condition() holds, so the limit costs a passing test
+--- nothing.
 function t.wait_for(what, condition)
-  if not vim.wait(5000, condition, 10) then
+  if not vim.wait(WAIT_MS, condition, 10) then
     error('timed out waiting for ' .. what, 2)
   end
 end

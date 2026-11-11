@@ -28,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.UiExecutor;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions.Fold;
 
 /**
@@ -168,7 +169,8 @@ class FoldMirrorTest {
                 reconciler[0] = new Thread(() -> model.addAnnotation(added, lines(5, 5)), "reconciler");
                 reconciler[0].start();
                 try {
-                    reconciler[0].join(10_000);
+                    // The usual wait limit; the assertion below fails if the change did not finish.
+                    reconciler[0].join(TestWait.millis());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }

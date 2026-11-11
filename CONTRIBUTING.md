@@ -283,6 +283,26 @@ Every wait has the same limit, `TestWait` (15 s). A passing test returns as soon
 holds, so the limit only matters when something is broken. To give a slow machine more time, or a
 fast one less so that a hang fails sooner, pass `-Dtest.wait.seconds=N` to any test command above.
 
+The same limit holds everywhere a test waits, so that no wait gives up before the others:
+
+- **The Lua specs.** `t.wait_for` waits as long as `TestWait` (`LuaScriptsInNeovimTest` passes the
+  limit to the harness in `$TEST_WAIT_MS`), not a limit of its own; it had 5 s, a third of the rest.
+- **Guards against a hang.** A read that could block forever is bounded by `TestWait` too
+  (`RpcChannelTest.receive`), not by a shorter `@Timeout` of the class: with 10 s around waits of
+  15 s, the guard ran out first.
+- **No fixed waits.** A UI test does not run the event loop for 100 ms and then check: that fails
+  when the step takes longer. Where the step is done before it returns (a host command or Undo on
+  the UI thread), the wait only hides that: a later change that makes the step queue its work goes
+  unnoticed until a slow machine fails it. The test waits for the outcome (`waitUntil`), for
+  Neovim (`settle`), or for the UI thread to run what is queued (`UiTestSupport.runUntilIdle`), or,
+  for a step done at once, checks right after it. The one fixed wait, `UiTestSupport.spin`, is for
+  the Marketplace pictures, where a paint must reach the screen and nothing reports that it has.
+
+The plug-in's own limits stay as they are in tests: a state reply within 750 ms, an RPC answer
+within 5 s, Neovim started within 10 s. They are what a user on a slow machine meets too, and
+scaling them for tests would add a setting only tests use. A test that fails on one of them says
+that the limit may be too short for users as well; look at the limit, not at the test.
+
 To reproduce CI's conditions, run the tests on fewer cores rather than next to a CPU hog: the run
 then behaves the same way each time, and the JVM, the test Eclipse and Neovim all see the small
 machine (on Linux the JVM sizes its thread pools and garbage collector by the cores it may use; on

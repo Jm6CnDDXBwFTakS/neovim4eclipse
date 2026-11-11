@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.channels.Channels;
 import java.nio.channels.Pipe;
 import java.util.Arrays;
@@ -20,13 +21,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 import java.util.logging.Level;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessagePacker;
 import org.msgpack.core.MessageUnpacker;
@@ -43,7 +44,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  * still alive and fail with "Write end dead" when the writing thread is not the one expected.
  * Messages decode with every integer as a {@code Long}, hence {@code 0L} and {@code 1L} below.
  */
-@Timeout(10) // a broken channel would make a test wait forever: fail instead
 class RpcChannelTest {
 
     /** What the channel handed to Incoming, as strings: "notification eclipse_mode [i]". */
@@ -107,9 +107,25 @@ class RpcChannelTest {
         toChannel.flush();
     }
 
-    /** The next message the channel sent to Neovim. */
-    private Object receive() throws IOException {
-        return MsgpackValues.unpack(fromChannel);
+    /**
+     * The next message the channel sent to Neovim. The one read in these tests that could wait
+     * forever (a broken channel sends nothing), so it waits at most {@link TestWait}'s limit, as every
+     * other wait here does, and then fails. A read cut short stays blocked on its thread until
+     * {@link #disconnect} closes the channel, which ends the pipe.
+     */
+    private Object receive() throws Exception {
+        CompletableFuture<Object> next = CompletableFuture.supplyAsync(() -> {
+            try {
+                return MsgpackValues.unpack(fromChannel);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+        try {
+            return next.get(TestWait.millis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw new AssertionError("the channel sent nothing within " + TestWait.millis() + " ms", e);
+        }
     }
 
     /** Neovim exits: its output ends. */

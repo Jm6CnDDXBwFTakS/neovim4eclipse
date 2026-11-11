@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +17,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -136,15 +140,32 @@ class LuaScriptsInNeovimTest {
         try {
             ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true).directory(WORK.toFile());
             NvimExecutable.prepareEnvironment(builder.environment(), io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil.isWindows());
+            // The harness's t.wait_for waits as every test does (TestWait), not with a limit of its own.
+            builder.environment().put("TEST_WAIT_MS", Long.toString(TestWait.millis()));
             Process process = builder.start();
             process.getOutputStream().close(); // no input: a script that waited for a key would hang
-            // Read before waiting: a full pipe would block Neovim.
-            byte[] out = process.getInputStream().readAllBytes();
-            if (!process.waitFor(TestWait.millis(), TimeUnit.MILLISECONDS)) {
+            // Read on another thread while waiting: a full pipe would block Neovim, and a read on
+            // this thread would return only at the end, so a Neovim that hangs would hang the test
+            // instead of failing it at the limit.
+            CompletableFuture<byte[]> out = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return process.getInputStream().readAllBytes();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+            // Twice the limit: a t.wait_for inside may take one whole limit, and when it runs out,
+            // its own message ("timed out waiting for ...") should be what the test reports.
+            if (!process.waitFor(2 * TestWait.millis(), TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
                 fail("Neovim did not finish: " + String.join(" ", cmd));
             }
-            return new Run(process.exitValue(), new String(out, StandardCharsets.UTF_8));
+            // The process has ended, so its output ends too; the limit only guards a stray child
+            // that kept the pipe open.
+            byte[] output = out.get(TestWait.millis(), TimeUnit.MILLISECONDS);
+            return new Run(process.exitValue(), new String(output, StandardCharsets.UTF_8));
+        } catch (ExecutionException | TimeoutException e) {
+            throw new AssertionError("could not read the output of " + cmd, e);
         } catch (IOException e) {
             throw new AssertionError("could not start " + cmd, e);
         } catch (InterruptedException e) {
