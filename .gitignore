@@ -56,6 +56,9 @@ local.properties
 .worksheet
 
 target/
+# Tycho writes it beside a module's pom.xml during a build and deletes it at the end; a stopped
+# build leaves it, and the developer tools would take it for a change (they need a clean tree).
+.tycho-consumer-pom.xml
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
