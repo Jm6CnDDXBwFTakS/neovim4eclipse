@@ -403,7 +403,7 @@ public final class ReleaseTool {
     private void newerDependencies() {
         Updates.Found found;
         try {
-            found = new Updates(root, shell, false, Set.of()).find();
+            found = new Updates(root, shell, Updates.Exceptions.NONE).find();
         } catch (ToolFailure e) {
             System.out.println("  (could not look for dependency updates: " + e.getMessage() + ")");
             return;

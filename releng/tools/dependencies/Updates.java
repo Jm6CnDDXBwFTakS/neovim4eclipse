@@ -105,6 +105,36 @@ public final class Updates {
         }
     }
 
+    /**
+     * The exceptions to the rules a person asked for, each deliberate: {@code allYoung} takes
+     * releases under a week old for every dependency ({@code --allow-young}), {@code young} for the
+     * dependencies named ({@code --allow-young actions/setup-java}), {@code majors} takes a major
+     * release the rules leave out ({@code --major junit}). A name is a property without
+     * {@code .version} ({@code junit}, {@code maven-surefire-plugin}) or an action
+     * ({@code actions/checkout}). Example: with build-helper 3.8.0 and setup-java v6.2.0 both days
+     * old, {@code young = {actions/setup-java}} moves setup-java and leaves build-helper to wait.
+     */
+    public record Exceptions(boolean allYoung, Set<String> young, Set<String> majors) {
+
+        /** No exception: what {@code Release.java check} reports. */
+        public static final Exceptions NONE = new Exceptions(false, Set.of(), Set.of());
+
+        public Exceptions {
+            young = Set.copyOf(young);
+            majors = Set.copyOf(majors);
+        }
+
+        /** Whether a release of {@code name} under a week old may be taken. */
+        public boolean takesYoung(String name) {
+            return allYoung || young.contains(name);
+        }
+
+        /** Whether a major release of {@code name} may be taken although the rules leave majors out. */
+        public boolean takesMajor(String name) {
+            return majors.contains(name);
+        }
+    }
+
     /** A property's name in messages: {@code jacoco.version} is {@code jacoco}. */
     static String label(String property) {
         return property.endsWith(".version") ? property.substring(0, property.length() - ".version".length()) : property;
@@ -114,38 +144,63 @@ public final class Updates {
     private final Shell shell;
     private final DependabotRules rules;
     private final Map<String, List<VersionCopies.Copy>> copySections;
-    private final boolean allowYoung;
-    private final Set<String> majors;
+    private final Exceptions exceptions;
 
-    /**
-     * @param majors the names given to {@code --major} (a label such as {@code junit}, or an
-     *     action such as {@code actions/checkout}): for these, a major release is taken although
-     *     the rules ignore majors
-     */
-    public Updates(Path root, Shell shell, boolean allowYoung, Set<String> majors) {
+    /** @param exceptions the rules' exceptions asked for on the command line ({@link Exceptions#NONE}: none) */
+    public Updates(Path root, Shell shell, Exceptions exceptions) {
         this.root = root;
         this.shell = shell;
         this.rules = DependabotRules.parse(read(DependabotRules.FILE));
         this.copySections = VersionCopies.parse(read(VersionCopies.FILE));
-        this.allowYoung = allowYoung;
-        this.majors = majors;
+        this.exceptions = exceptions;
     }
 
     /** Searches both kinds; network access to Maven Central, and to GitHub through {@code gh}. */
     public Found find() {
         List<String> notes = new ArrayList<>();
         List<String> upToDate = new ArrayList<>();
-        Set<String> unusedMajors = new LinkedHashSet<>(majors);
-        List<MavenMove> maven = rules.ecosystem("maven").map(e -> maven(e, notes, upToDate, unusedMajors)).orElse(List.of());
-        List<ActionMove> actions = rules.ecosystem("github-actions").map(e -> actions(e, notes, upToDate, unusedMajors)).orElse(List.of());
-        if (!unusedMajors.isEmpty()) {
-            throw new ToolFailure("--major " + String.join(", ", unusedMajors) + ": no such dependency (names: the property without"
-                    + " .version, such as junit, or an action, such as actions/checkout)");
-        }
+        // Each name given is crossed off when its dependency is met; one left over names none.
+        Unmet unmet = new Unmet(exceptions);
+        List<MavenMove> maven = rules.ecosystem("maven").map(e -> maven(e, notes, upToDate, unmet)).orElse(List.of());
+        List<ActionMove> actions = rules.ecosystem("github-actions").map(e -> actions(e, notes, upToDate, unmet)).orElse(List.of());
+        unmet.check();
         return new Found(maven, actions, notes, upToDate);
     }
 
-    private List<MavenMove> maven(DependabotRules.Ecosystem eco, List<String> notes, List<String> upToDate, Set<String> unusedMajors) {
+    /**
+     * The names given to {@code --allow-young} and {@code --major} that no dependency has matched
+     * yet: each is crossed off when its dependency is met, and {@link #check} stops the tool on one
+     * left over (a typo, a property that does not exist).
+     */
+    static final class Unmet {
+
+        private final Set<String> young;
+        private final Set<String> majors;
+
+        Unmet(Exceptions exceptions) {
+            this.young = new LinkedHashSet<>(exceptions.young());
+            this.majors = new LinkedHashSet<>(exceptions.majors());
+        }
+
+        /** Crosses {@code name} off; whether it was given to {@code --allow-young} or {@code --major}. */
+        boolean named(String name) {
+            boolean y = young.remove(name);
+            boolean m = majors.remove(name);
+            return y || m;
+        }
+
+        void check() {
+            List<String> wrong = new ArrayList<>();
+            young.forEach(n -> wrong.add("--allow-young " + n));
+            majors.forEach(n -> wrong.add("--major " + n));
+            if (!wrong.isEmpty()) {
+                throw new ToolFailure(String.join(", ", wrong) + ": no such dependency (names: the property without .version,"
+                        + " such as junit, or an action, such as actions/checkout)");
+            }
+        }
+    }
+
+    private List<MavenMove> maven(DependabotRules.Ecosystem eco, List<String> notes, List<String> upToDate, Unmet unmet) {
         Map<String, String> properties = PomVersions.properties(read("pom.xml"));
         Map<String, Set<PomVersions.Artifact>> used = new TreeMap<>();
         for (String pom : poms()) {
@@ -163,9 +218,10 @@ public final class Updates {
             // The copies' artifacts count as the property's: the same rules, the same new release.
             List<VersionCopies.Copy> copies = copies(property, artifacts, current);
             List<String> names = artifacts.stream().map(Object::toString).toList();
-            boolean major = unusedMajors.remove(label);
+            boolean named = unmet.named(label);
+            boolean major = exceptions.takesMajor(label);
             if (names.stream().allMatch(eco::ignoresAll)) {
-                if (major) {
+                if (named) {
                     throw ignoredEntirely(label);
                 }
                 continue; // org.eclipse.platform:*, which moves with the Eclipse release
@@ -190,7 +246,7 @@ public final class Updates {
             Choice c = Choice.of(now, common, t -> !(major && t == UpdateType.MAJOR) && names.stream().anyMatch(n -> eco.ignores(n, t)),
                     r -> Http.lastModified(first.pom(r.toString()))
                             .orElseThrow(() -> new ToolFailure("Maven Central gives no date for " + first.pom(r.toString()))),
-                    Instant.now(), allowYoung);
+                    Instant.now(), exceptions.takesYoung(label));
             note(label, now, c, String::valueOf, notes);
             if (c.to().isPresent()) {
                 moves.add(new MavenMove(property, current, c.to().get().toString(), artifacts, copies, groups.iterator().next(),
@@ -226,7 +282,7 @@ public final class Updates {
         return copies;
     }
 
-    private List<ActionMove> actions(DependabotRules.Ecosystem eco, List<String> notes, List<String> upToDate, Set<String> unusedMajors) {
+    private List<ActionMove> actions(DependabotRules.Ecosystem eco, List<String> notes, List<String> upToDate, Unmet unmet) {
         Map<String, List<WorkflowActions.Use>> byRepository = new TreeMap<>();
         for (String file : workflows()) {
             for (WorkflowActions.Use u : WorkflowActions.uses(file, read(file))) {
@@ -236,9 +292,10 @@ public final class Updates {
         List<ActionMove> moves = new ArrayList<>();
         for (Map.Entry<String, List<WorkflowActions.Use>> e : byRepository.entrySet()) {
             String repository = e.getKey();
-            boolean major = unusedMajors.remove(repository);
+            boolean named = unmet.named(repository);
+            boolean major = exceptions.takesMajor(repository);
             if (eco.ignoresAll(repository)) {
-                if (major) {
+                if (named) {
                     throw ignoredEntirely(repository);
                 }
                 continue;
@@ -265,7 +322,7 @@ public final class Updates {
                 return parseInstant(tags.get(r).published()).orElseThrow(); // tagCommit read it
             };
             Choice c = Choice.of(now, new ArrayList<>(tags.keySet()), t -> !(major && t == UpdateType.MAJOR) && eco.ignores(repository, t),
-                    age, Instant.now(), allowYoung);
+                    age, Instant.now(), exceptions.takesYoung(repository));
             c.to().ifPresent(age::apply); // with --allow-young, the choice asked for no date: the commit is still looked up and checked
             note(repository, now, c, r -> tags.get(r).name(), notes);
             Set<String> shas = new LinkedHashSet<>(e.getValue().stream().map(WorkflowActions.Use::sha).toList());
@@ -312,7 +369,7 @@ public final class Updates {
      */
     private static void note(String name, ReleaseNumber now, Choice c, Function<ReleaseNumber, String> shown, List<String> notes) {
         c.young().ifPresent(y -> notes.add(name + " " + shown.apply(y) + " is out but less than a week old"
-                + c.to().map(t -> "; taking " + shown.apply(t)).orElse("") + " (--allow-young takes it)"));
+                + c.to().map(t -> "; taking " + shown.apply(t)).orElse("") + " (--allow-young " + name + " takes it)"));
         c.ignored().ifPresent(i -> notes.add(now.typeTo(i) == UpdateType.MAJOR
                 ? name + " " + shown.apply(i) + " is out, a major release " + DependabotRules.FILE
                         + " leaves out: a deliberate upgrade (docs/UPGRADING.md); --major " + name + " makes it"
@@ -321,8 +378,8 @@ public final class Updates {
     }
 
     private static ToolFailure ignoredEntirely(String name) {
-        return new ToolFailure("--major " + name + ": " + DependabotRules.FILE + " leaves out every update of it (it moves another way,"
-                + " docs/UPGRADING.md), so the tool does not move it");
+        return new ToolFailure(name + ": " + DependabotRules.FILE + " leaves out every update of it (it moves another way,"
+                + " docs/UPGRADING.md), so the tool does not move it, --major or --allow-young or not");
     }
 
     /** The reactor's POMs, tracked by git: the root one and every module's. */

@@ -22,6 +22,7 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
+import common.Ask;
 import common.ReleaseAge;
 import common.Settings;
 import common.ToolFailure;
@@ -368,6 +369,51 @@ class DependenciesTest {
         assertEquals(List.of("maven-surefire-plugin.version", "tycho.version"),
                 commits.get(0).maven().stream().map(Updates.MavenMove::property).toList()); // the major is not in its group's commit
         assertEquals(2, commits.get(4).size());
+    }
+
+    @Test
+    void allowYoungTakesANameOrStandsAloneForEveryDependency() {
+        DependenciesTool.Options named = DependenciesTool.Options.parse(
+                new String[] {"--allow-young", "actions/setup-java", "--yes", "--allow-young", "jacoco"});
+        assertEquals(new Updates.Exceptions(false, Set.of("actions/setup-java", "jacoco"), Set.of()), named.exceptions());
+        assertEquals(Ask.Mode.YES, named.mode());
+        assertEquals("java " + DependenciesTool.TOOL + " --allow-young actions/setup-java --allow-young jacoco --yes", named.rerun());
+
+        DependenciesTool.Options all = DependenciesTool.Options.parse(new String[] {"--allow-young", "--no-tests"});
+        assertTrue(all.exceptions().allYoung());
+        assertEquals(Set.of(), all.exceptions().young()); // --no-tests is a flag, not a name
+        assertFalse(all.tests());
+        assertTrue(DependenciesTool.Options.parse(new String[] {"--major", "junit", "--allow-young"}).exceptions().allYoung());
+        assertEquals(Updates.Exceptions.NONE, DependenciesTool.Options.parse(new String[] {"--dry-run"}).exceptions());
+
+        for (String[] wrong : List.of(new String[] {"--allow-young", "a b"}, new String[] {"--allow-young", "x;rm"},
+                new String[] {"--major"}, new String[] {"--major", "--yes"}, new String[] {"junit"})) {
+            assertThrows(ToolFailure.class, () -> DependenciesTool.Options.parse(wrong), String.join(" ", wrong));
+        }
+    }
+
+    @Test
+    void aNamedExceptionHoldsForThatDependencyOnly() {
+        Updates.Exceptions named = new Updates.Exceptions(false, Set.of("actions/setup-java"), Set.of("junit"));
+        assertTrue(named.takesYoung("actions/setup-java"));
+        assertFalse(named.takesYoung("build-helper-maven-plugin")); // still waits its week
+        assertTrue(named.takesMajor("junit"));
+        assertFalse(named.takesMajor("actions/setup-java"));
+        Updates.Exceptions all = new Updates.Exceptions(true, Set.of(), Set.of());
+        assertTrue(all.takesYoung("build-helper-maven-plugin"));
+        assertFalse(Updates.Exceptions.NONE.takesYoung("actions/setup-java"));
+    }
+
+    @Test
+    void aNameNoDependencyMatchedStopsTheToolWithItsFlag() {
+        Updates.Unmet unmet = new Updates.Unmet(new Updates.Exceptions(true, Set.of("actions/setup-java", "typo"), Set.of("junit")));
+        assertTrue(unmet.named("actions/setup-java"));
+        assertFalse(unmet.named("jacoco")); // not named, though --allow-young alone covers it
+        assertTrue(unmet.named("junit"));
+        ToolFailure f = assertThrows(ToolFailure.class, unmet::check);
+        assertTrue(f.getMessage().startsWith("--allow-young typo: no such dependency"), f.getMessage());
+        unmet.named("typo");
+        unmet.check(); // every name met
     }
 
     @Test

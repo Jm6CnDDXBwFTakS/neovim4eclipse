@@ -32,7 +32,9 @@ import common.Version;
  * <pre>
  *   java releng/tools/dependencies/Dependencies.java                  every update the rules allow
  *   java releng/tools/dependencies/Dependencies.java --major junit    also JUnit's next major release
- *   flags: --allow-young (releases under a week old), --no-tests, --yes, --dry-run (as the Release tool)
+ *   java releng/tools/dependencies/Dependencies.java --allow-young actions/setup-java
+ *                                                     also setup-java's newest release, under a week old
+ *   flags: --allow-young alone (every release under a week old), --no-tests, --yes, --dry-run (as the Release tool)
  * </pre>
  *
  * <h2>Why a tool, and not Dependabot's pull requests</h2>
@@ -59,25 +61,24 @@ import common.Version;
 public final class DependenciesTool {
 
     static final String TOOL = "releng/tools/dependencies/Dependencies.java";
-    private static final String USAGE = "Usage: java " + TOOL + " [--major <name>]... [--allow-young] [--no-tests] [--yes] [--dry-run]";
+    private static final String USAGE = "Usage: java " + TOOL + " [--major <name>]... [--allow-young [<name>]]... [--no-tests] [--yes]"
+            + " [--dry-run]";
 
     private final Path root;
     private final Shell shell;
     private final Git git;
     private final Settings settings;
     private final Ask ask;
-    private final Set<String> majors;
-    private final boolean allowYoung;
+    private final Updates.Exceptions exceptions;
     private final boolean tests;
 
-    private DependenciesTool(Path root, Ask ask, Set<String> majors, boolean allowYoung, boolean tests) {
+    private DependenciesTool(Path root, Ask ask, Updates.Exceptions exceptions, boolean tests) {
         this.root = root;
         this.shell = new Shell(root);
         this.git = new Git(shell);
         this.settings = Settings.load(List.of(root.resolve(Settings.COMMON), root.resolve("releng/tools/dependencies")), Map.of());
         this.ask = ask;
-        this.majors = majors;
-        this.allowYoung = allowYoung;
+        this.exceptions = exceptions;
         this.tests = tests;
     }
 
@@ -87,38 +88,76 @@ public final class DependenciesTool {
             if (!Files.isRegularFile(root.resolve(TOOL))) {
                 throw new ToolFailure("run this from the repository's root folder: java " + TOOL);
             }
+            Options o = Options.parse(args);
+            new DependenciesTool(root, new Ask(o.mode(), o.rerun()), o.exceptions(), o.tests()).run();
+        } catch (ToolFailure f) {
+            System.err.println();
+            System.err.println("Dependencies: " + f.getMessage());
+            System.exit(1);
+        }
+    }
+
+    /** A dependency's name on the command line: a property without {@code .version}, or an action ({@code owner/repo}). */
+    private static final String NAME = "[\\w.-]+(/[\\w.-]+)?";
+
+    /**
+     * The command line, read. {@code rerun} is the same command with {@code --yes}, which the tool
+     * prints when it cannot ask (no terminal). Examples:
+     * <pre>
+     *   --allow-young                       every young release may be taken
+     *   --allow-young actions/setup-java    only setup-java's; repeat it for more
+     *   --major junit --allow-young junit   JUnit's newest release, a major and days old
+     * </pre>
+     * {@code --allow-young} takes the next word as a name unless it starts with {@code -}.
+     */
+    record Options(Updates.Exceptions exceptions, boolean tests, Ask.Mode mode, String rerun) {
+
+        static Options parse(String[] args) {
             Set<String> majors = new LinkedHashSet<>();
-            boolean allowYoung = false;
+            Set<String> young = new LinkedHashSet<>();
+            boolean allYoung = false;
             boolean tests = true;
             Ask.Mode mode = Ask.Mode.ASK;
             List<String> rerun = new ArrayList<>(List.of("java", TOOL));
             for (int i = 0; i < args.length; i++) {
                 String a = args[i];
                 switch (a) {
-                    case "--allow-young" -> allowYoung = true;
-                    case "--no-tests" -> tests = false;
-                    case "--yes" -> mode = mode == Ask.Mode.DRY_RUN ? mode : Ask.Mode.YES;
-                    case "--dry-run" -> mode = Ask.Mode.DRY_RUN;
+                    case "--allow-young" -> {
+                        rerun.add(a);
+                        if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
+                            young.add(name(a, args[++i]));
+                            rerun.add(args[i]);
+                        } else {
+                            allYoung = true;
+                        }
+                    }
                     case "--major" -> {
-                        if (i + 1 >= args.length || !args[i + 1].matches("[\\w.-]+(/[\\w.-]+)?")) {
+                        if (i + 1 >= args.length || args[i + 1].startsWith("-")) {
                             throw new ToolFailure("--major needs a name such as junit or actions/checkout\n" + USAGE);
                         }
-                        majors.add(args[++i]);
+                        majors.add(name(a, args[++i]));
                         rerun.add(a);
-                        a = args[i];
+                        rerun.add(args[i]);
                     }
+                    case "--no-tests" -> {
+                        tests = false;
+                        rerun.add(a);
+                    }
+                    case "--yes" -> mode = mode == Ask.Mode.DRY_RUN ? mode : Ask.Mode.YES;
+                    case "--dry-run" -> mode = Ask.Mode.DRY_RUN;
                     default -> throw new ToolFailure("unknown argument " + a + "\n" + USAGE);
-                }
-                if (!a.equals("--yes") && !a.equals("--dry-run")) {
-                    rerun.add(a);
                 }
             }
             rerun.add("--yes");
-            new DependenciesTool(root, new Ask(mode, String.join(" ", rerun)), majors, allowYoung, tests).run();
-        } catch (ToolFailure f) {
-            System.err.println();
-            System.err.println("Dependencies: " + f.getMessage());
-            System.exit(1);
+            return new Options(new Updates.Exceptions(allYoung, young, majors), tests, mode, String.join(" ", rerun));
+        }
+
+        private static String name(String flag, String name) {
+            if (!name.matches(NAME)) {
+                throw new ToolFailure(flag + " " + name + ": not a dependency's name (a property without .version, such as junit,"
+                        + " or an action, such as actions/checkout)\n" + USAGE);
+            }
+            return name;
         }
     }
 
@@ -135,7 +174,7 @@ public final class DependenciesTool {
             throw new ToolFailure("the working tree has changes (git status); commit or stash them first");
         }
         new GitHub(shell).requireReady(); // the actions' releases are read through gh
-        Updates.Found found = new Updates(root, shell, allowYoung, majors).find();
+        Updates.Found found = new Updates(root, shell, exceptions).find();
         for (String ok : found.upToDate()) {
             System.out.println("ok: " + ok + " is the newest the rules allow");
         }
@@ -149,7 +188,7 @@ public final class DependenciesTool {
         System.out.println();
         System.out.println("To move: " + found.summary());
 
-        List<Commit> commits = commits(found, majors);
+        List<Commit> commits = commits(found, exceptions.majors());
         Path work = root.resolve("target/dependency-update");
         List<String> made = new ArrayList<>();
         boolean testable = false;

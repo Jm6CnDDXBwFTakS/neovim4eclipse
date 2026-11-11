@@ -79,7 +79,8 @@ in) looks where Dependabot looks and commits what it would propose:
    `.github/dependabot.yml` apply, read by a small reader of its own: a key it does not know
    (`allow`, `cooldown`, `versions` in an ignore entry) stops the tool rather than be skipped.
 2. **A week old.** A release younger than seven days is passed over for the newest one that is old
-   enough, and named in a note; `--allow-young` takes it. The date is the POM's on Central, the
+   enough, and named in a note; `--allow-young actions/setup-java` takes it for that dependency only
+   (repeat it for more), `--allow-young` alone for every one. The date is the POM's on Central, the
    release's on GitHub. The commit an action's tag points to is what gets pinned, so a tag whose
    commit is newer than its release (moved after the release came out) stops the tool: check that
    release on GitHub by hand.
