@@ -50,6 +50,31 @@ public final class Shell {
         return root;
     }
 
+    /**
+     * {@code command}, checked for what Windows cannot pass: there Java joins the words into one
+     * command line, quoting a word with a space but not escaping a double quote inside it, and the
+     * program then takes that quote away. {@code --jq '"\(.a)\t\(.b)"'} reaches {@code gh} as
+     * {@code \(.a)\t\(.b)}, a {@code git commit -m} message loses its quotes. Such a word stops
+     * the tool on Windows instead of running changed; elsewhere it is passed on as it is. Write
+     * jq filters with {@code @tsv} instead (common/GitHub).
+     */
+    public static List<String> command(List<String> command) {
+        return command(command, WINDOWS);
+    }
+
+    /** {@link #command(List)} as on Windows or not, for the tests. */
+    public static List<String> command(List<String> command, boolean windows) {
+        if (windows) {
+            for (String word : command) {
+                if (word.indexOf('"') >= 0) {
+                    throw new ToolFailure("on Windows, " + command.get(0) + " would get this argument without its double quotes: "
+                            + word + " (Java does not escape them; see common/Shell)");
+                }
+            }
+        }
+        return command;
+    }
+
     /** Runs {@code command} and returns what it wrote; a missing program counts as status 127, as in a shell. */
     public Result capture(List<String> command) {
         return capture(command, Map.of());
@@ -58,7 +83,7 @@ public final class Shell {
     /** {@link #capture(List)} with extra environment variables, such as {@code TZ=UTC} for a commit. */
     public Result capture(List<String> command, Map<String, String> env) {
         try {
-            ProcessBuilder pb = new ProcessBuilder(command).directory(root.toFile());
+            ProcessBuilder pb = new ProcessBuilder(command(command)).directory(root.toFile());
             pb.environment().putAll(env);
             Process p = pb.start();
             p.getOutputStream().close();
@@ -81,7 +106,7 @@ public final class Shell {
      */
     public Result capture(List<String> command, Duration limit) {
         try {
-            Process p = new ProcessBuilder(command).directory(root.toFile()).start();
+            Process p = new ProcessBuilder(command(command)).directory(root.toFile()).start();
             p.getOutputStream().close();
             CompletableFuture<String> out = CompletableFuture.supplyAsync(() -> read(p.getInputStream()));
             CompletableFuture<String> err = CompletableFuture.supplyAsync(() -> read(p.getErrorStream()));
@@ -101,7 +126,7 @@ public final class Shell {
     /** Runs {@code command} on this terminal (its output shows as it comes); its exit status. */
     public int show(List<String> command) {
         try {
-            return new ProcessBuilder(command).directory(root.toFile()).inheritIO().start().waitFor();
+            return new ProcessBuilder(command(command)).directory(root.toFile()).inheritIO().start().waitFor();
         } catch (IOException e) {
             System.err.println(command.get(0) + ": " + e.getMessage());
             return 127;

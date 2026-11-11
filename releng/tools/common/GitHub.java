@@ -19,11 +19,13 @@ import java.util.regex.Pattern;
  *   gh run list --workflow build.yml --commit 9c7d0d2… --json databaseId,status,conclusion,url,event,headBranch
  *               --jq '.[] | [.databaseId, .status, …] | @tsv'
  * </pre>
- * The filters use {@code @tsv}, never a {@code "…"} string: on Windows, Java joins the arguments
- * into one command line without escaping the double quotes inside one, and {@code gh} then takes
- * them away, so jq would get {@code \(.status)…} with no string around it and fail. A null value
- * ({@code conclusion} while a run is going) is an empty field.
  * and reads {@code 42186112399	completed	success	https://github.com/…/runs/42186112399	push	main}.
+ *
+ * <p>The filters use {@code @tsv}, never a {@code "…"} string: on Windows, Java joins the
+ * arguments into one command line without escaping the double quotes inside one, and {@code gh}
+ * then takes them away, so jq would get {@code \(.status)…} with no string around it and fail
+ * ({@link Shell#command} refuses such an argument there). A null value ({@code conclusion} while
+ * a run is going) is an empty field.
  */
 public final class GitHub {
 

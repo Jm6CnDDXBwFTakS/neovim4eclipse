@@ -41,8 +41,8 @@ The libraries, the Maven plug-ins (Tycho among them) and the GitHub Actions move
 `java releng/tools/dependencies/Dependencies.java` (*Libraries, plug-ins and actions* below),
 which follows the rules in `.github/dependabot.yml`. Dependabot reads the same file; its
 version-update pull requests are turned off there (`open-pull-requests-limit: 0`), and only its
-security updates open pull requests (*Security updates* below). Neither covers the JDK, the Eclipse release or Neovim;
-those are upgraded with the steps below. Both skip, on purpose:
+security updates open pull requests (*Security updates* below). Neither covers the JDK, the
+Eclipse release or Neovim; those are upgraded with the steps below. Both skip, on purpose:
 
 - the `org.eclipse.platform` jars: they must match the Eclipse release, so they move with it;
 - the Maven wrapper (Maven itself and the wrapper scripts): Dependabot would update it by running
@@ -57,9 +57,12 @@ tool commits on the current release branch (`release/<next version>`, see CONTRI
 Dependabot at the next release; the tool reads the checkout's copy.
 
 **Security updates**: when a dependency has a known vulnerability, Dependabot opens a pull request
-against `main` (on in the repository's security settings). Apply the version it
-names on the release branch, with the tool (`--allow-young` if the fix is new) or by hand, and
-release; the pull request closes by itself once `main` has it. Dependabot's branches
+against `main` (on in the repository's security settings). Move the dependency on the release
+branch to the version it names or a newer one, and release; the pull request closes by itself
+once `main` has it. The tool does it when the newest release it would take has the fix: add
+`--allow-young` for a fix out less than a week, `--major <name>` for one in a major release. It
+cannot pick a given version, so for an older one change the property by hand (*Embedded library*
+and *Build tools* below say what else to check). Dependabot's branches
 (`dependabot/maven/…`) are left out of the ruleset that lets only the owner create branches:
 the pattern is `refs/heads/dependabot/**/*`, since GitHub's `**` at the end of a pattern stands
 for one folder only.
