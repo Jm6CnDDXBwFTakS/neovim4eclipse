@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-11-11
+
 ### Changed
 
 - Nothing changes in the plug-in itself: a new internal tool keeps the Eclipse Marketplace listing
