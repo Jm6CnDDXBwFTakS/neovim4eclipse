@@ -68,6 +68,7 @@ docs/PACKAGING.md  newest Eclipse release \((4\.\d+)\)
 # A version property of the root pom.xml, where a POM cannot use ${...}: the section is named after
 # the property. releng/sign/pom.xml has no parent (inheriting the root POM would load Tycho as a
 # build extension and resolve the whole target platform just to sign), so its tycho-gpg-plugin
-# names Tycho's version itself. (?s) lets the pattern reach over the comment between the lines.
+# names Tycho's version itself. Between <artifactId> and <version> only spaces, line breaks and
+# comments may stand ((?s) lets a comment span lines), so the pattern never reaches another plug-in's.
 [tycho.version]
-releng/sign/pom.xml  (?s)<artifactId>tycho-gpg-plugin</artifactId>.*?<version>([^<]+)</version>
+releng/sign/pom.xml  (?s)<artifactId>tycho-gpg-plugin</artifactId>\s*(?:<!--(?:(?!-->).)*-->\s*)*<version>([^<]+)</version>

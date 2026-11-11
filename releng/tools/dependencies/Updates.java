@@ -287,7 +287,8 @@ public final class Updates {
         String what = repository + " " + tag.name();
         Instant released = parseInstant(tag.published()).orElseThrow(() -> new ToolFailure(what + " has no publish date"));
         WorkflowActions.TagCommit commit = WorkflowActions.TagCommit.parse(shell.out(List.of("gh", "api",
-                "repos/" + repository + "/commits/" + tag.name(), "--jq", "\"\\(.sha)\\t\\(.commit.committer.date)\"")), what);
+                // refs/tags/: only a tag, never a branch of the same name
+                "repos/" + repository + "/commits/refs/tags/" + tag.name(), "--jq", "\"\\(.sha)\\t\\(.commit.committer.date)\"")), what);
         if (WorkflowActions.looksMoved(released, commit.date())) {
             throw new ToolFailure(what + " came out " + released + ", but its tag points to " + commit.sha() + ", a commit of "
                     + commit.date() + ": the tag was moved after the release. Check the release on GitHub before pinning anything"

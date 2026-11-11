@@ -130,7 +130,7 @@ public final class WorkflowActions {
 
     /**
      * The commit a release tag points to now, and that commit's date, as
-     * {@code gh api repos/<owner>/<repo>/commits/<tag> --jq '"\(.sha)\t\(.commit.committer.date)"'}
+     * {@code gh api repos/<owner>/<repo>/commits/refs/tags/<tag> --jq '"\(.sha)\t\(.commit.committer.date)"'}
      * answers: {@code 77dd5b2c…\t2026-11-04T21:58:10Z}.
      */
     public record TagCommit(String sha, Instant date) {
@@ -158,6 +158,10 @@ public final class WorkflowActions {
      * was pointed at later, by whoever controls the action's repository, and the week the release
      * has been out says nothing about that commit. Example: v6.2.0 published 2026-11-04 but
      * pointing to a commit of 2026-11-10.
+     *
+     * <p>The commit's date is written by its author's git, so whoever controls the repository can
+     * backdate one and pass: this catches a tag moved by mistake or carelessly, not one moved to
+     * deceive. GitHub keeps no record of when a tag was moved that the tool could read instead.
      */
     public static boolean looksMoved(Instant released, Instant committed) {
         return committed.isAfter(released.plus(CLOCK_SLACK));
