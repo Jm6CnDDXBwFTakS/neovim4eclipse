@@ -23,6 +23,7 @@ import org.eclipse.core.commands.ParameterizedCommand;
 import org.eclipse.e4.ui.model.application.ui.advanced.MArea;
 import org.eclipse.e4.ui.model.application.ui.basic.MPart;
 import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
+import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.graphics.Color;
@@ -350,6 +351,32 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         ITextEditor joined = (ITextEditor) page().getEditorReferences()[0].getEditor(false);
         waitUntil("the focus in the joined editor", TIMEOUT_MS, () -> widgetOf(joined).isFocusControl(),
                 () -> "; the focus is on " + UiTestSupport.focusReport(widgetOf(joined)));
+    }
+
+    /**
+     * Halves made without this plug-in's handler, here by setting the split tag on the editor's
+     * model part as Eclipse's own handler (or another plug-in) does, also leave the active half
+     * with the keyboard focus (EditorSplits.opened): on macOS no control had it.
+     */
+    @Test
+    void halvesMadeWithoutThisHandlerLeaveTheActiveHalfWithTheFocus() {
+        MPart part = editor.getSite().getService(MPart.class);
+        EModelService models = editor.getSite().getService(EModelService.class);
+        MArea area = EditorSplits.areaOf(part);
+        part.getTags().add(IPresentationEngine.SPLIT_HORIZONTAL);
+        try {
+            waitUntil("Eclipse's second half", TIMEOUT_MS, () -> page().getEditorReferences().length == 2);
+            ITextEditor active = (ITextEditor) page().getActiveEditor();
+            waitUntil("the focus in the active half", TIMEOUT_MS, () -> widgetOf(active).isFocusControl(),
+                    () -> "; the focus is on " + UiTestSupport.focusReport(widgetOf(active)));
+        } finally {
+            // Joined as Eclipse's handler and :only do it: by the tags.
+            for (MPart tagged : models.findElements(area, null, MPart.class,
+                    List.of(IPresentationEngine.SPLIT_HORIZONTAL))) {
+                tagged.getTags().remove(IPresentationEngine.SPLIT_HORIZONTAL);
+            }
+        }
+        waitUntil("the halves joined", TIMEOUT_MS, () -> page().getEditorReferences().length == 1);
     }
 
     /**

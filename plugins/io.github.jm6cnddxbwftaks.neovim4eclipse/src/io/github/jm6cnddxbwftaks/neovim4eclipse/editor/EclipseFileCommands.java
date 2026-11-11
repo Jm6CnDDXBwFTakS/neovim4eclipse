@@ -327,8 +327,8 @@ public final class EclipseFileCommands {
      * Gives the keyboard focus to the editor in front, when no control has it or the editor is the
      * active part without its text having it. A view Eclipse made active instead keeps it. Called
      * after {@link #close} (a closed split half leaves the focus on nothing), after {@code :only},
-     * and after Eclipse's split halves are made or joined (on macOS the first half stays active and
-     * the new one only opens, which leaves the focus on nothing too).
+     * and once one of Eclipse's split halves has opened ({@link EditorSplits#opened}: on macOS the
+     * first half stays active and the new one only opens, which leaves the focus on nothing too).
      */
     static void focusActiveEditor(IWorkbenchPage page) {
         IEditorPart next = page.getActiveEditor();

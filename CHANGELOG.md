@@ -39,8 +39,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
-- After Eclipse's *Toggle Split Editor* makes its two halves, the active half has the keyboard
-  focus. On macOS no half had it, so a click was needed before typing.
+- After Eclipse's split halves are made (*Toggle Split Editor*, or another plug-in that makes
+  them), the active half has the keyboard focus. On macOS no half had it, so a click was needed
+  before typing.
 
 ## [0.2.11] - 2026-11-10
 

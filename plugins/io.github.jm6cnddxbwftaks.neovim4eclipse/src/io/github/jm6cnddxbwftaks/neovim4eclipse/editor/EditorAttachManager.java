@@ -213,6 +213,9 @@ public final class EditorAttachManager {
     private final IPartListener2 partListener = new IPartListener2() {
         @Override
         public void partOpened(IWorkbenchPartReference partRef) {
+            if (partRef instanceof IEditorReference eref) {
+                EditorSplits.opened(eref.getEditor(false)); // one of Eclipse's halves: the focus
+            }
             maybeAutoAttach(partRef);
         }
 

@@ -30,6 +30,7 @@ import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -102,6 +103,41 @@ final class EditorSplits {
             previous = last;
             last = new WeakReference<>(part);
         }
+    }
+
+    /**
+     * An editor opened ({@code EditorAttachManager}'s part listener). When it is the new one of
+     * Eclipse's split halves, however they were made (Toggle Split Editor through this plug-in's
+     * handler or Eclipse's own, another plug-in setting the split tag), the active editor gets the
+     * keyboard focus once Eclipse is done, unless a view has it
+     * ({@link EclipseFileCommands#focusActiveEditor}). On macOS the first half stays active and the
+     * new one only opens, which leaves the focus on no control: a click was needed before typing.
+     * Joining the halves keeps the focus on macOS, so only an opened half needs this.
+     */
+    static void opened(IEditorPart part) {
+        Display display = Display.getCurrent();
+        if (part == null || display == null) {
+            return;
+        }
+        IWorkbenchPage page = part.getSite().getPage();
+        // Asked once Eclipse is done: the splitter add-on puts the half in place as it opens.
+        display.asyncExec(() -> {
+            if (isHalf(part)) {
+                EclipseFileCommands.focusActiveEditor(page);
+            }
+        });
+    }
+
+    /** Whether an editor is one of Eclipse's split halves: inside a composite part, in its stack. */
+    private static boolean isHalf(IEditorPart part) {
+        MPart model = part.getSite().getService(MPart.class);
+        for (MUIElement at = model == null ? null : parentOf(model); at != null && !(at instanceof MPartStack);
+                at = parentOf(at)) {
+            if (at instanceof MCompositePart) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
