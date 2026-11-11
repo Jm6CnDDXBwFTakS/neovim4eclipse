@@ -111,7 +111,8 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
 
     /**
      * Without the option, a stored value shows the note once and is removed the moment it shows;
-     * what comes next at the start waits for Close; the next start shows nothing.
+     * what comes next at the start waits for Close; the next start shows nothing. With the option
+     * set, a stored value is only removed: the user already named their Neovim.
      */
     @Test
     void anOldNeovimProgramPreferenceIsShownOnceAndRemoved() {
@@ -132,20 +133,14 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
         // Nothing stored: the next step ran at once, on this thread, and nothing was queued to show.
         assertTrue(thenRan.get(), "nothing stored: the next step runs at once");
         assertEquals(List.of(), seen, "the next start shows no note");
-    }
 
-    /** With the option set, the stored value is only removed: the user already named their Neovim. */
-    @Test
-    void withTheOptionSetTheOldValueIsRemovedWithoutANote() {
+        thenRan.set(false);
         System.setProperty(NeovimOption.PROPERTY, "/opt/nvim/bin/nvim");
         store().setValue(PreferenceConstants.REMOVED_NVIM_PROGRAM, "/usr/local/bin/nvim");
-        AtomicBoolean thenRan = new AtomicBoolean();
-        List<String> seen = watchStartDialogs(() -> null);
-
         OldNeovimProgramNotice.showOnce(() -> thenRan.set(true));
-        waitUntil("the start's next step", TIMEOUT_MS, thenRan::get);
-        assertEquals(List.of(), seen);
-        assertEquals("", store().getString(PreferenceConstants.REMOVED_NVIM_PROGRAM), "removed");
+        waitUntil("the start's next step, with the option set", TIMEOUT_MS, thenRan::get);
+        assertEquals(List.of(), seen, "the option set: no note");
+        assertEquals("", store().getString(PreferenceConstants.REMOVED_NVIM_PROGRAM), "the stored value removed");
     }
 
     /**

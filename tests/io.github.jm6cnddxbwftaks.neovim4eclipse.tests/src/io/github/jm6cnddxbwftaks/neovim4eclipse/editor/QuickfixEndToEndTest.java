@@ -262,13 +262,21 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
      * ({@code QuickfixLists}: the view follows the list's kind). The manual test ":copen and :lopen";
      * a list of Neovim's own ({@code :vimgrep}) shows {@code :clist} instead, checked in
      * quickfix_spec.lua.
+     *
+     * <p>{@code :Etasks} itself lists only the tasks whose tag is in
+     * {@code vim.g.neovim4eclipse_task_tags} (the TODO task is left out) and jumps to the first.
      */
     @Test
     void copenAfterEtasksShowsTheTasksView() throws Exception {
-        marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "JM6 shown", 0, 1);
+        marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "JM6 shown", 6, 2);
+        marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "TODO someone else's", 11, 3);
         SessionProbe.lua(session, "vim.g.neovim4eclipse_task_tags = 'JM6' return 0");
         session.inputAsync(":Etasks<CR>");
         waitForTexts(List.of("JM6 shown"));
+        // the task's place in the open editor, from its marker, is where :Etasks jumps
+        waitUntil("the jump to it", TIMEOUT_MS, () -> List.of(2, 0).equals(
+                cursor().stream().map(QuickfixEndToEndTest::number).toList()), () -> "; it is " + cursor());
+        assertEquals("Eclipse tasks (JM6)", SessionProbe.lua(session, "return vim.fn.getqflist({ title = 0 }).title"));
         IViewPart before = page().findView(IPageLayout.ID_TASK_LIST);
         if (before != null) {
             page().hideView(before);
@@ -286,20 +294,5 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
             }
             page().activate(editor);
         }
-    }
-
-    /** {@code :Etasks} lists the tasks whose tag is in {@code vim.g.neovim4eclipse_task_tags}. */
-    @Test
-    void etasksListsTheTasksWithTheUsersTags() throws Exception {
-        marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "JM6 look here", 6, 2);
-        marker(file(), IMarker.TASK, IMarker.SEVERITY_INFO, "TODO someone else's", 11, 3);
-        SessionProbe.lua(session, "vim.g.neovim4eclipse_task_tags = 'JM6' return 0");
-
-        session.inputAsync(":Etasks<CR>");
-
-        waitForTexts(List.of("JM6 look here"));
-        waitUntil("the jump to it", TIMEOUT_MS, () -> List.of(2, 0).equals(
-                cursor().stream().map(QuickfixEndToEndTest::number).toList()), () -> "; it is " + cursor());
-        assertEquals("Eclipse tasks (JM6)", SessionProbe.lua(session, "return vim.fn.getqflist({ title = 0 }).title"));
     }
 }

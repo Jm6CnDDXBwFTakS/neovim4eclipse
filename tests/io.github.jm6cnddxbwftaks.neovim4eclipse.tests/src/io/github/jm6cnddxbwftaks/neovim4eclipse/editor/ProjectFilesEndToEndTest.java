@@ -403,18 +403,27 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
     /**
      * A script's {@code :edit!} on a document (a plug-in reloading files) reloads Eclipse's text, with
      * its unsaved change, not the file on disk; and Neovim's changes still reach the document after.
+     * The editor stays dirty, and a mark and the cursor stay on their lines: the plug-in reads the
+     * document back into the buffer instead of the file. The manual test "A plug-in's :edit! on an
+     * open file". Example: line 1 changed to {@code xalpha} and {@code 'a} set on line 2; after
+     * {@code :edit!} line 1 still reads {@code xalpha} and {@code 'a} is still on line 2.
      */
     @Test
     void aScriptsEditBangReloadsEclipsesTextAndTheBufferStillSyncs() throws Exception {
-        session.inputAsync("ggix<Esc>");
+        session.inputAsync("ggix<Esc>2Gma3G");
         expectText("xalpha\nbeta\ngamma\n");
+        settle();
+        assertTrue(editor.isDirty(), "an unsaved change");
         SessionProbe.lua(session, "vim.cmd('edit!') return 0");
         settle(); // the attach's whole buffer is applied on the UI thread: let it run before asking Neovim
         waitUntil("the buffer to hold Eclipse's text again", TIMEOUT_MS,
-                () -> "xalpha".equals(String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_get_current_line()"))));
+                () -> "xalpha".equals(String.valueOf(SessionProbe.lua(session, "return vim.fn.getline(1)"))));
         expectText("xalpha\nbeta\ngamma\n");
         assertFalse(String.valueOf(bufferOption("filetype")).equals("text"), "not read by Neovim");
-        session.inputAsync("jiy<Esc>");
+        assertTrue(editor.isDirty(), "still unsaved");
+        assertEquals(2, ((Number) SessionProbe.lua(session, "return vim.fn.line(\"'a\")")).intValue(), "'a on its line");
+        assertEquals(3, cursorLine(), "the cursor on its line");
+        session.inputAsync("kiy<Esc>");
         expectText("xalpha\nybeta\ngamma\n");
     }
 
@@ -615,29 +624,6 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             SessionProbe.lua(session, "vim.cmd('delmarks A') return 0");
             closeAllBut(null);
         }
-    }
-
-    /**
-     * A script's {@code :edit!} on a file with an unsaved change keeps the change (Eclipse's text, not
-     * the file on disk), leaves the editor dirty, and keeps a mark on its line: the plug-in reads the
-     * document back into the buffer instead of the file. The manual test "A plug-in's :edit! on an
-     * open file". Example: line 1 changed to {@code xalpha} and {@code 'a} set on line 2; after
-     * {@code :edit!} line 1 still reads {@code xalpha} and {@code 'a} is still on line 2.
-     */
-    @Test
-    void aScriptsEditBangKeepsTheUnsavedChangeAndTheMarks() {
-        session.inputAsync("ggix<Esc>2Gma3G");
-        expectText("xalpha\nbeta\ngamma\n");
-        settle();
-        assertTrue(editor.isDirty(), "an unsaved change");
-
-        SessionProbe.lua(session, "vim.cmd('edit!') return 0");
-        settle();
-
-        assertEquals("xalpha", SessionProbe.lua(session, "return vim.fn.getline(1)"), "Eclipse's text, not the file's");
-        assertTrue(editor.isDirty(), "still unsaved");
-        assertEquals(2, ((Number) SessionProbe.lua(session, "return vim.fn.line(\"'a\")")).intValue(), "'a on its line");
-        assertEquals(3, cursorLine(), "the cursor on its line");
     }
 
     /**

@@ -164,12 +164,18 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
      * Closing both editors unloads the buffer, as Vim's {@code :bd} (gone from {@code :ls}, kept in
      * {@code :ls!}); reopening gives the same buffer number back (docs/design/BUFFER_NUMBERS.md), and
      * {@code u} undoes nothing: the history starts fresh with the saved file, as in Vim.
+     *
+     * <p>The reopened file also has its caret where it was left, as Vim's {@code :e} of a buffer
+     * {@code :bd} kept puts the cursor on {@code '"} (docs/design/BUFFER_NUMBERS.md, 2.2), and keeps
+     * its marks: {@code 'a} still goes to line 1.
      */
     @Test
     void closingTheLastEditorUnloadsTheBufferAndReopeningKeepsItsNumberWithAFreshHistory() throws Exception {
         type(widget, "ggdd");
         expectText("beta\ngamma\n");
         editor.doSave(null);
+        type(widget, "ggmaG"); // 'a on line 1, the caret left on line 2
+        settle();
         ITextEditor second = openSecondEditor();
         ITextEditor other = openOtherFile(); // stays open, so a buffer and an attached editor remain
         assertEquals(1, testTxtBuffers());
@@ -189,40 +195,17 @@ class TwoEditorsEndToEndTest extends EndToEndTestBase {
         waitForAttach(editor, "the reopened test.txt");
         assertEquals(number + " loaded", testTxtBuffer(), "the same buffer, not a new number");
         assertEquals(1, testTxtBuffers());
+        waitUntil("the caret on line 2, where it was left", TIMEOUT_MS,
+                () -> widget.getLineAtOffset(widget.getCaretOffset()) == 1,
+                () -> "; it is on line " + (widget.getLineAtOffset(widget.getCaretOffset()) + 1));
+        assertEquals(2, cursorLine(), "Neovim's cursor too");
+        settle(); // the attach's last steps, after the caret moved
+        type(widget, "'a");
+        waitUntil("'a to go to line 1, the line it kept", TIMEOUT_MS, () -> cursorLine() == 1,
+                () -> "; Neovim is on line " + cursorLine());
         type(widget, 'u');
         settle();
         expectText("beta\ngamma\n");
-        page().closeEditor(other, false);
-    }
-
-    /**
-     * A file opened again has its caret where it was left, as Vim's {@code :e} of a buffer
-     * {@code :bd} kept puts the cursor on {@code '"} (docs/design/BUFFER_NUMBERS.md, 2.2), and keeps
-     * its marks: {@code 'a} still goes to line 2.
-     */
-    @Test
-    void aReopenedFileHasItsCaretWhereItWasLeftAndItsMarks() throws Exception {
-        type(widget, "jmaG");
-        settle();
-        ITextEditor other = openOtherFile(); // stays open, so an attached editor remains
-        page().closeEditor(editor, false);
-        editor = null;
-        settle();
-        waitUntil("test.txt's buffer to be unloaded", TIMEOUT_MS, () -> testTxtBuffer().endsWith(" unloaded"),
-                () -> "; it is " + testTxtBuffer());
-
-        editor = (ITextEditor) IDE.openEditor(page(), project.getFile("test.txt"), TEXT_EDITOR, true);
-        widget = widgetOf(editor);
-        document = documentOf(editor);
-        waitForAttach(editor, "the reopened test.txt");
-        waitUntil("the caret on line 3, where it was left", TIMEOUT_MS,
-                () -> widget.getLineAtOffset(widget.getCaretOffset()) == 2,
-                () -> "; it is on line " + (widget.getLineAtOffset(widget.getCaretOffset()) + 1));
-        assertEquals(3, cursorLine(), "Neovim's cursor too");
-        settle(); // the attach's last steps, after the caret moved
-        type(widget, "'a");
-        waitUntil("'a to go to line 2, the line it kept", TIMEOUT_MS, () -> cursorLine() == 2,
-                () -> "; Neovim is on line " + cursorLine());
         page().closeEditor(other, false);
     }
 }

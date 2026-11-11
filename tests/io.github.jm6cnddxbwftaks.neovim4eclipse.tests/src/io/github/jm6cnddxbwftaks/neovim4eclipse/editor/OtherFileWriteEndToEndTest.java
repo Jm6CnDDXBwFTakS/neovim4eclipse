@@ -317,29 +317,6 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * From a file in a subfolder, {@code :w name} (Neovim's write) and {@code :wq name} (Eclipse's)
-     * put the copy in the same place, the project root, and {@code %:h/name} puts it beside the file.
-     * Before, {@code :wq name} wrote beside the file while {@code :w name} wrote at the root.
-     */
-    @Test
-    void aNameFromASubfolderMeansTheSameFileForWAndWq() throws Exception {
-        project.getFolder("src").create(true, true, null);
-        IFile nested = createFile("src/Nested.txt", "nested\n");
-        ITextEditor nestedEditor = (ITextEditor) IDE.openEditor(page(), nested, TEXT_EDITOR, true);
-        waitForAttach(nestedEditor, "src/Nested.txt");
-
-        runInBox(widgetOf(nestedEditor), "w w-copy.txt");
-        waitUntil("w-copy.txt at the root", TIMEOUT_MS, () -> project.getFile("w-copy.txt").exists());
-        runInBox(widgetOf(nestedEditor), "w %:h/beside.txt");
-        waitUntil("beside.txt in src", TIMEOUT_MS, () -> project.getFile("src/beside.txt").exists());
-        runInBox(widgetOf(nestedEditor), "wq wq-copy.txt");
-        expectClosed(nestedEditor);
-
-        assertEquals("nested\n", fileText("wq-copy.txt"), "at the root, as :w puts it");
-        assertFalse(project.getFile("src/wq-copy.txt").exists());
-    }
-
-    /**
      * An untitled editor has no file of its own, so {@code :w a.txt} is a save as, not a copy: Vim
      * names a buffer without a file after the file it writes ({@code :help cpo-F}). The editor
      * becomes {@code a.txt} (in the folder of the editor before it, the project root), keeps its
@@ -669,4 +646,3 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         }
     }
 }
-

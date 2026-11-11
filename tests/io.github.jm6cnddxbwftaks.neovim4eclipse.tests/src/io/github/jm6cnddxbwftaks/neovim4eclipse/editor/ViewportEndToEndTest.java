@@ -102,19 +102,6 @@ class ViewportEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void neovimsWindowIsTheEditorsSizeAndFollowsAResize() {
-        waitUntil("Neovim's window the editor's size", TIMEOUT_MS, this::neovimMatchesTheEditor, this::sizes);
-
-        Shell shell = widget.getShell();
-        shellSize = shell.getSize();
-        int rowsBefore = editorCells()[1];
-        shell.setSize(shellSize.x - 120, shellSize.y - 150);
-        shell.layout(true, true);
-        waitUntil("the smaller editor", TIMEOUT_MS, () -> editorCells()[1] < rowsBefore);
-        waitUntil("Neovim's window resized with it", TIMEOUT_MS, this::neovimMatchesTheEditor, this::sizes);
-    }
-
-    @Test
     void aJumpScrollsTheEditorToNeovimsTopLine() {
         longDocument();
         session.inputAsync("1");
@@ -154,16 +141,20 @@ class ViewportEndToEndTest extends EndToEndTestBase {
      * What a manual test found before commit 2 (XFCE, a maximized window restored): the window
      * shrinks, Neovim scrolls to keep its cursor on the screen, the editor did not, and {@code L}
      * went to a line below the editor's last one, which then scrolled.
+     *
+     * <p>Also the size in both directions: Neovim's window is the editor's size at attach, and
+     * after the editor gets narrower and shorter.
      */
     @Test
     void afterTheEditorShrinksLStillGoesToALineItShows() {
+        waitUntil("Neovim's window the editor's size", TIMEOUT_MS, this::neovimMatchesTheEditor, this::sizes);
         longDocument();
         session.inputAsync("L"); // the cursor on the last line of the larger editor
         settle();
         Shell shell = widget.getShell();
         shellSize = shell.getSize();
         int rowsBefore = editorCells()[1];
-        shell.setSize(shellSize.x, shellSize.y - 150);
+        shell.setSize(shellSize.x - 120, shellSize.y - 150); // narrower too, so the width is followed
         shell.layout(true, true);
         waitUntil("the smaller editor", TIMEOUT_MS, () -> editorCells()[1] < rowsBefore);
         waitUntil("Neovim's window resized with it", TIMEOUT_MS, this::neovimMatchesTheEditor, this::sizes);
@@ -313,9 +304,14 @@ class ViewportEndToEndTest extends EndToEndTestBase {
      * wrap} still wraps. A manual test found the toolbar's block selection button still pressed
      * afterward: Eclipse updates its buttons when its own key or button runs, not on
      * {@code setWordWrap} from code.
+     *
+     * <p>Also {@code :set wrap} and {@code :set nowrap} turning the editor's word wrap on and off,
+     * from {@code nowrap} at attach, as the editor.
      */
     @Test
     void setWrapEndsBlockSelectionAndItsToolbarButton() {
+        waitUntil("nowrap at attach, as the editor", TIMEOUT_MS,
+                () -> Boolean.FALSE.equals(SessionProbe.lua(session, "return vim.wo.wrap")));
         ToolItem button = toolItem("Toggle Block Selection");
         button.setSelection(true); // a click: SWT presses a check item, then tells its listeners
         button.notifyListeners(SWT.Selection, new Event());
@@ -326,6 +322,8 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         assertTrue(!block.isBlockSelectionModeEnabled(), "block selection ended");
         waitUntil("the block selection button released", TIMEOUT_MS, () -> !button.getSelection());
         assertTrue(Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.wo.wrap")), "Neovim keeps 'wrap'");
+        session.commandAsync("set nowrap");
+        waitUntil("the editor's word wrap off again", TIMEOUT_MS, () -> !((ITextEditorExtension6) editor).isWordWrapEnabled());
     }
 
     /** The workbench window's toolbar item whose tooltip starts with {@code tooltip}. */
@@ -370,15 +368,5 @@ class ViewportEndToEndTest extends EndToEndTestBase {
         event.doit = true;
         widget.notifyListeners(SWT.KeyDown, event);
         waitUntil("word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
-    }
-
-    @Test
-    void setWrapInNeovimTurnsOnTheEditorsWordWrap() {
-        waitUntil("nowrap at attach, as the editor", TIMEOUT_MS,
-                () -> Boolean.FALSE.equals(SessionProbe.lua(session, "return vim.wo.wrap")));
-        session.commandAsync("set wrap");
-        waitUntil("the editor's word wrap on", TIMEOUT_MS, () -> ((ITextEditorExtension6) editor).isWordWrapEnabled());
-        session.commandAsync("set nowrap");
-        waitUntil("and off again", TIMEOUT_MS, () -> !((ITextEditorExtension6) editor).isWordWrapEnabled());
     }
 }

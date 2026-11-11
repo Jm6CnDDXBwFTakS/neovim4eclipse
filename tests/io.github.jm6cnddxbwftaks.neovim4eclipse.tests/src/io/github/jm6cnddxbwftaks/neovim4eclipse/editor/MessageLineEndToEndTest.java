@@ -37,14 +37,10 @@ class MessageLineEndToEndTest extends EndToEndTestBase {
         assertTrue(line().isError());
         assertTrue(statusLineTexts(editor).stream().noneMatch(text -> text.contains("E486")),
                 "not in the status bar: " + statusLineTexts(editor));
-    }
 
-    @Test
-    void aPlainMessageIsNotAnError() {
-        typeSlowly("3yy");
-
+        typeSlowly("3yy"); // a message of another kind than an error
         waitForMessage("3 lines yanked");
-        assertFalse(line().isError());
+        assertFalse(line().isError(), "a plain message is not an error");
     }
 
     /** {@code n} twice with no match: the second error shows again after the first key hid it. */

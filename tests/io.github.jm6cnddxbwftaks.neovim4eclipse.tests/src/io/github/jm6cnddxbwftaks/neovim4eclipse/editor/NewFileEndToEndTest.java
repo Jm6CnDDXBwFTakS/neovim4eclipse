@@ -661,7 +661,9 @@ class NewFileEndToEndTest extends EndToEndTestBase {
 
     /**
      * As in Neovim, {@code ./} is the window's folder (the project root), like a plain name; the
-     * file's own folder is {@code %:h}, which Neovim expands. From {@code src/Nested.txt}.
+     * file's own folder is {@code %:h}, which Neovim expands. From {@code src/Nested.txt}. And
+     * {@code :w name} and {@code :wq name} put their copies at the root alike ({@code :wq name} once
+     * wrote beside the file), while {@code :w %:h/name} writes beside it.
      */
     @Test
     void dotSlashIsTheProjectRootAndPercentHIsTheFilesFolder() throws Exception {
@@ -682,6 +684,19 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         ITextEditor created = activeEditorNamed("New.txt");
         assertEquals(project.getFile("src/New.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(created.getEditorInput())));
         assertEquals("", documentOf(created).get(), "a new file beside Nested.txt");
+
+        // :w name (Neovim's write) and :wq name (Eclipse's) put the copy in the same place, the root;
+        // %:h/name puts it beside the file
+        page().activate(nestedEditor);
+        waitForAttach(nestedEditor, "src/Nested.txt");
+        runInBox(widgetOf(nestedEditor), "w w-copy.txt");
+        waitUntil("w-copy.txt at the root", TIMEOUT_MS, () -> project.getFile("w-copy.txt").exists());
+        runInBox(widgetOf(nestedEditor), "w %:h/beside.txt");
+        waitUntil("beside.txt in src", TIMEOUT_MS, () -> project.getFile("src/beside.txt").exists());
+        runInBox(widgetOf(nestedEditor), "wq wq-copy.txt");
+        waitUntil("src/Nested.txt to close", TIMEOUT_MS, () -> page().findEditor(nestedEditor.getEditorInput()) == null);
+        assertEquals("nested\n", fileText("wq-copy.txt"), "at the root, as :w puts it");
+        assertFalse(project.getFile("src/wq-copy.txt").exists());
         closeAll();
     }
 }
