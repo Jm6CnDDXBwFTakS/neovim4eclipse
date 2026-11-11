@@ -75,7 +75,8 @@ import maven.MavenFiles;
  *       site lists the version.</li>
  *   <li><b>next</b>: cuts {@code release/0.2.4} from {@code main}, sets its version
  *       ({@code 0.2.4-SNAPSHOT}), commits and pushes it; deletes {@code release/0.2.3} and the
- *       {@code fix/}, {@code feature/} and {@code rehearse/} branches already in {@code main}.</li>
+ *       {@code fix/}, {@code feature/} and {@code rehearse/} branches already in {@code main}.
+ *       Last of all, it offers {@code InstallCheck} for 0.2.3 ({@link #offerInstallCheck}).</li>
  * </ol>
  *
  * <h2>When a run fails</h2>
@@ -129,7 +130,18 @@ public final class ReleaseTool {
             case "go" -> go();
             default -> step(options.step());
         }
+        // The one place the offer is made, after everything else: next or go, once next has finished.
+        if (installCheckDue != null) {
+            offerInstallCheck(installCheckDue);
+        }
     }
+
+    /**
+     * The release {@link #next} has just finished, set at its end: {@link #run} then offers
+     * {@code InstallCheck} for it as the run's very last thing. Kept here because {@code next}
+     * has switched to the next release's branch by then, where the POM names the next version.
+     */
+    private Version installCheckDue;
 
     private void step(String name) {
         ask = new Ask(options.mode(), options.rerunWithYes(name));
@@ -180,12 +192,22 @@ public final class ReleaseTool {
 
     /** Whether {@code InstallCheck} passed for {@code v} on this machine ({@code checks.InstallCheckTool.RECORD}). */
     private boolean installChecked(Version v) {
+        return installCheckPassed().equals(Optional.of(v));
+    }
+
+    /** The release {@code InstallCheck} last passed for on this machine, if any. */
+    private Optional<Version> installCheckPassed() {
         Path record = root.resolve(InstallCheckTool.RECORD);
         try {
-            return Files.isRegularFile(record) && InstallCheckTool.recorded(Files.readString(record)).equals(Optional.of(v));
+            return Files.isRegularFile(record) ? InstallCheckTool.recorded(Files.readString(record)) : Optional.empty();
         } catch (IOException e) {
-            return false;
+            return Optional.empty();
         }
+    }
+
+    /** How to run {@code InstallCheck} for {@code v} by hand: {@code java releng/tools/checks/InstallCheck.java 0.2.13}. */
+    private static String installCheckCommand(Version v) {
+        return "java " + INSTALL_CHECK + " " + v;
     }
 
     private void status() {
@@ -209,8 +231,12 @@ public final class ReleaseTool {
         row("main", s.onMain() ? "at this commit" : "not at this commit");
         row(v.tag(), s.tagged() ? "on origin" : "not made");
         row("GitHub Release", s.released() ? "has the ZIP and its signature" : "none yet");
-        row("install check", installChecked(v) ? "passed for " + v + " (InstallCheck)"
-                : s.released() ? "not run for " + v + ": java " + INSTALL_CHECK + " " + v + " (recommended, not required)" : "after tag");
+        // InstallCheck runs after next, on the next release's branch: there the row names the
+        // release it last passed for (0.2.13 on release/0.2.14), as this one's has not come yet.
+        Optional<Version> passed = installCheckPassed();
+        row("install check", passed.equals(Optional.of(v)) ? "passed for " + v + " (InstallCheck)"
+                : s.released() ? "not run for " + v + ": " + installCheckCommand(v) + " (recommended, not required)"
+                : passed.map(p -> "passed for " + p + "; " + v + "'s is offered at the end of next").orElse("offered at the end of next"));
         row("next branch", nextVersion(v).branch() + (s.nextCut() ? " exists" : " not cut"));
         System.out.println();
         System.out.println(s.nextLine(TOOL) + (s.nextStep().equals("done") ? "" : "   (or go: every step from there)"));
@@ -228,7 +254,8 @@ public final class ReleaseTool {
             // A dry run changes nothing, so the steps after the first would find their start missing.
             step(first);
             System.out.println();
-            System.out.println("[dry run] then: " + String.join(", ", steps.subList(1, steps.size())));
+            System.out.println("[dry run] then: " + String.join(", ", steps.subList(1, steps.size()))
+                    + (steps.size() > 1 ? ", and last the InstallCheck offer" : ""));
             return;
         }
         inGo = true;
@@ -679,32 +706,61 @@ public final class ReleaseTool {
         awaitSite(v);
         System.out.println();
         System.out.println("Release " + v + " is out.");
-        offerInstallCheck(v);
     }
 
     /**
      * Offers {@code InstallCheck}: the release installed from the live update site into a copy of
-     * your Eclipse, as a user installs it. Recommended, never required: {@code next} does not wait
-     * for it (a fix for a release that fails it ships from the branch {@code next} cuts), and it
-     * can fail for reasons of this machine's Eclipse. The status shows whether it passed.
+     * your Eclipse, as a user installs it. Recommended, never required: a fix for a release that
+     * fails it ships from the branch {@code next} cuts, and it can fail for reasons of this
+     * machine's Eclipse. The status shows whether it passed.
      *
-     * <p>Only a person's yes runs it: {@code --yes} approves the tag step's own side effects, not a
+     * <p>It is the very last thing a release run does, after {@code next} (called only from the end
+     * of {@link #run}, through {@link #installCheckDue}, never from inside a step), because it ends
+     * with an Eclipse you try by hand and then close: nothing should still wait behind it.
+     * {@code v} is the release just made, read from the POM before {@code next} switched to the
+     * next release's branch: on {@code release/0.2.14}, it installs 0.2.13. The checkout does not
+     * matter, as InstallCheck installs from the update site and builds nothing.
+     *
+     * <p>Only a person's yes runs it: {@code --yes} approves the next step's own side effects, not a
      * new copy of an Eclipse and three Eclipse starts besides, so with {@code --yes} the offer is
-     * asked like any other (and, with no terminal, only recommended).
+     * asked like any other (and, with no terminal, only recommended). Once it passed for
+     * {@code v} (run by hand, say, after a {@code next} that stopped), it is not offered again.
      */
     private void offerInstallCheck(Version v) {
+        if (installChecked(v)) {
+            System.out.println();
+            ok("InstallCheck passed for " + v + " already");
+            return;
+        }
+        if (!siteServes(v)) {
+            System.out.println();
+            // next wants only the tag; the update site may not list v yet (the Release workflow
+            // still runs, or failed), and InstallCheck, which installs from there, would then fail
+            // for that reason alone. The site, not the GitHub Release, so that no gh is needed.
+            System.out.println("note: InstallCheck not offered: the update site does not serve " + v + " yet;"
+                    + " once tag has passed: " + installCheckCommand(v));
+            return;
+        }
         List<String> command = Shell.java(INSTALL_CHECK, v.toString());
-        Ask asking = options.mode() == Ask.Mode.YES ? new Ask(Ask.Mode.ASK, options.rerunWithYes("tag")) : ask;
-        if (asking.offer("Install " + v + " from the update site into a copy of your Eclipse (InstallCheck)", "java " + INSTALL_CHECK + " " + v)
+        Ask asking = options.mode() == Ask.Mode.YES ? new Ask(Ask.Mode.ASK, options.rerunWithYes("next")) : ask;
+        if (asking.offer("Install " + v + " from the update site into a copy of your Eclipse (InstallCheck)", installCheckCommand(v))
                 && shell.show(command) != 0) {
-            System.out.println("note: InstallCheck failed (see above); the release itself is out. Run it again with: java "
-                    + INSTALL_CHECK + " " + v);
+            System.out.println("note: InstallCheck failed (see above); the release itself is out. Run it again with: "
+                    + installCheckCommand(v));
         }
     }
 
     /** How often and how long {@link #awaitSite} asks the update site before it gives up. */
     private static final int SITE_LOOK_SECONDS = 30;
     private static final int SITE_LOOK_TIMES = 20;
+
+    /** Whether the public update site lists {@code v} and serves its {@code content.jar}, at one look. */
+    private boolean siteServes(Version v) {
+        String site = settings.get("site.url");
+        String composite = UpdateSite.get(site + "compositeContent.xml");
+        return composite != null && UpdateSite.releases(composite).contains(v)
+                && UpdateSite.get(site + "releases/" + v + "/content.jar") != null;
+    }
 
     /**
      * Waits until the public update site lists {@code v} and serves its {@code content.jar}. Each
@@ -714,9 +770,7 @@ public final class ReleaseTool {
     private void awaitSite(Version v) {
         String site = settings.get("site.url");
         for (int i = 0; i < SITE_LOOK_TIMES; i++) {
-            String composite = UpdateSite.get(site + "compositeContent.xml");
-            boolean listed = composite != null && UpdateSite.releases(composite).contains(v);
-            if (listed && UpdateSite.get(site + "releases/" + v + "/content.jar") != null) {
+            if (siteServes(v)) {
                 ok("the update site " + site + " lists and serves " + v);
                 return;
             }
@@ -746,6 +800,18 @@ public final class ReleaseTool {
         if (remoteTagCommit(v.tag()) == null) {
             throw new ToolFailure(v.tag() + " is not on origin: release " + v + " first (tag)");
         }
+        try {
+            cutAndTidy(v);
+            installCheckDue = v;
+        } catch (ToolFailure f) {
+            // The offer at the end will not come: say how to run it, if the release is out.
+            throw installChecked(v) || !siteServes(v) ? f
+                    : new ToolFailure(f.getMessage() + " Then, recommended: " + installCheckCommand(v) + " (InstallCheck).");
+        }
+    }
+
+    /** {@link #next} once {@code v} is tagged: cuts the next release's branch and deletes the finished ones. */
+    private void cutAndTidy(Version v) {
         Version next = nextVersion(v);
         String branch = next.branch();
         String main = git.commitOf("origin/main");

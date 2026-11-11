@@ -378,9 +378,9 @@ java releng/tools/ci/LikeCi.java --all
 - **Launch:** none
 - **Areas:** always
 
-1. Run `java releng/tools/checks/InstallCheck.java` (the Release tool's `tag` step offers it). It
-   installs the release from the update site into a fresh copy of your Eclipse, trusting only the
-   release key, and offers to start that Eclipse; say yes.
+1. Run `java releng/tools/checks/InstallCheck.java` (the Release tool offers it last, after
+   `next`). It installs the release from the update site into a fresh copy of your Eclipse,
+   trusting only the release key, and offers to start that Eclipse; say yes.
    ⇒ The install passes, and the Eclipse starts.
 2. In that Eclipse, let Get Neovim install Neovim, then open a text file.
    ⇒ Get Neovim opens at the first start, and the file attaches after it (Neovim's mode in the

@@ -623,12 +623,17 @@ release 0.2.3, on `release/0.2.3`:
    the update site too). Then it checks the release as a user meets it: the run reused the *Build*
    on `main`, the GitHub Release has `neovim4eclipse-0.2.3.zip` and its `.asc`, both kinds of
    signature verify (`releng/verify-zip.sh`, `releng/verify-signatures.sh`), and the public update
-   site lists the version. Last, it offers `InstallCheck` (below): recommended, not required.
+   site lists the version.
 5. **next**: cuts `release/0.2.4` from `main`, sets its version (`0.2.4-SNAPSHOT`), commits and
    pushes it; then deletes `release/0.2.3` and the `fix/`, `feature/` and `rehearse/` branches that
-   `main` already has (`--next 0.3.0` starts another version).
+   `main` already has (`--next 0.3.0` starts another version). Last of all, it offers
+   `InstallCheck` (below) for 0.2.3: recommended, not required.
 
-After `tag`, install the release as a user does (the status shows whether this passed):
+The offer is the very end of a release run, after the questions of `next`, because it ends in an
+Eclipse you try by hand and close. It installs the release just made (0.2.3) from the update site,
+although the checkout is on `release/0.2.4` by then. If `next` stops before the end, its message
+gives the command instead. You can install the release as a user does at any time after `tag`
+(the status shows whether this passed; on `release/0.2.4`, that it passed for 0.2.3):
 
 ```bash
 java releng/tools/checks/InstallCheck.java          # the newest release on the update site
@@ -645,7 +650,7 @@ listed. A `--root` folder it did not make (no `.install-check` file in it) is re
 deleted. Then it offers to start that Eclipse, with a new workspace and an
 empty Neovim folder, for the rest of the manual check `rl-publish`: *Get Neovim* opens, and a file
 attaches after it. Nothing waits for it: a release that fails it is fixed by the next one, from the
-branch `next` cuts, and `tag --yes` still asks before it runs InstallCheck. It is worth running at
+branch `next` cuts, and `next --yes` still asks before it runs InstallCheck. It is worth running at
 any time, too, such as after an Eclipse upgrade.
 
 When a workflow run fails, the tool prints the failed jobs' last log lines and what to do: rerun the
