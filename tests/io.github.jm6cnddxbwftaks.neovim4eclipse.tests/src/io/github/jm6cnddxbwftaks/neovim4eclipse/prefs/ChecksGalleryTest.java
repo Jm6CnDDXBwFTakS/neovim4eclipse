@@ -244,7 +244,7 @@ class ChecksGalleryTest {
             group.setText("Neovim");
             group.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
             group.setLayout(new GridLayout());
-            new NeovimStatusSection(group, () -> configured, describe);
+            new NeovimStatusSection(group, () -> configured, describe, new WorkbenchSectionActions());
             window.setSize(GROUP_WIDTH, 600); // the width the note and the help wrap in; the height is fitted below
             window.open();
             // The note is probed off the UI thread; it reads "Looking for Neovim..." until it answers.

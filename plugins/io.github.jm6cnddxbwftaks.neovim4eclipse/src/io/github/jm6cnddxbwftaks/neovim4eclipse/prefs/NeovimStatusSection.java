@@ -21,6 +21,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Link;
+import org.eclipse.swt.widgets.Shell;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.CopyField;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
@@ -64,8 +65,36 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
  * ({@link NvimProbe#describe}), which can take a moment and could hang on a broken program. So it
  * runs on a background thread when the page opens and after each install, and its answer is shown
  * only if no newer probe started meanwhile ({@link #generation}).
+ *
+ * <h2>What it is given</h2>
+ * The section uses SWT and JFace only, so the SWT tests run it without a workbench. Everything it
+ * needs from outside comes through its constructor: the option's value, the probe that turns it into
+ * a note, and {@link Actions}, what its button and links do. The page passes the real ones
+ * ({@link NeovimPreferencePage}: {@code NeovimOption::value}, {@code NvimProbe::describe},
+ * {@link WorkbenchSectionActions}); a test passes a fixed note and actions that record what was asked.
  */
 final class NeovimStatusSection {
+
+    /**
+     * What the section's button and links do outside it: the Get Neovim dialog, the event after an
+     * install, the external browser. In Eclipse, {@link WorkbenchSectionActions} hands each call to
+     * {@link GetNeovim} and {@link ExternalBrowser}; the menu entry and the "Neovim not started"
+     * notice call those two directly, being workbench code anyway.
+     */
+    interface Actions {
+
+        /** Opens Get Neovim's confirmation over {@code shell} ({@link GetNeovim#open(Shell)}). */
+        void openGetNeovim(Shell shell);
+
+        /** Runs {@code listener} on the UI thread after each successful install ({@link GetNeovim#addListener}). */
+        void addInstallListener(Runnable listener);
+
+        /** Stops {@link #addInstallListener}'s calls; the section does this when it is disposed. */
+        void removeInstallListener(Runnable listener);
+
+        /** Opens {@code url}, an https page, in the external browser ({@link ExternalBrowser#open(String)}). */
+        void openLink(String url);
+    }
 
     /** Width at which the note and the help wrap, rather than widening the dialog. */
     private static final int WRAP_WIDTH = 400;
@@ -139,28 +168,24 @@ final class NeovimStatusSection {
     private final Supplier<String> configured;
     /** What the note says for a value: {@link NvimProbe#describe}, which looks on disk; tests give their own. */
     private final Function<String, NvimProbe.Note> describe;
-
-    /** Fills {@code parent}, a one-column grid, and starts the first probe. */
-    NeovimStatusSection(Composite parent) {
-        this(parent, NeovimOption::value);
-    }
+    /** What the button and the links do ({@link Actions}). */
+    private final Actions actions;
 
     /**
-     * As above, with the option's value given: the UI tests' Eclipse has one fixed value, so a test
-     * of another (a missing program, a long path) passes its own.
+     * Fills {@code parent}, a one-column grid, and starts the first probe. Example, as the page
+     * builds it: {@code new NeovimStatusSection(group, NeovimOption::value, NvimProbe::describe,
+     * new WorkbenchSectionActions())}; the checks gallery passes a note of its own instead, such as
+     * "No dedicated Neovim yet" though the machine has one.
+     *
+     * @param configured the option's value ({@link NeovimOption#value})
+     * @param describe   the note for a value ({@link NvimProbe#describe}); called off the UI thread
+     * @param actions    what the button and the links do
      */
-    NeovimStatusSection(Composite parent, Supplier<String> configured) {
-        this(parent, configured, NvimProbe::describe);
-    }
-
-    /**
-     * As above, with the note given too: the checks gallery shows "No dedicated Neovim yet" though
-     * this machine has one, without touching the real plug-in folder. Example:
-     * {@code new NeovimStatusSection(group, () -> "", value -> NvimProbe.note(...))}.
-     */
-    NeovimStatusSection(Composite parent, Supplier<String> configured, Function<String, NvimProbe.Note> describe) {
+    NeovimStatusSection(Composite parent, Supplier<String> configured, Function<String, NvimProbe.Note> describe,
+            Actions actions) {
         this.configured = configured;
         this.describe = describe;
+        this.actions = actions;
         note = new Label(parent, SWT.WRAP); // wraps at its width hint, as the help below does
         note.setLayoutData(fullRow(WRAP_WIDTH));
         unused = new Label(parent, SWT.WRAP);
@@ -171,7 +196,7 @@ final class NeovimStatusSection {
         reinstall.setText("<a>" + REINSTALL + "</a>");
         reinstall.setToolTipText("Install the dedicated Neovim again, for a copy that is damaged");
         reinstall.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false));
-        reinstall.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(parent.getShell())));
+        reinstall.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> actions.openGetNeovim(parent.getShell())));
         setVisible(reinstall, false);
 
         // Shown only when the note offers it (show): not with Reinstall, and not while the option names
@@ -181,14 +206,14 @@ final class NeovimStatusSection {
         getNeovim.setToolTipText("Install the dedicated Neovim the plug-in needs, downloaded or from a file, "
                 + "into " + NvimExecutable.dedicatedFolder());
         getNeovim.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false));
-        getNeovim.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> GetNeovim.open(parent.getShell())));
+        getNeovim.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> actions.openGetNeovim(parent.getShell())));
         Runnable afterInstall = () -> {
             if (!note.isDisposed()) {
                 probe();
             }
         };
-        GetNeovim.addListener(afterInstall);
-        getNeovim.addDisposeListener(e -> GetNeovim.removeListener(afterInstall));
+        actions.addInstallListener(afterInstall);
+        getNeovim.addDisposeListener(e -> actions.removeInstallListener(afterInstall));
 
         PixelConverter dlus = new PixelConverter(parent);
         int room = dlus.convertVerticalDLUsToPixels(COMMAND_ROOM_DLUS) / 2; // half: a hint of room, not a gap
@@ -210,7 +235,7 @@ final class NeovimStatusSection {
         Link help = new Link(block, SWT.NONE);
         help.setText(HELP);
         help.setLayoutData(new GridData(SWT.BEGINNING, SWT.TOP, false, false)); // one line: never wraps
-        help.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> ExternalBrowser.open(OWN_NEOVIM_URL)));
+        help.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> actions.openLink(OWN_NEOVIM_URL)));
         Label tail = new Label(parent, SWT.WRAP);
         tail.setText(LabelText.literal(HELP_TAIL));
         GridData tailData = fullRow(WRAP_WIDTH);

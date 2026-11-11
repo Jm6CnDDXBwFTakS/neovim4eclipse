@@ -14,6 +14,8 @@ import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 
 /**
  * Window → Preferences → Neovim.
@@ -62,7 +64,8 @@ public class NeovimPreferencePage extends FieldEditorPreferencePage implements I
     protected void createFieldEditors() {
         program = group("Neovim");
         program.setLayout(new GridLayout()); // no field editor sets one here; adjustGridLayout fills it in
-        new NeovimStatusSection(program); // which Neovim runs, Get Neovim, and the help
+        // Which Neovim runs, Get Neovim, and the help.
+        new NeovimStatusSection(program, NeovimOption::value, NvimProbe::describe, new WorkbenchSectionActions());
 
         workbench = group("Workbench");
         addField(new BooleanFieldEditor(

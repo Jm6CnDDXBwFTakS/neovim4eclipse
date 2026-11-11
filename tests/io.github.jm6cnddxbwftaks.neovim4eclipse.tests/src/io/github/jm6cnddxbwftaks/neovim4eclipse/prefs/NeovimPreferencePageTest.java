@@ -236,7 +236,7 @@ class NeovimPreferencePageTest {
                     group.setText("Neovim");
                     group.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
                     group.setLayout(new GridLayout());
-                    new NeovimStatusSection(group, note::getKey, note.getValue());
+                    new NeovimStatusSection(group, note::getKey, note.getValue(), new WorkbenchSectionActions());
                     window.setSize(640, 600); // the gallery's width
                     window.open(); // wrapped text is measured right only once it is shown (GTK)
                     waitUntil("the note for '" + note.getKey() + "'", () -> find(group, Label.class,
@@ -269,7 +269,7 @@ class NeovimPreferencePageTest {
         group.setText("Neovim");
         group.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
         group.setLayout(new GridLayout());
-        new NeovimStatusSection(group, () -> configured);
+        new NeovimStatusSection(group, () -> configured, NvimProbe::describe, new WorkbenchSectionActions());
         window.setSize(600, 500);
         window.layout(true, true);
         return group;
