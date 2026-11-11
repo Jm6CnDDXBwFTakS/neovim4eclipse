@@ -23,7 +23,6 @@ import java.util.stream.Stream;
 
 import common.Http;
 import common.ReleaseAge;
-import common.Settings;
 import common.Shell;
 import common.ToolFailure;
 import common.VersionCopies;
@@ -53,12 +52,12 @@ public final class Updates {
     }
 
     /**
-     * A move of one action, every line of {@code files} that uses it, to a release tag (the SHA is
-     * looked up when the move is made). {@code major}: a major release, which {@code dependabot.yml}
+     * A move of one action, every line of {@code files} that uses it, to a release tag and the
+     * commit {@code toSha} it points to. {@code major}: a major release, which {@code dependabot.yml}
      * does not leave out for actions, so the plan says to read its migration notes.
      */
-    public record ActionMove(String repository, Set<String> files, Set<String> fromShas, String from, String toTag, Optional<String> group,
-            boolean major) {
+    public record ActionMove(String repository, Set<String> files, Set<String> fromShas, String from, String toTag, String toSha,
+            Optional<String> group, boolean major) {
     }
 
     /** What a search found: the moves, and notes on releases left out (too young, a major). */
@@ -113,7 +112,6 @@ public final class Updates {
 
     private final Path root;
     private final Shell shell;
-    private final Settings settings;
     private final DependabotRules rules;
     private final Map<String, List<VersionCopies.Copy>> copySections;
     private final boolean allowYoung;
@@ -124,10 +122,9 @@ public final class Updates {
      *     action such as {@code actions/checkout}): for these, a major release is taken although
      *     the rules ignore majors
      */
-    public Updates(Path root, Shell shell, Settings settings, boolean allowYoung, Set<String> majors) {
+    public Updates(Path root, Shell shell, boolean allowYoung, Set<String> majors) {
         this.root = root;
         this.shell = shell;
-        this.settings = settings;
         this.rules = DependabotRules.parse(read(DependabotRules.FILE));
         this.copySections = VersionCopies.parse(read(VersionCopies.FILE));
         this.allowYoung = allowYoung;
@@ -257,21 +254,46 @@ public final class Updates {
                     "--jq", ".[] | select(.draft | not) | select(.prerelease | not) | \"\\(.tag_name)\\t\\(.published_at)\"")))) {
                 t.number().ifPresent(n -> tags.putIfAbsent(n, t));
             }
+            // The SHA the tag points to is what gets pinned, so it is looked up with the release's
+            // date: a tag moved to a newer commit after the release stops the tool
+            // (WorkflowActions.looksMoved), since the week the release has been out says nothing
+            // about that commit.
+            Map<ReleaseNumber, WorkflowActions.TagCommit> commits = new LinkedHashMap<>();
+            Function<ReleaseNumber, Instant> age = r -> {
+                commits.computeIfAbsent(r, k -> tagCommit(repository, tags.get(r)));
+                return parseInstant(tags.get(r).published()).orElseThrow(); // tagCommit read it
+            };
             Choice c = Choice.of(now, new ArrayList<>(tags.keySet()), t -> !(major && t == UpdateType.MAJOR) && eco.ignores(repository, t),
-                    r -> parseInstant(tags.get(r).published())
-                            .orElseThrow(() -> new ToolFailure(repository + " " + tags.get(r).name() + " has no publish date")),
-                    Instant.now(), allowYoung);
+                    age, Instant.now(), allowYoung);
+            c.to().ifPresent(age::apply); // with --allow-young, the choice asked for no date: the commit is still looked up and checked
             note(repository, now, c, r -> tags.get(r).name(), notes);
             Set<String> shas = new LinkedHashSet<>(e.getValue().stream().map(WorkflowActions.Use::sha).toList());
             Set<String> files = new LinkedHashSet<>(e.getValue().stream().map(WorkflowActions.Use::file).toList());
             if (c.to().isPresent()) {
-                moves.add(new ActionMove(repository, files, shas, oldest.release(), tags.get(c.to().get()).name(), eco.groupOf(repository),
-                        now.typeTo(c.to().get()) == UpdateType.MAJOR));
+                moves.add(new ActionMove(repository, files, shas, oldest.release(), tags.get(c.to().get()).name(),
+                        commits.get(c.to().get()).sha(), eco.groupOf(repository), now.typeTo(c.to().get()) == UpdateType.MAJOR));
             } else {
                 upToDate.add(repository + " " + oldest.release());
             }
         }
         return moves;
+    }
+
+    /**
+     * The commit {@code tag} of {@code repository} points to now, through {@code gh}; stops the
+     * tool when the tag looks moved after its release ({@link WorkflowActions#looksMoved}).
+     */
+    private WorkflowActions.TagCommit tagCommit(String repository, WorkflowActions.Tag tag) {
+        String what = repository + " " + tag.name();
+        Instant released = parseInstant(tag.published()).orElseThrow(() -> new ToolFailure(what + " has no publish date"));
+        WorkflowActions.TagCommit commit = WorkflowActions.TagCommit.parse(shell.out(List.of("gh", "api",
+                "repos/" + repository + "/commits/" + tag.name(), "--jq", "\"\\(.sha)\\t\\(.commit.committer.date)\"")), what);
+        if (WorkflowActions.looksMoved(released, commit.date())) {
+            throw new ToolFailure(what + " came out " + released + ", but its tag points to " + commit.sha() + ", a commit of "
+                    + commit.date() + ": the tag was moved after the release. Check the release on GitHub before pinning anything"
+                    + " of it; the tool does not");
+        }
+        return commit;
     }
 
     private static Optional<Instant> parseInstant(String text) {

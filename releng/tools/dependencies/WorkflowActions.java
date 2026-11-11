@@ -3,6 +3,9 @@
 
 package dependencies;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -125,8 +128,38 @@ public final class WorkflowActions {
         return out;
     }
 
-    /** Whether {@code sha} is a full commit SHA, as {@code gh api …/commits/<tag>} must answer. */
-    public static boolean isSha(String sha) {
-        return SHA.matcher(sha).matches();
+    /**
+     * The commit a release tag points to now, and that commit's date, as
+     * {@code gh api repos/<owner>/<repo>/commits/<tag> --jq '"\(.sha)\t\(.commit.committer.date)"'}
+     * answers: {@code 77dd5b2c…\t2026-11-04T21:58:10Z}.
+     */
+    public record TagCommit(String sha, Instant date) {
+
+        /** {@code gh}'s answer, checked: a full SHA and a date, else the tool stops. */
+        public static TagCommit parse(String ghLine, String what) {
+            String[] f = ghLine.strip().split("\t", -1);
+            if (f.length != 2 || !SHA.matcher(f[0]).matches()) {
+                throw new ToolFailure("GitHub gave no commit SHA and date for " + what + ": " + ghLine.strip());
+            }
+            try {
+                return new TagCommit(f[0], Instant.parse(f[1]));
+            } catch (DateTimeParseException e) {
+                throw new ToolFailure("GitHub gave no commit date for " + what + ": " + f[1]);
+            }
+        }
+    }
+
+    /** How much later than its release a tag's commit may be dated: committers' clocks are not exact. */
+    static final Duration CLOCK_SLACK = Duration.ofHours(1);
+
+    /**
+     * Whether a tag looks moved: its commit is dated after the release it belongs to came out. A
+     * release is made from a commit that exists, so its tag's commit is older; one that is newer
+     * was pointed at later, by whoever controls the action's repository, and the week the release
+     * has been out says nothing about that commit. Example: v6.2.0 published 2026-11-04 but
+     * pointing to a commit of 2026-11-10.
+     */
+    public static boolean looksMoved(Instant released, Instant committed) {
+        return committed.isAfter(released.plus(CLOCK_SLACK));
     }
 }

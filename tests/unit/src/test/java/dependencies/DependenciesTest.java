@@ -294,6 +294,18 @@ class DependenciesTest {
     }
 
     @Test
+    void aTagsCommitIsReadCheckedAndATagMovedAfterItsReleaseIsSeen() {
+        WorkflowActions.TagCommit c = WorkflowActions.TagCommit.parse("77dd5b2ce225ea11469928ac317850245a74ae78\t2026-11-04T21:58:10Z\n", "x");
+        assertEquals(Instant.parse("2026-11-04T21:58:10Z"), c.date());
+        assertThrows(ToolFailure.class, () -> WorkflowActions.TagCommit.parse("77dd5b2\t2026-11-04T21:58:10Z", "x"));
+        assertThrows(ToolFailure.class, () -> WorkflowActions.TagCommit.parse("77dd5b2ce225ea11469928ac317850245a74ae78\tyesterday", "x"));
+        Instant released = Instant.parse("2026-11-04T22:12:26Z");
+        assertFalse(WorkflowActions.looksMoved(released, c.date())); // committed before the release, as usual
+        assertFalse(WorkflowActions.looksMoved(released, released.plus(Duration.ofMinutes(30)))); // a clock a little ahead
+        assertTrue(WorkflowActions.looksMoved(released, Instant.parse("2026-11-10T09:00:00Z")));
+    }
+
+    @Test
     void releaseTagsComeFromGhsLines() {
         List<WorkflowActions.Tag> tags = WorkflowActions.tags("v6.2.0\t2026-11-04T22:12:26Z\nnightly\t2026-11-01T00:00:00Z\n\nbroken line\n");
         assertEquals(2, tags.size());
@@ -347,8 +359,8 @@ class DependenciesTest {
                 List.of(maven("maven-surefire-plugin.version", Optional.of("build-tools")), maven("jacoco.version", Optional.empty()),
                         maven("tycho.version", Optional.of("build-tools")), maven("junit.version", Optional.empty()),
                         maven("maven-clean-plugin.version", Optional.of("build-tools"))),
-                List.of(new Updates.ActionMove("actions/checkout", Set.of("w"), Set.of("a"), "v7.0.1", "v7.1.0", Optional.of("actions"), false),
-                        new Updates.ActionMove("actions/setup-java", Set.of("w"), Set.of("b"), "v6.1.0", "v6.2.0", Optional.of("actions"), false)),
+                List.of(new Updates.ActionMove("actions/checkout", Set.of("w"), Set.of("a"), "v7.0.1", "v7.1.0", "c", Optional.of("actions"), false),
+                        new Updates.ActionMove("actions/setup-java", Set.of("w"), Set.of("b"), "v6.1.0", "v6.2.0", "d", Optional.of("actions"), false)),
                 List.of(), List.of());
         List<DependenciesTool.Commit> commits = DependenciesTool.commits(found, Set.of("maven-clean-plugin"));
         assertEquals(List.of("build-tools", "jacoco", "junit", "maven-clean-plugin", "actions"),

@@ -135,7 +135,7 @@ public final class DependenciesTool {
             throw new ToolFailure("the working tree has changes (git status); commit or stash them first");
         }
         new GitHub(shell).requireReady(); // the actions' releases are read through gh
-        Updates.Found found = new Updates(root, shell, settings, allowYoung, majors).find();
+        Updates.Found found = new Updates(root, shell, allowYoung, majors).find();
         for (String ok : found.upToDate()) {
             System.out.println("ok: " + ok + " is the newest the rules allow");
         }
@@ -236,10 +236,7 @@ public final class DependenciesTool {
             }
         }
         for (Updates.ActionMove a : c.actions()) {
-            String sha = shell.out(List.of("gh", "api", "repos/" + a.repository() + "/commits/" + a.toTag(), "--jq", ".sha")).strip();
-            if (!WorkflowActions.isSha(sha)) {
-                throw new ToolFailure("GitHub gave no commit SHA for " + a.repository() + " " + a.toTag() + ": " + sha);
-            }
+            String sha = a.toSha(); // checked when it was found (Updates)
             for (String file : a.files()) {
                 for (String from : a.fromShas()) {
                     edit(edits, file, text -> WorkflowActions.moved(file, text, a.repository(), from, sha, a.toTag()));

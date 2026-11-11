@@ -403,8 +403,7 @@ public final class ReleaseTool {
     private void newerDependencies() {
         Updates.Found found;
         try {
-            Settings tool = Settings.load(List.of(root.resolve(Settings.COMMON), root.resolve("releng/tools/dependencies")), Map.of());
-            found = new Updates(root, shell, tool, false, Set.of()).find();
+            found = new Updates(root, shell, false, Set.of()).find();
         } catch (ToolFailure e) {
             System.out.println("  (could not look for dependency updates: " + e.getMessage() + ")");
             return;

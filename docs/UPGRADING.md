@@ -69,7 +69,9 @@ in) looks where Dependabot looks and commits what it would propose:
    (`allow`, `cooldown`, `versions` in an ignore entry) stops the tool rather than be skipped.
 2. **A week old.** A release younger than seven days is passed over for the newest one that is old
    enough, and named in a note; `--allow-young` takes it. The date is the POM's on Central, the
-   release's on GitHub.
+   release's on GitHub. The commit an action's tag points to is what gets pinned, so a tag whose
+   commit is newer than its release (moved after the release came out) stops the tool: check that
+   release on GitHub by hand.
 3. **Majors of the libraries and plug-ins are only named**, in a note ("junit 6.1.3 is out, a
    major release …"): `dependabot.yml` ignores them. `--major junit` (the property without
    `.version`) takes one, in a commit of its own; read its migration notes first. The file ignores
