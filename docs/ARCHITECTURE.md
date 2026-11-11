@@ -921,7 +921,7 @@ reason is gone.
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | A window per editor: which token holds which window, the travel swap | `core/EditorWindows`, `core/EditorWindow`; Neovim side `core/DocumentBuffers`, `LuaScripts.WINDOWS` | `EditorWindowsTest`, `windows_spec.lua`, `NeovimWindowsIntegrationTest` (needs nvim) |
 | Status bar parts, messages and output, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
-| The status bar's labels: mode texts, widths, the cap | `util/ModeLabels`, `util/StatusBarWidths`, `editor/StatusBarLabels`, `editor/ModeStatusContribution` | `ModeLabelsTest`, `StatusBarWidthsTest`, `tests/swt` `StatusBarLabelsTest`, `state_snapshot_spec.lua`, UI `StatusBarEndToEndTest` |
+| The status bar's labels: mode texts, widths, the cap, which parts show | `util/ModeLabels`, `util/StatusBarWidths`, `util/StatusItem`, `editor/StatusBarLabels`, `editor/ModeStatusContribution` | `ModeLabelsTest`, `StatusBarWidthsTest`, `StatusItemTest`, `tests/swt` `StatusBarLabelsTest`, `state_snapshot_spec.lua`, UI `StatusBarEndToEndTest` |
 | Message events from `redraw`; where each message goes | `util/MessageEvent`, `util/MessageRoute` | `MessageEventTest`, `MessageRouteTest`, `NeovimSessionIntegrationTest` (needs nvim) |
 | Messages and errors in the editor, error flash | `editor/MessageLine` (colors: `util/OverlayColors`) | `tests/swt` `MessageLineTest`, `OverlayColorsTest`, UI `MessageLineEndToEndTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |

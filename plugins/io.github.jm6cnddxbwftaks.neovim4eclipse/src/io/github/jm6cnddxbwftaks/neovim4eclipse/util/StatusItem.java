@@ -36,4 +36,23 @@ public enum StatusItem {
     public static Set<StatusItem> defaults() {
         return EnumSet.of(MODE, CMD);
     }
+
+    /**
+     * The parts the status bar shows: the ones the user chose ({@code chosen}, from the Status Bar
+     * preference page), or, while Eclipse handles the keys ({@code eclipseMode}), the mode alone,
+     * whatever was chosen. In Eclipse mode Neovim's command and statusline say nothing about the
+     * editor, and the mode part, which then reads {@code ECLIPSE}, is how one sees where keys go.
+     * Example: with only the statusline chosen, Neovim mode shows the statusline, Eclipse mode
+     * {@code ECLIPSE}.
+     *
+     * @return a new set the caller may change
+     */
+    public static Set<StatusItem> shown(Set<StatusItem> chosen, boolean eclipseMode) {
+        if (eclipseMode) {
+            return EnumSet.of(MODE);
+        }
+        Set<StatusItem> parts = EnumSet.noneOf(StatusItem.class);
+        parts.addAll(chosen);
+        return parts;
+    }
 }

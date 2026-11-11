@@ -3,7 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.util.EnumSet;
 import java.util.Set;
 import java.util.function.IntConsumer;
 import java.util.logging.Level;
@@ -217,14 +216,9 @@ public final class ModeStatusContribution extends ContributionItem {
         maxShare = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_SHARE);
     }
 
-    /** The parts the user chose; only the mode while it says {@code ECLIPSE}. */
+    /** The parts the user chose; only the mode while it says {@code ECLIPSE} ({@link StatusItem#shown}). */
     private Set<StatusItem> partsShown() {
-        if (eclipse) {
-            return EnumSet.of(StatusItem.MODE);
-        }
-        Set<StatusItem> parts = EnumSet.noneOf(StatusItem.class);
-        parts.addAll(chosen);
-        return parts;
+        return StatusItem.shown(chosen, eclipse);
     }
 
     /**

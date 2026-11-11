@@ -81,7 +81,11 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
         assertTrue(statusline.length() <= 24, "at most 24 columns: \"" + statusline + "\"");
     }
 
-    /** The indicator says where keys go, so it shows even with the mode part turned off. */
+    /**
+     * The indicator says where keys go, so it shows even with the mode part turned off. Which parts
+     * show is {@code StatusItemTest} (tests/unit); here the preference, the switch to Eclipse and
+     * the bar's rebuild together.
+     */
     @Test
     void eclipseShowsEvenWithTheModeOff() {
         store().setValue(PreferenceConstants.STATUS_ITEM_MODE, false);

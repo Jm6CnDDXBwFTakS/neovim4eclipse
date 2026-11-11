@@ -120,7 +120,8 @@ right as in Vim. The status bar preferences are read once and again when one cha
   `tests/swt`), `editor/ModeStatusContribution` (what the labels say; rebuilds the bar when the set
   of labels changes, including `ECLIPSE`, which shows even with the mode part off).
 - Preferences `statusStatuslineWidth`, `statusMaxShare` on the Status Bar page.
-- Tests: `ModeLabelsTest`, `StatusBarWidthsTest`, `StatusLineFormatTest`, `StateSyncTest`
+- Tests: `ModeLabelsTest`, `StatusBarWidthsTest`, `StatusLineFormatTest`, `StatusItemTest` (which
+  parts show: the chosen ones, or `ECLIPSE` alone), `StateSyncTest`
   (the width reaches the snapshot), `state_snapshot_spec.lua` (Neovim fills and cuts to the width),
   `tests/swt` `StatusBarLabelsTest` (a real JFace bar: widths, cap, columns, tooltips), UI
   `StatusBarEndToEndTest` (the names and a recording, the fitted statusline, `ECLIPSE` with the mode off).
