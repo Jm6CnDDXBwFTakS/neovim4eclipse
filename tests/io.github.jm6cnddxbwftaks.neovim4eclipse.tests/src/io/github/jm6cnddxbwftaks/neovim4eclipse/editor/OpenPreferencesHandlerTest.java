@@ -41,8 +41,8 @@ class OpenPreferencesHandlerTest {
     void open() {
         dialog = OpenPreferencesHandler.create(PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell());
         dialog.setBlockOnOpen(false);
-        dialog.open();
-        UiTestSupport.spin(300);
+        dialog.open(); // builds and lays out the dialog before it returns
+        UiTestSupport.runUntilIdle(EndToEndTestBase.TIMEOUT_MS); // and what opening it queued
     }
 
     @AfterEach

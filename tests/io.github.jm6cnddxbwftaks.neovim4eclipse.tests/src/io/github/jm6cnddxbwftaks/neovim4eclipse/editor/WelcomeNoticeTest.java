@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.NeovimPreferencePage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 
 /**
@@ -40,6 +41,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
  * they are up; a blocking dialog would wait for a click that never comes.
  */
 class WelcomeNoticeTest {
+
+    private static final long TIMEOUT_MS = TestWait.millis();
 
     private MessageDialog dialog;
 
@@ -54,8 +57,8 @@ class WelcomeNoticeTest {
         Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
         dialog = WelcomeNotice.create(shell, kind, version);
         dialog.setBlockOnOpen(false);
-        dialog.open();
-        UiTestSupport.spin(200);
+        dialog.open(); // builds and lays out the dialog before it returns
+        UiTestSupport.runUntilIdle(TIMEOUT_MS); // and what opening it queued
         return dialog;
     }
 
@@ -89,8 +92,8 @@ class WelcomeNoticeTest {
         open(WelcomeNote.Kind.WELCOME, null);
         Button close = button(dialog.getShell(), "Close");
         close.notifyListeners(SWT.Selection, null);
-        UiTestSupport.spin(100);
-        assertTrue(dialog.getShell() == null || dialog.getShell().isDisposed(), "the dialog is still open");
+        UiTestSupport.waitUntil("the dialog to close", TIMEOUT_MS,
+                () -> dialog.getShell() == null || dialog.getShell().isDisposed());
         dialog = null;
     }
 

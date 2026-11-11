@@ -1880,8 +1880,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
      * without it they are dropped.
      */
     private void postCtrlZ() {
-        UiTestSupport.m1Key(widget, 'z');
-        UiTestSupport.spin(500);
+        UiTestSupport.m1Key(widget, 'z'); // Undo runs before this returns; the callers then settle()
     }
 
     /**

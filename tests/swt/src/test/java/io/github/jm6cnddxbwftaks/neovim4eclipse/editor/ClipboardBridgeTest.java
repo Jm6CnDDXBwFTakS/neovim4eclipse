@@ -29,7 +29,12 @@ class ClipboardBridgeTest {
 
     private static final long TIMEOUT_MS = TestWait.millis();
 
-    private final ClipboardBridge bridge = new ClipboardBridge(ClipboardBridge.PASTE_TIMEOUT_MS);
+    /**
+     * A paste from another thread waits for the UI thread at most this long. The test's limit, not
+     * the plug-in's 2 s ({@link ClipboardBridge#PASTE_TIMEOUT_MS}): on a slow machine the UI thread
+     * may take longer than 2 s to get to the read, and the paste would then fail with nothing wrong.
+     */
+    private final ClipboardBridge bridge = new ClipboardBridge(TIMEOUT_MS);
 
     @Test
     void copiedTextCanBePasted() {
@@ -41,7 +46,7 @@ class ClipboardBridgeTest {
     @Test
     void aPasteFromAnotherThreadWaitsForTheUiThread() throws Exception {
         bridge.copy(Selection.CLIPBOARD, "from the UI thread");
-        spin(100);
+        waitUntil("the copy", () -> bridge.paste(Selection.CLIPBOARD).equals(Optional.of("from the UI thread")));
         CompletableFuture<Optional<String>> pasted = CompletableFuture.supplyAsync(() -> bridge.paste(Selection.CLIPBOARD));
         waitUntil("the paste", pasted::isDone); // the event loop must run for the read to happen
 
@@ -59,7 +64,7 @@ class ClipboardBridgeTest {
 
             assertEquals(Optional.empty(), result, "nothing, instead of a Neovim that waits forever");
             log.assertLogged(Level.WARNING, "The UI thread did not read the clipboard");
-            spin(100); // let the queued read run, so it does not leak into the next test
+            runQueuedWork(); // the read the paste queued, so that it does not run in the next test
         }
     }
 
@@ -100,8 +105,13 @@ class ClipboardBridgeTest {
         }
     }
 
-    private static void spin(long millis) {
-        long end = System.currentTimeMillis() + millis;
-        waitUntil("time to pass", () -> System.currentTimeMillis() >= end);
+    /**
+     * Runs the work queued for the UI thread so far: SWT runs {@code asyncExec} work in order, so
+     * once a marker queued now has run, everything queued before it has too.
+     */
+    private static void runQueuedWork() {
+        boolean[] ran = { false };
+        Display.getDefault().asyncExec(() -> ran[0] = true);
+        waitUntil("the work queued for the UI thread", () -> ran[0]);
     }
 }

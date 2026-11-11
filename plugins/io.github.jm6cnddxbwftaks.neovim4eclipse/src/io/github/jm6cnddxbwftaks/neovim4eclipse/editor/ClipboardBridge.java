@@ -47,7 +47,10 @@ public final class ClipboardBridge implements ClipboardPort {
 
     private final long pasteTimeoutMs;
 
-    /** @param pasteTimeoutMs see {@link #PASTE_TIMEOUT_MS}; tests use a shorter one */
+    /**
+     * @param pasteTimeoutMs see {@link #PASTE_TIMEOUT_MS}; a test passes its own: a short one to see
+     *                       the paste give up, its wait limit otherwise
+     */
     ClipboardBridge(long pasteTimeoutMs) {
         this.pasteTimeoutMs = pasteTimeoutMs;
     }

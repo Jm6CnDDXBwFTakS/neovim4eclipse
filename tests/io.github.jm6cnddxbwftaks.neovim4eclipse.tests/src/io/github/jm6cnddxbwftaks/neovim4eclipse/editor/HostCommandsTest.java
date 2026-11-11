@@ -76,8 +76,15 @@ class HostCommandsTest {
 
     @Test
     void editBangRevertsAndPlainEditRefusesWithChanges() {
+        // On the UI thread the command runs before run() returns, so no wait is needed. Checked: :e
+        // refused (E37, in the status line, as Neovim is not attached), not only that the changes are
+        // still there, which holds as well when :e did nothing at all. The status line is cleared
+        // first, so an E37 an earlier test left there cannot pass the check.
+        String refusal = "E37: No write since last change (add ! to override)";
+        first.getEditorSite().getActionBars().getStatusLineManager().setErrorMessage(null);
         run("edit", first);
-        UiTestSupport.spin(100);
+        assertTrue(EndToEndTestBase.statusLineTexts(first).contains(refusal),
+                ":e refused with E37; the status line shows " + EndToEndTestBase.statusLineTexts(first));
         assertTrue(first.isDirty(), ":e must not drop changes (E37)");
 
         run("edit!", first);
@@ -95,8 +102,7 @@ class HostCommandsTest {
         run("tabprevious", other);
         waitUntil("back at the first tab", TIMEOUT_MS, () -> page().getActiveEditor() == start);
 
-        run("tablast", start);
-        UiTestSupport.spin(100);
+        run("tablast", start); // done before run() returns, on the UI thread
         ITextEditor last = (ITextEditor) page().getActiveEditor();
         run("tabfirst", last);
         waitUntil("a different tab for :tabfirst than :tablast", TIMEOUT_MS, () -> page().getActiveEditor() != last);

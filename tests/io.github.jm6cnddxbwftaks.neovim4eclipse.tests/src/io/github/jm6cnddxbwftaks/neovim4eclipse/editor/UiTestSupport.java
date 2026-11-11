@@ -224,6 +224,24 @@ final class UiTestSupport {
         AtomicBoolean reached = new AtomicBoolean();
         session.runAsync("test: settle", () -> reached.set(true));
         waitUntil("the session to finish the work queued before", timeoutMs, reached::get);
+        runUntilIdle(timeoutMs);
+    }
+
+    /**
+     * Runs the event loop until it has been empty for {@value #QUIET_TURNS} turns in a row: the work
+     * queued for the UI thread ({@code Display.asyncExec}), and what that work queued in turn, has
+     * run. Use it instead of a fixed {@link #spin} after a step on the UI thread that leaves work
+     * queued but no outcome to wait for (a dialog opened without blocking). It waits as long as the
+     * work takes, not a fixed time, so a slow machine does not cut it short.
+     *
+     * <p>What it cannot see: work that is not queued yet. Neovim's answers arrive on another thread
+     * and are queued only once they come, so for Neovim use {@link #settle}; the X server's events
+     * come when the server sends them, so for those wait for an outcome with {@link #waitUntil}.
+     *
+     * <p>Example: {@code dialog.open(); runUntilIdle(TIMEOUT_MS);} then what opening the dialog
+     * queued has run.
+     */
+    static void runUntilIdle(long timeoutMs) {
         Display display = Display.getCurrent();
         long deadline = System.currentTimeMillis() + timeoutMs;
         int quiet = 0;
@@ -342,7 +360,13 @@ final class UiTestSupport {
         return control == null ? "none" : control.isDisposed() ? "a disposed control" : control.getClass().getSimpleName();
     }
 
-    /** Runs the event loop for a while (lets queued work finish). */
+    /**
+     * Runs the event loop for {@code millis}: a fixed wait, so only for the Marketplace pictures
+     * ({@code ScreenshotCaptureTest}, {@code DemoRecordingTest}), where a paint must reach the X
+     * server's screen before it is read and nothing reports that it has. A test waits for an outcome
+     * ({@link #waitUntil}), for Neovim ({@link #settle}) or for the UI thread ({@link #runUntilIdle})
+     * instead (AGENTS.md, "Rules the code depends on").
+     */
     static void spin(long millis) {
         long end = System.currentTimeMillis() + millis;
         waitUntil("time to pass", millis + 5000, () -> System.currentTimeMillis() >= end);
