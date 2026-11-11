@@ -43,6 +43,22 @@ public final class WelcomeNote {
     /** The dialog's title for both kinds. */
     public static final String TITLE = "Neovim for Eclipse";
 
+    /**
+     * The welcome's buttons, in order; the last, Close, is the default, so Enter just dismisses it.
+     * The indexes are what a press reports ({@code dialogs/ButtonAction}): {@link #WELCOME_PREFERENCES},
+     * {@link #WELCOME_DOCUMENTATION}.
+     */
+    public static final List<String> WELCOME_BUTTONS = List.of("Open Preferences", "Documentation", "Close");
+    /** Index of "Open Preferences" in {@link #WELCOME_BUTTONS}. */
+    public static final int WELCOME_PREFERENCES = 0;
+    /** Index of "Documentation" in {@link #WELCOME_BUTTONS}. */
+    public static final int WELCOME_DOCUMENTATION = 1;
+
+    /** The update note's buttons, in order; the last, Close, is the default. */
+    public static final List<String> UPDATED_BUTTONS = List.of("What's New", "Close");
+    /** Index of "What's New" in {@link #UPDATED_BUTTONS}. */
+    public static final int UPDATED_WHATS_NEW = 0;
+
     /** The toggle command (plugin.xml), whose key binding the welcome names. */
     public static final String TOGGLE_COMMAND_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode";
 

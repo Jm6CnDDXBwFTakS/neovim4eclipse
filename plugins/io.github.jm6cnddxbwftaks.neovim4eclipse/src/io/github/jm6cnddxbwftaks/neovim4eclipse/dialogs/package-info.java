@@ -9,6 +9,11 @@
  * closing line). {@link io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.CopyField} is its value to
  * copy (a read-only field and a Copy button), used by those dialogs and by the preference page's
  * help, so every command or path to copy looks the same.
+ * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ActingDialog} and
+ * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ActingHeadedDialog} run a
+ * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ButtonAction} for the pressed button once
+ * they have closed: the update note and the welcome, whose actions ({@code editor/WelcomeNotice})
+ * open the preferences or a page in the browser.
  *
  * <p>Why a package of its own: both {@code editor} and {@code prefs} need it, and {@code editor}
  * already uses {@code prefs}, so putting it in {@code editor} would make the two use each other. It

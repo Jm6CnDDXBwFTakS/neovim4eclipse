@@ -397,4 +397,4 @@ for a permanent setting; editing `eclipse.ini` inside a signed macOS `Eclipse.ap
   `visibleWhen`), `NeovimStatusSection` (its button and links through `WorkbenchSectionActions`),
   `ExternalBrowser`. In `prefs/` rather than `editor/`
   because the preference page uses them and `prefs/` does not depend on `editor/`.
-- `editor/`: `GetNeovimHandler`, `OldNeovimProgramNotice`. `dialogs/`: `HeadedMessageDialog`.
+- `editor/`: `GetNeovimHandler`, `OldNeovimProgramNotice`. `dialogs/`: `HeadedMessageDialog` (and `ActingHeadedDialog`, the welcome's).

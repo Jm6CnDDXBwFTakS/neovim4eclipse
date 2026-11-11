@@ -113,6 +113,16 @@ class WelcomeNoteTest {
         assertTrue(message.contains("Preferences\u00A0\u203A\u00A0Neovim"), "one unbreakable path: " + message);
     }
 
+    /** The indexes name the buttons they say, and Close, the default, is last in both. */
+    @Test
+    void theButtonIndexesNameTheirButtons() {
+        assertEquals("Open Preferences", WelcomeNote.WELCOME_BUTTONS.get(WelcomeNote.WELCOME_PREFERENCES));
+        assertEquals("Documentation", WelcomeNote.WELCOME_BUTTONS.get(WelcomeNote.WELCOME_DOCUMENTATION));
+        assertEquals("What's New", WelcomeNote.UPDATED_BUTTONS.get(WelcomeNote.UPDATED_WHATS_NEW));
+        assertEquals("Close", WelcomeNote.WELCOME_BUTTONS.get(WelcomeNote.WELCOME_BUTTONS.size() - 1));
+        assertEquals("Close", WelcomeNote.UPDATED_BUTTONS.get(WelcomeNote.UPDATED_BUTTONS.size() - 1));
+    }
+
     @Test
     void releaseVersionKeepsShortVersionsAsTheyAre() {
         assertEquals("0.2.0", WelcomeNote.releaseVersion("0.2.0"));

@@ -1047,7 +1047,10 @@ one table of `util/ModeLabels` and its test.
 what was recorded and the running version, and returns what to show (`WelcomeNote.decide`); unit-test
 it in `tests/unit`. The glue in `editor/` (`WelcomeNotice`) reads the record from a preference scope,
 writes it *before* opening the dialog (so a crash does not repeat it), and opens the dialog with
-`Display.asyncExec`, never inside the code that triggered it. Turn it off for the UI tests in
+`Display.asyncExec`, never inside the code that triggered it. The dialog itself, with what its
+buttons do passed in (`dialogs/ActingHeadedDialog` and a `ButtonAction`), goes in `dialogs/`, and
+its labels in the `util/` class (`WelcomeNote.WELCOME_BUTTONS`), so `tests/swt` opens it with the
+real texts (`ActingDialogsTest`). Turn it off for the UI tests in
 `test-customization.ini`, or the first test that triggers it waits for a click until it times out.
 
 **Hand a normal-mode key to Eclipse.** Do not catch it in Java: map it in Neovim, so Neovim keeps

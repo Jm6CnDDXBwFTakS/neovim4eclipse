@@ -13,7 +13,6 @@ import java.util.List;
 
 import org.eclipse.core.commands.Command;
 import org.eclipse.jface.dialogs.MessageDialog;
-import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -31,9 +30,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 
 /**
  * The welcome dialog and its switches, in a running workbench. When it is due and what it says are
- * tested in {@code tests/unit} ({@code WelcomeNoteTest}); this checks the Eclipse glue: the dialog
- * opens with its buttons, the toggle's key binding is found, the command is registered, the
- * preference has its check box, and the UI tests themselves run with the welcome off.
+ * tested in {@code tests/unit} ({@code WelcomeNoteTest}), the dialogs themselves (their buttons,
+ * the default, the actions, all text shown) in {@code tests/swt} ({@code ActingDialogsTest}), the
+ * preference's check box there too ({@code NeovimPageTest}). This checks the Eclipse glue: the
+ * welcome and the update note open with their own texts and buttons, the toggle's key binding is
+ * found, the command is registered, and the UI tests themselves run with the welcome off.
  *
  * <p>The dialogs are opened with {@code setBlockOnOpen(false)}, so the test keeps running while
  * they are up; a blocking dialog would wait for a click that never comes.
@@ -78,21 +79,12 @@ class WelcomeNoticeTest {
         assertTrue(text.contains(key + ", the Neovim toolbar button"), text);
     }
 
+    /** The update note is built from its own texts and buttons, not the welcome's. */
     @Test
     void theUpdateNoteHasItsButtons() {
         open(WelcomeNote.Kind.UPDATED, "0.2.0.v20261101-1200");
         assertEquals(List.of("Close", "What's New"), sorted(buttonLabels(dialog.getShell())));
         assertTrue(labelText(dialog.getShell()).contains("updated to 0.2.0."));
-    }
-
-    @Test
-    void closeClosesTheDialog() {
-        open(WelcomeNote.Kind.WELCOME, null);
-        Button close = button(dialog.getShell(), "Close");
-        close.notifyListeners(SWT.Selection, null);
-        UiTestSupport.waitUntil("the dialog to close", TIMEOUT_MS,
-                () -> dialog.getShell() == null || dialog.getShell().isDisposed());
-        dialog = null;
     }
 
     @Test
@@ -115,11 +107,6 @@ class WelcomeNoticeTest {
             labels.add(b.getText());
         }
         return labels;
-    }
-
-    private static Button button(Control root, String text) {
-        return find(root, Button.class).stream().filter(b -> text.equals(b.getText())).findFirst()
-                .orElseThrow(() -> new AssertionError("no button " + text));
     }
 
     private static String labelText(Control root) {

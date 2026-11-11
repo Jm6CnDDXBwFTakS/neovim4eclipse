@@ -19,10 +19,10 @@ import org.eclipse.ui.keys.IBindingService;
 import org.osgi.service.prefs.BackingStoreException;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ActingDialog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ActingHeadedDialog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.ExternalBrowser;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HeadedMessage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 
 /**
@@ -49,11 +49,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
 final class WelcomeNotice {
 
     private static final Logger LOG = Logger.getLogger(WelcomeNotice.class.getName());
-
-    /** Button indexes of the two dialogs, in the order given to {@link MessageDialog}. */
-    private static final int WELCOME_PREFERENCES = 0;
-    private static final int WELCOME_DOCUMENTATION = 1;
-    private static final int UPDATED_WHATS_NEW = 0;
 
     /** Set after the first check of this Eclipse run; used on the UI thread only. */
     private static boolean checked;
@@ -93,24 +88,27 @@ final class WelcomeNotice {
 
     /**
      * Builds the dialog without opening it (also for tests, which open it with
-     * {@code setBlockOnOpen(false)}). Pressing a button acts on it before the dialog closes. UI
-     * thread only.
+     * {@code setBlockOnOpen(false)}). Pressing a button acts on it once the dialog has closed
+     * ({@link ActingDialog}, {@link ActingHeadedDialog}, in {@code dialogs/}: the dialogs need no
+     * workbench, what their buttons do here does). UI thread only.
      */
     static MessageDialog create(Shell shell, WelcomeNote.Kind kind, String version) {
         if (kind == WelcomeNote.Kind.UPDATED) {
-            return new ActingDialog(shell, WelcomeNote.updatedMessage(version), new String[] { "What's New", "Close" },
-                    button -> {
-                        if (button == UPDATED_WHATS_NEW) {
+            return new ActingDialog(shell, WelcomeNote.TITLE, WelcomeNote.updatedMessage(version),
+                    WelcomeNote.UPDATED_BUTTONS, button -> {
+                        if (button == WelcomeNote.UPDATED_WHATS_NEW) {
                             ExternalBrowser.open(WelcomeNote.CHANGELOG_URL);
                         }
                     });
         }
-        return new WelcomeDialog(shell, WelcomeNote.welcome(toggleKey()),
-                new String[] { "Open Preferences", "Documentation", "Close" }, button -> {
-                    if (button == WELCOME_PREFERENCES) {
-                        // After the dialog closes, so the preferences are not stacked on top of it.
+        return new ActingHeadedDialog(shell, WelcomeNote.TITLE, WelcomeNote.welcome(toggleKey()),
+                WelcomeNote.WELCOME_BUTTONS, button -> {
+                    if (button == WelcomeNote.WELCOME_PREFERENCES) {
+                        // Later, once the welcome's open() has returned: the action runs inside the
+                        // button's click, closed but not yet unwound, and the Preferences dialog
+                        // would otherwise run its own event loop from there.
                         Display.getCurrent().asyncExec(() -> OpenPreferencesHandler.open(activeShell()));
-                    } else if (button == WELCOME_DOCUMENTATION) {
+                    } else if (button == WelcomeNote.WELCOME_DOCUMENTATION) {
                         ExternalBrowser.open(WelcomeNote.DOCUMENTATION_URL);
                     }
                 });
@@ -176,55 +174,5 @@ final class WelcomeNotice {
         }
         IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
         return window == null ? null : window.getShell();
-    }
-
-    /** What a button press does; the index is the button's position. */
-    @FunctionalInterface
-    interface ButtonAction {
-        void pressed(int button);
-    }
-
-    /**
-     * A {@link MessageDialog} that runs an action for the pressed button. Acting inside
-     * {@code buttonPressed}, instead of on {@code open()}'s return value, makes the dialog work the
-     * same whether or not it blocks: the startup path blocks, tests do not.
-     */
-    private static final class ActingDialog extends MessageDialog {
-
-        private final ButtonAction action;
-
-        /**
-         * The last button (Close) is the default, so Enter just dismisses the note. GTK shows the
-         * default button rightmost, so the buttons' on-screen order varies by platform; their
-         * indexes, which {@link ButtonAction} gets, do not.
-         */
-        ActingDialog(Shell shell, String message, String[] buttons, ButtonAction action) {
-            super(shell, WelcomeNote.TITLE, null, message, MessageDialog.INFORMATION, buttons.length - 1, buttons);
-            this.action = action;
-        }
-
-        @Override
-        protected void buttonPressed(int buttonId) {
-            super.buttonPressed(buttonId); // sets the return code and closes
-            action.pressed(buttonId);
-        }
-    }
-
-    /** The welcome: a {@link HeadedMessageDialog} that runs an action for the pressed button, as {@link ActingDialog}. */
-    private static final class WelcomeDialog extends HeadedMessageDialog {
-
-        private final ButtonAction action;
-
-        /** Close, the last button, is the default (see {@link ActingDialog}). */
-        WelcomeDialog(Shell shell, HeadedMessage message, String[] buttons, ButtonAction action) {
-            super(shell, WelcomeNote.TITLE, MessageDialog.INFORMATION, message, buttons.length - 1, buttons);
-            this.action = action;
-        }
-
-        @Override
-        protected void buttonPressed(int buttonId) {
-            super.buttonPressed(buttonId); // sets the return code and closes
-            action.pressed(buttonId);
-        }
     }
 }
