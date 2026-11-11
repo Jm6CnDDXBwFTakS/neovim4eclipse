@@ -9,13 +9,16 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.core.resources.ICommand;
@@ -29,13 +32,16 @@ import org.eclipse.core.runtime.jobs.IJobManager;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.text.link.LinkedModeModel;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Table;
+import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -43,6 +49,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.osgi.framework.Bundle;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
@@ -164,6 +171,94 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * Starts JDT's Rename on the name at the caret: its linked editing, the name's occurrences
+     * edited together.
+     *
+     * <p>Right after the file opens, JDT may not have resolved the caret to a Java element yet (it
+     * parses the file in the background; on one core it can still be at it). Rename then opens a
+     * modal "Operation unavailable on the current selection" dialog, and the test hung inside the
+     * command until someone closed it (seen on Windows on one core). So this first waits for JDT
+     * to have the file's syntax tree ({@link #waitForJdtSyntaxTree}), then runs Rename. Should
+     * Rename still open a dialog, it is closed and Rename asked again, within {@code TestWait}'s
+     * limit: the wait is the readiness JDT itself offers, but Rename resolves the caret through
+     * JDT's Java model, which the tree's readiness only nearly guarantees. A dialog other than
+     * Rename's fails the test.
+     */
+    private void renameAtCaret() throws Exception {
+        waitForJdtSyntaxTree();
+        IDocument javaDocument = documentOf(javaEditor);
+        List<String> refused = new ArrayList<>(); // every dialog Rename opened, for the messages
+        List<String> last = new ArrayList<>(runClosingDialogs(RENAME));
+        refused.addAll(last);
+        waitUntil("Rename's linked editing on the name", TIMEOUT_MS, () -> {
+            if (LinkedModeModel.hasInstalledModel(javaDocument)) {
+                return true;
+            }
+            // Asked again only when the last try was refused: a Rename that started may take a
+            // moment to show its linked editing, and must not be started twice.
+            if (!last.isEmpty()) {
+                assertTrue(refused.stream().allMatch("Rename"::equals), "the dialogs that opened: " + refused);
+                last.clear();
+                last.addAll(runClosingDialogs(RENAME));
+                refused.addAll(last);
+            }
+            return false;
+        }, () -> "; Rename's dialogs: " + refused);
+        assertTrue(refused.stream().allMatch("Rename"::equals), "the dialogs that opened: " + refused);
+    }
+
+    /**
+     * Runs {@code commandId}, closing any modal dialog it opens ({@link #closeModalDialogsWhile}),
+     * and returns their titles. The watch lasts for the command only: it is tied to a shell of its
+     * own, never shown and disposed after, so later dialogs meet the usual error watch.
+     */
+    private List<String> runClosingDialogs(String commandId) {
+        Shell scope = new Shell(javaWidget.getShell());
+        try {
+            List<String> dialogs = closeModalDialogsWhile(scope);
+            runCommand(commandId);
+            return new ArrayList<>(dialogs);
+        } catch (Exception e) {
+            throw new IllegalStateException(commandId + " failed", e);
+        } finally {
+            scope.dispose();
+        }
+    }
+
+    /**
+     * Waits until JDT has the syntax tree of the Java editor's file: JDT's own wait,
+     * {@code SharedASTProvider.getAST(typeRoot, WAIT_YES, null)}, which returns once the
+     * background parse is done (and parses the file itself if none is running).
+     *
+     * <p>Called by name, through the JDT bundle's class loader: the test fragment has no JDT at
+     * compile time (the Java profiles add it at run time only), so JDT's types cannot be named
+     * here. {@code getAST} blocks, so it runs on a thread of its own while the UI thread keeps
+     * dispatching events, within {@code TestWait}'s limit. Example of what it waits for: the
+     * {@code CompilationUnit} JDT's Mark Occurrences and Rename work from.
+     */
+    private void waitForJdtSyntaxTree() throws Exception {
+        Bundle jdtUi = Platform.getBundle("org.eclipse.jdt.ui");
+        assertNotNull(jdtUi, "JDT is not installed in the test Eclipse (use -PuiHeavyJava or -Pall)");
+        Class<?> javaUi = jdtUi.loadClass("org.eclipse.jdt.ui.JavaUI");
+        Object typeRoot = javaUi.getMethod("getEditorInputTypeRoot", IEditorInput.class).invoke(null, javaEditor.getEditorInput());
+        assertNotNull(typeRoot, "JDT knows no Java element for the editor's input");
+        Class<?> provider = jdtUi.loadClass("org.eclipse.jdt.ui.SharedASTProvider");
+        Object waitYes = provider.getField("WAIT_YES").get(null);
+        Method getAst = Arrays.stream(provider.getMethods())
+                .filter(m -> m.getName().equals("getAST") && m.getParameterCount() == 3)
+                .findFirst().orElseThrow(() -> new AssertionError("JDT's SharedASTProvider has no getAST(typeRoot, wait, monitor)"));
+        CompletableFuture<Object> ast = CompletableFuture.supplyAsync(() -> {
+            try {
+                return getAst.invoke(null, typeRoot, waitYes, null);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("SharedASTProvider.getAST failed", e);
+            }
+        });
+        waitUntil("JDT's syntax tree of the file", TIMEOUT_MS, ast::isDone);
+        assertNotNull(ast.get(), "JDT gave no syntax tree for the file");
+    }
+
     private String javaText() {
         return documentOf(javaEditor).get();
     }
@@ -266,7 +361,7 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
                 """;
         openJava("A.java", source);
         caretTo(source.indexOf("count"));
-        runCommand(RENAME);
+        renameAtCaret();
         settle();
 
         type(javaWidget, "ciw");
@@ -298,7 +393,7 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
                 """;
         openJava("A.java", source);
         caretTo(source.indexOf("count"));
-        runCommand(RENAME);
+        renameAtCaret();
         settle();
 
         type(javaWidget, "ea");
