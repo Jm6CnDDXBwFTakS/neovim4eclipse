@@ -990,8 +990,10 @@ description), give the dark theme its own value in a stylesheet (`css/`, listed 
 `build.properties`, added with `org.eclipse.e4.ui.css.swt.theme`), read it with
 `PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getColorRegistry().getRGB(id)`, and
 listen to the theme manager for the id and `IThemeManager.CHANGE_CURRENT_THEME`, hopping to the UI
-thread. Follow `editor/SearchColors`, and add a check like `SearchMatchColorFilesTest` that the
-values in `plugin.xml`, the stylesheet and the code agree.
+thread. Follow `editor/SearchColors`: the reading and listening sit in `editor/ThemeColorSource`,
+behind `SearchColors.Source`, so what the code makes of the color is tested in `tests/swt` with a
+source of the test's own. Add a check like `SearchMatchColorFilesTest` that the values in
+`plugin.xml`, the stylesheet and the code agree.
 
 **Add a setting for `init.lua` instead.** A Neovim-side switch that is set once and forgotten
 (`vim.g.neovim4eclipse_folds`, `vim.g.neovim4eclipse_problems`) is better as a global variable than

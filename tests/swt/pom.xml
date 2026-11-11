@@ -14,7 +14,8 @@
        WidgetOffsets, and
        CommandLineBox with OutputPopup (Neovim and the IDE behind its Commands interface); and the
        preference pages' bodies (prefs/NeovimPage, StatusBarPage, CtrlKeysPage, with
-       NeovimStatusSection), on an in-memory preference store. They
+       NeovimStatusSection), on an in-memory preference store; and SearchColors, with a color
+       source of the test's own. They
        need SWT and a display, like the UI tests, but not a started Eclipse: plain JUnit creates
        the SWT Display on its own thread, which saves the workbench start and lets them run in the
        IDE as ordinary JUnit tests. On a machine without a display run them under xvfb-run.
@@ -196,6 +197,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWheel.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusBarLabels.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/SearchHighlighter.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/SearchColors.java</include>
             <!-- The pages' bodies; the classes plugin.xml names, their workbench subclasses, are not
                  here (prefs/package-info, "Two classes per page"). -->
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/prefs/PreferenceConstants.java</include>

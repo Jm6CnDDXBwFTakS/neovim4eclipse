@@ -185,8 +185,10 @@ unless it is exactly one of the defaults, which the registry cannot tell apart.
 `SearchMatchColorFilesTest` checks that `plugin.xml`, the stylesheet and `OverlayColors` agree on
 both values, and that the stylesheet's selector names the color.
 
-`editor/SearchColors` reads the current theme's color registry and listens to the theme manager (a
-change of the color or of the theme), hopping to the UI thread, as either may come on another. The
+`editor/SearchColors` takes the color from a `SearchColors.Source`: in Eclipse
+`editor/ThemeColorSource`, which reads the current theme's color registry and listens to the theme
+manager (a change of the color or of the theme); in `tests/swt` a source of the test's own. It hops
+to the UI thread, as either change may come on another. The
 editor's own colors are watched on the widget, at each paint: they change through the Text Editors
 preferences, but some editors set them straight on the widget (a TextMate theme in the Generic
 Editor), and the widget repaints after either; a paint with other colors than last time schedules

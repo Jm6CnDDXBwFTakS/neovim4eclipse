@@ -5,16 +5,11 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.function.BiConsumer;
 
-import org.eclipse.jface.resource.ColorRegistry;
-import org.eclipse.jface.util.IPropertyChangeListener;
-import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Listener;
-import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.themes.IThemeManager;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 
@@ -29,10 +24,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * Eclipse &gt; Search match</i>, where a user changes it. Its default is an amber, 255,214,102, as
  * Vim users know {@code hlsearch}; Eclipse's dark theme gets a darker amber, 110,88,24, from the
  * plug-in's stylesheet for that theme ({@code css/e4-dark_neovim4eclipse.css}), the way JDT gives
- * its syntax colors a dark default. The value is read from the current theme's
- * {@link ColorRegistry}, which holds the default, the theme's value and the user's choice in that
- * order. Neovim's {@code Search} highlight group is not used: its colors are made for Neovim's own
- * screen, not for the editor's theme.
+ * its syntax colors a dark default. The value is read from the current theme's color registry,
+ * which holds the default, the theme's value and the user's choice in that order: in Eclipse,
+ * {@link ThemeColorSource}, given as a {@link Source} (the SWT tests give one of their own, so this
+ * class needs no workbench). Neovim's {@code Search} highlight group is not used: its colors are
+ * made for Neovim's own screen, not for the editor's theme.
  *
  * <h2>Dark editors without Eclipse's dark theme</h2>
  * Where the registry holds one of the two defaults, the editor's background picks between them
@@ -47,10 +43,30 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * its own changes the matches without changing Eclipse's own search marks, and its default could
  * differ from that lavender, which a dark theme turns into a gray that matches barely show on.
  *
- * <p>A change of the color, or of the theme, reaches the editor at once through the theme
- * manager's listener. UI thread, but for that listener, which may be called on another.
+ * <p>A change of the color, or of the theme, reaches the editor at once through the source's
+ * listener. UI thread, but for that listener, which may be called on another.
  */
 final class SearchColors {
+
+    /**
+     * Where the chosen color comes from, and who says it changed: the theme's registry in Eclipse
+     * ({@link ThemeColorSource}). Example, in a test: a source that answers green and calls its
+     * listener when the test changes it.
+     */
+    interface Source {
+
+        /**
+         * The color in Colors and Fonts now (the user's, the theme's or plugin.xml's), or null where
+         * none answers.
+         */
+        RGB chosen();
+
+        /**
+         * Calls {@code changed} after each change of the color or of the theme, on any thread, until
+         * the returned stop runs.
+         */
+        Runnable listen(Runnable changed);
+    }
 
     /** The color definition's id in {@code plugin.xml}, and the key of a user's choice. */
     static final String COLOR_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch";
@@ -60,14 +76,9 @@ final class SearchColors {
 
     private final StyledText widget;
     private final BiConsumer<Color, Color> apply;
-    /** The theme manager, or null without a running workbench (see {@link #themeManager}). */
-    private final IThemeManager themes = themeManager();
-    /**
-     * Hears the theme: a change of this color, or another theme. Either may happen on any thread
-     * (a preference import, a Job), and the colors go to the widget, so the work hops to the
-     * widget's UI thread.
-     */
-    private final IPropertyChangeListener listener = this::onThemeChange;
+    private final Source source;
+    /** Stops hearing the source; run by {@link #dispose}. */
+    private final Runnable stopListening;
     /** Notices a change of the editor's own colors at the next paint (see the class comment). */
     private final Listener paint = event -> onPaint();
     /** The widget's background and text color the colors were last made for. UI thread. */
@@ -78,14 +89,17 @@ final class SearchColors {
 
     /**
      * Hands {@code apply} the match and box colors now and after every change of the color, the
-     * theme, or the editor's background or text color, until {@link #dispose}.
+     * theme, or the editor's background or text color, until {@link #dispose}. Example, as the
+     * editor builds it:
+     * {@code new SearchColors(styledText, new ThemeColorSource(), highlighter::setColors)}.
      */
-    SearchColors(StyledText widget, BiConsumer<Color, Color> apply) {
+    SearchColors(StyledText widget, Source source, BiConsumer<Color, Color> apply) {
         this.widget = widget;
         this.apply = apply;
-        if (themes != null) {
-            themes.addPropertyChangeListener(listener);
-        }
+        this.source = source;
+        // A change of this color, or another theme, may come on any thread (a preference import, a
+        // Job), and the colors go to the widget, so the work hops to the widget's UI thread.
+        this.stopListening = source.listen(this::onSourceChange);
         widget.addListener(SWT.Paint, paint);
         update();
     }
@@ -103,9 +117,8 @@ final class SearchColors {
         return new Color(rgb(mixed));
     }
 
-    private void onThemeChange(PropertyChangeEvent event) {
-        String property = event.getProperty();
-        if ((COLOR_ID.equals(property) || IThemeManager.CHANGE_CURRENT_THEME.equals(property)) && !widget.isDisposed()) {
+    private void onSourceChange() {
+        if (!widget.isDisposed()) {
             widget.getDisplay().asyncExec(this::update);
         }
     }
@@ -124,9 +137,7 @@ final class SearchColors {
     /** Stops listening; an update already queued does nothing. UI thread. */
     void dispose() {
         disposed = true;
-        if (themes != null) {
-            themes.removePropertyChangeListener(listener);
-        }
+        stopListening.run();
         if (!widget.isDisposed()) {
             widget.removeListener(SWT.Paint, paint);
         }
@@ -142,26 +153,10 @@ final class SearchColors {
         apply.accept(match, box(match));
     }
 
-    /** The color in Colors and Fonts: the user's, the theme's or plugin.xml's; {@link #DEFAULT} where none answers. */
+    /** The color in Colors and Fonts ({@link Source#chosen}); {@link #DEFAULT} where none answers. */
     private RGB registryRgb() {
-        RGB rgb = themes != null ? themes.getCurrentTheme().getColorRegistry().getRGB(COLOR_ID) : null;
+        RGB rgb = source.chosen();
         return rgb != null ? rgb : DEFAULT;
-    }
-
-    /**
-     * The workbench's theme manager, or null when there is no running workbench: an editor may
-     * attach while Eclipse shuts down, when {@link PlatformUI#getWorkbench()} may throw. The
-     * highlights then keep {@link #DEFAULT} (chosen by background) and hear no theme change.
-     */
-    private static IThemeManager themeManager() {
-        if (!PlatformUI.isWorkbenchRunning()) {
-            return null;
-        }
-        try {
-            return PlatformUI.getWorkbench().getThemeManager();
-        } catch (IllegalStateException e) {
-            return null; // closed between the check and the call
-        }
     }
 
     private static RGB rgb(int rgb) {
