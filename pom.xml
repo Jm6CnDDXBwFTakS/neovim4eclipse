@@ -71,7 +71,7 @@
     <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
     <!-- Code coverage (see CONTRIBUTING.md, "Code coverage"). 0.8.14 or newer is needed to run on a
          Java 25 JDK: an older agent cannot read the JDK's own class files and fails at start-up. -->
-    <jacoco.version>0.8.15</jacoco.version>
+    <jacoco.version>0.8.16</jacoco.version>
 
     <!-- Third-party library versions: the ONLY place they are defined. The plug-in build copies
          the jars into plugins/.../lib/ (version-less names, see its pom.xml) and the unit tests
