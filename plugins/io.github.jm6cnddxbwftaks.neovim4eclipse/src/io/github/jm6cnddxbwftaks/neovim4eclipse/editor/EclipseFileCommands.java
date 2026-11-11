@@ -40,6 +40,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EnewEditors;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WriteCopyChoice;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
 /**
@@ -108,7 +109,8 @@ public final class EclipseFileCommands {
      * editor without a file (an untitled one) is saved as {@code name} instead, as Vim names such a
      * buffer after the file it writes ({@link OtherFileWrites#copyOrSaveAs}).
      * Neovim's own {@code :w other.txt} checks for an existing file before Eclipse is asked; here the
-     * command is Eclipse's, so this does it: E13 without {@code !}. UI thread.
+     * command is Eclipse's, so this does it: E13 without {@code !}, and the other checks of
+     * {@link WriteCopyChoice}, which decides. UI thread.
      *
      * @param name          usually a full path (Neovim expanded it as its own {@code :w} would); a
      *                      relative one is relative to the window's folder ({@link EditPath})
@@ -117,36 +119,51 @@ public final class EclipseFileCommands {
      */
     static boolean writeCopy(ITextEditor editor, String name, boolean force, boolean onlyIfChanged, boolean createFolders) {
         IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
-        if (onlyIfChanged && !part.isDirty()) {
-            return true;
-        }
         Path target = EditPath.resolve(name, Path.of(System.getProperty("user.home")), windowFolder(editor));
-        if (target == null) {
-            HostCommands.showError(editor, "Eclipse cannot tell where \"" + name + "\" goes: this file has no folder");
-            return false;
-        }
-        // The editor's own file under another spelling (other case on Windows and macOS, a link, a
-        // junction): Vim's :wq of that name writes the buffer to its own file, a save, not a copy
-        // onto the file the editor shows (FilePaths, the one rule Neovim's side uses too).
         Path own = EditorAttachManager.fileOf(editor.getEditorInput());
-        if (own != null && FilePaths.same(own, target)) {
-            return save(editor, createFolders, !onlyIfChanged, force);
-        }
-        if (!force && Files.exists(target)) {
-            HostCommands.showError(editor, "E13: File exists (add ! to override)");
-            return false;
-        }
-        // Files.exists follows links: a link to a missing file is no file to it, and the copy
-        // would create the link's target, wherever it points (DanglingLinks). As an overwrite: !.
-        if (!force && DanglingLinks.isDangling(target)) {
-            HostCommands.showError(editor, DanglingLinks.refusal(name, target));
-            return false;
-        }
-        // An untitled editor is saved as the file instead, so the close that follows has no unsaved
-        // changes to ask about (OtherFileWrites.copyOrSaveAs; the Neovim buffer goes with the editor).
-        DocumentWrite.Result result = OtherFileWrites.copyOrSaveAs(editor, part, target, createFolders, force);
-        HostCommands.showMessage(editor, result.ok() ? result.message() : result.error(), !result.ok());
-        return result.ok();
+        // Which of the checks applies is WriteCopyChoice (tested in tests/unit); here the editor and
+        // the disk are read for it, and the choice is carried out.
+        WriteCopyChoice choice = WriteCopyChoice.of(part.isDirty(), onlyIfChanged, force,
+                target == null ? null : new WriteCopyChoice.Target() {
+                    @Override
+                    public boolean isOwnFile() {
+                        return own != null && FilePaths.same(own, target);
+                    }
+
+                    @Override
+                    public boolean exists() {
+                        return Files.exists(target);
+                    }
+
+                    @Override
+                    public boolean isDanglingLink() {
+                        return DanglingLinks.isDangling(target);
+                    }
+                });
+        return switch (choice) { // every choice named: a new one fails to compile here until handled
+            case NOTHING -> true;
+            case NO_FOLDER -> {
+                HostCommands.showError(editor, "Eclipse cannot tell where \"" + name + "\" goes: this file has no folder");
+                yield false;
+            }
+            case SAVE_OWN -> save(editor, createFolders, !onlyIfChanged, force);
+            case FILE_EXISTS -> {
+                HostCommands.showError(editor, WriteCopyChoice.E13);
+                yield false;
+            }
+            case DANGLING_LINK -> {
+                HostCommands.showError(editor, DanglingLinks.refusal(name, target));
+                yield false;
+            }
+            case COPY -> {
+                // An untitled editor is saved as the file instead, so the close that follows has no
+                // unsaved changes to ask about (OtherFileWrites.copyOrSaveAs; the Neovim buffer goes
+                // with the editor).
+                DocumentWrite.Result result = OtherFileWrites.copyOrSaveAs(editor, part, target, createFolders, force);
+                HostCommands.showMessage(editor, result.ok() ? result.message() : result.error(), !result.ok());
+                yield result.ok();
+            }
+        };
     }
 
     /**

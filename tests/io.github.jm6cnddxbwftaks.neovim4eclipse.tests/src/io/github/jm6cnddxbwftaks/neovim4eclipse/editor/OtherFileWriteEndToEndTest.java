@@ -625,14 +625,10 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals("alpha\nbeta\ngamma\n", fileText("test.txt"), "the file has not");
     }
 
-    @Test
-    void xWithANameWritesNothingWithoutChanges() {
-        ITextEditor target = editor;
-        runInBox(widget, "x copy.txt");
-        expectClosed(target);
-        assertFalse(project.getFile("copy.txt").exists());
-    }
-
+    /**
+     * Which of the checks applies (E13 here; :x without changes, the editor's own file, a link to a
+     * missing file) is WriteCopyChoiceTest (tests/unit); this shows one refusal carried out.
+     */
     @Test
     void wqWithAnExistingNameNeedsBangAndStaysOpen() throws Exception {
         createFile("taken.txt", "taken\n");
