@@ -5,6 +5,8 @@ show. Motions, operators, text objects,
 visual mode, registers, macros and `:` commands work on the buffer you see; Eclipse keeps owning
 files, rendering, content assist and its own commands.
 
+**See it work:** a demo is available at the top of the [README](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#readme).
+
 **Works with Eclipse:**
 
 - Vim's splits are Eclipse editors: `:split`, `:vsplit` and `Ctrl-W v` put the file in an editor

@@ -180,8 +180,10 @@ a checklist, to fill in the form from. Why the values are what they are:
 - **Update Site URL:** the composite site, which never changes.
 - **Supported Eclipse Release(s):** tick a release only once it is out and tested on.
 - **Feature ID:** the feature's ID, without the `.feature.group` suffix p2 adds; Required.
-- **Screenshots** (up to 4; png, gif or jpg; 16 MB): the README's demo, then the three screenshots
-  (*Images*, below).
+- **Screenshots** (up to 4; png, gif or jpg; 16 MB): the three screenshots (*Images*, below), then
+  the README's demo. The listing shows each picture through a resizing style, which keeps only a
+  GIF's first frame: the demo appears there as a still (a plain editor), so it goes last, and the
+  description links to the README, where it plays.
 
 **The description**, [releng/marketplace/description.md](../../releng/marketplace/description.md)
 (a small Markdown the tool turns into HTML for the form's source view), says, up front:
