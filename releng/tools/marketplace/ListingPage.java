@@ -68,8 +68,9 @@ public final class ListingPage {
                 <h2>Checklist</h2>
                 <ol>
                 <li>Look at every picture before uploading it: it is public, so no home folder or account name may show.</li>
-                <li>Upload the logo and the pictures, in the order above. A <code>demo-new.gif</code> is a recording not
-                committed yet: upload <code>demo.gif</code> unless you mean to commit the new one too.</li>
+                <li>Upload the logo and the four screenshots, in the order above. Not the demo: the listing shows only a
+                GIF's first frame, and the description links to the README, where it plays. A <code>demo-new.gif</code>
+                is a recording not committed yet; commit it (pictures offers to) for the README to show it.</li>
                 <li>Tick each supported Eclipse release up to the newest tested one, no further.</li>
                 <li>After saving, run <code>java releng/tools/marketplace/Marketplace.java submitted</code>, so the next run lists only what changed.</li>
                 </ol>

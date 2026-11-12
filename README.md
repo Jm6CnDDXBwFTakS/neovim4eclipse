@@ -7,9 +7,9 @@ text objects, visual mode, registers, macros, ex commands) works on the buffer y
 Neovim owns editing; Eclipse owns files and rendering.
 
 <!-- docs/images/demo.gif: a loop on a small Java file (ciw, a macro, :%s, gd, content assist in
-     insert mode, :e!). It starts and ends on the same frame. Record it again when the behavior it
+     insert mode, a split, :e!). It starts and ends on the same frame. Record it again when the behavior it
      shows changes: java releng/tools/marketplace/Marketplace.java pictures (DemoRecordingTest). -->
-![Neovim editing a Java file in Eclipse: ciw, a recorded macro, :%s, gd to a declaration, content assist in insert mode and :e! to revert](docs/images/demo.gif)
+![Neovim editing a Java file in Eclipse: ciw, a recorded macro, :%s, gd to a declaration, content assist in insert mode, a split with Ctrl-W s and :e! to revert](docs/images/demo.gif)
 
 **Status: 0.2.16, an early release.** It works day to day on Linux, macOS and Windows; expect rough
 edges, see [Known limitations](#known-limitations).

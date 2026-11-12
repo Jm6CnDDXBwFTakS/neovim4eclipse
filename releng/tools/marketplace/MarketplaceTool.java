@@ -46,7 +46,7 @@ import common.Version;
  * {@code DemoRecordingTest}) with the pinned Neovim under {@code xvfb-run}, so every run draws the
  * same Linux/GTK window at the same size, then joins the demo's pictures into
  * {@code target/marketplace/demo-new.gif} ({@link Gif}). The listing page shows it beside the
- * committed {@code demo.gif} until the two are the same. The three screenshots are not committed: the
+ * committed {@code demo.gif} until the two are the same. The four screenshots are not committed: the
  * listing takes them as uploads, and a picture in the repository stays in its history for good.
  * The demo is (the README shows it), after y/N, once you have looked at it: it is public. The
  * pictures' Eclipse keeps its files under {@code pictures.home} (the test pom), so no home folder
@@ -80,8 +80,12 @@ public final class MarketplaceTool {
     /** Where pictures puts a new recording of the demo, in {@link #OUT}, apart from the committed one's copy. */
     static final String NEW_DEMO = "demo-new.gif";
     static final String ICONS = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/";
-    /** The screenshots, in the order the listing shows them after the demo. */
-    static final List<String> SCREENSHOTS = List.of("01-visual-mode.png", "02-command-line.png", "03-problems.png");
+    /**
+     * The screenshots, in the order the listing shows them. Four, the form's limit, and no demo
+     * among them: the listing shows only a GIF's first frame (docs/design/MARKETPLACE.md).
+     */
+    static final List<String> SCREENSHOTS = List.of("01-visual-mode.png", "02-command-line.png", "03-problems.png",
+            "04-content-assist.png");
     private static final String TEST_FRAGMENT = "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests";
     /** As {@code ScreenshotCaptureTest} wants it: room for its window, in full color (Xvfb's default is 640x480 at 8 bits). */
     private static final String SCREEN = "-screen 0 1600x1000x24";
@@ -172,12 +176,15 @@ public final class MarketplaceTool {
         // Copies of the committed files, made afresh each run so the page never shows an old one.
         copy(root.resolve(MARKETPLACE_LOGO), out.resolve("marketplace-logo.png"));
         copy(root.resolve(DEMO), out.resolve("demo.gif"));
-        List<String> images = new ArrayList<>(List.of("marketplace-logo.png", "demo.gif"));
+        // The uploads first, in their order (the logo, the screenshots), then the README's demo,
+        // which is shown here but not uploaded.
+        List<String> images = new ArrayList<>(List.of("marketplace-logo.png"));
+        SCREENSHOTS.stream().filter(s -> Files.isRegularFile(out.resolve(s))).forEach(images::add);
+        images.add("demo.gif");
         Path recorded = out.resolve(NEW_DEMO);
         if (Files.isRegularFile(recorded) && !sameBytes(recorded, root.resolve(DEMO))) {
             images.add(NEW_DEMO); // a recording not committed (yet): shown, so it can be compared
         }
-        SCREENSHOTS.stream().filter(s -> Files.isRegularFile(out.resolve(s))).forEach(images::add);
         Path page = out.resolve("listing.html");
         write(page, ListingPage.html(listing, images, changes));
         System.out.println("The listing page: " + page.toUri());

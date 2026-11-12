@@ -29,7 +29,6 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IViewReference;
@@ -42,9 +41,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Records the README's demo: a Java file edited through Neovim (ciw, a macro, {@code :%s},
- * {@code gd}, content assist in insert mode, {@code :e!}), one picture after every key, so the
- * demo can be made again after the UI changes instead of by hand. Not a test, though named like
- * one: it checks only what it needs to reach each state.
+ * {@code gd}, content assist in insert mode, a split, {@code :e!}), one picture after every key,
+ * so the demo can be made again after the UI changes instead of by hand. Not a test, though
+ * named like one: it checks only what it needs to reach each state.
  *
  * <p>Runs with the {@code screenshots} profile, beside {@link ScreenshotCaptureTest}. It writes
  * {@code target/screenshots/demo/frame-0001.png} and on, and {@code frames.tsv}: one line per
@@ -249,6 +248,21 @@ class DemoRecordingTest extends EndToEndTestBase {
         escape(folder);
         endStep(folder);
 
+        // A split: Ctrl-W s opens a second editor on the file, above this one, and the change made
+        // in it shows in both, as in two Vim windows on one buffer; :q closes it again.
+        search(folder, "beta");
+        ITextEditor below = (ITextEditor) page().getActiveEditor();
+        splitAbove(folder);
+        keys(folder, "ciwdelta");
+        escape(folder);
+        picture(folder, STEP_MS); // both editors show delta
+        command(folder, ':', "q");
+        waitUntil("the split closed", TIMEOUT_MS, () -> page().getActiveEditor() == below
+                && page().getEditorReferences().length == 1);
+        waitForAttach(below, "Greeter.java again");
+        text = widgetOf(below);
+        caption.setLength(0); // no hold: the next step reverts the change at once
+
         // :e! reverts the file, and gg0 puts the cursor where the demo began.
         keys(folder, "gg0");
         command(folder, ':', "e!");
@@ -264,9 +278,10 @@ class DemoRecordingTest extends EndToEndTestBase {
 
     /**
      * The demo's whole length, in milliseconds: every picture's time is stretched by the same
-     * factor to reach it, so the rhythm keeps its shape. 40 seconds reads at ease without dragging.
+     * factor to reach it, so the rhythm keeps its shape. 45 seconds reads at ease without dragging:
+     * with the split step, a little brisker than the 40 the demo lasted without it.
      */
-    private static final int DEMO_MS = 40_000;
+    private static final int DEMO_MS = 45_000;
 
     /** The {@code frames.tsv} lines: each picture and its time, stretched so the demo lasts {@link #DEMO_MS}. */
     private List<String> timedFrames() {
@@ -338,17 +353,11 @@ class DemoRecordingTest extends EndToEndTestBase {
     /**
      * Ctrl+Space, as a user presses it in insert mode: Eclipse's content assist opens its list,
      * filtered by what is typed ("si" leaves {@code size()}), and Enter takes the first proposal.
-     * The key event runs the workbench's key bindings (see {@link UiTestSupport#m1Key}).
      */
     private void contentAssist(File folder) {
-        Event space = new Event();
-        space.keyCode = ' ';
-        space.character = ' ';
-        space.stateMask = SWT.CTRL;
-        space.doit = true;
-        text.notifyListeners(SWT.KeyDown, space);
+        ContentAssist.open(text);
         caption.append(" Ctrl+Space ");
-        waitUntil("the content assist list", TIMEOUT_MS, () -> proposalList() != null);
+        waitUntil("the content assist list", TIMEOUT_MS, () -> ContentAssist.proposals(window) != null);
         picture(folder, STEP_MS);
         String before = doc.get();
         Event enter = new Event();
@@ -356,37 +365,29 @@ class DemoRecordingTest extends EndToEndTestBase {
         enter.character = SWT.CR;
         enter.doit = true;
         text.notifyListeners(SWT.KeyDown, enter);
-        waitUntil("the proposal inserted", TIMEOUT_MS, () -> !doc.get().equals(before) && proposalList() == null);
+        waitUntil("the proposal inserted", TIMEOUT_MS, () -> !doc.get().equals(before) && ContentAssist.proposals(window) == null);
         caption.append('⏎');
         picture(folder, after('⏎'));
     }
 
-    /** The table of the open content assist list, if one is open. */
-    private Table proposalList() {
-        for (Shell shell : Display.getCurrent().getShells()) {
-            if (shell != window && shell.isVisible()) {
-                Table table = tableIn(shell);
-                if (table != null && table.getItemCount() > 0) {
-                    return table;
-                }
-            }
-        }
-        return null;
-    }
-
-    private static Table tableIn(org.eclipse.swt.widgets.Composite parent) {
-        for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
-            if (child instanceof Table table) {
-                return table;
-            }
-            if (child instanceof org.eclipse.swt.widgets.Composite composite) {
-                Table found = tableIn(composite);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
+    /**
+     * {@code Ctrl-W s}, as a user presses it in normal mode: the plug-in's Ctrl+W binding sends it
+     * to Neovim, and the split's new editor, a clone of this one in a stack above it, takes the
+     * focus. The keys after it go to that editor ({@link #text}) until {@code :q} closes it.
+     */
+    private void splitAbove(File folder) {
+        IEditorPart before = page().getActiveEditor();
+        UiTestSupport.ctrlKey(text, 'w');
+        caption.append(" Ctrl-W ");
+        picture(folder, after('w'));
+        UiTestSupport.type(text, 's');
+        waitUntil("the split's editor", TIMEOUT_MS, () -> page().getActiveEditor() != before
+                && page().getActiveEditor() instanceof ITextEditor);
+        ITextEditor above = (ITextEditor) page().getActiveEditor();
+        waitForAttach(above, "the split's editor");
+        text = widgetOf(above);
+        caption.append("s ");
+        picture(folder, after(' '));
     }
 
     /** Lets the step's result stay on screen, then clears the caption for the next one. */

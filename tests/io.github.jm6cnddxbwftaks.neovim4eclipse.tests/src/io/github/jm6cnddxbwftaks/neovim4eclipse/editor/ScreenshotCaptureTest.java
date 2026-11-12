@@ -50,7 +50,7 @@ import org.junit.jupiter.api.Test;
  * 8 bits per pixel, would cut the window off and lose the colors. Without a window manager the
  * window has no title bar, which suits a listing image.
  *
- * <p>The three pictures tell one story in a Java project, {@code shop}, as a user's workspace has
+ * <p>The four pictures tell one story in a Java project, {@code shop}, as a user's workspace has
  * it (the UI tests' own {@code e2e} project and {@code test.txt} are put away first, and every view
  * but the Project Explorer and the Outline is closed):
  * <ol>
@@ -62,6 +62,10 @@ import org.junit.jupiter.api.Test;
  *       finds the two other classes still calling {@code total()}; {@code :Eproblems} goes to the
  *       first, and {@code :clist} lists both in the output popup, Neovim's quickfix list of
  *       Eclipse's errors: what no Vim emulation shows.</li>
+ *   <li>{@code 04-content-assist.png}: at that first error, {@code ciw} on {@code total} and
+ *       Ctrl+Space: Eclipse's content assist lists {@code Invoice}'s methods, {@code sum()} among
+ *       them, with {@code INSERT} in the status bar. Eclipse's own features keep working in an
+ *       insert Neovim began.</li>
  * </ol>
  *
  * <p>How a screenshot is taken: {@link WindowPicture}.
@@ -218,6 +222,23 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
                 return popup != null && popup.getText().contains("Order.java") && popup.getText().contains("Receipt.java");
             });
             capture(window, "03-problems.png");
+
+            // 4. Content assist in insert mode, at that first error: ciw takes out the call to
+            // total(), and Ctrl+Space lists what Invoice offers instead, sum() among them. Eclipse's
+            // own feature, in an insert Neovim began.
+            // :clist's output has the focus and waits for a key, which closes it: Esc, typed into
+            // the popup as a user's goes. The :%s pattern's matches ('hlsearch') go too, through
+            // the API, so that only the list draws the eye.
+            UiTestSupport.escape(outputPopupIn(firstText));
+            waitUntil("the :clist output closed", TIMEOUT_MS, () -> outputPopupIn(firstText) == null);
+            session.commandAsync("nohlsearch");
+            session.commandAsync("call search('total(', 'cw')");
+            settle();
+            typeSlowly(firstText, "ciw");
+            waitUntil("insert mode, Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            ContentAssist.open(firstText);
+            waitUntil("the content assist list", TIMEOUT_MS, () -> ContentAssist.proposals(window) != null);
+            capture(window, "04-content-assist.png");
         } finally {
             // Also after a failed step: the base class's cleanup and any later test in this Eclipse
             // get the workbench as it was. The views and the font first, which cannot fail; the

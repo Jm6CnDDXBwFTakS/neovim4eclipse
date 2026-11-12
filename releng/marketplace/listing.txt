@@ -38,5 +38,5 @@ Supported Platform(s): Windows, Mac, Linux/GTK
 Minimum Java Version: Java {java}
 Feature ID: io.github.jm6cnddxbwftaks.neovim4eclipse.feature
 Install state: Required
-Screenshots: 01-visual-mode.png, 02-command-line.png, 03-problems.png, demo.gif
+Screenshots: 01-visual-mode.png, 02-command-line.png, 03-problems.png, 04-content-assist.png
 Additional Editors:

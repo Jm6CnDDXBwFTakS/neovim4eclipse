@@ -180,10 +180,10 @@ a checklist, to fill in the form from. Why the values are what they are:
 - **Update Site URL:** the composite site, which never changes.
 - **Supported Eclipse Release(s):** tick a release only once it is out and tested on.
 - **Feature ID:** the feature's ID, without the `.feature.group` suffix p2 adds; Required.
-- **Screenshots** (up to 4; png, gif or jpg; 16 MB): the three screenshots (*Images*, below), then
+- **Screenshots** (up to 4; png, gif or jpg; 16 MB): the four screenshots (*Images*, below), and not
   the README's demo. The listing shows each picture through a resizing style, which keeps only a
-  GIF's first frame: the demo appears there as a still (a plain editor), so it goes last, and the
-  description links to the README, where it plays.
+  GIF's first frame: the demo would show there as a still of a plain editor, so a fourth
+  screenshot takes its place. The description links to the README, where the demo plays.
 
 **The description**, [releng/marketplace/description.md](../../releng/marketplace/description.md)
 (a small Markdown the tool turns into HTML for the form's source view), says, up front:
@@ -223,14 +223,19 @@ a checklist, to fill in the form from. Why the values are what they are:
   visual line mode in `Invoice.java` (the mode in the status bar), the `:` box with
   `:%s/total/sum/g` typed, and, once it has run and `:w` saved it, `:clist` in the output popup: the
   errors Eclipse's compiler then finds in `Order.java` and `Receipt.java`, which `:Eproblems` made
-  Neovim's quickfix list. The third shows what a Vim emulation does not: Neovim working on Eclipse's
-  own problems, across files. `DemoRecordingTest` plays the README's demo a key at a time, with the
-  keys drawn in a band near the top, and the tool joins its pictures into `demo.gif`, keeping in
-  each frame only what changed. The demo shows the editor and the toolbar (no views), in JetBrains
-  Mono NL (`fonts-jetbrains-mono` on Debian and Ubuntu; the tool stops without it), with a made-up,
-  uneven typing rhythm stretched to 40 seconds.
+  Neovim's quickfix list; and, at the first of them, `ciw` on the broken call and Ctrl+Space:
+  Eclipse's content assist in an insert Neovim began. The third shows what a Vim emulation does
+  not: Neovim working on Eclipse's own problems, across files. The fourth answers what Vim users
+  ask first: whether Eclipse's own features keep working. `DemoRecordingTest` plays the README's
+  demo a key at a time, with the keys drawn in a band near the top, and the tool joins its
+  pictures into `demo.gif`, keeping in each frame only what changed. The demo shows the editor and
+  the toolbar (no views), in JetBrains Mono NL (`fonts-jetbrains-mono` on Debian and Ubuntu; the
+  tool stops without it), with a made-up, uneven typing rhythm stretched to 45 seconds. Its steps: `ciw`, a macro, `:%s`, `gd`, content
+  assist in insert mode, a split (`Ctrl-W s`, then a change that shows in both editors, `:q`) and
+  `:e!`. The split is one above the other: side by side, each editor would keep half of the 1100
+  pixels, too few for the file's longer lines.
 
-  The three screenshots are not committed: nothing shows them from the repository, so they are
+  The four screenshots are not committed: nothing shows them from the repository, so they are
   taken when the listing is submitted or refreshed and uploaded from `target/marketplace/`. A
   picture in the repository stays in its history for good, along with anything it shows by
   mistake. The demo is committed (the README shows it), after y/N, once you have looked at it.
