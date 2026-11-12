@@ -30,19 +30,19 @@ class StatusBarPage extends FieldEditorPreferencePage {
 
     @Override
     protected void createFieldEditors() {
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_MODE,
+        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_MODE,
                 "mode  (INSERT, V-BLOCK, rec @q)", getFieldEditorParent()));
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_CMD,
+        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_SHOWCMD,
                 "cmd  (pending command, e.g. 2d)", getFieldEditorParent()));
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_ITEM_STATUSLINE,
+        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_STATUSLINE,
                 "statusline  (Neovim's 'statusline')", getFieldEditorParent()));
         IntegerFieldEditor width = new IntegerFieldEditor(PreferenceConstants.STATUS_STATUSLINE_WIDTH,
                 "Statusline width (characters):", getFieldEditorParent());
         width.setValidRange(PreferenceConstants.STATUS_STATUSLINE_WIDTH_MIN, PreferenceConstants.STATUS_STATUSLINE_WIDTH_MAX);
         addField(width);
-        IntegerFieldEditor share = new IntegerFieldEditor(PreferenceConstants.STATUS_MAX_SHARE,
+        IntegerFieldEditor share = new IntegerFieldEditor(PreferenceConstants.STATUS_MAX_WIDTH_PERCENT,
                 "At most this share of the status bar (%):", getFieldEditorParent());
-        share.setValidRange(PreferenceConstants.STATUS_MAX_SHARE_MIN, PreferenceConstants.STATUS_MAX_SHARE_MAX);
+        share.setValidRange(PreferenceConstants.STATUS_MAX_WIDTH_PERCENT_MIN, PreferenceConstants.STATUS_MAX_WIDTH_PERCENT_MAX);
         addField(share);
     }
 

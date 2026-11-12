@@ -585,7 +585,7 @@
                </parameter>
                <visibleWhen checkEnabled="false">
                   <test
-                        property="io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar"
+                        property="io.github.jm6cnddxbwftaks.neovim4eclipse.showToggleButton"
                         value="true">
                   </test>
                </visibleWhen>
@@ -1260,7 +1260,7 @@
       <propertyTester
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.propertyTester"
             namespace="io.github.jm6cnddxbwftaks.neovim4eclipse"
-            properties="showToolbar,showMenu,offerGetNeovim"
+            properties="showToggleButton,showMenu,offerGetNeovim"
             type="java.lang.Object"
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.NeovimPropertyTester">
       </propertyTester>

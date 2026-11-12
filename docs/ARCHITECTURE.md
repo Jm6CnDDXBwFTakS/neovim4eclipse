@@ -432,7 +432,7 @@ colors stay. Design: [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
 
 ## Status bar items
 
-`ModeStatusContribution` shows the parts selected by the `statusItem*` preferences (`util/StatusItem`),
+`ModeStatusContribution` shows the parts selected by the `statusMode`, `statusShowcmd` and `statusStatusline` preferences (`util/StatusItem`),
 one label each: `editor/StatusBarLabels` owns the widgets and sizes them to their content (the mode's
 widest text as drawn; the statusline in characters of the editor's fixed-width font family at the bar's size, so
 Neovim's columns are exact) under the cap (`util/StatusBarWidths`; why a cap: JFace cuts the rightmost items, the plug-in's, once

@@ -35,7 +35,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WelcomeNote;
  * <ul>
  * <li>{@link PreferenceConstants#SHOW_WELCOME}, in the plug-in's preference store (per workspace,
  * with a check box on the Neovim page), turns both notes off.</li>
- * <li>{@link PreferenceConstants#WELCOME_SHOWN_LINE}, in the {@link ConfigurationScope} (per
+ * <li>{@link PreferenceConstants#WELCOME_SHOWN_FOR_VERSION}, in the {@link ConfigurationScope} (per
  * Eclipse installation), remembers which feature line was greeted. Eclipse has three such scopes:
  * {@code DefaultScope} (defaults, never saved), {@code InstanceScope} (the workspace, where the
  * preference store keeps everything else) and {@code ConfigurationScope} (the installation's
@@ -76,7 +76,7 @@ final class WelcomeNotice {
             }
             String version = plugin.getBundle().getVersion().toString();
             IEclipsePreferences record = ConfigurationScope.INSTANCE.getNode(Activator.PLUGIN_ID);
-            WelcomeNote.Kind kind = WelcomeNote.decide(record.get(PreferenceConstants.WELCOME_SHOWN_LINE, null),
+            WelcomeNote.Kind kind = WelcomeNote.decide(record.get(PreferenceConstants.WELCOME_SHOWN_FOR_VERSION, null),
                     version);
             if (kind == WelcomeNote.Kind.NONE) {
                 return;
@@ -159,7 +159,7 @@ final class WelcomeNotice {
         if (line == null) {
             return;
         }
-        record.put(PreferenceConstants.WELCOME_SHOWN_LINE, line);
+        record.put(PreferenceConstants.WELCOME_SHOWN_FOR_VERSION, line);
         try {
             record.flush(); // write it now: configuration scope is otherwise saved only at shutdown
         } catch (BackingStoreException e) {

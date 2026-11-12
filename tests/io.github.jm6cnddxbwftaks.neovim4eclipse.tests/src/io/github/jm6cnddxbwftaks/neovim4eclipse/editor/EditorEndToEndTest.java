@@ -1322,7 +1322,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     @Test
     void ctrlNWhileEclipseTypesRunsWordCompletion() {
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        store.setValue(PreferenceConstants.ctrlKeyInInsert('n'), true);
+        store.setValue(PreferenceConstants.ctrlKeyInsert('n'), true);
         try {
             document.set("apple\napricot\n");
             settle();
@@ -1338,7 +1338,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
             settle();
             expectText("apple\napricot\napple\n");
         } finally {
-            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('n'));
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('n'));
         }
     }
 
@@ -1354,7 +1354,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     void aNormalModeBindingStillOnInInsertModeRunsEclipsesCommand() {
         assumeFalse(PlatformUtil.isMac(), "Delete Line is Cmd+D on macOS: Ctrl+D runs nothing there");
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        store.setValue(PreferenceConstants.ctrlKeyInInsert('d'), false);
+        store.setValue(PreferenceConstants.ctrlKeyInsert('d'), false);
         try {
             type(widget, "gg");
             type(widget, 'A');
@@ -1369,7 +1369,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
             expectText("beta\ngamma\n");
             assertEquals(List.of("beta", "gamma"), io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(0, 0, -1, false)"));
         } finally {
-            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('d'));
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('d'));
         }
     }
 
@@ -1381,7 +1381,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     @Test
     void ctrlXCtrlOWhileEclipseTypesRunsContentAssist() {
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        store.setValue(PreferenceConstants.ctrlKeyInInsert('x'), true);
+        store.setValue(PreferenceConstants.ctrlKeyInsert('x'), true);
         try (CommandLog log = new CommandLog()) {
             List<String> run = log.run;
             type(widget, 'A');
@@ -1394,7 +1394,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
             escape(widget);
             waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
         } finally {
-            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('x'));
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('x'));
         }
     }
 
@@ -1478,7 +1478,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     @Test
     void ctrlCEndsAnInsertAsEscDoes() {
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        store.setValue(PreferenceConstants.ctrlKeyInInsert('c'), true);
+        store.setValue(PreferenceConstants.ctrlKeyInsert('c'), true);
         try {
             type(widget, "gg");
             type(widget, 'A');
@@ -1489,7 +1489,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
             typeSlowly("j.");
             expectText("alpha foo\nbeta foo\ngamma\n");
         } finally {
-            store.setToDefault(PreferenceConstants.ctrlKeyInInsert('c'));
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('c'));
         }
     }
 

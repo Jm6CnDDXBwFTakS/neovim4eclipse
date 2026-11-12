@@ -26,7 +26,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 /**
  * The Ctrl Keys page ({@link CtrlKeysPage}): its buttons, Restore Defaults, and what Apply stores,
  * on a store of its own with the plug-in's defaults ({@link PageTesting#store}). The Activator reads
- * the same keys ({@link PreferenceConstants#ctrlKeyInInsert}), so a value stored here is what the
+ * the same keys ({@link PreferenceConstants#ctrlKeyInsert}), so a value stored here is what the
  * editor would get.
  */
 class CtrlKeysPageTest {
@@ -75,10 +75,10 @@ class CtrlKeysPageTest {
         page.performDefaults();
         page.performOk();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertEquals(VimCtrlKeys.toNeovimByDefault(letter), store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)),
+            assertEquals(VimCtrlKeys.toNeovimByDefault(letter), store.getBoolean(PreferenceConstants.ctrlKeyNormal(letter)),
                     "normal " + letter);
             assertEquals(VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()),
-                    store.getBoolean(PreferenceConstants.ctrlKeyInInsert(letter)), "insert " + letter);
+                    store.getBoolean(PreferenceConstants.ctrlKeyInsert(letter)), "insert " + letter);
         }
     }
 
@@ -87,26 +87,26 @@ class CtrlKeysPageTest {
         press("Deselect All Normal");
         page.performOk();
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter)), "normal " + letter);
+            assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyNormal(letter)), "normal " + letter);
         }
         assertEquals(VimCtrlKeys.inInsertByDefault('w', PlatformUtil.isMac()),
-                store.getBoolean(PreferenceConstants.ctrlKeyInInsert('w')));
+                store.getBoolean(PreferenceConstants.ctrlKeyInsert('w')));
     }
 
     @Test
     void selectAllInsertThenApplyGivesEveryInsertLetterToNeovim() {
         press("Select All Insert");
         page.performOk();
-        assertTrue(store.getBoolean(PreferenceConstants.ctrlKeyInInsert('v')));
-        assertTrue(store.getBoolean(PreferenceConstants.ctrlKeyInInsert('s')));
-        assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyToNeovim('s')), "the Normal column is untouched");
+        assertTrue(store.getBoolean(PreferenceConstants.ctrlKeyInsert('v')));
+        assertTrue(store.getBoolean(PreferenceConstants.ctrlKeyInsert('s')));
+        assertFalse(store.getBoolean(PreferenceConstants.ctrlKeyNormal('s')), "the Normal column is untouched");
     }
 
     /** The page shows what is stored, not the defaults, when it opens. */
     @Test
     void thePageOpensWithTheStoredChoice() {
         page.dispose();
-        store.setValue(PreferenceConstants.ctrlKeyToNeovim('s'), !VimCtrlKeys.toNeovimByDefault('s'));
+        store.setValue(PreferenceConstants.ctrlKeyNormal('s'), !VimCtrlKeys.toNeovimByDefault('s'));
         page = new CtrlKeysPage(store);
         page.createControl(shell);
         int s = VimCtrlKeys.LETTERS.indexOf('s');

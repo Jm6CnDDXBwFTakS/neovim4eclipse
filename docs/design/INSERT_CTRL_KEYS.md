@@ -25,9 +25,9 @@ Ctrl+W  [ ] window commands: splits  [x] delete word before the cursor
 The 26 rows are one column: two halves side by side measured 950 px, wider than the Preferences
 dialog's page area.
 
-- **Normal** is the preference `ctrlKeyToNeovim.<letter>`, the one that existed before the Insert
+- **Normal** is the preference `ctrlKeyNormal.<letter>`, the one that existed before the Insert
   column, so an earlier choice keeps its meaning.
-- **Insert** is `ctrlKeyInInsert.<letter>`. Defaults on Windows and Linux: **W U R O T D**
+- **Insert** is `ctrlKeyInsert.<letter>`. Defaults on Windows and Linux: **W U R O T D**
   (delete word, delete to the insert's start, insert a register, one normal command, indent,
   unindent). A, C, V, X, Z, S, F stay Eclipse's (select all, copy, paste, cut, undo, save, find).
 - **macOS**: every letter with a Vim insert meaning, since Eclipse's own shortcuts use Cmd there.

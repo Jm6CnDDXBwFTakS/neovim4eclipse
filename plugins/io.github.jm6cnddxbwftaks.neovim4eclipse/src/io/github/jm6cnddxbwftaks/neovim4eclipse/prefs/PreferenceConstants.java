@@ -21,9 +21,9 @@ public final class PreferenceConstants {
     public static final String REMOVED_NVIM_PROGRAM = "nvimExecutable";
 
     /** Whether the Neovim toolbar button (the logo) is visible. */
-    public static final String SHOW_TOOLBAR = "showToolbar";
+    public static final String SHOW_TOGGLE_BUTTON = "showToggleButton";
 
-    public static final boolean SHOW_TOOLBAR_DEFAULT = true;
+    public static final boolean SHOW_TOGGLE_BUTTON_DEFAULT = true;
 
     /** Whether the Neovim menu is in the menu bar. */
     public static final String SHOW_MENU = "showMenu";
@@ -52,16 +52,16 @@ public final class PreferenceConstants {
     // ---- Which parts of the Vim status information the Eclipse status bar shows ----
 
     /** Show the mode ({@code INSERT}, {@code INSERT rec @q}). */
-    public static final String STATUS_ITEM_MODE = "statusItemMode";
+    public static final String STATUS_MODE = "statusMode";
     /** Show the pending command ({@code showcmd}, e.g. {@code 2d}). */
-    public static final String STATUS_ITEM_CMD = "statusItemCmd";
+    public static final String STATUS_SHOWCMD = "statusShowcmd";
     /** Show Neovim's own {@code 'statusline'}. */
-    public static final String STATUS_ITEM_STATUSLINE = "statusItemStatusline";
+    public static final String STATUS_STATUSLINE = "statusStatusline";
 
-    public static final boolean STATUS_ITEM_MODE_DEFAULT = true;
-    public static final boolean STATUS_ITEM_CMD_DEFAULT = true;
+    public static final boolean STATUS_MODE_DEFAULT = true;
+    public static final boolean STATUS_SHOWCMD_DEFAULT = true;
     /** Off by default: it is long and mostly repeats what Eclipse already shows (file, position). */
-    public static final boolean STATUS_ITEM_STATUSLINE_DEFAULT = false;
+    public static final boolean STATUS_STATUSLINE_DEFAULT = false;
 
     /**
      * How wide the statusline part is, in characters of the status bar's font. Neovim fits its
@@ -79,11 +79,11 @@ public final class PreferenceConstants {
      * The most the plug-in's labels may take of the status bar's width, in percent, so Eclipse's own
      * message area keeps room ({@code util/StatusBarWidths}).
      */
-    public static final String STATUS_MAX_SHARE = "statusMaxShare";
+    public static final String STATUS_MAX_WIDTH_PERCENT = "statusMaxWidthPercent";
 
-    public static final int STATUS_MAX_SHARE_DEFAULT = 40;
-    public static final int STATUS_MAX_SHARE_MIN = 10;
-    public static final int STATUS_MAX_SHARE_MAX = 90;
+    public static final int STATUS_MAX_WIDTH_PERCENT_DEFAULT = 40;
+    public static final int STATUS_MAX_WIDTH_PERCENT_MIN = 10;
+    public static final int STATUS_MAX_WIDTH_PERCENT_MAX = 90;
 
     // ---- Messages in the editor ----
 
@@ -115,37 +115,37 @@ public final class PreferenceConstants {
      * like the other preferences: the welcome is about installing the plug-in, so a second workspace
      * should not show it again. Not on any preference page.
      */
-    public static final String WELCOME_SHOWN_LINE = "welcomeShownLine";
+    public static final String WELCOME_SHOWN_FOR_VERSION = "welcomeShownForVersion";
 
     // ---- Which Ctrl+letter keys go to Neovim (Window > Preferences > Neovim > Ctrl Keys) ----
 
-    /** Prefix of the per-letter preferences; the lower-case letter follows, e.g. {@code ctrlKeyToNeovim.f}. */
-    public static final String CTRL_KEY_TO_NEOVIM_PREFIX = "ctrlKeyToNeovim.";
+    /** Prefix of the per-letter preferences; the lower-case letter follows, e.g. {@code ctrlKeyNormal.f}. */
+    public static final String CTRL_KEY_NORMAL_PREFIX = "ctrlKeyNormal.";
 
     /** Preference key for one letter: {@code true} sends Ctrl+letter to Neovim, {@code false} leaves it to Eclipse. */
-    public static String ctrlKeyToNeovim(char letter) {
-        return CTRL_KEY_TO_NEOVIM_PREFIX + Character.toLowerCase(letter);
+    public static String ctrlKeyNormal(char letter) {
+        return CTRL_KEY_NORMAL_PREFIX + Character.toLowerCase(letter);
     }
 
     /**
-     * Prefix of the per-letter insert-mode preferences: {@code ctrlKeyInInsert.w} is {@code true} when
+     * Prefix of the per-letter insert-mode preferences: {@code ctrlKeyInsert.w} is {@code true} when
      * Ctrl+W goes to Neovim in insert mode (docs/design/INSERT_CTRL_KEYS.md).
      */
-    public static final String CTRL_KEY_IN_INSERT_PREFIX = "ctrlKeyInInsert.";
+    public static final String CTRL_KEY_INSERT_PREFIX = "ctrlKeyInsert.";
 
     /** Preference key for one letter in insert mode: {@code true} sends it to Neovim there. */
-    public static String ctrlKeyInInsert(char letter) {
-        return CTRL_KEY_IN_INSERT_PREFIX + Character.toLowerCase(letter);
+    public static String ctrlKeyInsert(char letter) {
+        return CTRL_KEY_INSERT_PREFIX + Character.toLowerCase(letter);
     }
 
     /** Whether the key is one of the per-letter Ctrl-key preferences, normal or insert. */
     public static boolean isCtrlKeyKey(String key) {
-        return key != null && (key.startsWith(CTRL_KEY_TO_NEOVIM_PREFIX) || key.startsWith(CTRL_KEY_IN_INSERT_PREFIX));
+        return key != null && (key.startsWith(CTRL_KEY_NORMAL_PREFIX) || key.startsWith(CTRL_KEY_INSERT_PREFIX));
     }
 
     /** Whether the key is one of the status bar preferences: the three parts, the widths. */
     public static boolean isStatusItemKey(String key) {
-        return STATUS_ITEM_MODE.equals(key) || STATUS_ITEM_CMD.equals(key) || STATUS_ITEM_STATUSLINE.equals(key)
-                || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_SHARE.equals(key);
+        return STATUS_MODE.equals(key) || STATUS_SHOWCMD.equals(key) || STATUS_STATUSLINE.equals(key)
+                || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_WIDTH_PERCENT.equals(key);
     }
 }

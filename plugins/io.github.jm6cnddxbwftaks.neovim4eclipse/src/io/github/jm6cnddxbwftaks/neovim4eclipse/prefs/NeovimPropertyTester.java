@@ -7,11 +7,11 @@ import org.eclipse.core.expressions.PropertyTester;
 
 /**
  * Property tester for menu/toolbar {@code visibleWhen} expressions.
- * Properties: {@code io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar} (the Neovim toolbar button)
+ * Properties: {@code io.github.jm6cnddxbwftaks.neovim4eclipse.showToggleButton} (the Neovim toolbar button)
  * and {@code io.github.jm6cnddxbwftaks.neovim4eclipse.showMenu} (the Neovim menu in the menu bar).
  *
  * <p>{@code plugin.xml} decides when contributions are visible with <em>core expressions</em>,
- * small XML conditions such as {@code <test property="...showToolbar" value="true"/>}. A property
+ * small XML conditions such as {@code <test property="...showToggleButton" value="true"/>}. A property
  * tester answers such a test in Java. It is registered under
  * {@code org.eclipse.core.expressions.propertyTesters} with a namespace and property names; the
  * expression framework calls {@link #test} whenever it re-evaluates the condition. Eclipse caches
@@ -22,7 +22,7 @@ public class NeovimPropertyTester extends PropertyTester {
 
     @Override
     public boolean test(Object receiver, String property, Object[] args, Object expectedValue) {
-        if ("showToolbar".equals(property)) {
+        if ("showToggleButton".equals(property)) {
             return matches(ContributionVisibility.isShowToolbar(), expectedValue);
         }
         if ("showMenu".equals(property)) {

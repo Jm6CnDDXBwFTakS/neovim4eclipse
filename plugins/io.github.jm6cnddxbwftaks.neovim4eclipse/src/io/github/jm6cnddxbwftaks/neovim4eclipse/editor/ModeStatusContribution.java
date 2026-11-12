@@ -73,7 +73,7 @@ public final class ModeStatusContribution extends ContributionItem {
     /** The statusline's width in characters (preference). UI thread. */
     private int statuslineChars = PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT;
     /** The most of the bar the labels may take, in percent (preference). UI thread. */
-    private int maxShare = PreferenceConstants.STATUS_MAX_SHARE_DEFAULT;
+    private int maxShare = PreferenceConstants.STATUS_MAX_WIDTH_PERCENT_DEFAULT;
     /** Neovim's mode string ({@code nvim_get_mode().mode}); "" before Neovim said. */
     private String mode = "";
     /** Keys go to Eclipse: the mode label says {@code ECLIPSE}. */
@@ -213,7 +213,7 @@ public final class ModeStatusContribution extends ContributionItem {
         }
         chosen = activator.getStatusItems();
         statuslineChars = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH);
-        maxShare = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_SHARE);
+        maxShare = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_WIDTH_PERCENT);
     }
 
     /** The parts the user chose; only the mode while it says {@code ECLIPSE} ({@link StatusItem#shown}). */

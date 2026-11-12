@@ -254,7 +254,7 @@ class PluginXmlConsistencyTest {
     /**
      * A {@code visibleWhen} test of a property no tester declares is never true: the menu or button
      * would vanish for good, with only a log entry to say why. The menu and the toolbar button each
-     * have one ({@code showMenu}, {@code showToolbar}), and the menu's Get Neovim entry its own
+     * have one ({@code showMenu}, {@code showToggleButton}), and the menu's Get Neovim entry its own
      * ({@code offerGetNeovim}).
      */
     @Test
@@ -268,7 +268,7 @@ class PluginXmlConsistencyTest {
         }
         Set<String> used = attributes(extension(doc, "org.eclipse.ui.menus"), "test", "property");
         assertEquals(Set.of("io.github.jm6cnddxbwftaks.neovim4eclipse.showMenu",
-                "io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar",
+                "io.github.jm6cnddxbwftaks.neovim4eclipse.showToggleButton",
                 "io.github.jm6cnddxbwftaks.neovim4eclipse.offerGetNeovim"), used);
         assertTrue(declared.containsAll(used), "declared: " + declared + ", used: " + used);
     }

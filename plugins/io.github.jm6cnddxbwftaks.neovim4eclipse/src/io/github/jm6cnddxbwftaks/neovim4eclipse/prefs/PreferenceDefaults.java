@@ -36,21 +36,21 @@ final class PreferenceDefaults {
 
     /** Writes every default into {@code sink}. */
     static void fill(Sink sink) {
-        sink.put(PreferenceConstants.SHOW_TOOLBAR, PreferenceConstants.SHOW_TOOLBAR_DEFAULT);
+        sink.put(PreferenceConstants.SHOW_TOGGLE_BUTTON, PreferenceConstants.SHOW_TOGGLE_BUTTON_DEFAULT);
         sink.put(PreferenceConstants.SHOW_MENU, PreferenceConstants.SHOW_MENU_DEFAULT);
         sink.put(PreferenceConstants.ECLIPSE_SPLITS, PreferenceConstants.ECLIPSE_SPLITS_DEFAULT);
-        sink.put(PreferenceConstants.STATUS_ITEM_MODE, PreferenceConstants.STATUS_ITEM_MODE_DEFAULT);
-        sink.put(PreferenceConstants.STATUS_ITEM_CMD, PreferenceConstants.STATUS_ITEM_CMD_DEFAULT);
-        sink.put(PreferenceConstants.STATUS_ITEM_STATUSLINE, PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT);
+        sink.put(PreferenceConstants.STATUS_MODE, PreferenceConstants.STATUS_MODE_DEFAULT);
+        sink.put(PreferenceConstants.STATUS_SHOWCMD, PreferenceConstants.STATUS_SHOWCMD_DEFAULT);
+        sink.put(PreferenceConstants.STATUS_STATUSLINE, PreferenceConstants.STATUS_STATUSLINE_DEFAULT);
         sink.put(PreferenceConstants.STATUS_STATUSLINE_WIDTH, PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT);
-        sink.put(PreferenceConstants.STATUS_MAX_SHARE, PreferenceConstants.STATUS_MAX_SHARE_DEFAULT);
+        sink.put(PreferenceConstants.STATUS_MAX_WIDTH_PERCENT, PreferenceConstants.STATUS_MAX_WIDTH_PERCENT_DEFAULT);
         sink.put(PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.FLASH_ON_ERROR_DEFAULT);
         // A plugin_customization.ini (a product's, or -pluginCustomization <file>) can still change this
         // default: Eclipse applies it after the initializer. The UI tests set it to false that way.
         sink.put(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            sink.put(PreferenceConstants.ctrlKeyToNeovim(letter), VimCtrlKeys.toNeovimByDefault(letter));
-            sink.put(PreferenceConstants.ctrlKeyInInsert(letter), VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()));
+            sink.put(PreferenceConstants.ctrlKeyNormal(letter), VimCtrlKeys.toNeovimByDefault(letter));
+            sink.put(PreferenceConstants.ctrlKeyInsert(letter), VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac()));
         }
     }
 }

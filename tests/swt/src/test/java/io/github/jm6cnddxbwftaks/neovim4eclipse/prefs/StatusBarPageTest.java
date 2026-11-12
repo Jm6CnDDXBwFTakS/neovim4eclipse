@@ -109,7 +109,7 @@ class StatusBarPageTest {
         press(pushButton(shell, "Apply"));
 
         assertEquals(120, store.getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH));
-        assertEquals(!PreferenceConstants.STATUS_ITEM_STATUSLINE_DEFAULT, store.getBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE));
+        assertEquals(!PreferenceConstants.STATUS_STATUSLINE_DEFAULT, store.getBoolean(PreferenceConstants.STATUS_STATUSLINE));
     }
 
     /**

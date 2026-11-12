@@ -63,7 +63,7 @@ class NeovimPage extends FieldEditorPreferencePage {
 
         workbench = group("Workbench");
         addField(new BooleanFieldEditor(
-                PreferenceConstants.SHOW_TOOLBAR,
+                PreferenceConstants.SHOW_TOGGLE_BUTTON,
                 "Show the Neovim button on the main toolbar",
                 workbench));
 

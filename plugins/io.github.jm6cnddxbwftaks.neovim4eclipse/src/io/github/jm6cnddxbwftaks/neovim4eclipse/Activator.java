@@ -81,7 +81,7 @@ public class Activator extends AbstractUIPlugin {
 
         preferenceListener = event -> {
             String property = event.getProperty();
-            if (PreferenceConstants.SHOW_TOOLBAR.equals(property) || PreferenceConstants.SHOW_MENU.equals(property)) {
+            if (PreferenceConstants.SHOW_TOGGLE_BUTTON.equals(property) || PreferenceConstants.SHOW_MENU.equals(property)) {
                 ContributionVisibility.refresh();
             } else if (PreferenceConstants.isStatusItemKey(property)) {
                 applyStatusItems();
@@ -146,13 +146,13 @@ public class Activator extends AbstractUIPlugin {
     public Set<StatusItem> getStatusItems() {
         IPreferenceStore store = getPreferenceStore();
         Set<StatusItem> items = EnumSet.noneOf(StatusItem.class);
-        if (store.getBoolean(PreferenceConstants.STATUS_ITEM_MODE)) {
+        if (store.getBoolean(PreferenceConstants.STATUS_MODE)) {
             items.add(StatusItem.MODE);
         }
-        if (store.getBoolean(PreferenceConstants.STATUS_ITEM_CMD)) {
+        if (store.getBoolean(PreferenceConstants.STATUS_SHOWCMD)) {
             items.add(StatusItem.CMD);
         }
-        if (store.getBoolean(PreferenceConstants.STATUS_ITEM_STATUSLINE)) {
+        if (store.getBoolean(PreferenceConstants.STATUS_STATUSLINE)) {
             items.add(StatusItem.STATUSLINE);
         }
         return items;
@@ -160,12 +160,12 @@ public class Activator extends AbstractUIPlugin {
 
     /** Whether {@code Ctrl+letter} goes to Neovim (else Eclipse keeps it), as chosen in the preferences. */
     public boolean isCtrlKeyToNeovim(char letter) {
-        return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyToNeovim(letter));
+        return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyNormal(letter));
     }
 
     /** Whether {@code Ctrl+letter} goes to Neovim in insert mode, as chosen in the preferences. */
     public boolean isCtrlKeyInInsert(char letter) {
-        return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyInInsert(letter));
+        return getPreferenceStore().getBoolean(PreferenceConstants.ctrlKeyInsert(letter));
     }
 
     /** A status item preference changed: tell the session what to fetch and redraw the status bar. */

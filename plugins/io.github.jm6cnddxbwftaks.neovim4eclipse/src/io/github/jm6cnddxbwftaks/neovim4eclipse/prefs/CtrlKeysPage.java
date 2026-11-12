@@ -144,8 +144,8 @@ class CtrlKeysPage extends PreferencePage {
         IPreferenceStore store = getPreferenceStore();
         for (int i = 0; i < normal.length; i++) {
             char letter = VimCtrlKeys.LETTERS.charAt(i);
-            String n = PreferenceConstants.ctrlKeyToNeovim(letter);
-            String in = PreferenceConstants.ctrlKeyInInsert(letter);
+            String n = PreferenceConstants.ctrlKeyNormal(letter);
+            String in = PreferenceConstants.ctrlKeyInsert(letter);
             normal[i].setSelection(defaults ? store.getDefaultBoolean(n) : store.getBoolean(n));
             insert[i].setSelection(defaults ? store.getDefaultBoolean(in) : store.getBoolean(in));
         }
@@ -162,8 +162,8 @@ class CtrlKeysPage extends PreferencePage {
         IPreferenceStore store = getPreferenceStore();
         for (int i = 0; i < normal.length; i++) {
             char letter = VimCtrlKeys.LETTERS.charAt(i);
-            store.setValue(PreferenceConstants.ctrlKeyToNeovim(letter), normal[i].getSelection());
-            store.setValue(PreferenceConstants.ctrlKeyInInsert(letter), insert[i].getSelection());
+            store.setValue(PreferenceConstants.ctrlKeyNormal(letter), normal[i].getSelection());
+            store.setValue(PreferenceConstants.ctrlKeyInsert(letter), insert[i].getSelection());
         }
         return true;
     }

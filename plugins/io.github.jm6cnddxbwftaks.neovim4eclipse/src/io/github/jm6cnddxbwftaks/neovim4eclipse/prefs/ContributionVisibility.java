@@ -16,14 +16,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 public final class ContributionVisibility {
 
     /** The properties {@link NeovimPropertyTester} answers, as {@code plugin.xml} names them. */
-    static final String SHOW_TOOLBAR_PROPERTY = "io.github.jm6cnddxbwftaks.neovim4eclipse.showToolbar";
+    static final String SHOW_TOGGLE_BUTTON_PROPERTY = "io.github.jm6cnddxbwftaks.neovim4eclipse.showToggleButton";
     static final String SHOW_MENU_PROPERTY = "io.github.jm6cnddxbwftaks.neovim4eclipse.showMenu";
 
     private ContributionVisibility() {
     }
 
     public static boolean isShowToolbar() {
-        return preference(PreferenceConstants.SHOW_TOOLBAR, PreferenceConstants.SHOW_TOOLBAR_DEFAULT);
+        return preference(PreferenceConstants.SHOW_TOGGLE_BUTTON, PreferenceConstants.SHOW_TOGGLE_BUTTON_DEFAULT);
     }
 
     public static boolean isShowMenu() {
@@ -49,7 +49,7 @@ public final class ContributionVisibility {
             }
             IEvaluationService eval = PlatformUI.getWorkbench().getService(IEvaluationService.class);
             if (eval != null) {
-                eval.requestEvaluation(SHOW_TOOLBAR_PROPERTY);
+                eval.requestEvaluation(SHOW_TOGGLE_BUTTON_PROPERTY);
                 eval.requestEvaluation(SHOW_MENU_PROPERTY);
             }
         } catch (Exception ignored) {

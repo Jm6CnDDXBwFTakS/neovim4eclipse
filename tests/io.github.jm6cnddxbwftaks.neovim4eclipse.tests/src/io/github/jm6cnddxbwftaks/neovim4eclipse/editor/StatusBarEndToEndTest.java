@@ -26,8 +26,8 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void restorePreferences() {
-        for (String key : new String[] { PreferenceConstants.STATUS_ITEM_MODE,
-                PreferenceConstants.STATUS_ITEM_STATUSLINE, PreferenceConstants.STATUS_STATUSLINE_WIDTH }) {
+        for (String key : new String[] { PreferenceConstants.STATUS_MODE,
+                PreferenceConstants.STATUS_STATUSLINE, PreferenceConstants.STATUS_STATUSLINE_WIDTH }) {
             store().setToDefault(key);
         }
         // No controller when the test failed with the editor gone: the preferences are restored
@@ -71,7 +71,7 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
     @Test
     void theStatuslineFitsItsLabel() {
         store().setValue(PreferenceConstants.STATUS_STATUSLINE_WIDTH, 24);
-        store().setValue(PreferenceConstants.STATUS_ITEM_STATUSLINE, true);
+        store().setValue(PreferenceConstants.STATUS_STATUSLINE, true);
         typeSlowly("l");
         waitUntil("a statusline ending in Neovim's position", TIMEOUT_MS,
                 () -> statusLineTexts(editor).stream().anyMatch(t -> t.endsWith("All") || t.endsWith("Top")),
@@ -88,7 +88,7 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
      */
     @Test
     void eclipseShowsEvenWithTheModeOff() {
-        store().setValue(PreferenceConstants.STATUS_ITEM_MODE, false);
+        store().setValue(PreferenceConstants.STATUS_MODE, false);
         waitUntil("no mode label", TIMEOUT_MS, () -> !statusLineTexts(editor).contains("NORMAL"),
                 () -> "; it shows " + statusLineTexts(editor));
         EditorAttachManager.getInstance().getActiveController().setNeovimModeActive(false);

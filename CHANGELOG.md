@@ -17,6 +17,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - `vim.g.neovim4eclipse_search` is now `vim.g.neovim4eclipse_search_highlight`: it turns off only
   the highlighting of search matches in the editor, not search. Rename it in your `init.lua` if you
   set it.
+- Some preferences are stored under new names, so a choice you made on these pages returns to its
+  default once, and the welcome shows once more: *Neovim* (the toolbar toggle), *Status Bar* (each
+  part, and the most of the status bar's width the plug-in may take) and *Ctrl Keys*. Set them again
+  after upgrading; from now on the names stay.
 
 ## [0.2.15] - 2026-11-12
 
