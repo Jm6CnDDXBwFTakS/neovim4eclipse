@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -394,6 +395,37 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public String startupErrors() {
         return connection.startupErrors();
+    }
+
+    /**
+     * Which of {@code names} (global variables, without {@code g:}) are set, and to what, as
+     * {@code vim.g.<name>} to the value {@code vim.inspect} prints; in name order. For the problem
+     * report: queued like any other request, so the UI thread never waits for Neovim.
+     */
+    public CompletableFuture<Map<String, String>> initSettingsAsync(List<String> names) {
+        CompletableFuture<Map<String, String>> answer = new CompletableFuture<>();
+        unanswered.add(answer);
+        answer.whenComplete((set, error) -> unanswered.remove(answer));
+        boolean queued = submit("the init.lua settings", Level.FINE, () -> whenAnswering("the init.lua settings", () -> {
+            try {
+                Map<String, String> set = new TreeMap<>();
+                if (await(api.execLua(LuaScripts.INIT_SETTINGS, List.of(names))) instanceof List<?> pairs) {
+                    for (Object pair : pairs) {
+                        if (pair instanceof List<?> p && p.size() == 2) {
+                            set.put(String.valueOf(p.get(0)), String.valueOf(p.get(1)));
+                        }
+                    }
+                }
+                answer.complete(set);
+            } catch (Exception e) {
+                answer.completeExceptionally(e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e);
+                throw e;
+            }
+        }));
+        if (!queued) {
+            answer.completeExceptionally(new IllegalStateException("Neovim is closed"));
+        }
+        return answer;
     }
 
     /** The running Neovim's version ({@code 0.12.6}), or {@code ""} if unknown. */

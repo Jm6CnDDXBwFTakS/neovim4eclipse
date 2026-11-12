@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import java.util.function.Function;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.HeadedMessageDialog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ProblemReportDialog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GetNeovimText;
@@ -40,6 +42,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable.Resolved;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OldNeovimProgram;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProblemReport;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartFailureReport;
 
 /**
@@ -203,6 +206,29 @@ class ChecksGalleryTest {
                 OldNeovimProgram.BUTTONS,
                 "The command line is quoted (\"" + NeovimOption.iniLine(oldValueWithSpace) + "\"); the "
                         + "eclipse.ini line is not.");
+
+        // Neovim → Report a Problem… (editor/ReportProblemHandler), with facts of no real machine: the
+        // pictures are shared, so they show a made-up home folder and versions, not this one's.
+        ProblemReportDialog report = new ProblemReportDialog(null, new ProblemReport("0.2.16.v20261112",
+                "4.41.0.I20260905-1800 (Eclipse IDE for Java Developers)", "21.0.5 (Eclipse Adoptium)",
+                "Linux 6.12 aarch64, SWT gtk",
+                "Found: dedicated Neovim 0.12.6, checked, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim",
+                "0.12.6", false, false, Map.of("vim.g.neovim4eclipse_folds", "0"), List.of("statusStatusline = true"),
+                "a .java file in the Java Editor, Neovim mode on",
+                List.of("14:03:12 WARNING TextRepairs: Neovim's copy of a .java file in the Java Editor differed from"
+                        + " Eclipse's, and Eclipse's lines were written into Neovim's: Neovim's line 12 (of 40) differed"
+                        + " from Eclipse's line 12 (of 41), and no change explains it. Found at Esc or a sync point."))
+                .text("/home/you"), () -> { });
+        report.setBlockOnOpen(false);
+        report.open();
+        try {
+            save(report.getShell(), "report", "Report a Problem",
+                    "The intro (copy into an issue; no file text or names; home as ~; read it first), then the report"
+                            + " in a fixed-width read-only field with a scroll bar: the heading, the list, the warnings in a"
+                            + " text block, ~ for the home folder. Buttons Copy and Open Issues, Copy, Close (the default).");
+        } finally {
+            report.close();
+        }
 
         Files.writeString(out.resolve("index.html"), GalleryPage.html(platformName(), shots, out),
                 StandardCharsets.UTF_8);

@@ -35,6 +35,11 @@
             description="Show the welcome note again: the toggle, the preferences and the documentation">
       </command>
       <command
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.reportProblem"
+            name="Neovim: Report a Problem"
+            description="Show what a bug report needs (versions, settings, recent warnings; no file text), to copy into a GitHub issue">
+      </command>
+      <command
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode"
             name="Neovim: Toggle Neovim / Eclipse Mode"
             description="Toggle between Neovim key handling and normal Eclipse editing">
@@ -362,6 +367,10 @@
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome">
       </handler>
       <handler
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ReportProblemHandler"
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.reportProblem">
+      </handler>
+      <handler
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ToggleNeovimModeHandler"
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode">
       </handler>
@@ -552,6 +561,12 @@
                   commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.welcome"
                   label="Welcome..."
                   mnemonic="W"
+                  style="push">
+            </command>
+            <command
+                  commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.reportProblem"
+                  label="Report a Problem..."
+                  mnemonic="P"
                   style="push">
             </command>
             <command

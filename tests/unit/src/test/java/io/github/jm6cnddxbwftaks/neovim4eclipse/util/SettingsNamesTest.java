@@ -93,6 +93,7 @@ class SettingsNamesTest {
             Map.entry(".getNeovim", List.of(PLUGIN_XML, "id=\"" + COMMAND_ID + "getNeovim\"")),
             Map.entry(".openPreferences", List.of(PLUGIN_XML, "id=\"" + COMMAND_ID + "openPreferences\"")),
             Map.entry(".welcome", List.of(PLUGIN_XML, "id=\"" + COMMAND_ID + "welcome\"")),
+            Map.entry(".reportProblem", List.of(PLUGIN_XML, "id=\"" + COMMAND_ID + "reportProblem\"")),
             Map.entry(".ctrl.a", List.of(PLUGIN_XML, "id=\"" + COMMAND_ID + "ctrl.a\"")),
             Map.entry(".ctrl.z", List.of(PLUGIN_XML, "id=\"" + COMMAND_ID + "ctrl.z\"")),
             Map.entry("io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch",
@@ -147,6 +148,15 @@ class SettingsNamesTest {
         List<String> unknown = found.stream().filter(name -> !promised.contains(name)).toList();
         assertEquals(List.of(), unknown, "names users set that this test neither promises nor leaves out:"
                 + " add each to PROMISED (and the README's Settings) or NOT_PROMISED");
+    }
+
+    /** The problem report asks Neovim about every promised init.lua setting, and only those ({@link ProblemReport#INIT_SETTINGS}). */
+    @Test
+    void theProblemReportAsksAboutEveryInitLuaSetting() {
+        Set<String> promised = new TreeSet<>();
+        PROMISED.keySet().stream().filter(name -> name.startsWith("vim.g.neovim4eclipse_"))
+                .forEach(name -> promised.add(name.substring("vim.g.".length())));
+        assertEquals(promised, new TreeSet<>(ProblemReport.INIT_SETTINGS));
     }
 
     @Test

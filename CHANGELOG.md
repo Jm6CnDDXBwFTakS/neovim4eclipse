@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- *Neovim → Report a Problem...* shows what a bug report needs: the versions, which Neovim runs, the
+  settings you changed and the plug-in's last warnings, with no text of your files and your home
+  folder written as `~`. *Copy and Open Issues* copies it and opens the project's issues.
+
 ### Changed
 
 - When Neovim's copy of a file and Eclipse's drift apart, the plug-in now says so: a message in the

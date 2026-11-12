@@ -4731,4 +4731,23 @@ final class LuaScripts {
 
     /** Evaluates the Vim expression in argument 1 ({@code bufnr('a.txt')}) and returns its value. */
     static final String EVAL = "return vim.fn.eval(select(1, ...))";
+
+    /**
+     * Which of the plug-in's {@code init.lua} settings are set, for the problem report
+     * ({@code util/ProblemReport}). Argument: the names, without {@code g:}. Answers a list of
+     * {@code {"vim.g.<name>", value}} pairs, the value as {@code vim.inspect} prints it, for the set
+     * ones only. Example: {@code ({"neovim4eclipse_folds", "neovim4eclipse_viewport"})} with
+     * {@code vim.g.neovim4eclipse_folds = 0} answers {@code {{"vim.g.neovim4eclipse_folds", "0"}}}.
+     * A list of pairs, not a table by name: an empty Lua table reaches Java as a list.
+     */
+    static final String INIT_SETTINGS = """
+            local set = {}
+            for _, name in ipairs((...)) do
+              local value = vim.g[name]
+              if value ~= nil then
+                set[#set + 1] = { 'vim.g.' .. name, vim.inspect(value) }
+              end
+            end
+            return set
+            """;
 }

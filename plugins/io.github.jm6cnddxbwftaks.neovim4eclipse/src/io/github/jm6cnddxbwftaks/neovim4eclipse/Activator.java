@@ -32,6 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.RecentWarnings;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
@@ -58,6 +59,8 @@ public class Activator extends AbstractUIPlugin {
     private IPropertyChangeListener preferenceListener;
     /** Copies the plug-in's JUL warnings and errors to the Error Log. */
     private ErrorLogHandler errorLogHandler;
+    /** The plug-in's last warnings of this run, for Neovim → Report a Problem… ({@link RecentWarnings}). */
+    private final RecentWarnings recentWarnings = new RecentWarnings();
     /** Prints the plug-in's log at the level of {@code -Dneovim4eclipse.logLevel}, when it is set. */
     private final LogLevelSwitch logLevelSwitch = new LogLevelSwitch();
     /** Moves Neovim out of a project folder before Eclipse deletes or closes the project. */
@@ -73,6 +76,7 @@ public class Activator extends AbstractUIPlugin {
         plugin = this;
         errorLogHandler = new ErrorLogHandler(getLog());
         errorLogHandler.install(PLUGIN_ID);
+        Logger.getLogger(PLUGIN_ID).addHandler(recentWarnings);
         applyLogLevel();
         EditorAttachManager.getInstance().installWorkbenchListeners();
         projectFolderExit = ProjectFolderExit.install(this::currentSession);
@@ -111,6 +115,7 @@ public class Activator extends AbstractUIPlugin {
             errorLogHandler.uninstall();
             errorLogHandler = null;
         }
+        Logger.getLogger(PLUGIN_ID).removeHandler(recentWarnings);
         logLevelSwitch.remove();
         super.stop(context);
     }
@@ -181,6 +186,11 @@ public class Activator extends AbstractUIPlugin {
     }
 
     /** The running session, or {@code null}: unlike {@link #getOrCreateSession()}, never starts {@code nvim}. */
+    /** The plug-in's last warnings and errors of this run, oldest first ({@link RecentWarnings}). */
+    public List<String> recentWarnings() {
+        return recentWarnings.lines();
+    }
+
     public synchronized NeovimSession currentSession() {
         return session != null && session.isAlive() ? session : null;
     }

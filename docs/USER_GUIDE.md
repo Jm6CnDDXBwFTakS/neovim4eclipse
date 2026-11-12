@@ -566,8 +566,10 @@ for an editor that did not attach by itself, which also starts a new Neovim if
 the old one stopped; *Restart Neovim...*, which asks, then stops Neovim and starts a new one, for
 example after changing `init.lua` (lost: the undo history, and what you set by hand with `:set`,
 `:map` or `:let`; kept: the editors' text, unsaved changes included, and the registers, marks and
-history, which Neovim's ShaDa file brings back as after a restart in a terminal); *Welcome...*; *Preferences...*.
-On Linux and Windows each entry has an underlined letter: `Alt+V` then `V`, `A`, `R`, `W` or `N`
+history, which Neovim's ShaDa file brings back as after a restart in a terminal); *Get Neovim...*; *Welcome...*;
+*Report a Problem...*, which shows what a bug report needs, to copy into an issue
+([Reporting a problem](../README.md#reporting-a-problem)); *Preferences...*.
+On Linux and Windows each entry has an underlined letter: `Alt+V` then `V`, `A`, `R`, `G`, `W`, `P` or `N`
 (*Prefere<u>n</u>ces*, as in Eclipse's *Window* menu) runs it without the mouse.
 *Neovim: Detach Neovim* is in Quick Access (`Ctrl+3`) only: *Neovim Mode* off already
 gives the keys back to Eclipse. *Flash the editor on errors*

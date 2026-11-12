@@ -109,7 +109,7 @@ class MenuVisibilityTest {
             assertEquals('g', getNeovim, "Get Neovim's letter");
         }
         assertEquals(Map.of("Neovim Mode", 'v', "Attach Neovim", 'a', "Restart Neovim...", 'r',
-                "Welcome...", 'w', "Preferences...", 'n'), letters);
+                "Welcome...", 'w', "Report a Problem...", 'p', "Preferences...", 'n'), letters);
     }
 
     /**

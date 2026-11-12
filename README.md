@@ -253,7 +253,8 @@ which an administrator can set for everyone in the product's `plugin_customizati
 - the plug-in's commands on *Window → Preferences → General → Keys*, listed there by name:
   *Neovim: Toggle Neovim / Eclipse Mode* (`io.github.jm6cnddxbwftaks.neovim4eclipse.commands.toggleMode`),
   *Neovim: Attach Neovim* (`.attach`), *Detach Neovim* (`.detach`), *Restart Neovim* (`.restart`),
-  *Get Neovim* (`.getNeovim`), *Preferences* (`.openPreferences`), *Welcome* (`.welcome`), and
+  *Get Neovim* (`.getNeovim`), *Preferences* (`.openPreferences`), *Welcome* (`.welcome`),
+  *Report a Problem* (`.reportProblem`), and
   *Neovim: Ctrl-A (Increment number)* to *Ctrl-Z* (`.ctrl.a` to `.ctrl.z`);
 - the color *Neovim for Eclipse → Search match* in *Colors and Fonts*
   (`io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch`).
@@ -357,12 +358,12 @@ gets in your way:
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues/new/choose); the bug report
-template asks for what helps most: the keys you typed, what you saw and expected, and the versions
-(*Help → About Eclipse IDE → Installation Details*; for Neovim, the *Found:* line on
-*Window → Preferences → Neovim*, or `:version` in the editor). The plug-in's lines in the
-Error Log (*Window → Show View → Error Log*) often say what went wrong; more detail is in its log,
-switched on with one startup option ([The plug-in's log](docs/USER_GUIDE.md#the-plug-ins-log)).
+Choose *Neovim → Report a Problem...*: it shows what a report needs (the versions, which Neovim, the
+settings you changed, the plug-in's last warnings), with no text of your files and your home folder
+written as `~`. Read it, then *Copy and Open Issues* copies it and opens the
+[issues](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues/new/choose); paste it into the
+bug report, with the keys you typed and what you saw and expected. More detail is in the plug-in's
+log, switched on with one startup option ([The plug-in's log](docs/USER_GUIDE.md#the-plug-ins-log)).
 A security problem goes through [SECURITY.md](SECURITY.md) instead, privately.
 
 ## AI assistance

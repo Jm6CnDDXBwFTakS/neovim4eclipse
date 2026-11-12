@@ -17,6 +17,8 @@ labels: bug
 2.
 
 **Environment**
+<!-- Easiest: Neovim > Report a Problem... in Eclipse, Copy, and paste it here in place of the list
+     below. It holds the versions and settings, and no text of your files. -->
 - Neovim for Eclipse version (Help > About > Installation Details > Plug-ins):
 - Eclipse version:
 - Operating system and architecture:
