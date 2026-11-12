@@ -133,7 +133,8 @@ register `a`, and the next letter is Eclipse's. `.` still repeats the whole inse
 After `Ctrl+O`, Neovim runs one normal-mode command, and Eclipse types again when the insert goes on.
 
 **Completion is Eclipse's.** Neovim's completion popup is not drawn in the editor, so these keys,
-when ticked for insert mode, run Eclipse's instead (on macOS they are ticked by default):
+when ticked for insert mode, run Eclipse's instead (`Ctrl+N` and `Ctrl+P` are ticked by default;
+`Ctrl+X`, for its `Ctrl+X Ctrl+O`, on macOS only):
 
 | Key | Runs |
 |-----|------|

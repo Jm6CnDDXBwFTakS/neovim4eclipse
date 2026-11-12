@@ -63,7 +63,8 @@ class SettingsNamesTest {
             Map.entry("vim.g.neovim4eclipse_search_highlight", List.of(LUA, "vim.g.neovim4eclipse_search_highlight")),
             Map.entry("vim.g.neovim4eclipse_task_tags", List.of(LUA, "vim.g.neovim4eclipse_task_tags")),
             // set by the plug-in, read by a user's config
-            Map.entry("vim.g.neovim4eclipse", List.of(SRC + "util/NvimExecutable.java", "GUARD_VARIABLE = \"neovim4eclipse\"")),
+            // In backticks: every vim.g.neovim4eclipse_* row of the README contains the bare name.
+            Map.entry("`vim.g.neovim4eclipse`", List.of(SRC + "util/NvimExecutable.java", "GUARD_VARIABLE = \"neovim4eclipse\"")),
             Map.entry("Neovim4EclipseFolds", List.of(LUA, "pattern = 'Neovim4EclipseFolds'")),
             Map.entry("`neovim4eclipse`", List.of(LUA, "nvim_create_namespace('neovim4eclipse')")),
             // Ex commands
@@ -143,6 +144,8 @@ class SettingsNamesTest {
                 + "([a-zA-Z]+)\""), ".");
         // Ex commands the plug-in defines
         collect(found, read(LUA), Pattern.compile("nvim_create_user_command\\('([A-Za-z]+)'"), ":");
+        // colors users change in Colors and Fonts
+        collect(found, read(PLUGIN_XML), Pattern.compile("<colorDefinition\\b[^>]*?\\bid=\"([^\"]+)\""), "");
         Set<String> promised = new TreeSet<>(PROMISED.keySet());
         promised.addAll(NOT_PROMISED);
         List<String> unknown = found.stream().filter(name -> !promised.contains(name)).toList();
@@ -157,6 +160,18 @@ class SettingsNamesTest {
         PROMISED.keySet().stream().filter(name -> name.startsWith("vim.g.neovim4eclipse_"))
                 .forEach(name -> promised.add(name.substring("vim.g.".length())));
         assertEquals(promised, new TreeSet<>(ProblemReport.INIT_SETTINGS));
+    }
+
+    /**
+     * Every letter's Ctrl key command is there: a user's key binding for one is stored under its id,
+     * and the README promises {@code .ctrl.a} to {@code .ctrl.z} (PROMISED checks only the two ends).
+     */
+    @Test
+    void everyCtrlKeyCommandIsStillThere() throws IOException {
+        String xml = read(PLUGIN_XML);
+        List<String> missing = VimCtrlKeys.LETTERS.chars().mapToObj(c -> VimCtrlKeys.commandId((char) c))
+                .filter(id -> !xml.contains("id=\"" + id + "\"")).toList();
+        assertEquals(List.of(), missing, "Ctrl key commands gone from plugin.xml");
     }
 
     @Test

@@ -24,7 +24,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   and `Ctrl+N` / `Ctrl+P` (word completion) now go to Neovim by default, beside `Ctrl+W`, `U`, `R`,
   `O`, `T` and `D`. Eclipse's Find Next, Last Edit Location, New and Print they replaced there are
   rarely wanted in the middle of typing; each is a box on *Window → Preferences → Neovim → Ctrl
-  Keys*, and a choice you made there stays.
+  Keys*. (The page's choices start from these defaults once anyway: its keys are renamed, below.)
 - When Neovim's copy of a file and Eclipse's drift apart, the plug-in now says so: a message in the
   status bar (once per Neovim session) asks you to check your last change, and the Error Log gets a
   warning to report, with no text of the file. The whole file is compared at `Esc` up to 20,000

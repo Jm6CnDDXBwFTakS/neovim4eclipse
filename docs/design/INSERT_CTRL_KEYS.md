@@ -25,8 +25,8 @@ Ctrl+W  [ ] window commands: splits  [x] delete word before the cursor
 The 26 rows are one column: two halves side by side measured 950 px, wider than the Preferences
 dialog's page area.
 
-- **Normal** is the preference `ctrlKeyNormal.<letter>`, the one that existed before the Insert
-  column, so an earlier choice keeps its meaning.
+- **Normal** is the preference `ctrlKeyNormal.<letter>`, the letter's Normal column (`util/VimCtrlKeys`
+  has the defaults).
 - **Insert** is `ctrlKeyInsert.<letter>`. Defaults on Windows and Linux: **W U R O T D K Q N P**
   (delete word, delete to the insert's start, insert a register, one normal command, indent,
   unindent, digraph, insert literally, word completion). A, C, V, X, Y, Z, S, F stay Eclipse's
