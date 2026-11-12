@@ -11,9 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
+import java.util.stream.Collectors;
 
+import org.eclipse.jface.text.DocumentEvent;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IDocumentListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -76,16 +81,83 @@ class TextCheckEndToEndTest extends EndToEndTestBase {
      * earlier test, say). So the line is read together with where it came from ({@link #CURRENT}),
      * in one call, and a failure message says which window and buffer were current at that read and
      * what the test file's buffer held.
+     *
+     * <p>It also lists every change to the document from the {@code i} on, each with the thread and
+     * the calls that made it ({@link DocumentChanges}). Why: in a rare failure the document read
+     * "Xalpha" (the wait below saw it) and later "alpha" again, in Eclipse and in Neovim alike, so
+     * something took the X out of the document after it arrived. The list names what did: a change
+     * of Neovim's applied by the plug-in ({@code BufferSynchronizer}), Eclipse's file buffer
+     * reloading test.txt, an undo.
      */
     @Test
     void aTestLeftInInsertModeIsComparedAfterItsEsc() {
-        type(widget, "iX");
-        waitUntilInsert();
-        assertNull(TextCheck.differences(TIMEOUT_MS));
-        assertEquals("n", session.getMode());
-        int bufnr = EditorAttachManager.getInstance().bufferNumberOf(document);
-        List<?> read = (List<?>) SessionProbe.lua(session, CURRENT.formatted(bufnr));
-        assertEquals("Xalpha", read.get(0), () -> String.valueOf(read.get(1)));
+        try (DocumentChanges changes = DocumentChanges.of(document)) {
+            type(widget, "iX");
+            waitUntilInsert();
+            String differences = TextCheck.differences(TIMEOUT_MS);
+            assertNull(differences, () -> differences + "; the document's changes from the i on: " + changes);
+            assertEquals("n", session.getMode());
+            int bufnr = EditorAttachManager.getInstance().bufferNumberOf(document);
+            List<?> read = (List<?>) SessionProbe.lua(session, CURRENT.formatted(bufnr));
+            assertEquals("Xalpha", read.get(0),
+                    () -> read.get(1) + "; the document's changes from the i on: " + changes);
+        }
+    }
+
+    /**
+     * Records each change to a document, with the thread and the calls that made it, for a failure
+     * message. Example of one entry: {@code [main] 0+0 "X" at BufferSynchronizer.applyChange <-
+     * BufferSynchronizer.lambda$14 <- ... <- Display.runAsyncMessages}: the X Neovim typed, applied
+     * to the document by the plug-in. The calls are the first few that are not the document's own
+     * or the JDK's: those name the code that changed it.
+     */
+    private static final class DocumentChanges implements IDocumentListener, AutoCloseable {
+
+        /** How many calls of each change are kept: enough to name its maker, short enough to read. */
+        private static final int CALLS = 8;
+
+        private final IDocument document;
+        private final List<String> changes = new CopyOnWriteArrayList<>();
+
+        private DocumentChanges(IDocument document) {
+            this.document = document;
+        }
+
+        static DocumentChanges of(IDocument document) {
+            DocumentChanges recorder = new DocumentChanges(document);
+            document.addDocumentListener(recorder);
+            return recorder;
+        }
+
+        @Override
+        public void documentAboutToBeChanged(DocumentEvent event) {
+        }
+
+        @Override
+        public void documentChanged(DocumentEvent event) {
+            String calls = StackWalker.getInstance().walk(frames -> frames
+                    .filter(f -> !f.getClassName().startsWith("java.") && !f.getClassName().startsWith("jdk.")
+                            && !f.getClassName().equals("org.eclipse.jface.text.AbstractDocument")
+                            && !f.getClassName().equals("org.eclipse.jface.text.Document")
+                            && !f.getClassName().endsWith(".SynchronizableDocument") // a file buffer's document
+                            && !f.getClassName().equals(DocumentChanges.class.getName()))
+                    .limit(CALLS)
+                    .map(f -> f.getClassName().replaceAll(".*\\.", "") + "." + f.getMethodName())
+                    .collect(Collectors.joining(" <- ")));
+            String text = event.getText() == null ? "" : event.getText().replace("\n", "\\n");
+            changes.add("[" + Thread.currentThread().getName() + "] " + event.getOffset() + "+" + event.getLength()
+                    + " \"" + text + "\" at " + calls);
+        }
+
+        @Override
+        public void close() {
+            document.removeDocumentListener(this);
+        }
+
+        @Override
+        public String toString() {
+            return changes.isEmpty() ? "none" : String.join("; ", changes);
+        }
     }
 
     /**
