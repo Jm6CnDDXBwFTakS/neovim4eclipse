@@ -215,7 +215,7 @@ final class StatusTracker {
         }
     }
 
-    /** The status last passed to the listeners: what Neovim shows now. Any thread. */
+    /** The status last recorded (passed to the listeners, or about to be): what Neovim shows now. Any thread. */
     StatusInfo current() {
         return lastStatus;
     }

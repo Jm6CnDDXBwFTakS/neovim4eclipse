@@ -342,6 +342,12 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         onModeChanged(session.getMode());
+        // The first editor of a session shows what Neovim showed at its start (the message for a
+        // floating window the config left open): that arrived before any listener was added.
+        StatusInfo atStart = session.takeStartStatus();
+        if (atStart != null) {
+            onStatusChanged(atStart);
+        }
         Consumer<NeovimEditorController> hook = startedHookForTests;
         if (hook != null) {
             hook.accept(this);

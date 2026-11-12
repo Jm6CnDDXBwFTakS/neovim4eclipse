@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -98,6 +99,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final KeyInput keyInput;
     /** Status bar parts and macro recording, published to listeners. */
     private final StatusTracker status = new StatusTracker();
+    /** Set once the first editor took what Neovim showed at the start ({@link #takeStartStatus}). */
+    private final AtomicBoolean startStatusTaken = new AtomicBoolean();
 
     /** One Neovim buffer per Eclipse document, and which one is attached. */
     private final DocumentBuffers buffers;
@@ -536,6 +539,24 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public StatusInfo currentStatus() {
         return status.current();
+    }
+
+    /**
+     * What Neovim shows when the first editor attaches, for that editor; {@code null} for every
+     * later one. A message of the start, such as the one for a floating window the user's config
+     * left focused ({@link LuaScripts#SHOW_START_FLOAT_CLOSED}) or an {@code echoerr} of the
+     * config's, arrives before any editor listens, and the first attach is not a key, which would
+     * show the newest message to the editor that sent it. Without this, the message would be lost:
+     * the next key clears it.
+     *
+     * <p>Only the first editor: a later one would show a message another editor's command gave.
+     * The editor calls this after adding its status listener, so that a message still on its way
+     * reaches it through the listener instead. Example: lazy.nvim's installer was open at the
+     * start; the first editor's message line says "Closed the floating window of lazy: …".
+     * Any thread.
+     */
+    public StatusInfo takeStartStatus() {
+        return startStatusTaken.getAndSet(true) ? null : status.current();
     }
 
     /** Notified (on a session thread) when the command, message or statusline text changes. */

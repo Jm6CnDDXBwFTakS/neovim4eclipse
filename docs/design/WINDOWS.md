@@ -49,7 +49,9 @@ The Neovim side:
   before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
   after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
   start) is closed and a plain window is made current: left current, it got the home buffer and
-  then the editors' keys. Its message is shown once Neovim's messages reach the session.
+  then the editors' keys. Its message is shown once Neovim's messages reach the session, and
+  the first editor that attaches shows it (`NeovimSession.takeStartStatus`): it came before any
+  editor listened, and only a key would otherwise show a message.
   Not caught: a float opened with `noautocmd` (no `WinNew`), or entered a moment after it opened. The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps
   the set of windows it opened, and the net closes the others. That set forgets a window on the
