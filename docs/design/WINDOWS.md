@@ -45,9 +45,12 @@ The Neovim side:
   so `H` and `L` no longer matched the editor. It also closes a floating window that is new and
   has the focus (it opened with it: a picker's prompt, `:Lazy`), which Eclipse does not draw and
   which would take the keys; floats without the focus stay, and so does one entered later
-  (`Ctrl-W w` into hover documentation), which the net has seen before (`seen`). At start, a
-  floating window the config left the focus in (lazy.nvim's installer on a first start) is closed
-  and a plain window becomes the home window: taken as the home window, it got the editors' keys. The net cannot use the current window (in `WinNew`
+  (`Ctrl-W w` into hover documentation), which the net has seen before (`seen`). At start,
+  before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
+  after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
+  start) is closed and a plain window is made current: left current, it got the home buffer and
+  then the editors' keys. Its message is shown once Neovim's messages reach the session.
+  Not caught: a float opened with `noautocmd` (no `WinNew`), or entered a moment after it opened. The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps
   the set of windows it opened, and the net closes the others. That set forgets a window on the
   plug-in's quiet closes too, which fire no `WinClosed`. `:help` is closed by the net, with the

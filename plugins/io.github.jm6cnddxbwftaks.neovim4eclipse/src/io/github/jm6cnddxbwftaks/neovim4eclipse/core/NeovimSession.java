@@ -266,6 +266,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         NeovimApi api = connection.api();
         // First: the one rule for comparing file paths, which later scripts use (LuaScripts.PATHS).
         await(api.execLua(LuaScripts.PATHS, List.of()));
+        // Before the home buffer goes into the current window: the config may have left the focus
+        // in a floating window Eclipse does not draw (lazy.nvim's installer on a first start).
+        Object closedFloat = await(api.execLua(LuaScripts.LEAVE_START_FLOAT, List.of()));
 
         // Until a document is shown, Neovim shows an unlisted scratch buffer (also what tests edit).
         Handle homeBuffer = await(api.createBuf(false, true));
@@ -291,6 +294,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
             int channel = await(api.getChannelId());
             await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
+            if (closedFloat instanceof String name && !name.isEmpty()) {
+                await(api.execLua(LuaScripts.SHOW_START_FLOAT_CLOSED, List.of(name))); // the messages reach us now
+            }
             await(api.execLua(LuaScripts.IDE_KEYS, IdeKeys.toLuaArgs())); // gd, K, gr*: after init.lua
             // Before any document's buffer: each new buffer is checked against the project folders,
             // which Eclipse sends at the first attach (docs/design/BUFFER_NUMBERS.md, 2.3).

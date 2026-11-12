@@ -171,8 +171,8 @@ variable is set with `--cmd`, not in the environment, so a Neovim you start in a
 Eclipse does not see it.
 
 **Distributions** (LazyVim, NvChad, AstroNvim and other large configs) are made for a terminal, and
-most of what they add draws windows Eclipse does not show (see Known limitations, item 7). Tried
-with the LazyVim starter: the plug-in closes the windows that take the focus (lazy.nvim's installer,
+most of what they add draws windows Eclipse does not show (see Known limitations, item 7). With
+the LazyVim starter, the plug-in closes the windows that take the focus (lazy.nvim's installer,
 with a message), and the plug-ins still install in the background; keys typed in the first seconds
 of that first start can be lost, while the installer opens its window again. Later starts edit as
 usual, without most of what the distribution shows. Keep such a config out of Eclipse with the
@@ -203,7 +203,7 @@ Nothing here needs changing to get started: this is the reference of every name 
 reads from you, or sets for your config to read. These names stay: one is
 renamed or removed only after a release that still accepts the old name and warns about it, and the
 [change log](CHANGELOG.md) says so. Anything not listed here (other `neovim4eclipse_*` variables,
-the plug-in's Lua modules and namespaces) is internal and may change.
+the plug-in's Lua modules and namespaces, its key-binding contexts) is internal and may change.
 
 **In `init.lua`**, read when Neovim starts (after a change, *Neovim → Restart Neovim...*), except
 where the table says otherwise. `0` or `false` turns a part off:
@@ -370,9 +370,10 @@ gets in your way:
    dashboards, notifications, an installer's progress window. Plug-ins that work on text
    (surround, commentary, text objects, mappings of your own) work as in a terminal. A floating window
    that opens with the focus (a picker's prompt, `:Lazy`) is closed again at once, with a message,
-   since it would take the keys typed in the editor; one without the focus stays, unseen. Leave such
-   plug-ins out in Eclipse
-   (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
+   since it would take the keys typed in the editor; one without the focus stays, unseen. A plug-in
+   can still slip one past (a window opened without autocommands, or focused a moment later); if
+   keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins
+   out in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 
 ## Reporting a problem

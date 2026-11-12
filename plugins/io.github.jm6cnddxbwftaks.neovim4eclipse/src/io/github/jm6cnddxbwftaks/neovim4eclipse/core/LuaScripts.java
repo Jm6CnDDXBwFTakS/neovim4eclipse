@@ -1055,6 +1055,45 @@ final class LuaScripts {
             """;
 
     /**
+     * Leaves a floating window the user's config left the focus in, before the plug-in sets up
+     * Neovim's windows: lazy.nvim's installer on the first start of a LazyVim config. Eclipse does
+     * not draw it; left current, the home buffer would go into it ({@link #SHOW_BUFFER}) and the
+     * editors' keys after it. The focus moves to a plain window of the tab, and the float is
+     * closed. Answers the float's name for the message (its buffer's filetype, else
+     * {@code "a plug-in"}), or {@code ""} when there was none. Run first, right after
+     * {@link #PATHS}; the session shows the message once Neovim's messages reach it
+     * ({@code NeovimSession.initialize}). Example: with lazy.nvim's window current, answers
+     * {@code "lazy"} and leaves the plain window current.
+     */
+    static final String LEAVE_START_FLOAT = """
+            local float = vim.api.nvim_get_current_win()
+            if vim.api.nvim_win_get_config(float).relative == '' then
+              return ''
+            end
+            local ok, ft = pcall(function() return vim.bo[vim.api.nvim_win_get_buf(float)].filetype end)
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+              if vim.api.nvim_win_get_config(win).relative == '' then
+                vim.api.nvim_set_current_win(win)
+                break
+              end
+            end
+            if not pcall(vim.api.nvim_win_close, float, true) then
+              return ''
+            end
+            return ok and ft ~= '' and ft or 'a plug-in'
+            """;
+
+    /**
+     * Shows the message for the floating window {@link #LEAVE_START_FLOAT} closed (argument: its
+     * name), once Neovim's messages reach the session: sent before, it would be lost. Run after
+     * {@link #WINDOWS}, whose {@code float_closed_message} words it.
+     */
+    static final String SHOW_START_FLOAT_CLOSED = """
+            local windows = package.loaded['neovim4eclipse.windows']
+            vim.api.nvim_echo({ { windows.float_closed_message((...)) } }, true, { err = true })
+            """;
+
+    /**
      * Installs the module {@code neovim4eclipse.windows}: a Neovim window per Eclipse editor, each
      * alone in its own tabpage (docs/design/WINDOWS.md; Java side {@code DocumentBuffers} and
      * {@code EditorWindows}). Argument: the home buffer's number. Returns the <em>home window</em>'s
@@ -1100,31 +1139,22 @@ final class LuaScripts {
               local ok, ft = pcall(function() return vim.bo[vim.api.nvim_win_get_buf(win)].filetype end)
               return ok and ft ~= '' and ft or 'a plug-in'
             end
-            local function float_closed_message(name)
+            --- The message for a floating window closed by the plug-in; LEAVE_START_FLOAT's too.
+            function M.float_closed_message(name)
               return "Closed the floating window of " .. name .. ": Eclipse cannot show Neovim's floating"
-                .. ' windows, and it would take the keys (README, Known limitations, item 7)'
-            end
-            -- The config may have left the focus in a floating window: lazy.nvim's installer, on the
-            -- first start of a LazyVim config. Taken as the home window, it would get the editors'
-            -- keys, unseen. It is closed, and a plain window of the tab becomes the home window.
-            if vim.api.nvim_win_get_config(home).relative ~= '' then
-              local name = float_name(home)
-              pcall(vim.api.nvim_win_close, home, true)
-              for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-                if vim.api.nvim_win_get_config(win).relative == '' then
-                  home = win
-                  break
-                end
-              end
-              pcall(vim.api.nvim_set_current_win, home)
-              vim.schedule(function()
-                vim.api.nvim_echo({ { float_closed_message(name) } }, true, { err = true })
-              end)
+                .. " windows, and it would take the keys (README, Known limitations: Neovim plug-ins that draw)"
             end
             -- The windows the plug-in opened and has not closed (the home window and the editors'):
             -- any other plain window is a stray one (the WinNew safety net below), and a floating
             -- or special one is a side window (M.is_side_window).
             local own = { [home] = true }
+            -- The windows the safety net has looked at, so that it knows a new one: a floating window
+            -- is closed only when it opened with the focus, never when the user entered one that
+            -- was there already (Ctrl-W w into hover documentation), where :q stays Neovim's.
+            local seen = {}
+            for _, win in ipairs(vim.api.nvim_list_wins()) do
+              seen[win] = true
+            end
             vim.o.showtabline = 0
 
             --- Runs fn(...) without Neovim's file info message ('shortmess' F: putting a buffer in a
@@ -1288,6 +1318,7 @@ final class LuaScripts {
             local function close_quietly(win)
               quietly(vim.api.nvim_win_close, win, true)
               own[win] = nil
+              seen[win] = nil -- no WinClosed while quiet
             end
 
             function M.close(win, fallback)
@@ -1334,14 +1365,6 @@ final class LuaScripts {
               preview = 'Eclipse cannot show the preview window',
             }
 
-            -- The windows the net below has looked at, so that it knows a window that is new: a floating
-            -- window is closed only when it opened with the focus, never when the user entered one
-            -- that was there already (Ctrl-W w into hover documentation), where :q stays Neovim's.
-            local seen = {}
-            for _, win in ipairs(vim.api.nvim_list_wins()) do
-              seen[win] = true
-            end
-
             local group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true })
             vim.api.nvim_create_autocmd('WinClosed', {
               group = group,
@@ -1372,7 +1395,7 @@ final class LuaScripts {
               group = group,
               callback = function()
                 vim.schedule(function()
-                  local why, list
+                  local why, list, float
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
                   local current = vim.api.nvim_get_current_win()
                   for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -1381,8 +1404,14 @@ final class LuaScripts {
                     local wintype = vim.fn.win_gettype(win)
                     if new and win == current and wintype == 'popup' and not own[win] then
                       local name = float_name(win)
+                      local prompt = vim.bo[vim.api.nvim_win_get_buf(win)].buftype == 'prompt'
                       if pcall(vim.api.nvim_win_close, win, true) then
-                        why = why or float_closed_message(name)
+                        float = float or name
+                        -- A picker's prompt starts insert mode; closed, it would leave the editor's
+                        -- window in an insert nobody began there.
+                        if prompt and vim.fn.mode():sub(1, 1) == 'i' then
+                          vim.cmd.stopinsert()
+                        end
                       end
                     end
                     local reason = not own[win] and why_closed[wintype]
@@ -1394,9 +1423,10 @@ final class LuaScripts {
                       end
                     end
                   end
-                  if why then
-                    vim.api.nvim_echo({ { why:find('^Closed the floating') and why or 'Window closed: ' .. why } }, true,
-                      { err = true })
+                  if float then
+                    vim.api.nvim_echo({ { M.float_closed_message(float) } }, true, { err = true })
+                  elseif why then
+                    vim.api.nvim_echo({ { 'Window closed: ' .. why } }, true, { err = true })
                   end
                   if list then
                     quickfix.window(list)

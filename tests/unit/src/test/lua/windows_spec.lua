@@ -768,19 +768,31 @@ t.test('a floating window the user enters later stays, so :q in it stays Neovim\
   t.eq(float, vim.api.nvim_get_current_win())
 end)
 
-t.test('a floating window that has the focus when the plug-in starts is closed, and is not the home window', function()
+t.test('a floating window the config left the focus in is closed before the home buffer goes anywhere', function()
+  -- The session's order: LEAVE_START_FLOAT, then SHOW_BUFFER with the home buffer, then WINDOWS.
   t.setup()
   local plain = vim.api.nvim_get_current_win()
   local buf = buffer(1)
   vim.bo[buf].filetype = 'lazy'
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  vim.v.errmsg = ''
-  local home = t.run('WINDOWS', tostring(vim.api.nvim_create_buf(false, true)))
-  t.eq(plain, home, 'the plain window is the home window')
+  t.eq('lazy', t.run('LEAVE_START_FLOAT'))
   t.ok(not vim.api.nvim_win_is_valid(float), 'the float is closed')
   t.eq(plain, vim.api.nvim_get_current_win())
-  flush()
+  local home_buf = vim.api.nvim_create_buf(false, true)
+  t.run('SHOW_BUFFER', tostring(home_buf))
+  local home = t.run('WINDOWS', tostring(home_buf))
+  t.eq(plain, home, 'the plain window is the home window')
+  t.eq(home_buf, vim.api.nvim_win_get_buf(home), 'and shows the home buffer')
+  vim.v.errmsg = ''
+  t.run('SHOW_START_FLOAT_CLOSED', 'lazy')
   t.ok(vim.v.errmsg:find('Closed the floating window of lazy', 1, true), vim.v.errmsg)
+end)
+
+t.test('without a floating window at start there is nothing to leave', function()
+  t.setup()
+  local win = vim.api.nvim_get_current_win()
+  t.eq('', t.run('LEAVE_START_FLOAT'))
+  t.eq(win, vim.api.nvim_get_current_win())
 end)
 
 t.test('only floating and special windows are side windows', function()
