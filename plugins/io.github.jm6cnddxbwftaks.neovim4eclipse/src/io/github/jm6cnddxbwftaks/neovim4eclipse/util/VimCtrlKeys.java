@@ -143,11 +143,20 @@ public final class VimCtrlKeys {
 
     /**
      * Letters that go to Neovim in insert mode by default on Windows and Linux: delete word, delete
-     * to the insert's start, insert a register, one normal command, indent, unindent. The others
-     * keep Eclipse's shortcuts there, which people use while typing (Ctrl+A select all, Ctrl+C copy,
-     * Ctrl+V paste, Ctrl+X cut, Ctrl+Z undo, Ctrl+S save, Ctrl+F find).
+     * to the insert's start, insert a register, one normal command, indent, unindent; Ctrl+K for a
+     * digraph and Ctrl+Q to insert the next key literally (Ctrl+V stays Paste, so Ctrl+Q is Vim's
+     * only way left, as Vim on Windows has it); Ctrl+N and Ctrl+P for word completion (Eclipse's
+     * Word Completion). Eclipse's shortcuts they replace (Find Next, Last Edit Location, New, Print)
+     * are rarely wanted in the middle of typing.
+     *
+     * <p>The others keep Eclipse's shortcuts there: those people use while typing (Ctrl+A select
+     * all, Ctrl+C copy, Ctrl+V paste, Ctrl+X cut, Ctrl+Y redo, Ctrl+Z undo, Ctrl+S save, Ctrl+F
+     * find); those Vim has no insert meaning for (Ctrl+B, Ctrl+L); those whose Vim meaning is a key
+     * the keyboard has anyway (Ctrl+H Backspace, Ctrl+I Tab, Ctrl+J and Ctrl+M Enter), where
+     * Eclipse's Search, Correct Indentation, Incremental Find and Maximize are real tools; Ctrl+E
+     * (Quick Switch Editor; Vim copies the character below) and Ctrl+G (niche either way).
      */
-    public static final String INSERT_BY_DEFAULT = "wurotd";
+    public static final String INSERT_BY_DEFAULT = "wurotdkqnp";
 
     /**
      * On macOS, Eclipse's own shortcuts use Cmd, so every letter with a Vim insert meaning goes to

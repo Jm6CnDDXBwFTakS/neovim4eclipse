@@ -27,9 +27,13 @@ dialog's page area.
 
 - **Normal** is the preference `ctrlKeyNormal.<letter>`, the one that existed before the Insert
   column, so an earlier choice keeps its meaning.
-- **Insert** is `ctrlKeyInsert.<letter>`. Defaults on Windows and Linux: **W U R O T D**
+- **Insert** is `ctrlKeyInsert.<letter>`. Defaults on Windows and Linux: **W U R O T D K Q N P**
   (delete word, delete to the insert's start, insert a register, one normal command, indent,
-  unindent). A, C, V, X, Z, S, F stay Eclipse's (select all, copy, paste, cut, undo, save, find).
+  unindent, digraph, insert literally, word completion). A, C, V, X, Y, Z, S, F stay Eclipse's
+  (select all, copy, paste, cut, redo, undo, save, find), and so do the letters with no Vim insert
+  meaning or one the keyboard has a key for (`util/VimCtrlKeys.INSERT_BY_DEFAULT` says why for each).
+  Find Next, Last Edit Location, New and Print, which K, Q, N and P replace, are rarely wanted in
+  the middle of typing.
 - **macOS**: every letter with a Vim insert meaning, since Eclipse's own shortcuts use Cmd there.
   That includes `Ctrl+A`, `Ctrl+E` and `Ctrl+K`, although macOS text fields use them for line
   start, line end and delete to line end: in the editor they are Vim's.

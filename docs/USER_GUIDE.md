@@ -530,7 +530,7 @@ Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that send
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
 of the letters you send to Neovim in the current mode (*Window → Preferences → Neovim → Ctrl Keys*;
 in normal mode by default every letter except `Ctrl+S` and `Ctrl+Z`, in insert mode
-`Ctrl+W`, `U`, `R`, `O`, `T` and `D`; see [docs/KEYBOARD.md](KEYBOARD.md)). The bindings work
+`Ctrl+W`, `U`, `R`, `O`, `T`, `D`, `K`, `Q`, `N` and `P`; see [docs/KEYBOARD.md](KEYBOARD.md)). The bindings work
 only while Neovim owns the editor's keys and the editor has focus; for the other letters, and in
 Eclipse mode (toggle with the toolbar button: color logo in Neovim mode, grey in Eclipse mode),
 Eclipse's own shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
@@ -588,7 +588,7 @@ insert mode (**Insert**); cleared ones keep their Eclipse shortcut. In an insert
 Insert key first hands Neovim the typed text, so `Ctrl+W` deletes the word just typed, and `.`
 repeats the whole insert. *Select All* and *Deselect All* set a column; *Restore Defaults* ticks
 every Normal box but `Ctrl+S` and `Ctrl+Z`, and the Insert boxes of `Ctrl+W`, `U`, `R`,
-`O`, `T` and `D` (on macOS every letter with an insert meaning). Changes apply immediately.
+`O`, `T`, `D`, `K`, `Q`, `N` and `P` (on macOS every letter with an insert meaning). Changes apply immediately.
 [docs/KEYBOARD.md](KEYBOARD.md) explains the defaults and which keys go where.
 
 ### Get Neovim

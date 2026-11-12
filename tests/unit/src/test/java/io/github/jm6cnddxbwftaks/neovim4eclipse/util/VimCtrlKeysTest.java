@@ -57,11 +57,11 @@ class VimCtrlKeysTest {
         }
     }
 
-    /** Windows and Linux: W U R O T D; everything else keeps Eclipse's shortcut while typing. */
+    /** Windows and Linux: W U R O T D, K Q (digraph, literal), N P (completion); the rest keep Eclipse's shortcut. */
     @Test
     void insertDefaultsOnWindowsAndLinux() {
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertEquals("wurotd".indexOf(letter) >= 0, VimCtrlKeys.inInsertByDefault(letter, false), "letter " + letter);
+            assertEquals("wurotdkqnp".indexOf(letter) >= 0, VimCtrlKeys.inInsertByDefault(letter, false), "letter " + letter);
         }
     }
 

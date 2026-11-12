@@ -96,7 +96,7 @@ In insert mode Eclipse types, so content assist, auto-indent and templates keep 
 `Ctrl` letters not ticked for insert mode keep their Eclipse meaning: `Ctrl+Space` for content
 assist, `Ctrl+V` to paste (on Windows and Linux), and so on.
 
-By default these six go to Neovim in insert mode on Windows and Linux:
+By default these ten go to Neovim in insert mode on Windows and Linux:
 
 | Key | Vim | Eclipse shortcut it replaces there |
 |-----|-----|------------------------------------|
@@ -106,9 +106,16 @@ By default these six go to Neovim in insert mode on Windows and Linux:
 | `Ctrl+O` | one normal-mode command, then back to insert | Java: Quick Outline |
 | `Ctrl+T` | indent the line | Java: Quick Type Hierarchy |
 | `Ctrl+D` | unindent the line | Delete Line |
+| `Ctrl+K` | enter a digraph (`Ctrl+K e :` types `ë`) | Find Next |
+| `Ctrl+Q` | insert the next key literally (`Ctrl+V` stays Paste) | Last Edit Location |
+| `Ctrl+N`, `Ctrl+P` | word completion: Eclipse's *Word Completion* (below) | New, Print |
 
-`Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+X`, `Ctrl+Z`, `Ctrl+S` and `Ctrl+F` stay Eclipse's (select all,
-copy, paste, cut, undo, save, find): people use them while typing. On macOS, where Eclipse's
+`Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+X`, `Ctrl+Y`, `Ctrl+Z`, `Ctrl+S` and `Ctrl+F` stay Eclipse's
+(select all, copy, paste, cut, redo, undo, save, find): people use them while typing. So do `Ctrl+B`
+and `Ctrl+L`, which mean nothing in Vim's insert mode; `Ctrl+H`, `Ctrl+I`, `Ctrl+J` and `Ctrl+M`,
+whose Vim meanings are Backspace, Tab and Enter, keys the keyboard has anyway (Eclipse's Search,
+Correct Indentation, Incremental Find and Maximize stay); `Ctrl+E` (Quick Switch Editor) and
+`Ctrl+G`. Each can be ticked on the *Ctrl Keys* page. On macOS, where Eclipse's
 shortcuts use Command, every letter with a Vim insert-mode meaning goes to Neovim, `Ctrl+A`,
 `Ctrl+E` and `Ctrl+K` included.
 
