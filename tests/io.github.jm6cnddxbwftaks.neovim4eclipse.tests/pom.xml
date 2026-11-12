@@ -197,6 +197,9 @@
             <test.isolated.root>${tests.isolated.root}</test.isolated.root>
             <!-- Where ScreenshotCaptureTest writes its PNG files. -->
             <screenshots.dir>${project.build.directory}/screenshots</screenshots.dir>
+            <!-- Where a wait that runs out writes what the screen and the threads looked like
+                 (editor/FailureEvidence); the CI workflow keeps the folder when a job fails. -->
+            <failure.evidence.dir>${project.build.directory}/failure-evidence</failure.evidence.dir>
           </systemProperties>
           <!-- The test Eclipse runs in folders of its own, so a run on a developer's machine sees what
                a CI runner sees, and changes nothing outside target/ (CONTRIBUTING.md, "Your Neovim

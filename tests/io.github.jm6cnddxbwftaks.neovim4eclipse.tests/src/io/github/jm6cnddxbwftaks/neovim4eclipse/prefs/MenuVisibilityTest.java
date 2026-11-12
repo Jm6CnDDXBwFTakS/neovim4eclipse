@@ -14,17 +14,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.osgi.framework.Bundle;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.FailureEvidence;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 
 /**
@@ -182,6 +186,59 @@ class MenuVisibilityTest {
         return 0;
     }
 
+    /**
+     * What decides whether the Neovim menu shows, for a failure message: the preference as the
+     * store has it (and its default), what a property tester of the class plugin.xml names answers
+     * for it (the menu's {@code visibleWhen} asks Eclipse's own instance, which this does not
+     * prove works; an exception there would be in Eclipse's log), whether
+     * the plug-in has started, which window is active, and the entries of its menu bar. Example:
+     * "showMenu = true (default true); tester: true; plug-in ACTIVE; window 'data - e2e/test.txt';
+     * menu bar: File, Edit, Navigate, ..., Help" points away from the preference and the tester.
+     */
+    private String menuState() {
+        try {
+            return menuStateOrFail();
+        } catch (RuntimeException e) {
+            return "(the menu's state not read: " + e + ")"; // never instead of the timeout's own message
+        }
+    }
+
+    private String menuStateOrFail() {
+        StringBuilder state = new StringBuilder();
+        state.append("showMenu = ").append(store.getBoolean(PreferenceConstants.SHOW_MENU))
+                .append(" (default ").append(store.getDefaultBoolean(PreferenceConstants.SHOW_MENU)).append(')');
+        try {
+            state.append("; tester: ").append(new NeovimPropertyTester().test(null, "showMenu", new Object[0], "true"));
+        } catch (RuntimeException e) {
+            state.append("; tester threw ").append(e);
+        }
+        Bundle bundle = Platform.getBundle(Activator.PLUGIN_ID);
+        state.append("; plug-in ").append(bundle == null ? "not found" : bundleState(bundle.getState()));
+        IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+        if (window == null) {
+            return state.append("; no active workbench window").toString();
+        }
+        state.append("; window '").append(window.getShell().getText()).append('\'');
+        Menu bar = window.getShell().getMenuBar();
+        List<String> entries = new ArrayList<>();
+        if (bar != null) {
+            for (MenuItem item : bar.getItems()) {
+                entries.add(item.getText().replace("&", ""));
+            }
+        }
+        return state.append("; menu bar: ").append(bar == null ? "none" : String.join(", ", entries)).toString();
+    }
+
+    private static String bundleState(int state) {
+        return switch (state) {
+            case Bundle.ACTIVE -> "ACTIVE";
+            case Bundle.STARTING -> "STARTING";
+            case Bundle.RESOLVED -> "RESOLVED (not started)";
+            case Bundle.STOPPING -> "STOPPING";
+            default -> "state " + state;
+        };
+    }
+
     /** Whether the workbench window's menu bar has a "Neovim" entry (SWT drops hidden ones). */
     private boolean neovimMenuShown() {
         Menu bar = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell().getMenuBar();
@@ -193,13 +250,18 @@ class MenuVisibilityTest {
         return false;
     }
 
-    /** Runs the event loop until {@code condition} holds: the menu bar is updated asynchronously. */
-    private static void waitUntil(String what, BooleanSupplier condition) {
+    /**
+     * Runs the event loop until {@code condition} holds: the menu bar is updated asynchronously. A
+     * timeout says what decides the menu ({@link #menuState}) and writes what the screen and the
+     * threads looked like ({@link FailureEvidence}).
+     */
+    private void waitUntil(String what, BooleanSupplier condition) {
         Display display = Display.getCurrent();
         long deadline = System.currentTimeMillis() + TIMEOUT_MS;
         while (!condition.getAsBoolean()) {
             if (System.currentTimeMillis() > deadline) {
-                fail("Timed out after " + TIMEOUT_MS + " ms waiting until " + what);
+                fail("Timed out after " + TIMEOUT_MS + " ms waiting until " + what + "\n  " + menuState()
+                        + FailureEvidence.record(what));
             }
             if (!display.readAndDispatch()) {
                 display.timerExec(10, () -> { });

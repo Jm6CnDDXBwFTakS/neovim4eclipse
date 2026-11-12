@@ -165,11 +165,15 @@ final class UiTestSupport {
         waitUntil(what, timeoutMs, condition, () -> "");
     }
 
-    /** As {@link #waitUntil(String, long, BooleanSupplier)}, adding {@code actual} to the failure message. */
+    /**
+     * As {@link #waitUntil(String, long, BooleanSupplier)}, adding {@code actual} to the failure
+     * message. A timeout also writes what the screen and the threads looked like
+     * ({@link FailureEvidence}), and the message says where.
+     */
     static void waitUntil(String what, long timeoutMs, BooleanSupplier condition,
             java.util.function.Supplier<String> actual) {
         if (!waitUntilOrGiveUp(timeoutMs, condition)) {
-            fail("Timed out after " + timeoutMs + " ms waiting for: " + what + actual.get());
+            fail("Timed out after " + timeoutMs + " ms waiting for: " + what + actual.get() + FailureEvidence.record(what));
         }
     }
 

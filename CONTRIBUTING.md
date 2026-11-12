@@ -169,6 +169,35 @@ GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
   `0.1.0-SNAPSHOT`), and only when that passes publishes a GitHub Release with
   `neovim4eclipse-0.1.0.zip` attached and rebuilds the update site.
 
+#### When CI fails
+
+A test job that fails keeps what it left behind as an artifact of the run, so that a failure that
+happens only now and then can be looked at afterwards: `failure-linux-ui-attempt-1`,
+`failure-linux-integration-attempt-1`, `failure-Windows-attempt-1`, `failure-macOS-attempt-1` (a
+rerun of the failed job keeps its own, `-attempt-2`). Each holds:
+
+- the test reports (`target/surefire-reports/` of every test module);
+- the test Eclipse's own log (`tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/work/data/.metadata/.log`),
+  where Eclipse puts an error it caught itself, such as one in a menu's `visibleWhen`, which no
+  test output shows;
+- the UI tests' timeout reports (`target/failure-evidence/`): when a wait runs out
+  (`UiTestSupport.waitUntil`), `editor/FailureEvidence` writes a picture of each of the test
+  Eclipse's windows as the screen showed them, and a text with every window and which one had the
+  focus, every thread's whole stack and the end of Eclipse's log. The failure message names the
+  files. A run on your own machine writes them too, under the same `target/` folder; a window of
+  another program lying over the test Eclipse's is in its picture, so look before sharing one.
+
+The artifacts are kept 14 days. The repository is public, so anyone signed in to GitHub can
+download them meanwhile, as anyone can read the job's log; they hold what the runner's test
+Eclipse showed, nothing of yours. Download one, or delete it early (the run's page has a trash
+icon beside each artifact, too):
+
+```bash
+gh run download <run-id> -n failure-linux-ui-attempt-1
+gh api repos/Jm6CnDDXBwFTakS/neovim4eclipse/actions/runs/<run-id>/artifacts --jq '.artifacts[] | "\(.id) \(.name)"'
+gh api -X DELETE repos/Jm6CnDDXBwFTakS/neovim4eclipse/actions/artifacts/<artifact-id>
+```
+
 ### Your Neovim config and the UI tests
 
 Every test runs in folders of its own under its module's `target/`, so it reads nothing of yours

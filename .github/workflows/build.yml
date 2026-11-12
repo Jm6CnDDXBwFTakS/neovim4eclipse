@@ -127,6 +127,28 @@ jobs:
         run: >
           xvfb-run -a -s "-screen 0 1280x1024x24" ./mvnw -B -ntp verify -Pui
           -Dnvim.path=$NVIM
+      # When a test failed: what it left behind, so that a failure that happens only now and then
+      # can be looked at afterwards (CONTRIBUTING.md, "When CI fails"): the test reports, the test
+      # Eclipse's own log (an error Eclipse caught, such as one in a menu's visibleWhen, goes only
+      # there), and the UI tests' timeout reports (a picture of the screen, every thread's stack,
+      # every window and the focus). Kept 14 days; the repository is public, so anyone signed in to
+      # GitHub can download it meanwhile, as they can read the job's log. The run attempt is in the
+      # name, so that a rerun of the failed job keeps its own. cancelled() too: a job stopped by
+      # its time limit (a test stuck behind a dialog) is cancelled, not failed, and its evidence is
+      # the most wanted. include-hidden-files: Eclipse's log is .metadata/.log, and upload-artifact
+      # leaves out every path through a folder or file whose name starts with a dot unless told.
+      - name: Keep the evidence of a failure
+        if: ${{ (failure() || cancelled()) && !inputs.skip-tests }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failure-linux-ui-attempt-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            **/target/surefire-reports/
+            tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/work/data/.metadata/.log
+            tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/failure-evidence/
+          retention-days: 14
+          if-no-files-found: ignore
       # The same build with every test left out (the test modules are still compiled): the ZIP
       # alone, at the version release.yml set above.
       - name: Build only (the tests passed on main)
@@ -173,6 +195,15 @@ jobs:
       - run: >
           ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration
           -Dnvim.path=$NVIM
+      # As in the build job; this job has only the unit tests' reports.
+      - name: Keep the evidence of a failure
+        if: ${{ failure() || cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failure-linux-integration-attempt-${{ github.run_attempt }}
+          path: tests/unit/target/surefire-reports/
+          retention-days: 14
+          if-no-files-found: ignore
 
   # The two jobs above run on Linux only; this one runs the same tests on the other two systems
   # the plug-in (and its Marketplace listing) supports, because the parts that differ per OS are
@@ -230,3 +261,16 @@ jobs:
       # The same as the Linux integration job.
       - name: Integration tests (real Neovim)
         run: ./mvnw -B -ntp test -f tests/unit/pom.xml -Pintegration "-Dnvim.path=$NVIM"
+      # As in the build job. The timeout reports' pictures are taken on this runner's desktop.
+      - name: Keep the evidence of a failure
+        if: ${{ failure() || cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failure-${{ matrix.name }}-attempt-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            **/target/surefire-reports/
+            tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/work/data/.metadata/.log
+            tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/failure-evidence/
+          retention-days: 14
+          if-no-files-found: ignore
