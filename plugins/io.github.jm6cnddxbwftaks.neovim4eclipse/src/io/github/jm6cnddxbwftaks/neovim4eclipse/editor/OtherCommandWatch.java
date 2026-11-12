@@ -3,6 +3,9 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.core.commands.IExecutionListener;
@@ -23,6 +26,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  */
 final class OtherCommandWatch implements IExecutionListener {
 
+    private static final Logger LOG = Logger.getLogger(OtherCommandWatch.class.getName());
+
     private final ICommandService commands;
     private final Runnable onOtherCommand;
 
@@ -38,9 +43,20 @@ final class OtherCommandWatch implements IExecutionListener {
         }
     }
 
+    /**
+     * Stops watching. At Eclipse's quit this runs late, from a detach queued while the workbench
+     * closes, and the command service may be gone by then: removing the listener from it then fails
+     * inside Eclipse (a {@code NullPointerException} from a disposed service), with nothing left to
+     * undo, since a disposed service has dropped its listeners. That failure is only logged at FINE;
+     * thrown, it reached Eclipse's error log at every quit with an attached editor.
+     */
     void dispose() {
         if (commands != null) {
-            commands.removeExecutionListener(this);
+            try {
+                commands.removeExecutionListener(this);
+            } catch (RuntimeException e) {
+                LOG.log(Level.FINE, "the command service is gone already (Eclipse is closing)", e);
+            }
         }
     }
 

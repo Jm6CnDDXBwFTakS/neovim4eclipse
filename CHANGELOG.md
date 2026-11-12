@@ -41,6 +41,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Quitting Eclipse with an editor attached logged a `NullPointerException` from the plug-in
+  (`OtherCommandWatch.dispose`): it removed a listener from a command service Eclipse had already
+  disposed.
 - A Neovim plug-in's floating window that took the focus (a picker's prompt, lazy.nvim's installer
   on the first start of a LazyVim config) took the keys typed in the editor, unseen. It is now
   closed, with a message; one the config leaves open at start no longer becomes the window the

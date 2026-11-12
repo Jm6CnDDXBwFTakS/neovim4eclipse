@@ -250,7 +250,10 @@ public final class NeovimEditorController implements AutoCloseable {
         keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
         keyInterceptor.setCompletion(this::runCompletion);
         keyInterceptor.setEclipseBinding(this::runEclipseBinding);
-        this.otherCommandWatch = new OtherCommandWatch(editor.getSite().getService(ICommandService.class),
+        // The workbench's own command service, not the site's: the site hands out its window's, which
+        // the window disposes when it closes (OtherCommandWatch.dispose).
+        this.otherCommandWatch = new OtherCommandWatch(
+                editor.getSite().getWorkbenchWindow().getWorkbench().getService(ICommandService.class),
                 keyInterceptor::cancelCtrlX);
     }
 
