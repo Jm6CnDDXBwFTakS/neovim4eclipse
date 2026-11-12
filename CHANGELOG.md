@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.15] - 2026-11-12
+
 ### Changed
 
 - Nothing changes in the plug-in itself: more of its decisions are tested without Eclipse, and the
