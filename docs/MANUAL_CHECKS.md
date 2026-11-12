@@ -25,6 +25,23 @@ java releng/tools/checks/ManualChecks.java list             # every card
 java releng/tools/checks/ManualChecks.java json             # the cards as JSON, for a page that keeps ticks
 ```
 
+The tool runs `git` (for `due`) and starts your Eclipse (for `launch`), so both must be found. On
+Windows neither is usually on `PATH` in a new PowerShell window. Paste this block into one, from
+the repository's root, after changing the first two lines to where your Git and Eclipse are (the
+two settings last as long as that window). It builds the update site ZIP `launch` installs, makes
+the folders, and starts Eclipse for a card:
+
+```powershell windows
+$env:PATH = "C:\path\to\git\cmd;$env:PATH"         # the folder with git.exe
+$env:ECLIPSE = "C:\path\to\eclipse\eclipse.exe"    # the Eclipse program itself, not its folder
+.\mvnw.cmd verify -DskipTests
+java releng/tools/checks/ManualChecks.java setup
+java releng/tools/checks/ManualChecks.java launch gn-download
+```
+
+On Linux and macOS `git` is on `PATH` already; `export ECLIPSE=/path/to/eclipse` names an Eclipse
+the tool does not find by itself (see below).
+
 - **`due`** lists the cards whose source files changed since the last release tag (`v*`), and the
   cards marked `always`. A card about macOS's input method does not come up in a release that did
   not touch the `:` box. A POM, manifest or feature whose only change is the version number (each
@@ -122,12 +139,14 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 ```
 
 ```powershell windows
-.\mvnw.cmd verify -Pgallery -Dnvim.path=C:\path\to\nvim.exe
+.\mvnw.cmd verify -Pgallery "-Dnvim.path=C:\path\to\nvim.exe"
 ```
 
 1. On Linux, `xvfb-run` is optional: on a desktop session the command runs without it. On every
    system the windows draw themselves into the pictures, so other windows may cover them; leave
    the test Eclipse in front, though, so the pictures show its windows active, as users see them.
+   In PowerShell keep the quotes around `-Dnvim.path=...`: it splits an unquoted argument that
+   starts with `-` at its first dot, so Maven would get `-Dnvim` and `.path=...` apart.
 2. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/index.html` in a
    browser and look at each picture against the text under it.
    ⇒ Each picture matches its caption (the list below).
@@ -206,7 +225,7 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 ```
 
 ```powershell windows
-.\mvnw.cmd verify -Pgallery -Dnvim.path=C:\path\to\nvim.exe
+.\mvnw.cmd verify -Pgallery "-Dnvim.path=C:\path\to\nvim.exe"
 ```
 
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
