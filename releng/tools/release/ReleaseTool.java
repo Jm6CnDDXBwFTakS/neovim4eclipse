@@ -83,7 +83,8 @@ import maven.MavenFiles;
  * </ol>
  *
  * <h2>When a run fails</h2>
- * The tool prints the failed jobs' last log lines and the commands that recover: rerun the failed
+ * The tool prints what the failed jobs' logs say failed ({@code GitHub.failureSummary}: a failing
+ * test and its message, Maven's error lines) and the commands that recover: rerun the failed
  * jobs (a runner hiccup), or fix the cause on the release branch and run {@code promote} again.
  * It never deletes a tag, a release or a branch that is not finished with, and never forces a
  * push; when a tag must move, it prints the commands for a person to run.
@@ -944,8 +945,8 @@ public final class ReleaseTool {
     // ---------------------------------------------------------------- shared
 
     /**
-     * Follows the run that a push or dispatch started; on failure, prints the failed jobs' last log
-     * lines and {@code recovery}, then stops the tool.
+     * Follows the run that a push or dispatch started; on failure, prints what the failed jobs'
+     * logs say failed ({@code GitHub.failureSummary}) and {@code recovery}, then stops the tool.
      */
     private GitHub.Run awaitAndWatch(String what, String workflow, String commit, String event, String branch, Set<Long> older,
             List<String> recovery) {

@@ -161,6 +161,25 @@ public final class GitHub {
     /** How many lines after a failed test's own line (its assertion message) {@link #failureSummary} keeps. */
     private static final int MESSAGE_LINES = 6;
 
+    /**
+     * The lines Maven prints under every failed build, whatever failed: blank {@code [ERROR]} lines,
+     * {@code -> [Help 1]} and the links under it, the "-e" and "-X" hints, and the {@code -rf :module}
+     * resume command. They name no cause, so {@link #failureSummary} leaves them out.
+     */
+    private static final Pattern MAVEN_ADVICE = Pattern.compile("^\\[ERROR\\]\\s*(?:$|->\\s*\\[Help|\\[Help \\d+\\]|To see the full stack trace"
+            + "|Re-run Maven using|For more information about the errors|After correcting the problems|Please refer to|mvn .* -rf :)");
+
+    /**
+     * Maven's first error line when it stops before the build, with no {@code BUILD FAILURE} line: a
+     * POM it cannot read (a parent not found, a bad property), e.g.
+     * {@code [ERROR] [ERROR] Some problems were encountered while processing the POMs:}.
+     */
+    private static final Pattern MAVEN_STOPPED = Pattern.compile(
+            "^\\[ERROR\\] (?:\\[ERROR\\] )?(?:Some problems were encountered while processing the POMs|The build could not read)");
+
+    /** GitHub's line under a step that failed; the runner's cleanup follows it to the job's end. */
+    private static final String STEP_FAILED = "##[error]Process completed with exit code";
+
     /** A log line's start as {@code gh run view --log} prints it: job, step, then a timestamp. */
     private static final Pattern LOG_LINE = Pattern.compile("^([^\t]*)\t[^\t]*\t(?:\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z ?)?(.*)$");
 
@@ -177,18 +196,39 @@ public final class GitHub {
      *   All tests on Windows: expected: <one
      *       </pre></li>
      *   <li>Maven's summary of them ({@code [ERROR] Failures:} and the indented lines under it);</li>
-     *   <li>GitHub's own error lines ({@code ##[error]…}), but for "Process completed with exit code".</li>
+     *   <li>GitHub's own error lines ({@code ##[error]…}), but for "Process completed with exit code";</li>
+     *   <li>Maven's own error lines after its {@code BUILD FAILURE} line (or a POM it could not
+     *       read, {@link #MAVEN_STOPPED}), which name a build that failed before any test ran (a
+     *       plug-in that could not be resolved, a compile error), e.g.
+     *       <pre>
+     *   Build: [ERROR] Plugin org.eclipse.tycho:tycho-versions-plugin:5.0.4 or one of its dependencies could not be resolved:
+     *   Build: [ERROR] 	org.eclipse.tycho:tycho-versions-plugin:jar:5.0.4 was not found in https://repo.maven.apache.org/maven2 during a previous attempt. …
+     *       </pre>
+     *       but not the advice Maven prints under every failure ({@link #MAVEN_ADVICE}) nor its
+     *       "Tests run:" counts, which say only how many failed. Only after {@code BUILD FAILURE}:
+     *       the log holds every step of each failed job, one job after the other, and an
+     *       {@code [ERROR]} line of a Maven call that passed (in this job or before) is no cause. When another step failed (signing, an upload), the last lines
+     *       below show it instead.</li>
      * </ul>
      * When nothing of that is there (a step that is not Maven's failed), the last {@code max}
-     * lines, as before.
+     * lines before the last failed step's {@code ##[error]Process completed with exit code} line:
+     * after it come some 40 lines of the runner's cleanup ("Post job cleanup.", git config), which
+     * would leave no room for the step's own message.
      */
     public static String failureSummary(String log, int max) {
         List<String> lines = log.lines().toList();
         List<String> kept = new ArrayList<>();
         boolean inSummary = false;
+        boolean afterBuildFailure = false;
+        String job = null;
         for (int i = 0; i < lines.size() && kept.size() < max; i++) {
             String[] line = parts(lines.get(i));
             String text = line[1];
+            if (!line[0].equals(job)) {
+                // The next failed job's log: its Maven calls have not failed yet.
+                job = line[0];
+                afterBuildFailure = false;
+            }
             if ((text.contains("<<< FAILURE!") || text.contains("<<< ERROR!")) && !text.contains("Tests run:")) {
                 kept.add(line[0] + ": " + text);
                 for (int j = i + 1; j < lines.size() && j <= i + MESSAGE_LINES && kept.size() < max; j++) {
@@ -206,13 +246,26 @@ public final class GitHub {
                 kept.add(line[0] + ": " + text);
             } else {
                 inSummary = false;
-                if (text.startsWith("##[error]") && !text.contains("Process completed with exit code")) {
+                if (text.startsWith("[INFO] BUILD FAILURE") || MAVEN_STOPPED.matcher(text).find()) {
+                    afterBuildFailure = true;
+                }
+                if (text.startsWith("##[error]") && !text.startsWith(STEP_FAILED)) {
+                    kept.add(line[0] + ": " + text);
+                } else if (afterBuildFailure && text.startsWith("[ERROR]") && !text.contains("Tests run:")
+                        && !MAVEN_ADVICE.matcher(text).find()) {
                     kept.add(line[0] + ": " + text);
                 }
             }
         }
         if (kept.isEmpty()) {
-            return String.join("\n", lines.subList(Math.max(0, lines.size() - max), lines.size()).stream().map(GitHub::printable).toList());
+            int end = lines.size();
+            for (int i = lines.size() - 1; i >= 0; i--) {
+                if (parts(lines.get(i))[1].startsWith(STEP_FAILED)) {
+                    end = i;
+                    break;
+                }
+            }
+            return String.join("\n", lines.subList(Math.max(0, end - max), end).stream().map(GitHub::printable).toList());
         }
         return String.join("\n", kept.stream().distinct().toList());
     }

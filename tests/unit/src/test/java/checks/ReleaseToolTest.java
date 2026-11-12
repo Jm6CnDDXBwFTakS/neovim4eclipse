@@ -394,6 +394,109 @@ class ReleaseToolTest {
         assertEquals("a\tb", GitHub.failureSummary("a\u0008\tb", 5), "control characters but tabs dropped, in the plain tail too");
     }
 
+    /**
+     * A build that failed before any test ran, as the 0.2.15 Release run's "Set version" step did:
+     * the cause is in Maven's first error lines, about ten lines above the log's end, and the advice
+     * and the runner's cleanup after them name nothing. The report is those error lines alone, and
+     * only those after {@code BUILD FAILURE}: an {@code [ERROR]} line of an earlier Maven call that
+     * passed is no cause.
+     */
+    @Test
+    void aFailedBuildsReportNamesMavensErrorNotItsAdvice() {
+        String job = "Build / Build (tested on main)\tSet version 0.2.15\t2026-11-12T06:51:16.1114309Z ";
+        String log = String.join("\n",
+                job + "[ERROR] a line an earlier Maven call logged, and passed",
+                job + "[INFO] BUILD SUCCESS",
+                job + "[WARNING] The POM for org.eclipse.tycho:tycho-versions-plugin:jar:5.0.4 is missing, no dependency information available",
+                job + "[INFO] BUILD FAILURE",
+                job + "[ERROR] Plugin org.eclipse.tycho:tycho-versions-plugin:5.0.4 or one of its dependencies could not be resolved:",
+                job + "[ERROR] \torg.eclipse.tycho:tycho-versions-plugin:jar:5.0.4 was not found in https://repo.maven.apache.org/maven2",
+                job + "[ERROR] -> [Help 1]",
+                job + "[ERROR] ",
+                job + "[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.",
+                job + "[ERROR] Re-run Maven using the -X switch to enable full debug logging.",
+                job + "[ERROR] For more information about the errors and possible solutions, please read the following articles:",
+                job + "[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/PluginResolutionException",
+                job + "[ERROR] After correcting the problems, you can resume the build with the command",
+                job + "[ERROR]   mvn <args> -rf :neovim4eclipse",
+                job + "##[error]Process completed with exit code 1.",
+                job + "Post job cleanup.",
+                job + "[command]/usr/bin/git version");
+        assertEquals(String.join("\n",
+                "Build / Build (tested on main): [ERROR] Plugin org.eclipse.tycho:tycho-versions-plugin:5.0.4 or one of its dependencies could not be resolved:",
+                "Build / Build (tested on main): [ERROR] \torg.eclipse.tycho:tycho-versions-plugin:jar:5.0.4 was not found in https://repo.maven.apache.org/maven2"),
+                GitHub.failureSummary(log, 40));
+
+        String signing = "Sign with PGP\tSign\t2026-11-12T06:59:00.0Z ";
+        assertEquals(String.join("\n", signing + "gpg: using key 0123", signing + "gpg: signing failed: No secret key"),
+                GitHub.failureSummary(String.join("\n",
+                        job + "[ERROR] a line a Maven call that passed logged",
+                        job + "[INFO] BUILD SUCCESS",
+                        signing + "gpg: using key 0123",
+                        signing + "gpg: signing failed: No secret key",
+                        signing + "##[error]Process completed with exit code 2.",
+                        signing + "Post job cleanup.",
+                        signing + "[command]/usr/bin/git version"), 2),
+                "no Maven call failed: the last lines before the runner's cleanup, which show the step that did");
+
+        String pom = "Build\tSet version 0.2.16\t2026-11-12T06:51:16.1Z ";
+        assertEquals(String.join("\n",
+                "Build: [ERROR] [ERROR] Some problems were encountered while processing the POMs:",
+                "Build: [ERROR] Non-resolvable parent POM for x:y:1: not found",
+                "Build: [ERROR] The build could not read 1 project -> [Help 1]"),
+                GitHub.failureSummary(String.join("\n",
+                        pom + "[INFO] Scanning for projects...",
+                        pom + "[ERROR] [ERROR] Some problems were encountered while processing the POMs:",
+                        pom + "[ERROR] Non-resolvable parent POM for x:y:1: not found",
+                        pom + "[ERROR] The build could not read 1 project -> [Help 1]",
+                        pom + "[ERROR] ",
+                        pom + "[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.",
+                        pom + "##[error]Process completed with exit code 1."), 40),
+                "a POM Maven cannot read stops it with no BUILD FAILURE line; its error lines still count");
+
+        String macos = "All tests on macOS\tBuild, unit and UI tests\t2026-11-12T06:51:16.1Z ";
+        String windows = "All tests on Windows\tBuild, unit and UI tests\t2026-11-12T06:51:16.1Z ";
+        assertEquals(String.join("\n",
+                "All tests on macOS: [ERROR] Plugin x could not be resolved",
+                "All tests on Windows: [ERROR] Plugin y could not be resolved"),
+                GitHub.failureSummary(String.join("\n",
+                        macos + "[INFO] BUILD FAILURE",
+                        macos + "[ERROR] Plugin x could not be resolved",
+                        windows + "[ERROR] a line a Maven call that passed logged",
+                        windows + "[INFO] BUILD FAILURE",
+                        windows + "[ERROR] Plugin y could not be resolved"), 40),
+                "each failed job starts again: the next job's passing Maven call is no cause");
+    }
+
+    /**
+     * A run whose tests failed, as a surefire log ends: the failing test and Maven's summary, then
+     * the goal that failed (which names the module) and the advice under it, which is left out.
+     */
+    @Test
+    void aFailedTestRunsReportEndsWithTheGoalThatFailed() {
+        String job = "Build\tBuild, unit and UI tests\t2026-11-12T06:51:16.1Z ";
+        String goal = "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.4:test (default-test)"
+                + " on project unit: There are test failures.";
+        String log = String.join("\n",
+                job + "[ERROR] checks.ReleaseToolTest.anEdit(Path) -- Time elapsed: 0.497 s <<< FAILURE!",
+                job + "org.opentest4j.AssertionFailedError: expected: <one",
+                job + "\tat org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)",
+                job + "[ERROR] Failures: ",
+                job + "[ERROR]   ReleaseToolTest.anEdit:275 expected: <one",
+                job + "[ERROR] Tests run: 1086, Failures: 1, Errors: 0, Skipped: 3",
+                job + "[INFO] BUILD FAILURE",
+                job + goal,
+                job + "[ERROR] ",
+                job + "[ERROR] Please refer to tests/unit/target/surefire-reports for the individual test results.",
+                job + "[ERROR] -> [Help 1]");
+        assertEquals(String.join("\n",
+                "Build: [ERROR] checks.ReleaseToolTest.anEdit(Path) -- Time elapsed: 0.497 s <<< FAILURE!",
+                "Build: org.opentest4j.AssertionFailedError: expected: <one",
+                "Build: [ERROR] Failures: ",
+                "Build: [ERROR]   ReleaseToolTest.anEdit:275 expected: <one",
+                "Build: " + goal), GitHub.failureSummary(log, 40));
+    }
+
     @Test
     void theRunFollowedIsTheOneThePushStarted() {
         GitHub.Run failed = new GitHub.Run(41, "completed", "failure", "u41", "push", "rehearse/0.2.3");

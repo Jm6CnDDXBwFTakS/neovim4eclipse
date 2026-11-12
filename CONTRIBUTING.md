@@ -694,9 +694,15 @@ attaches after it. Nothing waits for it: a release that fails it is fixed by the
 branch `next` cuts, and `next --yes` still asks before it runs InstallCheck. It is worth running at
 any time, too, such as after an Eclipse upgrade.
 
-When a workflow run fails, the tool prints the failed jobs' last log lines and what to do: rerun the
-failed jobs for a runner hiccup, or fix the cause on the release branch and run `check` and
-`promote` again. It never forces a push or moves a tag; when a tag must move, it prints the
+When a workflow run fails, the tool prints the lines of the failed jobs' logs that say what failed
+(each failing test with its message, Maven's own error lines; the last lines when there are none)
+and what to do: rerun the failed jobs for a runner hiccup, or fix the cause on the release branch
+and run `check` and `promote` again. A rerun cannot help when Maven reports a plug-in "not found
+... during a previous attempt": that "not found" came with the Maven cache the run restored, and
+Maven does not look again without `-U` (only the *Set version* step passes it). Delete that cache first:
+the failed job's log names its key ("Cache restored from key: ..."), and a run on a tag restores it
+from `main`, so `gh cache list --ref refs/heads/main --key <key>` gives its id for `gh cache delete
+<id>`. Then rerun. It never forces a push or moves a tag; when a tag must move, it prints the
 commands. Its commits are in UTC. A `local.properties` beside a `settings.properties` overrides it
 on one machine (each folder's `local.properties.example` lists the keys): in `releng/tools/common/`,
 a last paragraph for every tool's commits; in `releng/tools/release/`, the local test run.
