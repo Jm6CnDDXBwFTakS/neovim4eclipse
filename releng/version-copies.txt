@@ -23,6 +23,7 @@ README.md  \bNeovim (\d+\.\d+\.\d+)
 README.md  dedicated Neovim\* \((\d+\.\d+\.\d+)\)
 README.md  \b(\d+\.\d+\.\d+) or newer
 CONTRIBUTING.md  \bNeovim (\d+\.\d+\.\d+)
+docs/USER_GUIDE.md  \bNeovim (\d+\.\d+\.\d+)
 CONTRIBUTING.md  only (\d+\.\d+\.\d+) is what CI checks
 docs/LEARNING.md  Get Neovim (\d+\.\d+\.\d+)
 docs/LEARNING.md  \b(\d+\.\d+\.\d+) or newer

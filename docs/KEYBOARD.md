@@ -15,10 +15,10 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Keys typed within milliseconds of entering insert mode, or of a `Ctrl` key Neovim handles there, before Eclipse has Neovim's text | Neovim, so nothing is lost; then Eclipse types again |
 | The key after `Ctrl-R`, `Ctrl-V`, `Ctrl-Q`, `Ctrl-K`, `Ctrl-G` or `Ctrl-\` (keys after which Neovim waits for another), and any typed before Neovim has it | Neovim; then Eclipse types again |
 | `:`, `/`, `?` in normal mode | Neovim, which opens its command line; the editor shows it in the `:` box, whose keys all go to Neovim (Paste and Copy stay Eclipse's, acting on the box) |
-| `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see the README) | Eclipse's save, Save All, close, open and tab switching |
+| `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see docs/USER_GUIDE.md, "Command line") | Eclipse's save, Save All, close, open and tab switching |
 | `gd`, `Ctrl-]`, `K`, `grn`, `gra`, `grr`, `gri`, `grt`, `gO`, `gt`, `gT` in normal mode (`gra` in visual mode too) | Neovim first, which hands them to Eclipse (below) |
-| The left mouse button in normal and visual mode | Neovim's own mouse (`nvim_input_mouse`); Ctrl/Cmd+click, the right and middle buttons stay Eclipse's (README, "Mouse") |
-| The vertical mouse wheel and touchpad in normal and visual mode | Neovim, which scrolls its window by the lines the system reports and drags the cursor, as `Ctrl-E`; the editor follows. With Ctrl, Shift or Cmd held, sideways, and in insert mode: Eclipse (README, "The editor's size, scrolling and word wrap") |
+| The left mouse button in normal and visual mode | Neovim's own mouse (`nvim_input_mouse`); Ctrl/Cmd+click, the right and middle buttons stay Eclipse's (docs/USER_GUIDE.md, "Mouse") |
+| The vertical mouse wheel and touchpad in normal and visual mode | Neovim, which scrolls its window by the lines the system reports and drags the cursor, as `Ctrl-E`; the editor follows. With Ctrl, Shift or Cmd held, sideways, and in insert mode: Eclipse (docs/USER_GUIDE.md, "The editor's size, scrolling and word wrap") |
 | Eclipse mode (the Neovim toolbar button, the logo) | Eclipse, always |
 
 ## `Ctrl` keys
@@ -39,7 +39,7 @@ In normal mode, by default every letter goes to Neovim **except these two**, on 
 
 **`Ctrl+W`** goes to Neovim, though Eclipse closes the editor with it on Windows and Linux: it starts
 Vim's window commands, which work on Eclipse's editors, each Vim window being an editor and each split
-an editor stack (README, "Splits"; docs/design/SPLITS.md). `Ctrl+W s` and `v` split, `Ctrl+W h/j/k/l`
+an editor stack (docs/USER_GUIDE.md, "Splits"; docs/design/SPLITS.md). `Ctrl+W s` and `v` split, `Ctrl+W h/j/k/l`
 move, `Ctrl+W +` sizes, `Ctrl+W o` is `:only`; `Ctrl+W q`, `Ctrl+W Ctrl+Q` and `Ctrl+W c` close the
 editor (as `:q` and `:close` do; in a floating window you entered, they close that window, as in
 Neovim); `Ctrl+W T` moves the editor out of its split, as a tab. Your own mappings of these keys win.
@@ -152,7 +152,7 @@ inserts its first match without showing the list.
 - The `z` fold commands (`zo`, `zc`, `zM`, ...) are Neovim's like any normal-mode key. In an editor
   that folds they act on Eclipse's folds, which are mirrored into Neovim. There `zf`, `zF`, `zd`,
   `zD` and `zE` and `:fold` show `zf: Eclipse defines the folds in this editor` instead, since
-  Eclipse decides where folds are (README, "Folding"). The keys are caught by a buffer-local
+  Eclipse decides where folds are (docs/USER_GUIDE.md, "Folding"). The keys are caught by a buffer-local
   mapping of `z` alone that reads the next key without a time limit (two-key mappings timed out,
   and a slowly typed `zE` was Neovim's); `:fold` is refused when its line runs, like the host
   commands. In an editor that cannot fold they are Neovim's own.

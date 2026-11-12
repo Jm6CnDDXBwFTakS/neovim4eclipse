@@ -34,7 +34,7 @@ small msgpack client attached with the plug-in's own UI options (`NeovimConnecti
   and `zt` makes the cursor line the editor's first.
 - Resizing the editor, the window, or the font changes `&lines` and `&columns`; `Ctrl-D` then
   scrolls half of the new height. Lines made taller by code minings (Java editors' reference counts)
-  are not counted, so there `L` lands a line or two low (README says so).
+  are not counted, so there `L` lands a line or two low (the user guide says so).
 - The mouse wheel and the touchpad scroll Neovim's window (D1, D9) in normal and visual mode: by
   the lines the operating system reports (its speed, acceleration and momentum, as Eclipse scrolls;
   `'mousescroll'` is not used), and the cursor is pulled along when it would leave the screen, as
@@ -50,7 +50,7 @@ small msgpack client attached with the plug-in's own UI options (`NeovimConnecti
   as Neovim's own wheel would have done.
 - The end of the document: Neovim can scroll until the last line is at the top (`Ctrl-E`), Eclipse
   cannot; the editor stops at its end, and that position becomes the agreed one (not sent back).
-  README says so.
+  The user guide says so.
 - A user's `'laststatus'`, `'number'`, `'signcolumn'` stay theirs. The plug-in measures what they
   take (section 3.1) instead of turning them off.
 - `'wrap'` and Eclipse's word wrap (Alt+Shift+Y; Cmd+Option+Y on macOS) are one setting (D2):
@@ -243,7 +243,7 @@ screen row on both sides (its experiment X9), so the row counts agree. What rema
   top line is inside a closed fold, the editor's top line is that fold's caption line
   (`FoldMirror.captionOffset`), as FOLDING.md finds the caret's.
 - With the folds opt-out (`vim.g.neovim4eclipse_folds = 0`) folds are not mirrored, and `L`,
-  `Ctrl-F` and `zb` fall short by the folded lines; README says so. `LuaScripts.MOUSE` keeps its
+  `Ctrl-F` and `zb` fall short by the folded lines; the user guide says so. `LuaScripts.MOUSE` keeps its
   off-screen branch for this case.
 
 ### 3.5 Horizontal scrolling
@@ -262,7 +262,7 @@ conversion (bytes, cells, pixels) is its own work.
   plug-in sets the window's `'wrap'` from the editor's word wrap; an `OptionSet` autocommand turns a
   `:set wrap` / `:set nowrap` in Neovim into Eclipse's word wrap for that editor. Eclipse's state
   wins on attach, so a `set wrap` in `init.lua` does not fight Eclipse's preference ("Enable word
-  wrap when opening an editor", which README names as the way to set a default). While wrap is on,
+  wrap when opening an editor", which the user guide names as the way to set a default). While wrap is on,
   the window also gets `'linebreak'` (D7). Echo guard as for the caret: an option set from Eclipse
   does not come back. Rejected: one way only (a `:set wrap` would silently leave the two out of
   step), and leaving `'wrap'` to the user (wrong counts on long lines).
@@ -294,7 +294,7 @@ conversion (bytes, cells, pixels) is its own work.
 - **D9, the touchpad**: Neovim scrolls by the lines SWT reports (`count`), for a mouse wheel and a
   touchpad alike, dragging the cursor when it would leave the screen as `Ctrl-E` does
   (`'scrolloff'` kept). The speed, acceleration and momentum stay the operating system's, as
-  Eclipse scrolls; `'mousescroll'` is not used (README says so). Why: on macOS nothing in the event
+  Eclipse scrolls; `'mousescroll'` is not used (the user guide says so). Why: on macOS nothing in the event
   tells a trackpad from a wheel (X10), so one rule must serve both. Events of 0 lines, possible from
   smooth touchpads, did not come on macOS (X10) or Linux (X11), since SWT reports whole lines, so
   nothing is added up; real Linux and Windows touchpads are not measured (the test machines share

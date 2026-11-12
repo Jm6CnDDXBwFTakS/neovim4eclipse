@@ -57,7 +57,7 @@ whole plug-in, `core/` and `util/` included.
    installing the Error Log bridge (so the warning about an unknown value reaches the Error Log;
    nothing logs in between) and, if set, calls `LogLevelSwitch.apply(…, System.err)`. `stop`
    removes the handler again, as `ErrorLogHandler.uninstall` does.
-3. The property name lives in one constant (in `LogLevelSwitch`), so the README, the tests and the
+3. The property name lives in one constant (in `LogLevelSwitch`), so the user guide, the tests and the
    code agree.
 
 **`--launcher.appendVmargs` on the command line**, not only in `eclipse.ini`, keeps the ini's VM
@@ -65,7 +65,7 @@ arguments. Tried with `eclipsec.exe` (Eclipse 4.41, Windows) and a copy of `ecli
 that line, passed with `--launcher.ini`, plus `-vmargs -XX:+PrintCommandLineFlags`: with the flag,
 the ini's `-XX:+UseStringDeduplication` was still in effect; without it, it was gone. The EPP
 packages' own `eclipse.ini` already has `--launcher.appendVmargs`, so for most people the trap does
-not arise; the README still shows the flag, since it costs nothing.
+not arise; the user guide still shows the flag, since it costs nothing.
 
 ## 3. Why no environment variable
 

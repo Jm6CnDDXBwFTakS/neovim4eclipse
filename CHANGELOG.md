@@ -14,6 +14,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The README is now the overview: install, the first five minutes, every setting in one table, the
+  known limitations and how to report a problem. Each feature's details moved to
+  [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 - `vim.g.neovim4eclipse_search` is now `vim.g.neovim4eclipse_search_highlight`: it turns off only
   the highlighting of search matches in the editor, not search. Rename it in your `init.lua` if you
   set it.
@@ -836,7 +839,7 @@ The plug-in itself is unchanged from 0.1.7; this release is for people who build
   install folders, now also Neovim's own `/opt` folders and per-user Windows installs. Several
   Neovims side by side in one folder: the newest that runs is used. An absolute path to `nvim` set
   before keeps working. Under the field's note, a line says what the field takes and links to
-  [Finding Neovim](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#finding-neovim) in the README;
+  [Finding Neovim](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/blob/main/docs/USER_GUIDE.md#finding-neovim) in the user guide;
   when nothing is found, the note says whether the default folders or the value entered came up
   empty, and how to go on. A note about a Neovim that would not start is shown in the theme's error
   color, with an error mark on the field.

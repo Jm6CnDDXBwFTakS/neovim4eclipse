@@ -20,9 +20,9 @@ labels: bug
 - Neovim for Eclipse version (Help > About > Installation Details > Plug-ins):
 - Eclipse version:
 - Operating system and architecture:
-- Neovim version (`nvim --version`, first line):
+- Neovim version (the *Found:* line on Window > Preferences > Neovim, or `:version` in the editor):
 - Editor type (Java editor, plain text, POM editor, ...):
 
 **Log**
 <!-- Relevant lines from Window > Show View > Error Log, or the console of a launched Eclipse.
-     docs/KEYBOARD.md and the README's key-binding table explain the key-routing messages. -->
+     docs/KEYBOARD.md and docs/USER_GUIDE.md ("Blockwise visual", "The plug-in's log") explain the key-routing messages. -->

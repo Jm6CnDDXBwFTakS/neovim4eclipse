@@ -60,7 +60,7 @@ switches, two editors on one file have their own, and the send on attach finds t
   closed fold puts Eclipse's caret on that caption line.
 - **`'foldopen'` is the user's,** and the plug-in does not set it. Out of the box this is Vim's
   behavior: `j` steps over a closed fold, and a search into one opens it. `set foldopen=all` in
-  `init.lua` gives Eclipse's behavior, where any move into folded code opens it. README and
+  `init.lua` gives Eclipse's behavior, where any move into folded code opens it. docs/USER_GUIDE.md and
   `docs/KEYBOARD.md` say so.
 - **`zf`, `zF`, `zd`, `zD`, `zE` and `:fold` are not supported** in a mirrored buffer. They show
   `zf: Eclipse defines the folds in this editor` and change no fold: Eclipse's next reconcile would
@@ -77,7 +77,7 @@ switches, two editors on one file have their own, and the send on attach finds t
 - **The opt-out costs nothing.** The setting is read once per Neovim session, after `init.lua` has
   run, and when it is off none of the fold code runs (section 3.6). The cost is that changing
   `g:neovim4eclipse_folds` in a running Neovim does nothing until Neovim is restarted (Window ›
-  Preferences › Neovim, or restarting Eclipse). README says so.
+  Preferences › Neovim, or restarting Eclipse). The README's Settings say so.
 - **Flat variable names:** `neovim4eclipse_folds` beside `neovim4eclipse_ide_keys`, not one table
   `vim.g.neovim4eclipse = { folds = … }`. Why:
   - `vim.g.neovim4eclipse.folds = 0` silently does nothing: reading `vim.g.x` returns a *copy* of
@@ -337,7 +337,7 @@ plug-in does. Lines are 1-based.
   (`hold`) and sends at the end of insert mode, after the push (`resume`). Test:
   `JavaEditorEndToEndTest.aMethodTypedInInsertModeStaysAndBecomesAFold`.
 - **Undo** (X7): `u` restores the lines, not the fold; the reconcile brings it back in both, open.
-  This is Neovim's own behavior for manual folds, and users will notice it, so README mentions it.
+  This is Neovim's own behavior for manual folds, and users will notice it, so the user guide mentions it.
   Closing it again after the undo would need the plug-in to remember deleted closed folds and match
   them to restored lines; not worth the state.
 - **The extmark ids** become stale only when the list is resent, and resending replaces them all.
@@ -512,7 +512,7 @@ and why", lists them all with the code and the test that holds each.
   caret is not drawn until it moves (normal mode, Linux, XFCE on X11). It happens the same with
   `Ctrl+Numpad` in Eclipse mode and in an Eclipse without the plug-in, so it is SWT's or the
   platform's (likely the caret's blink state across the viewer's redraw). Hiding and showing the
-  caret after each fold change was rejected: it would only cover Neovim mode. The README notes it.
+  caret after each fold change was rejected: it would only cover Neovim mode. The user guide notes it ("Folding").
 
 ## 7. Not checked
 

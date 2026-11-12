@@ -322,7 +322,7 @@ the plug-in
 The project's goal is that Neovim handles as much as possible itself; supporting old versions
 would mean keeping the workarounds. Users need no Neovim of their own: the plug-in
 runs only the dedicated Neovim that *Get Neovim* installs, this one version, hash-checked before
-every start (README, *Finding Neovim*). So a new version costs them one *Get Neovim* when they
+every start (docs/USER_GUIDE.md, *Finding Neovim*). So a new version costs them one *Get Neovim* when they
 update the plug-in: the dedicated Neovim of the old version fails the check, and the plug-in
 opens *Get Neovim* by itself at Eclipse's start. (A program named with the startup option
 `-Dneovim4eclipse.nvim` instead runs unchecked and unsupported; one older than the minimum is

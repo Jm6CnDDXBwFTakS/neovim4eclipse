@@ -47,7 +47,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 - On Windows, `SHELL` is not passed on (`NvimExecutable.prepareEnvironment`): Eclipse started from Git Bash
   inherits `SHELL=/usr/bin/bash`, which Neovim would combine with `cmd.exe`'s flags, so `:!` commands failed.
   Neovim then uses `cmd.exe`; set `'shell'` and its flags in `init.lua` for another shell.
-- Simplest install: *Get Neovim* (README, "Get Neovim"), with no `-Dneovim4eclipse.nvim`. It downloads
+- Simplest install: *Get Neovim* (docs/USER_GUIDE.md, "Get Neovim"), with no `-Dneovim4eclipse.nvim`. It downloads
   through Eclipse's proxy settings (`IProxyService.select` per address, as p2 does; Eclipse's
   *Native* reads environment variables and GNOME on Linux, the Windows settings on Windows, nothing
   on macOS), or installs an archive the user picked. A proxy that wants a password needs
@@ -93,7 +93,7 @@ Maven/Tycho builds the OSGi plug-in, feature, and p2 update site. Unit tests (`t
 5. **macOS: links open in MacVim, or not at all** — Eclipse's *Default system web browser* opens a
    link with the app for `.html` files (`Program.findProgram("html")` in `org.eclipse.ui.browser`),
    not the default browser, and a browser added by its `.app` folder does not start. The fix, an
-   entry with `/usr/bin/open` and `-a Safari %URL%`, is in the README, Get Neovim, "The dialog's
+   entry with `/usr/bin/open` and `-a Safari %URL%`, is in docs/USER_GUIDE.md, Get Neovim, "The dialog's
    links".
 
 ## Quick verification

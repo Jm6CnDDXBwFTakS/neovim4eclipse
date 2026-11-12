@@ -119,8 +119,8 @@ jobs:
       - name: Make sure xvfb-run is there
         if: ${{ !inputs.skip-tests }}
         run: command -v xvfb-run || { sudo apt-get update && sudo apt-get install -y xvfb; }
-      # verify = compile, unit tests, feature, p2 repository and the ZIP (see README "Build and
-      # test"); -Pui adds the UI tests, which are off by default because they open a window. They
+      # verify = compile, unit tests, feature, p2 repository and the ZIP (see CONTRIBUTING.md, "Build
+      # and test"); -Pui adds the UI tests, which are off by default because they open a window. They
       # need an X display: xvfb-run provides a virtual one.
       - name: Build, unit and UI tests
         if: ${{ !inputs.skip-tests }}

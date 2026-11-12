@@ -326,7 +326,7 @@ Sources* first.
    second closes the line.
 4. `:` `echo "`, hold <kbd>E</kbd>, let go, and click an accent at once.
    ⇒ The clicked accent replaces the e. (A click made after a pause is lost, an SWT bug described
-   in the README: use the digit or the arrows.)
+   in docs/USER_GUIDE.md, "Command line": use the digit or the arrows.)
 5. With the *ABC – AZERTY* input source, if you have it: step 1 with <kbd>Shift</kbd> and the
    <kbd>é</kbd> key (2) as the digit.
    ⇒ The picked accent, once, as in step 1.

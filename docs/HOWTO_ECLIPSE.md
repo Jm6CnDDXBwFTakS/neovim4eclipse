@@ -12,7 +12,7 @@ For a headless CI build of the plug-in and update site, use Maven/Tycho (`./mvnw
 6. Open a `.txt` / source file — the first attach logs `Started Neovim pid=...` and `NeovimSession ready`
    (java.util.logging, level INFO). Each attach and detach is logged at FINE: to see those lines, add
    `-Dneovim4eclipse.logLevel=FINE` to the launch configuration's *Arguments* tab, *VM arguments*.
-   They appear in this Eclipse's Console view (README, "If `Ctrl-V` does nothing").
+   They appear in this Eclipse's Console view (docs/USER_GUIDE.md, "The plug-in's log").
 
 ## Common problems
 

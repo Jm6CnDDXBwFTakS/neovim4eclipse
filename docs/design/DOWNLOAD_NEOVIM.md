@@ -277,7 +277,7 @@ URL, asset name or hash. Asset names do change: 0.10.4 renamed `nvim-linux64` to
 
 Downloads took 0.8 to 1.0 s through `release-assets.githubusercontent.com`. On macOS `spctl`
 rejects `bin/nvim` (ad-hoc signed, not notarized), but it runs, because Gatekeeper only checks
-quarantined files. A browser download for a hand install does get quarantined, hence the README's
+quarantined files. A browser download for a hand install does get quarantined, hence the user guide's
 `xattr -dr com.apple.quarantine <folder>` for extracting by hand.
 
 **Proxy**: section 4.

@@ -70,7 +70,7 @@ class VersionConsistencyTest {
      * description is one: Install New Software shows it before anyone installs.
      */
     private static final List<String> DOCS = List.of(
-            "README.md", "CONTRIBUTING.md", "docs/HOWTO_ECLIPSE.md", "docs/LEARNING.md",
+            "README.md", "docs/USER_GUIDE.md", "CONTRIBUTING.md", "docs/HOWTO_ECLIPSE.md", "docs/LEARNING.md",
             "features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml");
 
     /** "JDK 21", "Java 21", "Java 21+", "JavaSE-21": the number is the first group. */
@@ -88,7 +88,7 @@ class VersionConsistencyTest {
             "\\bNeovim (\\d+\\.\\d+(?:\\.\\d+)?)|\\b(\\d+\\.\\d+(?:\\.\\d+)?) or newer");
     /** Files that must state the Neovim minimum: the docs above, and the update site's category. */
     private static final List<String> NEOVIM_DOCS = List.of(
-            "README.md", "CONTRIBUTING.md",
+            "README.md", "CONTRIBUTING.md", "docs/USER_GUIDE.md",
             "features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml",
             "releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml");
 

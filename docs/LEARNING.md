@@ -1137,9 +1137,9 @@ Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
   process (the launching Eclipse's Console view, or the terminal Eclipse was started from).
   Warnings and errors also go to the Error Log view (*Window > Show View > Error Log*), through
   `ErrorLogHandler`. The details (FINE and below) are hidden unless Eclipse starts with
-  `-Dneovim4eclipse.logLevel=FINE` (or `FINER`, `FINEST`; `util/LogLevelSwitch`, and README, "If
-  `Ctrl-V` does nothing"). `KeyContextDiagnostics` reports which command the workbench resolves for
-  `Ctrl+V`; the README lists what its messages mean.
+  `-Dneovim4eclipse.logLevel=FINE` (or `FINER`, `FINEST`; `util/LogLevelSwitch`, and docs/USER_GUIDE.md,
+  "The plug-in's log"). `KeyContextDiagnostics` reports which command the workbench resolves for
+  `Ctrl+V`; docs/USER_GUIDE.md, "Blockwise visual", lists what its messages mean.
 - **Key bindings**: *Window > Preferences > General > Keys* shows each binding with its context
   ("When"). The *Ctrl Keys* page decides which of this plug-in's letter contexts are active.
 - **Inside Neovim**: `:messages`, `:ls`, `:set option?` all work through the `:` box. `vim.g.neovim4eclipse`

@@ -1038,7 +1038,7 @@ final class LuaScripts {
      * Neovim decides about the message while entering the buffer, so this changes nothing about a
      * {@code :b} the user types, which Neovim runs by itself. {@code :silent} would also
      * hide the message, but it would hide every other message of the switch too, such as one from
-     * the user's own {@code BufEnter} autocommand. README.md, "Neovim settings the plug-in changes",
+     * the user's own {@code BufEnter} autocommand. docs/USER_GUIDE.md, "Neovim settings the plug-in changes",
      * lists this for users.
      */
     static final String SHOW_BUFFER = """
@@ -1064,7 +1064,7 @@ final class LuaScripts {
      * <p>Why tabpages: one window per tab fills Neovim's screen, which is the attached editor's size
      * (VIEWPORT.md), so {@code H}, {@code L} and {@code Ctrl-D} match the editor, and window commands
      * stay inside the editor's tab. {@code 'showtabline'} is set to 0, a setting the plug-in changes
-     * (README, "Neovim settings the plug-in changes"): Neovim's default, 1, would show a tab line as
+     * (docs/USER_GUIDE.md, "Neovim settings the plug-in changes"): Neovim's default, 1, would show a tab line as
      * soon as a second editor has a window, and take a row from the editor.
      *
      * <p>The functions, each called by one of the scripts below:

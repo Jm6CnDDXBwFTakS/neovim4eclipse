@@ -100,7 +100,7 @@ Linux: a 50-line buffer with three diagnostics set by `vim.diagnostic.set`, keys
 
 Not checked: how often JDT's annotation model changes while typing (its reconcile runs after about
 500 ms); macro playback inside Eclipse, which applies the macro's edit to Eclipse once at the end
-(README, *Macros*), so the plug-in's next `vim.diagnostic.set` after Eclipse reconciles must agree
+(docs/USER_GUIDE.md, *Macros*), so the plug-in's next `vim.diagnostic.set` after Eclipse reconciles must agree
 with what Neovim already shifted; JDT's temporary problems (found while typing, before a save) in a
 Java editor, which would be a `-PuiHeavyJava` test.
 

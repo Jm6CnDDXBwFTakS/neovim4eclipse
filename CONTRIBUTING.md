@@ -11,7 +11,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
   end-to-end tests. Without `-Dnvim.path` the tests use what the plug-in uses without its startup
   option `-Dneovim4eclipse.nvim`: the dedicated Neovim, `~/.local/share/neovim4eclipse-plugin/neovim/<code>/bin/nvim`
   (Windows: `%LOCALAPPDATA%\neovim4eclipse-plugin\neovim\<code>`; *Get Neovim* puts
-  it there, README "Get Neovim"), and only if its files match the pinned release. Nothing else is
+  it there, docs/USER_GUIDE.md, "Get Neovim"), and only if its files match the pinned release. Nothing else is
   searched. `-Dnvim.path=...` (the absolute path of the program, not a folder) picks another; the UI
   tests pass it on to the test Eclipse as `-Dneovim4eclipse.nvim` (the `nvim-path` profile in their
   `pom.xml`), so it is set before the plug-in starts, as for a user's Eclipse started with it. A newer
@@ -152,6 +152,22 @@ does nothing for these settings on macOS.
 
 The compiler keeps 1 to 3 honest: each module has only the jars its tier may use (none, the text
 model, SWT and JFace), so a class that starts using more no longer compiles there.
+
+### Continuous integration
+
+GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
+
+- **Build** runs on every push and pull request to `main`, and on demand on any branch (*Actions*
+  tab › *Build* › *Run workflow*; at a release, the run on `main` is the test run, see
+  "Releasing"). It runs `./mvnw verify -Pui` (the UI tests under `xvfb-run`) and the integration
+  tests against the pinned Neovim, on Linux and again on Windows and macOS (the `platforms` job),
+  and attaches the installable ZIP to the run: `neovim4eclipse-<version>.zip`, ready for
+  *Install New Software › Add › Archive* without unpacking.
+- **Release** runs when a tag such as `v0.1.0` is pushed, and stops at once unless the tagged
+  commit is on `main`. It runs the Build workflow itself (a reusable workflow, so with the same
+  Neovim and all the same tests) for that version (the tag's `0.1.0` replaces the committed
+  `0.1.0-SNAPSHOT`), and only when that passes publishes a GitHub Release with
+  `neovim4eclipse-0.1.0.zip` attached and rebuilds the update site.
 
 ### Your Neovim config and the UI tests
 
@@ -449,7 +465,15 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 
 | Path | Contents |
 |------|----------|
-| `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse` | the plug-in |
+| `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse` | the plug-in; its packages under `src/io/github/jm6cnddxbwftaks/neovim4eclipse/` follow |
+| `.../util/` | pure Java, no Eclipse: key mapping, mode strings, text and column conversion, the decisions the Eclipse classes call |
+| `.../core/` | `NeovimSession` (the Neovim process, RPC and events) and the Lua it sends (`LuaScripts`); no Eclipse imports |
+| `.../core/rpc/` | the plug-in's own msgpack-rpc client: connection, encoding, the typed Neovim API |
+| `.../sync/` | `BufferSynchronizer`: an Eclipse document and its Neovim buffer, kept equal; the text model only |
+| `.../editor/` | attaching to editors, key interception, the caret, status bar and command line, `:w` and `:q` |
+| `.../prefs/` | the preference pages (Neovim, Status Bar, Ctrl Keys) and their defaults |
+| `.../dialogs/` | the layout the longer dialogs share (the welcome, Restart Neovim, Get Neovim) and the copy field; SWT and JFace, no workbench |
+| `plugins/.../lib/` | the msgpack-core jar, copied by the build (its version is in the root `pom.xml`) |
 | `tests/unit` | JUnit tests of `util` and `core`, without Eclipse |
 | `tests/text` | JUnit tests of code that uses Eclipse's text model but no widgets (`sync`, parts of `editor`), without a workbench |
 | `tests/swt` | JUnit tests of `editor` classes that use SWT widgets but not the workbench; need a display |
@@ -498,6 +522,8 @@ text that tests do not always catch.
    (`DocumentPositions`, `Utf8Columns`).
 5. **While Neovim is blocked** (after `f`, `r`, `"`, ...), send nothing but `nvim_input` and
    `nvim_get_mode`.
+6. **Never pull the whole buffer after every key.** The buffer's line events say what changed;
+   `NvimKeys.isBufferMutating` lists the exceptions.
 
 ## Making a change
 
