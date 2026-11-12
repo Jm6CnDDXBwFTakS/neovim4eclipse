@@ -8,14 +8,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,19 +68,44 @@ public final class Proxy implements AutoCloseable {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        int port = DEFAULT_PORT;
-        if (args.length == 2 && args[0].equals("--port")) {
-            port = Integer.parseInt(args[1]);
-        } else if (args.length != 0) {
-            System.err.println("Usage: java releng/tools/checks/Proxy.java [--port <number>]   (default " + DEFAULT_PORT + ")");
-            System.exit(2);
+        int port = port(args);
+        Proxy started;
+        try {
+            started = start(port, System.out::println);
+        } catch (BindException e) {
+            // Example: a Squid already listens on 3128, its default port too.
+            System.err.println("Proxy: port " + port + " is in use (" + e.getMessage() + "); choose another with --port <number>,"
+                    + " and give Eclipse that port.");
+            System.exit(1);
+            return;
         }
-        try (Proxy proxy = start(port, System.out::println)) {
+        try (Proxy proxy = started) {
             System.out.println("Proxy on 127.0.0.1:" + proxy.port() + ". In Eclipse: Window > Preferences > General >"
                     + " Network Connections, Active Provider: Manual, HTTP and HTTPS: host 127.0.0.1, port "
                     + proxy.port() + ". Ctrl+C stops it.");
             new CountDownLatch(1).await(); // until Ctrl+C
         }
+    }
+
+    /** The port {@code args} ask for ({@code --port <number>}), or {@link #DEFAULT_PORT}; exits on anything else. */
+    private static int port(String[] args) {
+        if (args.length == 0) {
+            return DEFAULT_PORT;
+        }
+        if (args.length == 2 && args[0].equals("--port")) {
+            try {
+                int port = Integer.parseInt(args[1]);
+                if (port >= 1 && port <= 65_535) {
+                    return port;
+                }
+            } catch (NumberFormatException e) {
+                // the usage below says what a port is
+            }
+        }
+        System.err.println("Usage: java releng/tools/checks/Proxy.java [--port <number from 1 to 65535>]   (default "
+                + DEFAULT_PORT + ")");
+        System.exit(2);
+        return DEFAULT_PORT; // not reached
     }
 
     /**
@@ -142,10 +167,11 @@ public final class Proxy implements AutoCloseable {
                 log.accept(number + "  " + request.method() + " " + request.authority());
                 if (request.isTunnel()) {
                     reply(out, "200 Connection established");
+                    pump(in, client, target, -1);
                 } else {
                     target.getOutputStream().write(Request.forwarded(head, request).getBytes(StandardCharsets.ISO_8859_1));
+                    pump(in, client, target, Request.bodyLength(head));
                 }
-                pump(in, client, target);
             }
         } catch (IOException e) {
             // a side closed the connection: nothing more to copy
@@ -155,17 +181,53 @@ public final class Proxy implements AutoCloseable {
     /**
      * Copies bytes both ways until the host closes: client to host on a thread of its own, host to
      * client on this one. The client's further bytes include what {@code in} buffered after the head.
+     *
+     * <p>{@code clientBytes} limits what goes to the host: -1 for a tunnel (everything, until the
+     * client is done), else a forwarded request's body length, so that only that one request
+     * reaches the host. Example: a client that reuses its connection to the proxy sends its next
+     * request, perhaps for another host, after the answer; it must not go to this host. The client
+     * gets the connection closed instead and asks again on a new one.
+     *
+     * <p>If the client's side fails (a reset), the host's socket is closed, which ends the copy
+     * the other way at once; otherwise it would wait for the host to time out, minutes later.
      */
-    private void pump(InputStream in, Socket client, Socket target) throws IOException {
+    private void pump(InputStream in, Socket client, Socket target, long clientBytes) throws IOException {
         connections.submit(() -> {
             try {
-                in.transferTo(target.getOutputStream());
-                target.shutdownOutput(); // the client is done sending: tell the host
+                OutputStream toHost = target.getOutputStream();
+                if (clientBytes < 0) {
+                    in.transferTo(toHost);
+                    target.shutdownOutput(); // the client is done sending: tell the host
+                } else {
+                    copy(in, toHost, clientBytes);
+                }
             } catch (IOException e) {
-                // either side closed: the other direction ends too
+                closeQuietly(target); // the client's side failed: end the other direction too
             }
         });
         target.getInputStream().transferTo(client.getOutputStream());
+    }
+
+    /** Copies exactly {@code length} bytes, fewer only if {@code in} ends first. */
+    private static void copy(InputStream in, OutputStream out, long length) throws IOException {
+        byte[] buffer = new byte[8192];
+        for (long left = length; left > 0;) {
+            int n = in.read(buffer, 0, (int) Math.min(buffer.length, left));
+            if (n < 0) {
+                return;
+            }
+            out.write(buffer, 0, n);
+            left -= n;
+        }
+        out.flush();
+    }
+
+    private static void closeQuietly(Socket socket) {
+        try {
+            socket.close();
+        } catch (IOException e) {
+            // closing is all that was wanted
+        }
     }
 
     private static void reply(OutputStream out, String status) throws IOException {
@@ -222,27 +284,88 @@ public final class Proxy implements AutoCloseable {
                 return null;
             }
             String method = parts[0];
-            try {
-                if (method.equals("CONNECT")) {
-                    URI authority = new URI("tunnel://" + parts[1]);
-                    String host = authority.getHost();
-                    int port = authority.getPort();
-                    return host == null || port < 0 ? null : new Request(method, unbracketed(host), port, null);
-                }
-                URI url = new URI(parts[1]);
-                if (!"http".equalsIgnoreCase(url.getScheme()) || url.getHost() == null) {
-                    return null;
-                }
-                String path = (url.getRawPath() == null || url.getRawPath().isEmpty() ? "/" : url.getRawPath())
-                        + (url.getRawQuery() == null ? "" : "?" + url.getRawQuery());
-                return new Request(method, unbracketed(url.getHost()), url.getPort() < 0 ? 80 : url.getPort(), path);
-            } catch (URISyntaxException e) {
-                return null;
+            if (method.equals("CONNECT")) {
+                return hostPort(parts[1], -1).map(a -> new Request(method, a.host(), a.port(), null)).orElse(null);
             }
+            String url = parts[1];
+            if (!url.regionMatches(true, 0, "http://", 0, 7)) {
+                return null; // a path alone is for a server; https goes through CONNECT
+            }
+            int slash = url.indexOf('/', 7);
+            String rest = slash < 0 ? "/" : url.substring(slash);
+            int fragment = rest.indexOf('#');
+            String path = fragment < 0 ? rest : rest.substring(0, fragment);
+            return hostPort(slash < 0 ? url.substring(7) : url.substring(7, slash), 80)
+                    .map(a -> new Request(method, a.host(), a.port(), path)).orElse(null);
         }
 
-        private static String unbracketed(String host) {
-            return host.startsWith("[") ? host.substring(1, host.length() - 1) : host;
+        /** A host and port, as {@link #hostPort(String, int)} reads them. */
+        record HostPort(String host, int port) {
+        }
+
+        /**
+         * Reads {@code host:port}, {@code [ipv6]:port} or a host alone (then {@code defaultPort};
+         * -1: a port is required). Read by hand, not with {@code java.net.URI}, whose host rules
+         * refuse an underscore, which DNS names may hold ({@code some_host.example.net}).
+         */
+        static Optional<HostPort> hostPort(String text, int defaultPort) {
+            String hostPort = text.substring(text.lastIndexOf('@') + 1); // no user name is passed on
+            String host;
+            String port;
+            if (hostPort.startsWith("[")) {
+                int close = hostPort.indexOf(']');
+                if (close < 0) {
+                    return Optional.empty();
+                }
+                host = hostPort.substring(1, close);
+                String after = hostPort.substring(close + 1);
+                if (!after.isEmpty() && !after.startsWith(":")) {
+                    return Optional.empty();
+                }
+                port = after.isEmpty() ? null : after.substring(1);
+            } else {
+                int colon = hostPort.lastIndexOf(':');
+                host = colon < 0 ? hostPort : hostPort.substring(0, colon);
+                port = colon < 0 ? null : hostPort.substring(colon + 1);
+                if (host.contains(":")) {
+                    return Optional.empty(); // an IPv6 address must be in brackets
+                }
+            }
+            int number = defaultPort;
+            if (port != null) {
+                try {
+                    number = Integer.parseInt(port);
+                } catch (NumberFormatException e) {
+                    return Optional.empty();
+                }
+            }
+            if (host.isEmpty() || number < 1 || number > 65_535) {
+                return Optional.empty();
+            }
+            return Optional.of(new HostPort(host, number));
+        }
+
+        /**
+         * The length of the body that follows {@code head}: its {@code Content-Length}, 0 if it has
+         * none, or -1 (all of it, until the client is done) for a body sent in chunks
+         * ({@code Transfer-Encoding: chunked}), whose end this proxy does not read.
+         */
+        static long bodyLength(String head) {
+            long length = 0;
+            for (String line : head.split("\r\n")) {
+                String lower = line.toLowerCase(Locale.ROOT);
+                if (lower.startsWith("transfer-encoding:")) {
+                    return -1;
+                }
+                if (lower.startsWith("content-length:")) {
+                    try {
+                        length = Long.parseLong(line.substring(line.indexOf(':') + 1).trim());
+                    } catch (NumberFormatException e) {
+                        return -1;
+                    }
+                }
+            }
+            return length;
         }
 
         /**

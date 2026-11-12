@@ -339,14 +339,16 @@ Sources* first.
 
 - **On:** linux, macos, windows
 - **Launch:** none
-- **Areas:** /features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml, /releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml, /releng/marketplace/listing.txt, prefs/GetNeovim*.java, prefs/EclipseProxies.java, util/ProxyChoice.java, util/NeovimDownload.java, /releng/tools/checks/Proxy.java
+- **Areas:** /features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml, /releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml, /releng/marketplace/listing.txt, prefs/GetNeovim*.java, prefs/EclipseProxies.java, util/ProxyChoice.java, util/NeovimDownload.java
 
 What a new user does, from end to end: install from the Marketplace into a new Eclipse, let Get
 Neovim install Neovim, open a file. Twice, once with a direct connection and once through an HTTP
 proxy, since a proxy is where installs and downloads go wrong at work. The pieces are tested
 apart (`InstallCheck` installs from the update site, `NeovimDownloadProxyTest` takes the download
 through a proxy); this card is the only place they run in one go, with Eclipse's own Marketplace
-client, as a user meets them. It needs the listing live on the Marketplace.
+client, as a user meets them. It needs the listing live on the Marketplace. (The proxy tool is
+not among its files: its own test, `ProxyTest`, covers it, and a change to it alone is no reason
+to install from the Marketplace again.)
 
 The Eclipse is a new one, not yours or the checks' copy: a package downloaded from
 [eclipse.org/downloads/packages](https://www.eclipse.org/downloads/packages/) and unpacked into a
@@ -365,8 +367,16 @@ $env:XDG_DATA_HOME = "$HOME\var\n4e-checks\xdg-mp"
 C:\path\to\new\eclipse\eclipse.exe -data "$HOME\var\n4e-checks\ws-mp"
 ```
 
-On macOS the program is inside the app: `/path/to/new/Eclipse.app/Contents/MacOS/eclipse`. In
-PowerShell, `Remove-Item Env:XDG_DATA_HOME` afterward, or close the window.
+On macOS the package is a disk image: copy `Eclipse.app` out of it into a new folder; the program
+is inside the app, `/path/to/new/Eclipse.app/Contents/MacOS/eclipse`. macOS marks a downloaded app
+as quarantined, and Gatekeeper may then refuse to start it from a terminal ("cannot be opened").
+Open the app once in Finder and confirm, or clear the mark, then start it as above:
+
+```sh macos
+xattr -dr com.apple.quarantine /path/to/new/Eclipse.app
+```
+
+In PowerShell, `Remove-Item Env:XDG_DATA_HOME` afterward, or close the window.
 
 1. Unpack a new Eclipse and start it as above.
    ⇒ Eclipse starts; nothing about Neovim yet.

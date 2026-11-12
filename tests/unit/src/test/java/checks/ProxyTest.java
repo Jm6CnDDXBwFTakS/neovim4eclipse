@@ -22,9 +22,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+
 /**
  * The manual checks' proxy ({@code releng/tools/checks/Proxy}): how it reads a request line, and a
  * tunnel and a forwarded request through it to a server of the test's own on this machine.
+ *
+ * <p>Every socket read and thread join waits at most {@link TestWait}'s time, so a proxy that
+ * stopped answering fails the test instead of hanging the build.
  */
 class ProxyTest {
 
@@ -36,6 +41,7 @@ class ProxyTest {
     void start() throws IOException {
         proxy = Proxy.start(0, log::add);
         host = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
+        host.setSoTimeout((int) TestWait.millis());
     }
 
     @AfterEach
@@ -70,11 +76,22 @@ class ProxyTest {
     }
 
     @Test
+    void aHostNameWithAnUnderscoreIsServed() {
+        assertEquals(new Proxy.Request("CONNECT", "some_host.example.net", 443, null),
+                Proxy.Request.parse("CONNECT some_host.example.net:443 HTTP/1.1"));
+        assertEquals(new Proxy.Request("GET", "some_host.example.net", 80, "/"),
+                Proxy.Request.parse("GET http://some_host.example.net HTTP/1.1"));
+    }
+
+    @Test
     void linesAProxyCannotServeAreRefused() {
         assertNull(Proxy.Request.parse("GET /a HTTP/1.1"), "a path alone is for a server");
         assertNull(Proxy.Request.parse("GET https://example.org/ HTTP/1.1"), "https goes through CONNECT");
         assertNull(Proxy.Request.parse("CONNECT example.org HTTP/1.1"), "a tunnel needs a port");
         assertNull(Proxy.Request.parse("CONNECT example.org:443"), "no HTTP version");
+        assertNull(Proxy.Request.parse("CONNECT example.org:0 HTTP/1.1"), "no port 0");
+        assertNull(Proxy.Request.parse("CONNECT example.org:x HTTP/1.1"));
+        assertNull(Proxy.Request.parse("CONNECT ::1:443 HTTP/1.1"), "an IPv6 address needs brackets");
         assertNull(Proxy.Request.parse("nonsense"));
     }
 
@@ -84,6 +101,13 @@ class ProxyTest {
                 + "Connection: keep-alive\r\nAccept: */*\r\n\r\n";
         assertEquals("GET /a HTTP/1.1\r\nHost: example.org\r\nAccept: */*\r\nConnection: close\r\n\r\n",
                 Proxy.Request.forwarded(head, Proxy.Request.parse("GET http://example.org/a HTTP/1.1")));
+    }
+
+    @Test
+    void aBodyIsAsLongAsItsContentLengthSays() {
+        assertEquals(0, Proxy.Request.bodyLength("GET http://h/ HTTP/1.1\r\nHost: h\r\n\r\n"));
+        assertEquals(12, Proxy.Request.bodyLength("POST http://h/ HTTP/1.1\r\ncontent-length: 12\r\n\r\n"));
+        assertEquals(-1, Proxy.Request.bodyLength("POST http://h/ HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n"));
     }
 
     @Test
@@ -101,6 +125,7 @@ class ProxyTest {
     void aTunnelCarriesBytesBothWays() throws Exception {
         Thread server = Thread.ofVirtual().start(() -> {
             try (Socket s = host.accept()) {
+                s.setSoTimeout((int) TestWait.millis());
                 byte[] ping = s.getInputStream().readNBytes(4);
                 s.getOutputStream().write(new String(ping, StandardCharsets.ISO_8859_1).equals("ping")
                         ? "pong".getBytes(StandardCharsets.ISO_8859_1) : "????".getBytes(StandardCharsets.ISO_8859_1));
@@ -114,7 +139,7 @@ class ProxyTest {
             send(client, "ping");
             assertEquals("pong", new String(client.getInputStream().readNBytes(4), StandardCharsets.ISO_8859_1));
         }
-        server.join();
+        joined(server);
         assertEquals(List.of("1  CONNECT 127.0.0.1:" + host.getLocalPort()), log);
     }
 
@@ -123,6 +148,7 @@ class ProxyTest {
         List<String> got = new CopyOnWriteArrayList<>();
         Thread server = Thread.ofVirtual().start(() -> {
             try (Socket s = host.accept()) {
+                s.setSoTimeout((int) TestWait.millis());
                 got.add(Proxy.readHead(s.getInputStream()));
                 s.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".getBytes(StandardCharsets.ISO_8859_1));
             } catch (IOException e) {
@@ -135,23 +161,83 @@ class ProxyTest {
             assertEquals("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok",
                     new String(client.getInputStream().readAllBytes(), StandardCharsets.ISO_8859_1));
         }
-        server.join();
+        joined(server);
         assertEquals(List.of("GET /a HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"), got);
     }
 
+    /**
+     * A client that reuses its connection sends a second request after the first one's body: it
+     * must not reach this host (it may be meant for another). The host gets one request and its
+     * body, then the client's side ends when the host closes.
+     */
+    @Test
+    void onlyOneRequestAndItsBodyReachTheHost() throws Exception {
+        List<String> got = new CopyOnWriteArrayList<>();
+        Thread server = Thread.ofVirtual().start(() -> {
+            try (Socket s = host.accept()) {
+                s.setSoTimeout((int) TestWait.millis());
+                InputStream in = s.getInputStream();
+                got.add(Proxy.readHead(in));
+                got.add(new String(in.readNBytes(4), StandardCharsets.ISO_8859_1));
+                s.getOutputStream().write("HTTP/1.1 204 No Content\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+                s.shutdownOutput();
+                got.add(String.valueOf(in.read())); // -1: nothing more came from the proxy
+            } catch (IOException e) {
+                got.add("failed: " + e);
+            }
+        });
+        try (Socket client = toProxy()) {
+            send(client, "POST http://127.0.0.1:" + host.getLocalPort() + "/a HTTP/1.1\r\nContent-Length: 4\r\n\r\nbody"
+                    + "GET http://example.org/next HTTP/1.1\r\n\r\n");
+            assertEquals("HTTP/1.1 204 No Content\r\n\r\n",
+                    new String(client.getInputStream().readAllBytes(), StandardCharsets.ISO_8859_1));
+        }
+        joined(server);
+        assertEquals(List.of("POST /a HTTP/1.1\r\nContent-Length: 4\r\nConnection: close\r\n\r\n", "body", "-1"), got);
+    }
+
+    /**
+     * A client that resets its tunnel: the proxy closes the host's side at once, rather than
+     * waiting for the host to give up. The host here waits for bytes and sees the end.
+     */
+    @Test
+    void aResetTunnelClosesTheHostsSideToo() throws Exception {
+        List<String> got = new CopyOnWriteArrayList<>();
+        Thread server = Thread.ofVirtual().start(() -> {
+            try (Socket s = host.accept()) {
+                s.setSoTimeout((int) TestWait.millis());
+                got.add(String.valueOf(s.getInputStream().read()));
+            } catch (IOException e) {
+                got.add("failed: " + e); // a read timeout: the proxy kept the host's side open
+            }
+        });
+        Socket client = toProxy();
+        send(client, "CONNECT 127.0.0.1:" + host.getLocalPort() + " HTTP/1.1\r\n\r\n");
+        assertEquals("HTTP/1.1 200 Connection established\r\n\r\n", Proxy.readHead(client.getInputStream()));
+        client.setSoLinger(true, 0); // close with a reset, not an orderly end
+        client.close();
+        joined(server);
+        assertTrue(got.size() == 1 && !got.get(0).startsWith("failed"), got::toString);
+    }
+
+    /** A host name that never resolves ({@code .invalid}, RFC 2606): the client gets 502. */
     @Test
     void aHostThatCannotBeReachedIsA502() throws Exception {
-        int closed = host.getLocalPort();
-        host.close(); // nothing listens there now
         try (Socket client = toProxy()) {
-            send(client, "CONNECT 127.0.0.1:" + closed + " HTTP/1.1\r\n\r\n");
+            send(client, "CONNECT neovim.invalid:443 HTTP/1.1\r\n\r\n");
             assertTrue(Proxy.readHead(client.getInputStream()).startsWith("HTTP/1.1 502 Bad Gateway\r\n"));
         }
-        assertTrue(log.get(0).startsWith("1  CONNECT 127.0.0.1:" + closed + " failed: "), log::toString);
+        assertTrue(log.get(0).startsWith("1  CONNECT neovim.invalid:443 failed: "), log::toString);
+    }
+
+    private static void joined(Thread server) throws InterruptedException {
+        assertTrue(server.join(TestWait.duration()), "the test's server did not finish");
     }
 
     private Socket toProxy() throws IOException {
-        return new Socket(InetAddress.getLoopbackAddress(), proxy.port());
+        Socket socket = new Socket(InetAddress.getLoopbackAddress(), proxy.port());
+        socket.setSoTimeout((int) TestWait.millis());
+        return socket;
     }
 
     private static void send(Socket socket, String text) throws IOException {
