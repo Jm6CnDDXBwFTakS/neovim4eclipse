@@ -81,7 +81,7 @@ public final class MarketplaceTool {
     static final String NEW_DEMO = "demo-new.gif";
     static final String ICONS = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/icons/";
     /** The screenshots, in the order the listing shows them after the demo. */
-    static final List<String> SCREENSHOTS = List.of("01-visual-mode.png", "02-command-line.png", "03-preferences.png");
+    static final List<String> SCREENSHOTS = List.of("01-visual-mode.png", "02-command-line.png", "03-problems.png");
     private static final String TEST_FRAGMENT = "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests";
     /** As {@code ScreenshotCaptureTest} wants it: room for its window, in full color (Xvfb's default is 640x480 at 8 bits). */
     private static final String SCREEN = "-screen 0 1600x1000x24";

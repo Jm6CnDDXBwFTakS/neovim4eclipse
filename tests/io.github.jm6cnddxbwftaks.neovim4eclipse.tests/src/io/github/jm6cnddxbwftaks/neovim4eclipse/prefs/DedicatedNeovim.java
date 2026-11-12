@@ -88,7 +88,7 @@ public final class DedicatedNeovim {
      * Runs {@code action} with the dedicated Neovim installed and {@code -Dneovim4eclipse.nvim}
      * taken away, so the plug-in sees what a user's Eclipse started without the option sees: the
      * preference page then reports the dedicated Neovim, not "another Neovim program". Example: the
-     * Marketplace picture of the preference page (editor/ScreenshotCaptureTest). Afterwards the option
+     * gallery's dedicated-Neovim group ({@code ChecksGalleryTest}). Afterwards the option
      * is back and the copy gone. A session already running keeps its Neovim: only what the plug-in
      * checks from now on changes.
      */

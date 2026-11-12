@@ -213,13 +213,17 @@ a checklist, to fill in the form from. Why the values are what they are:
 - **Screenshots and the demo**, taken by the UI tests of the `screenshots` group rather than by
   hand, so they show the current UI each time: `java releng/tools/marketplace/Marketplace.java
   pictures` (Linux) runs them with the pinned Neovim under `xvfb-run`, at a screen of a known size,
-  and copies the results to `target/marketplace/`. `ScreenshotCaptureTest` takes a Java editor in
-  visual line mode (the mode in the status bar), the `:` box with a substitution typed, and the
-  Neovim preference page. `DemoRecordingTest` plays the README's demo a key at a time, with the
+  and copies the results to `target/marketplace/`. `ScreenshotCaptureTest` tells one story in a
+  small Java project, `shop`, with only the Project Explorer and the Outline beside the editor:
+  visual line mode in `Invoice.java` (the mode in the status bar), the `:` box with
+  `:%s/total/sum/g` typed, and, once it has run and `:w` saved it, `:clist` in the output popup: the
+  errors Eclipse's compiler then finds in `Order.java` and `Receipt.java`, which `:Eproblems` made
+  Neovim's quickfix list. The third shows what a Vim emulation does not: Neovim working on Eclipse's
+  own problems, across files. `DemoRecordingTest` plays the README's demo a key at a time, with the
   keys drawn in a band near the top, and the tool joins its pictures into `demo.gif`, keeping in
-  each frame only what changed. The demo shows the editor and the toolbar (no views), in
-  JetBrains Mono NL (`fonts-jetbrains-mono` on Debian and Ubuntu; the tool stops without it), with
-  a made-up, uneven typing rhythm stretched to 40 seconds.
+  each frame only what changed. The demo shows the editor and the toolbar (no views), in JetBrains
+  Mono NL (`fonts-jetbrains-mono` on Debian and Ubuntu; the tool stops without it), with a made-up,
+  uneven typing rhythm stretched to 40 seconds.
 
   The three screenshots are not committed: nothing shows them from the repository, so they are
   taken when the listing is submitted or refreshed and uploaded from `target/marketplace/`. A
@@ -227,12 +231,10 @@ a checklist, to fill in the form from. Why the values are what they are:
   mistake. The demo is committed (the README shows it), after y/N, once you have looked at it.
   They show Eclipse's default light theme on Linux/GTK, without a window title bar.
 
-  The preference page is taken as a user's Eclipse shows it: with the dedicated Neovim (a copy of
-  the pinned release) and without `-Dneovim4eclipse.nvim`. Its *Found:* note names the dedicated
-  Neovim's folder, which the `screenshots` profile keeps under `pictures.home`
-  (`/tmp/neovim4eclipse-pictures`) instead of `target/`, so no picture shows a home folder and with
-  it an account name (`gallery/PicturesFolder` in the test fragment). Look at the pictures before
-  uploading them all the same: they are public.
+  The pictures' Neovim keeps its folders under `pictures.home` (`/tmp/neovim4eclipse-pictures`),
+  not under `target/`, so that no picture can show a home folder and with it an account name
+  (`gallery/PicturesFolder` in the test fragment). Look at the pictures before uploading them all
+  the same: they are public.
 
 ## Phase 3: account, submission, test
 

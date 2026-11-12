@@ -5,28 +5,21 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 import org.eclipse.core.resources.IFile;
-import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.IProjectDescription;
-import org.eclipse.core.resources.ResourcesPlugin;
-import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
-import org.eclipse.jface.resource.FontRegistry;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
@@ -71,7 +64,7 @@ class DemoRecordingTest extends EndToEndTestBase {
      * The window size. This wide, the status bar keeps the plug-in's mode label whole while a macro
      * records ("INSERT rec @q"): JFace keeps a third of the status line for Eclipse's messages and
      * shrinks the last item, the mode label, first. This tall, the editor shows the file's 24 lines
-     * (23, and one more once content assist adds it) in {@link #FONT} at {@link #FONT_POINTS}.
+     * (23, and one more once content assist adds it) in {@link PictureFont#FONT} at {@link PictureFont#POINTS}.
      */
     private static final int WIDTH = 1100;
     private static final int HEIGHT = 700;
@@ -96,16 +89,6 @@ class DemoRecordingTest extends EndToEndTestBase {
 
     private static final String JAVA_EDITOR = "org.eclipse.jdt.ui.CompilationUnitEditor";
 
-    /**
-     * The demo's font, in the editor and the captions: JetBrains Mono NL, a monospaced font made
-     * for code (the NL variant has no ligatures, so {@code !=} shows as typed). The Marketplace
-     * tool checks that it is installed; on Debian and Ubuntu it is {@code fonts-jetbrains-mono}.
-     * 13 points fills the window's height, below the toolbar, with the file ({@link #HEIGHT}).
-     */
-    private static final String FONT = "JetBrains Mono NL";
-    private static final int FONT_POINTS = 13;
-    /** The text font every editor uses, and the Java editor's own, which follows it unless set. */
-    private static final List<String> EDITOR_FONTS = List.of("org.eclipse.jface.textfont", "org.eclipse.jdt.ui.editors.textfont");
     /**
      * JDT's preference for opening content assist by itself after a {@code .}: off while the demo
      * runs, so the list opens only for Ctrl+Space, at a known moment ({@code PreferenceConstants.
@@ -174,8 +157,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         IWorkbenchPage page = page();
         // The base class opens test.txt for every UI test; the demo shows only its own file.
         page.closeEditor(editor, false);
-        FontRegistry fonts = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getFontRegistry();
-        Map<String, FontData[]> fontsBefore = new HashMap<>();
+        Map<String, FontData[]> fontsBefore = Map.of();
         IProject demo = null;
         IEditorPart opened = null;
         try {
@@ -187,13 +169,9 @@ class DemoRecordingTest extends EndToEndTestBase {
             for (IViewReference view : page.getViewReferences()) {
                 page.hideView(view);
             }
-            for (String key : EDITOR_FONTS) {
-                fontsBefore.put(key, fonts.getFontData(key));
-                fonts.put(key, new FontData[] { new FontData(FONT, FONT_POINTS, SWT.NORMAL) });
-            }
-            demo = javaProject("demo");
-            IFile file = demo.getFile("src/demo/Greeter.java");
-            file.create(new ByteArrayInputStream(SOURCE.getBytes(StandardCharsets.UTF_8)), true, null);
+            fontsBefore = PictureFont.useInEditors(); // the editor and the captions in one font
+            demo = JavaProjects.create("demo", "demo"); // a Java project: content assist needs its build path
+            IFile file = JavaProjects.addClass(demo, "demo", "Greeter.java", SOURCE);
             opened = IDE.openEditor(page, file, JAVA_EDITOR, true);
             if (!(opened instanceof ITextEditor java)) {
                 throw new AssertionError("not a text editor (is JDT installed? use -Pscreenshots): " + opened);
@@ -205,23 +183,22 @@ class DemoRecordingTest extends EndToEndTestBase {
             // run (the pictures' Neovim keeps its history under pictures.home), and Eclipse's
             // build of the new Java project done, so no "Building" shows in the status bar.
             session.commandAsync("let @/ = '' | nohlsearch");
-            waitUntil("the workspace build", TIMEOUT_MS,
-                    () -> Job.getJobManager().find(ResourcesPlugin.FAMILY_AUTO_BUILD).length == 0
-                            && Job.getJobManager().find(ResourcesPlugin.FAMILY_MANUAL_BUILD).length == 0);
+            waitUntil("the workspace build", TIMEOUT_MS, JavaProjects::buildDone);
             settle();
             captionTop = captionTop(text);
             play(new File(WindowPicture.folder(), "demo"));
         } finally {
             // Also after a failed step: ScreenshotCaptureTest runs next in this Eclipse, and its
             // pictures need the workbench as it was.
+            // The editor, the font and the views first, which cannot fail; the project's delete can.
             if (opened != null) {
                 page.closeEditor(opened, false);
             }
+            PictureFont.restore(fontsBefore);
+            page.resetPerspective(); // the views back where they were
             if (demo != null) {
                 demo.delete(true, true, null);
             }
-            fontsBefore.forEach(fonts::put);
-            page.resetPerspective(); // the views back where they were
         }
     }
 
@@ -283,37 +260,6 @@ class DemoRecordingTest extends EndToEndTestBase {
         picture(folder, STEP_MS); // the same as the first picture
 
         Files.write(new File(folder, "frames.tsv").toPath(), timedFrames(), StandardCharsets.UTF_8);
-    }
-
-    /**
-     * A Java project, as the demo needs for content assist: Java's completion asks the project's
-     * build path, and in a plain project it shows a dialog instead. Made with the resources API
-     * only (the Java nature by its id, the build path as the {@code .classpath} file JDT reads), so
-     * the test fragment needs no JDT bundle at compile time; the {@code screenshots} profile adds
-     * JDT at run time. The JRE container is the Java the test Eclipse runs on.
-     */
-    private static IProject javaProject(String name) throws Exception {
-        IProject p = ResourcesPlugin.getWorkspace().getRoot().getProject(name);
-        if (p.exists()) {
-            p.delete(true, true, null);
-        }
-        p.create(null);
-        p.open(null);
-        IFolder src = p.getFolder("src");
-        src.create(true, true, null);
-        src.getFolder("demo").create(true, true, null);
-        p.getFile(".classpath").create(new ByteArrayInputStream("""
-                <?xml version="1.0" encoding="UTF-8"?>
-                <classpath>
-                    <classpathentry kind="src" path="src"/>
-                    <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-                    <classpathentry kind="output" path="bin"/>
-                </classpath>
-                """.getBytes(StandardCharsets.UTF_8)), true, null);
-        IProjectDescription description = p.getDescription();
-        description.setNatureIds(new String[] {"org.eclipse.jdt.core.javanature"});
-        p.setDescription(description, null);
-        return p;
     }
 
     /**
@@ -484,7 +430,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         String shown = keys.length() > CAPTION_CHARS ? "…" + keys.substring(keys.length() - CAPTION_CHARS + 1) : keys;
         Display display = Display.getCurrent();
         GC gc = new GC(image);
-        Font font = new Font(display, new FontData(FONT, 20, SWT.BOLD));
+        Font font = new Font(display, new FontData(PictureFont.FONT, 20, SWT.BOLD));
         Color band = new Color(display, 0x55, 0x55, 0x55);
         Color white = new Color(display, 0xff, 0xff, 0xff);
         try {
