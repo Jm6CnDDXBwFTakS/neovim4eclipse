@@ -352,6 +352,70 @@ class StateSyncTest {
         assertFalse(state.isEclipseTypingReady());
     }
 
+    /**
+     * A sync read in normal mode (after a {@code :} command, say) that the editor applies only once
+     * {@code i} has been read: it holds the text from before the insert, so it must not let Eclipse
+     * type. If it did, Eclipse typed the next key, and the insert's own sync, applied after it,
+     * took that key out again.
+     */
+    @Test
+    void aSyncReadBeforeTheInsertDoesNotLetEclipseTypeInIt() {
+        state.syncBuffer();
+        nvim.mode = new Mode("i", false);
+        state.readMode(); // the i is read; the editor has not applied the sync yet
+
+        listeners.changes.get(0).afterApply().run();
+
+        assertFalse(state.isEclipseTypingReady());
+    }
+
+    /** The same for a sync of an earlier insert, applied after its Esc and the next {@code i}. */
+    @Test
+    void aSyncOfAnEarlierInsertDoesNotLetEclipseTypeInTheNext() {
+        state.dispatchMode("i");
+        state.syncBuffer();
+        state.dispatchMode("n");
+        nvim.mode = new Mode("i", false);
+        state.readMode();
+
+        listeners.changes.get(0).afterApply().run();
+
+        assertFalse(state.isEclipseTypingReady());
+    }
+
+    /** An insert ended and begun again with only {@link StateSync#readMode} hearing it needs a new sync. */
+    @Test
+    void anInsertReadAgainAfterNormalModeNeedsANewSync() {
+        state.dispatchMode("i");
+        state.syncBuffer();
+        listeners.changes.get(0).afterApply().run();
+
+        nvim.mode = new Mode("n", false);
+        state.readMode();
+        nvim.mode = new Mode("i", false);
+        state.readMode();
+
+        assertFalse(state.isEclipseTypingReady());
+    }
+
+    /**
+     * A pause (a sync point's {@code Ctrl-W}) lasts until a sync read after it: one read before it
+     * and applied after it holds Neovim's text from before the key.
+     */
+    @Test
+    void aSyncReadBeforeAPauseDoesNotEndIt() {
+        state.dispatchMode("i");
+        state.syncBuffer();
+        state.pauseEclipseTyping();
+
+        listeners.changes.get(0).afterApply().run();
+        assertFalse(state.isEclipseTypingReady(), "read before the pause");
+
+        state.syncBuffer();
+        listeners.changes.get(1).afterApply().run();
+        assertTrue(state.isEclipseTypingReady(), "read after it");
+    }
+
     @Test
     void aFailedBufferReadPublishesNothing() {
         try (ExpectedLog log = ExpectedLog.of(StateSync.class)) {

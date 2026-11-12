@@ -28,7 +28,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * active selection. After {@code Esc} they get mode {@code "n"} and {@link VisualSelection#none()}.
  *
  * <p>The reading methods block and run on the session's input thread; the getters and dispatch
- * methods may be called from any thread (the fields are volatile). Neovim is reached only through
+ * methods may be called from any thread (the fields are volatile; the typing generation is guarded
+ * by the instance, see {@link #typingGeneration}). Neovim is reached only through
  * the small {@link Neovim} interface, so tests use a fake.
  */
 final class StateSync {
@@ -78,10 +79,27 @@ final class StateSync {
     /** Told about every mode change before the listeners (see {@code KeyInput#onModeChanged}). */
     private final Consumer<String> onModeChanged;
 
+    /** Set only through {@link #setMode}, which keeps {@link #typingGeneration} with it. */
     private volatile String mode = "n";
     private volatile CursorPos lastCursor = new CursorPos(1, 0);
-    /** See {@link #isEclipseTypingReady()}. Set on the UI thread, cleared on any thread. */
-    private volatile boolean eclipseTypingReady;
+    /**
+     * Counts every start and end of a typing mode (insert, replace) and every
+     * {@link #pauseEclipseTyping pause}: a full sync lets Eclipse type only in the generation it was
+     * read in ({@link #isEclipseTypingReady()}). Guarded by {@code this}, as is
+     * {@link #readyGeneration}.
+     *
+     * <p>Why a count and not a flag: the editor applies a sync later, on the UI thread, and by then
+     * the generation may have moved on. Example: a sync read in normal mode (after a {@code :}
+     * command) is applied only once {@code i} has been read, and the user's next key comes in
+     * between. A flag set when that sync was applied let Eclipse type the key, as the mode was
+     * {@code "i"} by then; then the insert's own sync, read before the key, replaced the document,
+     * and the key was lost in Eclipse and, at Esc, in Neovim too. With the count, that old sync
+     * belongs to generation 4 and the insert is generation 5: Eclipse waits for the insert's sync,
+     * and the key goes to Neovim meanwhile ({@code KeyRouter}).
+     */
+    private long typingGeneration;
+    /** The generation in which Eclipse may type, -1 for none yet (see {@link #typingGeneration}). */
+    private long readyGeneration = -1;
     /**
      * True while Neovim waits for one more character after {@code f}, {@code r}, {@code @}, {@code q}
      * ... (as of the last {@code nvim_get_mode}). The key listener then forwards a typed {@code :},
@@ -134,20 +152,40 @@ final class StateSync {
     /**
      * Whether Eclipse may type in the current insert mode. Entering insert mode is followed by a
      * full buffer sync from Neovim; until the editor has applied it, text typed by Eclipse would be
-     * overwritten by that sync. So this becomes true only once a full sync has been applied while in
-     * insert mode, and false again when insert mode ends.
+     * overwritten by that sync. So this becomes true only once a full sync read in this insert (and
+     * since the last pause) has been applied, and false again when insert mode ends. A sync read
+     * earlier does not count, even if it is applied during this insert ({@link #typingGeneration}).
      */
-    boolean isEclipseTypingReady() {
-        return eclipseTypingReady && isTypingMode();
+    synchronized boolean isEclipseTypingReady() {
+        return readyGeneration == typingGeneration && isTypingMode();
     }
 
     /**
-     * Eclipse stops typing in the current insert until the next full sync has been applied: at a
-     * sync point ({@code KeyInput#syncInsertThenInput}), Neovim's answer to the key is about to change
-     * the text, and keys that follow go to Neovim, in order. UI thread, at the key.
+     * Eclipse stops typing in the current insert until a full sync read after this call has been
+     * applied: at a sync point ({@code KeyInput#syncInsertThenInput}), Neovim's answer to the key is
+     * about to change the text, and keys that follow go to Neovim, in order. A sync read before the
+     * pause holds Neovim's text from before the key, so it starts a new generation. UI thread, at
+     * the key.
      */
-    void pauseEclipseTyping() {
-        eclipseTypingReady = false;
+    synchronized void pauseEclipseTyping() {
+        typingGeneration++;
+    }
+
+    /**
+     * Records the mode; a start or end of a typing mode begins a new {@link #typingGeneration}.
+     * Example: {@code "n"} to {@code "i"} does, {@code "i"} to {@code "R"} (the Insert key) does not,
+     * so a replace that follows an insert keeps Eclipse typing.
+     */
+    private synchronized void setMode(String newMode) {
+        if (VimModes.isTyping(newMode) != VimModes.isTyping(mode)) {
+            typingGeneration++;
+        }
+        mode = newMode;
+    }
+
+    /** The current {@link #typingGeneration}: what a full sync remembers when it is read. */
+    private synchronized long currentGeneration() {
+        return typingGeneration;
     }
 
     /** Whether Neovim is waiting for the argument character of a command ({@code f}, {@code @}, ...). */
@@ -186,7 +224,7 @@ final class StateSync {
         try {
             Mode read = nvim.getMode();
             if (read != null && read.mode() != null) {
-                mode = read.mode();
+                setMode(read.mode());
             }
             waitingForArgument = read != null && read.blocking();
             return read;
@@ -271,12 +309,14 @@ final class StateSync {
      * ({@code KeyInput#handBackToEclipse}) is called off if a key reached Neovim after the read.
      */
     void syncBuffer(BooleanSupplier mayType) {
+        // Before the read: a mode change between the two then makes the sync not count, as it should.
+        long generation = currentGeneration();
         try {
             List<String> lines = nvim.bufferLines();
             LOG.fine(() -> "full buffer sync: " + lines.size() + " lines");
             dispatchBufferChange(0, -1, lines, () -> {
                 if (mayType.getAsBoolean()) {
-                    markTypingReadyIfTyping();
+                    letEclipseTypeIn(generation);
                 }
             });
         } catch (Exception e) {
@@ -290,13 +330,17 @@ final class StateSync {
      * document ({@code KeyInput#syncInsertThenInput}).
      */
     void letEclipseTypeOnceApplied() {
-        dispatchBufferChange(0, 0, List.of(), this::markTypingReadyIfTyping);
+        long generation = currentGeneration();
+        dispatchBufferChange(0, 0, List.of(), () -> letEclipseTypeIn(generation));
     }
 
-    /** After-apply action of a full sync: the document now matches Neovim, so Eclipse may type. */
-    private void markTypingReadyIfTyping() {
-        if (isTypingMode()) {
-            eclipseTypingReady = true;
+    /**
+     * After-apply action of a full sync read in {@code generation}: the document now matches
+     * Neovim, so Eclipse may type, if the sync was read in this insert and since the last pause.
+     */
+    private synchronized void letEclipseTypeIn(long generation) {
+        if (generation == typingGeneration && isTypingMode()) {
+            readyGeneration = generation;
         }
     }
 
@@ -304,10 +348,7 @@ final class StateSync {
 
     /** Records {@code newMode} and tells {@code onModeChanged}, then the listeners. */
     void dispatchMode(String newMode) {
-        mode = newMode;
-        if (!VimModes.isTyping(newMode)) {
-            eclipseTypingReady = false;
-        }
+        setMode(newMode); // leaving insert ends Eclipse's typing (a new generation)
         onModeChanged.accept(newMode);
         listeners.mode(newMode);
     }

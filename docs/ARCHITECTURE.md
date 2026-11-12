@@ -661,7 +661,12 @@ keys* and to keep the editor in step with playback.
 Entering insert mode is followed by a full buffer sync from Neovim (`KeyInput`, decided by `util/ModeTransition`), which the editor applies
 asynchronously on the UI thread. Text Eclipse typed before that sync landed would be overwritten by it. So
 Eclipse types only once the sync has been applied: the sync's `BufferChange` carries an `afterApply` action,
-run by `BufferSynchronizer` after applying it, which sets `NeovimSession.isEclipseTypingReady()`. A key that
+run by `BufferSynchronizer` after applying it, which sets `NeovimSession.isEclipseTypingReady()`. Only a
+sync read in this insert counts: `StateSync` counts each start and end of insert mode (and each pause at a
+sync point), and a sync lets Eclipse type only if the count has not moved since it was read. Example: a sync
+read in normal mode after a `:` command, applied only once `i` has been read, holds the text from before
+the insert; had it let Eclipse type the next key, the insert's own sync, applied after that key, would have
+taken it out again, in Eclipse and then, at Esc, in Neovim. A key that
 arrives in insert mode before then makes the insert Neovim-driven for now (`driveInsertFromNeovim`):
 Neovim types it, in order, and the keys after it, since mixing the two could let Neovim's update for
 an earlier key overwrite a later one typed by Eclipse. Once Neovim has them all (no key queued for it),

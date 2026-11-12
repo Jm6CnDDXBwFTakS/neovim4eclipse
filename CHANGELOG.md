@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- A key typed right after entering insert mode (`i`, `a`, `o`) could, rarely, vanish from the file:
+  Eclipse took over the typing too early, and Neovim's copy of the text, read before the key, then
+  replaced it. Eclipse now waits for Neovim's text of that insert, and Neovim types the key meanwhile.
+
 ## [0.2.16] - 2026-11-12
 
 ### Added
