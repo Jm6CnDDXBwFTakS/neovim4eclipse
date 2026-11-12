@@ -65,9 +65,10 @@ final class StatusBarLabels {
      *                        the widest
      * @param cmdChars        the pending-command label, in characters
      * @param statuslineChars the statusline label, in characters, before the cap
-     * @param maxShare        the most all labels may take of the bar, in percent
+     * @param maxWidthPercent the most all labels may take of the bar, in percent (the
+     *                        {@code statusMaxWidthPercent} preference)
      */
-    record Widths(List<String> modeTexts, int cmdChars, int statuslineChars, int maxShare) {
+    record Widths(List<String> modeTexts, int cmdChars, int statuslineChars, int maxWidthPercent) {
     }
 
     /** The gap JFace's status bar layout leaves after every item, in pixels. */
@@ -216,7 +217,7 @@ final class StatusBarLabels {
             }
         }
         int barWidth = bar.getClientArea().width;
-        int cap = Math.min(StatusBarWidths.cap(barWidth, widths.maxShare()), StatusBarWidths.free(barWidth, othersWidth()));
+        int cap = Math.min(StatusBarWidths.cap(barWidth, widths.maxWidthPercent()), StatusBarWidths.free(barWidth, othersWidth()));
         int[] fitted = StatusBarWidths.fit(wanted, minimum, cap);
         boolean changed = false;
         for (int i = 0; i < order.length; i++) {

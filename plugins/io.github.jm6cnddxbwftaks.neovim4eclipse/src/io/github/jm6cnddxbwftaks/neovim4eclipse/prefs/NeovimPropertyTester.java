@@ -23,7 +23,7 @@ public class NeovimPropertyTester extends PropertyTester {
     @Override
     public boolean test(Object receiver, String property, Object[] args, Object expectedValue) {
         if ("showToggleButton".equals(property)) {
-            return matches(ContributionVisibility.isShowToolbar(), expectedValue);
+            return matches(ContributionVisibility.isShowToggleButton(), expectedValue);
         }
         if ("showMenu".equals(property)) {
             return matches(ContributionVisibility.isShowMenu(), expectedValue);

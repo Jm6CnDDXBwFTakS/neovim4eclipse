@@ -22,7 +22,7 @@ public final class ContributionVisibility {
     private ContributionVisibility() {
     }
 
-    public static boolean isShowToolbar() {
+    public static boolean isShowToggleButton() {
         return preference(PreferenceConstants.SHOW_TOGGLE_BUTTON, PreferenceConstants.SHOW_TOGGLE_BUTTON_DEFAULT);
     }
 

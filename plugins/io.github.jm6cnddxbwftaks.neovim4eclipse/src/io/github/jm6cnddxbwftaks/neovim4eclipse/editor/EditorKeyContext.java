@@ -131,7 +131,7 @@ final class EditorKeyContext {
                 }
                 applied = null; // until applied: a failure below must not look applied
                 contexts.apply(service,
-                        column == Column.INSERT ? EditorKeyContext::isCtrlKeyInInsert : EditorKeyContext::isCtrlKeyToNeovim,
+                        column == Column.INSERT ? EditorKeyContext::isCtrlKeyInsert : EditorKeyContext::isCtrlKeyNormal,
                         letter -> KeyContextRule.contextId(letter, column, eclipseTypes));
                 applied = now;
                 if (!wasActive) {
@@ -163,7 +163,7 @@ final class EditorKeyContext {
         Applied now = applied;
         boolean active = !disposed && now != null && contexts.isActive();
         boolean toNeovim = now != null
-                && (now.column() == Column.INSERT ? isCtrlKeyInInsert('v') : isCtrlKeyToNeovim('v'));
+                && (now.column() == Column.INSERT ? isCtrlKeyInsert('v') : isCtrlKeyNormal('v'));
         KeyContextDiagnostics.logResolution(active, toNeovim);
     }
 
@@ -208,20 +208,23 @@ final class EditorKeyContext {
         update(); // disposed == true: deactivates
     }
 
-    /** Whether {@code Ctrl+letter} goes to Neovim; all letters do while the preferences are unavailable. */
-    static boolean isCtrlKeyToNeovim(char letter) {
+    /**
+     * Whether {@code Ctrl+letter} goes to Neovim outside insert mode; all letters do while the
+     * preferences are unavailable.
+     */
+    static boolean isCtrlKeyNormal(char letter) {
         Activator activator = Activator.getDefault();
-        return activator == null || activator.isCtrlKeyToNeovim(letter);
+        return activator == null || activator.isCtrlKeyNormal(letter);
     }
 
     /**
      * Whether {@code Ctrl+letter} goes to Neovim in insert mode; while the preferences are
      * unavailable, the default letters do ({@link VimCtrlKeys#inInsertByDefault}).
      */
-    static boolean isCtrlKeyInInsert(char letter) {
+    static boolean isCtrlKeyInsert(char letter) {
         Activator activator = Activator.getDefault();
         return activator == null ? VimCtrlKeys.inInsertByDefault(letter, PlatformUtil.isMac())
-                : activator.isCtrlKeyInInsert(letter);
+                : activator.isCtrlKeyInsert(letter);
     }
 
     private static IContextService contextService() {

@@ -62,8 +62,8 @@ class StatusBarLabelsTest {
         shell.dispose();
     }
 
-    private static StatusBarLabels.Widths widths(int statuslineChars, int maxShare) {
-        return new StatusBarLabels.Widths(MODE_TEXTS, 10, statuslineChars, maxShare);
+    private static StatusBarLabels.Widths widths(int statuslineChars, int maxWidthPercent) {
+        return new StatusBarLabels.Widths(MODE_TEXTS, 10, statuslineChars, maxWidthPercent);
     }
 
     private StatusBarLabels create(Set<StatusItem> parts, StatusBarLabels.Widths widths) {

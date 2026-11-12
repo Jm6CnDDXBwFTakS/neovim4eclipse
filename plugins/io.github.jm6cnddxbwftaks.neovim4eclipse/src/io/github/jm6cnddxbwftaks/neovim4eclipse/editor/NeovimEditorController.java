@@ -180,8 +180,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.session = session;
         this.styledText = styledText;
         this.keyInterceptor = new KeyInterceptor(session);
-        this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyToNeovim);
-        this.keyInterceptor.setInsertCtrlKeyFilter(EditorKeyContext::isCtrlKeyInInsert);
+        this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyNormal);
+        this.keyInterceptor.setInsertCtrlKeyFilter(EditorKeyContext::isCtrlKeyInsert);
         this.synchronizer = new BufferSynchronizer(documentOf(editor), buffer, session, SwtUiExecutor.INSTANCE);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
         this.buffer = buffer;
