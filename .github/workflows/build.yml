@@ -80,11 +80,16 @@ jobs:
       # empty string is false in an if: expression. Tycho's own goal rewrites 0.1.0-SNAPSHOT and
       # 0.1.0.qualifier to the release version in the POMs, MANIFEST.MF and feature.xml together,
       # inside the runner only (nothing is committed back), so the ZIP is neovim4eclipse-0.1.0.zip.
+      # -U: look again for a plug-in the restored cache records as not found. Only this step uses
+      # tycho-versions-plugin, and only in a release, so the Builds on main that save the cache
+      # never fetch it. For 0.2.15, main's cache held a failed lookup of it instead (which job made
+      # that lookup is not known), and Maven does not retry such a record by itself: the Release
+      # run stopped here. With -U it looks again, whatever the cache holds.
       - name: Set version ${{ inputs.version }}
         if: ${{ inputs.version }}
         env:
           VERSION: ${{ inputs.version }}
-        run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
+        run: ./mvnw -B -ntp -U org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
       # Ubuntu's packaged Neovim is too old, so use the official release archive: exactly the one
       # Get Neovim installs (util/neovim-downloads.properties, util/NeovimVersion.MINIMUM), for the
       # runner's platform (auto), its size, SHA-256 and tree hash checked, in Java so no runner
@@ -146,6 +151,13 @@ jobs:
           distribution: temurin
           java-version-file: .java-version   # the JDK version, kept in one file
           cache: maven
+          # Read only: this job builds tests/unit alone, so its ~/.m2/repository lacks most of what
+          # the build job needs (Tycho's plug-ins, the Eclipse target). The cache key is the same for
+          # every Linux job, and the first job to finish saves it; after a POM change (each version
+          # bump) this short job finishes first, and every later run with that key, the Release run
+          # on the tag included (it reads main's cache), downloaded the rest again. The build job,
+          # which resolves the whole reactor, saves the Linux cache instead.
+          cache-read-only: true
       # The Maven wrapper downloads Maven itself on a fresh runner (setup-java's cache holds
       # ~/.m2/repository, not ~/.m2/wrapper), once, with no retry of its own; one dropped
       # connection there failed the whole job. Tried up to three times here, so later steps find it.
@@ -201,12 +213,12 @@ jobs:
       # connection there failed the whole job. Tried up to three times here, so later steps find it.
       - name: Download Maven (retried)
         run: for try in 1 2 3; do ./mvnw -B -q --version && break; [ "$try" = 3 ] && exit 1; sleep 15; done
-      # As in the build job, so a release is tested at the version it ships with.
+      # As in the build job (-U included), so a release is tested at the version it ships with.
       - name: Set version ${{ inputs.version }}
         if: ${{ inputs.version }}
         env:
           VERSION: ${{ inputs.version }}
-        run: ./mvnw -B -ntp org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
+        run: ./mvnw -B -ntp -U org.eclipse.tycho:tycho-versions-plugin:set-version -DnewVersion="$VERSION"
       # As in the build job: the archive Get Neovim installs on this runner's platform, checked.
       - name: Install Neovim
         run: |
