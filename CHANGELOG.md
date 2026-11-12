@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-11-12
+
 ### Fixed
 
 - A key typed right after entering insert mode (`i`, `a`, `o`) could, rarely, vanish from the file:
