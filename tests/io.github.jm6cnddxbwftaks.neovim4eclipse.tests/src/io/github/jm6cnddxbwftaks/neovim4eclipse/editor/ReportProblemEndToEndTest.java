@@ -15,6 +15,7 @@ import org.eclipse.swt.widgets.Text;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.dialogs.ProblemReportDialog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TextFields;
 
 /**
  * <i>Neovim → Report a Problem…</i> in a real Eclipse with a running Neovim: the command opens the
@@ -39,7 +40,7 @@ class ReportProblemEndToEndTest extends EndToEndTestBase {
         try {
             Text field = textIn(dialog[0]);
             assertNotNull(field, "the report's text field");
-            String report = field.getText();
+            String report = TextFields.text(field); // "\n" line breaks on Windows too, as the report has them
             assertTrue(report.startsWith("### Neovim for Eclipse problem report\n"), report);
             assertTrue(report.contains("- Running: Neovim " + session.neovimVersion() + "\n"), report);
             assertTrue(report.contains("- Active editor: a .txt file in the "), report);

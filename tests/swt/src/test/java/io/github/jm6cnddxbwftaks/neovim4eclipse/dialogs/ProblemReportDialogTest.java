@@ -19,6 +19,7 @@ import org.eclipse.swt.widgets.Display;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.LayoutCheck;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TextFields;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ProblemReport;
 
 /**
@@ -48,7 +49,10 @@ class ProblemReportDialogTest {
     void theDialogShowsTheWholeReportReadOnlyAndFits() {
         ProblemReportDialog dialog = open(() -> { });
         try {
-            assertEquals(REPORT, dialog.reportText().getText());
+            // The field gives its lines back with the platform's line break ("\r\n" on Windows),
+            // so compare its text with "\n" restored; any other difference, an extra line break
+            // at the end included, still fails.
+            assertEquals(REPORT, TextFields.text(dialog.reportText()));
             assertTrue((dialog.reportText().getStyle() & SWT.READ_ONLY) != 0, "the report is not edited here");
             assertEquals(List.of(), LayoutCheck.problems(dialog.getShell()));
         } finally {
