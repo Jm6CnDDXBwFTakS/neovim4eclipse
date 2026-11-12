@@ -25,6 +25,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   warning to report, with no text of the file. The whole file is compared at `Esc` up to 20,000
   lines (was 10,000), and also after each save and when you come back to an editor, up to 100,000
   lines ([docs/USER_GUIDE.md](docs/USER_GUIDE.md), "When Neovim's copy and Eclipse's differ").
+- The README says which Neovim plug-ins work in Eclipse (those that work on text) and which do not
+  show (those that draw: completion menus, pickers, file trees), and how to keep a distribution such
+  as LazyVim out of Eclipse; the Marketplace listing says the same.
 - The README is now the overview: install, the first five minutes, every setting in one table, the
   known limitations and how to report a problem. Each feature's details moved to
   [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
