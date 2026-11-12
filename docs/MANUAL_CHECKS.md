@@ -333,6 +333,72 @@ Sources* first.
 
 **Expect:** each step's result, after its ⇒.
 
+## Marketplace
+
+### `mp-setup` First-time setup from the Marketplace, direct and behind a proxy
+
+- **On:** linux, macos, windows
+- **Launch:** none
+- **Areas:** /features/io.github.jm6cnddxbwftaks.neovim4eclipse.feature/feature.xml, /releng/io.github.jm6cnddxbwftaks.neovim4eclipse.updatesite/category.xml, /releng/marketplace/listing.txt, prefs/GetNeovim*.java, prefs/EclipseProxies.java, util/ProxyChoice.java, util/NeovimDownload.java, /releng/tools/checks/Proxy.java
+
+What a new user does, from end to end: install from the Marketplace into a new Eclipse, let Get
+Neovim install Neovim, open a file. Twice, once with a direct connection and once through an HTTP
+proxy, since a proxy is where installs and downloads go wrong at work. The pieces are tested
+apart (`InstallCheck` installs from the update site, `NeovimDownloadProxyTest` takes the download
+through a proxy); this card is the only place they run in one go, with Eclipse's own Marketplace
+client, as a user meets them. It needs the listing live on the Marketplace.
+
+The Eclipse is a new one, not yours or the checks' copy: a package downloaded from
+[eclipse.org/downloads/packages](https://www.eclipse.org/downloads/packages/) and unpacked into a
+new folder, one with the Marketplace client (*Eclipse IDE for Java Developers*, say). It starts
+with a plug-in folder and a workspace of its own, emptied first, so the plug-in finds no Neovim, as
+on a new machine (`XDG_DATA_HOME` moves the plug-in's folder on every system):
+
+```sh linux macos
+rm -rf ~/var/n4e-checks/xdg-mp ~/var/n4e-checks/ws-mp
+XDG_DATA_HOME=~/var/n4e-checks/xdg-mp /path/to/new/eclipse/eclipse -data ~/var/n4e-checks/ws-mp
+```
+
+```powershell windows
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\var\n4e-checks\xdg-mp", "$HOME\var\n4e-checks\ws-mp"
+$env:XDG_DATA_HOME = "$HOME\var\n4e-checks\xdg-mp"
+C:\path\to\new\eclipse\eclipse.exe -data "$HOME\var\n4e-checks\ws-mp"
+```
+
+On macOS the program is inside the app: `/path/to/new/Eclipse.app/Contents/MacOS/eclipse`. In
+PowerShell, `Remove-Item Env:XDG_DATA_HOME` afterward, or close the window.
+
+1. Unpack a new Eclipse and start it as above.
+   ⇒ Eclipse starts; nothing about Neovim yet.
+2. *Help → Eclipse Marketplace…*, search for `Neovim`, and *Install* on **Neovim for Eclipse**;
+   confirm, accept the license (EPL-2.0), *Finish*.
+   ⇒ Eclipse asks to trust the PGP key *Neovim for Eclipse releases*, fingerprint
+   `A91F 53D8 931B 7FD0 D146 8618 6CC9 E446 147B 063C` (README, *Install*); after *Trust
+   Selected*, it asks to restart. No question about *unsigned content*.
+3. Restart.
+   ⇒ *Get Neovim* opens by itself, its *Why* line saying the dedicated Neovim is missing.
+4. **Download**.
+   ⇒ Progress, then done.
+5. *File → New → Project… → General → Project*, then a file `a.txt` in it, and open it.
+   ⇒ Neovim attaches: the mode in the status bar, the welcome note. `ihello`, Esc, `:w` saves
+   the file.
+6. Behind a proxy: close Eclipse, unpack the package again into a new folder (the first one has
+   the plug-in now), and start the proxy below in a window of its own; it prints a line for each
+   connection. Start the new Eclipse as above (the commands empty the two folders again). Before
+   anything else, *Window → Preferences → General → Network Connections*: *Active Provider*
+   **Manual**, edit **HTTP** and **HTTPS** to host `127.0.0.1`, port `3128`; *Apply and Close*.
+   Then steps 2 to 5 again.
+   ⇒ The same results. The proxy's lines include `CONNECT marketplace.eclipse.org:443` (the
+   Marketplace client), `CONNECT jm6cnddxbwftaks.github.io:443` (the update site), and
+   `CONNECT github.com:443` and `CONNECT release-assets.githubusercontent.com:443` (Get Neovim's
+   download): all of them took the proxy.
+
+```sh
+java releng/tools/checks/Proxy.java
+```
+
+**Expect:** each step's result, after its ⇒, on each platform.
+
 ## Release
 
 These follow [CONTRIBUTING.md](../CONTRIBUTING.md), "Releasing"; each is done once, on any machine

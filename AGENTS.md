@@ -27,6 +27,7 @@ java releng/tools/ci/LikeCi.java --all            # the same with every test gro
 ./mvnw verify -DskipTests                         # build only
 java releng/tools/checks/ManualChecks.java due    # the manual checks a release needs (docs/MANUAL_CHECKS.md; JDK 22+)
 java releng/tools/checks/InstallCheck.java        # install the newest release from the update site into a copy of your Eclipse (JDK 22+)
+java releng/tools/checks/Proxy.java               # an HTTP proxy on 127.0.0.1:3128 that prints each host it reaches, for the card mp-setup
 java releng/tools/neovim/NeovimUpgrade.java 0.13.0  # move to a new Neovim release (data file, copies, checks, tests; docs/UPGRADING.md)
 java releng/tools/eclipse/EclipseUpgrade.java newest  # test with the newest Eclipse release; oldest <release> raises the floor; smoke installs into both (docs/UPGRADING.md)
 java releng/tools/maven/MavenUpgrade.java        # move to the newest Maven 3.9.x and Maven wrapper (checked downloads, tests, one commit each; docs/UPGRADING.md)
