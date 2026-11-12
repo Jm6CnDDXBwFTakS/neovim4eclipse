@@ -113,6 +113,20 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
     }
 
     /**
+     * Who hears what ends the reader thread with a throw, in place of the JVM's default handler,
+     * which prints its stack trace to stderr: a {@link VirtualMachineError}, which
+     * {@link #readLoop} throws again after its cleanup, or anything thrown by that cleanup. For
+     * tests that end the reader on purpose: input nested a million deep ends it with a
+     * {@code StackOverflowError} whose trace is a thousand identical lines, which would bury a real
+     * failure in the build's output. Example:
+     * {@code channel.whenReaderDies((thread, error) -> died.set(error))}. May be called after
+     * {@link #start}, as long as it is before the error.
+     */
+    void whenReaderDies(Thread.UncaughtExceptionHandler handler) {
+        reader.setUncaughtExceptionHandler(handler);
+    }
+
+    /**
      * Sends a request and returns a future of the result. Example:
      * {@code request("nvim_buf_get_lines", Handle.buffer(3), 0, -1, false)} completes with
      * {@code ["first line", "second line"]}.

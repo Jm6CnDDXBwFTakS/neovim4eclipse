@@ -22,6 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.logging.Level;
 
@@ -292,10 +293,12 @@ class RpcChannelTest {
     /**
      * A handler that overflows the stack: Neovim, which waits for the answer, still gets one, and
      * then the connection ends as if Neovim had exited: a waiting request fails at once rather
-     * than after its timeout, and so does every later one.
+     * than after its timeout, and so does every later one. The error itself is thrown again on the
+     * reader thread ({@link #readerDeath}).
      */
     @Test
     void aRequestHandlerThatOverflowsTheStackIsAnsweredAndEndsTheConnection() throws Exception {
+        AtomicReference<Throwable> died = readerDeath();
         requestHandler = (method, params) -> {
             throw new StackOverflowError("deep");
         };
@@ -307,6 +310,7 @@ class RpcChannelTest {
             assertInstanceOf(NeovimConnectionClosedException.class, failure(waiting));
             assertInstanceOf(NeovimConnectionClosedException.class, failure(channel.request("nvim_get_mode")));
             log.assertLogged(Level.SEVERE, "Reading from Neovim failed; the connection is closed");
+            waitUntil(() -> died.get() instanceof StackOverflowError);
         }
     }
 
@@ -317,6 +321,7 @@ class RpcChannelTest {
      */
     @Test
     void inputNestedTooDeepEndsTheConnectionAndFailsWaitingRequests() throws Exception {
+        AtomicReference<Throwable> died = readerDeath();
         try (ExpectedLog log = ExpectedLog.of(RpcChannel.class)) {
             CompletableFuture<Object> waiting = channel.request("nvim_get_mode");
             receive();
@@ -333,7 +338,20 @@ class RpcChannelTest {
             writer.start();
             assertInstanceOf(NeovimConnectionClosedException.class, failure(waiting));
             log.assertLogged(Level.SEVERE, "Reading from Neovim failed; the connection is closed");
+            waitUntil(() -> died.get() instanceof StackOverflowError);
         }
+    }
+
+    /**
+     * Catches the error that ends the reader in a test that ends it on purpose. The reader throws
+     * a {@link VirtualMachineError} again after its cleanup, so that it is not lost; without this,
+     * the JVM's default handler would print it, and a stack overflow's trace is a thousand
+     * identical lines in every build's output. The test then checks that the error did arrive.
+     */
+    private AtomicReference<Throwable> readerDeath() {
+        AtomicReference<Throwable> died = new AtomicReference<>();
+        channel.whenReaderDies((thread, error) -> died.set(error));
+        return died;
     }
 
     @Test
