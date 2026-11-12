@@ -53,6 +53,14 @@ public final class Proxy implements AutoCloseable {
     /** How long to wait for a host to accept the connection, in milliseconds. */
     private static final int CONNECT_TIMEOUT_MS = 15_000;
 
+    /**
+     * How long a host may send nothing before its connection is closed, in milliseconds. Without
+     * it, a host that keeps its side open after the client is done (a TLS server waiting for its
+     * own long timeout) would hold a thread and two sockets for good. Ten minutes is far longer
+     * than any pause in a download or an install.
+     */
+    private static final int IDLE_TIMEOUT_MS = 10 * 60_000;
+
     /** The most a request's head (request line and headers) may hold; a real one is a few hundred bytes. */
     private static final int MAX_HEAD = 64 * 1024;
 
@@ -149,28 +157,33 @@ public final class Proxy implements AutoCloseable {
             if (head == null) {
                 return; // the client gave up, or sent no proper request
             }
-            Request request = Request.parse(head.substring(0, head.indexOf("\r\n")));
+            String requestLine = head.substring(0, head.indexOf("\r\n"));
+            Request request = Request.parse(requestLine);
+            long bodyLength = request == null || request.isTunnel() ? -1 : Request.bodyLength(head);
             OutputStream out = client.getOutputStream();
-            if (request == null) {
+            int number = count.incrementAndGet();
+            if (request == null || bodyLength == Request.INVALID_LENGTH) {
+                // Said, so that a failed install through the proxy has a line that explains it.
+                say(number + "  refused (400): " + requestLine);
                 reply(out, "400 Bad Request");
                 return;
             }
-            int number = count.incrementAndGet();
             try (Socket target = new Socket()) {
                 try {
                     target.connect(new InetSocketAddress(request.host(), request.port()), CONNECT_TIMEOUT_MS);
+                    target.setSoTimeout(IDLE_TIMEOUT_MS);
                 } catch (IOException e) {
-                    log.accept(number + "  " + request.method() + " " + request.authority() + " failed: " + e.getMessage());
+                    say(number + "  " + request.method() + " " + request.authority() + " failed: " + e.getMessage());
                     reply(out, "502 Bad Gateway");
                     return;
                 }
-                log.accept(number + "  " + request.method() + " " + request.authority());
+                say(number + "  " + request.method() + " " + request.authority());
                 if (request.isTunnel()) {
                     reply(out, "200 Connection established");
                     pump(in, client, target, -1);
                 } else {
                     target.getOutputStream().write(Request.forwarded(head, request).getBytes(StandardCharsets.ISO_8859_1));
-                    pump(in, client, target, Request.bodyLength(head));
+                    pump(in, client, target, bodyLength);
                 }
             }
         } catch (IOException e) {
@@ -228,6 +241,26 @@ public final class Proxy implements AutoCloseable {
         } catch (IOException e) {
             // closing is all that was wanted
         }
+    }
+
+    /** Writes one line of output, made {@link #printable}: every part of it may come from a client. */
+    private void say(String line) {
+        log.accept(printable(line));
+    }
+
+    /**
+     * {@code line} as it may go into the output: at most 200 characters, control characters as
+     * {@code ?}, so that a client cannot write over the terminal's lines with escape codes. That
+     * includes the 8-bit ones (U+0080 to U+009F): the head is read as ISO-8859-1, so a byte 0x9B
+     * arrives as U+009B, a one-character escape (CSI) some terminals obey.
+     */
+    static String printable(String line) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < line.length() && out.length() < 200; i++) {
+            char c = line.charAt(i);
+            out.append(c < 0x20 || (c >= 0x7f && c <= 0x9f) ? '?' : c);
+        }
+        return line.length() > 200 ? out + "..." : out.toString();
     }
 
     private static void reply(OutputStream out, String status) throws IOException {
@@ -291,12 +324,16 @@ public final class Proxy implements AutoCloseable {
             if (!url.regionMatches(true, 0, "http://", 0, 7)) {
                 return null; // a path alone is for a server; https goes through CONNECT
             }
-            int slash = url.indexOf('/', 7);
-            String rest = slash < 0 ? "/" : url.substring(slash);
-            int fragment = rest.indexOf('#');
-            String path = fragment < 0 ? rest : rest.substring(0, fragment);
-            return hostPort(slash < 0 ? url.substring(7) : url.substring(7, slash), 80)
-                    .map(a -> new Request(method, a.host(), a.port(), path)).orElse(null);
+            // The host part ends at the first '/', '?' or '#': http://example.org?x=1 is example.org.
+            int end = 7;
+            while (end < url.length() && "/?#".indexOf(url.charAt(end)) < 0) {
+                end++;
+            }
+            String rest = url.substring(end);
+            int fragment = rest.indexOf('#'); // a fragment is the client's own, never sent
+            String pathAndQuery = fragment < 0 ? rest : rest.substring(0, fragment);
+            String path = pathAndQuery.startsWith("/") ? pathAndQuery : "/" + pathAndQuery;
+            return hostPort(url.substring(7, end), 80).map(a -> new Request(method, a.host(), a.port(), path)).orElse(null);
         }
 
         /** A host and port, as {@link #hostPort(String, int)} reads them. */
@@ -345,27 +382,40 @@ public final class Proxy implements AutoCloseable {
             return Optional.of(new HostPort(host, number));
         }
 
+        /** {@link #bodyLength}'s answer for a head whose length cannot be trusted: the request is refused. */
+        static final long INVALID_LENGTH = -2;
+
         /**
          * The length of the body that follows {@code head}: its {@code Content-Length}, 0 if it has
          * none, or -1 (all of it, until the client is done) for a body sent in chunks
-         * ({@code Transfer-Encoding: chunked}), whose end this proxy does not read.
+         * ({@code Transfer-Encoding: chunked}), whose end this proxy does not read. A length that
+         * is not a number, is negative, or is given twice with two values is
+         * {@link #INVALID_LENGTH}: guessing would send the host more or less than one request.
          */
         static long bodyLength(String head) {
-            long length = 0;
+            long length = -1;
+            boolean chunked = false;
             for (String line : head.split("\r\n")) {
                 String lower = line.toLowerCase(Locale.ROOT);
                 if (lower.startsWith("transfer-encoding:")) {
-                    return -1;
-                }
-                if (lower.startsWith("content-length:")) {
+                    chunked = true;
+                } else if (lower.startsWith("content-length:")) {
+                    long value;
                     try {
-                        length = Long.parseLong(line.substring(line.indexOf(':') + 1).trim());
+                        value = Long.parseLong(line.substring(line.indexOf(':') + 1).trim());
                     } catch (NumberFormatException e) {
-                        return -1;
+                        return INVALID_LENGTH;
                     }
+                    if (value < 0 || (length >= 0 && value != length)) {
+                        return INVALID_LENGTH;
+                    }
+                    length = value;
                 }
             }
-            return length;
+            if (chunked) {
+                return length >= 0 ? INVALID_LENGTH : -1; // both at once: RFC 9112 says refuse
+            }
+            return Math.max(length, 0);
         }
 
         /**

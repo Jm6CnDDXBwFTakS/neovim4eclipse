@@ -73,6 +73,8 @@ class ProxyTest {
                 Proxy.Request.parse("GET http://example.org/a/b?c=d HTTP/1.1"));
         assertEquals(new Proxy.Request("HEAD", "example.org", 8080, "/"),
                 Proxy.Request.parse("HEAD http://example.org:8080 HTTP/1.1"));
+        assertEquals(new Proxy.Request("GET", "example.org", 80, "/?x=1"),
+                Proxy.Request.parse("GET http://example.org?x=1#top HTTP/1.1"), "the host ends at '?'; no fragment is sent");
     }
 
     @Test
@@ -108,6 +110,24 @@ class ProxyTest {
         assertEquals(0, Proxy.Request.bodyLength("GET http://h/ HTTP/1.1\r\nHost: h\r\n\r\n"));
         assertEquals(12, Proxy.Request.bodyLength("POST http://h/ HTTP/1.1\r\ncontent-length: 12\r\n\r\n"));
         assertEquals(-1, Proxy.Request.bodyLength("POST http://h/ HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n"));
+    }
+
+    @Test
+    void aLengthThatCannotBeTrustedIsInvalid() {
+        for (String headers : List.of("Content-Length: -5", "Content-Length: x", "Content-Length: 4\r\nContent-Length: 5",
+                "Content-Length: 4\r\nTransfer-Encoding: chunked")) {
+            assertEquals(Proxy.Request.INVALID_LENGTH, Proxy.Request.bodyLength("POST http://h/ HTTP/1.1\r\n" + headers + "\r\n\r\n"),
+                    headers);
+        }
+        assertEquals(4, Proxy.Request.bodyLength("POST http://h/ HTTP/1.1\r\nContent-Length: 4\r\nContent-Length: 4\r\n\r\n"),
+                "the same length twice is that length");
+    }
+
+    @Test
+    void theOutputShowsNoControlCharactersAndNoLongLines() {
+        assertEquals("GET ?[2J HTTP/1.1", Proxy.printable("GET \u001b[2J HTTP/1.1"));
+        assertEquals("GET ?2J HTTP/1.1", Proxy.printable("GET \u009b2J HTTP/1.1"), "an 8-bit escape too");
+        assertEquals("x".repeat(200) + "...", Proxy.printable("x".repeat(300)));
     }
 
     @Test
@@ -220,14 +240,40 @@ class ProxyTest {
         assertTrue(got.size() == 1 && !got.get(0).startsWith("failed"), got::toString);
     }
 
-    /** A host name that never resolves ({@code .invalid}, RFC 2606): the client gets 502. */
+    /**
+     * Port 1 of this machine, where nothing listens unless its administrator starts something
+     * there: the connection is refused at once, and the client gets 502.
+     */
     @Test
     void aHostThatCannotBeReachedIsA502() throws Exception {
         try (Socket client = toProxy()) {
-            send(client, "CONNECT neovim.invalid:443 HTTP/1.1\r\n\r\n");
+            send(client, "CONNECT 127.0.0.1:1 HTTP/1.1\r\n\r\n");
             assertTrue(Proxy.readHead(client.getInputStream()).startsWith("HTTP/1.1 502 Bad Gateway\r\n"));
         }
-        assertTrue(log.get(0).startsWith("1  CONNECT neovim.invalid:443 failed: "), log::toString);
+        assertTrue(log.get(0).startsWith("1  CONNECT 127.0.0.1:1 failed: "), log::toString);
+    }
+
+    /** A request it cannot serve gets 400, and a line in the output saying so. */
+    @Test
+    void aRefusedRequestIsA400WithALine() throws Exception {
+        try (Socket client = toProxy()) {
+            send(client, "GET https://example.org/ HTTP/1.1\r\n\r\n");
+            assertTrue(Proxy.readHead(client.getInputStream()).startsWith("HTTP/1.1 400 Bad Request\r\n"));
+        }
+        assertEquals(List.of("1  refused (400): GET https://example.org/ HTTP/1.1"), log);
+    }
+
+    /**
+     * A client's escape code reaches the output as text, not as a terminal command. Every line
+     * goes through the same {@code say}; a refused request line is the one that needs no network.
+     */
+    @Test
+    void aClientCannotWriteControlCharactersToTheOutput() throws Exception {
+        try (Socket client = toProxy()) {
+            send(client, "GET /\u001b[2J HTTP/1.1\r\n\r\n");
+            assertTrue(Proxy.readHead(client.getInputStream()).startsWith("HTTP/1.1 400"));
+        }
+        assertEquals(List.of("1  refused (400): GET /?[2J HTTP/1.1"), log);
     }
 
     private static void joined(Thread server) throws InterruptedException {
