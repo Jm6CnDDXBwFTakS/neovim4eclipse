@@ -5,6 +5,16 @@ show. Motions, operators, text objects,
 visual mode, registers, macros and `:` commands work on the buffer you see; Eclipse keeps owning
 files, rendering, content assist and its own commands.
 
+**Works with Eclipse:**
+
+- Vim's splits are Eclipse editors: `:split`, `:vsplit` and `Ctrl-W v` put the file in an editor
+  beside this one, `Ctrl-W h/j/k/l` move between them, `:only` gathers them again.
+- Eclipse's problems in Neovim: `]d` / `[d` go between a file's errors and warnings, `:Eproblems`
+  puts the workspace's in the quickfix list for `]q` / `:cnext`, and `:copen` shows the Problems view.
+- Neovim's keys run Eclipse's commands: `gd` Open Declaration, `K` hover, `grn` Rename,
+  `gra` Quick Fix, `grr` References.
+- Folding with `zo`, `zc` and `zM` on Eclipse's own folds (methods, imports, comments).
+
 **Requires:**
 
 - Neovim {neovim}. After installing, a *Get Neovim* dialog opens when Eclipse starts: it can

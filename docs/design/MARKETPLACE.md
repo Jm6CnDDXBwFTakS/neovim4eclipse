@@ -188,6 +188,9 @@ a checklist, to fill in the form from. Why the values are what they are:
 
 - what the plug-in does (Neovim owns the editing; Eclipse keeps owning files, rendering, content
   assist and its own commands);
+- what it does with Eclipse, which no picture shows well (a split looks like any two editors):
+  Vim's splits as Eclipse editors, Eclipse's problems in `]d` and the quickfix list, Neovim's
+  language keys running Eclipse's commands, folding on Eclipse's folds;
 - the requirements, as in `feature.xml`: which Neovim and how it gets one, Eclipse 2024-12 (4.34)
   or newer, Java 21 or newer;
 - that releases are signed with the project's PGP key, with the fingerprint to check in the trust
