@@ -172,11 +172,13 @@ Eclipse does not see it.
 
 **Distributions** (LazyVim, NvChad, AstroNvim and other large configs) are made for a terminal, and
 most of what they add draws windows Eclipse does not show (see Known limitations, item 7). Tried
-with the LazyVim starter: on the first start, lazy.nvim's installer window opened unseen and took the
-keys typed in the editor; on later starts editing worked, but slower to start, with a window still
-open that nothing showed. Keep such a config out of Eclipse with the guard above, placed before it
-loads (`if vim.g.neovim4eclipse then ... return end` ahead of `require('config.lazy')`), or give
-Eclipse a small config of its own (*A separate config for Eclipse*, below).
+with the LazyVim starter: the plug-in closes the windows that take the focus (lazy.nvim's installer,
+with a message), and the plug-ins still install in the background; keys typed in the first seconds
+of that first start can be lost, while the installer opens its window again. Later starts edit as
+usual, without most of what the distribution shows. Keep such a config out of Eclipse with the
+guard above, placed before it loads (`if vim.g.neovim4eclipse then ... return end` ahead of
+`require('config.lazy')`), or give Eclipse a small config of its own (*A separate config for
+Eclipse*, below).
 
 **Errors in your config.** If `init.lua` reports an error while Neovim starts (a typo, or a
 Vimscript line such as `nnoremap ; :` in a Lua file: write `vim.keymap.set('n', ';', ':')`, or wrap
@@ -367,8 +369,9 @@ gets in your way:
    are not drawn: completion menus (nvim-cmp, blink.cmp), pickers (Telescope, fzf-lua), file trees,
    dashboards, notifications, an installer's progress window. Plug-ins that work on text
    (surround, commentary, text objects, mappings of your own) work as in a terminal. A floating window
-   that takes the focus also takes the keys typed in the editor until it closes; if keys seem to do
-   nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins out in Eclipse
+   that opens with the focus (a picker's prompt, `:Lazy`) is closed again at once, with a message,
+   since it would take the keys typed in the editor; one without the focus stays, unseen. Leave such
+   plug-ins out in Eclipse
    (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 

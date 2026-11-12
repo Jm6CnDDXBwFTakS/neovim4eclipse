@@ -39,6 +39,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   part, and the most of the status bar's width the plug-in may take) and *Ctrl Keys*. Set them again
   after upgrading; from now on the names stay.
 
+### Fixed
+
+- A Neovim plug-in's floating window that took the focus (a picker's prompt, lazy.nvim's installer
+  on the first start of a LazyVim config) took the keys typed in the editor, unseen. It is now
+  closed, with a message; one the config leaves open at start no longer becomes the window the
+  editors' keys go to.
+
 ## [0.2.15] - 2026-11-12
 
 ### Changed

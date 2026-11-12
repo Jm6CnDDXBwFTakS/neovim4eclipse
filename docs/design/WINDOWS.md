@@ -42,7 +42,12 @@ The Neovim side:
   than `TabClosedPre` because it covers that and any other close. A `WinNew` net closes any window
   the plug-in did not open that is neither floating nor special, and also the quickfix, location
   list and preview windows: Eclipse cannot show them, and in the editor's tab they took its rows,
-  so `H` and `L` no longer matched the editor. The net cannot use the current window (in `WinNew`
+  so `H` and `L` no longer matched the editor. It also closes a floating window that is new and
+  has the focus (it opened with it: a picker's prompt, `:Lazy`), which Eclipse does not draw and
+  which would take the keys; floats without the focus stay, and so does one entered later
+  (`Ctrl-W w` into hover documentation), which the net has seen before (`seen`). At start, a
+  floating window the config left the focus in (lazy.nvim's installer on a first start) is closed
+  and a plain window becomes the home window: taken as the home window, it got the editors' keys. The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps
   the set of windows it opened, and the net closes the others. That set forgets a window on the
   plug-in's quiet closes too, which fire no `WinClosed`. `:help` is closed by the net, with the

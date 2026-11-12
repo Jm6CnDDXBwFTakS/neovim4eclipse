@@ -733,10 +733,55 @@ t.test('the quickfix and location list windows are closed too: they would take t
   t.eq(1, #vim.fn.getqflist(), 'the list stays, for :cnext')
 end)
 
---- A floating window entered, as Ctrl-W w enters hover documentation.
-local function enter_float()
-  return vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+--- Runs the work scheduled so far, the safety net's check among it: a barrier, not a sleep.
+local function flush()
+  local after = false
+  vim.schedule(function() after = true end)
+  t.wait_for("the net's check", function() return after end)
 end
+
+--- A floating window entered by the user, as Ctrl-W w enters hover documentation: opened without
+--- the focus (hover is), the net's check done, then entered.
+local function enter_float()
+  local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  flush()
+  vim.api.nvim_set_current_win(float)
+  return float
+end
+
+t.test('a floating window that opens with the focus is closed again: it would take the keys unseen', function()
+  local win = commands()
+  vim.v.errmsg = ''
+  local buf = buffer(1)
+  vim.bo[buf].filetype = 'lazy'
+  local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  t.wait_for('the focused float to close', function() return not vim.api.nvim_win_is_valid(float) end)
+  t.eq(win, vim.api.nvim_get_current_win(), "the editor's window has the focus again")
+  t.ok(vim.v.errmsg:find('Closed the floating window of lazy', 1, true), vim.v.errmsg)
+end)
+
+t.test('a floating window the user enters later stays, so :q in it stays Neovim\'s', function()
+  commands()
+  local float = enter_float()
+  flush()
+  t.ok(vim.api.nvim_win_is_valid(float))
+  t.eq(float, vim.api.nvim_get_current_win())
+end)
+
+t.test('a floating window that has the focus when the plug-in starts is closed, and is not the home window', function()
+  t.setup()
+  local plain = vim.api.nvim_get_current_win()
+  local buf = buffer(1)
+  vim.bo[buf].filetype = 'lazy'
+  local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  vim.v.errmsg = ''
+  local home = t.run('WINDOWS', tostring(vim.api.nvim_create_buf(false, true)))
+  t.eq(plain, home, 'the plain window is the home window')
+  t.ok(not vim.api.nvim_win_is_valid(float), 'the float is closed')
+  t.eq(plain, vim.api.nvim_get_current_win())
+  flush()
+  t.ok(vim.v.errmsg:find('Closed the floating window of lazy', 1, true), vim.v.errmsg)
+end)
 
 t.test('only floating and special windows are side windows', function()
   local win, home = commands()

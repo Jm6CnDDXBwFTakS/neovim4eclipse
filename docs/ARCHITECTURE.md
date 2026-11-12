@@ -252,8 +252,11 @@ area; [design/SPLITS.md](design/SPLITS.md)); the tab commands are refused throug
 hook; a `WinNew` safety
 net closes any other window that is not the plug-in's, floating or special, and the quickfix,
 location list and preview windows, which Eclipse cannot show (the quickfix and location list
-windows are then shown the Eclipse way, section 8); in a floating window the user
-entered, `:q` and `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
+windows are then shown the Eclipse way, section 8); a floating window is closed too when it opens
+with the focus (a picker's prompt, `:Lazy`), since Eclipse does not draw it and it would take the
+keys, and so is one the user's config leaves the focus in at start (lazy.nvim's installer), which
+would otherwise become the home window; in a floating window the user entered later, `:q` and
+`:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
 ### 7. Eclipse is Neovim's clipboard provider
 
