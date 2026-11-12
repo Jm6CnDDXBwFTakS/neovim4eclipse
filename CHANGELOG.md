@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-11-12
+
 ### Added
 
 - *Neovim → Report a Problem...* shows what a bug report needs: the versions, which Neovim runs, the
