@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- Nothing changes in the plug-in itself: more of its decisions are tested without Eclipse, and the
+  tests wait for outcomes instead of fixed times.
+
 ## [0.2.14] - 2026-11-11
 
 ### Changed
