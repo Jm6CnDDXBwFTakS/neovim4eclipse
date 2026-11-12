@@ -92,6 +92,11 @@ class DocumentPushTest {
         }
 
         @Override
+        public void checkDocumentAgainstNeovim() {
+            calls.add("compare");
+        }
+
+        @Override
         public void startRemoteListening() {
             calls.add("start listening");
         }
@@ -168,9 +173,12 @@ class DocumentPushTest {
         }
     }
 
-    /** Neither side changed since the editor was detached: the push is skipped, the rest is not. */
+    /**
+     * Neither side changed since the editor was detached: no push of what changed, but a comparison,
+     * which writes only a drift no change explains (and reports it); the rest as always.
+     */
     @Test
-    void aDocumentInSyncWithItsBufferIsNotPushedAgain() {
+    void aDocumentInSyncWithItsBufferIsComparedNotPushedAgain() {
         Fake unchanged = new Fake() {
             @Override
             public long documentStamp() {
@@ -186,7 +194,7 @@ class DocumentPushTest {
         unchanged.runQueued();
 
         assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4",
-                "start listening", "cursor 2:3", "follow cursor reports"), unchanged.calls);
+                "compare", "start listening", "cursor 2:3", "follow cursor reports"), unchanged.calls);
     }
 
     /**

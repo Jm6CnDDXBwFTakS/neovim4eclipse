@@ -1231,18 +1231,29 @@ public final class EditorAttachManager {
         QuickfixLists.changed(session); // their entries go back to the markers, by file name
     }
 
-    /** Tells Neovim whether {@code part}'s document has unsaved changes. UI thread. */
+    /**
+     * Tells Neovim whether {@code part}'s document has unsaved changes, and after a save of the
+     * attached editor has its document compared with Neovim's buffer
+     * ({@link NeovimEditorController#afterSave}). UI thread.
+     */
     private void onDirtyChanged(IEditorPart part) {
         ITextEditor text = textEditorOf(part); // a multi-page editor's text page too
         IDocument document = text == null ? null : documentOf(text);
         Optional<DocumentBuffer> buffer;
         NeovimSession session;
+        NeovimEditorController controller;
         synchronized (this) {
             session = followedSession;
             buffer = document == null ? Optional.empty() : documents.bufferOf(document);
+            controller = activeController;
         }
         if (session != null && buffer.isPresent() && buffer.get().isOpenIn(session)) {
             session.setModifiedAsync(buffer.get(), part.isDirty());
+        }
+        // No longer dirty: saved (or reverted, where the comparison finds nothing to repair either).
+        if (!part.isDirty() && controller != null && text != null && controller.getEditor() == text
+                && !controller.isClosed()) {
+            controller.afterSave();
         }
     }
 

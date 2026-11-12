@@ -829,17 +829,29 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   line too). So every push brackets its change with two `eclipse_echo` notifications
   (`LuaScripts.SET_LINES_MARKED` for the attached buffer, `SET_DOCUMENT_LINES` for the others), and
   the session drops the line events between them.
-- **Repairs are reported:** a push of a document of up to 10,000 lines compares Neovim's whole
+- **Repairs are reported:** a push of a document of up to 20,000 lines compares Neovim's whole
   buffer with it and writes every difference (`ChangedLines.COMPARE_WHOLE_UP_TO_LINES`), so a drift
   between the two copies, whatever caused it, lasts only until the next `Esc` or Eclipse change. A
   drift still matters meanwhile: a Neovim command runs on its own copy, and `yy` then `p` can paste a
   line Eclipse never showed. So a push that finds a line no recorded change explains (one of the
-  lines `util/ChangedLines` counts as unchanged since the buffer last equaled the document) logs
-  it (`sync/TextRepairs`, at `FINE`). Example: Eclipse typed in line 1, Neovim's line 3 differs: a
-  repair; only line 1 differs: an ordinary push. Checked are the push at `Esc` and at a sync point
-  and that of Eclipse's own changes, not the push at attach, which carries what changed while Neovim
-  was not followed. The UI tests fail on a repair, and also compare every open document with its
-  buffer when a test ends (CONTRIBUTING.md, "Test helpers and fakes").
+  lines `util/ChangedLines` counts as unchanged since the buffer last equaled the document) reports
+  it (`sync/TextRepairs`): the document's first repair as a WARNING in the Error Log, with no text
+  of the file and not its name (`util/RepairReport`: which way, where, when, what kind of file, the
+  versions), and the editor's status bar tells the user once per Neovim session to check the last
+  change; later repairs of the same document at `FINE`. Example: Eclipse typed in line 1, Neovim's
+  line 3 differs: a repair; only line 1 differs: an ordinary push.
+
+  A drift is resolved either way, whichever comes first. A push writes Eclipse's lines into Neovim:
+  at `Esc` and at a sync point, after Eclipse's own changes, after each save, and when an editor
+  comes back to a document that did not change meanwhile (the last two up to
+  `ChangedLines.CHECK_WHOLE_UP_TO_LINES`, 100,000 lines); these are checked and reported. A read of
+  Neovim's whole buffer writes Neovim's lines into the document: at the start of an insert and after
+  a `:` command (`StateSync.syncBuffer`). It is not checked: the read is also how some of Neovim's
+  own changes arrive (a macro's replay, a script's `:edit!`), so a line it brings that no change
+  explains is no drift there. Not checked either: the push at attach to a changed document, which
+  carries what changed while Neovim was not followed. The UI
+  tests fail on a repair, and also compare every open document with its buffer when a test ends
+  (CONTRIBUTING.md, "Test helpers and fakes").
 - **Paste, counts and `.`** are ordinary keys sent to Neovim; there is no Java-side emulation. Linewise
   paste arrives as a pure line insertion, which `LineRangeEdit` handles.
 - **Columns:** Neovim cursor/visual columns are UTF-8 byte offsets. `editor/DocumentPositions` converts

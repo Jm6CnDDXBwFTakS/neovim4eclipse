@@ -49,13 +49,27 @@ import java.util.List;
 public final class ChangedLines {
 
     /**
-     * Documents up to this many lines are compared whole at {@code Esc} and at a sync point:
-     * Neovim's whole buffer is read and diffed against the document, about 3 ms at
-     * 10,000 lines. That repairs any difference between the two, wherever it is, not only in the
-     * lines typed (a safety net: a lost event, or a bug elsewhere, does not stay). Longer documents
-     * push only the changed lines ({@link #region}), where a whole comparison costs 20 ms and more.
+     * Documents up to this many lines are compared whole at {@code Esc} and at a sync point: the
+     * document's lines go to Neovim, which compares them with its buffer and writes the ones that
+     * differ. That repairs any difference between the two, wherever it is, not only in the lines
+     * typed (a safety net: a lost event, or a bug elsewhere, does not stay). Longer documents push
+     * only the changed lines ({@link #region}).
+     *
+     * <p>Why 20,000: the comparison costs about 0.32 ms per 1,000 lines (measured with the pinned
+     * Neovim on a 10-core ARM machine: 3.1 ms at 10,000 lines, 8.0 at 25,000, 31 at 100,000; on one
+     * core the same medians, maxima up to twice that). 20,000 lines, about 6.5 ms, keeps {@code Esc}
+     * quick on a machine two or three times slower too. Comparing a fingerprint instead was measured
+     * as well: Neovim's {@code sha256()} took twice as long as the comparison it would save.
      */
-    public static final int COMPARE_WHOLE_UP_TO_LINES = 10_000;
+    public static final int COMPARE_WHOLE_UP_TO_LINES = 20_000;
+
+    /**
+     * Documents up to this many lines are compared whole, and repaired, after a save and when an
+     * editor comes back to a document that did not change meanwhile ({@code sync/BufferSynchronizer}):
+     * about 31 ms at 100,000 lines, once, at a moment that takes longer anyway. Longer documents are
+     * not checked there.
+     */
+    public static final int CHECK_WHOLE_UP_TO_LINES = 100_000;
 
     /** Nothing changed at all: as many unchanged lines as there can be. */
     private static final int ALL = Integer.MAX_VALUE;

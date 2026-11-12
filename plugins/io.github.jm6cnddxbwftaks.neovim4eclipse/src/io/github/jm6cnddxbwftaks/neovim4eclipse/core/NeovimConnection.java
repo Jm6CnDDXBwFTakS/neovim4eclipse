@@ -124,6 +124,8 @@ final class NeovimConnection implements AutoCloseable {
     private volatile Incoming incoming;
     /** The errors the user's configuration reported while Neovim started, or "" (see {@link #waitForStartup}). */
     private String startupErrors = "";
+    /** The running Neovim's version, checked at start ({@link #checkVersion}); {@code null} before. */
+    private volatile NeovimVersion version;
 
     private NeovimConnection(Process process, String program) {
         this.process = process;
@@ -208,6 +210,16 @@ final class NeovimConnection implements AutoCloseable {
         if (!version.isSupported()) {
             throw new UnsupportedNeovimException(version.tooOldMessage());
         }
+        this.version = version;
+    }
+
+    /**
+     * The running Neovim's version, as {@code 0.12.6}, or {@code ""} before the start checked it. For
+     * reports that should say which Neovim they are about ({@code util/RepairReport}).
+     */
+    String version() {
+        NeovimVersion v = version;
+        return v == null ? "" : v.toString();
     }
 
     private static String unknownVersionMessage() {

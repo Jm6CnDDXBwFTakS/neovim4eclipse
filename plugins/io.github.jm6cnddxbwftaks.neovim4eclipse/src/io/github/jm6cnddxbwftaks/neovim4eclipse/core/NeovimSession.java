@@ -396,6 +396,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return connection.startupErrors();
     }
 
+    /** The running Neovim's version ({@code 0.12.6}), or {@code ""} if unknown. */
+    public String neovimVersion() {
+        return connection.version();
+    }
+
     public String getMode() {
         return state.mode();
     }

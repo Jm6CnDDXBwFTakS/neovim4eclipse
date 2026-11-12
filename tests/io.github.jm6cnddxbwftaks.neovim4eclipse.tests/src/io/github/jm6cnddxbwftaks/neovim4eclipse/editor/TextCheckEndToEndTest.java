@@ -4,12 +4,15 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -83,6 +86,39 @@ class TextCheckEndToEndTest extends EndToEndTestBase {
         int bufnr = EditorAttachManager.getInstance().bufferNumberOf(document);
         List<?> read = (List<?>) SessionProbe.lua(session, CURRENT.formatted(bufnr));
         assertEquals("Xalpha", read.get(0), () -> String.valueOf(read.get(1)));
+    }
+
+    /**
+     * A drift Eclipse never sees: Neovim's line 3 changes with its line events dropped as an echo of
+     * a push (between two {@code eclipse_echo} notifications, as {@code LuaScripts.SET_LINES_MARKED}
+     * sends them). Eclipse's next edit in normal mode (a format, a refactoring; here a replace) is
+     * pushed whole and finds it: Neovim gets Eclipse's line back, the Error Log one warning that says
+     * when and holds no text, and the status bar tells the user.
+     */
+    @Test
+    void aDriftIsRepairedByThePushOfAnEclipseEditAndReported() throws Exception {
+        int bufnr = EditorAttachManager.getInstance().bufferNumberOf(document);
+        SessionProbe.lua(session, """
+                local chan, buf = vim.g.neovim4eclipse_channel, %d
+                vim.rpcnotify(chan, 'eclipse_echo', buf, true)
+                vim.api.nvim_buf_set_lines(buf, 2, 3, true, { 'GAMMA' })
+                vim.rpcnotify(chan, 'eclipse_echo', buf, false)
+                """.formatted(bufnr));
+        assertEquals("gamma", document.get().split("\\n")[2], "Eclipse never saw the drift");
+
+        document.replace(0, 0, "X"); // Eclipse's own edit, in normal mode
+        // The status bar's message comes after the report, which comes after the push: wait for it.
+        waitUntil("the status bar's message", TIMEOUT_MS,
+                () -> statusLineTexts(editor).stream().anyMatch(t -> t.contains("drifted apart")));
+        assertEquals("gamma", SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(" + bufnr + ", 2, 3, true)[1]"),
+                "Neovim's line 3 put right");
+        List<LogRecord> repairs = takeRepairs();
+        assertEquals(1, repairs.size(), () -> "one report: " + repairs);
+        assertEquals(Level.WARNING, repairs.get(0).getLevel());
+        String message = repairs.get(0).getMessage();
+        assertTrue(message.contains("a .txt file in the") && message.contains("Eclipse's lines were written into Neovim's")
+                && message.contains("Found after an Eclipse edit in normal mode."), message);
+        assertTrue(!message.contains("amma") && !message.contains("test.txt"), "no text, no name: " + message);
     }
 
     /**

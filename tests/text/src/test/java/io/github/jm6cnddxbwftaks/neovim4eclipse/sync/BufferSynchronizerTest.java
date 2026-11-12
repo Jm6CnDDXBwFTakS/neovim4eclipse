@@ -249,7 +249,8 @@ class BufferSynchronizerTest {
         document.replace(0, 0, "X");
         try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
             sync.pushChangedLinesToNeovim();
-            log.assertLogged(Level.FINE, "its line 3 differed from the document's line 3");
+            log.assertLogged(Level.WARNING, "Neovim's line 3 (of 3) differed from Eclipse's line 3 (of 3)");
+            log.assertLogged(Level.WARNING, "Found at Esc or a sync point.");
             // The lines are for the tests, in the record's own fields: no log formatter prints
             // them (an XMLFormatter prints every parameter of a message without placeholders).
             TextRepairs.RepairRecord repair = (TextRepairs.RepairRecord) log.records().get(0);
@@ -281,8 +282,106 @@ class BufferSynchronizerTest {
         document.replace(document.getLineOffset(2), 5, "GAMMA");
         try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
             neovim.runQueued();
-            log.assertLogged(Level.FINE, "its line 1 differed");
+            log.assertLogged(Level.WARNING, "Neovim's line 1 (of 3) differed");
+            log.assertLogged(Level.WARNING, "Found after an Eclipse edit in normal mode.");
         }
+    }
+
+    /** What the editor gave: the file's kind and the versions, and how often the user was told. */
+    private static final class Reporting implements RepairReporting {
+        int reported;
+
+        @Override
+        public String fileKind() {
+            return "a .txt file in the Text Editor";
+        }
+
+        @Override
+        public String neovimVersion() {
+            return "0.12.6";
+        }
+
+        @Override
+        public String pluginVersion() {
+            return "0.2.16";
+        }
+
+        @Override
+        public void reported() {
+            reported++;
+        }
+    }
+
+    /**
+     * A document's first repair is a warning, with the editor's part of the report, and the user is
+     * told; the next one is logged at FINE only, and nobody is told again.
+     */
+    @Test
+    void onlyADocumentsFirstRepairIsAWarning() throws Exception {
+        Reporting reporting = new Reporting();
+        sync.setRepairReporting(reporting);
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            neovim.neovimLines = List.of("alpha", "beta", "GAMMA");
+            document.replace(0, 0, "X");
+            sync.pushChangedLinesToNeovim();
+            neovim.neovimLines = List.of("Xalpha", "BETA", "gamma");
+            document.replace(0, 0, "Y");
+            sync.pushChangedLinesToNeovim();
+            assertEquals(List.of(Level.WARNING, Level.FINE), log.records().stream().map(r -> r.getLevel()).toList());
+            log.assertLogged(Level.WARNING, "Neovim's copy of a .txt file in the Text Editor differed");
+            log.assertLogged(Level.WARNING, "Neovim 0.12.6, Neovim for Eclipse 0.2.16.");
+            log.assertLogged(Level.FINE, "Neovim's line 2 (of 3) differed");
+        }
+        assertEquals(1, reporting.reported, "the user is told once");
+    }
+
+    /** After a save, the whole document is compared on the input thread: a drift is repaired and reported. */
+    @Test
+    void aComparisonAfterASaveRepairsAndReportsADrift() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        neovim.neovimLines = List.of("alpha", "BETA", "gamma");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.checkAfterSaveAsync(() -> true);
+            neovim.runQueued();
+            log.assertLogged(Level.WARNING, "Found after a save.");
+        }
+        assertEquals(List.of("alpha", "beta", "gamma"), neovim.neovimLines, "repaired");
+    }
+
+    /** Not while the gate is closed (Eclipse types an insert): nothing is read, pushed or cleared. */
+    @Test
+    void aComparisonAfterASaveWaitsForItsGate() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        neovim.neovimLines = List.of("alpha", "BETA", "gamma");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.checkAfterSaveAsync(() -> false);
+            neovim.runQueued();
+            log.assertNothingAtOrAbove(Level.FINE);
+        }
+        assertEquals(List.of("alpha", "BETA", "gamma"), neovim.neovimLines, "nothing pushed");
+    }
+
+    /** A document longer than ChangedLines.CHECK_WHOLE_UP_TO_LINES is not compared after a save. */
+    @Test
+    void aVeryLongDocumentIsNotComparedAfterASave() throws Exception {
+        startComparedWhole("x\n".repeat(ChangedLines.CHECK_WHOLE_UP_TO_LINES + 1));
+        neovim.neovimLines = List.of("drifted");
+        sync.checkAfterSaveAsync(() -> true);
+        neovim.runQueued();
+        assertEquals(List.of("drifted"), neovim.neovimLines, "not pushed");
+    }
+
+    /** An editor coming back to a document that did not change: compared, and a drift repaired and reported. */
+    @Test
+    void theComparisonWhenAnUnchangedEditorComesBackRepairsAndReports() throws Exception {
+        startComparedWhole("alpha\nbeta\ngamma\n");
+        neovim.neovimLines = List.of("ALPHA", "beta", "gamma");
+        try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
+            sync.checkDocumentAgainstNeovim();
+            log.assertLogged(Level.WARNING, "Found on switching to the editor.");
+        }
+        assertEquals(List.of("alpha", "beta", "gamma"), neovim.neovimLines, "repaired");
     }
 
     /** The push at attach carries what changed while Neovim was not followed: never a repair. */

@@ -206,6 +206,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync.dropNeovimCursorWhile(() -> eclipseTyping() || session.isLeavingInsertMode());
         this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
                 caretSync::sendEclipseCaretNow);
+        this.synchronizer.setRepairReporting(new RepairNotice(editor, session));
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution(this::onStatuslineColumns);
         this.cursorStyle = new CursorStyleController(styledText);
@@ -682,6 +683,18 @@ public final class NeovimEditorController implements AutoCloseable {
 
     public ITextEditor getEditor() {
         return editor;
+    }
+
+    /**
+     * Eclipse saved this editor's document: compare it with Neovim's buffer and repair a drift
+     * ({@link BufferSynchronizer#checkAfterSaveAsync}), unless Eclipse is typing an insert, whose
+     * text reaches Neovim at {@code Esc}. UI thread.
+     */
+    void afterSave() {
+        if (!closed) {
+            synchronizer.checkAfterSaveAsync(
+                    () -> isNeovimModeActive() && !session.isTypingMode() && !session.isLeavingInsertMode());
+        }
     }
 
     public boolean isClosed() {

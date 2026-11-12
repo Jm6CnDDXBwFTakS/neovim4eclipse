@@ -127,11 +127,12 @@ have come or gone), before the first push, after a failed push, and when a Neovi
 reach the document (not listening, an error, a skipped full sync): then the lines could differ
 anywhere.
 
-**Documents up to `ChangedLines.COMPARE_WHOLE_UP_TO_LINES` (10,000) lines are compared whole**,
-at about 3 ms: the whole comparison is also a safety net, since whatever differed, anywhere, is
+**Documents up to `ChangedLines.COMPARE_WHOLE_UP_TO_LINES` (20,000 lines, raised from 10,000 after
+measuring) are compared whole**, at about 0.32 ms per 1,000 lines: the whole comparison is also a safety net, since whatever differed, anywhere, is
 repaired at the next `Esc`. A repair is no longer silent: when the comparison finds a line no
 recorded change explains (`ChangedLines.Known.firstUnexplained`: one outside the two unchanged
-counts), `sync/TextRepairs` logs it at `FINE`, which users do not see and the UI tests fail on.
+counts), `sync/TextRepairs` reports it: a WARNING in the Error Log for the document's first,
+`FINE` after; the UI tests fail on either.
 Only longer documents push the changed lines. The same limit chooses the
 handshake after a sync point's key (section 2, step 5): a full sync for a short document; for a long
 one only a marker change (`BufferChange.marker`) that lets Eclipse type once the key's own line

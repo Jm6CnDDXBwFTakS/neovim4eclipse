@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * The Neovim buffer that mirrors one Eclipse document, so that each file keeps its own undo
  * history and marks. Created on first {@link NeovimSession#showBuffer}; belongs to that session only (a
@@ -48,6 +50,8 @@ public final class DocumentBuffer {
      * change needs no reading of the whole document and buffer.
      */
     private volatile long syncedStamp = NO_STAMP;
+    /** A repair of this buffer was reported as a warning ({@link #firstRepairReport}). */
+    private final AtomicBoolean repairReported = new AtomicBoolean();
 
     /** @param name buffer name shown by {@code :ls} and {@code %f}, normally the file path; may be empty */
     public DocumentBuffer(String name) {
@@ -82,6 +86,15 @@ public final class DocumentBuffer {
      */
     public boolean isInSyncAt(long stamp) {
         return stamp != NO_STAMP && syncedStamp == stamp;
+    }
+
+    /**
+     * {@code true} the first time it is called, {@code false} after: a repair of this document's
+     * buffer is reported as a warning once ({@code sync/TextRepairs}), however often its editor is
+     * attached again. Safe from any thread.
+     */
+    public boolean firstRepairReport() {
+        return repairReported.compareAndSet(false, true);
     }
 
     /** Neovim changed the buffer, or it was made anew: it is not known to equal the document. */

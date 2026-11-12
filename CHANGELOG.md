@@ -14,6 +14,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- When Neovim's copy of a file and Eclipse's drift apart, the plug-in now says so: a message in the
+  status bar (once per Neovim session) asks you to check your last change, and the Error Log gets a
+  warning to report, with no text of the file. The whole file is compared at `Esc` up to 20,000
+  lines (was 10,000), and also after each save and when you come back to an editor, up to 100,000
+  lines ([docs/USER_GUIDE.md](docs/USER_GUIDE.md), "When Neovim's copy and Eclipse's differ").
 - The README is now the overview: install, the first five minutes, every setting in one table, the
   known limitations and how to report a problem. Each feature's details moved to
   [docs/USER_GUIDE.md](docs/USER_GUIDE.md).

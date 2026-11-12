@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ChangedLines;
 
 /**
  * Edits deep in a file of {@value #LINES} lines, opened from disk as a user opens one: the edit, its dot repeat and undo, a
@@ -30,7 +31,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
  *
  * <p>Why a test of its own: at {@code Esc} and at a sync point (Ctrl-W) the plug-in compares the
  * whole document with Neovim's buffer only up to {@code ChangedLines.COMPARE_WHOLE_UP_TO_LINES}
- * (10,000) lines, and pushes just the changed lines in a longer one. The other tests' three-line
+ * (20,000) lines, and pushes just the changed lines in a longer one. The other tests' three-line
  * file never takes that path; here every change must still land on the same line in both, and
  * nothing else may differ ({@link #expectNeovimHasTheDocument}). Speed is not
  * measured here (that would be a {@code timeoutReliant} test): each step only has to finish within
@@ -38,7 +39,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
  */
 class LargeFileEndToEndTest extends EndToEndTestBase {
 
-    static final int LINES = 12_000;
+    /** More than {@code ChangedLines.COMPARE_WHOLE_UP_TO_LINES}, so that {@code Esc} pushes only the changed lines. */
+    static final int LINES = ChangedLines.COMPARE_WHOLE_UP_TO_LINES + 2_000;
 
     /** Closes test.txt and opens big.txt in its place: the base class closes {@link #editor} afterwards. */
     @BeforeEach

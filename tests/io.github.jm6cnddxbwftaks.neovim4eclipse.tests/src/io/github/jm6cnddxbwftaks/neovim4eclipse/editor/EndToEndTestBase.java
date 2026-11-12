@@ -307,6 +307,20 @@ abstract class EndToEndTestBase {
         }
     }
 
+    /**
+     * The repairs caught so far, which then no longer fail the test: for a test that makes a drift on
+     * purpose and checks its report. The capture goes on for the rest of the test.
+     */
+    protected List<LogRecord> takeRepairs() {
+        if (repairs == null) {
+            return List.of();
+        }
+        List<LogRecord> taken = List.copyOf(repairs.records());
+        repairs.close();
+        repairs = ExpectedLog.of(TextRepairs.class, Level.FINE);
+        return taken;
+    }
+
     /** Ends the capture of repairs and returns what it caught (nothing if the setup never started it). */
     private List<String> stopCapturingRepairs() {
         if (repairs == null) {

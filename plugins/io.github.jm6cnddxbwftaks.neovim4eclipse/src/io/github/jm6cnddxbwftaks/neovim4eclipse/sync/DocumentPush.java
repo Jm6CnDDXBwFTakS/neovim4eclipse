@@ -107,6 +107,12 @@ public final class DocumentPush {
         /** Makes Neovim's buffer equal to the document. */
         void pushDocumentToNeovim();
 
+        /**
+         * Compares the document, unchanged since its last push, with Neovim's buffer, and repairs
+         * and reports any difference (up to a size: {@code ChangedLines.CHECK_WHOLE_UP_TO_LINES}).
+         */
+        void checkDocumentAgainstNeovim();
+
         /** Applies Neovim's changes to the document again. */
         void startRemoteListening();
 
@@ -183,9 +189,11 @@ public final class DocumentPush {
             // The stamp now, where the push would read the document: one read when start() was
             // called would miss an Eclipse change made while this waited in the queue.
             if (nvim.bufferInSyncAt(mirror.documentStamp())) {
-                // Neither side changed since the editor was detached: the push would read the whole
-                // document and buffer to find nothing to send (see DocumentBuffer.syncedStamp).
-                LOG.fine("Document unchanged since its last push: not pushed again");
+                // Neither side changed since the editor was detached, as far as the plug-in knows
+                // (see DocumentBuffer.syncedStamp): a whole comparison should find nothing to send,
+                // and a difference it finds is a drift, repaired and reported.
+                LOG.fine("Document unchanged since its last push: compared, not pushed again");
+                mirror.checkDocumentAgainstNeovim();
             } else {
                 mirror.pushDocumentToNeovim();
             }

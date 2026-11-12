@@ -740,6 +740,25 @@ narrowly as it can, and it is listed here.
   messages in a row also opened the output popup, which took the keyboard focus from the editor,
   and Eclipse's Undo then left Neovim's cursor a line off. A `:b` you type is not affected.
 
+## When Neovim's copy and Eclipse's differ
+
+Eclipse keeps the document you see; Neovim keeps a copy of it in a buffer, and every change goes
+from one to the other. Should the two ever drift apart (a bug, a change that got lost), the
+plug-in notices at its next comparison and makes them equal again:
+
+- **Eclipse's lines go to Neovim** at `Esc`, after an edit Eclipse makes in normal mode (a format,
+  a refactoring), after each save, and when you come back to an editor. At `Esc` the whole file is
+  compared up to 20,000 lines; after a save and on coming back, up to 100,000.
+- **Neovim's lines come to Eclipse** when an insert starts and after a `:` command, when the
+  plug-in reads Neovim's whole buffer.
+
+Whichever comes first wins. When Eclipse's lines win, the window's status bar says *"Neovim's and
+Eclipse's copies of this file had drifted apart and were made equal again"* (once per Neovim
+session), and the Error Log (*Window → Show View → Error Log*) gets a warning (once per file) that
+says where and when, holding no text of the file and not its name. Check your last
+change: what Neovim did while its copy was stale may have gone to the wrong line. Please report the
+warning in an [issue](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues): a drift is a bug.
+
 ## The plug-in's log
 
 The plug-in writes what it does to a log: WARNING and SEVERE lines reach Eclipse's Error Log
