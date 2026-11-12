@@ -9,6 +9,8 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.commands.ICommandService;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +18,8 @@ import org.junit.jupiter.api.Test;
  * {@link OtherCommandWatch} with a command service of the test's own: watching starts and stops
  * on it, and stopping does not fail when the service is gone, as the window's is at Eclipse's quit
  * (a detach queued while the workbench closes ran after it: Eclipse's {@code SlaveCommandService}
- * threw a {@code NullPointerException} from {@code removeExecutionListener}).
+ * threw a {@code NullPointerException} from {@code removeExecutionListener}). It also stops by
+ * itself when its widget is disposed, and stopping twice removes the listener once.
  */
 class OtherCommandWatchTest {
 
@@ -35,20 +38,55 @@ class OtherCommandWatchTest {
     @Test
     void watchingStartsAndStopsOnTheService() {
         List<String> calls = new ArrayList<>();
-        new OtherCommandWatch(service(calls, false), () -> { }).dispose();
+        new OtherCommandWatch(service(calls, false), null, () -> { }).dispose();
         assertEquals(List.of("addExecutionListener", "removeExecutionListener"), calls);
     }
 
     @Test
     void stoppingDoesNotFailWhenTheServiceIsGone() {
         List<String> calls = new ArrayList<>();
-        OtherCommandWatch watch = new OtherCommandWatch(service(calls, true), () -> { });
+        OtherCommandWatch watch = new OtherCommandWatch(service(calls, true), null, () -> { });
         watch.dispose(); // a throw fails the test
         assertEquals(List.of("addExecutionListener", "removeExecutionListener"), calls);
     }
 
     @Test
     void withNoServiceThereIsNothingToWatch() {
-        new OtherCommandWatch(null, () -> { }).dispose(); // a throw fails the test
+        new OtherCommandWatch(null, null, () -> { }).dispose(); // a throw fails the test
+    }
+
+    @Test
+    void watchingStopsWhenTheWidgetIsDisposedAndOnlyOnce() {
+        List<String> calls = new ArrayList<>();
+        Shell shell = new Shell(Display.getDefault()); // stands in for the editor's text widget
+        OtherCommandWatch watch = new OtherCommandWatch(service(calls, false), shell, () -> { });
+        shell.dispose(); // the editor closed without its controller's close()
+        assertEquals(List.of("addExecutionListener", "removeExecutionListener"), calls);
+        watch.dispose(); // close() after all: nothing more to remove
+        assertEquals(List.of("addExecutionListener", "removeExecutionListener"), calls);
+    }
+
+    @Test
+    void stoppingFirstLeavesTheWidgetAlone() {
+        List<String> calls = new ArrayList<>();
+        Shell shell = new Shell(Display.getDefault());
+        try {
+            new OtherCommandWatch(service(calls, false), shell, () -> { }).dispose();
+            shell.dispose(); // the watch no longer listens: no second removal
+            assertEquals(List.of("addExecutionListener", "removeExecutionListener"), calls);
+        } finally {
+            if (!shell.isDisposed()) {
+                shell.dispose();
+            }
+        }
+    }
+
+    @Test
+    void aWidgetDisposedAlreadyGivesNoWatch() {
+        List<String> calls = new ArrayList<>();
+        Shell shell = new Shell(Display.getDefault());
+        shell.dispose(); // the editor closed before its controller was built
+        new OtherCommandWatch(service(calls, false), shell, () -> { }).dispose();
+        assertEquals(List.of(), calls, "nothing would end a watch added now");
     }
 }
