@@ -982,7 +982,9 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 `PreferenceDefaults`; add a field to a preference page's body (`NeovimPage`, `StatusBarPage`,
 `CtrlKeysPage`) and test it in its `tests/swt` test; read it with
 `Activator.getDefault().getPreferenceStore()`; if it must apply at once, handle it in the
-`Activator`'s property-change listener.
+`Activator`'s property-change listener. Pick the key's name with care and list it in the README's
+*Settings* table, with `SettingsNamesTest`'s `PROMISED`: from then on it stays, since a user's saved
+choice is stored under it. The same goes for a color's id, an `init.lua` switch and an Ex command.
 
 **Add a color users can change.** Declare it in `plugin.xml` (`org.eclipse.ui.themes`: a
 `themeElementCategory` to group it, a `colorDefinition` with id, label, `value="r,g,b"` and a

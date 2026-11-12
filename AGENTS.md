@@ -120,6 +120,10 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   (`SPDX-FileCopyrightText` and `SPDX-License-Identifier: EPL-2.0`); Markdown files have none.
 - American spelling (behavior, color, license).
 - Every exception class the plug-in defines extends `util/NeovimExceptionBase` (abstract, unchecked).
+- The names in the README's *Settings* table are promised (users' `init.lua`, `eclipse.ini`, key
+  bindings and preferences hold them): never rename or remove one. A new user-set name goes into
+  that table or is marked internal; `SettingsNamesTest` checks both (CONTRIBUTING.md, "Making a
+  change").
 - Comments and docs in an explanatory style: say why, give an example, link the concept.
 - A check only a person can do gets a card in `docs/MANUAL_CHECKS.md` (with its source files),
   in the same commit; keep that file free of anything personal (`ManualChecksTest` checks).

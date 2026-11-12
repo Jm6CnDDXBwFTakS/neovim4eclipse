@@ -539,7 +539,15 @@ text that tests do not always catch.
 - A larger change (several commits, a new subsystem, a release process) gets a design note in
   [docs/design/](docs/design/README.md), or adds to an existing one, in the same branch: how it
   works and why, not how it was planned (that page says what goes in a note and what does not).
-- Update the documentation (README, `docs/`, Javadoc) when behavior changes.
+- Update the documentation (README, [docs/USER_GUIDE.md](docs/USER_GUIDE.md), `docs/`, Javadoc)
+  when behavior changes.
+- **The names in the README's [Settings](README.md#settings) stay.** Users' `init.lua`,
+  `eclipse.ini`, key bindings and saved preferences hold them, and a renamed one is ignored without
+  a word. Never rename or remove one in passing: a change takes a release that still accepts the old
+  name and warns about it, and a changelog entry. A new name a user sets (an `init.lua` switch, a
+  preference key, a `plugin.xml` command, an Ex command) goes into that table, or is marked
+  internal. `SettingsNamesTest` fails on a promised name gone from the code and on a new one in
+  neither list.
 - Something only a person can check (a real download, a system dialog, an input method) gets a
   card in [docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md), in the same commit, with the files it
   depends on; anything a test can check gets the test instead.
