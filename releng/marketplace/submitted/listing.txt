@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
+#
+# The Marketplace listing as last saved on marketplace.eclipse.org, facts filled in
+# (java releng/tools/marketplace/Marketplace.java submitted). The tool compares the
+# listing with this copy and lists the fields to change on the website.
+
+Solution Name: Neovim for Eclipse
+Solution URL: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse
+Organization Name: 
+Eclipse Foundation Member Organization: No
+Solution Logo: docs/images/marketplace-logo.png
+Summary: Vim mode for Eclipse, powered by a real Neovim: motions, operators, text objects, macros, registers and : commands, with your own init.lua, in Eclipse's text editors.
+Status: Beta
+License Type: EPL 2.0
+Solution Type: This product requires an existing Eclipse installation to function
+Support URL: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/issues
+RSS Feed: https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse/releases.atom
+Categories: Editor, General Purpose Tools, Tools
+Markets: Tools
+Tags: vim, neovim, vi, modal editing, keybindings
+Version number: 
+Update Site URL: https://jm6cnddxbwftaks.github.io/neovim4eclipse/
+Supported Eclipse Release(s): 2024-12 (4.34) to 2026-09 (4.41); tick each release up to the newest tested
+Supported Platform(s): Windows, Mac, Linux/GTK
+Minimum Java Version: Java 21
+Feature ID: io.github.jm6cnddxbwftaks.neovim4eclipse.feature
+Install state: Required
+Screenshots: 01-visual-mode.png, 02-command-line.png, 03-problems.png, demo.gif
+Additional Editors: 
