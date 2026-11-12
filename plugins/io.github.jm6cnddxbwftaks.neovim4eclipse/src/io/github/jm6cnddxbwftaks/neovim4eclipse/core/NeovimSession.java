@@ -309,7 +309,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.info(() -> "viewport " + (session.viewportEnabled ? "follows the editor" : "off (g:neovim4eclipse_viewport)"));
             // And for search highlighting (docs/design/SEARCH_HIGHLIGHTING.md, "Turning it off").
             session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
-            LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search)"));
+            LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search_highlight)"));
             Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
             session.nvimManagesClipboard = managesSystemClipboard(
                     clipboardOption == null ? "" : String.valueOf(clipboardOption));

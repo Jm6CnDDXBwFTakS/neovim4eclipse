@@ -44,11 +44,11 @@ local function matches(m)
   return out
 end
 
-t.test('vim.g.neovim4eclipse_search = 0 turns it off', function()
+t.test('vim.g.neovim4eclipse_search_highlight = 0 turns it off', function()
   t.setup()
-  vim.g.neovim4eclipse_search = 0
+  vim.g.neovim4eclipse_search_highlight = 0
   t.eq(false, t.run('SEARCH'))
-  vim.g.neovim4eclipse_search = nil
+  vim.g.neovim4eclipse_search_highlight = nil
 end)
 
 t.test('after a search, the matches are sent once; :noh sends an empty list', function()

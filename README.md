@@ -524,7 +524,7 @@ While you type a search, the editor follows Neovim's match (`'incsearch'`); Esc 
 you were. The matches are highlighted as in Neovim: every match of what you type, then of the last
 search (`'hlsearch'`) until `:noh`, behind the text in an amber (darker in a dark editor;
 change it under *Window → Preferences → General → Appearance → Colors and Fonts → Neovim for
-Eclipse → Search match*), a box around the match under the caret. `vim.g.neovim4eclipse_search = 0` in `init.lua` turns this off
+Eclipse → Search match*), a box around the match under the caret. `vim.g.neovim4eclipse_search_highlight = 0` in `init.lua` turns this off
 ([design](docs/design/SEARCH_HIGHLIGHTING.md)). A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's live
 preview of it (`'inccommand'`) is not shown in the editor. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
 Up and Down in the box browse the same history.
@@ -813,7 +813,7 @@ The variables starting with `eclipse_` work in two directions:
 |----------|--------|---------|
 | `vim.g.neovim4eclipse` | the plug-in, before your config | this Neovim runs inside Eclipse |
 | `vim.g.neovim4eclipse_ide_keys` | you, in `init.lua` | `0` keeps Neovim's own `gd`, `Ctrl-]`, `K`, `grn`, `gra`, `grr`, `gri`, `grt`, `gO`, `gt`, `gT` (not `ZZ`, `ZQ`; [docs/KEYBOARD.md](docs/KEYBOARD.md)) |
-| `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse; for the plug-in's own scripts |
+| `vim.g.neovim4eclipse_channel` | the plug-in, after your config | the RPC channel to Eclipse, for the plug-in's own scripts only: internal, and it may change. A mapping reaches Eclipse through `:Eclipse` |
 
 **A separate config for Eclipse.** If you would rather keep two configs apart, start Eclipse with
 the environment variable `NVIM_APPNAME` set, for example to `eclipse-nvim`.

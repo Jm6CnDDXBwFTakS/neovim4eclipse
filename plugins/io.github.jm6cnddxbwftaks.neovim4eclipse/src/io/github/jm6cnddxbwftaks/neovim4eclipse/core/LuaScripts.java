@@ -3455,7 +3455,7 @@ final class LuaScripts {
      * Search highlighting (docs/design/SEARCH_HIGHLIGHTING.md): the matches of Neovim's search that
      * the current window shows, sent to Eclipse, which paints them behind the editor's text. Run
      * once at start, after the user's config; returns {@code false} (and installs nothing) when the
-     * config sets {@code vim.g.neovim4eclipse_search = 0} (or {@code false}).
+     * config sets {@code vim.g.neovim4eclipse_search_highlight = 0} (or {@code false}).
      *
      * <p><b>Which pattern.</b> What Neovim itself highlights:
      * <ul>
@@ -3525,7 +3525,7 @@ final class LuaScripts {
      * paint.
      */
     static final String SEARCH = """
-            local enabled = vim.g.neovim4eclipse_search
+            local enabled = vim.g.neovim4eclipse_search_highlight
             if enabled == 0 or enabled == false then
               return false
             end

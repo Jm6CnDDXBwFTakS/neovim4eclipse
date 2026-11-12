@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- `vim.g.neovim4eclipse_search` is now `vim.g.neovim4eclipse_search_highlight`: it turns off only
+  the highlighting of search matches in the editor, not search. Rename it in your `init.lua` if you
+  set it.
+
 ## [0.2.15] - 2026-11-12
 
 ### Changed

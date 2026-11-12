@@ -28,7 +28,7 @@ in Neovim turns the highlights off.
 
 ### Turning it off
 
-`vim.g.neovim4eclipse_search = 0` in `init.lua` stops Neovim reporting matches, as the other
+`vim.g.neovim4eclipse_search_highlight = 0` in `init.lua` stops Neovim reporting matches, as the other
 features' `vim.g` switches do. It is read once when Neovim starts.
 
 ## How it works

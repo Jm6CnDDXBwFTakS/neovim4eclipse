@@ -24,7 +24,7 @@ public interface SearchPort {
 
     /**
      * Whether search matches are reported: {@code true} unless the user's config sets
-     * {@code vim.g.neovim4eclipse_search = 0} (or {@code false}). Read once when the session starts.
+     * {@code vim.g.neovim4eclipse_search_highlight = 0} (or {@code false}). Read once when the session starts.
      */
     boolean searchEnabled();
 
