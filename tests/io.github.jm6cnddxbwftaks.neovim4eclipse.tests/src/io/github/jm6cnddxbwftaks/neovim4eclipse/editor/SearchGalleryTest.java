@@ -36,8 +36,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
 /**
  * The search highlighting pictures of the manual checks' gallery (card {@code sh-colors},
  * docs/design/SEARCH_HIGHLIGHTING.md): whether the match colors read well in a light and a dark
- * theme, behind plain text and behind the Java editor's syntax colors, is for a person to judge.
- * The painting itself is tested ({@code SearchHighlighterTest}, {@code SearchHighlightingEndToEndTest}).
+ * theme, behind plain text and behind the Java editor's syntax colors, is for a person to judge;
+ * so is how Neovim's own highlights (a yank flash, a {@code :match}) look beside them, in Neovim's
+ * colors. The painting itself is tested ({@code SearchHighlighterTest},
+ * {@code SearchHighlightingEndToEndTest}, {@code NeovimHighlighterTest}, {@code NeovimHighlightsEndToEndTest}).
  *
  * <p>Not a test, though named like one: it asserts only what it needs to reach each state. The
  * {@code gallery} profile runs it twice, in two test Eclipses: once as the others (the light
@@ -70,6 +72,11 @@ class SearchGalleryTest extends EndToEndTestBase {
                     "The comment, the class name, the string and the variables keep their syntax colors on the "
                             + "background, and stay readable; the match under the caret, in the comment, has a box "
                             + "and its text reads as well as the others."),
+            new Picture("neovim", "Neovim's own highlights in the Java editor",
+                    "The flash of a yank over the class line (Neovim's IncSearch: a light yellow with its own dark text) "
+                            + "and :match Error on count (a dark red with light text) read in both themes, over the "
+                            + "fox matches where they meet. Their colors are Neovim's default colorscheme's, the same "
+                            + "in both themes (docs/design/SEARCH_HIGHLIGHTING.md, \"The yank flash and window matches\")."),
             new Picture("color", "With another search match color",
                     "The matches take the color set in Preferences > General > Appearance > Colors and Fonts > "
                             + "Neovim for Eclipse > Search match (a green here); the box follows it."),
@@ -146,6 +153,25 @@ class SearchGalleryTest extends EndToEndTestBase {
             waitForMatches(javaWidget, JAVA.indexOf("foxes"));
             waitForCaret(javaWidget, JAVA.indexOf("foxes")); // the search's first match, in the comment
             take(javaWidget, "java", 16);
+
+            // Neovim's own highlights over the same view: a flash kept until the picture is taken (a
+            // real one is gone after 150 ms), and a :match, both in Neovim's default colors.
+            int classLine = JAVA.indexOf("public class");
+            int count = JAVA.indexOf("count(");
+            session.inputAsync(":lua vim.api.nvim_create_autocmd('TextYankPost', { group = vim.api.nvim_create_augroup('gallery_flash', {}),"
+                    + " callback = function() vim.hl.on_yank({ timeout = 600000 }) end })<CR>");
+            session.inputAsync(":match Error /count/<CR>4Gyy");
+            settle();
+            waitUntil("the flash on the class line", TIMEOUT_MS, () -> textWidgetBackground(javaWidget, classLine) != null);
+            waitUntil("the match on count", TIMEOUT_MS, () -> textWidgetBackground(javaWidget, count) != null);
+            try {
+                take(javaWidget, "neovim", 16);
+            } finally {
+                session.inputAsync(":match none<CR>:lua vim.api.nvim_del_augroup_by_name('gallery_flash')"
+                        + " vim.api.nvim_buf_clear_namespace(0, vim.api.nvim_create_namespace('nvim.hlyank'), 0, -1)<CR>");
+                settle();
+                waitUntil("the flash gone", TIMEOUT_MS, () -> textWidgetBackground(javaWidget, classLine) == null);
+            }
 
             // As a user sets it in Colors and Fonts: the theme's color registry takes the new value.
             ColorRegistry colors = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getColorRegistry();

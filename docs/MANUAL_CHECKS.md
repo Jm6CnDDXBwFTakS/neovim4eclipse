@@ -209,7 +209,7 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 - **On:** any
 - **Launch:** none
-- **Areas:** editor/SearchHighlighter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
+- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
 (`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two
@@ -230,11 +230,12 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
    browser.
-   ⇒ Each of the five pictures is there in the light and the dark theme, side by side.
+   ⇒ Each of the six pictures is there in the light and the dark theme, side by side.
 2. Look at each pair against the text above it.
    ⇒ In both themes every match stands out from the editor's background, its text (syntax colors
    included, in the Java editor) stays readable, and the match under the caret is told apart from
-   the others without hiding its text.
+   the others without hiding its text. In the picture of Neovim's own highlights, the flash and the
+   `:match` read in both themes, in Neovim's colors.
 
 **Expect:** each step's result, after its ⇒.
 

@@ -289,4 +289,5 @@ cleared in Eclipse mode and asked for again in Neovim mode, all as for search ma
 - `NeovimHighlightsEndToEndTest`: a `:match` and a yank flash painted and taken away, in a real
   editor.
 - The manual check `sh-colors`: the gallery's pictures (`SearchGalleryTest`, `-Pgallery`) in a
-  light and a dark theme, plain text and the Java editor.
+  light and a dark theme, plain text and the Java editor, and one of Neovim's own highlights (a
+  yank flash and a `:match` in Neovim's default colors) over the search matches in the Java editor.
