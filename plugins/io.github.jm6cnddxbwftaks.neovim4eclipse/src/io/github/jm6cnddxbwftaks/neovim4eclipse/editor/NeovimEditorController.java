@@ -327,7 +327,7 @@ public final class NeovimEditorController implements AutoCloseable {
 
         modeStatus.addTo(editor.getEditorSite());
 
-        int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offsets.caretModelOffset());
+        int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offsets.caretModelOffset());
 
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
         if (viewport != null) {
@@ -742,7 +742,7 @@ public final class NeovimEditorController implements AutoCloseable {
             // Eclipse may have edited the document while Neovim mode was off: resync into Neovim.
             // Must not block here (this runs on the UI thread).
             int offset = styledText.isDisposed() ? 0 : offsets.caretModelOffset();
-            int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), offset);
+            int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offset);
             pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
             modeStatus.setMode(session.getMode());
             cursorStyle.updateForMode(session.getMode());
@@ -1027,7 +1027,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private void leaveInsertAtCaret() {
         int caretOffset = offsets.caretModelOffset();
         if (keyInterceptor.leaveInsertMode()) {
-            int[] lineCol = DocumentPositions.offsetToLineCol(documentOf(editor), caretOffset);
+            int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), caretOffset);
             session.setCursorAsync(lineCol[0], lineCol[1]);
         }
     }

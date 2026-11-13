@@ -48,6 +48,20 @@ class MouseEndToEndTest extends EndToEndTestBase {
         expectText("alpha\nbea\ngamma\n");
     }
 
+    /**
+     * A click on the empty line Eclipse shows after the final newline, as on the space below the
+     * text, puts the cursor at the end of the last line, as in Vim: Neovim has no line there
+     * ({@code DocumentPositions.offsetToCursor}). The click was lost before, and the next key
+     * edited the line the cursor had been on.
+     */
+    @Test
+    void aClickBelowTheTextGoesToTheLastLine() {
+        click(document.getLength(), 1); // the empty fourth line Eclipse shows
+        waitUntil("Neovim's cursor on line 3", TIMEOUT_MS, () -> cursorLine() == 3);
+        type(widget, "x");
+        expectText("alpha\nbeta\ngamm\n");
+    }
+
     /** With the {@code :} box open, a click in the editor abandons the line and then lands. */
     @Test
     void aClickWithTheBoxOpenClosesItAndMovesTheCursor() {

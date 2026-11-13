@@ -1776,6 +1776,49 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code Ctrl+End}, Eclipse's own key, puts the caret on the empty line Eclipse shows after the
+     * final newline, which Neovim does not have: Neovim's cursor goes to the end of the last line
+     * ({@code DocumentPositions.offsetToCursor}), and the caret follows it there. Neovim's cursor
+     * stayed on line 1 before, so the next {@code x} deleted a character there.
+     */
+    @Test
+    void ctrlEndPutsTheCursorOnTheLastLineNeovimHas() {
+        Event end = new Event();
+        end.keyCode = SWT.END;
+        end.stateMask = SWT.CTRL;
+        end.doit = true;
+        widget.notifyListeners(SWT.KeyDown, end);
+        waitUntil("Neovim's cursor on line 3", TIMEOUT_MS, () -> cursorLine() == 3);
+        waitUntil("the caret on line 3", TIMEOUT_MS, () -> widget.getLineAtOffset(widget.getCaretOffset()) == 2);
+        type(widget, "x");
+        expectText("alpha\nbeta\ngamm\n");
+    }
+
+    /**
+     * {@code Down} from the last line in insert mode puts the caret on the empty line Eclipse shows
+     * after the final newline, and Eclipse types there. Neovim has no such line, so at Esc the
+     * typed text is replayed as a new line after the end of the last line it has
+     * ({@code InsertReplay.Plan.typedOnANewLineAfter}): Neovim gets the same lines, and its cursor
+     * ends on the {@code z}, where Vim leaves it. The replay failed before, and the cursor stayed on
+     * {@code gamma}.
+     */
+    @Test
+    void textTypedOnTheEmptyLastLineBecomesALineOfNeovims() throws Exception {
+        typeSlowly("GA");
+        waitUntil("insert mode", TIMEOUT_MS, () -> "i".equals(session.getMode()));
+        Event down = new Event();
+        down.keyCode = SWT.ARROW_DOWN;
+        down.doit = true;
+        widget.notifyListeners(SWT.KeyDown, down);
+        typeSlowly("z");
+        escape(widget);
+        settle();
+        expectText("alpha\nbeta\ngamma\nz");
+        assertEquals(List.of("alpha", "beta", "gamma", "z"), session.getBufferLines());
+        waitUntil("Neovim's cursor on the z", TIMEOUT_MS, () -> cursorLine() == 4);
+    }
+
+    /**
      * Neovim's {@code 'modified'} follows the editor's dirty flag: a change in Eclipse sets it, a
      * save in Eclipse clears it, so {@code :update} writes what Eclipse would save.
      */

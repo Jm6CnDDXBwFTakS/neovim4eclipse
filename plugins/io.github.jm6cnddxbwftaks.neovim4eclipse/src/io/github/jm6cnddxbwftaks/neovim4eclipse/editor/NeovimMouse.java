@@ -156,7 +156,7 @@ final class NeovimMouse {
      * on sends nothing; presses and releases are always sent (Neovim counts the presses).
      */
     private void send(MouseInput.Action action, Event event, boolean always) {
-        int[] position = DocumentPositions.offsetToLineCol(document.get(),
+        int[] position = DocumentPositions.offsetToCursor(document.get(),
                 toDocument.applyAsInt(widgetOffsetAt(widget, event.x, event.y)));
         if (!always && lastPosition != null && lastPosition[0] == position[0] && lastPosition[1] == position[1]) {
             return;

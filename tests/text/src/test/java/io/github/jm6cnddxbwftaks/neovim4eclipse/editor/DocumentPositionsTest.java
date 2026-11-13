@@ -30,6 +30,22 @@ class DocumentPositionsTest {
         assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToLineCol(null, 3));
     }
 
+    /**
+     * The empty line Eclipse shows after a final newline is no line of Neovim's: Neovim's cursor
+     * goes to the end of the last line instead, in bytes. Every other offset is as offsetToLineCol.
+     */
+    @Test
+    void theCursorStaysOnALineNeovimHas() {
+        IDocument text = new Document("alpha\nbeté\n");
+        assertArrayEquals(new int[] { 2, 5 }, DocumentPositions.offsetToCursor(text, text.getLength()), "the empty third line");
+        assertArrayEquals(new int[] { 2, 5 }, DocumentPositions.offsetToCursor(text, 999));
+        assertArrayEquals(new int[] { 2, 5 }, DocumentPositions.offsetToCursor(text, 10), "after the é: the same place");
+        assertArrayEquals(new int[] { 1, 2 }, DocumentPositions.offsetToCursor(text, 2));
+        IDocument noFinalNewline = new Document("alpha\nbeta");
+        assertArrayEquals(new int[] { 2, 4 }, DocumentPositions.offsetToCursor(noFinalNewline, 999));
+        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToCursor(null, 3));
+    }
+
     @Test
     void byteColumnsRoundTrip() throws Exception {
         for (int offset = 0; offset <= doc.getLength(); offset++) {

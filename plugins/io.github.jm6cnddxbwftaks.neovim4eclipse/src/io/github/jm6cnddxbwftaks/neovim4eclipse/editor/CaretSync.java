@@ -176,7 +176,7 @@ final class CaretSync implements DocumentPush.Caret {
             return;
         }
         try {
-            int[] lineCol = DocumentPositions.offsetToLineCol(document.get(), cursorModelOffset());
+            int[] lineCol = DocumentPositions.offsetToCursor(document.get(), cursorModelOffset());
             session.setCursorAsync(lineCol[0], lineCol[1]);
         } catch (Exception e) {
             LOG.log(Level.FINE, "Eclipse→Neovim cursor failed", e);
@@ -208,7 +208,7 @@ final class CaretSync implements DocumentPush.Caret {
         ui.syncExec(() -> {
             IDocument doc = document.get();
             if (!disposed && !caret.isDisposed() && doc != null) {
-                lineCol[0] = DocumentPositions.offsetToLineCol(doc, cursorModelOffset());
+                lineCol[0] = DocumentPositions.offsetToCursor(doc, cursorModelOffset());
             }
         });
         if (lineCol[0] == null) {

@@ -7,6 +7,7 @@ import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.FinalNewlines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Utf8Columns;
 
@@ -42,6 +43,39 @@ final class DocumentPositions {
             return new int[] { line0 + 1, Utf8Columns.charToByteIndex(content, charCol) };
         } catch (BadLocationException e) {
             return new int[] { 1, 0 };
+        }
+    }
+
+    /**
+     * Eclipse offset to where Neovim's cursor goes: {@link #offsetToLineCol}, kept inside Neovim's
+     * lines. For every place that moves Neovim's cursor to an Eclipse position (a click, the caret
+     * moved by an Eclipse command, an attach).
+     *
+     * <p>Why: a file that ends with a line break shows one more line in Eclipse than Neovim has, an
+     * empty one after the final newline ({@link FinalNewlines#neovimLineCount}). Eclipse puts the
+     * caret there (a click below the text, {@code Ctrl+End}, {@code Down} from the last line), but
+     * Neovim refuses a cursor on a line it does not have, so the cursor stayed where it was, and the
+     * next {@code x} edited that line instead. That position goes to the end of Neovim's last line
+     * instead, the nearest place Neovim has, as a click below the text does in Vim.
+     *
+     * <p>Example: in {@code "alpha\nbeta\n"}, offset 11 (the empty third line Eclipse shows) is
+     * {@code {2, 4}}, the end of {@code beta}; Neovim puts its normal-mode cursor on the {@code a}.
+     */
+    static int[] offsetToCursor(IDocument doc, int offset) {
+        int[] lineCol = offsetToLineCol(doc, offset);
+        if (doc == null) {
+            return lineCol;
+        }
+        int lines = FinalNewlines.neovimLineCount(doc);
+        if (lineCol[0] <= lines) {
+            return lineCol;
+        }
+        try {
+            IRegion last = doc.getLineInformation(lines - 1);
+            String content = doc.get(last.getOffset(), last.getLength());
+            return new int[] { lines, Utf8Columns.charToByteIndex(content, content.length()) };
+        } catch (BadLocationException e) {
+            return lineCol;
         }
     }
 

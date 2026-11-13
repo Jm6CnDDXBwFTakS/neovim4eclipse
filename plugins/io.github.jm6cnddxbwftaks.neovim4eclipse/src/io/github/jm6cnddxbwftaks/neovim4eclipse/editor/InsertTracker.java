@@ -74,10 +74,19 @@ final class InsertTracker implements IDocumentListener {
         reset();
     }
 
+    /**
+     * Where the replay types, when the insert began on the empty line Eclipse shows after a final
+     * newline: the end of Neovim's last line ({@code {line1Based, byteCol0Based}}), since Neovim has
+     * no such line ({@link InsertReplay.Plan#typedOnANewLineAfter}); {@code null} otherwise. Decided
+     * at the first change, while the document still has Neovim's lines.
+     */
+    private int[] newLineAfter;
+
     /** Forgets the current window; the next eligible change starts a new one. */
     void reset() {
         before = null;
         changePending = false;
+        newLineAfter = null;
     }
 
     @Override
@@ -94,6 +103,7 @@ final class InsertTracker implements IDocumentListener {
                 firstLine = document.getLineOfOffset(windowStart);
                 before = document.get(windowStart, windowEnd - windowStart);
                 base = offset - windowStart;
+                newLineAfter = endOfNeovimsLastLineIfPast(offset);
             } else {
                 cover(offset, end);
             }
@@ -126,7 +136,7 @@ final class InsertTracker implements IDocumentListener {
                 return null;
             }
             InsertReplay.Plan plan = InsertReplay.plan(before, windowNow(), base, caretOffset - windowStart);
-            return plan == null ? null : plan.withLineOffset(firstLine);
+            return plan == null ? null : onNeovimsLines(plan.withLineOffset(firstLine));
         } finally {
             reset();
         }
@@ -145,13 +155,28 @@ final class InsertTracker implements IDocumentListener {
             if (before != null && coverCaret(caretOffset)) {
                 InsertReplay.SyncPoint inWindow = InsertReplay.syncPoint(before, windowNow(), base,
                         caretOffset - windowStart);
-                typed = inWindow.typed() == null ? null : inWindow.typed().withLineOffset(firstLine);
+                typed = inWindow.typed() == null ? null : onNeovimsLines(inWindow.typed().withLineOffset(firstLine));
             }
-            int[] caret = DocumentPositions.offsetToLineCol(document, caretOffset);
+            int[] caret = DocumentPositions.offsetToCursor(document, caretOffset);
             return new InsertReplay.SyncPoint(typed, caret[0], caret[1], document.getNumberOfLines());
         } finally {
             reset();
         }
+    }
+
+    /** {@code plan}, typed where Neovim has a line ({@link #newLineAfter}). */
+    private InsertReplay.Plan onNeovimsLines(InsertReplay.Plan plan) {
+        return newLineAfter == null ? plan : plan.typedOnANewLineAfter(newLineAfter[0], newLineAfter[1]);
+    }
+
+    /**
+     * The end of Neovim's last line, if {@code offset} lies past it, on the empty line Eclipse
+     * shows after a final newline; else {@code null}. The cursor rule decides
+     * ({@link DocumentPositions#offsetToCursor}): it moves such an offset onto an earlier line.
+     */
+    private int[] endOfNeovimsLastLineIfPast(int offset) throws BadLocationException {
+        int[] cursor = DocumentPositions.offsetToCursor(document, offset);
+        return cursor[0] < document.getLineOfOffset(offset) + 1 ? cursor : null;
     }
 
     /** The window's text in the document now. */

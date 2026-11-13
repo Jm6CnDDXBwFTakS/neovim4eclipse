@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- In a file that ends with a line break, Eclipse shows an empty line after the last one, which
+  Neovim does not have. A click there or below the text, and `Ctrl+End`, left Neovim's cursor where
+  it was, so the next key (`x`, `dd`) changed that line instead; the cursor now goes to the end of
+  the last line, as in Vim. Text typed on that empty line in insert mode now becomes Neovim's new
+  last line, with the cursor on it after Esc.
+
 ## [0.2.17] - 2026-11-12
 
 ### Fixed

@@ -348,9 +348,11 @@ gets in your way:
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`
    creates it.
 4. **The line after a final newline.** Eclipse shows an empty line after a file's final newline,
-   where Neovim has none, so motions cannot reach it (`G` stops on the line above). A file without
-   a final newline keeps none, as with Vim's `'noeol'`: `o` on its last line adds an empty line that
-   motions do reach.
+   where Neovim has none, so motions cannot reach it (`G` stops on the line above, as in Vim). Where
+   Eclipse puts the caret there (a click below the text, `Ctrl+End`), Neovim's cursor goes to the
+   end of the last line, as a click below the text does in Vim; text typed there in insert mode
+   becomes a new last line, as after `A` and Enter. A file without a final newline keeps none, as
+   with Vim's `'noeol'`: `o` on its last line adds an empty line that motions do reach.
 5. **Other Vim plug-ins (Vrapper).** Installed together with [Vrapper](https://github.com/vrapper/vrapper),
    Neovim for Eclipse gets the keys while it is attached: each key is handled once, by Neovim
    (tried with Vrapper 0.74.0 on Eclipse 4.34). Vrapper's own mode display stays in the status bar,

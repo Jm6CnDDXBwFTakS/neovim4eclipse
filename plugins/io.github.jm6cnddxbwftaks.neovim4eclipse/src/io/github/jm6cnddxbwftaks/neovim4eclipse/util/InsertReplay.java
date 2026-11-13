@@ -56,6 +56,24 @@ public final class InsertReplay {
         public Plan withLineOffset(int lines) {
             return new Plan(textChunks, baseLine1Based + lines, baseCol0Based, finalLine1Based + lines, finalCol0Based);
         }
+
+        /**
+         * The same text, typed as a new line after the end of line {@code line1Based} (at byte
+         * column {@code byteCol0Based}, that line's end): an Enter first, then the text, as Vim's
+         * {@code A}, Enter and the text. The final cursor stays.
+         *
+         * <p>Why: for text typed on the empty line Eclipse shows after a file's final newline,
+         * which Neovim does not have ({@code sync/FinalNewlines.neovimLineCount}). Neovim has no
+         * place to type it at, so the replay failed: {@code .} missed the text, and the cursor
+         * stayed off it. Example: {@code z} typed on that line of {@code "alpha\nbeta\n"} is
+         * replayed as Enter and {@code z} after the {@code a} of {@code beta}.
+         */
+        public Plan typedOnANewLineAfter(int line1Based, int byteCol0Based) {
+            List<String> chunks = new ArrayList<>(textChunks.size() + 1);
+            chunks.add("\r"); // Enter, as toTextChunks writes a line break
+            chunks.addAll(textChunks);
+            return new Plan(List.copyOf(chunks), line1Based, byteCol0Based, finalLine1Based, finalCol0Based);
+        }
     }
 
     /**

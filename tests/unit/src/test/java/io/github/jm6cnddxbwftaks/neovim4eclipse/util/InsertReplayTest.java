@@ -245,4 +245,11 @@ class InsertReplayTest {
     private static List<Integer> asList(int[] pair) {
         return List.of(pair[0], pair[1]);
     }
+
+    /** Text typed where Neovim has no line becomes Enter and the text after the end of a line it has. */
+    @Test
+    void aPlanTypedOnANewLineStartsWithEnterAndKeepsItsFinalCursor() {
+        InsertReplay.Plan plan = new InsertReplay.Plan(List.of("ab"), 4, 0, 4, 1).typedOnANewLineAfter(3, 5);
+        assertEquals(new InsertReplay.Plan(List.of("\r", "ab"), 3, 5, 4, 1), plan);
+    }
 }

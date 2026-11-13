@@ -56,6 +56,35 @@ class InsertTrackerTest {
         assertEquals(4, plan.baseCol0Based());
     }
 
+    /**
+     * Text typed on the empty line Eclipse shows after the final newline: Neovim has no such line,
+     * so the replay types it as a new line after the end of {@code gamma}, the last line Neovim has
+     * (an Enter first). The final cursor is on the {@code z}, as the plain plan has it.
+     */
+    @Test
+    void textTypedOnTheEmptyLineAfterTheFinalNewlineIsANewLineForNeovim() throws Exception {
+        edit(17, 0, "z"); // "alpha\nbeta\ngamma\nz"
+        InsertReplay.Plan plain = InsertReplay.plan(wholeBefore, document.get(), firstOffset, 18);
+        InsertReplay.Plan plan = tracker.consumePlan(18);
+        assertEquals(List.of("\r", "z"), plan.textChunks());
+        assertEquals(3, plan.baseLine1Based());
+        assertEquals(5, plan.baseCol0Based(), "the end of gamma");
+        assertEquals(plain.finalLine1Based(), plan.finalLine1Based());
+        assertEquals(plain.finalCol0Based(), plan.finalCol0Based());
+        assertEquals(4, plan.finalLine1Based(), "on the z");
+    }
+
+    /** The same at a sync point ({@code Ctrl+W} after the text): typed as a new line too. */
+    @Test
+    void aSyncPointOnTheEmptyLineAfterTheFinalNewlineTypesANewLine() throws Exception {
+        edit(17, 0, "zz");
+        InsertReplay.SyncPoint sync = tracker.consumeSyncPoint(19);
+        assertEquals(List.of("\r", "zz"), sync.typed().textChunks());
+        assertEquals(3, sync.typed().baseLine1Based());
+        assertEquals(4, sync.caretLine1Based());
+        assertEquals(2, sync.caretCol0Based());
+    }
+
     @Test
     void enterTypedMakesTheWindowGrow() throws Exception {
         edit(8, 0, "\n"); // "be" / "ta"

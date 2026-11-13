@@ -813,6 +813,12 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   so a file keeps (or lacks) its final newline exactly as it had it. It cannot be read from the text at
   each edit: after `o` on the last line of `"a"`, the text `"a\n"` is `["a", ""]` without a final
   newline, not `["a"]` with one (class comment on `util/LineTextUtil`). Later pushes send it that way too.
+  With a final newline, Eclipse shows one line more than Neovim has, an empty one after it
+  (`FinalNewlines.neovimLineCount`). A caret Eclipse puts there (a click below the text, `Ctrl+End`)
+  becomes Neovim's cursor at the end of its last line (`editor/DocumentPositions.offsetToCursor`, used
+  wherever an Eclipse position becomes Neovim's cursor), since Neovim refuses a cursor on a line it
+  does not have; and text typed there is replayed at Esc as Enter and the text after that line's end
+  (`InsertReplay.Plan.typedOnANewLineAfter`).
 - **Line breaks inside a Neovim line:** Neovim keeps a carriage return inside a line (`Ctrl-V Ctrl-M`,
   `:s/x/\=nr2char(13)/`, a put of a register holding one); Eclipse's document takes it as a line
   break. So `"\ra"` is one line in Neovim and two in Eclipse, and every line below it would be

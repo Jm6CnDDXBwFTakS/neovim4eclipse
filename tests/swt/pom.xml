@@ -190,6 +190,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CommandLineBox.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ClipboardBridge.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/sync/FinalNewlines.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimMouse.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/FoldMirror.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CursorStyleController.java</include>
