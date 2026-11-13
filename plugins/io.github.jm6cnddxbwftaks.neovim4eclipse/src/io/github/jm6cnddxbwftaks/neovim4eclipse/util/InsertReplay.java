@@ -58,6 +58,16 @@ public final class InsertReplay {
         }
 
         /**
+         * The same plan, with Neovim's cursor ending at {@code line1Based} and {@code byteCol0Based}
+         * once the text is typed. Example: Esc with the caret on the empty line Eclipse shows after
+         * a final newline, which Neovim does not have: the cursor ends at the end of Neovim's last
+         * line instead ({@code editor/InsertTracker}).
+         */
+        public Plan endingAt(int line1Based, int byteCol0Based) {
+            return new Plan(textChunks, baseLine1Based, baseCol0Based, line1Based, byteCol0Based);
+        }
+
+        /**
          * The same text, typed as a new line after the end of line {@code line1Based} (at byte
          * column {@code byteCol0Based}, that line's end): an Enter first, then the text, as Vim's
          * {@code A}, Enter and the text. The final cursor stays.

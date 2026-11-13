@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +26,7 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
@@ -1397,8 +1399,43 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** @param line1Based 1-based line; @param col0Based 0-based UTF-8 byte column */
     public void setCursor(int line1Based, int col0Based) throws Exception {
-        await(api.winSetCursor(Handle.CURRENT_WINDOW, new WinCursor(line1Based, col0Based)));
-        state.rememberCursor(new CursorPos(line1Based, col0Based));
+        WinCursor placed = new WinCursor(line1Based, col0Based);
+        try {
+            await(api.winSetCursor(Handle.CURRENT_WINDOW, placed));
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof NeovimErrorException refused)) {
+                throw e;
+            }
+            placed = onTheLastLine(line1Based, refused);
+        }
+        state.rememberCursor(new CursorPos(placed.row(), placed.col()));
+    }
+
+    /**
+     * The safety net of {@link #setCursor}: Neovim refused a cursor, and if that was because the
+     * line is past its last one, the cursor goes to the end of the last line instead, and that is
+     * returned; any other refusal is thrown on. Costs nothing on the usual path: only a refusal
+     * asks for the line count.
+     *
+     * <p>Why: the editor keeps the positions it sends on Neovim's lines
+     * ({@code editor/DocumentPositions.offsetToCursor}), but Eclipse shows one line more than Neovim
+     * has after a final newline, and a position computed some other way can still name that line.
+     * Example: the cursor after Esc was counted in the document's own text, and named line 4 of a
+     * three-line buffer; the refusal broke off the rest of Esc's work. Neovim knows its own line
+     * count, so this holds for every caller, today's and later ones.
+     */
+    private WinCursor onTheLastLine(int line1Based, NeovimErrorException refused) throws Exception {
+        Handle buffer = Handle.buffer(0); // the current window's buffer
+        int last = await(api.bufLineCount(buffer));
+        if (line1Based <= last) {
+            throw refused; // not a line past the end: a real error
+        }
+        List<String> lastLine = await(api.bufGetLines(buffer, last - 1, last, true));
+        int end = lastLine.isEmpty() ? 0 : lastLine.get(0).getBytes(StandardCharsets.UTF_8).length;
+        WinCursor placed = new WinCursor(last, end);
+        await(api.winSetCursor(Handle.CURRENT_WINDOW, placed));
+        LOG.fine(() -> "cursor line " + line1Based + " is past Neovim's last line, " + last + "; put at its end");
+        return placed;
     }
 
     public CursorPos getCursor() throws Exception {

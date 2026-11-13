@@ -1819,6 +1819,28 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Esc with the caret on the empty line after the final newline, after typing on line 1
+     * ({@code Ctrl+End} in insert mode is Eclipse's): the cursor after Esc was counted in the
+     * document's text as line 4, which Neovim refused, and the rest of Esc's work was broken off.
+     * It ends at the end of the last line now ({@code InsertTracker}), and the insert ends cleanly.
+     */
+    @Test
+    void escWithTheCaretOnTheEmptyLastLineEndsOnTheLastLine() throws Exception {
+        typeSlowly("ix");
+        Event end = new Event();
+        end.keyCode = SWT.END;
+        end.stateMask = SWT.CTRL;
+        end.doit = true;
+        widget.notifyListeners(SWT.KeyDown, end);
+        escape(widget);
+        settle();
+        expectText("xalpha\nbeta\ngamma\n");
+        assertEquals(List.of("xalpha", "beta", "gamma"), session.getBufferLines());
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
+        waitUntil("Neovim's cursor on line 3", TIMEOUT_MS, () -> cursorLine() == 3);
+    }
+
+    /**
      * Neovim's {@code 'modified'} follows the editor's dirty flag: a change in Eclipse sets it, a
      * save in Eclipse clears it, so {@code :update} writes what Eclipse would save.
      */

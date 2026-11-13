@@ -122,6 +122,11 @@ public final class MsgpackNeovimApi implements NeovimApi {
     }
 
     @Override
+    public CompletableFuture<Integer> bufLineCount(Handle buffer) {
+        return call(answer -> integer("nvim_buf_line_count", answer), "nvim_buf_line_count", buffer);
+    }
+
+    @Override
     public CompletableFuture<List<String>> bufGetLines(Handle buffer, int start, int end, boolean strict) {
         return call(answer -> {
             List<?> lines = list("nvim_buf_get_lines", answer, "a list of lines");

@@ -252,4 +252,10 @@ class InsertReplayTest {
         InsertReplay.Plan plan = new InsertReplay.Plan(List.of("ab"), 4, 0, 4, 1).typedOnANewLineAfter(3, 5);
         assertEquals(new InsertReplay.Plan(List.of("\r", "ab"), 3, 5, 4, 1), plan);
     }
+
+    @Test
+    void aPlanEndingElsewhereKeepsItsTextAndBase() {
+        assertEquals(new InsertReplay.Plan(List.of("ab"), 1, 0, 3, 5),
+                new InsertReplay.Plan(List.of("ab"), 1, 0, 4, 0).endingAt(3, 5));
+    }
 }

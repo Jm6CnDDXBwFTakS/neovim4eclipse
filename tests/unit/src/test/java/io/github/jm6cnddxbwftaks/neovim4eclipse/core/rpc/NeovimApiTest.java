@@ -134,6 +134,13 @@ class NeovimApiTest {
     }
 
     @Test
+    void bufLineCountAnswersAnInteger() throws Exception {
+        answer = 3L;
+        assertEquals(3, get(api.bufLineCount(Handle.buffer(0))));
+        assertSent("nvim_buf_line_count", Handle.buffer(0));
+    }
+
+    @Test
     void cursorIsRowAndColumn() throws Exception {
         answer = List.of(2L, 3L);
         assertEquals(new WinCursor(2, 3), get(api.winGetCursor(Handle.window(1000))));

@@ -16,23 +16,23 @@ class DocumentPositionsTest {
     private final IDocument doc = new Document("aé b\nline2\n");
 
     @Test
-    void offsetToLineColCountsUtf8Bytes() {
-        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToLineCol(doc, 0));
+    void offsetToCursorCountsUtf8Bytes() {
+        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToCursor(doc, 0));
         // "aé" is 2 chars but 3 bytes, so the space after it is char 2 and byte 3.
-        assertArrayEquals(new int[] { 1, 3 }, DocumentPositions.offsetToLineCol(doc, 2));
-        assertArrayEquals(new int[] { 2, 2 }, DocumentPositions.offsetToLineCol(doc, 7));
+        assertArrayEquals(new int[] { 1, 3 }, DocumentPositions.offsetToCursor(doc, 2));
+        assertArrayEquals(new int[] { 2, 2 }, DocumentPositions.offsetToCursor(doc, 7));
     }
 
     @Test
     void offsetsOutsideTheDocumentAreClamped() {
-        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToLineCol(doc, -5));
-        assertArrayEquals(new int[] { 3, 0 }, DocumentPositions.offsetToLineCol(doc, 999));
-        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToLineCol(null, 3));
+        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToCursor(doc, -5));
+        assertArrayEquals(new int[] { 2, 5 }, DocumentPositions.offsetToCursor(doc, 999), "the end of line2");
+        assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToCursor(null, 3));
     }
 
     /**
      * The empty line Eclipse shows after a final newline is no line of Neovim's: Neovim's cursor
-     * goes to the end of the last line instead, in bytes. Every other offset is as offsetToLineCol.
+     * goes to the end of the last line instead, in bytes.
      */
     @Test
     void theCursorStaysOnALineNeovimHas() {
@@ -46,10 +46,14 @@ class DocumentPositionsTest {
         assertArrayEquals(new int[] { 1, 0 }, DocumentPositions.offsetToCursor(null, 3));
     }
 
+    /**
+     * Every offset on a line Neovim has comes back as itself. The last one, the empty line after the
+     * final newline, is the end of the line above for Neovim (the test before).
+     */
     @Test
     void byteColumnsRoundTrip() throws Exception {
-        for (int offset = 0; offset <= doc.getLength(); offset++) {
-            int[] lineCol = DocumentPositions.offsetToLineCol(doc, offset);
+        for (int offset = 0; offset < doc.getLength(); offset++) {
+            int[] lineCol = DocumentPositions.offsetToCursor(doc, offset);
             assertEquals(offset, DocumentPositions.byteColToOffset(doc, lineCol[0], lineCol[1]), "offset " + offset);
         }
     }
@@ -58,11 +62,11 @@ class DocumentPositionsTest {
     void byteColumnsRoundTripOnTextWithTabsAndWideCharacters() throws Exception {
         IDocument sample = VimText.parse(VimText.SAMPLE).document();
         String text = sample.get();
-        for (int offset = 0; offset <= sample.getLength(); offset++) {
+        for (int offset = 0; offset < sample.getLength(); offset++) { // the last: the empty line after the final newline
             if (offset > 0 && Character.isHighSurrogate(text.charAt(offset - 1))) {
                 continue; // between the two halves of 😀: not a place a caret can be
             }
-            int[] lineCol = DocumentPositions.offsetToLineCol(sample, offset);
+            int[] lineCol = DocumentPositions.offsetToCursor(sample, offset);
             assertEquals(offset, DocumentPositions.byteColToOffset(sample, lineCol[0], lineCol[1]), "offset " + offset);
         }
     }
@@ -70,7 +74,7 @@ class DocumentPositionsTest {
     @Test
     void anEmojiIsFourBytes() {
         VimText t = VimText.parse("smile 😀| end");
-        assertArrayEquals(new int[] { 1, 10 }, DocumentPositions.offsetToLineCol(t.document(), t.caret()));
+        assertArrayEquals(new int[] { 1, 10 }, DocumentPositions.offsetToCursor(t.document(), t.caret()));
     }
 
     @Test

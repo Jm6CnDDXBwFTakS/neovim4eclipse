@@ -11,6 +11,7 @@ import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.IRegion;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.FinalNewlines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 
 /**
@@ -164,9 +165,21 @@ final class InsertTracker implements IDocumentListener {
         }
     }
 
-    /** {@code plan}, typed where Neovim has a line ({@link #newLineAfter}). */
+    /**
+     * {@code plan} on lines Neovim has, once the document is pushed: typed there
+     * ({@link #newLineAfter}), and ending there. The plan counts lines in the document's own text,
+     * which includes the empty line Eclipse shows after a final newline; Neovim has no such line.
+     * Example: {@code x} typed on line 1, then the caret moved down to that empty line, then Esc:
+     * the cursor would end on line 4 of a three-line buffer, and ends at the end of line 3 instead,
+     * as {@link DocumentPositions#offsetToCursor} puts any position there.
+     */
     private InsertReplay.Plan onNeovimsLines(InsertReplay.Plan plan) {
-        return newLineAfter == null ? plan : plan.typedOnANewLineAfter(newLineAfter[0], newLineAfter[1]);
+        InsertReplay.Plan typed = newLineAfter == null ? plan : plan.typedOnANewLineAfter(newLineAfter[0], newLineAfter[1]);
+        if (typed.finalLine1Based() <= FinalNewlines.neovimLineCount(document)) {
+            return typed;
+        }
+        int[] end = DocumentPositions.offsetToCursor(document, document.getLength());
+        return typed.endingAt(end[0], end[1]);
     }
 
     /**

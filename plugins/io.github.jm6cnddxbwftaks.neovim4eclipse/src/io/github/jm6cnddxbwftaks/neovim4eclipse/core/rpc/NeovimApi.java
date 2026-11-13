@@ -137,6 +137,9 @@ public interface NeovimApi {
      */
     CompletableFuture<Void> bufSetLines(Handle buffer, int start, int end, boolean strict, List<String> lines);
 
+    /** {@code nvim_buf_line_count(buffer)}: how many lines it has, 1 for an empty buffer. */
+    CompletableFuture<Integer> bufLineCount(Handle buffer);
+
     /** {@code nvim_win_get_cursor(window)}: see {@link WinCursor} for the bases. */
     CompletableFuture<WinCursor> winGetCursor(Handle window);
 

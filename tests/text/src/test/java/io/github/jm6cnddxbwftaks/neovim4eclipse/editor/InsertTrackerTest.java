@@ -74,6 +74,21 @@ class InsertTrackerTest {
         assertEquals(4, plan.finalLine1Based(), "on the z");
     }
 
+    /**
+     * Esc with the caret moved down to the empty line after the final newline, after typing on line
+     * 1: the cursor ends at the end of {@code gamma}, the last line Neovim has, not on a line 4 it
+     * does not have.
+     */
+    @Test
+    void escOnTheEmptyLineAfterTheFinalNewlineEndsOnNeovimsLastLine() throws Exception {
+        edit(0, 0, "x"); // "xalpha\nbeta\ngamma\n"
+        InsertReplay.Plan plan = tracker.consumePlan(document.getLength());
+        assertEquals(List.of("x"), plan.textChunks());
+        assertEquals(1, plan.baseLine1Based());
+        assertEquals(3, plan.finalLine1Based());
+        assertEquals(5, plan.finalCol0Based(), "the end of gamma");
+    }
+
     /** The same at a sync point ({@code Ctrl+W} after the text): typed as a new line too. */
     @Test
     void aSyncPointOnTheEmptyLineAfterTheFinalNewlineTypesANewLine() throws Exception {

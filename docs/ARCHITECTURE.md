@@ -818,7 +818,11 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   becomes Neovim's cursor at the end of its last line (`editor/DocumentPositions.offsetToCursor`, used
   wherever an Eclipse position becomes Neovim's cursor), since Neovim refuses a cursor on a line it
   does not have; and text typed there is replayed at Esc as Enter and the text after that line's end
-  (`InsertReplay.Plan.typedOnANewLineAfter`).
+  (`InsertReplay.Plan.typedOnANewLineAfter`), and a cursor after Esc counted there ends at that end
+  (`InsertTracker`). `offsetToCursor` is the only offset-to-position conversion the editor can call.
+  Behind them, `NeovimSession.setCursor` has a safety net for a position computed some other way:
+  when Neovim refuses a line past its last one, the cursor goes to the end of the last line (only a
+  refusal costs the extra calls).
 - **Line breaks inside a Neovim line:** Neovim keeps a carriage return inside a line (`Ctrl-V Ctrl-M`,
   `:s/x/\=nr2char(13)/`, a put of a register holding one); Eclipse's document takes it as a line
   break. So `"\ra"` is one line in Neovim and two in Eclipse, and every line below it would be

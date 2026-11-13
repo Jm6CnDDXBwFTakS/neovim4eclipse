@@ -26,11 +26,14 @@ final class DocumentPositions {
     }
 
     /**
-     * Eclipse offset to Neovim position.
+     * Eclipse offset to a position in Eclipse's lines, in Neovim's units: the step before
+     * {@link #offsetToCursor}. Private, so that every position sent to Neovim goes through that
+     * method and stays on a line Neovim has: this one also gives the empty line Eclipse shows after
+     * a final newline, which Neovim does not have.
      *
      * @return {@code {line1Based, byteColumn0Based}}; the column is a UTF-8 byte offset, clamped to the line
      */
-    static int[] offsetToLineCol(IDocument doc, int offset) {
+    private static int[] offsetToLineCol(IDocument doc, int offset) {
         if (doc == null) {
             return new int[] { 1, 0 };
         }
@@ -47,9 +50,10 @@ final class DocumentPositions {
     }
 
     /**
-     * Eclipse offset to where Neovim's cursor goes: {@link #offsetToLineCol}, kept inside Neovim's
-     * lines. For every place that moves Neovim's cursor to an Eclipse position (a click, the caret
-     * moved by an Eclipse command, an attach).
+     * Eclipse offset to where Neovim's cursor goes: a 1-based line and a UTF-8 byte column, kept
+     * inside Neovim's lines. The one conversion from an Eclipse offset to a Neovim position, for every
+     * place that moves Neovim's cursor to an Eclipse position (a click, the caret moved by an Eclipse
+     * command, an attach, the re-typing at Esc).
      *
      * <p>Why: a file that ends with a line break shows one more line in Eclipse than Neovim has, an
      * empty one after the final newline ({@link FinalNewlines#neovimLineCount}). Eclipse puts the

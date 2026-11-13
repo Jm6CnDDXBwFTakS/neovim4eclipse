@@ -213,6 +213,21 @@ class NeovimSessionIntegrationTest {
 
     // ---- keys handed to the IDE, command output ----
 
+    /**
+     * The safety net of {@link NeovimSession#setCursor}: a line past Neovim's last one puts the
+     * cursor at the end of the last line (normal mode: on its last character), and the session
+     * remembers that place; any other refusal is still an error.
+     */
+    @Test
+    void aCursorPastTheLastLineGoesToTheEndOfIt() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha", "beté"));
+            s.setCursor(5, 0);
+            assertEquals(new CursorPos(2, 3), s.getCursor(), "on the é, its last character (bytes 3 and 4)");
+            assertThrows(Exception.class, () -> s.setCursor(0, 0), "line 0 is no line past the end");
+        }
+    }
+
     /** Neovim's own gd, for files without Open Declaration: the mapping is bypassed. */
     @Test
     void neovimsOwnGdJumpsToTheFirstUseOfTheWord() throws Exception {
