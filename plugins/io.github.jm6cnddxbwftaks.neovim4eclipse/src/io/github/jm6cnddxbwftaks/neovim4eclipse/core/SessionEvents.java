@@ -37,6 +37,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<ViewportPort.WrapChange> wrapListeners = new ListenerList<>("wrap", Level.WARNING);
     private final ListenerList<ViewportPort.TopLine> topLineListeners = new ListenerList<>("top line", Level.WARNING);
     private final ListenerList<SearchPort.Matches> searchListeners = new ListenerList<>("search matches", Level.WARNING);
+    private final ListenerList<SearchPort.Highlights> highlightsListeners = new ListenerList<>("highlights", Level.WARNING);
 
     // ---- firing ----
 
@@ -88,6 +89,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** The attached window's visible search matches changed (see {@link SearchPort#addSearchListener}). */
     void search(SearchPort.Matches matches) {
         searchListeners.fire(matches);
+    }
+
+    /** The attached window's highlights changed (see {@link SearchPort#addHighlightsListener}). */
+    void highlights(SearchPort.Highlights highlights) {
+        highlightsListeners.fire(highlights);
     }
 
     /** Neovim's window scrolled (see {@link ViewportPort#addTopLineListener}). */
@@ -206,6 +212,14 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeSearchListener(Consumer<SearchPort.Matches> listener) {
         searchListeners.remove(listener);
+    }
+
+    void addHighlightsListener(Consumer<SearchPort.Highlights> listener) {
+        highlightsListeners.add(listener);
+    }
+
+    void removeHighlightsListener(Consumer<SearchPort.Highlights> listener) {
+        highlightsListeners.remove(listener);
     }
 
     void addTopLineListener(Consumer<ViewportPort.TopLine> listener) {

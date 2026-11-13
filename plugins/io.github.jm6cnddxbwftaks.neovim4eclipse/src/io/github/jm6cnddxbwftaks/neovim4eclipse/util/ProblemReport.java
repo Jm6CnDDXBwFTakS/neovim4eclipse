@@ -63,7 +63,7 @@ public record ProblemReport(String plugin, String eclipse, String java, String s
      */
     public static final List<String> INIT_SETTINGS = List.of("neovim4eclipse_ide_keys", "neovim4eclipse_folds",
             "neovim4eclipse_viewport", "neovim4eclipse_problems", "neovim4eclipse_search_highlight",
-            "neovim4eclipse_task_tags");
+            "neovim4eclipse_highlights", "neovim4eclipse_task_tags");
 
     /** The text to paste into an issue, with {@code home} written as {@code ~} throughout. */
     public String text(String home) {

@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- The editor shows the flash after a yank (`vim.hl.on_yank` in your `init.lua`) and your window
+  matches (`:match`, `matchadd()`), in the colors of their Neovim group, over search matches as in
+  Neovim. `vim.g.neovim4eclipse_highlights = 0` turns this off.
+
 ## [0.2.18] - 2026-11-13
 
 ### Fixed

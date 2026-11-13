@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.util.List;
 import java.util.function.Consumer;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
 /**
@@ -38,6 +39,22 @@ public interface SearchPort {
     void removeSearchListener(Consumer<Matches> listener);
 
     /**
+     * Whether Neovim's own highlights are reported (the yank flash, window matches; see
+     * {@link LuaScripts#HIGHLIGHTS}): {@code true} unless the user's config sets
+     * {@code vim.g.neovim4eclipse_highlights = 0} (or {@code false}). Read once when the session
+     * starts. {@link #resendSearchAsync} and {@link #setSearchViewAsync} serve them too.
+     */
+    boolean highlightsEnabled();
+
+    /**
+     * Hears the attached editor's window's highlights, on a session thread (hop to the UI thread
+     * yourself), lowest priority first. An empty list means none.
+     */
+    void addHighlightsListener(Consumer<Highlights> listener);
+
+    void removeHighlightsListener(Consumer<Highlights> listener);
+
+    /**
      * Has Neovim send the matches of {@code buffer}'s window again, after every key queued before:
      * the editor is back in Neovim mode and has none painted. Matches are otherwise sent only when
      * they change, or when the window or buffer is entered (an attach). Nothing when
@@ -65,6 +82,18 @@ public interface SearchPort {
 
         public Matches {
             matches = List.copyOf(matches);
+        }
+    }
+
+    /**
+     * The highlights Neovim's window shows for buffer {@code bufnr}.
+     *
+     * @param bufnr      Neovim's buffer number
+     * @param highlights lowest priority first: the last one lies on top
+     */
+    record Highlights(int bufnr, List<NeovimHighlight> highlights) {
+        public Highlights {
+            highlights = List.copyOf(highlights);
         }
     }
 

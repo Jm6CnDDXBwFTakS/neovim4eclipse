@@ -61,6 +61,7 @@ class SettingsNamesTest {
             Map.entry("vim.g.neovim4eclipse_viewport", List.of(LUA, "vim.g.neovim4eclipse_viewport")),
             Map.entry("vim.g.neovim4eclipse_problems", List.of(LUA, "vim.g.neovim4eclipse_problems")),
             Map.entry("vim.g.neovim4eclipse_search_highlight", List.of(LUA, "vim.g.neovim4eclipse_search_highlight")),
+            Map.entry("vim.g.neovim4eclipse_highlights", List.of(LUA, "vim.g.neovim4eclipse_highlights")),
             Map.entry("vim.g.neovim4eclipse_task_tags", List.of(LUA, "vim.g.neovim4eclipse_task_tags")),
             // set by the plug-in, read by a user's config
             // In backticks: every vim.g.neovim4eclipse_* row of the README contains the bare name.

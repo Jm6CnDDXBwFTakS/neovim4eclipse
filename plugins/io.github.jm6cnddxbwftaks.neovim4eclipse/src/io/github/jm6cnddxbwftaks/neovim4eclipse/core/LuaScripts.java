@@ -4071,6 +4071,240 @@ final class LuaScripts {
             """;
 
     /**
+     * Neovim's own highlights that the editor shows besides search matches
+     * (docs/design/SEARCH_HIGHLIGHTING.md, "The yank flash and window matches"): the flash after a
+     * yank, and the window's matches. Run once at start, after the user's config; returns
+     * {@code false} (and installs nothing) when the config sets
+     * {@code vim.g.neovim4eclipse_highlights = 0} (or {@code false}).
+     *
+     * <p><b>What.</b>
+     * <ul>
+     *   <li>The yank flash: {@code vim.hl.on_yank}, which a user's {@code TextYankPost}
+     *       autocommand calls (kickstart.nvim has one), puts an extmark in the namespace
+     *       {@code nvim.hlyank} over the yanked text, group {@code IncSearch} unless the user names
+     *       another, priority 200, and removes it after its timeout (150 ms by default). Neovim
+     *       never flashes on its own.</li>
+     *   <li>The window's matches ({@code getmatches()}): {@code :match}, {@code :2match},
+     *       {@code matchadd()} with a pattern, {@code matchaddpos()} with positions. Example:
+     *       {@code :match Error /\s\+$/} marks trailing white space. A pattern is found with
+     *       {@code matchbufline()} after {@code \C} and {@code \m}, since a match ignores
+     *       {@code 'ignorecase'} and {@code 'magic'}, which {@code matchbufline()} follows.</li>
+     *   <li>Not the matches of matchparen (group {@code MatchParen}), on by default: Eclipse's code
+     *       editors mark the matching bracket themselves, and two marks would clash.</li>
+     * </ul>
+     *
+     * <p><b>Colors.</b> The group's own, its links followed ({@code nvim_get_hl} with
+     * {@code link = false}): the background, and the text color when the group sets one, since
+     * Neovim pairs them (the default {@code IncSearch} is a light yellow with dark text, which a dark
+     * Eclipse theme's light text could not be read on). A group without a 24-bit background (a
+     * colorscheme for terminals only) is not shown. The colors are read at each update, not kept:
+     * {@code :highlight Mine guibg=#112233} after the {@code :match} changes no colorscheme, but
+     * redraws, and the new color is sent as a change.
+     *
+     * <p><b>Which lines, and when.</b> As {@link #SEARCH}: the window's visible lines and the
+     * editor's ({@code M.set_view}, sent with {@link #SEARCH_VIEW}), worked out in work that a
+     * decoration provider's {@code on_win} schedules at each redraw (a flash's extmark comes and
+     * goes, {@code :match} redraws), and sent only when they changed; with highlights, the buffer's
+     * change count counts as part of them, so they are sent again after an edit, which may have made
+     * the editor drop one it touched. {@code M.resend()} ({@link #SEARCH_RESEND}) sends them in any
+     * case.
+     *
+     * <p>Sent: {@code eclipse_highlights(buf, ranges, win)}, where {@code ranges} is a flat list of
+     * six numbers per highlight, lowest priority first: start line (1-based), start byte column
+     * (0-based), end line, end byte column (0-based, exclusive), background and text color
+     * ({@code 0xRRGGBB}; the text color -1 when the group sets none). Example: the flash of
+     * {@code yy} on line 2, {@code "abc"}, with the default {@code IncSearch}:
+     * {@code {2, 0, 2, 3, 0xFCE094, 0x07080D}}. A flash over whole lines ends at the end of its last
+     * line, not at the start of the next one: a line-wise yank of the last line would name a line
+     * the document does not have.
+     */
+    static final String HIGHLIGHTS = """
+            local enabled = vim.g.neovim4eclipse_highlights
+            if enabled == 0 or enabled == false then
+              return false
+            end
+            local M = {}
+            -- What each window was last sent, as text, so that only a change is sent.
+            local sent = {}
+            -- The lines each window's editor shows, { top, bottom }, as Eclipse last reported them.
+            local views = {}
+
+            local function notify(...)
+              local chan = vim.g.neovim4eclipse_channel
+              if chan then
+                vim.rpcnotify(chan, ...)
+              end
+            end
+
+            local ns = vim.api.nvim_create_namespace('neovim4eclipse_highlights')
+            -- Neovim's own namespace for the flash: creating it again gives the same id.
+            local yank_ns = vim.api.nvim_create_namespace('nvim.hlyank')
+
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_highlights', { clear = true })
+            vim.api.nvim_create_autocmd({ 'WinEnter', 'BufWinEnter' }, {
+              group = group,
+              callback = function()
+                sent[vim.api.nvim_get_current_win()] = nil
+              end,
+            })
+            vim.api.nvim_create_autocmd('WinClosed', {
+              group = group,
+              callback = function(ev)
+                local win = tonumber(ev.match)
+                sent[win] = nil
+                views[win] = nil
+              end,
+            })
+            -- A group's colors, { bg, fg }, or false for a group without a 24-bit background; looked up
+            -- once per update in colors, a table of that update's own.
+            local function color(colors, name)
+              if colors[name] == nil then
+                local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+                if ok and hl.bg then
+                  colors[name] = { hl.bg, hl.fg or -1 }
+                else
+                  colors[name] = false
+                end
+              end
+              return colors[name]
+            end
+
+            -- The highlights of win between lines top and bottom (1-based), added to out as
+            -- { priority, line, col, endline, endcol, bg, fg }, seen keeping each one once.
+            local function collect(win, buf, top, bottom, out, seen, colors)
+              local function add(priority, l1, c1, l2, c2, name)
+                if l2 < l1 or (l2 == l1 and c2 <= c1) then
+                  return -- no width: nothing to paint
+                end
+                local rgb = color(colors, name)
+                if not rgb then
+                  return
+                end
+                local key = table.concat({ l1, c1, l2, c2, name }, ':')
+                if not seen[key] then
+                  seen[key] = true
+                  out[#out + 1] = { priority, l1, c1, l2, c2, rgb[1], rgb[2] }
+                end
+              end
+              local marks = vim.api.nvim_buf_get_extmarks(buf, yank_ns, { top - 1, 0 }, { bottom - 1, -1 },
+                { details = true, overlap = true })
+              for _, m in ipairs(marks) do
+                local d = m[4]
+                if d.hl_group and d.end_row then
+                  local l2, c2 = d.end_row + 1, d.end_col
+                  if c2 == 0 and d.end_row > m[2] then
+                    -- Up to the start of the next line: the end of the line before it instead.
+                    l2 = d.end_row
+                    c2 = #(vim.api.nvim_buf_get_lines(buf, l2 - 1, l2, false)[1] or '')
+                  end
+                  add(d.priority or 4096, m[2] + 1, m[3], l2, c2, d.hl_group)
+                end
+              end
+              local ok, list = pcall(vim.fn.getmatches, win)
+              for _, m in ipairs(ok and list or {}) do
+                if m.group ~= 'MatchParen' then
+                  local priority = m.priority or 10
+                  if m.pattern then
+                    local pok, found = pcall(vim.fn.matchbufline, buf, '\\\\C\\\\m' .. m.pattern, top, bottom)
+                    for _, f in ipairs(pok and found or {}) do
+                      add(priority, f.lnum, f.byteidx, f.lnum, f.byteidx + #f.text, m.group)
+                    end
+                  else
+                    local i = 1
+                    while m['pos' .. i] do
+                      local p = m['pos' .. i]
+                      local lnum = p[1]
+                      if lnum >= top and lnum <= bottom then
+                        local text = vim.api.nvim_buf_get_lines(buf, lnum - 1, lnum, false)[1] or ''
+                        if p[2] then
+                          add(priority, lnum, p[2] - 1, lnum, math.min(#text, p[2] - 1 + (p[3] or 1)), m.group)
+                        else
+                          add(priority, lnum, 0, lnum, #text, m.group) -- {lnum} alone: the whole line
+                        end
+                      end
+                      i = i + 1
+                    end
+                  end
+                end
+              end
+            end
+
+            --- Sends win's highlights even if they did not change: the editor that shows them was just
+            --- attached, or Neovim mode is back on, and has none painted. Scheduled, as on_win's work is.
+            function M.resend(win)
+              win = win or vim.api.nvim_get_current_win()
+              sent[win] = nil
+              vim.schedule(function()
+                pcall(M.update, win)
+              end)
+            end
+
+            --- The lines the editor of win shows (1-based): looked at along with Neovim's own visible lines.
+            function M.set_view(win, top, bottom)
+              win = win or vim.api.nvim_get_current_win()
+              views[win] = { top, bottom }
+              vim.schedule(function()
+                pcall(M.update, win)
+              end)
+            end
+
+            --- Works out win's highlights and sends them if they changed. Returns the flat list sent.
+            function M.update(win)
+              win = win or vim.api.nvim_get_current_win()
+              if not vim.api.nvim_win_is_valid(win) then
+                return {}
+              end
+              local buf = vim.api.nvim_win_get_buf(win)
+              local last = vim.api.nvim_buf_line_count(buf)
+              local found, seen, colors = {}, {}, {}
+              collect(win, buf, vim.fn.line('w0', win), vim.fn.line('w$', win), found, seen, colors)
+              local view = views[win]
+              if view then
+                local top, bottom = math.max(1, view[1]), math.min(last, view[2])
+                if top <= bottom then
+                  collect(win, buf, top, bottom, found, seen, colors)
+                end
+              end
+              -- Lowest priority first: Eclipse paints them in order, so the highest lies on top.
+              table.sort(found, function(a, b)
+                if a[1] ~= b[1] then
+                  return a[1] < b[1]
+                end
+                return a[2] < b[2] or (a[2] == b[2] and a[3] < b[3])
+              end)
+              local ranges = {}
+              for _, h in ipairs(found) do
+                vim.list_extend(ranges, { h[2], h[3], h[4], h[5], h[6], h[7] })
+              end
+              local key = table.concat(ranges, ',')
+              if #ranges > 0 then
+                key = key .. '@' .. vim.api.nvim_buf_get_changedtick(buf)
+              end
+              if sent[win] ~= key then
+                sent[win] = key
+                notify('eclipse_highlights', buf, ranges, win)
+              end
+              return ranges
+            end
+
+            local scheduled = false
+            vim.api.nvim_set_decoration_provider(ns, {
+              on_win = function()
+                if not scheduled then
+                  scheduled = true
+                  vim.schedule(function()
+                    scheduled = false
+                    pcall(M.update)
+                  end)
+                end
+                return false -- no on_line calls: nothing is drawn here
+              end,
+            })
+            package.loaded['neovim4eclipse.highlights'] = M
+            return true
+            """;
+
+    /**
      * The rows and columns Neovim's screen has besides the current window's text,
      * {@code { rows, columns }}; see {@link #VIEWPORT}'s {@code overhead}. Sent only when the
      * viewport is on, so the module is there.
@@ -4080,32 +4314,43 @@ final class LuaScripts {
             """;
 
     /**
-     * Sends the current window's visible search matches again ({@link #SEARCH}'s {@code resend}),
-     * for the editor just attached or back in Neovim mode, which has none painted (argument:
-     * the buffer number). Nothing when that buffer is not the current one. Sent only when search
-     * highlighting is on, so the module is there.
+     * Sends the current window's visible search matches and highlights again ({@link #SEARCH}'s and
+     * {@link #HIGHLIGHTS}'s {@code resend}), for the editor just attached or back in Neovim mode,
+     * which has none painted (argument: the buffer number). Nothing when that buffer is not the
+     * current one. Each module only when it is on (it is then loaded).
      */
     static final String SEARCH_RESEND = """
             local buf = tonumber((select(1, ...)))
             if vim.api.nvim_get_current_buf() ~= buf then
               return
             end
-            require('neovim4eclipse.search').resend()
+            for _, name in ipairs({ 'neovim4eclipse.search', 'neovim4eclipse.highlights' }) do
+              local m = package.loaded[name]
+              if m then
+                m.resend()
+              end
+            end
             """;
 
     /**
-     * The lines the editor shows, which {@link #SEARCH} searches along with the window's own
-     * (arguments: the buffer number, the first and the last line, 1-based, as strings). Nothing
-     * when that buffer is not the current one. Example: with the viewport feature off, Neovim's
-     * window shows lines 1 to 40 and the editor, scrolled with its scroll bar, 200 to 240; both
-     * ranges are searched, so the editor's lines are highlighted.
+     * The lines the editor shows, which {@link #SEARCH} searches, and {@link #HIGHLIGHTS} looks at,
+     * along with the window's own (arguments: the buffer number, the first and the last line,
+     * 1-based, as strings). Nothing when that buffer is not the current one. Example: with the
+     * viewport feature off, Neovim's window shows lines 1 to 40 and the editor, scrolled with its
+     * scroll bar, 200 to 240; both ranges are searched, so the editor's lines are highlighted. Each
+     * module only when it is on (it is then loaded).
      */
     static final String SEARCH_VIEW = """
             local buf, top, bottom = tonumber((select(1, ...))), tonumber((select(2, ...))), tonumber((select(3, ...)))
             if vim.api.nvim_get_current_buf() ~= buf then
               return
             end
-            require('neovim4eclipse.search').set_view(nil, top, bottom)
+            for _, name in ipairs({ 'neovim4eclipse.search', 'neovim4eclipse.highlights' }) do
+              local m = package.loaded[name]
+              if m then
+                m.set_view(nil, top, bottom)
+              end
+            end
             """;
 
     /**

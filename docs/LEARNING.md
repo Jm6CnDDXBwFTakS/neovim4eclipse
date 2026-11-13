@@ -861,6 +861,14 @@ registry still holds a default, the editor's own background has the last word
 (`OverlayColors.searchMatch`), for dark editors outside Eclipse's dark theme. Design:
 [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
 
+The flash after `yy` goes the same way, with two differences. What Neovim reports is an extmark,
+not a search: `vim.hl.on_yank` (from the user's `TextYankPost` autocommand) puts one in the
+namespace `nvim.hlyank`, and `LuaScripts.HIGHLIGHTS` lists that namespace's extmarks in the visible
+lines (`nvim_buf_get_extmarks`), with the window's `:match` matches. And the color is Neovim's: the
+group's (`IncSearch`) background and text color, read with `nvim_get_hl`, sent as numbers
+(`0xFCE094`, `0x07080D`) and painted by `editor/NeovimHighlighter`, a second presentation listener.
+150 ms later Neovim's timer deletes the extmark, the window redraws, and an empty list clears it.
+
 ### 3.2f `:vsplit`: a Vim split as an editor stack
 
 `test.txt` is open and attached; the user types `:vsplit` and Enter.

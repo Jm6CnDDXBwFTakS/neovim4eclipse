@@ -333,7 +333,29 @@ you were. The matches are highlighted as in Neovim: every match of what you type
 search (`'hlsearch'`) until `:noh`, behind the text in an amber (darker in a dark editor;
 change it under *Window → Preferences → General → Appearance → Colors and Fonts → Neovim for
 Eclipse → Search match*), a box around the match under the caret. `vim.g.neovim4eclipse_search_highlight = 0` in `init.lua` turns this off
-([design](design/SEARCH_HIGHLIGHTING.md)). A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's live
+([design](design/SEARCH_HIGHLIGHTING.md)).
+
+The editor also shows two kinds of highlight you set up in your `init.lua`, in the colors of their
+Neovim group (its background, and its text color when the group has one): the flash over the text
+you yank, which `vim.hl.on_yank` makes, and your window matches (`:match`, `:2match`, `matchadd()`,
+`matchaddpos()`). They lie over search matches, as in Neovim. Neovim's matching-bracket highlight
+(matchparen) is left out: the code editors mark the matching bracket themselves.
+`vim.g.neovim4eclipse_highlights = 0` turns these off. For example:
+
+```lua
+-- Flash the yanked text, as kickstart.nvim does
+vim.api.nvim_create_autocmd('TextYankPost', {
+  callback = function() vim.hl.on_yank() end,
+})
+-- Mark trailing white space in red, in every window (a :match belongs to one window)
+vim.api.nvim_create_autocmd('BufWinEnter', {
+  callback = function() vim.cmd([[match Error /\s\+$/]]) end,
+})
+```
+
+A group with no background of its own (`ErrorMsg` sets only a text color) shows nothing.
+
+A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's live
 preview of it (`'inccommand'`) is not shown in the editor. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
 Up and Down in the box browse the same history.
 

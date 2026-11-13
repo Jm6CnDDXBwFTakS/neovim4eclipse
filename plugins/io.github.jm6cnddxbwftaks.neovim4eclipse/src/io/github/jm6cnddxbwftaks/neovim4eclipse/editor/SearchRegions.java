@@ -5,6 +5,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
@@ -99,24 +101,54 @@ final class SearchRegions {
      * list, or becomes -1 when it was dropped.
      */
     static Moved moved(List<IRegion> regions, int current, int offset, int removed, int inserted) {
-        int delta = inserted - removed;
         int newCurrent = -1;
         List<IRegion> out = new ArrayList<>(regions.size());
         for (int i = 0; i < regions.size(); i++) {
-            IRegion r = regions.get(i);
-            int start = r.getOffset();
-            int end = start + r.getLength();
-            if (end <= offset) {
-                out.add(r); // before the change
-            } else if (start >= offset + removed) {
-                out.add(new Region(start + delta, r.getLength())); // after it (text typed right before it included)
-            } else {
-                continue; // the change touches the match, which is dropped
+            IRegion r = movedRegion(regions.get(i), offset, removed, inserted);
+            if (r == null) {
+                continue;
             }
+            out.add(r);
             if (i == current) {
                 newCurrent = out.size() - 1;
             }
         }
         return new Moved(List.copyOf(out), newCurrent);
+    }
+
+    /**
+     * The same as {@link #moved} for regions that carry something along (a highlight's colors):
+     * each item's region, from {@code region}, moves or is dropped as {@link #moved} decides, and
+     * {@code withRegion} makes the item again with the moved region. Example: a highlight at 10 to
+     * 13 and {@code xx} typed at 2 comes back at 12 to 15, with its colors.
+     */
+    static <T> List<T> follow(List<T> items, Function<T, IRegion> region, BiFunction<T, IRegion, T> withRegion,
+            int offset, int removed, int inserted) {
+        List<T> out = new ArrayList<>(items.size());
+        for (T item : items) {
+            IRegion before = region.apply(item);
+            IRegion after = movedRegion(before, offset, removed, inserted);
+            if (after != null) {
+                out.add(after == before ? item : withRegion.apply(item, after));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /**
+     * {@code r} after the change: itself when it lies before the change, moved by the difference
+     * when after it (text typed right before it included), {@code null} when the change touches it
+     * (its text is no longer what Neovim matched).
+     */
+    private static IRegion movedRegion(IRegion r, int offset, int removed, int inserted) {
+        int start = r.getOffset();
+        int end = start + r.getLength();
+        if (end <= offset) {
+            return r;
+        }
+        if (start >= offset + removed) {
+            return new Region(start + inserted - removed, r.getLength());
+        }
+        return null;
     }
 }

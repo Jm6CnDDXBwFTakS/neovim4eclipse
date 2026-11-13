@@ -14,6 +14,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
 /**
@@ -148,6 +149,13 @@ final class NotificationBridge implements Incoming {
         void onSearchMatches(int bufnr, List<SearchMatch> matches, int winid);
 
         /**
+         * The highlights that window {@code winid}, showing buffer {@code bufnr}, has in its visible
+         * lines changed ({@link LuaScripts#HIGHLIGHTS}), lowest priority first; empty when there are
+         * none.
+         */
+        void onHighlights(int bufnr, List<NeovimHighlight> highlights, int winid);
+
+        /**
          * Neovim's window {@code winid}, which shows buffer {@code bufnr}, has {@code line1} (1-based) as its top
          * line now: it scrolled ({@code Ctrl-E}, {@code zt}), or the cursor report carried it. Comes
          * before the cursor of the same report, so that the editor scrolls first and the caret then
@@ -221,6 +229,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_viewport" -> sink.onViewportOverheadChanged();
             case "eclipse_topline" -> onTopLine(args);
             case "eclipse_search" -> onSearch(args);
+            case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
             case "eclipse_echo" -> onEcho(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
@@ -330,6 +339,31 @@ final class NotificationBridge implements Incoming {
             }
         }
         sink.onSearchMatches(buf, matches, window(args, 2));
+    }
+
+    /**
+     * Payload: {@code [bufnr, ranges, winid]}, from {@link LuaScripts#HIGHLIGHTS}: {@code ranges}
+     * holds six numbers per highlight (start line, start byte, end line, end byte, background, text
+     * color or -1). An incomplete last group is left out.
+     */
+    private void onHighlights(List<?> args) {
+        Integer buf = args.isEmpty() ? null : toInt(args.get(0));
+        if (buf == null || args.size() < 2 || !(args.get(1) instanceof List<?> flat)) {
+            return;
+        }
+        List<NeovimHighlight> highlights = new ArrayList<>(flat.size() / 6);
+        for (int i = 0; i + 5 < flat.size(); i += 6) {
+            Integer l1 = toInt(flat.get(i));
+            Integer c1 = toInt(flat.get(i + 1));
+            Integer l2 = toInt(flat.get(i + 2));
+            Integer c2 = toInt(flat.get(i + 3));
+            Integer bg = toInt(flat.get(i + 4));
+            Integer fg = toInt(flat.get(i + 5));
+            if (l1 != null && c1 != null && l2 != null && c2 != null && bg != null && fg != null) {
+                highlights.add(new NeovimHighlight(new SearchMatch(l1, c1, l2, c2), bg, fg));
+            }
+        }
+        sink.onHighlights(buf, highlights, window(args, 2));
     }
 
     /** Payload: {@code [bufnr, line1, winid]}, from {@link LuaScripts#VIEWPORT}'s {@code WinScrolled}. */

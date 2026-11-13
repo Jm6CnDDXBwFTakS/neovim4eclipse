@@ -430,7 +430,10 @@ The matches Neovim highlights are painted in the editor too: `LuaScripts.SEARCH`
 window's visible lines at each redraw (a decoration provider's `on_win`) and sends
 `eclipse_search` when they change; `SearchPort` hands them to the attached editor, whose
 `editor/SearchHighlighter` merges a background into the viewer's text presentation, so the syntax
-colors stay. Design: [SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
+colors stay. Neovim's own highlights from the user's config, the flash after a yank and window
+matches (`:match`), take the same way (`LuaScripts.HIGHLIGHTS`, `eclipse_highlights`,
+`editor/NeovimHighlighter`), in their Neovim group's colors. Design:
+[SEARCH_HIGHLIGHTING.md](design/SEARCH_HIGHLIGHTING.md).
 
 
 ## Status bar items

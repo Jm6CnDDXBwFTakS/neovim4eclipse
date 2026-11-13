@@ -39,6 +39,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
@@ -155,6 +156,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@link #initialize}, before the session is handed out.
      */
     private volatile boolean searchEnabled;
+    /**
+     * Whether Neovim's own highlights are reported ({@link SearchPort#highlightsEnabled()}): the
+     * answer of {@link LuaScripts#HIGHLIGHTS}, run once at start after the user's config. Written
+     * once, as {@link #searchEnabled}.
+     */
+    private volatile boolean highlightsEnabled;
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -322,6 +329,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             // And for search highlighting (docs/design/SEARCH_HIGHLIGHTING.md, "Turning it off").
             session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
             LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search_highlight)"));
+            // And for the yank flash and window matches (the same doc, "The yank flash and window matches").
+            session.highlightsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.HIGHLIGHTS, List.of())));
+            LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
             Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
             session.nvimManagesClipboard = managesSystemClipboard(
                     clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -1196,8 +1206,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     @Override
+    public boolean highlightsEnabled() {
+        return highlightsEnabled;
+    }
+
+    @Override
+    public void addHighlightsListener(Consumer<Highlights> listener) {
+        events.addHighlightsListener(listener);
+    }
+
+    @Override
+    public void removeHighlightsListener(Consumer<Highlights> listener) {
+        events.removeHighlightsListener(listener);
+    }
+
+    @Override
     public void setSearchViewAsync(DocumentBuffer buffer, int top1, int bottom1) {
-        if (!searchEnabled || top1 < 1 || bottom1 < top1) {
+        if (!(searchEnabled || highlightsEnabled) || top1 < 1 || bottom1 < top1) {
             return;
         }
         if (pendingSearchView.offer(new View(buffer, top1, bottom1))) {
@@ -1214,7 +1239,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void resendSearchAsync(DocumentBuffer buffer) {
-        if (!searchEnabled) {
+        if (!(searchEnabled || highlightsEnabled)) {
             return;
         }
         submit("search matches again for " + buffer.name(), Level.FINE, () -> {
@@ -1908,6 +1933,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (searchEnabled && buffers.isAttached(winid, bufnr)) {
                 LOG.finest(() -> matches.size() + " search matches in view, buffer " + bufnr);
                 events.search(new Matches(bufnr, matches));
+            }
+        }
+
+        @Override
+        public void onHighlights(int bufnr, List<NeovimHighlight> highlights, int winid) {
+            if (highlightsEnabled && buffers.isAttached(winid, bufnr)) {
+                LOG.finest(() -> highlights.size() + " highlights in view, buffer " + bufnr);
+                events.highlights(new Highlights(bufnr, highlights));
             }
         }
 

@@ -205,12 +205,59 @@ the match's background in both.
 Neovim's `Search` and `CurSearch` groups are not used: their colors suit Neovim's screen, not the
 editor's theme.
 
+## The yank flash and window matches
+
+Two more kinds of highlight users set up in their `init.lua` reach the editor the same way:
+
+- **The flash after a yank.** `vim.hl.on_yank`, which a user's `TextYankPost` autocommand calls
+  (kickstart.nvim has one), puts an extmark in the namespace `nvim.hlyank` over the yanked text,
+  group `IncSearch` unless the user names another, priority 200, and removes it after its timeout
+  (150 ms by default). Neovim never flashes on its own.
+- **Window matches** (`getmatches()`): `:match`, `:2match`, `matchadd()` with a pattern,
+  `matchaddpos()` with positions. Example: `:match Error /\s\+$/` marks trailing white space. A
+  pattern is found with `matchbufline()` after `\C` and `\m`, since a match ignores
+  `'ignorecase'` and `'magic'`, which `matchbufline()` follows.
+- **Not matchparen** (group `MatchParen`), on by default: Eclipse's code editors mark the matching
+  bracket themselves, and two marks would clash.
+
+**Colors: the group's own.** Unlike search matches, which have a color of the plug-in's own, these
+are the user's: the group's colors, its links followed (`nvim_get_hl` with `link = false`). The
+background always; the text color too when the group sets one, as Neovim pairs them. Example: the
+default `IncSearch` is a light yellow (`#FCE094`) with dark text (`#07080D`); under a dark Eclipse
+theme's light syntax colors that background alone could not be read, with its own text color it
+can, and a flash is gone after 150 ms anyway. A group with a background alone (a `:match` group the
+user defines, `Mine guibg=#112233`) keeps the editor's syntax colors. A group without a 24-bit
+background (`ErrorMsg`, which sets only a text color, or a colorscheme for terminals only) is not
+shown. The colors are read at each update, not kept: `:highlight Mine guibg=#445566` after the
+`:match` changes no colorscheme, but redraws, and the new color goes out as a change.
+
+**In Neovim: `LuaScripts.HIGHLIGHTS`**, beside `LuaScripts.SEARCH` and built the same way: a
+decoration provider's `on_win` schedules the work (a flash's extmark comes and goes with a redraw,
+`:match` redraws); the window's visible lines and the editor's are looked at (`SEARCH_VIEW` and
+`SEARCH_RESEND` reach both modules); a change is sent, with the buffer's change count when there
+are highlights. Sent: `eclipse_highlights(buf, ranges, win)`, six numbers per highlight, lowest
+priority first: the range as a search match's, the background and the text color (`-1` for none).
+A flash over whole lines ends at the end of its last line, not at the start of the next one, which
+for the file's last line would be a line the document does not have.
+
+**In Eclipse: `editor/NeovimHighlighter`**, a second presentation listener beside
+`SearchHighlighter`, merging the background and, where set, the text color. The highlights are
+merged lowest priority first, so the last lies on top (the flash, 200, over a match, 10). The viewer
+calls its presentation listeners in the order they were added, and the editor adds this one after
+the search highlighter, so both lie over a search match, as in Neovim, where `'hlsearch'` has the
+lowest priority. Between two reports they follow Eclipse's edits with the search matches'
+arithmetic (`SearchRegions.follow`), are ignored while Eclipse types and asked for again at `Esc`,
+cleared in Eclipse mode and asked for again in Neovim mode, all as for search matches.
+
+`vim.g.neovim4eclipse_highlights = 0` in `init.lua` turns them off, read once at start.
+
 ## Not done
 
 - **No marks in the overview ruler.** Eclipse's own Find overlay (2024-12 and 2026-09) marks none
   either; ruler marks come only from Mark Occurrences and the Search view. They would need every
   match in the file, which costs 8 ms at 10,000 lines and 114 ms at 100,000 at each change.
-- **Other highlights:** the yank flash, `:match`, other plug-ins' extmarks.
+- **Other highlights:** other plug-ins' extmarks (LSP document highlights, vim-illuminate), and
+  matchparen (see above).
 - **`'inccommand'`'s live preview of `:s`** is not shown, as before.
 
 ## Tests
@@ -232,5 +279,14 @@ editor's theme.
 - `SearchHighlightingEndToEndTest`: a search, `n`, `:noh`, Eclipse mode and back, another editor
   and back, Detach and Attach, typing in insert mode with a scroll to another match before `Esc`
   (Neovim's older columns not painted), in a real editor.
+- `tests/unit/src/test/lua/highlights_spec.lua`: the flash with its colors and gone again, a
+  line-wise flash ending at its last line's end (the file's last line too), `:match` in exact case,
+  `matchaddpos()`, matchparen and groups without a background left out, the priority order, only
+  changes sent, the editor's own lines, new colors for a group, `SEARCH_RESEND` and `SEARCH_VIEW`.
+- `NotificationBridgeTest.highlightsComeInGroupsOfSix`, `SearchRegionsTest.followMovesWhatARegionCarriesWithIt`.
+- `NeovimHighlighterTest` (`tests/swt`): both colors or the background alone, the last on top and
+  over a search match, following an edit, clear and dispose.
+- `NeovimHighlightsEndToEndTest`: a `:match` and a yank flash painted and taken away, in a real
+  editor.
 - The manual check `sh-colors`: the gallery's pictures (`SearchGalleryTest`, `-Pgallery`) in a
   light and a dark theme, plain text and the Java editor.

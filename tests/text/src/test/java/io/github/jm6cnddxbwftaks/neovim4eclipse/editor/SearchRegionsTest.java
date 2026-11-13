@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.List;
 
@@ -91,5 +92,20 @@ class SearchRegionsTest {
         assertEquals(1, moved.current());
         assertEquals(List.of(new Region(2, 3)), SearchRegions.moved(twoFoos, -1, 9, 4, 0).regions(),
                 "a deletion over the second match drops it");
+    }
+
+    /** A highlight carried along with its region: moved with its colors, or dropped, as a match is. */
+    record Tagged(IRegion region, String color) {
+    }
+
+    @Test
+    void followMovesWhatARegionCarriesWithIt() {
+        List<Tagged> items = List.of(new Tagged(new Region(2, 3), "red"), new Tagged(new Region(10, 3), "blue"));
+        assertEquals(List.of(new Tagged(new Region(4, 3), "red"), new Tagged(new Region(12, 3), "blue")),
+                SearchRegions.follow(items, Tagged::region, (t, r) -> new Tagged(r, t.color()), 0, 0, 2), "xx typed at the start");
+        assertEquals(List.of(new Tagged(new Region(9, 3), "blue")),
+                SearchRegions.follow(items, Tagged::region, (t, r) -> new Tagged(r, t.color()), 3, 1, 0), "an edit in the first drops it");
+        List<Tagged> after = SearchRegions.follow(items, Tagged::region, (t, r) -> new Tagged(r, t.color()), 20, 0, 1);
+        assertSame(items.get(0), after.get(0), "an item before the change is kept as it is");
     }
 }

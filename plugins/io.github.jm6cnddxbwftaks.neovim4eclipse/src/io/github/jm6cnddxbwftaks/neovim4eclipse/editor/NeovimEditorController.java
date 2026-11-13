@@ -117,7 +117,16 @@ public final class NeovimEditorController implements AutoCloseable {
     /** Paints Neovim's search matches; {@code null} when search highlighting is off or the viewer cannot. */
     private final SearchHighlighter searchHighlighter;
     private final SearchColors searchColors;
-    /** Set when Neovim's matches were ignored while Eclipse typed; cleared when they are asked for again. */
+    /**
+     * Paints Neovim's own highlights (the yank flash, window matches); {@code null} when they are off
+     * or the viewer cannot. Made after {@link #searchHighlighter}, so its colors lie over a search
+     * match's (the viewer calls its presentation listeners in the order they were added).
+     */
+    private final NeovimHighlighter neovimHighlighter;
+    /**
+     * Set when Neovim's matches or highlights were ignored while Eclipse typed; cleared when they are
+     * asked for again (one request serves both: {@link SearchPort#resendSearchAsync}).
+     */
     private volatile boolean searchSkipped;
     /** Neovim's visual selection shown in the widget (native selection or blockwise overlay). */
     private final VisualSelectionView selectionView;
@@ -167,6 +176,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
     private final Consumer<SearchPort.Matches> searchListener = this::onSearchMatches;
+    private final Consumer<SearchPort.Highlights> highlightsListener = this::onHighlights;
     /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
     private volatile String loggedMode;
 
@@ -225,6 +235,8 @@ public final class NeovimEditorController implements AutoCloseable {
             this.searchColors = null;
             this.searchHighlighter = null;
         }
+        this.neovimHighlighter = session.highlightsEnabled() && textViewer != null && SearchHighlighter.supports(textViewer)
+                ? new NeovimHighlighter(textViewer) : null;
 
         this.keyViewer = viewerExtensionOf(editor); // the key interceptor goes there in start()
         // A rename begun in normal mode and accepted with Enter ends the insert typed for it.
@@ -324,6 +336,9 @@ public final class NeovimEditorController implements AutoCloseable {
         if (searchHighlighter != null) {
             session.addSearchListener(searchListener); // the attach's window switch has them sent (SEARCH)
         }
+        if (neovimHighlighter != null) {
+            session.addHighlightsListener(highlightsListener); // as the matches (HIGHLIGHTS)
+        }
 
         modeStatus.addTo(editor.getEditorSite());
 
@@ -333,11 +348,14 @@ public final class NeovimEditorController implements AutoCloseable {
         if (viewport != null) {
             viewport.start(); // after the push: the wrap is for this editor's buffer
         }
+        // After the push, which makes the buffer: the lines this editor shows, then its matches and
+        // highlights, asked for whether or not Neovim's window changed (a re-attach to the same
+        // window fires no WinEnter, and Neovim would send nothing new). Without search highlighting
+        // the highlights take Neovim's visible lines alone.
         if (searchHighlighter != null) {
-            // After the push, which makes the buffer: the lines this editor shows, then its matches,
-            // asked for whether or not Neovim's window changed (a re-attach to the same window
-            // fires no WinEnter, and Neovim would send nothing new).
             searchHighlighter.setViewListener((top1, bottom1) -> session.setSearchViewAsync(buffer, top1, bottom1));
+        }
+        if (searchHighlighter != null || neovimHighlighter != null) {
             session.resendSearchAsync(buffer);
         }
 
@@ -431,11 +449,29 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Whether Neovim's matches must be ignored now: Neovim's lines are behind the document until Esc
-     * (Eclipse types), so its columns are of older text, and painted they would land on the wrong
-     * characters. The highlighter keeps its own matches in step with the typing meanwhile, and the
-     * matches are asked for again once the insert has ended: at the mode change (onModeChanged),
-     * or now if that came already (the Esc is still being handled). Any thread.
+     * Neovim's own highlights in its window's visible lines changed: paint them, under the same
+     * rules as the search matches ({@link #onSearchMatches}). Session thread.
+     */
+    private void onHighlights(SearchPort.Highlights highlights) {
+        if (closed || !neovimModeActive || highlights.bufnr() != buffer.bufnr()) {
+            return;
+        }
+        if (skipWhileEclipseTypes()) {
+            return;
+        }
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed && neovimModeActive && !styledText.isDisposed() && !skipWhileEclipseTypes()) {
+                neovimHighlighter.show(highlights.highlights());
+            }
+        });
+    }
+
+    /**
+     * Whether Neovim's matches (and highlights) must be ignored now: Neovim's lines are behind the
+     * document until Esc (Eclipse types), so its columns are of older text, and painted they would
+     * land on the wrong characters. The highlighter keeps its own matches in step with the typing
+     * meanwhile, and the matches are asked for again once the insert has ended: at the mode change
+     * (onModeChanged), or now if that came already (the Esc is still being handled). Any thread.
      */
     private boolean skipWhileEclipseTypes() {
         if (!eclipseTyping() && !session.isLeavingInsertMode()) {
@@ -454,7 +490,7 @@ public final class NeovimEditorController implements AutoCloseable {
      * insert without a search costs nothing more.
      */
     private void resendSkippedSearch() {
-        if (searchHighlighter != null && searchSkipped) {
+        if ((searchHighlighter != null || neovimHighlighter != null) && searchSkipped) {
             searchSkipped = false;
             session.resendSearchAsync(buffer);
         }
@@ -746,7 +782,7 @@ public final class NeovimEditorController implements AutoCloseable {
             pushDocumentAndCursorAsync(lineCol[0], lineCol[1], false);
             modeStatus.setMode(session.getMode());
             cursorStyle.updateForMode(session.getMode());
-            if (searchHighlighter != null) {
+            if (searchHighlighter != null || neovimHighlighter != null) {
                 session.resendSearchAsync(buffer); // cleared in Eclipse mode
             }
             LOG.info("Mode → NEOVIM (keys to nvim)");
@@ -760,6 +796,9 @@ public final class NeovimEditorController implements AutoCloseable {
             selectionView.clearBlock();
             if (searchHighlighter != null) {
                 searchHighlighter.clear(); // Neovim's search is not Eclipse's: nothing of it stays
+            }
+            if (neovimHighlighter != null) {
+                neovimHighlighter.clear(); // nor are its matches
             }
             LOG.info("Mode → ECLIPSE (keys to IDE)");
         }
@@ -1135,6 +1174,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeWrapListener(wrapListener);
             session.removeTopLineListener(topLineListener);
             session.removeSearchListener(searchListener);
+            session.removeHighlightsListener(highlightsListener);
             if (viewport != null) {
                 session.setLeaveInsertView(null); // the next editor's attach sets its own
             }
@@ -1160,6 +1200,9 @@ public final class NeovimEditorController implements AutoCloseable {
             if (searchHighlighter != null) {
                 searchColors.dispose();
                 searchHighlighter.dispose();
+            }
+            if (neovimHighlighter != null) {
+                neovimHighlighter.dispose();
             }
             if (keyViewer != null) {
                 keyViewer.removeVerifyKeyListener(keyInterceptor);

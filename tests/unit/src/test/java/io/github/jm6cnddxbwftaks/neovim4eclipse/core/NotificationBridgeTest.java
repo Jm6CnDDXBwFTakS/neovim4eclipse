@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
@@ -55,6 +56,7 @@ class NotificationBridgeTest {
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onViewportOverheadChanged() { events.add("overhead"); }
             @Override public void onSearchMatches(int bufnr, List<SearchMatch> matches, int winid) { events.add("search@" + bufnr + ":" + matches + "#" + winid); }
+            @Override public void onHighlights(int bufnr, List<NeovimHighlight> highlights, int winid) { events.add("hl@" + bufnr + ":" + highlights + "#" + winid); }
             @Override public void onTopLine(int bufnr, int line1, int winid) { events.add("top@" + bufnr + ":" + line1 + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
@@ -203,6 +205,21 @@ class NotificationBridgeTest {
         notify("eclipse_search", 3);
         assertEquals(List.of("search@3:" + List.of(new SearchMatch(1, 2, 1, 5), new SearchMatch(3, 0, 4, 3)) + "#1001",
                 "search@3:[]#1001", "search@3:[]#1001"), events);
+    }
+
+    /**
+     * LuaScripts.HIGHLIGHTS: six numbers per highlight (the range, the background, the text color or
+     * -1); an incomplete group or a payload without a list is ignored.
+     */
+    @Test
+    void highlightsComeInGroupsOfSix() {
+        notify("eclipse_highlights", 3, List.of(1, 4, 1, 7, 0xFCE094, 0x07080D, 2, 0, 2, 3, 0x112233, -1), 1001);
+        notify("eclipse_highlights", 3, List.of(), 1001);
+        notify("eclipse_highlights", 3, List.of(1, 4, 1, 7, 0xFCE094), 1001);
+        notify("eclipse_highlights", 3);
+        assertEquals(List.of("hl@3:" + List.of(new NeovimHighlight(new SearchMatch(1, 4, 1, 7), 0xFCE094, 0x07080D),
+                new NeovimHighlight(new SearchMatch(2, 0, 2, 3), 0x112233, NeovimHighlight.NO_COLOR)) + "#1001",
+                "hl@3:[]#1001", "hl@3:[]#1001"), events);
     }
 
     @Test
