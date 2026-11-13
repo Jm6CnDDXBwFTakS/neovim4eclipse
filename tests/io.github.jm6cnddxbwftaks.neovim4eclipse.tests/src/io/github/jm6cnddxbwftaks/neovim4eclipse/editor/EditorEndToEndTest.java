@@ -1776,16 +1776,17 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * {@code Ctrl+End}, Eclipse's own key, puts the caret on the empty line Eclipse shows after the
-     * final newline, which Neovim does not have: Neovim's cursor goes to the end of the last line
-     * ({@code DocumentPositions.offsetToCursor}), and the caret follows it there. Neovim's cursor
-     * stayed on line 1 before, so the next {@code x} deleted a character there.
+     * {@code Ctrl+End} ({@code Cmd+End} on macOS), Eclipse's own key, puts the caret on the empty
+     * line Eclipse shows after the final newline, which Neovim does not have: Neovim's cursor goes
+     * to the end of the last line ({@code DocumentPositions.offsetToCursor}), and the caret follows
+     * it there. Neovim's cursor stayed on line 1 before, so the next {@code x} deleted a character
+     * there.
      */
     @Test
     void ctrlEndPutsTheCursorOnTheLastLineNeovimHas() {
         Event end = new Event();
         end.keyCode = SWT.END;
-        end.stateMask = SWT.CTRL;
+        end.stateMask = SWT.MOD1; // Ctrl+End, Cmd+End on macOS: StyledText's end of the text
         end.doit = true;
         widget.notifyListeners(SWT.KeyDown, end);
         waitUntil("Neovim's cursor on line 3", TIMEOUT_MS, () -> cursorLine() == 3);
@@ -1820,8 +1821,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
     /**
      * Esc with the caret on the empty line after the final newline, after typing on line 1
-     * ({@code Ctrl+End} in insert mode is Eclipse's): the cursor after Esc was counted in the
-     * document's text as line 4, which Neovim refused, and the rest of Esc's work was broken off.
+     * ({@code Ctrl+End}, {@code Cmd+End} on macOS, in insert mode is Eclipse's): the cursor after
+     * Esc was counted in the document's text as line 4, which Neovim refused, and the rest of Esc's
+     * work was broken off.
      * It ends at the end of the last line now ({@code InsertTracker}), and the insert ends cleanly.
      */
     @Test
@@ -1829,7 +1831,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         typeSlowly("ix");
         Event end = new Event();
         end.keyCode = SWT.END;
-        end.stateMask = SWT.CTRL;
+        end.stateMask = SWT.MOD1; // Ctrl+End, Cmd+End on macOS: StyledText's end of the text
         end.doit = true;
         widget.notifyListeners(SWT.KeyDown, end);
         escape(widget);
