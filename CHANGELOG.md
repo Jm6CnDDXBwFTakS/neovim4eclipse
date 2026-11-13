@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.18] - 2026-11-13
+
 ### Fixed
 
 - In a file that ends with a line break, Eclipse shows an empty line after the last one, which

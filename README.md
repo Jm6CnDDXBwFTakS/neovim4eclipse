@@ -11,7 +11,7 @@ Neovim owns editing; Eclipse owns files and rendering.
      shows changes: java releng/tools/marketplace/Marketplace.java pictures (DemoRecordingTest). -->
 ![Neovim editing a Java file in Eclipse: ciw, a recorded macro, :%s, gd to a declaration, content assist in insert mode, a split with Ctrl-W s and :e! to revert](docs/images/demo.gif)
 
-**Status: 0.2.17, an early release.** It works day to day on Linux, macOS and Windows; expect rough
+**Status: 0.2.18, an early release.** It works day to day on Linux, macOS and Windows; expect rough
 edges, see [Known limitations](#known-limitations).
 
 **Documentation**
