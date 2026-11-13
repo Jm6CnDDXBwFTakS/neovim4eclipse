@@ -59,6 +59,13 @@ final class InsertTracker implements IDocumentListener {
     /** The length change of the edit being made, from {@code documentAboutToBeChanged} to {@code documentChanged}. */
     private int pendingDelta;
     private boolean changePending;
+    /**
+     * Where the replay types, when the insert began on the empty line Eclipse shows after a final
+     * newline: the end of Neovim's last line ({@code {line1Based, byteCol0Based}}), since Neovim has
+     * no such line ({@link InsertReplay.Plan#typedOnANewLineAfter}); {@code null} otherwise. Decided
+     * at the first change, while the document still has Neovim's lines.
+     */
+    private int[] newLineAfter;
 
     /**
      * @param eligible whether a change right now is the user typing in a plain Eclipse-driven insert
@@ -74,14 +81,6 @@ final class InsertTracker implements IDocumentListener {
         document.removeDocumentListener(this);
         reset();
     }
-
-    /**
-     * Where the replay types, when the insert began on the empty line Eclipse shows after a final
-     * newline: the end of Neovim's last line ({@code {line1Based, byteCol0Based}}), since Neovim has
-     * no such line ({@link InsertReplay.Plan#typedOnANewLineAfter}); {@code null} otherwise. Decided
-     * at the first change, while the document still has Neovim's lines.
-     */
-    private int[] newLineAfter;
 
     /** Forgets the current window; the next eligible change starts a new one. */
     void reset() {

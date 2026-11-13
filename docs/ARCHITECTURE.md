@@ -817,7 +817,8 @@ older than they are. (Publishing the earlier one after `:w` showed `-- COMMAND -
   (`FinalNewlines.neovimLineCount`). A caret Eclipse puts there (a click below the text, `Ctrl+End`)
   becomes Neovim's cursor at the end of its last line (`editor/DocumentPositions.offsetToCursor`, used
   wherever an Eclipse position becomes Neovim's cursor), since Neovim refuses a cursor on a line it
-  does not have; and text typed there is replayed at Esc as Enter and the text after that line's end
+  does not have; and text typed there is replayed at Esc as Enter and the text after that line's end,
+  less a line break the text ends with, which takes the final newline's place
   (`InsertReplay.Plan.typedOnANewLineAfter`), and a cursor after Esc counted there ends at that end
   (`InsertTracker`). `offsetToCursor` is the only offset-to-position conversion the editor can call.
   Behind them, `NeovimSession.setCursor` has a safety net for a position computed some other way:

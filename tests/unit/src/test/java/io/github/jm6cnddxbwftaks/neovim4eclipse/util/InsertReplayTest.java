@@ -253,6 +253,23 @@ class InsertReplayTest {
         assertEquals(new InsertReplay.Plan(List.of("\r", "ab"), 3, 5, 4, 1), plan);
     }
 
+    /**
+     * A line break at the end of such text takes the final newline's place: {@code z} and Enter make
+     * one line {@code z}, Enter alone one empty line, not two.
+     */
+    @Test
+    void aPlanTypedOnANewLineLeavesOutTheLineBreakItEndsWith() {
+        assertEquals(List.of("\r", "z"),
+                new InsertReplay.Plan(List.of("z\r"), 4, 0, 5, 0).typedOnANewLineAfter(3, 5).textChunks());
+        assertEquals(List.of("\r"),
+                new InsertReplay.Plan(List.of("\r"), 4, 0, 5, 0).typedOnANewLineAfter(3, 5).textChunks());
+        assertEquals(List.of("\r", "ab", "c"),
+                new InsertReplay.Plan(List.of("ab", "c\r"), 4, 0, 5, 0).typedOnANewLineAfter(3, 5).textChunks());
+        assertEquals(List.of("\r", "a\rb"),
+                new InsertReplay.Plan(List.of("a\rb"), 4, 0, 5, 1).typedOnANewLineAfter(3, 5).textChunks(),
+                "a line break inside the text stays");
+    }
+
     @Test
     void aPlanEndingElsewhereKeepsItsTextAndBase() {
         assertEquals(new InsertReplay.Plan(List.of("ab"), 1, 0, 3, 5),

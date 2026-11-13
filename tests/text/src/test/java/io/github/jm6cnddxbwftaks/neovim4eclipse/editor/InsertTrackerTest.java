@@ -75,6 +75,19 @@ class InsertTrackerTest {
     }
 
     /**
+     * {@code z} and Enter on the empty line after the final newline: Neovim gets one line {@code z},
+     * and the cursor ends at its end, as the caret is on the empty line Eclipse shows after it.
+     */
+    @Test
+    void aLineTypedOnTheEmptyLineAfterTheFinalNewlineIsOneLineForNeovim() throws Exception {
+        edit(17, 0, "z\n"); // "alpha\nbeta\ngamma\nz\n"
+        InsertReplay.Plan plan = tracker.consumePlan(document.getLength());
+        assertEquals(List.of("\r", "z"), plan.textChunks());
+        assertEquals(4, plan.finalLine1Based(), "on Neovim's last line, z");
+        assertEquals(1, plan.finalCol0Based());
+    }
+
+    /**
      * Esc with the caret moved down to the empty line after the final newline, after typing on line
      * 1: the cursor ends at the end of {@code gamma}, the last line Neovim has, not on a line 4 it
      * does not have.

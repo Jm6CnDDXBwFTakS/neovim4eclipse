@@ -77,11 +77,26 @@ public final class InsertReplay {
          * place to type it at, so the replay failed: {@code .} missed the text, and the cursor
          * stayed off it. Example: {@code z} typed on that line of {@code "alpha\nbeta\n"} is
          * replayed as Enter and {@code z} after the {@code a} of {@code beta}.
+         *
+         * <p>A line break the text ends with is left out: it takes the place of the final newline
+         * the text was typed after, which Neovim keeps as {@code 'eol'}, not as a line. Example:
+         * {@code z} and Enter typed there make {@code "alpha\nbeta\nz\n"}, Neovim's lines
+         * {@code alpha}, {@code beta}, {@code z}; Enter, {@code z} and Enter would add an empty
+         * fourth line, which {@code .} would then repeat too.
          */
         public Plan typedOnANewLineAfter(int line1Based, int byteCol0Based) {
             List<String> chunks = new ArrayList<>(textChunks.size() + 1);
             chunks.add("\r"); // Enter, as toTextChunks writes a line break
             chunks.addAll(textChunks);
+            String last = chunks.get(chunks.size() - 1);
+            if (chunks.size() > 1 && last.endsWith("\r")) {
+                String rest = last.substring(0, last.length() - 1);
+                if (rest.isEmpty()) {
+                    chunks.remove(chunks.size() - 1);
+                } else {
+                    chunks.set(chunks.size() - 1, rest);
+                }
+            }
             return new Plan(List.copyOf(chunks), line1Based, byteCol0Based, finalLine1Based, finalCol0Based);
         }
     }
