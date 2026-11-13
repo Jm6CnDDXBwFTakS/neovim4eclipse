@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.19] - 2026-11-13
+
 ### Added
 
 - The editor shows the flash after a yank (`vim.hl.on_yank` in your `init.lua`) and your window
