@@ -262,6 +262,13 @@ public final class GalleryCamera {
             double scale = (double) pixelWidth / shell.getBounds().width;
 
             Display display = control.getDisplay();
+            if (shell.getMonitor().getZoom() != display.getPrimaryMonitor().getZoom()) {
+                // The image below is made at the main monitor's zoom: a window drawn at another
+                // monitor's would be cut off, or have room to spare.
+                throw new AssertionError("the window to picture is on a monitor scaled " + shell.getMonitor().getZoom()
+                        + "%, the main one " + display.getPrimaryMonitor().getZoom()
+                        + "%: move it to the main monitor");
+            }
             Image image = new Image(display, (int) Math.ceil(pixelWidth / scale), (int) Math.ceil(pixelHeight / scale));
             try {
                 GC gc = new GC(image);
@@ -271,9 +278,13 @@ public final class GalleryCamera {
                 } finally {
                     gc.dispose();
                 }
-                ImageData whole = image.getImageDataAtCurrentZoom(); // real pixels, at least pixelWidth x pixelHeight
+                // Real pixels: the image's data at the window's zoom (SWT's scale as a percentage, 200
+                // in the example above), which is the zoom the image was made at, so nothing is
+                // rescaled. At least pixelWidth x pixelHeight: a fractional scale rounds the size up.
+                ImageData whole = image.getImageData((int) Math.round(scale * 100));
                 if (whole.width < pixelWidth - 1 || whole.height < pixelHeight - 1) {
-                    // The image's zoom is below the window's: the drawing is cut off. A larger image
+                    // SWT's zoom for the image is below the window's (an integer autoscale that
+                    // rounds 150% down, say): the drawing is cut off or rescaled. A larger image
                     // (a fractional SWT scale rounding up) only has room to spare.
                     throw new AssertionError("the image is " + whole.width + "x" + whole.height + " px for a window of "
                             + pixelWidth + "x" + pixelHeight + " px: the display's scale and the window's differ"
