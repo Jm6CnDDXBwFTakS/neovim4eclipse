@@ -12,6 +12,18 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- For contributors: the repository builds again in Eclipse after a Maven import. The SWT test
+  module's list of plug-in sources missed one class its highlighters use; Maven compiled it anyway,
+  Eclipse did not. The Maven build now compiles only the listed files too, so such a gap fails
+  there first.
+
+### Changed
+
+- For contributors: the GitHub Build workflow tests on Linux; Windows and macOS run when a manual
+  *Run workflow* asks for them (CONTRIBUTING.md, "Continuous integration").
+
 ## [0.2.19] - 2026-11-13
 
 ### Added
