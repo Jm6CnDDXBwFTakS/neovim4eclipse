@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.20] - 2026-11-14
+
 ### Fixed
 
 - For contributors: the repository builds again in Eclipse after a Maven import. The SWT test
