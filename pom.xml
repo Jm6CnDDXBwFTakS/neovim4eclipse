@@ -285,6 +285,20 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
           <version>${maven-compiler-plugin.version}</version>
+          <!-- Compile only the files a module lists, as Eclipse does. tests/unit, tests/text and
+               tests/swt compile some of the plug-in's sources, named one by one in <includes>.
+               The plug-in passes javac the module's source folders as -sourcepath, so javac would
+               also compile any class a listed file uses and the list leaves out; the build passes,
+               while Eclipse, which compiles only the listed files, reports the class missing.
+               Example: tests/swt listed SearchHighlighter but not the SearchRegions it uses.
+               A second -sourcepath replaces the first (javac keeps the last one), here a folder
+               that holds no source, so a forgotten file fails in Maven too: "cannot find symbol". -->
+          <configuration>
+            <compilerArgs>
+              <arg>-sourcepath</arg>
+              <arg>${project.build.directory}/no-implicit-sources</arg>
+            </compilerArgs>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
