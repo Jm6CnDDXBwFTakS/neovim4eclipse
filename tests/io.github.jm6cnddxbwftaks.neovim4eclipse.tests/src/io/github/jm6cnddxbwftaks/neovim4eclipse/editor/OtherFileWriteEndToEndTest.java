@@ -500,7 +500,9 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
                 assertFalse(Pattern.compile("E\\d+:").matcher(messageText(shown)).find(),
                         "no error: " + messageText(shown));
             }
-            assertTrue(List.of(page().getEditors()).contains(editor), "the changed editor stays open");
+            // getEditorReferences, not the deprecated getEditors; getEditor(false) does not restore one.
+            assertTrue(Arrays.stream(page().getEditorReferences()).anyMatch(ref -> ref.getEditor(false) == editor),
+                    "the changed editor stays open");
             assertTrue(editor.isDirty(), "with its changes");
             assertEquals("beta\ngamma\n", document.get());
             assertEquals(List.of(), dialogs);

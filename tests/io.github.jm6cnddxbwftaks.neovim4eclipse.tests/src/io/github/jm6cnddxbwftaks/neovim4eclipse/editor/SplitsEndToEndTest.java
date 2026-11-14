@@ -198,7 +198,8 @@ class SplitsEndToEndTest extends EndToEndTestBase {
     private static String look(MPartStack stack) {
         CTabFolder folder = (CTabFolder) stack.getWidget();
         return String.join(" ", folder.getClass().getSimpleName(), folder.getRenderer().getClass().getSimpleName(),
-                "style=" + folder.getStyle(), "simple=" + folder.getSimple(), "tabHeight=" + folder.getTabHeight(),
+                // No getSimple(): deprecated for removal in SWT 2026-06; the renderer and style cover it.
+                "style=" + folder.getStyle(), "tabHeight=" + folder.getTabHeight(),
                 "font=" + folder.getFont().getFontData()[0], "bg=" + rgb(folder.getBackground()),
                 "fg=" + rgb(folder.getForeground()), "selectionBg=" + rgb(folder.getSelectionBackground()),
                 "selectionFg=" + rgb(folder.getSelectionForeground()), "minimize=" + folder.getMinimizeVisible(),
