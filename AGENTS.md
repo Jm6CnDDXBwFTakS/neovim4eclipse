@@ -12,6 +12,19 @@ Eclipse plug-in and Neovim API concepts, and must stay maintainable by humans fo
 Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNING.md](docs/LEARNING.md)
 (concepts), [docs/KEYBOARD.md](docs/KEYBOARD.md) (key routing).
 
+## How to work
+
+- **Ask when a spec is unclear**: a choice of behavior, a name, a default or text a user sees,
+  before building it, saying what you would assume. Code or docs answer it only if still current:
+  one older than a later change to the same behavior (`git log -- <file>`, `CHANGELOG.md`), or two
+  sources that disagree, is a reason to ask, naming both. Why: a question costs a minute, a wrong
+  guess a rebuild.
+- **Review before the final test run**: once a change is built and its own tests pass, a code
+  review and a security review of the branch's diff (in Claude Code `/code-review`,
+  `/security-review`), then the fixes. At most two rounds (the review, and one over its fixes);
+  list what is left and ask before a third. Then `LikeCi --all` or `-Pall`, last, since review
+  fixes change the code that run must test.
+
 ## Commands
 
 ```bash
