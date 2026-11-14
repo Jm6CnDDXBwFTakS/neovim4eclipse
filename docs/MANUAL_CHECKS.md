@@ -237,6 +237,12 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
    the others without hiding its text. In the picture of Neovim's own highlights, the flash and the
    `:match` read in both themes, in Neovim's colors.
 
+   On macOS the block caret inverts the cell under it: SWT's Cocoa `Canvas` draws a `Caret` as a
+   white rectangle in the Difference blend mode, the same in Eclipse's own editors. On the dark
+   theme's amber the caret's cell turns light blue, and a gray comment letter on it stays gray, as
+   on the `f` of the current match in the dark Java picture. That cell is the caret, not the
+   match: judge the match by its other letters.
+
 **Expect:** each step's result, after its ⇒.
 
 ## Splits
