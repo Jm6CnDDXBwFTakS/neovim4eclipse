@@ -168,8 +168,6 @@ final class NeovimStatusSection {
     private final Supplier<String> configured;
     /** What the note says for a value: {@link NvimProbe#describe}, which looks on disk; tests give their own. */
     private final Function<String, NvimProbe.Note> describe;
-    /** What the button and the links do ({@link Actions}). */
-    private final Actions actions;
 
     /**
      * Fills {@code parent}, a one-column grid, and starts the first probe. Example, as the page
@@ -185,7 +183,6 @@ final class NeovimStatusSection {
             Actions actions) {
         this.configured = configured;
         this.describe = describe;
-        this.actions = actions;
         note = new Label(parent, SWT.WRAP); // wraps at its width hint, as the help below does
         note.setLayoutData(fullRow(WRAP_WIDTH));
         unused = new Label(parent, SWT.WRAP);

@@ -1999,13 +1999,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText("one hree\n");
     }
 
-    /** A left click on the character at {@code offset}, as the mouse sends it. */
-    private void click(int offset) {
-        Point at = pointOf(offset);
-        widget.notifyListeners(SWT.MouseDown, mouse(at, 0));
-        widget.notifyListeners(SWT.MouseUp, mouse(at, SWT.BUTTON1));
-    }
-
     /**
      * Presses the left button on {@code from}, moves to {@code to} in two steps, releases it. Two,
      * as a real drag sends many: on each move StyledText moves the caret (the plug-in sends it to
