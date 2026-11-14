@@ -12,6 +12,7 @@ import java.util.List;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
@@ -57,25 +58,38 @@ class LayoutCheckTest {
         assertEquals(List.of(), LayoutCheck.problems(shell));
     }
 
+    /**
+     * A parent of a known size for a check: a Composite, not the shell. On GTK a shell's new size
+     * reaches its client area only once the window system confirms it, and on a CI runner that can
+     * come after the check: the shell then still reads 94x1, and every child "reaches outside" it.
+     * A Composite's setBounds takes effect at once.
+     */
+    private Composite area(int width, int height) {
+        Composite area = new Composite(shell, SWT.NONE);
+        area.setBounds(0, 0, width, height);
+        return area;
+    }
+
     @Test
     void aLabelNarrowerThanItsTextIsCutOff() {
-        Label label = new Label(shell, SWT.NONE);
+        Composite area = area(200, 100);
+        Label label = new Label(area, SWT.NONE);
         label.setText("Get Neovim 0.12.6...");
         label.setBounds(0, 0, 10, 40);
-        shell.setSize(200, 100);
-        List<String> problems = LayoutCheck.problems(shell);
+        List<String> problems = LayoutCheck.problems(area);
         assertTrue(problems.size() == 1 && problems.get(0).startsWith("Label 'Get Neovim 0.12.6...' is cut off"),
                 problems.toString());
     }
 
     @Test
     void aWrappingLabelTooLowForItsLinesIsCutOff() {
-        Label label = new Label(shell, SWT.WRAP);
+        Composite area = area(200, 200);
+        Label label = new Label(area, SWT.WRAP);
         label.setText("one two three four five six seven eight nine ten eleven twelve");
         int line = label.computeSize(SWT.DEFAULT, SWT.DEFAULT).y;
         label.setBounds(0, 0, 60, line); // wraps onto several lines at 60 pixels, but has room for one
-        shell.setSize(200, 200);
-        assertTrue(LayoutCheck.problems(shell).get(0).contains("is cut off"), LayoutCheck.problems(shell).toString());
+        List<String> problems = LayoutCheck.problems(area);
+        assertTrue(problems.size() == 1 && problems.get(0).contains("is cut off"), problems.toString());
     }
 
     @Test
