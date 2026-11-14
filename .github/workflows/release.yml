@@ -16,8 +16,8 @@
 #               build is unsigned and sees no secrets, exactly as on main. When the Build on main
 #               passed for this commit (the usual case: CONTRIBUTING.md, "Releasing", promote), it
 #               only builds the ZIP (skip-tests): the same tests on the same commit would only
-#               give the same answer, at a cost of about an hour of Windows and macOS minutes
-#               (counted 2x and 10x). Otherwise it runs every test, as every CI run does. It is
+#               give the same answer. Otherwise it runs the Linux tests, as a push to main does
+#               (Windows and macOS run only on request: build.yml, at the top). It is
 #               rebuilt either way, since only this build stamps the release version into the ZIP.
 #   3. sign:    signs that ZIP with the project's PGP key (releng/sign.sh): every jar inside, then
 #               the ZIP itself (a detached signature, .asc). Uploads the result as
@@ -103,11 +103,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}   # GitHub's API, with this run's rate limit
         run: java releng/UpdateNeovimDownloads.java --check
-      # A successful Build run (push or Run workflow, every job: Linux UI, integration, Windows,
-      # macOS) on main for exactly this commit means the tests already passed on it; the build job
+      # A successful Build run (push or Run workflow) on main for exactly this commit, whose Linux
+      # build and integration jobs both passed, means the tests already passed on it; the build job
       # then skips them. Example: v0.2.0 tagged 9dde160, whose push to main ran Build 41404567004.
+      # A Run workflow with platforms-only (Windows or macOS alone) succeeds without those two
+      # jobs, so a run counts only when its own jobs show them passed. Windows and macOS are not
+      # required: Build runs them only on request (build.yml, at the top).
       # Anything else (none yet, still running, failed, or an error from the API) answers false,
-      # and the release runs every test, as before this check existed.
+      # and the release runs the Linux tests, as before this check existed.
       #
       # Only push and Run workflow (workflow_dispatch) runs of this repository count. A run's
       # "branch" is its head branch, and a pull request from a fork's own main has head branch main
@@ -119,14 +122,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&status=success&per_page=100" \
-                  --jq '[.workflow_runs[] | select((.event == "push" or .event == "workflow_dispatch")
-                          and .head_repository.full_name == $ENV.GITHUB_REPOSITORY)] | .[0].html_url // empty') || run=''
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&status=success&per_page=100" \
+                  --jq '.workflow_runs[] | select((.event == "push" or .event == "workflow_dispatch")
+                          and .head_repository.full_name == $ENV.GITHUB_REPOSITORY) | "\(.id) \(.html_url)"') || runs=''
+          run=''
+          while read -r id url; do
+            [ -n "$id" ] || continue
+            # The number of the two Linux jobs that passed in that run: 2, or it does not count.
+            passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" \
+                       --jq '[.jobs[] | select(.conclusion == "success" and (.name == "Build, unit and UI tests"
+                               or .name == "Integration tests (real Neovim)"))] | length') || passed=0
+            if [ "$passed" = 2 ]; then run=$url; break; fi
+          done <<< "$runs"
           if [ -n "$run" ]; then
             echo "Build passed on main for $GITHUB_SHA: $run. The release build skips the tests."
             echo "tested=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No successful Build on main for $GITHUB_SHA: the release build runs every test."
+            echo "No successful Build on main for $GITHUB_SHA: the release build runs the tests (Linux)."
             echo "tested=false" >> "$GITHUB_OUTPUT"
           fi
 

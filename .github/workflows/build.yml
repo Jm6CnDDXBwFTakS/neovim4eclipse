@@ -10,7 +10,12 @@
 # (neovim4eclipse-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software
 # > Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
 # included, inside a virtual X display (xvfb-run) with a pinned Neovim. The platforms job runs the
-# same tests on Windows and macOS, so every OS the plug-in claims to support is tested on each run.
+# same tests on Windows and macOS, but only when a Run workflow asks for it (the windows and macos
+# inputs): those runners cost 2x and 10x Linux's minutes and sometimes wait long for a machine, and
+# the maintainer runs every test on all three systems before a release (LikeCi --all). Ticking
+# platforms-only as well runs just those, for a commit whose Linux jobs already ran. Example, the
+# release commit on main afterwards:
+#   gh workflow run build.yml --ref main -f windows=true -f macos=true -f platforms-only=true
 #
 # It is also a reusable workflow (workflow_call): release.yml runs this same build for a tag, with
 # the version taken from the tag, so a release is built exactly like every CI run. Keep the build
@@ -25,6 +30,22 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    # Only a Run workflow has these: push, pull request and release.yml runs build on Linux only.
+    inputs:
+      windows:
+        description: Also run every test on Windows
+        type: boolean
+        default: false
+      macos:
+        description: Also run every test on macOS
+        type: boolean
+        default: false
+      platforms-only:
+        description: >-
+          Only the Windows and macOS tests ticked above, without the Linux build and integration
+          jobs (for a commit whose Linux jobs already ran)
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       version:
@@ -61,8 +82,18 @@ defaults:
     shell: bash
 
 jobs:
+  # A Run workflow with platforms-only and neither system ticked would run nothing and pass, and
+  # an all-skipped run counts as a success: fail it instead.
+  inputs-check:
+    name: Check the Run workflow inputs
+    if: ${{ inputs.platforms-only && !inputs.windows && !inputs.macos }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::error::platforms-only needs windows or macos ticked; nothing would run"; exit 1
+
   build:
     name: ${{ inputs.skip-tests && 'Build (tested on main)' || 'Build, unit and UI tests' }}
+    if: ${{ !inputs.platforms-only }}   # absent (push, pull request, release.yml) is false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -164,7 +195,7 @@ jobs:
 
   integration:
     name: Integration tests (real Neovim)
-    if: ${{ !inputs.skip-tests }}   # see the build job
+    if: ${{ !inputs.skip-tests && !inputs.platforms-only }}   # see the build job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -219,19 +250,21 @@ jobs:
   # that changes processor needs no change here.
   platforms:
     name: All tests on ${{ matrix.name }}
-    if: ${{ !inputs.skip-tests }}   # see the build job
+    # Only on request (see the top of this file); release.yml never asks.
+    if: ${{ !inputs.skip-tests && (inputs.windows || inputs.macos) }}
     runs-on: ${{ matrix.os }}
     # A UI test that hangs (a dialog nobody closes) would otherwise hold the runner for 6 hours.
     timeout-minutes: 60
     strategy:
       # Let both finish: a failure on one OS only says something different from one on both.
       fail-fast: false
+      # The systems ticked, as a JSON list built from the inputs. Example, both ticked:
+      # [{"name":"Windows","os":"windows-latest"},{"name":"macOS","os":"macos-latest"}]
       matrix:
-        include:
-          - name: Windows
-            os: windows-latest
-          - name: macOS
-            os: macos-latest
+        include: ${{ fromJSON(format('[{0}{1}{2}]',
+          inputs.windows && '{"name":"Windows","os":"windows-latest"}' || '',
+          inputs.windows && inputs.macos && ',' || '',
+          inputs.macos && '{"name":"macOS","os":"macos-latest"}' || '')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
