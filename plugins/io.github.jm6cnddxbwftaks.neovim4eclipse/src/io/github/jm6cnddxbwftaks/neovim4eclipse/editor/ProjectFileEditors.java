@@ -136,6 +136,20 @@ final class ProjectFileEditors {
         return textOnly(page, opened, file.toString());
     }
 
+    /**
+     * Neovim's {@code name} as a path when it is in no open project ({@link NewFiles#workspaceFileAt}
+     * finds no workspace file there), else {@code null}: a workspace file {@link #workspaceFile}
+     * refused is not opened by location. Not on the UI thread (the lookup may wait for the workspace).
+     */
+    static Path outsidePath(String name) {
+        try {
+            Path path = Path.of(name);
+            return NewFiles.workspaceFileAt(path) == null ? path : null;
+        } catch (InvalidPathException e) {
+            return null;
+        }
+    }
+
     /** {@code file}, a file on disk in no open project, as the editor input Eclipse opens it with. */
     static FileStoreEditorInput inputOf(Path file) {
         return new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri()));

@@ -150,6 +150,7 @@ class SplitsEndToEndTest extends EndToEndTestBase {
             waitUntil("Neovim on gf's tag", TIMEOUT_MS, () -> currentLine().contains("*gf*"),
                     () -> "; the line: " + currentLine());
             assertEquals(Boolean.FALSE, SessionProbe.lua(session, "return vim.bo.modifiable"), "read-only");
+            assertFalse(widgetOf(help).getEditable(), "read-only on Eclipse's side too: no paste through Eclipse");
 
             ex("help 'fileformat'");
             ITextEditor second = waitForNewEditor(help, "options.txt in the help editor");

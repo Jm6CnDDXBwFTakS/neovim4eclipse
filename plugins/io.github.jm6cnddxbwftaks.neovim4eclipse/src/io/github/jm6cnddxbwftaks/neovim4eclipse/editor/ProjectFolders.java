@@ -43,9 +43,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
  * <h2>Why</h2>
  * The folders are for finding a path's workspace file through the spelling the user gave a project
  * or a link ({@link #locations}, {@code NewFiles.workspaceFileAt}): a junction's path, a link's
- * target. Neovim gets them too ({@code inside(path)}), though its read hook no longer depends on
- * them: the plug-in reads every file on disk for Neovim, a project's or not, since Eclipse opens an
- * editor for either.
+ * target. Neovim gets them too ({@code inside(path)}): the plug-in reads every file on disk for
+ * Neovim, a project's or not, since Eclipse opens an editor for either, and only outside the
+ * projects is a help file ({@code doc/x.txt} beside {@code doc/tags}) left to Neovim.
  *
  * <h2>Which folders</h2>
  * Each open project's location, and the location of every linked folder in it (a folder that lives

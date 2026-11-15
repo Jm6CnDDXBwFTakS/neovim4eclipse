@@ -2283,9 +2283,10 @@ final class LuaScripts {
      * <p><b>Which buffers.</b> Each new buffer ({@code BufNew}, also sent after a rename) named
      * after a file ({@code eclipse_reads}: an absolute path, no scheme, no help file) gets a
      * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. A help
-     * file is told by its place ({@code is_help}: a {@code doc} folder with a tags file), since
-     * {@code :help} sets {@code 'buftype'} only after {@code BufNew}. Eclipse also sends the open
-     * projects' folders ({@link #SET_PROJECT_FOLDERS}); {@code inside(path)} answers by them. A buffer
+     * file outside the projects is told by its place ({@code is_help}: a {@code doc} folder with a
+     * tags file), since {@code :help} sets {@code 'buftype'} only after {@code BufNew}; inside a
+     * project the same file is the project's (a Vim plug-in's repository), by the folders Eclipse
+     * sends ({@link #SET_PROJECT_FOLDERS}; {@code inside(path)}). A buffer
      * added to the list is checked too ({@code BufAdd}), unless {@code BufNew} checked it under the
      * same name: {@code :vimgrep} makes the buffers of the files it matched while it searches,
      * without {@code BufNew}, and its jump into one fires only {@code BufAdd} before the read (found
@@ -2420,7 +2421,15 @@ final class LuaScripts {
             -- \\\\server\\share). Not a name with a scheme (zipfile://, fugitive://, term://, oil://):
             -- those are a plug-in's buffers, which it fills itself.
             function M.eclipse_reads(name)
-              if name == '' or name:find('^%a[%w+.-]*://') or M.is_help(name) then
+              if name == '' or name:find('^%a[%w+.-]*://') then
+                return false
+              end
+              -- A project's file is Eclipse's even where it looks like help: a Vim plug-in's own
+              -- repository has doc/*.txt beside doc/tags, and its author edits them.
+              if M.inside(name) then
+                return true
+              end
+              if M.is_help(name) then
                 return false
               end
               return name:find('^/') ~= nil or name:find('^%a:[/\\\\]') ~= nil

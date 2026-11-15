@@ -29,6 +29,8 @@ import org.eclipse.e4.ui.model.application.ui.basic.MStackElement;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
+import org.eclipse.jface.text.ITextOperationTarget;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
@@ -43,6 +45,7 @@ import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowLayout;
@@ -303,27 +306,55 @@ final class EditorSplits {
      */
     private static void help(ITextEditor editor, IEditorPart from, WindowCommand command) {
         IWorkbenchPage page = from.getSite().getPage();
+        Path file = Path.of(command.file());
+        if (shows(from, file)) {
+            return; // a tag in the page this editor shows: Neovim moved its cursor there itself
+        }
         IEditorPart shown = HELP_EDITORS.stream().filter(e -> isOpen(page, e)).findFirst().orElse(null);
+        IEditorPart opened;
         if (shown == null) {
             split(editor, from, new WindowCommand(WindowCommand.Action.SPLIT, command.where(),
                     WindowCommand.Target.FILE, command.file(), (char) 0, 0, false));
-            IEditorPart opened = page.getActiveEditor();
-            if (opened != null && opened != from) {
-                HELP_EDITORS.add(opened);
+            opened = page.getActiveEditor();
+            if (opened == null || opened == from) {
+                return; // not opened: the reason is shown already
             }
-            return;
-        }
-        page.activate(shown); // the page opens in the help editor's stack
-        IEditorPart opened = EclipseFileCommands.open(page, Path.of(command.file()), IWorkbenchPage.MATCH_INPUT);
-        if (opened == null) {
-            return; // logged
+        } else if (shows(shown, file)) {
+            opened = shown; // its page already: Neovim's cursor goes to the tag once it attaches
+        } else {
+            page.activate(shown); // the page opens in the help editor's stack
+            // A new editor even when another one shows the file (MATCH_NONE): an editor of yours on
+            // a plug-in's doc/x.txt stays yours, not read-only.
+            opened = EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE);
+            if (opened == null) {
+                return; // logged
+            }
+            if (!shown.isDirty()) {
+                HELP_EDITORS.remove(shown);
+                page.closeEditor(shown, false); // the page it showed, read-only: nothing to save
+            }
         }
         HELP_EDITORS.add(opened);
-        if (opened != shown && !shown.isDirty()) {
-            HELP_EDITORS.remove(shown);
-            page.closeEditor(shown, false); // the page it showed, read-only: nothing to save
-        }
+        readOnly(opened);
         activate(page, opened);
+    }
+
+    /** Whether {@code part} is a text editor of {@code file} (compared by the one rule, FilePaths). */
+    private static boolean shows(IEditorPart part, Path file) {
+        Path its = part == null ? null : EditorAttachManager.fileOf(part.getEditorInput());
+        return its != null && FilePaths.same(its, file);
+    }
+
+    /**
+     * Makes a help page's editor read-only on Eclipse's side too, as Neovim's buffer is
+     * ({@code help.ready}): its viewer no longer types, pastes, cuts or formats. Without it an edit
+     * made through Eclipse (Edit › Paste) would change the document that Neovim refuses to change.
+     */
+    private static void readOnly(IEditorPart part) {
+        ITextEditor text = EditorAttachManager.textEditorOf(part);
+        if (text != null && text.getAdapter(ITextOperationTarget.class) instanceof ITextViewer viewer) {
+            viewer.setEditable(false);
+        }
     }
 
     /** Whether {@code editor} is still one of {@code page}'s open editors. */

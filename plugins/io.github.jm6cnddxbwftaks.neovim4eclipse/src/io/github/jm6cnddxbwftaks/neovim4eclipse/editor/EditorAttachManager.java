@@ -684,9 +684,12 @@ public final class EditorAttachManager {
     private void onNeovimEnteredProjectFile(int bufnr, String file) {
         Job lookup = Job.create("Neovim: find " + file, monitor -> {
             IFile target = ProjectFileEditors.workspaceFile(file);
+            // In no open project: opened by its location. A workspace file the lookup refused (not
+            // accessible) is not opened by location either: Neovim goes back, as before.
+            Path outside = target == null ? ProjectFileEditors.outsidePath(file) : null;
             Display display = Display.getDefault();
             if (display != null && !display.isDisposed()) {
-                display.asyncExec(() -> followNeovimIntoFile(bufnr, file, target));
+                display.asyncExec(() -> followNeovimIntoFile(bufnr, file, target, outside));
             }
         });
         lookup.setSystem(true); // no progress shown: it takes milliseconds, unless a build runs
@@ -704,8 +707,9 @@ public final class EditorAttachManager {
      * folder, a {@code .zip} it would hand to the system's program) sends Neovim back, as before. UI thread.
      *
      * @param target the workspace file at {@code file}, or {@code null} when it is no open project's
+     * @param outside {@code file} as a path when it is in no open project, else {@code null}
      */
-    private void followNeovimIntoFile(int bufnr, String file, IFile target) {
+    private void followNeovimIntoFile(int bufnr, String file, IFile target, Path outside) {
         NeovimSession session;
         EditorWindow mover;
         DocumentBuffer leftBehind;
@@ -729,7 +733,6 @@ public final class EditorAttachManager {
                 IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
                 page = window == null ? null : window.getActivePage();
             }
-            Path outside = target == null ? outsidePath(file) : null;
             IEditorPart opened = page == null ? null
                     : target != null ? ProjectFileEditors.open(page, target)
                     : outside != null ? ProjectFileEditors.openOutside(page, outside) : null;
@@ -749,15 +752,6 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not open " + file + " for Neovim", e);
         }
         session.returnToAttachedBufferAsync();
-    }
-
-    /** {@code file}, Neovim's name for a file in no open project, as a path, or {@code null} if it is none. */
-    private static Path outsidePath(String file) {
-        try {
-            return Path.of(file);
-        } catch (InvalidPathException e) {
-            return null;
-        }
     }
 
     /**

@@ -181,6 +181,19 @@ t.test('a help page and a plug-in\'s buffer with a scheme are Neovim\'s', functi
   t.eq(false, files.eclipse_reads(''))
 end)
 
+t.test('a project\'s own doc/*.txt beside doc/tags (a Vim plug-in\'s repository) is the project\'s', function()
+  local root = project()
+  vim.fn.mkdir(file(root, 'doc'), 'p')
+  vim.fn.writefile({ '*myplugin.txt*  For Vim', '' }, file(root, 'doc', 'myplugin.txt'))
+  vim.fn.writefile({ 'myplugin.txt\tmyplugin.txt\t/*myplugin.txt*' }, file(root, 'doc', 'tags'))
+  local files = require('neovim4eclipse.project_files')
+  t.eq(true, files.is_help(file(root, 'doc', 'myplugin.txt')), 'it looks like help')
+  vim.cmd.edit(vim.fn.fnameescape(file(root, 'doc', 'myplugin.txt')))
+  local b = vim.api.nvim_get_current_buf()
+  t.eq('', vim.bo[b].filetype, 'read by the hook, not as help')
+  t.eq(vim.api.nvim_buf_get_name(b), files.file_of(b), 'Eclipse opens its editor')
+end)
+
 t.test('a file reached through a link to the project is the project\'s', function()
   local root = project()
   local link = root .. '-link'
