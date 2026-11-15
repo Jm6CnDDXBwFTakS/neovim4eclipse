@@ -95,7 +95,8 @@ program's), so the profile keeps the plug-in's data and the test's own files und
 (`/tmp/neovim4eclipse-pictures`; on Windows `C:\Users\Public\neovim4eclipse-pictures`;
 `-Dpictures.home=...` for another) instead of `target/`, which usually sits in your home folder: a
 picture then shows no account name and can be sent on. `gallery/PicturesFolder` refuses that folder
-if it is a link or another account's. `SearchGalleryTest`, in the same profile, pictures the search highlights in a
+if it is a link, or another account's when it is outside your home folder (inside it, no other
+account can have made it, and on Windows an elevated run's files belong to Administrators). `SearchGalleryTest`, in the same profile, pictures the search highlights in a
 text file and the Java editor into `search.html`; the profile then starts a second test Eclipse
 with Eclipse's dark theme (`-cssTheme org.eclipse.e4.ui.css.theme.e4_dark`, as a user's Eclipse
 starts after choosing Dark), which takes those pictures again, so the page shows each in both
