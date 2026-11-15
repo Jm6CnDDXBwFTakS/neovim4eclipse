@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- A jump into a file outside the open projects (`gf` on `/usr/include/stdio.h`, `'A`, `:b`,
+  `Ctrl-^`, a quickfix entry) opens it in an editor, by its location as *File › Open File...* does,
+  instead of being undone. As for a project's file, the plug-in reads it for Neovim, so no filetype
+  plug-in or language server starts for it in the embedded Neovim. A file Eclipse would open in
+  another program (a `.zip`) is still not opened.
+
 ## [0.2.21] - 2026-11-15
 
 ### Added

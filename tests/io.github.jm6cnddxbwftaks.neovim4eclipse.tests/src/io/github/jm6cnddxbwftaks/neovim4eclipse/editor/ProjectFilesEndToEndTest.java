@@ -32,6 +32,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IEditorRegistry;
 import org.eclipse.ui.IFileEditorInput;
+import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
@@ -136,6 +137,39 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             assertEquals(a, page().getActiveEditor());
         } finally {
             closeAllBut(null);
+        }
+    }
+
+    /**
+     * {@code gf} onto a file in no open project ({@code /usr/include/stdio.h}, a config file) opens
+     * it by its location, as <i>File › Open File...</i> does, the same way as a project's file:
+     * Neovim never reads it (no filetype, so no language server), the window travels along, and
+     * {@code Ctrl-O} goes back. Example: {@code a.txt} names {@code /tmp/outside-x/o.txt}.
+     */
+    @Test
+    void gfOntoAFileOutsideTheProjectsOpensItByItsLocation() throws Exception {
+        Path outside = Files.createTempDirectory("outside");
+        Path o = outside.resolve("o.txt");
+        Files.writeString(o, "first\nsecond\n", StandardCharsets.UTF_8);
+        ITextEditor a = open(createFile("a.txt", o + "\n"));
+        try {
+            session.inputAsync("gg0gf");
+            ITextEditor opened = waitForFollowInto("o.txt");
+            expectText(opened, "first\nsecond\n");
+            assertTrue(opened.getEditorInput() instanceof IURIEditorInput
+                    && !(opened.getEditorInput() instanceof IFileEditorInput), "by its location, no workspace file");
+            assertEquals("", bufferOption("filetype"), "Neovim did not read it: no filetype");
+            assertEquals("acwrite", bufferOption("buftype"), "a document's buffer now");
+            assertEquals("", filetypesSeen(), "no FileType event, so no language server either");
+
+            session.inputAsync("<C-o>");
+            waitForAttach(a, "a.txt after Ctrl-O");
+            assertEquals(a, page().getActiveEditor());
+        } finally {
+            closeAllBut(null);
+            wipeBuffersUnder(outside);
+            Files.deleteIfExists(o);
+            Files.deleteIfExists(outside);
         }
     }
 
@@ -386,8 +420,6 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             settle();
             assertEquals(a, page().getActiveEditor());
             assertEquals(null, editorTitled("x.zip"), "no editor opened");
-            assertFalse(String.valueOf(SessionProbe.lua(session, "return require('neovim4eclipse.project_files')"
-                    + ".file_of(vim.fn.bufnr('x.zip'))")).isEmpty(), "Eclipse was asked to open it, and refused");
             assertEquals("a.txt", String.valueOf(SessionProbe.lua(session, "return vim.fn.expand('%:t')")));
 
             session.inputAsync(":help<CR>");
@@ -526,9 +558,9 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
     /**
      * A linked folder made while Neovim runs (<i>New → Folder → Link to alternate location</i>):
      * its files are the project's from then on, so {@code gf} onto one by its real path opens its
-     * editor and Neovim never reads it. Once the link is removed, the file is outside every project
-     * again: Neovim reads it itself (a {@code FileType} event) and no editor opens. The manual test
-     * "A linked folder, added while running" does the same by hand.
+     * editor as the workspace file and Neovim never reads it. Once the link is removed, the file is
+     * outside every project again: {@code gf} opens it by its location, still without Neovim
+     * reading it. The manual test "A linked folder, added while running" does the same by hand.
      */
     @Test
     void aLinkedFolderMadeAndRemovedWhileRunningIsSeenByNeovim() throws Exception {
@@ -545,6 +577,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             session.inputAsync("gg0gf");
             ITextEditor opened = waitForFollowInto("ext.txt");
             expectText(opened, "outside text\n");
+            assertTrue(opened.getEditorInput() instanceof IFileEditorInput, "the workspace file, while linked");
             assertEquals("", bufferOption("filetype"), "Neovim did not read it: no filetype");
             assertEquals("acwrite", bufferOption("buftype"), "a document's buffer now");
             assertEquals("", filetypesSeen(), "no FileType event while linked");
@@ -556,17 +589,18 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             page().activate(a);
             waitForAttach(a, "a.txt again");
             session.inputAsync("gg0gf");
-            waitUntil("Neovim to read ext.txt itself", TIMEOUT_MS, () -> filetypesSeen().contains("ext.txt="),
-                    () -> "; seen: " + filetypesSeen());
-            settle();
-            assertEquals(null, editorTitled("ext.txt"), "no editor for a file outside the projects");
+            ITextEditor byLocation = waitForFollowInto("ext.txt");
+            expectText(byLocation, "outside text\n");
+            assertTrue(byLocation.getEditorInput() instanceof IURIEditorInput
+                    && !(byLocation.getEditorInput() instanceof IFileEditorInput), "opened by its location now");
+            assertEquals("", filetypesSeen(), "Neovim did not read it either");
         } finally {
             closeAllBut(null);
             if (link.exists()) {
                 link.delete(true, null);
             }
-            // Neovim read ext.txt itself in step 7: a buffer of its own, which would stay listed and,
-            // once the file is deleted, modified (E211), stopping a later test's :bufdo in it.
+            // ext.txt's buffer is kept after its editor closes, listed: once the file is deleted
+            // it would be modified (E211), stopping a later test's :bufdo in it.
             wipeBuffersUnder(outside);
             Files.deleteIfExists(ext);
             Files.deleteIfExists(outside);

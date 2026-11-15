@@ -193,9 +193,11 @@ followed: its editor is activated and attached, keeping Neovim's cursor. When se
 that document, the first one opened is chosen. Commands such as `:bufdo`, `:argdo` and `:cdo` enter
 every buffer in turn; `DocumentBuffers` remembers the buffer entered last, and a queued follow-up for a
 buffer Neovim has left again is skipped, so Eclipse activates only the editor Vim ends in instead of
-flicking through all of them. A switch to a project's file that has no editor (`gf`, `'A`, `:b 3`
-of a closed file, a quickfix entry) opens that file's editor (`editor/ProjectFileEditors`) and is
-followed the same way; a switch to any other buffer is undone (`returnToAttachedBufferAsync`). When
+flicking through all of them. A switch to a file that has no editor (`gf`, `'A`, `:b 3`
+of a closed file, a quickfix entry) opens that file's editor (`editor/ProjectFileEditors`: a
+project's file as a workspace file, any other by its location, as *File › Open File...* does) and is
+followed the same way; a switch to any other buffer (`:help`, a scratch buffer) is undone
+(`returnToAttachedBufferAsync`). When
 a document's last editor closes, its buffer is unloaded and unlisted, as by Vim's `:bd`, not wiped
 (`closeBufferAsync`, `LuaScripts.CLOSE_DOCUMENT_BUFFER`), and the file's next editor gets the same
 buffer back, with its number and marks (`LuaScripts.CREATE_DOCUMENT_BUFFER`;

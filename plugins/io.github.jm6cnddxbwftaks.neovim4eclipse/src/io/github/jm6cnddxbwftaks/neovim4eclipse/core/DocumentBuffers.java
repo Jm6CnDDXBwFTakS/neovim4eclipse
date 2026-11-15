@@ -38,7 +38,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedE
  *       attached editor; those of the other document buffers to their own documents
  *       ({@link #documentOf}, {@link DocumentBufferPort}).</li>
  *   <li>When Neovim enters another buffer by itself, the enter handler decides: follow it (another
- *       open document) or switch back (help, {@code :e} of an unrelated file, a closed document).</li>
+ *       open document, or a file Eclipse opens an editor for) or switch back (help, a scratch buffer).</li>
  * </ul>
  *
  * <h2>Windows</h2>
@@ -891,7 +891,7 @@ final class DocumentBuffers {
         } else if (fileHandler != null && !projectFile.isEmpty()) {
             fileHandler.accept(bufnr, projectFile);
         } else {
-            returnBack.run(); // help, :e of another file, a closed document, ...
+            returnBack.run(); // help, a scratch buffer, a plug-in's buffer, ...
         }
     }
 }

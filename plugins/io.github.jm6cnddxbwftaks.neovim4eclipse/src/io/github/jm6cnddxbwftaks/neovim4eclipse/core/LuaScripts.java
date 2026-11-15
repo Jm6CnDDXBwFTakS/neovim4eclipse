@@ -138,8 +138,8 @@ final class LuaScripts {
                     end
                   end
                 end
-                -- The fourth value: the file of a project's buffer that has no editor yet (gf, 'A,
-                -- quickfix: PROJECT_FILES), whose editor Eclipse opens; '' for any other buffer.
+                -- The fourth value: the file of a buffer that has no editor yet (gf, 'A, quickfix:
+                -- PROJECT_FILES), in a project or not, whose editor Eclipse opens; '' for any other.
                 local project = package.loaded['neovim4eclipse.project_files']
                 vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, vim.api.nvim_get_current_win(), jumped,
                   project and project.file_of(ev.buf) or '')
@@ -2164,8 +2164,9 @@ final class LuaScripts {
             """;
 
     /**
-     * Module {@code neovim4eclipse.project_files}: Neovim never reads a file of an open Eclipse
-     * project by itself (docs/design/BUFFER_NUMBERS.md, 2.3).
+     * Module {@code neovim4eclipse.project_files}: Neovim never reads a file on disk by itself,
+     * a project's or not, since Eclipse opens an editor for either (docs/design/BUFFER_NUMBERS.md,
+     * 2.3). Help pages and a plug-in's buffers with a scheme ({@code fugitive://}) are Neovim's.
      *
      * <p><b>Why.</b> When Neovim reads a file ({@code gf}, {@code 'A}, {@code :b} into a closed file,
      * a quickfix entry), it runs filetype detection, the filetype plug-ins ({@code indentexpr},
@@ -2176,9 +2177,12 @@ final class LuaScripts {
      * file's editor ({@code EditorAttachManager}) and the attach takes the buffer over, as for a
      * document's kept buffer.
      *
-     * <p><b>Which buffers.</b> Eclipse sends the open projects' folders ({@link #SET_PROJECT_FOLDERS}).
-     * Each new buffer ({@code BufNew}, also sent after a rename) whose file is inside one gets a
-     * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. A buffer
+     * <p><b>Which buffers.</b> Each new buffer ({@code BufNew}, also sent after a rename) named
+     * after a file ({@code eclipse_reads}: an absolute path, no scheme, no help file) gets a
+     * buffer-local {@code BufReadCmd}, which stays with the buffer while it is unloaded. A help
+     * file is told by its place ({@code is_help}: a {@code doc} folder with a tags file), since
+     * {@code :help} sets {@code 'buftype'} only after {@code BufNew}. Eclipse also sends the open
+     * projects' folders ({@link #SET_PROJECT_FOLDERS}); {@code inside(path)} answers by them. A buffer
      * added to the list is checked too ({@code BufAdd}), unless {@code BufNew} checked it under the
      * same name: {@code :vimgrep} makes the buffers of the files it matched while it searches,
      * without {@code BufNew}, and its jump into one fires only {@code BufAdd} before the read (found
@@ -2201,8 +2205,8 @@ final class LuaScripts {
      * short names, macOS's NFD names; {@code /} separators; lower case where
      * {@code 'fileignorecase'} is on, Windows and macOS). Autocommand patterns were tried first and cannot match a
      * junction, an 8.3 name or a folder named {@code $HOME} on Windows (BUFFER_NUMBERS.md, X18d).
-     * Example: with project {@code /ws/app}, {@code gf} on {@code src/B.java} in {@code /ws/app/A.java}
-     * is read by the hook; {@code /etc/hosts} and {@code /ws/app2/C.java} are read by Neovim.
+     * Example: {@code gf} on {@code src/B.java} in {@code /ws/app/A.java}, and on {@code /etc/hosts},
+     * is read by the hook; {@code :help} reads {@code $VIMRUNTIME/doc/help.txt} as Neovim does.
      *
      * <p><b>The read.</b> {@code 'swapfile'} off first: with a swap file left by an earlier Neovim,
      * the read would stop at the E325 question, which nothing can answer under {@code noautocmd}
@@ -2219,8 +2223,9 @@ final class LuaScripts {
      * {@code BufReadCmd} of its own, which asks Eclipse for the text instead.
      *
      * <p>Functions: {@code set_folders(list)}; {@code file_of(buf)}, the buffer's file name when the
-     * hook is on it, else {@code ""} (sent with {@code eclipse_buf_enter}, {@link #SETUP});
-     * {@code inside(path)}.
+     * hook is on it and the buffer is a plain one ({@code 'buftype'} empty), else {@code ""} (sent
+     * with {@code eclipse_buf_enter}, {@link #SETUP}); {@code eclipse_reads(name)};
+     * {@code is_help(name)}; {@code inside(path)}.
      */
     static final String PROJECT_FILES = """
             local M = {}
@@ -2306,10 +2311,40 @@ final class LuaScripts {
               end
             end
 
+            -- Whether Eclipse reads name's file for Neovim: any file on disk, a project's or not
+            -- (/ws/app/B.java, /etc/hosts, ~/.config/nvim/init.lua), since Eclipse opens an editor
+            -- for either. A buffer's name for a file is its absolute path (/x, C:\\x, C:/x,
+            -- \\\\server\\share). Not a name with a scheme (zipfile://, fugitive://, term://, oil://):
+            -- those are a plug-in's buffers, which it fills itself.
+            function M.eclipse_reads(name)
+              if name == '' or name:find('^%a[%w+.-]*://') or M.is_help(name) then
+                return false
+              end
+              return name:find('^/') ~= nil or name:find('^%a:[/\\\\]') ~= nil
+                or name:find('^[/\\\\][/\\\\]') ~= nil
+            end
+
+            -- Whether name is a help file, as Neovim finds them: a .txt in a doc folder that has a
+            -- tags file (doc/help.txt beside doc/tags), or a translated one (doc/usr_01.jax beside
+            -- doc/tags-ja). Neovim reads those itself: :help readies the buffer for them (concealed
+            -- tags, 'filetype' help), and 'buftype' help is set only after BufNew, too late for a
+            -- check by kind.
+            function M.is_help(name)
+              local dir = vim.fn.fnamemodify(name, ':h')
+              if vim.fn.fnamemodify(dir, ':t') ~= 'doc' then
+                return false
+              end
+              local ext = vim.fn.fnamemodify(name, ':e')
+              if ext == 'txt' then
+                return vim.fn.filereadable(dir .. '/tags') == 1
+              end
+              return ext:find('^%a%ax$') ~= nil and vim.fn.filereadable(dir .. '/tags-' .. ext:sub(1, 2)) == 1
+            end
+
             local function check(buf)
               local name = vim.api.nvim_buf_get_name(buf)
               checked[buf] = name
-              if M.inside(name) then
+              if M.eclipse_reads(name) then
                 hook(buf)
               else
                 unhook(buf)
@@ -2327,7 +2362,10 @@ final class LuaScripts {
             end
 
             function M.file_of(buf)
-              return hooked[buf] and vim.api.nvim_buf_get_name(buf) or ''
+              if not hooked[buf] or vim.bo[buf].buftype ~= '' then
+                return ''
+              end
+              return vim.api.nvim_buf_get_name(buf)
             end
 
             vim.api.nvim_create_autocmd('BufNew', { group = group, callback = function(ev)

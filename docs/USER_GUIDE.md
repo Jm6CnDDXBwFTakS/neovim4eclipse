@@ -485,10 +485,10 @@ options to match the file:
 
 These options replace any your `init.lua` sets for the buffer. Filetype detection is not used, so
 your filetype plugins (and language servers they may start) do not run in the embedded Neovim. That
-holds for a project's file Neovim reaches by itself too (`gf`, `'A`, a quickfix entry): the plug-in
-reads it for Neovim, without filetype detection, and Eclipse opens its editor. A file outside the
-open projects is read by Neovim as usual, and gets its filetype
-([docs/design/BUFFER_NUMBERS.md](design/BUFFER_NUMBERS.md)). One exception: to search files,
+holds for any file Neovim reaches by itself too (`gf`, `'A`, a quickfix entry), in a project or
+not: the plug-in reads it for Neovim, without filetype detection, and Eclipse opens its editor (a
+file outside the open projects by its location, as *File › Open File...* does). Help pages are
+Neovim's own ([docs/design/BUFFER_NUMBERS.md](design/BUFFER_NUMBERS.md)). One exception: to search files,
 `:vimgrep` reads them itself, filetype detection included, so the files it matched get their
 filetype (and a language server started from `FileType` may attach to its first match) before
 Eclipse opens their editors.

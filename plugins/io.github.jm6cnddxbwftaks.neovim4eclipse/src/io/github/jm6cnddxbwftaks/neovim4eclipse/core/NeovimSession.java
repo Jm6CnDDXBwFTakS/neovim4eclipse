@@ -873,8 +873,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Handles Neovim entering a project's file that has no editor yet ({@code gf}, {@code 'A}, a
-     * quickfix entry; read by {@link LuaScripts#PROJECT_FILES}): the handler gets the buffer number
+     * Handles Neovim entering a file that has no editor yet, in a project or not ({@code gf},
+     * {@code 'A}, a quickfix entry; read by {@link LuaScripts#PROJECT_FILES}): the handler gets the buffer number
      * and the file, opens the file's editor and follows into it, or calls
      * {@link #returnToAttachedBufferAsync()}. Called on an RPC thread. Without a handler, Neovim is
      * switched back.

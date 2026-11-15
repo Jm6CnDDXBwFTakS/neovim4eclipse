@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -10,6 +11,7 @@ import java.util.Deque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
@@ -18,14 +20,17 @@ import org.eclipse.ui.IEditorDescriptor;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PartInitException;
+import org.eclipse.ui.ide.FileStoreEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.part.MultiPageEditorPart;
 
 /**
- * Opens the editor of a project's file that Neovim moved into by itself ({@code gf}, {@code 'A},
+ * Opens the editor of a file that Neovim moved into by itself ({@code gf}, {@code 'A},
  * {@code :b} into a closed file, a quickfix entry), for {@link EditorAttachManager} to follow into
  * (docs/design/BUFFER_NUMBERS.md, 2.3, point 5). Without an editor Eclipse cannot show the file, and
- * Neovim used to be sent back.
+ * Neovim used to be sent back. A project's file opens as a workspace file ({@link #open}); any other
+ * file on disk by its location ({@link #openOutside}), as <i>File › Open File...</i> opens one. Example:
+ * {@code gf} on {@code /usr/include/stdio.h} in a C file opens that header in an editor of its own.
  *
  * <p>What the probes showed (BUFFER_NUMBERS.md, X21, X22), and so what is done here:
  * <ul>
@@ -89,11 +94,63 @@ final class ProjectFileEditors {
             LOG.log(Level.WARNING, "Could not open " + target.getFullPath() + " for Neovim", e);
             return null;
         }
+        return textOnly(page, opened, target.getFullPath().toString());
+    }
+
+    /**
+     * Opens the editor of {@code file}, a file on disk in no open project, in {@code page}, not
+     * activated, by the same rules as {@link #open}: only an existing regular file (no folder, no
+     * dangling link), only an editor inside Eclipse, only text. Its content type comes from its name,
+     * as no project gives it one ({@link NewFiles#internalOr(IEditorDescriptor, String)}). Example:
+     * {@code /etc/hosts} opens in the Text Editor; {@code /tmp/x.zip}, which Eclipse would open in
+     * the system's program, is not opened, and Neovim goes back. UI thread.
+     *
+     * @return the text editor or multi-page editor opened, or {@code null} (logged)
+     */
+    static IEditorPart openOutside(IWorkbenchPage page, Path file) {
+        String name = file.getFileName() == null ? "" : file.getFileName().toString();
+        if (name.isEmpty() || !Files.isRegularFile(file) || DanglingLinks.isDangling(file)) {
+            LOG.fine(() -> "Not a file to open for Neovim: " + file);
+            return null;
+        }
+        IEditorDescriptor editor;
+        try {
+            editor = IDE.getEditorDescriptor(name, true, false);
+        } catch (PartInitException e) {
+            LOG.log(Level.FINE, "No editor for " + file, e);
+            return null;
+        }
+        if (editor == null || !editor.isInternal() || editor.isOpenExternal() || editor.isOpenInPlace()) {
+            LOG.fine(() -> "Eclipse would open " + file + " outside the IDE ("
+                    + (editor == null ? "no editor" : editor.getId()) + "): not opened for Neovim");
+            return null;
+        }
+        IEditorPart opened;
+        try {
+            opened = page.openEditor(inputOf(file), NewFiles.internalOr(editor, name), false,
+                    IWorkbenchPage.MATCH_INPUT);
+        } catch (PartInitException e) {
+            LOG.log(Level.WARNING, "Could not open " + file + " for Neovim", e);
+            return null;
+        }
+        return textOnly(page, opened, file.toString());
+    }
+
+    /** {@code file}, a file on disk in no open project, as the editor input Eclipse opens it with. */
+    static FileStoreEditorInput inputOf(Path file) {
+        return new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(file.toUri()));
+    }
+
+    /**
+     * {@code opened} if it is a text editor or a multi-page editor; any other (an image in the
+     * browser editor) is closed again, and {@code null} returned, as for no editor.
+     */
+    private static IEditorPart textOnly(IWorkbenchPage page, IEditorPart opened, String what) {
         if (opened == null) {
             return null;
         }
         if (EditorAttachManager.textEditorOf(opened) == null && !(opened instanceof MultiPageEditorPart)) {
-            LOG.fine(() -> target.getFullPath() + " opened in " + opened.getClass().getName()
+            LOG.fine(() -> what + " opened in " + opened.getClass().getName()
                     + ", which is no text editor: closed again");
             page.closeEditor(opened, false);
             return null;

@@ -37,15 +37,15 @@ import org.eclipse.core.runtime.jobs.Job;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 
 /**
- * Tells Neovim where the open projects' files are, so that it never reads one by itself
+ * Finds where the open projects' files are, and tells Neovim
  * (docs/design/BUFFER_NUMBERS.md, 2.3; {@code LuaScripts.PROJECT_FILES}).
  *
  * <h2>Why</h2>
- * When Neovim reads a file ({@code gf}, {@code 'A}, a quickfix entry), filetype detection runs, and
- * with it the filetype plug-ins and the user's {@code FileType} autocommands, which may start a
- * language server inside Eclipse's Neovim. For a project's file the plug-in reads the text instead,
- * and Eclipse opens the file's editor. Neovim decides which buffers are a project's from the folders
- * sent here.
+ * The folders are for finding a path's workspace file through the spelling the user gave a project
+ * or a link ({@link #locations}, {@code NewFiles.workspaceFileAt}): a junction's path, a link's
+ * target. Neovim gets them too ({@code inside(path)}), though its read hook no longer depends on
+ * them: the plug-in reads every file on disk for Neovim, a project's or not, since Eclipse opens an
+ * editor for either.
  *
  * <h2>Which folders</h2>
  * Each open project's location, and the location of every linked folder in it (a folder that lives
@@ -53,7 +53,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
  * depth). Example: project {@code app} at {@code /ws/app}, with {@code app/ext} linked to
  * {@code /data/ext}, sends {@code /ws/app} and {@code /data/ext}. A closed project, a project or
  * virtual folder with no location on disk, and a linked single file are left out (a linked file's
- * target is then read by Neovim as before).
+ * target is then opened by its location, as a file outside the projects).
  *
  * <h2>When</h2>
  * At the first attach of each Neovim ({@link #sendTo}), and again after a workspace change that adds,

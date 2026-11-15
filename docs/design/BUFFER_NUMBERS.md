@@ -121,8 +121,9 @@ Neovim's cursor instead of pushing Eclipse's caret (`GO_TO_LAST_POSITION`).
 Eclipse workspace (as `:e` of a file without an editor does, `EclipseFileCommands`), then follows as
 for an open file: the window that jumped travels into the new editor (docs/design/WINDOWS.md, E2),
 so `Ctrl-O` there goes back. The attach finds the buffer by name (2.2) and pushes Eclipse's text.
-Anything else Neovim enters (`:help`, a scratch buffer, a file outside the workspace) is undone:
-Neovim goes back to the editor's buffer.
+A file outside the workspace opens the same way, by its location (`ProjectFileEditors.openOutside`,
+an editor input as *File › Open File...* makes), and is read by the hook too. Anything else Neovim
+enters (`:help`, a scratch buffer) is undone: Neovim goes back to the editor's buffer.
 
 This applies to any workspace file, not only closed documents: the mechanism and its risk are the
 same, so it is built once, and quickfix (DIAGNOSTICS.md, section 5) only adds the lists,

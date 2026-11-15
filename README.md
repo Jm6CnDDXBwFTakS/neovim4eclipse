@@ -334,8 +334,9 @@ gets in your way:
    Back steps over the switches the plug-in made for Neovim's jumps, which Neovim's history
    already has, and Ctrl-I comes back through the same places Ctrl-O went. A jump into a project's
    file that has no editor open (`gf`, `'A`, `:b 3` of a closed file, Ctrl-^, a quickfix entry)
-   opens its editor and goes along the same way. Jumps to anything else (`:help`, a file outside the
-   open projects, a file Eclipse opens in another program, such as a `.zip`) are undone. When a
+   opens its editor and goes along the same way, and so does a jump into a file outside the open
+   projects (`gf` on `/usr/include/stdio.h`), which opens by its location. Jumps to anything else
+   (`:help`, a file Eclipse opens in another program, such as a `.zip`) are undone. When a
    file's last editor closes, its buffer is kept, as after Vim's `:bd`: `:ls!` lists it with `u`,
    and its number, marks and last cursor position come back when the file is opened again (its undo
    history goes, as in Vim). Changes Neovim makes to another open file (`:bufdo`, `:argdo`)

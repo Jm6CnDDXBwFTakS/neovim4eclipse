@@ -128,33 +128,57 @@ t.test(':vimgrep runs through where no swap file can be made, and \'swapfile\' c
   t.eq(true, vim.go.swapfile, 'the global value is back')
 end)
 
--- BufAdd checks a buffer only when BufNew did not, under the same name: resolving a path
--- (fs_realpath) is most of the hook's cost (docs/design/DIAGNOSTICS.md, Q-E1).
-t.test(':badd resolves the new buffer\'s path once, not again on BufAdd', function()
+-- BufAdd checks a buffer only when BufNew did not, under the same name: the check reads the disk
+-- (is_help looks for a doc folder's tags file), and :vimgrep makes many buffers at once
+-- (docs/design/DIAGNOSTICS.md, Q-E1).
+t.test(':badd checks the new buffer once, not again on BufAdd', function()
   local root = project()
-  local paths = require('neovim4eclipse.paths')
-  local canonical, calls = paths.canonical, 0
-  paths.canonical = function(...)
+  local files = require('neovim4eclipse.project_files')
+  local reads_, calls = files.eclipse_reads, 0
+  files.eclipse_reads = function(...)
     calls = calls + 1
-    return canonical(...)
+    return reads_(...)
   end
   local ok, err = pcall(vim.cmd.badd, vim.fn.fnameescape(file(root, 'src', 'B.java')))
-  paths.canonical = canonical
+  files.eclipse_reads = reads_
   assert(ok, err)
   t.eq(1, calls)
-  t.ok(require('neovim4eclipse.project_files').file_of(vim.fn.bufnr(file(root, 'src', 'B.java'))) ~= '', 'hooked')
+  t.ok(files.file_of(vim.fn.bufnr(file(root, 'src', 'B.java'))) ~= '', 'hooked')
 end)
 
-t.test('a file outside the projects, and one in a folder whose name starts the same, are Neovim\'s to read', function()
+t.test('a file outside the projects is read by the hook too, and its name goes with BufEnter', function()
   local root = project()
-  local sibling = root .. '2'
+  local sibling = root .. '2' -- a folder whose name starts as the project's
   vim.fn.mkdir(sibling, 'p')
   vim.fn.writefile({ 'class C {}' }, file(sibling, 'C.java'))
+  local seen = reads()
   vim.cmd.edit(vim.fn.fnameescape(file(sibling, 'C.java')))
-  t.eq('java', vim.bo.filetype, 'Neovim read it as usual')
-  t.eq('', require('neovim4eclipse.project_files').file_of(0 + vim.api.nvim_get_current_buf()))
+  t.eq({ 'class C {}' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
+  t.eq({}, seen, 'no filetype plug-in or language server: Eclipse opens its editor')
+  local b = vim.api.nvim_get_current_buf()
+  t.eq(vim.api.nvim_buf_get_name(b), require('neovim4eclipse.project_files').file_of(b))
+  local entered = t.sent('eclipse_buf_enter')
+  t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4])
+end)
+
+t.test('a help page and a plug-in\'s buffer with a scheme are Neovim\'s', function()
+  project()
+  local files = require('neovim4eclipse.project_files')
+  vim.cmd('help help')
+  t.eq('help', vim.bo.buftype)
+  t.ok(vim.api.nvim_buf_line_count(0) > 10, 'Neovim read the help file itself')
+  t.eq('', files.file_of(vim.api.nvim_get_current_buf()))
+  t.eq(true, files.is_help(vim.api.nvim_buf_get_name(0)))
   local entered = t.sent('eclipse_buf_enter')
   t.eq('', entered[#entered][4])
+  local scheme = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(scheme, 'fugitive:///repo/.git//0/a.txt')
+  t.eq(false, files.eclipse_reads(vim.api.nvim_buf_get_name(scheme)))
+  t.eq(true, files.eclipse_reads('/etc/hosts'))
+  t.eq(true, files.eclipse_reads('C:\\Users\\you\\a.txt'))
+  t.eq(true, files.eclipse_reads('C:/Users/you/a.txt'))
+  t.eq(true, files.eclipse_reads('\\\\server\\share\\a.txt'))
+  t.eq(false, files.eclipse_reads(''))
 end)
 
 t.test('a file reached through a link to the project is the project\'s', function()
@@ -168,7 +192,7 @@ t.test('a file reached through a link to the project is the project\'s', functio
   t.eq({ 'class B {', '\tint x;', '}' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
 end)
 
-t.test('buffers made before the folders came get the hook; a folder that goes takes it away', function()
+t.test('a buffer made before the folders came has the hook, and keeps it when its project closes', function()
   vim.cmd('filetype plugin indent on')
   t.setup()
   t.run('PROJECT_FILES')
@@ -178,13 +202,12 @@ t.test('buffers made before the folders came get the hook; a folder that goes ta
   vim.fn.writefile({ 'class B {}' }, f)
   local early = vim.fn.bufadd(f)
   local files = require('neovim4eclipse.project_files')
-  t.eq('', files.file_of(early))
-  t.run('SET_PROJECT_FOLDERS', { root })
   t.eq(vim.api.nvim_buf_get_name(early), files.file_of(early))
+  t.run('SET_PROJECT_FOLDERS', { root })
   vim.fn.bufload(early)
   t.eq('', vim.bo[early].filetype, 'read by the hook')
-  t.run('SET_PROJECT_FOLDERS', {}) -- the project was closed
-  t.eq('', files.file_of(early))
+  t.run('SET_PROJECT_FOLDERS', {}) -- the project was closed: a file outside the projects now
+  t.eq(vim.api.nvim_buf_get_name(early), files.file_of(early))
 end)
 
 t.test('a closed document\'s buffer is read by the hook: its number, marks and last place stay', function()
@@ -240,11 +263,11 @@ t.test('a stale swap file does not stop the read at E325', function()
   local path = file(root, 'src', 'B.java')
   -- A swap file as an earlier Neovim that crashed would leave it: made (by Neovim's own read, the
   -- project off for a moment), kept aside, put back.
-  t.run('SET_PROJECT_FOLDERS', {})
   vim.o.updatecount = 200 -- nvim -l starts with swap files off (0), a normal Neovim with 200
   vim.o.directory = vim.fn.tempname() .. '//'
   vim.fn.mkdir(vim.o.directory, 'p')
   local probe = vim.fn.bufadd(path)
+  vim.api.nvim_clear_autocmds({ group = 'neovim4eclipse_projects', buffer = probe }) -- Neovim's own read
   vim.bo[probe].swapfile = true
   vim.fn.bufload(probe)
   vim.api.nvim_buf_call(probe, function() vim.cmd('silent! noautocmd normal! ix') vim.cmd('preserve') end)
@@ -253,7 +276,6 @@ t.test('a stale swap file does not stop the read at E325', function()
   assert(vim.uv.fs_copyfile(swap, swap .. '.keep'))
   vim.api.nvim_buf_delete(probe, { force = true })
   assert(vim.uv.fs_rename(swap .. '.keep', swap))
-  t.run('SET_PROJECT_FOLDERS', { root })
   vim.cmd.edit(vim.fn.fnameescape(path))
   t.eq({ 'class B {', '\tint x;', '}' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
   t.eq('n', vim.api.nvim_get_mode().mode, 'no question asked')

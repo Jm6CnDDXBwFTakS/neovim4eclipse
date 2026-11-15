@@ -668,9 +668,10 @@ public final class EditorAttachManager {
     }
 
     /**
-     * Neovim switched by itself to a project's file that has no editor ({@code gf}, {@code 'A},
+     * Neovim switched by itself to a file that has no editor ({@code gf}, {@code 'A},
      * {@code :b} into a closed file, a quickfix entry), which the plug-in read for it
-     * ({@code LuaScripts.PROJECT_FILES}). Called on an RPC thread; see {@link #followNeovimIntoFile}.
+     * ({@code LuaScripts.PROJECT_FILES}): a project's file, or one outside the open projects
+     * ({@code gf} on {@code /usr/include/stdio.h}). Called on an RPC thread; see {@link #followNeovimIntoFile}.
      *
      * <p>The workspace file is looked up in a {@link Job} first, not on the UI thread: a file made on
      * disk since Eclipse's last refresh is refreshed then ({@link ProjectFileEditors#workspaceFile}),
@@ -697,8 +698,10 @@ public final class EditorAttachManager {
      * {@link #followNeovimInto} does for an open document: the window that jumped travels into the
      * new editor, so {@code Ctrl-O} there goes back, and the attach takes Neovim's cursor (where
      * {@code gf}, a mark or the quickfix entry put it). The attach finds the buffer by its name and
-     * keeps it (its number, its marks: docs/design/BUFFER_NUMBERS.md, 2.2). A file Eclipse would not
-     * open here ({@link ProjectFileEditors}) sends Neovim back, as before. UI thread.
+     * keeps it (its number, its marks: docs/design/BUFFER_NUMBERS.md, 2.2). A file in no open
+     * project opens by its location ({@link ProjectFileEditors#openOutside}), as <i>File › Open
+     * File...</i> opens one. A file Eclipse would not open here ({@link ProjectFileEditors}: a
+     * folder, a {@code .zip} it would hand to the system's program) sends Neovim back, as before. UI thread.
      *
      * @param target the workspace file at {@code file}, or {@code null} when it is no open project's
      */
@@ -726,9 +729,12 @@ public final class EditorAttachManager {
                 IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
                 page = window == null ? null : window.getActivePage();
             }
-            IEditorPart opened = page == null || target == null ? null : ProjectFileEditors.open(page, target);
+            Path outside = target == null ? outsidePath(file) : null;
+            IEditorPart opened = page == null ? null
+                    : target != null ? ProjectFileEditors.open(page, target)
+                    : outside != null ? ProjectFileEditors.openOutside(page, outside) : null;
             if (opened != null) {
-                showTextPageForNeovim(opened, TextPages.inputOf(target));
+                showTextPageForNeovim(opened, target != null ? TextPages.inputOf(target) : ProjectFileEditors.inputOf(outside));
                 NavigationHistorySteps.activateForNeovim(page, opened, jumped);
                 if (textEditorOf(opened) != null) {
                     travel(session, mover, opened, leftBehind);
@@ -743,6 +749,15 @@ public final class EditorAttachManager {
             LOG.log(Level.WARNING, "Could not open " + file + " for Neovim", e);
         }
         session.returnToAttachedBufferAsync();
+    }
+
+    /** {@code file}, Neovim's name for a file in no open project, as a path, or {@code null} if it is none. */
+    private static Path outsidePath(String file) {
+        try {
+            return Path.of(file);
+        } catch (InvalidPathException e) {
+            return null;
+        }
     }
 
     /**
