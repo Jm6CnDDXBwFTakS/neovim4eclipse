@@ -19,11 +19,31 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
   one older than a later change to the same behavior (`git log -- <file>`, `CHANGELOG.md`), or two
   sources that disagree, is a reason to ask, naming both. Why: a question costs a minute, a wrong
   guess a rebuild.
+- **Offer the option that is easy to prove**: when you give the maintainer a choice (a design, a
+  rule for the docs, how to close a gap a review found), say which option's safety one check
+  establishes, and recommend it unless it costs something real. Easy to prove: check where a path
+  ends, not the route to it (the real path through `util/FilePaths`, not each link on the way);
+  allow a known set instead of refusing a list of bad cases (`NewFiles.internalOr` lets only
+  Eclipse's own text editors open a file); filter in the one place everything passes through, not
+  on each route to it (every `:` line passes `CmdlineLeavePre`, every jump `followNeovimIntoFile`);
+  act only on what the code found itself, never on text a program printed. Say what the option
+  costs (what it refuses that the other allowed) and what the other option would need instead.
+  Why: a rule proven by one check needs one review; a rule that guards every route keeps turning
+  up new routes.
 - **Review before the final test run**: once a change is built and its own tests pass, a code
-  review and a security review of the branch's diff (in Claude Code `/code-review`,
-  `/security-review`), then the fixes. At most two rounds (the review, and one over its fixes);
-  list what is left and ask before a third. Then `LikeCi --all` or `-Pall`, last, since review
-  fixes change the code that run must test.
+  review (correctness against the docs and spec, edge cases, error handling, docs kept current)
+  and a security review (untrusted input, paths, links, what a later step trusts) of the branch's
+  diff (in Claude Code `/code-review`, `/security-review`), each by a fresh reviewer that reads
+  the code, not this session's conclusions; then the fixes. **What counts as real:** a finding
+  that breaks a rule this file states (a cloned repository's file that makes something run: a
+  name reaching a command, a script-running editor, the system's program; Eclipse's and Neovim's
+  text drifting apart, or a user's text lost; a blocking call on the UI thread; personal data in
+  anything pushed), that stops a real use from working as documented, or that makes the code
+  disagree with its docs. A case that needs the user's own config or programs to act against
+  them, a crafted input that can only spoil its own result, or a message's wording is noted in
+  the report, not fixed in another round. Ask the reviewer to sort its findings by this rule. At
+  most two rounds (the review, and one over its fixes); list what is left and ask before a third.
+  Then `LikeCi --all` or `-Pall`, last, since review fixes change the code that run must test.
 
 ## Commands
 
