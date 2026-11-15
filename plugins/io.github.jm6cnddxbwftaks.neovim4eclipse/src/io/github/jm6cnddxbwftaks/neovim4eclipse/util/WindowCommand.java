@@ -38,14 +38,16 @@ import java.util.Locale;
  *       editor tabs of this stack close ({@code .} keeps this one)</td></tr>
  *   <tr><td>{@code help above 1234 /usr/share/nvim/runtime/doc/editing.txt}</td><td>{@code :help gf},
  *       Ctrl-] on a tag in a help page: the page in the help editor, at the tag's line (the count);
- *       a split on that side when no help editor is open</td></tr>
+ *       a split on that side when no help editor is open ({@code help tab ...}: {@code :tab help}, a new
+ *       editor tab of this stack)</td></tr>
  * </table>
  *
  * <p>A count of 0 means none was given, as Vim's {@code v:count}: {@code Ctrl-W w} goes to the next
  * window, {@code 3 Ctrl-W w} to window 3.
  *
  * @param action what to do
- * @param where  for {@link Action#SPLIT}: the side of the current editor the new one goes to
+ * @param where  for {@link Action#SPLIT} and {@link Action#HELP}: the side of the current editor the new
+ *               one goes to; {@code null} for a {@code :tab help}
  * @param target for {@link Action#SPLIT} and {@link Action#TAB}: what the new editor shows
  * @param file   for {@link Target#FILE}: the file's full path (Neovim made it absolute); "" otherwise
  * @param key    for {@link Action#FOCUS} and {@link Action#SIZE}: Vim's key after {@code Ctrl-W}
@@ -174,12 +176,15 @@ public record WindowCommand(Action action, Where where, Target target, String fi
         };
     }
 
-    /** {@code help above 1234 /path/doc/editing.txt}: the side, the line, the page's full path (one word). */
+    /**
+     * {@code help above 1234 /path/doc/editing.txt}: the side ({@code tab} for {@code :tab help}: a
+     * new editor tab, no side), the line, the page's full path (one word).
+     */
     private static WindowCommand help(List<String> words) {
         if (words.size() != 4 || words.get(3).isEmpty()) {
             return null;
         }
-        Where where = Where.valueOf(words.get(1).toUpperCase(Locale.ROOT));
+        Where where = words.get(1).equals("tab") ? null : Where.valueOf(words.get(1).toUpperCase(Locale.ROOT));
         return new WindowCommand(Action.HELP, where, Target.FILE, words.get(3), (char) 0, count(words.get(2)), false);
     }
 

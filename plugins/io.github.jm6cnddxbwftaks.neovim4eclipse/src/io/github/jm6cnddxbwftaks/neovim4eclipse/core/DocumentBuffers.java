@@ -91,8 +91,8 @@ final class DocumentBuffers {
     /** Called with the number of a document buffer Neovim switched to by itself. */
     private volatile Consumer<Integer> enterHandler;
     /**
-     * Called with the number and the file of a project's buffer without an editor that Neovim
-     * switched to by itself ({@code gf}, {@code 'A}; {@link LuaScripts#PROJECT_FILES}).
+     * Called with the number and the file of a buffer without an editor that Neovim switched to by
+     * itself ({@code gf}, {@code 'A}; {@link LuaScripts#PROJECT_FILES}), in a project or not.
      */
     private volatile BiConsumer<Integer, String> projectFileHandler;
     /**

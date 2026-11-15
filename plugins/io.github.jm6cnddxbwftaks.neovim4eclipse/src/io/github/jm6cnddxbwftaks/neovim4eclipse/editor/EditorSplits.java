@@ -29,6 +29,7 @@ import org.eclipse.e4.ui.model.application.ui.basic.MStackElement;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.swt.custom.StyledText;
@@ -44,6 +45,8 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
@@ -313,11 +316,18 @@ final class EditorSplits {
         IEditorPart shown = HELP_EDITORS.stream().filter(e -> isOpen(page, e)).findFirst().orElse(null);
         IEditorPart opened;
         if (shown == null) {
-            split(editor, from, new WindowCommand(WindowCommand.Action.SPLIT, command.where(),
-                    WindowCommand.Target.FILE, command.file(), (char) 0, 0, false));
+            // :tab help (no side): a new editor tab of this stack, as Vim's :tab help opens a tab page.
+            if (command.where() == null) {
+                tab(editor, from, new WindowCommand(WindowCommand.Action.TAB, null, WindowCommand.Target.FILE,
+                        command.file(), (char) 0, 0, false));
+            } else {
+                split(editor, from, new WindowCommand(WindowCommand.Action.SPLIT, command.where(),
+                        WindowCommand.Target.FILE, command.file(), (char) 0, 0, false));
+            }
             opened = page.getActiveEditor();
             if (opened == null || opened == from) {
-                return; // not opened: the reason is shown already
+                dropOpenCommand(); // not opened: the reason is shown already
+                return;
             }
         } else if (shows(shown, file)) {
             opened = shown; // its page already: Neovim's cursor goes to the tag once it attaches
@@ -327,7 +337,8 @@ final class EditorSplits {
             // a plug-in's doc/x.txt stays yours, not read-only.
             opened = EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE);
             if (opened == null) {
-                return; // logged
+                dropOpenCommand(); // logged
+                return;
             }
             if (!shown.isDirty()) {
                 HELP_EDITORS.remove(shown);
@@ -335,8 +346,7 @@ final class EditorSplits {
             }
         }
         HELP_EDITORS.add(opened);
-        readOnly(opened);
-        activate(page, opened);
+        activate(page, opened); // its attach makes it read-only (followHelpPage)
     }
 
     /** Whether {@code part} is a text editor of {@code file} (compared by the one rule, FilePaths). */
@@ -345,16 +355,50 @@ final class EditorSplits {
         return its != null && FilePaths.same(its, file);
     }
 
-    /**
-     * Makes a help page's editor read-only on Eclipse's side too, as Neovim's buffer is
-     * ({@code help.ready}): its viewer no longer types, pastes, cuts or formats. Without it an edit
-     * made through Eclipse (Edit › Paste) would change the document that Neovim refuses to change.
-     */
-    private static void readOnly(IEditorPart part) {
-        ITextEditor text = EditorAttachManager.textEditorOf(part);
-        if (text != null && text.getAdapter(ITextOperationTarget.class) instanceof ITextViewer viewer) {
-            viewer.setEditable(false);
+    /** The waiting cursor move of a page Eclipse did not show goes, so no later editor of it jumps. */
+    private static void dropOpenCommand() {
+        NeovimSession session = Activator.getDefault() == null ? null : Activator.getDefault().currentSession();
+        if (session != null) {
+            session.dropOpenCommandAsync();
         }
+    }
+
+    /**
+     * Whether {@code editor}'s document is a help page's: one an open help editor shows. Decided
+     * from the document, not the editor, since every editor of a file shares its document and its
+     * one Neovim buffer: a clone of the help editor ({@code :split}), or an editor of yours on that
+     * file, is read-only while the page is open, else Eclipse's text and Neovim's would drift.
+     * Makes the editor's viewer read-only accordingly, and editable again when it was made so here
+     * and the page has closed ({@code wasHelpPage}): it no longer types, pastes, cuts or formats.
+     * Called at each attach push. UI thread.
+     *
+     * @return whether it is a help page's now
+     */
+    static boolean followHelpPage(ITextEditor editor, boolean wasHelpPage) {
+        IDocument document = documentOf(editor);
+        // The attaching editor's page: a closed help editor stays in the weak set until it is
+        // collected, and its own site may be gone by then.
+        IWorkbenchPage workbenchPage = editor.getSite() == null ? null : editor.getSite().getPage();
+        boolean page = false;
+        for (IEditorPart help : new ArrayList<>(HELP_EDITORS)) {
+            if (document == null || workbenchPage == null || !isOpen(workbenchPage, help)) {
+                continue;
+            }
+            ITextEditor text = EditorAttachManager.textEditorOf(help);
+            if (text != null && documentOf(text) == document) {
+                page = true;
+                break;
+            }
+        }
+        if (page != wasHelpPage && editor.getAdapter(ITextOperationTarget.class) instanceof ITextViewer viewer) {
+            viewer.setEditable(!page);
+        }
+        return page;
+    }
+
+    private static IDocument documentOf(ITextEditor editor) {
+        return editor.getDocumentProvider() == null ? null
+                : editor.getDocumentProvider().getDocument(editor.getEditorInput());
     }
 
     /** Whether {@code editor} is still one of {@code page}'s open editors. */

@@ -100,7 +100,8 @@ final class ProjectFileEditors {
     /**
      * Opens the editor of {@code file}, a file on disk in no open project, in {@code page}, not
      * activated, by the same rules as {@link #open}: only an existing regular file (no folder, no
-     * dangling link), only an editor inside Eclipse, only text. Its content type comes from its name,
+     * dangling link: {@link #outsidePath} checked that, off the UI thread), only an editor inside
+     * Eclipse, only text. Its content type comes from its name,
      * as no project gives it one ({@link NewFiles#internalOr(IEditorDescriptor, String)}). Example:
      * {@code /etc/hosts} opens in the Text Editor; {@code /tmp/x.zip}, which Eclipse would open in
      * the system's program, is not opened, and Neovim goes back. UI thread.
@@ -109,8 +110,7 @@ final class ProjectFileEditors {
      */
     static IEditorPart openOutside(IWorkbenchPage page, Path file) {
         String name = file.getFileName() == null ? "" : file.getFileName().toString();
-        if (name.isEmpty() || !Files.isRegularFile(file) || DanglingLinks.isDangling(file)) {
-            LOG.fine(() -> "Not a file to open for Neovim: " + file);
+        if (name.isEmpty()) {
             return null;
         }
         IEditorDescriptor editor;
@@ -137,13 +137,19 @@ final class ProjectFileEditors {
     }
 
     /**
-     * Neovim's {@code name} as a path when it is in no open project ({@link NewFiles#workspaceFileAt}
-     * finds no workspace file there), else {@code null}: a workspace file {@link #workspaceFile}
-     * refused is not opened by location. Not on the UI thread (the lookup may wait for the workspace).
+     * Neovim's {@code name} as a path when it is an existing regular file (no folder, no dangling
+     * link) in no open project ({@link NewFiles#workspaceFileAt} finds no workspace file there),
+     * else {@code null}: a workspace file {@link #workspaceFile} refused is not opened by location.
+     * Not on the UI thread: the lookup may wait for the workspace, and the checks read the disk
+     * (a network path may be slow).
      */
     static Path outsidePath(String name) {
         try {
             Path path = Path.of(name);
+            if (!Files.isRegularFile(path) || DanglingLinks.isDangling(path)) {
+                LOG.fine(() -> "Not a file to open for Neovim: " + name);
+                return null;
+            }
             return NewFiles.workspaceFileAt(path) == null ? path : null;
         } catch (InvalidPathException e) {
             return null;

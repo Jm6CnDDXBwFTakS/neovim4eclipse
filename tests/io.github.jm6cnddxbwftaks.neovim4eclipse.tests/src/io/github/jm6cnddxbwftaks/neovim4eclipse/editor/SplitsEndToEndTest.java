@@ -160,8 +160,25 @@ class SplitsEndToEndTest extends EndToEndTestBase {
                     "editing.txt's editor gave its place");
             waitUntil("Neovim on 'fileformat''s tag", TIMEOUT_MS, () -> currentLine().contains("*'fileformat'*"),
                     () -> "; the line: " + currentLine());
+
+            // editing.txt again: its buffer, kept read-only from the first page, takes the text.
+            ex("help gf");
+            ITextEditor again = waitForNewEditor(second, "editing.txt in the help editor again");
+            waitUntil("Neovim on gf's tag again", TIMEOUT_MS, () -> currentLine().contains("*gf*"),
+                    () -> "; the line: " + currentLine());
+            assertEquals(Boolean.FALSE, SessionProbe.lua(session, "return vim.bo.modifiable"), "read-only again");
+
+            // A clone of the help editor shares its text: read-only too, in Eclipse.
+            ex("split");
+            ITextEditor clone = waitForNewEditor(again, "the clone of the help editor");
+            assertFalse(widgetOf(clone).getEditable(), "the clone is read-only too");
         } finally {
             // The pages' buffers stay in Neovim, read-only: a later test's :bufdo would stop in them.
+            // Their editors close first, and test.txt's is attached again: a buffer wiped under its
+            // attached editor leaves the next test's attach waiting.
+            closeTheSplits();
+            page().activate(editor);
+            waitForAttach(editor, "test.txt again");
             SessionProbe.lua(session, """
                     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                       if vim.b[buf].neovim4eclipse_help then

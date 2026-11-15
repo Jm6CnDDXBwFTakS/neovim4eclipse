@@ -33,6 +33,11 @@ public final class DocumentBuffer {
      */
     volatile boolean reopened;
     /**
+     * Whether the buffer was last made a help page's ({@link NeovimSession#setPageReadOnly}):
+     * read-only, so the next push must make it writable first. Input thread.
+     */
+    volatile boolean helpPage;
+    /**
      * Whether Eclipse has unsaved changes in the document (its editor is dirty). Neovim's
      * {@code 'modified'} follows it ({@link NeovimSession#setModifiedAsync}), so that {@code :update}
      * and {@code :wall} write exactly what Eclipse would save, and {@code :ls} shows {@code +}.

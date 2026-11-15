@@ -953,6 +953,24 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit(copy.size() + " project folders", Level.FINE, () -> await(api.execLua(LuaScripts.SET_PROJECT_FOLDERS, List.of(copy))));
     }
 
+    /**
+     * Makes {@code buffer} a help page's ({@code true}: read-only, help's {@code 'iskeyword'},
+     * {@code Ctrl-]} on a tag) or a plain document's ({@link LuaScripts#PAGE_ACCESS}). Nothing when
+     * it already is: a plain document's buffer costs no call. Input thread (the attach push).
+     */
+    public void setPageReadOnly(DocumentBuffer buffer, boolean page) throws Exception {
+        if (buffer.helpPage == page) {
+            return;
+        }
+        await(api.execLua(LuaScripts.PAGE_ACCESS, List.of(String.valueOf(buffer.bufnr), String.valueOf(page))));
+        buffer.helpPage = page;
+    }
+
+    /** Drops the waiting cursor move of a {@code :help} whose page Eclipse could not show. Any thread. */
+    public void dropOpenCommandAsync() {
+        submit("drop the :help open command", Level.FINE, () -> await(api.execLua(LuaScripts.DROP_OPEN_COMMAND, List.of())));
+    }
+
     /** Switches Neovim back to the attached buffer (it entered one that Eclipse does not show). */
     public void returnToAttachedBufferAsync() {
         submit("return to attached buffer", Level.FINE, buffers::returnToAttached);

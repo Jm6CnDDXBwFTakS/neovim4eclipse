@@ -48,6 +48,8 @@ class WindowCommandTest {
     void aHelpPageSaysItsSideLineAndFile() {
         assertEquals(new WindowCommand(Action.HELP, Where.ABOVE, Target.FILE, "/rt/doc/my editing.txt", (char) 0, 1234, false),
                 parse("help", "above", "1234", "/rt/doc/my editing.txt"));
+        assertEquals(new WindowCommand(Action.HELP, null, Target.FILE, "/rt/doc/editing.txt", (char) 0, 7, false),
+                parse("help", "tab", "7", "/rt/doc/editing.txt"), ":tab help: no side");
         assertNull(parse("help", "above", "x", "/rt/doc/editing.txt"), "the line is a number");
         assertNull(parse("help", "above", "12"), "no page");
         assertNull(parse("help", "sideways", "12", "/rt/doc/editing.txt"));

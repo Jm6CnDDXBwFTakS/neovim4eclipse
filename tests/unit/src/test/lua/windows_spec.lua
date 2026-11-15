@@ -897,6 +897,7 @@ t.test('a help page\'s buffer is read-only, and Ctrl-] there opens the tag\'s he
   vim.api.nvim_win_set_buf(0, page)
   t.eq(true, require('neovim4eclipse.host_commands').take_open_command(editing))
   t.eq(help_line(editing, 'gf'), vim.api.nvim_win_get_cursor(0)[1], 'on the tag')
+  t.run('PAGE_ACCESS', tostring(page), 'true') -- the attach push, its document a help editor's
   t.eq(false, vim.bo[page].modifiable)
   t.eq(true, vim.bo[page].readonly)
   -- Ctrl-] on a tag in the same page moves there; on one in another page sends that page.
@@ -914,4 +915,19 @@ t.test('a help page\'s buffer is read-only, and Ctrl-] there opens the tag\'s he
   t.type('<C-]>')
   local options = vim.api.nvim_get_runtime_file('doc/options.txt', false)[1]
   expect_windows({ { 'window', 'help', 'above', tostring(help_line(options, tag)), file_at(options) } })
+
+  -- Plain again when no help editor shows it (PAGE_ACCESS false): writable, Ctrl-] Eclipse's.
+  t.run('PAGE_ACCESS', tostring(page), 'false')
+  t.eq(true, vim.bo[page].modifiable)
+  t.eq(false, vim.bo[page].readonly)
+  t.eq('', vim.fn.maparg('<C-]>', 'n', false, true).buffer == 1 and 'buffer-local' or '')
+end)
+
+t.test(':tab help sends no side, and a page Eclipse could not show drops its cursor move', function()
+  commands()
+  local editing = vim.api.nvim_get_runtime_file('doc/editing.txt', false)[1]
+  t.type(':tab help gf<CR>')
+  expect_windows({ { 'window', 'help', 'tab', tostring(help_line(editing, 'gf')), file_at(editing) } })
+  t.run('DROP_OPEN_COMMAND')
+  t.eq(false, require('neovim4eclipse.host_commands').take_open_command(editing), 'nothing waits for it')
 end)

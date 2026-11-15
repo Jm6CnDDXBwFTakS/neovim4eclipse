@@ -515,18 +515,19 @@ final class LuaScripts {
               if not open_command or canonical(file) ~= open_command.file then
                 return false
               end
-              local command, after = open_command.command, open_command.after
+              local command = open_command.command
               open_command = nil
               run_open_command(command)
-              if after then
-                after()
-              end
               return true
             end
             -- For another script (WINDOW_COMMANDS' :help): a +cmd for the file Eclipse is about to
-            -- show, as :e +cmd name gives one, and after(), run once it ran, in that buffer.
-            package.loaded['neovim4eclipse.host_commands'].set_open_command = function(file, command, after)
-              open_command = { file = canonical(file), command = command, after = after }
+            -- show, as :e +cmd name gives one; dropped when Eclipse could not show it
+            -- (DROP_OPEN_COMMAND), so a later editor of that file does not jump.
+            package.loaded['neovim4eclipse.host_commands'].set_open_command = function(file, command)
+              open_command = { file = canonical(file), command = command }
+            end
+            package.loaded['neovim4eclipse.host_commands'].drop_open_command = function()
+              open_command = nil
             end
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
@@ -986,6 +987,12 @@ final class LuaScripts {
               if vim.bo[buf].buftype ~= '' then
                 return { vim.api.nvim_create_buf(true, true), false, false }
               end
+              -- Kept from a help page's editor: plain again, so the push can fill it; the attach
+              -- makes it a help page's again when its document is one (PAGE_ACCESS).
+              local commands = package.loaded['neovim4eclipse.window_commands']
+              if commands and vim.b[buf].neovim4eclipse_help then
+                commands.help.plain(buf)
+              end
             else
               buf = vim.fn.bufadd(name)
             end
@@ -1017,6 +1024,33 @@ final class LuaScripts {
      *       40, not line 1.</li>
      * </ul>
      */
+    /**
+     * Makes a document's buffer a help page's, or a plain document's again (arguments: the buffer
+     * number, and {@code "true"} or {@code "false"}): {@code help.ready} or {@code help.plain} of
+     * {@link #WINDOW_COMMANDS}. Sent by the attach push ({@code DocumentPush}): {@code false} before
+     * the text is pushed into a buffer that was a help page's (read-only, it would refuse it), then
+     * {@code true} after the push when the document is a help editor's.
+     */
+    static final String PAGE_ACCESS = """
+            local number, page = ...
+            local buf = tonumber(number)
+            page = page == 'true'
+            local help = require('neovim4eclipse.window_commands').help
+            if page then
+              help.ready(buf)
+            else
+              help.plain(buf)
+            end
+            """;
+
+    /** Drops the waiting {@code +cmd} of a {@code :help} whose page Eclipse could not show. */
+    static final String DROP_OPEN_COMMAND = """
+            local host = package.loaded['neovim4eclipse.host_commands']
+            if host and host.drop_open_command then
+              host.drop_open_command()
+            end
+            """;
+
     static final String GO_TO_LAST_POSITION = """
             local reused = ...
             local file = vim.b.neovim4eclipse_file
@@ -1879,7 +1913,9 @@ final class LuaScripts {
             --- What a help page's buffer gets, as Vim's help buffer has it: read-only (Neovim's side
             --- of the decision that help pages are not edited), help's 'iskeyword' (|tag| and
             --- *tag* read as a word), and Ctrl-] on a tag opening its help, where Ctrl-] elsewhere
-            --- is Eclipse's Open Declaration (IDE_KEYS).
+            --- is Eclipse's Open Declaration (IDE_KEYS). Eclipse decides, at each attach push of
+            --- the page's document (PAGE_ACCESS): the buffer is the document's, whichever editor
+            --- shows it, and is kept when its editor closes.
             function help.ready(buf)
               vim.bo[buf].modifiable = false
               vim.bo[buf].readonly = true
@@ -1888,6 +1924,19 @@ final class LuaScripts {
               vim.keymap.set('n', '<C-]>', function()
                 help.open(vim.fn.expand('<cword>'), nil)
               end, { buffer = buf, desc = 'Eclipse: the help for the tag under the cursor' })
+            end
+
+            --- Undoes help.ready: the buffer as any document's again (its page's editor closed, and
+            --- another editor of the file attaches), or writable for a moment, for Eclipse's push.
+            function help.plain(buf)
+              if not vim.b[buf].neovim4eclipse_help then
+                return
+              end
+              vim.bo[buf].modifiable = true
+              vim.bo[buf].readonly = false
+              vim.bo[buf].iskeyword = vim.go.iskeyword
+              vim.b[buf].neovim4eclipse_help = nil
+              pcall(vim.keymap.del, 'n', '<C-]>', { buffer = buf })
             end
 
             --- The words for a help page, or nil and why. In the page's own editor the cursor goes
@@ -1905,11 +1954,11 @@ final class LuaScripts {
                   pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
                 end)
               else
-                host.set_open_command(file, tostring(line), function()
-                  help.ready(vim.api.nvim_get_current_buf())
-                end)
+                host.set_open_command(file, tostring(line))
               end
-              return { 'window', 'help', side(mods and mods.vertical, mods), tostring(line), file }
+              -- :tab help: a new editor tab of this stack, as Vim's :tab help opens a tab page.
+              local where = (mods and mods.tab and mods.tab >= 0) and 'tab' or side(mods and mods.vertical, mods)
+              return { 'window', 'help', where, tostring(line), file }
             end
 
             --- :help as Ctrl-] runs it, where no : line is typed.

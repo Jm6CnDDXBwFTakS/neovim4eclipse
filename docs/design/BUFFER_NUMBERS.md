@@ -123,7 +123,9 @@ for an open file: the window that jumped travels into the new editor (docs/desig
 so `Ctrl-O` there goes back. The attach finds the buffer by name (2.2) and pushes Eclipse's text.
 A file outside the workspace opens the same way, by its location (`ProjectFileEditors.openOutside`,
 an editor input as *File › Open File...* makes), and is read by the hook too. Anything else Neovim
-enters (`:help`, a scratch buffer) is undone: Neovim goes back to the editor's buffer.
+enters (a scratch buffer, a help window `<Cmd>help` opened) is undone: Neovim goes back to the
+editor's buffer. A `:help` line enters no buffer: Eclipse shows the page in a help editor
+(docs/design/WINDOWS.md).
 
 This applies to any workspace file, not only closed documents: the mechanism and its risk are the
 same, so it is built once, and quickfix (DIAGNOSTICS.md, section 5) only adds the lists,
@@ -216,9 +218,8 @@ README's `vim.g.neovim4eclipse` check stays the way to skip them altogether.
 - `NotificationBridgeTest`: the notifications.
 - UI tests: `TwoEditorsEndToEndTest` (`:ls!` numbers after closing and reopening an editor, the
   caret on `'"`); `ProjectFilesEndToEndTest` (`gf` and `Ctrl-O` back, `:b N` and `Ctrl-^` into a
-  closed file, a quickfix entry, a file made outside Eclipse, a `.zip` refused and `:help` undone, a
-  script's `:edit!` and the text kept across its reload). Its tests fail with the folders not sent,
-  except the refusal, which checks that Eclipse was asked. Each half of the reload's attach rule,
+  closed file, a quickfix entry, a file made outside Eclipse, a file outside the projects opened by its
+  location, a `.zip` refused, a script's `:edit!` and the text kept across its reload). Each half of the reload's attach rule,
   undone, fails one test in `document_buffer_spec.lua` or `ProjectFilesEndToEndTest`.
 
 ## 4. Probed and left as they are; known limits
