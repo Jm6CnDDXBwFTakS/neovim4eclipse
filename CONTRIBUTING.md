@@ -68,9 +68,9 @@ The UI tests in `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests` run only 
 start an Eclipse workbench, which opens a window for about 15 seconds, so a plain `./mvnw verify`
 leaves them out (it still compiles them). On a headless Linux machine run
 `xvfb-run -a ./mvnw verify -Pui`, which keeps the window on a virtual display. CI always runs them on
-Linux, and on Windows and macOS when a *Run workflow* asks (the *Build* workflow's `platforms`
-job, "Continuous integration" below), but run `-Pui` yourself before you push a change to the editor, the session or the end-to-end
-behavior: CI only shows a failure after the push.
+Linux, and on Windows and macOS when a *Run workflow* asks (the *Build* workflow's `windows` and
+`macos` jobs, "Continuous integration" below), but run `-Pui` yourself before you push a change to
+the editor, the session or the end-to-end behavior: CI only shows a failure after the push.
 
 The Java-editor checks (Format, Rename, Organize Imports, a save action, a template, `gd`/`K` as
 Open Declaration and the Javadoc hover, folded imports) need the Java development tools in the
@@ -162,10 +162,11 @@ GitHub Actions ([.github/workflows](.github/workflows)) runs the same commands:
   "Releasing"). It runs `./mvnw verify -Pui` (the UI tests under `xvfb-run`) and the integration
   tests against the pinned Neovim on Linux, and attaches the installable ZIP to the run:
   `neovim4eclipse-<version>.zip`, ready for *Install New Software › Add › Archive* without
-  unpacking. Windows and macOS (the `platforms`
-  job) run only when a *Run workflow* ticks them: their runners cost 2x and 10x Linux's minutes
+  unpacking. Windows and macOS (the `windows` and `macos`
+  jobs) run only when a *Run workflow* ticks them: their runners cost 2x and 10x Linux's minutes
   and can wait long for a machine, and `LikeCi --all` runs on all three systems before a release.
-  Ticking *platforms-only* as well runs just those, for a commit whose Linux jobs already ran:
+  Ticking *platforms-only* as well runs just those, for a commit whose Linux jobs already ran
+  (with neither system ticked, the run fails at once):
 
   ```bash
   gh workflow run build.yml --ref main -f windows=true -f macos=true -f platforms-only=true

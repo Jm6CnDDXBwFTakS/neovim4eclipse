@@ -20,6 +20,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   plug-in and forgets your Trust dialog choices first, as a new user's Eclipse. The check also
   fails now if the install fetches anything beyond the release's own plug-in and feature.
 
+### Changed
+
+- For contributors: the Build workflow's Windows and macOS tests are two jobs, *All tests on
+  Windows* and *All tests on macOS*, so a run without them names the skipped jobs plainly.
+
 ## [0.2.20] - 2026-11-14
 
 ### Fixed

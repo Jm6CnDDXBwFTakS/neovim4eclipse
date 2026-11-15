@@ -35,7 +35,7 @@ The safe loop for any upgrade:
 | Maven itself, and the Maven wrapper | `distributionUrl` and `distributionSha256Sum` (Maven), `wrapperVersion` (the scripts `mvnw` and `mvnw.cmd`) in `.mvn/wrapper/maven-wrapper.properties`; the line Maven stays on is `maven.line` in `releng/tools/maven/settings.properties` | none; `java releng/tools/maven/MavenUpgrade.java` moves both |
 | Neovim (what *Get Neovim* installs, the oldest supported, and the one CI tests) | `version=` in the plug-in's `util/neovim-downloads.properties` (written by `releng/UpdateNeovimDownloads.java`; *Get Neovim* and CI both install from it; `NeovimVersion.MINIMUM` reads it) | the copies `releng/version-copies.txt` lists, section `[neovim]` (README, CONTRIBUTING, LEARNING, PACKAGING, `feature.xml`, the update site's `category.xml`); `java releng/tools/neovim/NeovimUpgrade.java` rewrites them |
 | GitHub Actions | `uses: owner/repo@<commit SHA> # vX.Y.Z` lines in `.github/workflows/` | not checked by `VersionConsistencyTest`; `DependenciesTest` fails on a line that is not pinned this way |
-| CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `platforms` job's matrix in `build.yml` adds `windows-latest` and `macos-latest` | not checked |
+| CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `windows` and `macos` jobs in `build.yml` add `windows-latest` and `macos-latest` | not checked |
 
 The libraries, the Maven plug-ins (Tycho among them) and the GitHub Actions move with
 `java releng/tools/dependencies/Dependencies.java` (*Libraries, plug-ins and actions* below),

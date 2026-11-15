@@ -9,12 +9,13 @@
 # Release workflow then reuses (CONTRIBUTING.md, "Releasing"). The update-site ZIP is attached to the run as it is
 # (neovim4eclipse-<version>.zip, not wrapped in another ZIP), ready for Help > Install New Software
 # > Add > Archive, and kept for 90 days. The build also runs the workbench (UI) tests, end-to-end ones
-# included, inside a virtual X display (xvfb-run) with a pinned Neovim. The platforms job runs the
-# same tests on Windows and macOS, but only when a Run workflow asks for it (the windows and macos
-# inputs): those runners cost 2x and 10x Linux's minutes and sometimes wait long for a machine, and
-# the maintainer runs every test on all three systems before a release (LikeCi --all). Ticking
-# platforms-only as well runs just those, for a commit whose Linux jobs already ran. Example, the
-# release commit on main afterwards:
+# included, inside a virtual X display (xvfb-run) with a pinned Neovim. The windows and macos jobs
+# run the same tests on those systems, but only when a Run workflow asks for them (the inputs of
+# the same names): those runners cost 2x and 10x Linux's minutes and sometimes wait long for a
+# machine, and the maintainer runs every test on all three systems before a release (LikeCi
+# --all). Ticking platforms-only as well runs just those, for a commit whose Linux jobs already
+# ran (with neither system ticked, the inputs-check job fails the run). Example, the release commit
+# on main afterwards:
 #   gh workflow run build.yml --ref main -f windows=true -f macos=true -f platforms-only=true
 #
 # It is also a reusable workflow (workflow_call): release.yml runs this same build for a tag, with
@@ -58,7 +59,7 @@ on:
       skip-tests:
         description: >-
           Build the ZIP without running any test: the build job runs verify -DskipTests without
-          -Pui, and the integration and platforms jobs are skipped. Only for release.yml, when
+          -Pui, and the integration, windows and macos jobs are skipped. Only for release.yml, when
           this workflow already passed on main for the same commit. False by default; push, pull
           request and manual runs have no inputs, and an absent input is false too, so they always
           run every test.
@@ -248,24 +249,19 @@ jobs:
   # UI only on the first thread). Each job installs the Neovim for its runner's platform
   # (install auto: windows-latest is x86_64 today, macos-latest Apple silicon), so a runner image
   # that changes processor needs no change here.
-  platforms:
-    name: All tests on ${{ matrix.name }}
+  #
+  # Two jobs, not one matrix job over the ticked systems: GitHub does not expand ${{ matrix.* }}
+  # in the name of a job it skips, so a run without them showed "All tests on ${{ matrix.name }}".
+  # The macos job takes the windows job's steps through the YAML anchor &platform-steps (an alias,
+  # *platform-steps, repeats the anchored node exactly), so the steps are written once.
+  windows:
+    name: All tests on Windows
     # Only on request (see the top of this file); release.yml never asks.
-    if: ${{ !inputs.skip-tests && (inputs.windows || inputs.macos) }}
-    runs-on: ${{ matrix.os }}
+    if: ${{ !inputs.skip-tests && inputs.windows }}
+    runs-on: windows-latest
     # A UI test that hangs (a dialog nobody closes) would otherwise hold the runner for 6 hours.
     timeout-minutes: 60
-    strategy:
-      # Let both finish: a failure on one OS only says something different from one on both.
-      fail-fast: false
-      # The systems ticked, as a JSON list built from the inputs. Example, both ticked:
-      # [{"name":"Windows","os":"windows-latest"},{"name":"macOS","os":"macos-latest"}]
-      matrix:
-        include: ${{ fromJSON(format('[{0}{1}{2}]',
-          inputs.windows && '{"name":"Windows","os":"windows-latest"}' || '',
-          inputs.windows && inputs.macos && ',' || '',
-          inputs.macos && '{"name":"macOS","os":"macos-latest"}' || '')) }}
-    steps:
+    steps: &platform-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
@@ -299,7 +295,7 @@ jobs:
         if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: failure-${{ matrix.name }}-attempt-${{ github.run_attempt }}
+          name: failure-${{ runner.os }}-attempt-${{ github.run_attempt }}   # Windows or macOS
           include-hidden-files: true
           path: |
             **/target/surefire-reports/
@@ -307,3 +303,10 @@ jobs:
             tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/failure-evidence/
           retention-days: 14
           if-no-files-found: ignore
+
+  macos:
+    name: All tests on macOS
+    if: ${{ !inputs.skip-tests && inputs.macos }}   # as the windows job
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps: *platform-steps
