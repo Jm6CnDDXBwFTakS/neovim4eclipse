@@ -370,8 +370,8 @@ matches; when Eclipse changes it, Neovim reloads the colorscheme, so highlight c
 config makes after its `:colorscheme` are lost then (make them in a `ColorScheme` autocommand to
 keep them). The left button and the wheel are Neovim's inside it, in every mode: a click puts the
 cursor on a history line, a double click selects a word, dragging selects, and the wheel scrolls
-(your `'mouse'`, `'mousescroll'` and mouse mappings apply). The right and middle buttons do nothing
-there. An input method's composed text (Japanese, the macOS accent menu) does not reach it: the
+(your `'mouse'`, `'mousescroll'` and mouse mappings apply; with `'mouse'` empty, a click there
+does nothing). The right and middle buttons do nothing there. An input method's composed text (Japanese, the macOS accent menu) does not reach it: the
 `:` box has that.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.

@@ -753,11 +753,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     static final String CLOSE_COMMAND_WINDOW_KEYS = "<C-\\><C-N><C-\\><C-N>";
 
     /**
-     * Closes the command-line window without running its line ({@link #CLOSE_COMMAND_WINDOW_KEYS});
-     * nothing when it is not open. Example: the user clicks into another view while {@code q:} is
-     * shown, maybe in Insert mode, maybe after a {@code d} still waiting for its motion.
-     */
-    /**
      * A mouse event on cell ({@code row}, {@code col}) of the command-line window, as drawn in its
      * panel: {@code nvim_input_mouse} on the window's grid, in order with the keys, so Neovim counts
      * double clicks and drags itself, and its {@code 'mouse'} and mappings apply. Nothing while the
@@ -778,6 +773,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         });
     }
 
+    /**
+     * Closes the command-line window without running its line ({@link #CLOSE_COMMAND_WINDOW_KEYS});
+     * nothing when it is not open. Example: the user clicks into another view while {@code q:} is
+     * shown, maybe in Insert mode, maybe after a {@code d} still waiting for its motion.
+     */
     public void closeCommandWindowAsync() {
         submit("close the command-line window", Level.FINE, () -> await(api.input(CLOSE_COMMAND_WINDOW_KEYS)));
     }

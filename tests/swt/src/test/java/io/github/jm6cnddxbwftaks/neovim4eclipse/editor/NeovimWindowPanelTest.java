@@ -133,9 +133,9 @@ class NeovimWindowPanelTest {
         int w = canvas.cellWidth();
         int h = canvas.cellHeight();
         canvas.notifyListeners(SWT.MouseDown, mouse(1, 3 * w + 1, 2 * h + 1, SWT.SHIFT));
-        canvas.notifyListeners(SWT.MouseMove, mouse(0, 3 * w + 2, 2 * h + 2, 0)); // the same cell
-        canvas.notifyListeners(SWT.MouseMove, mouse(0, 5 * w + 1, 2 * h + 1, 0));
-        canvas.notifyListeners(SWT.MouseMove, mouse(0, 100 * w, 100 * h, 0)); // past the edge: the last cell
+        canvas.notifyListeners(SWT.MouseMove, mouse(0, 3 * w + 2, 2 * h + 2, SWT.BUTTON1)); // the same cell
+        canvas.notifyListeners(SWT.MouseMove, mouse(0, 5 * w + 1, 2 * h + 1, SWT.BUTTON1));
+        canvas.notifyListeners(SWT.MouseMove, mouse(0, 100 * w, 100 * h, SWT.BUTTON1)); // past the edge: the last cell
         canvas.notifyListeners(SWT.MouseUp, mouse(1, 100 * w, 100 * h, 0));
         canvas.notifyListeners(SWT.MouseDown, mouse(3, w, h, 0)); // the right button
         Event wheel = mouse(0, w, h, 0);
@@ -143,6 +143,31 @@ class NeovimWindowPanelTest {
         canvas.notifyListeners(SWT.MouseVerticalWheel, wheel);
         assertEquals(List.of("mouse left press S 2 3", "mouse left drag  2 5", "mouse left drag  6 19",
                 "mouse left release  6 19", "mouse wheel down  1 1"), calls);
+    }
+
+    /** A touchpad's small counts add up to a notch's scroll, not one scroll each. */
+    @Test
+    void aTouchpadsSmallWheelCountsAddUpToOneScroll() {
+        panel.show(window());
+        GridCanvas canvas = panel.canvas();
+        for (int i = 0; i < 5; i++) {
+            Event wheel = mouse(0, 1, 1, 0);
+            wheel.count = 1;
+            canvas.notifyListeners(SWT.MouseVerticalWheel, wheel);
+        }
+        assertEquals(List.of("mouse wheel up  0 0"), calls, "5 counts: one scroll, 2 kept for the next");
+    }
+
+    /** The window closed mid-drag (Enter typed with the button held): no hover turns into a drag after. */
+    @Test
+    void aDragCutOffByTheCloseSendsNothingWhenTheWindowOpensAgain() {
+        panel.show(window());
+        panel.canvas().notifyListeners(SWT.MouseDown, mouse(1, 1, 1, 0));
+        panel.show(CommandWindowView.CLOSED);
+        panel.show(window());
+        int w = panel.canvas().cellWidth();
+        panel.canvas().notifyListeners(SWT.MouseMove, mouse(0, 5 * w, 1, 0));
+        assertEquals(List.of("mouse left press  0 0"), calls);
     }
 
     private static Event mouse(int button, int x, int y, int stateMask) {

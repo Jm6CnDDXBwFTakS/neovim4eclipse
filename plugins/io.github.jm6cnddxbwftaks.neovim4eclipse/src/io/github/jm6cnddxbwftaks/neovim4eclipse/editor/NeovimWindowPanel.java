@@ -156,6 +156,7 @@ final class NeovimWindowPanel {
         canvas.addListener(SWT.MouseMove, this::onMouseMove);
         canvas.addListener(SWT.MouseUp, this::onMouseUp);
         canvas.addListener(SWT.MouseVerticalWheel, this::onWheel);
+        canvas.addListener(SWT.MouseHorizontalWheel, e -> e.doit = false); // the editor under it stays put
         canvas.addListener(SWT.FocusIn, e -> stateListener.run());
         canvas.addListener(SWT.FocusOut, e -> stateListener.run());
         host.addControlListener(repositionOnResize);
@@ -179,9 +180,13 @@ final class NeovimWindowPanel {
         commands.mouse("left", "press", modifiers(e.stateMask), cell[0], cell[1]);
     }
 
-    /** A drag sends only a change of cell: moving inside one cell would make Neovim redraw for nothing. */
+    /**
+     * A drag sends only a change of cell: moving inside one cell would make Neovim redraw for
+     * nothing. Only with the left button held: a press whose release was lost (the window closed
+     * mid-drag) never turns a hover into a drag.
+     */
     private void onMouseMove(Event e) {
-        int[] cell = pressedAt == null ? null : canvas.cellAt(e.x, e.y);
+        int[] cell = pressedAt == null || (e.stateMask & SWT.BUTTON1) == 0 ? null : canvas.cellAt(e.x, e.y);
         if (cell == null || (cell[0] == pressedAt[0] && cell[1] == pressedAt[1])) {
             return;
         }
@@ -198,17 +203,28 @@ final class NeovimWindowPanel {
         commands.mouse("left", "release", modifiers(e.stateMask), cell[0], cell[1]);
     }
 
-    /** One wheel notch is one {@code <ScrollWheelUp>} or {@code <ScrollWheelDown>}: Neovim scrolls by its {@code 'mousescroll'}. */
+    /** The wheel's counts not yet sent: SWT counts 3 per notch, a touchpad less per event. */
+    private int wheelCount;
+
+    /**
+     * One wheel notch (SWT's count of 3) is one {@code <ScrollWheelUp>} or {@code <ScrollWheelDown>}:
+     * Neovim scrolls by its {@code 'mousescroll'}. A touchpad sends many smaller counts; they add
+     * up, so a swipe scrolls as far as the same turn of a wheel would, not one scroll per event.
+     */
     private void onWheel(Event e) {
+        e.doit = false; // the editor under the panel does not scroll too
         int[] cell = canvas.cellAt(e.x, e.y);
         if (cell == null || e.count == 0) {
             return;
         }
-        String direction = e.count > 0 ? "up" : "down";
-        for (int i = 0; i < Math.max(1, Math.abs(e.count) / 3); i++) { // SWT counts 3 per notch
-            commands.mouse("wheel", direction, modifiers(e.stateMask), cell[0], cell[1]);
+        if (Integer.signum(e.count) != Integer.signum(wheelCount)) {
+            wheelCount = 0; // turned the other way: what was left of the old direction goes
         }
-        e.doit = false; // the editor under the panel does not scroll too
+        wheelCount += e.count;
+        while (Math.abs(wheelCount) >= 3) {
+            commands.mouse("wheel", wheelCount > 0 ? "up" : "down", modifiers(e.stateMask), cell[0], cell[1]);
+            wheelCount -= 3 * Integer.signum(wheelCount);
+        }
     }
 
     /** Neovim's modifier letters for a mouse event's keys: {@code "S"} Shift, {@code "C"} Ctrl, {@code "A"} Alt. */
@@ -304,6 +320,8 @@ final class NeovimWindowPanel {
         OverlayFrame<GridCanvas> old = frame;
         frame = null;
         canvas = null;
+        pressedAt = null; // a drag cut off by the close: its release never comes from a disposed canvas
+        wheelCount = 0;
         old.dispose();
         if (refocusEditor && hadFocus && !host.isDisposed()) {
             host.setFocus();
