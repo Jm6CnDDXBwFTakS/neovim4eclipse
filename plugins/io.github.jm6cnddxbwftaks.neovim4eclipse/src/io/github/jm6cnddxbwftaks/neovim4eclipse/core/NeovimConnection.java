@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,8 +59,8 @@ final class NeovimConnection implements AutoCloseable {
     static final String CLIENT_NAME = "neovim4eclipse";
 
     /**
-     * The size reported with {@code nvim_ui_attach}. The plug-in draws nothing from Neovim's screen,
-     * but the size matters: it is what {@code &columns} and {@code &lines} say, and what {@code L}
+     * The size reported with {@code nvim_ui_attach}. The plug-in draws only the command-line window
+     * from Neovim's screen, but the size matters: it is what {@code &columns} and {@code &lines} say, and what {@code L}
      * and {@code Ctrl-D} count. It holds until an editor attaches, which resizes the screen to its
      * own size ({@code NeovimSession.setEditorSizeAsync}), and for good with the viewport turned
      * off ({@code vim.g.neovim4eclipse_viewport = 0}).
@@ -67,9 +68,9 @@ final class NeovimConnection implements AutoCloseable {
     private static final int UI_WIDTH = 120;
     private static final int UI_HEIGHT = 40;
     /**
-     * The UI the plug-in attaches as: no 24-bit color ({@code rgb} defaults to {@code true}, so it is
-     * sent explicitly), and parts of Neovim's screen sent as events instead of drawn into the
-     * grid, which nobody sees:
+     * The UI the plug-in attaches as: 24-bit color ({@code rgb}: the highlights of the grids it draws
+     * come as {@code 0xRRGGBB}), and parts of Neovim's screen sent as events instead of drawn into
+     * the grid:
      * <ul>
      *   <li>{@code ext_cmdline}: every command line Neovim opens, as {@code cmdline_show},
      *       {@code cmdline_pos} ... ({@code util/CmdlineEvent}), which the editor's {@code :} box
@@ -82,15 +83,20 @@ final class NeovimConnection implements AutoCloseable {
      *       belong to the command line, and the box lists them. A menu of an insert Neovim drives
      *       ({@code <C-n>} in a block {@code I}) comes on grid 1 and is ignored, as it was drawn into
      *       a grid nobody saw before.</li>
-     *   <li>{@code ext_linegrid}, which {@code ext_messages} needs (Neovim turns it on anyway). The grid
-     *       events it brings are ignored; they are fewer per key than the old cell-by-cell ones.</li>
+     *   <li>{@code ext_linegrid}, which {@code ext_messages} needs (Neovim turns it on anyway): the
+     *       screen as {@code grid_line} events, fewer per key than the old cell-by-cell ones.</li>
+     *   <li>{@code ext_multigrid}: each window drawn into a grid of its own, with {@code win_pos}
+     *       saying which window a grid shows ({@code util/GridEvent}, {@code util/Grids}). The
+     *       editors' windows' grids are not drawn: the editors show the documents. The command-line
+     *       window's is ({@code editor/NeovimWindowPanel}). Turning it on sends about the same
+     *       events per key as before (measured on Neovim 0.12.6).</li>
      * </ul>
-     * The other {@code ext_*} options stay off: the tabline, windows ... are not used.
+     * The other {@code ext_*} options stay off: the tabline and cterm colors are not used.
      */
     static final Map<String, Object> TERMINAL_UI = terminalUi();
 
     private static Map<String, Object> terminalUi() {
-        List<String> on = List.of("ext_cmdline", "ext_messages", "ext_linegrid", "ext_popupmenu");
+        List<String> on = List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu");
         Map<String, Object> options = new LinkedHashMap<>();
         for (String name : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                 "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
@@ -326,19 +332,53 @@ final class NeovimConnection implements AutoCloseable {
      *
      * <p>{@link RpcChannel} calls it on its reader thread, in arrival order; while it runs, no
      * other message from Neovim is read. Until it is set, notifications are dropped (Neovim sends
-     * {@code redraw}s right after {@code nvim_ui_attach}) and requests are answered with an error.
+     * {@code redraw}s right after {@code nvim_ui_attach}) and requests are answered with an error,
+     * except the highlight definitions in those redraws, which are kept and handed on first (see
+     * {@link Forwarder}).
      */
     void setIncoming(Incoming incoming) {
         this.incoming = incoming;
     }
 
-    /** Hands messages to {@link #incoming} once it is set (the channel needs a receiver from the start). */
+    /**
+     * Hands messages to {@link #incoming} once it is set (the channel needs a receiver from the start).
+     *
+     * <p>One part of the redraws before that is kept: the highlight definitions ({@code
+     * hl_attr_define}, {@code default_colors_set}). Neovim defines each highlight id once for a UI,
+     * when it first uses it, and the ones its start-up uses come right after {@code nvim_ui_attach};
+     * dropped, the command-line window's cells would point at ids nobody defined, and draw in the
+     * default colors (seen with Neovim's default dark colorscheme: no bold, no colors). They are
+     * handed on as one {@code redraw} before the first notification once {@code incoming} is set,
+     * on this same reader thread, so the order holds. Fields used on the reader thread only.
+     */
     private final class Forwarder implements Incoming {
+        private List<Object> earlyHighlights = new ArrayList<>();
+
         @Override
         public void notification(String method, List<?> params) {
             Incoming target = incoming;
-            if (target != null) {
-                target.notification(method, params);
+            if (target == null) {
+                if ("redraw".equals(method) && earlyHighlights != null) {
+                    keepHighlights(params);
+                }
+                return;
+            }
+            if (earlyHighlights != null) {
+                List<Object> early = earlyHighlights;
+                earlyHighlights = null;
+                if (!early.isEmpty()) {
+                    target.notification("redraw", early);
+                }
+            }
+            target.notification(method, params);
+        }
+
+        private void keepHighlights(List<?> batches) {
+            for (Object batch : batches) {
+                if (batch instanceof List<?> entry && !entry.isEmpty()
+                        && ("hl_attr_define".equals(entry.get(0)) || "default_colors_set".equals(entry.get(0)))) {
+                    earlyHighlights.add(entry);
+                }
             }
         }
 

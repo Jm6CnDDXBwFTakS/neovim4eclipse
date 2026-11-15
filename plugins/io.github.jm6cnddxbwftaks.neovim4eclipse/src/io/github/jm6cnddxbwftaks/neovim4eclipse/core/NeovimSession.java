@@ -31,6 +31,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
@@ -229,6 +233,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final CmdlineState cmdline = new CmdlineState();
     /** The view last passed to the command-line listeners. */
     private CmdlineState.View lastCmdline = CmdlineState.View.CLOSED;
+    /** Neovim's screen grids, from its UI events ({@code ext_multigrid}); RPC reader thread only. */
+    private final Grids grids = new Grids();
+    /**
+     * The command-line window as last passed to its listeners ({@link #addCommandWindowListener}).
+     * Written on the RPC reader thread; read by {@link #resizeGrid} on the input thread.
+     */
+    private volatile CommandWindowView commandWindow = CommandWindowView.CLOSED;
 
     private NeovimSession(NeovimConnection connection, Handle homeBuffer, int homeWin, ClipboardPort clipboard) {
         this.connection = connection;
@@ -693,6 +704,56 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     public void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
         events.removeCmdlineListener(listener);
+    }
+
+    /**
+     * Hears the command-line window open, change and close ({@link CommandWindowView}), on the RPC
+     * reader thread: the listener hops to the UI thread itself. The window's grid comes after it
+     * opened, once Neovim has drawn it, and again after each change.
+     */
+    public void addCommandWindowListener(Consumer<CommandWindowView> listener) {
+        events.addCommandWindowListener(listener);
+    }
+
+    public void removeCommandWindowListener(Consumer<CommandWindowView> listener) {
+        events.removeCommandWindowListener(listener);
+    }
+
+    /** Whether Neovim's command-line window is open. */
+    public boolean isCommandWindowOpen() {
+        return commandWindow.open();
+    }
+
+    /**
+     * Sets Neovim's {@code 'background'} from Eclipse's theme ({@link LuaScripts#SET_BACKGROUND}):
+     * {@code dark} for a dark editor background. Example: the editor attaches in the dark theme;
+     * the user then switches Eclipse to the light one.
+     */
+    public void setBackgroundAsync(boolean dark) {
+        String background = dark ? "dark" : "light";
+        submit("'background' " + background, Level.FINE,
+                () -> await(api.execLua(LuaScripts.SET_BACKGROUND, List.of(background))));
+    }
+
+    /**
+     * The keys that close the command-line window without running its line, whatever mode it is
+     * in. {@code <C-\><C-N>} ends a command half typed ({@code r}, {@code "}, {@code d}) and Insert
+     * or Visual mode; in the window's Normal mode it closes the window, its line dropped, as
+     * {@code :quit} there does. So the first one closes a window in Normal mode, the second one one
+     * that was in another mode; a second one left over goes to the editor's window, where in Normal
+     * mode it does nothing. Keys, not a call: while Neovim waits for the rest of a command it reads
+     * keys but answers no call. Not {@code Ctrl-C}: in that window it goes back to the command line
+     * with the line under the cursor (and Enter then runs it).
+     */
+    static final String CLOSE_COMMAND_WINDOW_KEYS = "<C-\\><C-N><C-\\><C-N>";
+
+    /**
+     * Closes the command-line window without running its line ({@link #CLOSE_COMMAND_WINDOW_KEYS});
+     * nothing when it is not open. Example: the user clicks into another view while {@code q:} is
+     * shown, maybe in Insert mode, maybe after a {@code d} still waiting for its motion.
+     */
+    public void closeCommandWindowAsync() {
+        submit("close the command-line window", Level.FINE, () -> await(api.input(CLOSE_COMMAND_WINDOW_KEYS)));
     }
 
     // ---- per-document buffers (see DocumentBuffers) ----
@@ -1280,7 +1341,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         if (size == null) {
             return;
         }
-        if (isBlocked()) {
+        if (isBlocked() || commandWindow.open()) {
+            // While the command-line window is open Neovim's editor window is shorter by its
+            // rows, and the overhead would count them: the screen keeps its size until it closes.
             gridPending = true;
             return;
         }
@@ -2014,6 +2077,51 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (changed && !view.equals(lastCmdline)) {
                 lastCmdline = view;
                 events.cmdline(view);
+            }
+        }
+
+        /**
+         * Builds the grids; at each {@code flush} the command-line window's grid, if it is open and
+         * changed, goes to the listeners.
+         */
+        @Override
+        public void onGridEvents(List<GridEvent> gridEvents) {
+            for (GridEvent event : gridEvents) {
+                grids.apply(event);
+                if (event instanceof GridEvent.Flush) {
+                    grids.snapshotIfChanged().ifPresent(this::commandWindowDrawn);
+                }
+            }
+        }
+
+        @Override
+        public boolean wantsGridLines(int grid) {
+            return grids.wantsLines(grid);
+        }
+
+        @Override
+        public void onCommandWindow(int winid, String type) {
+            grids.draw(winid);
+            commandWindow = new CommandWindowView(true, type, null);
+            events.commandWindow(commandWindow);
+            grids.snapshotIfChanged().ifPresent(this::commandWindowDrawn); // when its grid came first
+        }
+
+        @Override
+        public void onCommandWindowClosed() {
+            grids.stopDrawing();
+            commandWindow = CommandWindowView.CLOSED;
+            events.commandWindow(commandWindow);
+            submit("resize after the command-line window", Level.FINE, () -> {
+                // nothing: submit runs a resize held while the window was open (gridPending)
+            });
+        }
+
+        private void commandWindowDrawn(GridSnapshot grid) {
+            CommandWindowView view = commandWindow;
+            if (view.open()) {
+                commandWindow = new CommandWindowView(true, view.type(), grid);
+                events.commandWindow(commandWindow);
             }
         }
     }

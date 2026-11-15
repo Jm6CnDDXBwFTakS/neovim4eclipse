@@ -46,8 +46,12 @@ final class LuaScripts {
      *   <li>The diagnostics namespace {@code neovim4eclipse} ({@link #SET_DIAGNOSTICS}) draws nothing,
      *       and, unless the user's config has its own, a {@code vim.diagnostic} {@code on_jump} hook
      *       echoes the first line of the problem {@code ]d} lands on.</li>
-     *   <li>The command-line window ({@code q:}) is closed as soon as it opens, with a message:
-     *       Eclipse cannot show a second window.</li>
+     *   <li>The command-line window ({@code q:}, {@code q/}, {@code Ctrl-F} on the command line)
+     *       sends {@code eclipse_cmdwin} with its window and type when it opens, and {@code
+     *       eclipse_cmdwin_closed} when it closes: Eclipse draws it from its grid, over the bottom
+     *       of the editor ({@code editor/NeovimWindowPanel}). Its buffer sends no {@code
+     *       eclipse_buf_enter}: Eclipse would take Neovim back to the editor's window, which Neovim
+     *       refuses while the command-line window is open (E11).</li>
      *   <li>Two guards against files a cloned repository brings, both kept when your config already decided:
      *       <ul>
      *         <li>{@code g:rmd_dynamic_fenced_languages} is off. Neovim 0.12.6's R Markdown syntax
@@ -120,6 +124,11 @@ final class LuaScripts {
             -- record of the switch a repeat that Back may step over (util/HistorySteps).
             vim.api.nvim_create_autocmd('BufEnter', {
               callback = function(ev)
+                -- The command-line window's own buffer: Eclipse draws that window (eclipse_cmdwin
+                -- below), and taking Neovim back to the editor's window is refused while it is open.
+                if vim.fn.getcmdwintype() ~= '' then
+                  return
+                end
                 local left, jumped = vim.fn.bufnr('#'), false
                 if left > 0 and left ~= ev.buf then
                   for _, jump in ipairs(vim.fn.getjumplist()[1]) do
@@ -342,17 +351,17 @@ final class LuaScripts {
               end } })
             end
             -- The command-line window (q:, q/, Ctrl-F on the command line) is a window of its own,
-            -- which Eclipse cannot show: close it at once and say why. The : box's Up and Down
-            -- browse the same history. Scheduled: the window cannot close inside its own CmdwinEnter.
+            -- with no editor behind it: Eclipse draws it from its grid (ext_multigrid) over the
+            -- bottom of the editor, and sends it every key while it is open. The window's ID tells
+            -- Eclipse which grid to draw; its type (':', '/', '?') is for the panel's title.
             vim.api.nvim_create_autocmd('CmdwinEnter', {
               callback = function()
-                vim.schedule(function()
-                  if vim.fn.getcmdwintype() ~= '' then
-                    vim.cmd.quit()
-                  end
-                  vim.api.nvim_echo({ { 'The command-line window is not available in Eclipse; '
-                    .. 'Up and Down in the : box browse the history' } }, true, {})
-                end)
+                vim.rpcnotify(0, 'eclipse_cmdwin', vim.api.nvim_get_current_win(), vim.fn.getcmdwintype())
+              end
+            })
+            vim.api.nvim_create_autocmd('CmdwinLeave', {
+              callback = function()
+                vim.rpcnotify(0, 'eclipse_cmdwin_closed')
               end
             })
             """;
@@ -825,8 +834,8 @@ final class LuaScripts {
 
             -- Safety net: a :quit that Neovim runs itself (<Cmd>q, vim.cmd.quit(), :let x = 1 | q) closes the
             -- editor too. It cannot stop the quit (on the last window Neovim ends anyway). Not for the
-            -- command-line window, which SETUP closes with :quit, nor while Eclipse ends Neovim (:qa!),
-            -- which the session ignores.
+            -- command-line window, whose :quit closes only that window, nor
+            -- while Eclipse ends Neovim (:qa!), which the session ignores.
             vim.api.nvim_create_autocmd('QuitPre', {
               desc = 'Eclipse closes the editor',
               callback = function()
@@ -4312,6 +4321,20 @@ final class LuaScripts {
     static final String VIEWPORT_OVERHEAD = """
             return require('neovim4eclipse.viewport').overhead()
             """;
+
+    /**
+     * Sets Neovim's {@code 'background'} to the argument, {@code "dark"} or {@code "light"}, unless
+     * it is that already: from Eclipse's theme, so a colorscheme with both variants picks the one
+     * that matches the editor, whose colors the command-line window takes for its default ones
+     * ({@code editor/GridCanvas}). Overrides a {@code 'background'} the user's config set.
+     */
+    static final String SET_BACKGROUND = """
+            local background = ...
+            if vim.o.background ~= background then
+              vim.o.background = background
+            end
+            """;
+
 
     /**
      * Sends the current window's visible search matches and highlights again ({@link #SEARCH}'s and

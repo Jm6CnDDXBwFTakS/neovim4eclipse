@@ -812,6 +812,20 @@ final class CommandLineBox {
         stateListener.run();
     }
 
+    /**
+     * Neovim opened its command-line window from this line ({@code Ctrl-F}): the box closes without
+     * abandoning the line, and without taking the focus back for the editor ({@link
+     * NeovimWindowPanel} takes it). Neovim hides the line itself, but its {@code cmdline_hide}
+     * comes after the window's opening; meanwhile the panel's taking the focus would count as focus
+     * elsewhere, and the {@code <C-c>} sent then would end the window (in it, {@code Ctrl-C} goes
+     * back to the command line). Nothing when the box is closed.
+     */
+    void closeForCommandWindow() {
+        if (isOpen()) {
+            close(false);
+        }
+    }
+
     /** Called when the editor goes away. */
     void dispose() {
         close(false);

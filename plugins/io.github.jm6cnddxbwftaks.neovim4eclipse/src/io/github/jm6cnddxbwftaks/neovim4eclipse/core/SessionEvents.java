@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
@@ -34,6 +35,8 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<Void> inputHandledListeners = new ListenerList<>("input handled", Level.WARNING);
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
+    private final ListenerList<CommandWindowView> commandWindowListeners = new ListenerList<>("command-line window",
+            Level.WARNING);
     private final ListenerList<ViewportPort.WrapChange> wrapListeners = new ListenerList<>("wrap", Level.WARNING);
     private final ListenerList<ViewportPort.TopLine> topLineListeners = new ListenerList<>("top line", Level.WARNING);
     private final ListenerList<SearchPort.Matches> searchListeners = new ListenerList<>("search matches", Level.WARNING);
@@ -104,6 +107,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** Neovim's command line changed: opened, edited, completed or closed (see {@code CmdlineState}). */
     void cmdline(CmdlineState.View view) {
         cmdlineListeners.fire(view);
+    }
+
+    /** The command-line window opened, was redrawn or closed (see {@code CommandWindowView}). */
+    void commandWindow(CommandWindowView view) {
+        commandWindowListeners.fire(view);
     }
 
     // ---- registration ----
@@ -196,6 +204,14 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
         cmdlineListeners.remove(listener);
+    }
+
+    void addCommandWindowListener(Consumer<CommandWindowView> listener) {
+        commandWindowListeners.add(listener);
+    }
+
+    void removeCommandWindowListener(Consumer<CommandWindowView> listener) {
+        commandWindowListeners.remove(listener);
     }
 
     void addWrapListener(Consumer<ViewportPort.WrapChange> listener) {

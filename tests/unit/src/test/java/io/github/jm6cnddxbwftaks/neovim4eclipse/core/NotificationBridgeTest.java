@@ -15,6 +15,7 @@ import java.util.logging.Level;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -102,6 +103,9 @@ class NotificationBridgeTest {
             @Override public void onMessageEvent(MessageEvent event) {
                 events.add("message:" + event);
             }
+            @Override public void onGridEvents(List<GridEvent> grid) { events.add("grid:" + grid); }
+            @Override public void onCommandWindow(int winid, String type) { events.add("cmdwin:" + winid + ":" + type); }
+            @Override public void onCommandWindowClosed() { events.add("cmdwin closed"); }
         });
     }
 
@@ -421,10 +425,24 @@ class NotificationBridgeTest {
 
     @Test
     void unknownNotificationsAreIgnored() {
-        // Neovim sends these too: grid redraws to every UI, changedtick events to nvim_buf_attach.
-        notify("redraw", List.of("grid_line", List.of(1, 0, 0, List.of(), false)));
+        // Neovim sends these too: mode changes to every UI, changedtick events to nvim_buf_attach.
+        notify("redraw", List.of("mode_change", List.of("normal", 0)));
         notify("nvim_buf_changedtick_event", 1, 5);
         assertTrue(events.isEmpty(), events.toString());
+    }
+
+    /** The command-line window: told by the plug-in's Lua; its grid comes with the redraws. */
+    @Test
+    void theCommandLineWindowAndItsGrid() {
+        notify("eclipse_cmdwin", 1004, ":");
+        notify("redraw", List.of("grid_line", List.of(4, 0, 0, List.of(List.of("x", 0)), false)),
+                List.of("win_pos", List.of(4, io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle.window(1004), 31, 0, 120, 7)),
+                List.of("flush"));
+        notify("eclipse_cmdwin_closed");
+        assertEquals(List.of("cmdwin:1004::", "message:" + new MessageEvent.Flush(),
+                "grid:[" + new GridEvent.Line(4, 0, 0, List.of(new GridEvent.Cell("x", 0))) + ", "
+                        + new GridEvent.WinPos(4, 1004, false) + ", " + new GridEvent.Flush() + "]",
+                "cmdwin closed"), events, "the window's handle read as its ID");
     }
 
     /** The command line first: the output of a command is titled with it, from the same redraw. */

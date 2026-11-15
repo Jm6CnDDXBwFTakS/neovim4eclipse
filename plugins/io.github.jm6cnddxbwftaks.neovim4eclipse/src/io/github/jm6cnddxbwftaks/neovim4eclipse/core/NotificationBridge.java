@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
@@ -195,6 +196,26 @@ final class NotificationBridge implements Incoming {
          * attached with {@code ext_messages}; see {@link MessageEvent}).
          */
         void onMessageEvent(MessageEvent event);
+
+        /**
+         * The grid events of one {@code redraw} notification, in order (the UI is attached with
+         * {@code ext_multigrid}; see {@link GridEvent}): what Neovim's windows show.
+         */
+        void onGridEvents(List<GridEvent> events);
+
+        /**
+         * The command-line window opened ({@code q:}, {@code q/}, {@code Ctrl-F} on the command
+         * line): window {@code winid}, of type {@code ":"}, {@code "/"} or {@code "?"}.
+         */
+        void onCommandWindow(int winid, String type);
+
+        /** The command-line window closed. */
+        void onCommandWindowClosed();
+
+        /** Whether the {@code grid_line}s of {@code grid} are wanted (see {@link GridEvent#fromRedraw}). */
+        default boolean wantsGridLines(int grid) {
+            return true;
+        }
     }
 
     private final Sink sink;
@@ -205,10 +226,10 @@ final class NotificationBridge implements Incoming {
 
     /**
      * Dispatches a notification by name. Unknown names are ignored (see {@link Incoming}). Of the
-     * {@code redraw} notifications, which Neovim sends several times per key, only the command-line
-     * and message events are read; the rest is Neovim's screen, which the plug-in does not draw.
-     * The command-line events go first: a command's output is titled with its command line
-     * ({@code :ls}), which the same notification may carry.
+     * {@code redraw} notifications, which Neovim sends several times per key, the command-line,
+     * message and grid events are read; the grids are drawn only for the command-line window (the
+     * editors show the documents themselves). The command-line events go first: a command's output
+     * is titled with its command line ({@code :ls}), which the same notification may carry.
      */
     @Override
     public void notification(String method, List<?> args) {
@@ -232,6 +253,8 @@ final class NotificationBridge implements Incoming {
             case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
             case "eclipse_echo" -> onEcho(args);
+            case "eclipse_cmdwin" -> onCommandWindow(args);
+            case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -239,6 +262,11 @@ final class NotificationBridge implements Incoming {
                     sink.onCmdline(cmdline);
                 }
                 MessageEvent.fromRedraw(args).forEach(sink::onMessageEvent);
+                // A redraw that changed no grid still ends in a flush: nothing to pass on then.
+                List<GridEvent> grid = GridEvent.fromRedraw(args, NotificationBridge::windowId, sink::wantsGridLines);
+                if (grid.stream().anyMatch(e -> !(e instanceof GridEvent.Flush))) {
+                    sink.onGridEvents(grid);
+                }
             }
             default -> LOG.finest(() -> "Ignored notification " + method);
         }
@@ -305,6 +333,25 @@ final class NotificationBridge implements Incoming {
     }
 
     /** Payload: {@code [winid]}, from {@link LuaScripts#WINDOWS}'s {@code WinClosed}. */
+    private void onCommandWindow(List<?> args) {
+        int win = window(args, 0);
+        if (win != EditorWindow.UNKNOWN) {
+            sink.onCommandWindow(win, args.size() > 1 ? String.valueOf(args.get(1)) : ":");
+        }
+    }
+
+    /**
+     * A window's ID in a grid event ({@code win_pos}): Neovim sends it as a handle, decoded into a
+     * {@link Handle}; a plain number is accepted too. -1 when it is neither.
+     */
+    static int windowId(Object raw) {
+        if (raw instanceof Handle handle && handle.kind() == Handle.Kind.WINDOW) {
+            return handle.intId();
+        }
+        Integer id = toInt(raw);
+        return id == null ? -1 : id;
+    }
+
     private void onWindowClosed(List<?> args) {
         int win = window(args, 0);
         if (win != EditorWindow.UNKNOWN) {

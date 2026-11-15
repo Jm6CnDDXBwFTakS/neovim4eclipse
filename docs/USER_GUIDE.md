@@ -356,8 +356,20 @@ vim.api.nvim_create_autocmd('BufWinEnter', {
 A group with no background of its own (`ErrorMsg` sets only a text color) shows nothing.
 
 A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's live
-preview of it (`'inccommand'`) is not shown in the editor. Neovim's command-line window (`q:`) is not available: it closes at once, with a message;
-Up and Down in the box browse the same history.
+preview of it (`'inccommand'`) is not shown in the editor.
+
+Neovim's command-line window (`q:` for commands, `q/` and `q?` for searches, or `Ctrl-F` while
+typing on the `:` line) opens over the bottom of the editor, where the box opens: the history, one
+line each, and an empty line at the end for a new one. It is Neovim's own window, so every key
+goes to Neovim, in every mode: move with `j` and `k`, search with `/`, edit a line in insert mode,
+and press Enter to run the line under the cursor; `:q` closes it without running anything. A click
+anywhere else in Eclipse closes it too, without running anything; the click goes where it was
+aimed. Its colors are the editor's, with Neovim's highlight groups on top; Neovim's `'background'`
+follows Eclipse's theme (light or dark), so a colorscheme with both variants picks the one that
+matches; when Eclipse changes it, Neovim reloads the colorscheme, so highlight changes your
+config makes after its `:colorscheme` are lost then (make them in a `ColorScheme` autocommand to
+keep them). The mouse does nothing inside it yet, and an input method's composed text (Japanese,
+the macOS accent menu) does not reach it: the `:` box has both.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.
 
@@ -499,8 +511,8 @@ the plugin makes sure everything you do is seen by Neovim as keys:
   to Neovim (previously `f/` opened the search box).
 
 Clicks in normal and visual mode are recorded, as Neovim records them (`<LeftMouse>`, without a
-position: playback clicks where the mouse was last). Not recorded: actions that happen only in Eclipse. Not supported: the command-line
-window (`q:`, `q/`, `q?`). Macros live in Neovim's registers, which Neovim's ShaDa file keeps across restarts (*Neovim →
+position: playback clicks where the mouse was last). Not recorded: actions that happen only in Eclipse. A macro's
+text can be edited in the command-line window as in Vim (`q:`, then `let @q = '...'`). Macros live in Neovim's registers, which Neovim's ShaDa file keeps across restarts (*Neovim →
 Restart Neovim...*, a new executable, or Eclipse), as in a terminal.
 
 ## Repeating inserted text with `.`

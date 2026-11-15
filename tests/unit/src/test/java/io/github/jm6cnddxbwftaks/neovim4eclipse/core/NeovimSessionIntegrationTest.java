@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
@@ -698,8 +701,8 @@ class NeovimSessionIntegrationTest {
 
     /**
      * What Neovim knows about us, pinned before the switch to our own client
-     * ({@code docs/design/RPC_CLIENT.md}, step 7): the client info, and a terminal-like UI of 120 x 40 with
-     * no 24-bit color and no {@code ext_*} features. An empty Lua table has no type, so empty
+     * ({@code docs/design/RPC_CLIENT.md}, step 7): the client info, and a UI of 120 x 40 with 24-bit
+     * color and the {@code ext_*} features {@code NeovimConnection.TERMINAL_UI} lists. An empty Lua table has no type, so empty
      * {@code methods} and {@code attributes} may come back as a list or a map; both mean "none".
      */
     @Test
@@ -720,7 +723,8 @@ class NeovimSessionIntegrationTest {
             assertEquals(40L, ui.get("height"));
             for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                     "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-                boolean on = List.of("ext_cmdline", "ext_messages", "ext_linegrid", "ext_popupmenu").contains(option);
+                boolean on = List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu")
+                    .contains(option);
                 assertEquals(on, ui.get(option), option); // see TERMINAL_UI
             }
         }
@@ -1388,16 +1392,126 @@ class NeovimSessionIntegrationTest {
 
     /** {@code q:} would open a window Eclipse cannot show: it closes at once, with a message. */
     @Test
-    void theCommandLineWindowClosesWithAMessage() throws Exception {
+    void theCommandLineWindowIsDrawnAndEnterRunsItsLine() throws Exception {
         try (NeovimSession s = start()) {
+            List<CommandWindowView> views = new CopyOnWriteArrayList<>();
+            s.addCommandWindowListener(views::add);
             List<StatusInfo> seen = new CopyOnWriteArrayList<>();
             s.addStatusListener(seen::add);
+            s.lua("vim.fn.histadd(':', 'echo \"from the history\"')");
             keys(s, "q", ":");
-            waitFor(() -> seen.stream().anyMatch(i -> i.message().startsWith("The command-line window is not available")),
-                    "the message: " + seen);
-            assertEquals("", String.valueOf(s.lua("return vim.fn.getcmdwintype()")));
+            waitFor(() -> views.stream().anyMatch(v -> v.open() && v.grid() != null
+                    && rows(v.grid()).stream().anyMatch(r -> r.contains("echo \"from the history\""))),
+                    "the window drawn with the history: " + views);
+            CommandWindowView open = views.get(views.size() - 1);
+            assertEquals(":", open.type());
+            assertTrue(open.grid().cursorRow() >= 0, "the cursor is in the window");
+            assertTrue(s.isCommandWindowOpen());
+            assertEquals(":", String.valueOf(s.lua("return vim.fn.getcmdwintype()")));
+            keys(s, "k", "<CR>"); // up to the history line, and run it
+            waitFor(() -> !views.get(views.size() - 1).open(), "closed after Enter: " + views);
+            waitFor(() -> seen.stream().anyMatch(i -> i.message().contains("from the history")), "the line ran: " + seen);
+            assertEquals(1L, ((Number) s.lua("return #vim.api.nvim_list_wins()")).longValue());
+            assertFalse(s.isCommandWindowOpen());
+        }
+    }
+
+    /** Closed in Normal mode: no :quit reaches the editor's window, which would close its editor. */
+    @Test
+    void closingTheCommandLineWindowInNormalModeQuitsNothingElse() throws Exception {
+        try (NeovimSession s = start()) {
+            s.lua("vim.api.nvim_create_autocmd('QuitPre', { callback = function() vim.g.quit_seen = vim.fn.getcmdwintype() end })");
+            keys(s, "q", ":");
+            waitFor(s::isCommandWindowOpen, "open");
+            s.closeCommandWindowAsync();
+            waitFor(() -> !s.isCommandWindowOpen(), "closed");
+            s.lua("return 1"); // the keys typed by the close have been handled
+            assertEquals(Boolean.TRUE, s.lua("return vim.g.quit_seen == nil"), "no :quit ran outside the window");
             assertEquals(1L, ((Number) s.lua("return #vim.api.nvim_list_wins()")).longValue());
         }
+    }
+
+    /** Closed with a command half typed ({@code r}, {@code "}, {@code g}): the history line under the cursor does not run. */
+    @Test
+    void closingTheCommandLineWindowMidCommandRunsNothing() throws Exception {
+        for (String pending : List.of("r", "\"", "g", "d")) {
+            try (NeovimSession s = start()) {
+                s.lua("vim.fn.histadd(':', 'let g:ran = 1')");
+                keys(s, "q", ":");
+                waitFor(s::isCommandWindowOpen, "open");
+                keys(s, "k", pending); // on the history line, a command waiting for its next key
+                s.closeCommandWindowAsync();
+                waitFor(() -> !s.isCommandWindowOpen(), "closed after " + pending);
+                s.lua("return 1");
+                assertEquals(Boolean.TRUE, s.lua("return vim.g.ran == nil"), "the line did not run after " + pending);
+                assertEquals(Boolean.TRUE, s.lua("return vim.fn.histget(':', -1) == 'let g:ran = 1'"),
+                        "and was not changed in the history (r replaced no character) after " + pending);
+            }
+        }
+    }
+
+    @Test
+    void closingTheCommandLineWindowRunsNothingEvenInInsertMode() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CommandWindowView> views = new CopyOnWriteArrayList<>();
+            s.addCommandWindowListener(views::add);
+            keys(s, "q", ":");
+            waitFor(s::isCommandWindowOpen, "open");
+            keys(s, "i", "l", "e", "t", " ", "g", ":", "x", "=", "1"); // a line typed, not run
+            s.closeCommandWindowAsync();
+            waitFor(() -> !s.isCommandWindowOpen(), "closed: " + views);
+            assertEquals("", String.valueOf(s.lua("return vim.fn.getcmdwintype()")));
+            assertEquals(Boolean.TRUE, s.lua("return vim.g.x == nil"), "the line did not run");
+            assertEquals("n", String.valueOf(s.lua("return vim.api.nvim_get_mode().mode")));
+        }
+    }
+
+    @Test
+    void ctrlFOnTheCommandLineOpensTheWindowWithTheLine() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CommandWindowView> views = new CopyOnWriteArrayList<>();
+            s.addCommandWindowListener(views::add);
+            List<CmdlineState.View> lines = new CopyOnWriteArrayList<>();
+            s.addCmdlineListener(lines::add);
+            keys(s, ":", "e", "c", "h", "o", " ", "4", "2", "<C-f>");
+            waitFor(() -> views.stream().anyMatch(v -> v.open() && v.grid() != null
+                    && rows(v.grid()).stream().anyMatch(r -> r.contains("echo 42"))), "the window with the line: " + views);
+            waitFor(() -> !lines.get(lines.size() - 1).open(), "the line hidden while the window is open: " + lines);
+            // Ctrl-C in the window: back to the command line, with the line under the cursor.
+            keys(s, "<C-c>");
+            waitFor(() -> !s.isCommandWindowOpen() && lines.get(lines.size() - 1).open()
+                    && lines.get(lines.size() - 1).text().equals(":echo 42"), "back on the line: " + lines);
+            keys(s, "<Esc>");
+        }
+    }
+
+    /**
+     * The window's highlights are known though Neovim defined some before the session listened:
+     * {@code :echo} is a Vim command, bold in Neovim's default colorscheme ({@code Statement}),
+     * light or dark.
+     */
+    @Test
+    void theCommandLineWindowsHighlightsAreKnownFromTheStart() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CommandWindowView> views = new CopyOnWriteArrayList<>();
+            s.addCommandWindowListener(views::add);
+            s.lua("vim.fn.histadd(':', 'echo 1')");
+            keys(s, "q", ":");
+            waitFor(() -> views.stream().anyMatch(v -> v.grid() != null && rows(v.grid()).stream().anyMatch(r -> r.contains("echo 1"))),
+                    "the window drawn: " + views);
+            GridSnapshot grid = views.get(views.size() - 1).grid();
+            int row = rows(grid).indexOf(rows(grid).stream().filter(r -> r.contains("echo 1")).findFirst().orElseThrow());
+            int col = grid.row(row).indexOf("echo");
+            assertTrue(grid.attr(grid.hlAt(row, col)).bold(), "echo in Statement's bold: " + grid.attr(grid.hlAt(row, col)));
+        }
+    }
+
+    private static List<String> rows(GridSnapshot grid) {
+        List<String> rows = new ArrayList<>();
+        for (int r = 0; r < grid.height(); r++) {
+            rows.add(grid.row(r));
+        }
+        return rows;
     }
 
     @Test

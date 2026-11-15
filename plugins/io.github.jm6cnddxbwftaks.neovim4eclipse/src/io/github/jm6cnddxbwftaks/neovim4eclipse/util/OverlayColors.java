@@ -117,8 +117,11 @@ public final class OverlayColors {
         return isDark(editorBackground) ? SEARCH_MATCH_DARK : SEARCH_MATCH_LIGHT;
     }
 
-    /** Whether a color is dark: its perceived brightness (ITU-R BT.601 weights) is below half. */
-    static boolean isDark(int rgb) {
+    /**
+     * Whether a color is dark: its perceived brightness (ITU-R BT.601 weights) is below half.
+     * Example: the dark theme's editor background {@code 0x2F2F2F} is, white is not.
+     */
+    public static boolean isDark(int rgb) {
         int r = (rgb >> 16) & 0xFF;
         int g = (rgb >> 8) & 0xFF;
         int b = rgb & 0xFF;

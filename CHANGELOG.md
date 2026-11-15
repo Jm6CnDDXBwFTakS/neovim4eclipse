@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Neovim's command-line window (`q:`, `q/`, `q?`, or `Ctrl-F` on the `:` line) opens over the bottom
+  of the editor instead of closing at once: the history, edited and run with Neovim's own keys
+  (Enter runs the line under the cursor). A click elsewhere closes it without running anything.
+- Neovim's `'background'` follows Eclipse's theme, light or dark, so a colorscheme with both
+  variants matches the editor.
+
 ### Fixed
 
 - For contributors: InstallCheck no longer fails a correctly signed release when your Eclipse has

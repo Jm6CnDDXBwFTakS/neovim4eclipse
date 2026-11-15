@@ -569,8 +569,8 @@ view to the controller, which shows it in the box. The box edits nothing:
   follow the match, and Esc or Enter then set the real cursor through the state read after that key.
 - **The plug-in's own lines** (`commandAsync` types `:cmd<CR>`) are not shown: `util/CmdlineWatcher`
   is told before each one and drops its events.
-- **`q:`** (the command-line window) is closed as soon as it opens, by a `CmdwinEnter` autocommand in
-  `LuaScripts.SETUP`, with a message: Eclipse cannot show a second window.
+- **`q:`** (the command-line window) is drawn over the bottom of the editor from its grid: see
+  "Neovim's windows drawn from their grids" below.
 - **Working folder:** the controller sets the window's folder (`:lcd`, silently) to the editor's project
   root, or the file's folder outside a project, so that `:e` completion and `:!` start there.
   A relative `:e`, `:w` or `:wq` name is then relative to that folder, as in Neovim: `HOST_COMMANDS`
@@ -631,6 +631,50 @@ view to the controller, which shows it in the box. The box edits nothing:
   box's focus. The plug-in redirects nothing itself, so a user's own `:redir` works as in Vim.
   (`core/CommandRunner` still types whole lines for `commandAsync`, waiting until Neovim is idle, at most
   60 s, before refreshing Eclipse.)
+
+
+### Neovim's windows drawn from their grids
+
+Neovim draws each window into a grid of its own (`ext_multigrid`, `core/NeovimConnection.TERMINAL_UI`,
+with `rgb` for 24-bit highlight colors). The editors show their documents themselves; the plug-in
+draws only the grid of the command-line window (`q:`), which has no document behind it.
+
+```
+Neovim  ── redraw: grid_line, grid_scroll, win_pos, hl_attr_define, flush ──▶  RPC reader thread
+  CmdwinEnter ── eclipse_cmdwin(win, type) ──▶ NotificationBridge
+                                                ├─ util/GridEvent   parse the batch
+                                                └─ NeovimSession.EventSink
+                                                     util/Grids     every grid's cells; at flush the
+                                                                    command-line window's, if changed
+                                                     ── util/CommandWindowView (immutable) ──▶ listeners
+NeovimEditorController ── UI thread ──▶ editor/NeovimWindowPanel (OverlayFrame over the bottom rows)
+                                          └─ editor/GridCanvas   cells, colors, cursor
+keys in the panel ── NeovimSession.inputAsync ──▶ Neovim (every mode; Eclipse never types there)
+focus elsewhere ── closeCommandWindowAsync ── <C-\><C-N><C-\><C-N> ──▶ Neovim (nothing runs)
+```
+
+- **Whose cells are kept** (`util/Grids.wantsLines`): the drawn window's grid's, and a new grid's
+  until its window is known: Neovim sends a grid's `win_pos` at the end of a redraw, after its lines.
+  An editor's window's lines are then left out unread (`GridEvent.fromRedraw`), not even parsed.
+- **Its mode stays in the panel:** while the window is open, `NeovimEditorController.onModeChanged`
+  hands Neovim's mode only to the panel's cursor (a block, a bar in insert mode); the editor keeps
+  its caret and never types. The cursor and buffer reports are already filtered by window.
+- **Its buffer sends no `eclipse_buf_enter`** (`LuaScripts.SETUP`): the session would take Neovim
+  back to the editor's window, which Neovim refuses while the command-line window is open (E11).
+- **The screen keeps its size** while it is open: `NeovimSession.resizeGrid` waits (`gridPending`),
+  since Neovim's editor window is shorter by the window's rows and the overhead would count them.
+- **`Ctrl-F` on the `:` line:** Neovim hides its command line when the window opens, but that
+  `cmdline_hide` comes in the redraw after `eclipse_cmdwin` (sent at `CmdwinEnter`). The controller
+  closes the box first (`CommandLineBox.closeForCommandWindow`, nothing sent): otherwise the panel
+  taking the focus would count as focus elsewhere, and the box's `<C-c>` would end the window.
+- **Closing it from Eclipse** types `<C-\><C-N>` twice (`NeovimSession.CLOSE_COMMAND_WINDOW_KEYS`):
+  it ends a half-typed command or Insert mode, and in the window's Normal mode closes the window,
+  its line dropped. Keys, not a Lua call: while Neovim waits for a command's next key (`r`, `d`) it
+  answers no call. Not `<C-c>`: in that window `Ctrl-C` goes back to the command line with the
+  line under the cursor.
+- **Colors:** a highlight's own colors where it sets them, the editor's text and background where it
+  leaves them to the default (`util/GridSnapshot.colors`); `'background'` follows the editor's
+  (`LuaScripts.SET_BACKGROUND`, sent at the start and at each theme switch).
 
 ## Macros
 
@@ -930,6 +974,7 @@ reason is gone.
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `LuaScripts.HOST_COMMANDS` (Neovim parses and hands over), `util/HostCommand` (which commands, by full name), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `NeovimSessionIntegrationTest` (typed, mapping, macro, `@:`, arguments), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
+| The command-line window (`q:`) drawn from its grid | `util/GridEvent`, `util/Grids`, `util/GridSnapshot`, `util/CommandWindowView`, `editor/GridCanvas`, `editor/NeovimWindowPanel` | `GridEventTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimSessionIntegrationTest` (real Neovim: drawn, Enter runs the line, closed in insert mode runs nothing), `tests/swt` `GridCanvasTest` (pixels: colors, cursor), `NeovimWindowPanelTest` (keys, focus), UI `CommandWindowEndToEndTest` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
 | File paths compared by one rule | `LuaScripts.PATHS` (module `neovim4eclipse.paths`), `util/FilePaths`, `NewFiles.workspaceFileAt` (the one workspace lookup) | `paths_spec.lua` and `FilePathsTest` (both run `tests/unit/src/test/resources/path-cases.tsv` on the Linux, macOS and Windows rules), `EditPathTest`, `t.same_file` in every spec, UI `FilePathsEndToEndTest` (`:e` and `:wq!` through a link; `:e` by the real path into a folder linked through a link), `ProjectFilesEndToEndTest` (a linked folder made and removed while running) |
 | `gd`/`K`/`gr*`/`gO`/`gt`/`gT` handed to Eclipse | `core/IdeKeys` (the one table: keys, actions, how each command is found), `core/IdeAction`, `LuaScripts.IDE_KEYS` (the mappings, from the table), `IdeKeys.pick` (the one loop, over the port `IdeKeys.Editor`; `dryRun` for tests), `editor/IdeActions` (`EclipseEditor`, the port's Eclipse side), `editor/HyperlinkProbe` (links for `gd` and `grt`) | `IdeKeysTest`, `setup_spec.lua`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest`, `IdeKeysEndToEndTest`, `JavaEditorEndToEndTest` (heavyJava: Java's commands, `gri`, `grt`) |

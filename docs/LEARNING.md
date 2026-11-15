@@ -458,12 +458,12 @@ to FINEST: every message in and out is logged.
 ### 2.4 Attaching as a UI
 
 A Neovim instance with no UI attached does not process typed input reliably. `NeovimSession.start`
-therefore calls `nvim_ui_attach(120, 40, ...)` even though Eclipse draws nothing of Neovim's screen.
+therefore calls `nvim_ui_attach(120, 40, ...)` even though Eclipse draws little of Neovim's screen.
 The size is only a start: once an editor attaches, `nvim_ui_try_resize` makes the screen the
 editor's size, so that Neovim's screen commands count the lines you see (3.2b).
 Neovim then sends `redraw` notifications describing that screen. The options passed to
 `nvim_ui_attach` choose parts that come as *events* instead of drawn cells (`:help ui-ext-options`);
-the plug-in asks for three (`NeovimConnection.TERMINAL_UI`) and ignores the rest of the screen:
+the plug-in asks for these (`NeovimConnection.TERMINAL_UI`):
 
 - `ext_cmdline` and `ext_popupmenu`: Neovim's command line, as events. Typing `:set tabs` sends
   `cmdline_show` with the text `set tabs`, the cursor as a byte offset (8) and the type `:`; Left
@@ -484,6 +484,23 @@ the plug-in asks for three (`NeovimConnection.TERMINAL_UI`) and ignores the rest
   the echo of the search nowhere, the error to the message line in red; `:ls` (kind `list_cmd`) to
   the output popup when it lists more than one line, to the message line otherwise. Without `ext_messages`, a UI that draws no grid sees no message at all, and Neovim
   stops at a "Press ENTER" prompt whenever its message area overflows (2.6).
+
+- `ext_multigrid`: each window drawn into a grid of its own, a rectangle of cells, with `win_pos`
+  saying which window a grid shows. Example, `q:` with one command in the history: Neovim makes a
+  new grid of 120 by 7 cells, sends its rows, then says it shows the new window:
+
+  ```
+  ["grid_resize", 4, 120, 7]
+  ["grid_line", 4, 5, 0, [[":", 1], ["e", 2], ["c"], ["h"], ["o"], [" ", 0], ["1"], [" ", 0, 113]], false]
+  ["win_pos", 4, <window 1002>, 31, 0, 120, 7]
+  ["flush"]
+  ```
+
+  A cell is `[text, highlight, repeat]`, one character each; a left-out highlight is the previous
+  cell's (`echo` is all highlight 2, a Vim command), and `[" ", 0, 113]` is 113 blanks. `util/GridEvent` reads them, `util/Grids` keeps the cells, and the editor
+  paints the window's grid (`editor/GridCanvas`). The grids of the editors' own windows are not
+  drawn: each editor shows its document itself. With `rgb`, `hl_attr_define` gives each highlight
+  id its colors as `0xRRGGBB`.
 
 A UI that takes over parts of the screen draws them itself, with Neovim's data. Example, the
 search preview: while `/foo` is typed with `'incsearch'`, Neovim moves its view to the match but no

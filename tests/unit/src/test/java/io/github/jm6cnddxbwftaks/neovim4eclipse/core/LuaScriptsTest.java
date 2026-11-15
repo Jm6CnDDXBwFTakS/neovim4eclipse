@@ -54,11 +54,11 @@ class LuaScriptsTest {
 
     /** {@code q:} opens a window Eclipse cannot show: closed at once, with a message saying so. */
     @Test
-    void theCommandLineWindowIsClosedWithAMessage() {
+    void theCommandLineWindowIsToldToEclipse() {
         assertTrue(LuaScripts.SETUP.contains("'CmdwinEnter'"));
-        assertTrue(LuaScripts.SETUP.contains("vim.schedule(function()"), "it cannot close inside its own CmdwinEnter");
-        assertTrue(LuaScripts.SETUP.contains("vim.cmd.quit()"));
-        assertTrue(LuaScripts.SETUP.contains("Up and Down in the : box browse the history"));
+        assertTrue(LuaScripts.SETUP.contains("'eclipse_cmdwin', vim.api.nvim_get_current_win(), vim.fn.getcmdwintype()"));
+        assertTrue(LuaScripts.SETUP.contains("'CmdwinLeave'"));
+        assertTrue(LuaScripts.SETUP.contains("'eclipse_cmdwin_closed'"));
     }
 
     @Test

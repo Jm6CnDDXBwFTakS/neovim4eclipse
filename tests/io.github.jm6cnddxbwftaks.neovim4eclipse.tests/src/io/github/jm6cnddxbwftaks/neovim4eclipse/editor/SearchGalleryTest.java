@@ -77,6 +77,11 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "and :match Error on count (a dark red with light text) read in both themes, over the "
                             + "fox matches where they meet. Their colors are Neovim's default colorscheme's, the same "
                             + "in both themes (docs/design/SEARCH_HIGHLIGHTING.md, \"The yank flash and window matches\")."),
+            new Picture("cmdwin", "Neovim's command-line window (q:)",
+                    "The window covers the editor's bottom rows, framed like the : box: the history, one command a "
+                            + "line, in the editor's own background and text colors, with Neovim's syntax colors for "
+                            + "Vim script on top, readable in both themes (Neovim's 'background' follows the theme). "
+                            + "The cursor is a block on the last, empty line."),
             new Picture("color", "With another search match color",
                     "The matches take the color set in Preferences > General > Appearance > Colors and Fonts > "
                             + "Neovim for Eclipse > Search match (a green here); the box follows it."),
@@ -171,6 +176,31 @@ class SearchGalleryTest extends EndToEndTestBase {
                         + " vim.api.nvim_buf_clear_namespace(0, vim.api.nvim_create_namespace('nvim.hlyank'), 0, -1)<CR>");
                 settle();
                 waitUntil("the flash gone", TIMEOUT_MS, () -> textWidgetBackground(javaWidget, classLine) == null);
+            }
+
+            // Neovim's command-line window over the bottom of the same editor.
+            session.inputAsync(":call histadd(':', 'echo \"from the gallery\"') | call histadd(':', 'set number')<CR>");
+            session.inputAsync("q:");
+            settle();
+            waitUntil("the command-line window drawn", TIMEOUT_MS, () -> {
+                settle();
+                GridCanvas canvas = canvasOf(javaWidget);
+                if (canvas == null || canvas.grid() == null) {
+                    return false;
+                }
+                for (int row = 0; row < canvas.grid().height(); row++) {
+                    if (canvas.grid().row(row).contains("from the gallery")) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            try {
+                takeWhole(javaWidget, "cmdwin");
+            } finally {
+                session.closeCommandWindowAsync();
+                waitUntil("the command-line window closed", TIMEOUT_MS, () -> !session.isCommandWindowOpen());
+                settle();
             }
 
             // As a user sets it in Colors and Fonts: the theme's color registry takes the new value.
@@ -286,6 +316,30 @@ class SearchGalleryTest extends EndToEndTestBase {
         int height = Math.min(target.getClientArea().height, target.getLinePixel(lines) + target.getLineHeight() / 2);
         int width = Math.min(target.getClientArea().width, 720);
         GalleryCamera.save(target, new Rectangle(0, 0, width, height), out.resolve(file(theme, name)), name + " (" + theme + ")");
+    }
+
+    /** Like {@link #take}, the editor's whole height: the command-line window is at its bottom. */
+    private void takeWhole(StyledText target, String name) {
+        GalleryCamera.drain(target.getDisplay());
+        Rectangle area = target.getClientArea();
+        GalleryCamera.save(target, new Rectangle(0, 0, Math.min(area.width, 720), area.height), out.resolve(file(theme, name)),
+                name + " (" + theme + ")");
+    }
+
+    /** The command-line window's canvas below the editor's widget, or {@code null} when it is closed. */
+    private static GridCanvas canvasOf(org.eclipse.swt.widgets.Composite parent) {
+        for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed()) {
+                return canvas;
+            }
+            if (child instanceof org.eclipse.swt.widgets.Composite composite) {
+                GridCanvas found = canvasOf(composite);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     private static String file(String theme, String name) {
