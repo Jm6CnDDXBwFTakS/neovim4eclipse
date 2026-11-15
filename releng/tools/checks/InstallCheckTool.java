@@ -5,6 +5,7 @@ package checks;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -60,11 +61,32 @@ import common.Version;
  * <h2>A fresh copy of your Eclipse, each time</h2>
  * The Eclipse is a copy of yours under {@code ~/var/n4e-checks/install-check/eclipse}, made with
  * hard links as {@code ManualChecks launch} makes its copy (both use {@code common/EclipseCopy}),
- * and made anew each run, so nothing of an earlier run is left. If your Eclipse has the plug-in
- * installed, the copy has it too; the install then replaces it in the same step, as an update
- * would. The plug-in's Neovim folder ({@code XDG_DATA_HOME}) and the workspace are new and empty
- * too, so the Eclipse it starts shows <i>Get Neovim</i> as a first-time user sees it. A separate
- * folder from {@code ManualChecks}' copy, which holds the build under test.
+ * and made anew each run, so nothing of an earlier run is left. The plug-in's Neovim folder
+ * ({@code XDG_DATA_HOME}) and the workspace are new and empty too, so the Eclipse it starts
+ * shows <i>Get Neovim</i> as a first-time user sees it. A separate folder from
+ * {@code ManualChecks}' copy, which holds the build under test.
+ *
+ * <h2>The copy forgets that your Eclipse trusts the release key</h2>
+ * p2 lists in its report only the keys it does not trust yet: a key it already trusts signs
+ * silently, and the report then has no line that the release key signed anything (see
+ * {@link #trustProblem}). Your Eclipse may trust the release key twice over, and the copy
+ * inherits both, so the copy first forgets them ({@link #forgetTrust}), as a new user's Eclipse:
+ * <ul>
+ *   <li>the plug-in, if your Eclipse has it installed: its {@code plugin.xml} contributes the key
+ *       to p2 ({@code org.eclipse.equinox.p2.engine.pgp}), so an update needs no Trust dialog. The
+ *       copy uninstalls it in a director run of its own, since the extension stays in effect for
+ *       the rest of the run that uninstalls it;</li>
+ *   <li>the key under {@code pgp.trustedPublicKeys} in the copy's p2 profile preferences: p2 puts
+ *       every key there that you clicked <i>Trust</i> for (Preferences &gt; Install/Update &gt;
+ *       Trust). The other choices of that dialog go too ({@link #TRUST_CHOICES}): trusted
+ *       certificates, and "Always trust all content", which skips the report altogether.</li>
+ * </ul>
+ * Either one left in place keeps the report empty. Example: 0.2.20 installed into a copy of an
+ * Eclipse that had 0.2.19 printed no line about the release key, and the check failed.
+ *
+ * <p>So the check installs as a new user does, not as an update over the plug-in you have: an
+ * update's trust comes from the installed plug-in, and could not show what signed the release.
+ * Check for Updates in your own Eclipse is the way to see an update.
  *
  * <p>The folder is deleted at the start of each run, so the tool refuses a {@code --root} it did
  * not make: one that holds files but not its mark ({@link #MARK}). Example: {@code --root
@@ -260,12 +282,10 @@ public final class InstallCheckTool {
         Path director = EclipseCopy.director(program);
         Path log = root.resolve("director.log");
 
-        // Install, replacing the plug-in if the copy has it from your Eclipse.
-        boolean had = installedVersion(director, log).isPresent();
+        forgetTrust(director, copy.resolve(EclipseCopy.inner(source)), log);
         List<String> install = new ArrayList<>(List.of(director.toString()));
-        install.addAll(installArguments(site, v, fingerprint, had));
-        System.out.println("Installing with p2's director" + (had ? ", replacing the plug-in the copy has from your Eclipse" : "")
-                + " (output in " + log + "):");
+        install.addAll(installArguments(site, v, fingerprint));
+        System.out.println("Installing with p2's director (output in " + log + "):");
         String output = EclipseCopy.run(install, log);
         directorLines(output).forEach(line -> System.out.println("  " + line));
         if (!output.contains("Operation completed")) {
@@ -315,18 +335,124 @@ public final class InstallCheckTool {
     }
 
     /**
+     * Makes the copy forget the trust in the release key it has from your Eclipse (see the class
+     * comment): uninstalls the plug-in if the copy has it, then drops the trust choices
+     * ({@link #TRUST_CHOICES}) from every p2 profile's preferences under {@code inner}, the copy's
+     * folder that holds {@code p2/} ({@code Contents/Eclipse} on macOS).
+     */
+    private static void forgetTrust(Path director, Path inner, Path log) throws IOException, InterruptedException {
+        Optional<String> had = installedVersion(director, log);
+        if (had.isPresent()) {
+            List<String> uninstall = new ArrayList<>(List.of(director.toString()));
+            uninstall.addAll(uninstallArguments());
+            String output = EclipseCopy.run(uninstall, log);
+            if (!output.contains("Operation completed") || installedVersion(director, log).isPresent()) {
+                throw new ToolFailure("could not uninstall the plug-in " + had.get() + " the copy has from your Eclipse (" + log + ")");
+            }
+            System.out.println("  uninstalled the plug-in " + had.get() + " the copy has from your Eclipse: it makes p2 trust the"
+                    + " release key");
+        }
+        int forgotten = forgetTrustChoices(inner);
+        if (forgotten > 0) {
+            System.out.println("  the keys and certificates your Eclipse trusts left out of the copy's p2 profile (" + forgotten + ")");
+        }
+    }
+
+    /** The director's arguments, after the program, that uninstall the plug-in's feature from the copy. */
+    static List<String> uninstallArguments() {
+        List<String> args = new ArrayList<>(DIRECTOR);
+        args.addAll(List.of("-uninstallIU", EclipseCopy.FEATURE, "-data", "@none"));
+        return args;
+    }
+
+    /**
+     * The preferences in which a p2 profile keeps what you chose in the Trust dialog (p2's
+     * {@code CertificateChecker} and {@code TrustPreferencePage}): the PGP keys and certificates
+     * you trusted, and the "Always trust all content" and "all authorities" ticks. Without them the
+     * copy trusts what a new user's Eclipse trusts. {@code trustedAuthorities} stays: the director's
+     * {@code -trustedAuthorities} replaces it for the run.
+     */
+    static final List<String> TRUST_CHOICES = List.of("pgp.trustedPublicKeys", "trustedCertificates", "trustAlways",
+            "trustAllAuthorities");
+
+    /**
+     * Drops {@link #TRUST_CHOICES} from each p2 profile's preferences under {@code inner}, which
+     * is the copy's: {@code p2/org.eclipse.equinox.p2.engine/profileRegistry/<profile>/.data/
+     * .settings/org.eclipse.equinox.p2.engine.prefs}. The copy has its own copy of these files
+     * ({@code EclipseCopy.shared} links only {@code plugins/} and {@code features/}); each changed
+     * one is still deleted before it is written, so that even a hard link to your Eclipse's file
+     * would only lose the copy's name and yours keeps its choices. Returns how many files changed;
+     * 0 if there is no profile registry.
+     */
+    static int forgetTrustChoices(Path inner) throws IOException {
+        Path registry = inner.resolve(Path.of("p2", "org.eclipse.equinox.p2.engine", "profileRegistry"));
+        if (!Files.isDirectory(registry)) {
+            return 0;
+        }
+        int changed = 0;
+        try (var profiles = Files.list(registry)) {
+            for (Path profile : profiles.toList()) {
+                Path prefs = profile.resolve(Path.of(".data", ".settings", "org.eclipse.equinox.p2.engine.prefs"));
+                if (!Files.isRegularFile(prefs)) {
+                    continue;
+                }
+                // Preference files are written in ISO 8859-1, as java.util.Properties files are.
+                String text = Files.readString(prefs, StandardCharsets.ISO_8859_1);
+                String without = withoutTrustChoices(text);
+                if (!without.equals(text)) {
+                    Files.delete(prefs);
+                    Files.writeString(prefs, without, StandardCharsets.ISO_8859_1);
+                    changed++;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * {@code prefs} without its {@link #TRUST_CHOICES} entries, every other line kept as it is.
+     * The file has the syntax of {@link java.util.Properties}: a key ends at the first {@code =},
+     * {@code :} or blank, may have blanks before it, and a value goes on over lines that end in an
+     * odd number of {@code \}. p2 writes the armored keys on one line ({@code \n} escaped).
+     * Example:
+     * <pre>
+     * eclipse.preferences.version=1
+     * pgp.trustedPublicKeys=-----BEGIN PGP MESSAGE-----\nVersion\: BCPG v1.85\n...
+     * trustedAuthorities=https\://download.eclipse.org
+     * </pre>
+     * keeps the first and the last line.
+     */
+    static String withoutTrustChoices(String prefs) {
+        StringBuilder kept = new StringBuilder();
+        boolean continued = false; // this line goes on the entry of the line before
+        boolean dropping = false; // the entry this line belongs to is dropped
+        for (String line : prefs.split("(?<=\n)")) {
+            String bare = line.stripTrailing();
+            String start = bare.stripLeading();
+            boolean comment = !continued && (start.startsWith("#") || start.startsWith("!"));
+            if (!continued) {
+                dropping = !comment && TRUST_CHOICES.contains(start.split("[=:\\s]", 2)[0]);
+            }
+            if (!dropping) {
+                kept.append(line);
+            }
+            // A comment never goes on; an entry does if its line ends in an odd number of backslashes.
+            int slashes = bare.length() - bare.replaceAll("\\\\+$", "").length();
+            continued = !comment && slashes % 2 == 1;
+        }
+        return kept.toString();
+    }
+
+    /**
      * The director's arguments that install release {@code v} from the site, after the program
-     * (see the class comment for the trust arguments). Example, for 0.2.4 with the plug-in already
-     * in the copy: {@code ... -repository https://jm6cnddxbwftaks.github.io/neovim4eclipse/releases/0.2.4/
-     * -uninstallIU <feature> -installIU <feature> -trustSignedContentOnly -trustedCertificates -trustedPGPKeys a91f…063c
+     * (see the class comment for the trust arguments). Example, for 0.2.4: {@code ... -repository
+     * https://jm6cnddxbwftaks.github.io/neovim4eclipse/releases/0.2.4/ -installIU <feature>
+     * -trustSignedContentOnly -trustedCertificates -trustedPGPKeys a91f…063c
      * -trustedAuthorities https://jm6cnddxbwftaks.github.io/ -verboseTrust -data @none}.
      */
-    static List<String> installArguments(String site, Version v, String fingerprint, boolean installed) {
+    static List<String> installArguments(String site, Version v, String fingerprint) {
         List<String> args = new ArrayList<>(DIRECTOR);
         args.addAll(List.of("-repository", site + "releases/" + v + "/"));
-        if (installed) {
-            args.addAll(List.of("-uninstallIU", EclipseCopy.FEATURE));
-        }
         // -trustedCertificates with no value (the next argument is an option) trusts no self-made certificate.
         args.addAll(List.of("-installIU", EclipseCopy.FEATURE, "-trustSignedContentOnly", "-trustedCertificates",
                 "-trustedPGPKeys", fingerprint.toLowerCase(java.util.Locale.ROOT), "-trustedAuthorities", authority(site),
@@ -359,8 +485,14 @@ public final class InstallCheckTool {
      * What is wrong with the director's trust report ({@code -verboseTrust}) for a release, if
      * anything. A release passes only if the report lists the plug-in's bundle and the feature
      * under the release key, and no other heading: no other key, no certificate chain, nothing
-     * unsigned. Example of a good report:
+     * unsigned. And it fetched nothing but the release's own units: p2 lists nothing that a key
+     * or certificate it already trusts signed (Eclipse's own keys, say, which its platform bundle
+     * contributes), so an extra unit would otherwise pass unseen. Example of a good report:
      * <pre>
+     * The following IUs are fetched from https://jm6cnddxbwftaks.github.io/neovim4eclipse/releases/0.2.4/
+     *   io.github.jm6cnddxbwftaks.neovim4eclipse 0.2.4
+     *   io.github.jm6cnddxbwftaks.neovim4eclipse.feature.feature.group 0.2.4
+     *   io.github.jm6cnddxbwftaks.neovim4eclipse.feature.feature.jar 0.2.4
      * The following artifacts are signed by PGP key a91f53d8931b7fd0d14686186cc9e446147b063c
      *   osgi.bundle,io.github.jm6cnddxbwftaks.neovim4eclipse,0.2.4 -> /.../plugins/...jar
      *   org.eclipse.update.feature,io.github.jm6cnddxbwftaks.neovim4eclipse.feature,0.2.4 -> /.../features/...
@@ -369,12 +501,24 @@ public final class InstallCheckTool {
     static Optional<String> trustProblem(String output, String fingerprint, Version v) {
         String ours = "The following artifacts are signed by PGP key " + fingerprint.toLowerCase(java.util.Locale.ROOT);
         String feature = EclipseCopy.FEATURE.substring(0, EclipseCopy.FEATURE.length() - ".feature.group".length());
+        List<String> releaseUnits = List.of(BUNDLE, EclipseCopy.FEATURE, feature + ".feature.jar");
+        boolean underFetched = false;
         boolean underOurs = false;
         boolean bundle = false;
         boolean featureSigned = false;
         for (String raw : output.lines().toList()) {
             String line = raw.strip();
-            if (line.startsWith("The following artifacts are") || line.startsWith("The artifacts below are")) {
+            if (line.startsWith("The following IUs are fetched from ")) {
+                underFetched = true;
+                underOurs = false;
+            } else if (underFetched && raw.startsWith("  ")) {
+                // "  <id> <version>"; a unit's touchpoint lines below it are indented further.
+                String[] unit = line.split(" ");
+                if (!raw.startsWith("    ") && (unit.length != 2 || !releaseUnits.contains(unit[0]) || !isVersion(unit[1], v))) {
+                    return Optional.of("the director fetches \"" + line + "\", which is not part of release " + v);
+                }
+            } else if (line.startsWith("The following artifacts are") || line.startsWith("The artifacts below are")) {
+                underFetched = false;
                 if (!line.equals(ours)) {
                     return Optional.of("the director reports \"" + line + "\"");
                 }
@@ -384,6 +528,7 @@ public final class InstallCheckTool {
                 bundle |= isArtifact(artifact, "osgi.bundle," + BUNDLE + ",", v);
                 featureSigned |= isArtifact(artifact, "org.eclipse.update.feature," + feature + ",", v);
             } else {
+                underFetched = false;
                 underOurs = false;
             }
         }

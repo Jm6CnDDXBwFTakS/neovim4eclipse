@@ -52,21 +52,65 @@ class InstallCheckTest {
 
     @Test
     void theDirectorTrustsOnlyTheSiteAndTheReleaseKey() {
-        List<String> args = InstallCheckTool.installArguments(SITE, V, "A91F53D8931B7FD0D14686186CC9E446147B063C", false);
+        List<String> args = InstallCheckTool.installArguments(SITE, V, "A91F53D8931B7FD0D14686186CC9E446147B063C");
         assertEquals(SITE + "releases/0.2.4/", after(args, "-repository"));
         assertEquals("https://jm6cnddxbwftaks.github.io/", after(args, "-trustedAuthorities"), "the host, with its /");
         assertEquals("a91f53d8931b7fd0d14686186cc9e446147b063c", after(args, "-trustedPGPKeys"), "in lower case, as p2 compares it");
         assertTrue(args.contains("-trustSignedContentOnly"));
         assertTrue(after(args, "-trustedCertificates").startsWith("-"), "no value: no self-made certificate is trusted");
-        assertFalse(args.contains("-uninstallIU"), "nothing to replace");
-        assertEquals(EclipseCopy.FEATURE,
-                after(InstallCheckTool.installArguments(SITE, V, "A91F", true), "-uninstallIU"), "replaces the copy's plug-in");
+        assertFalse(args.contains("-uninstallIU"), "the copy's plug-in goes in a run of its own, before");
+        assertEquals(EclipseCopy.FEATURE, after(InstallCheckTool.uninstallArguments(), "-uninstallIU"));
+    }
+
+    @Test
+    void theTrustChoicesLeaveThePrefsAndNothingElse() {
+        String prefs = "eclipse.preferences.version=1\n"
+                + "pgp.trustedPublicKeys=-----BEGIN PGP MESSAGE-----\\nVersion\\: BCPG v1.85\\n\\nuQINBGSil\n"
+                + "trustAlways=false\n"
+                + "trustedAuthorities=https\\://download.eclipse.org\n";
+        assertEquals("eclipse.preferences.version=1\ntrustedAuthorities=https\\://download.eclipse.org\n",
+                InstallCheckTool.withoutTrustChoices(prefs), "p2's own layout: the keys on one line; trustAlways goes too");
+        assertEquals("a=1\n# trustAlways=true\n", InstallCheckTool.withoutTrustChoices(
+                "a=1\n  trustAlways = true\ntrustAllAuthorities:true\n# trustAlways=true\ntrustedCertificates\tMCMG\n"),
+                "blanks before the key, and =, : or a blank after it; a comment stays");
+        assertEquals("a=x\\\n trustAlways=true\nb=2\n", InstallCheckTool.withoutTrustChoices("a=x\\\n trustAlways=true\nb=2\n"),
+                "a line that goes on another entry's value is that value, not a key");
+        assertEquals("a=1\r\nb=2",
+                InstallCheckTool.withoutTrustChoices("a=1\r\npgp.trustedPublicKeys=x\\\r\n  y\\\\\\\n  z\r\nb=2"),
+                "lines ending in an odd number of \\ go on; Windows line ends and a last line without one kept");
+        assertEquals("a=x\\\\\nb=2\n", InstallCheckTool.withoutTrustChoices("a=x\\\\\nb=2\n"), "nothing to drop");
+        assertEquals("other.pgp.trustedPublicKeys=1\n", InstallCheckTool.withoutTrustChoices("other.pgp.trustedPublicKeys=1\n"),
+                "only the key itself");
+    }
+
+    @Test
+    void theCopyForgetsTheKeysYourEclipseKeeps(@TempDir Path dir) throws IOException {
+        assertEquals(0, InstallCheckTool.forgetTrustChoices(dir.resolve("copy")), "no p2 folder: nothing to do");
+
+        Path settings = Path.of("p2", "org.eclipse.equinox.p2.engine", "profileRegistry", "SDKProfile.profile", ".data",
+                ".settings", "org.eclipse.equinox.p2.engine.prefs");
+        Path yours = dir.resolve("yours").resolve(settings);
+        Path copied = dir.resolve("copy").resolve(settings);
+        Files.createDirectories(yours.getParent());
+        Files.createDirectories(copied.getParent());
+        String text = "eclipse.preferences.version=1\npgp.trustedPublicKeys=KEYS\ntrustAlways=true\nother=1\n";
+        Files.writeString(yours, text);
+        Files.createLink(copied, yours); // as EclipseCopy may link a file the copy only reads
+        Files.createDirectories(dir.resolve("copy/p2/org.eclipse.equinox.p2.engine/profileRegistry/Other.profile"));
+
+        assertEquals(1, InstallCheckTool.forgetTrustChoices(dir.resolve("copy")), "one profile with prefs");
+        assertEquals("eclipse.preferences.version=1\nother=1\n", Files.readString(copied));
+        assertEquals(text, Files.readString(yours), "your Eclipse keeps its keys: the link is broken, not written through");
+        assertEquals(0, InstallCheckTool.forgetTrustChoices(dir.resolve("copy")), "a second time: nothing left");
     }
 
     private static final String KEY = "a91f53d8931b7fd0d14686186cc9e446147b063c";
     private static final String SIGNED = """
             The following IUs are fetched from https://jm6cnddxbwftaks.github.io/neovim4eclipse/releases/0.2.4/
               io.github.jm6cnddxbwftaks.neovim4eclipse 0.2.4
+              io.github.jm6cnddxbwftaks.neovim4eclipse.feature.feature.group 0.2.4
+              io.github.jm6cnddxbwftaks.neovim4eclipse.feature.feature.jar 0.2.4
+                zipped=Instruction[true,null]
             The following artifacts are signed by PGP key a91f53d8931b7fd0d14686186cc9e446147b063c
               osgi.bundle,io.github.jm6cnddxbwftaks.neovim4eclipse,0.2.4 -> /c/plugins/io.github.jm6cnddxbwftaks.neovim4eclipse_0.2.4.jar
               org.eclipse.update.feature,io.github.jm6cnddxbwftaks.neovim4eclipse.feature,0.2.4 -> /c/features/f_0.2.4
@@ -95,6 +139,19 @@ class InstallCheckTest {
         String noBundle = SIGNED.replaceAll("(?m)^  osgi\\.bundle.*\\n", "");
         assertTrue(InstallCheckTool.trustProblem(noBundle, KEY, V).orElseThrow().contains("the plug-in"), noBundle);
         assertTrue(InstallCheckTool.trustProblem(SIGNED.replace(",0.2.4 ->", ",0.2.3 ->"), KEY, V).isPresent(), "another version");
+    }
+
+    /**
+     * p2 lists nothing a key it already trusts signed (Eclipse's own keys, say), so a unit fetched
+     * beyond the release's own fails the check even with every release line in place.
+     */
+    @Test
+    void aUnitBeyondTheReleaseFails() {
+        String extra = SIGNED.replace("  io.github.jm6cnddxbwftaks.neovim4eclipse 0.2.4\n",
+                "  io.github.jm6cnddxbwftaks.neovim4eclipse 0.2.4\n  org.example.extra 1.0.0\n");
+        assertTrue(InstallCheckTool.trustProblem(extra, KEY, V).orElseThrow().contains("org.example.extra"), extra);
+        String older = SIGNED.replace("feature.feature.jar 0.2.4", "feature.feature.jar 0.2.3");
+        assertTrue(InstallCheckTool.trustProblem(older, KEY, V).orElseThrow().contains("0.2.3"), "another version of a release unit");
     }
 
     /** Only a folder this tool made, an empty one, or the default is deleted to start afresh. */

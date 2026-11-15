@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- For contributors: InstallCheck no longer fails a correctly signed release when your Eclipse has
+  the plug-in installed or already trusts the release key. p2 then trusted the key without listing
+  it, so the check could not see that the key signed the release. The copy now uninstalls the
+  plug-in and forgets your Trust dialog choices first, as a new user's Eclipse. The check also
+  fails now if the install fetches anything beyond the release's own plug-in and feature.
+
 ## [0.2.20] - 2026-11-14
 
 ### Fixed
