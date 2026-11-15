@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.21] - 2026-11-15
+
 ### Added
 
 - Neovim's command-line window (`q:`, `q/`, `q?`, or `Ctrl-F` on the `:` line) opens over the bottom
