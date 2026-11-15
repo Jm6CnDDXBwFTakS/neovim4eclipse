@@ -19,6 +19,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   instead of being undone. As for a project's file, the plug-in reads it for Neovim, so no filetype
   plug-in or language server starts for it in the embedded Neovim. A file Eclipse would open in
   another program (a `.zip`) is still not opened.
+- The mouse in the command-line window (`q:`): a click puts the cursor on a history line, a double
+  click or a drag selects, and the wheel scrolls, through Neovim's own mouse handling.
 
 ## [0.2.21] - 2026-11-15
 

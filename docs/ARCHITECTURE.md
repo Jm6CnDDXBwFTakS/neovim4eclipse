@@ -652,6 +652,7 @@ Neovim  ── redraw: grid_line, grid_scroll, win_pos, hl_attr_define, flush �
 NeovimEditorController ── UI thread ──▶ editor/NeovimWindowPanel (OverlayFrame over the bottom rows)
                                           └─ editor/GridCanvas   cells, colors, cursor
 keys in the panel ── NeovimSession.inputAsync ──▶ Neovim (every mode; Eclipse never types there)
+left button, wheel ── GridCanvas.cellAt ── commandWindowMouseAsync ── nvim_input_mouse(grid) ──▶ Neovim
 focus elsewhere ── closeCommandWindowAsync ── <C-\><C-N><C-\><C-N> ──▶ Neovim (nothing runs)
 ```
 
@@ -674,6 +675,12 @@ focus elsewhere ── closeCommandWindowAsync ── <C-\><C-N><C-\><C-N> ─�
   its line dropped. Keys, not a Lua call: while Neovim waits for a command's next key (`r`, `d`) it
   answers no call. Not `<C-c>`: in that window `Ctrl-C` goes back to the command line with the
   line under the cursor.
+- **The mouse** (left button and wheel, every mode): `GridCanvas.cellAt` turns a point into the
+  window's cell, and `NeovimSession.commandWindowMouseAsync` sends it with `nvim_input_mouse` on the
+  window's own grid (`util/Grids.drawnGrid`, kept with each drawn view). Neovim counts double
+  clicks and drags itself, as for a terminal; a drag is sent only when it reaches another cell. The
+  right and middle buttons do nothing there. The editor's mouse is another path (`LuaScripts.MOUSE`
+  maps a document position to Neovim's screen, grid 0), since Eclipse draws the editor's text.
 - **Colors:** a highlight's own colors where it sets them, the editor's text and background where it
   leaves them to the default (`util/GridSnapshot.colors`); `'background'` follows the editor's
   (`LuaScripts.SET_BACKGROUND`, sent at the start and at each theme switch).

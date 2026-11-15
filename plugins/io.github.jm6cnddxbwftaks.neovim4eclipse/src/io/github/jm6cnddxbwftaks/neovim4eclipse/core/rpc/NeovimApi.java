@@ -56,6 +56,18 @@ public interface NeovimApi {
     CompletableFuture<Integer> input(String keys);
 
     /**
+     * {@code nvim_input_mouse(button, action, modifier, grid, row, col)}: a mouse event on a cell of
+     * grid {@code grid} (with {@code ext_multigrid}, the window's own grid; 0 is the whole screen),
+     * queued as typed input, so Neovim counts multiple clicks and drags itself. Example: a click on
+     * row 2, column 5 of grid 4 is {@code ("left", "press", "", 4, 2, 5)} and the matching release;
+     * the wheel turned up is {@code ("wheel", "up", "", 4, 2, 5)}.
+     *
+     * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}, combined),
+     *                 or {@code ""}
+     */
+    CompletableFuture<Void> inputMouse(String button, String action, String modifier, int grid, int row, int col);
+
+    /**
      * {@code nvim_set_client_info(name, version, type, methods, attributes)}: tells Neovim who is on
      * this channel; {@code :lua =vim.api.nvim_get_chan_info(n).client} shows it.
      *

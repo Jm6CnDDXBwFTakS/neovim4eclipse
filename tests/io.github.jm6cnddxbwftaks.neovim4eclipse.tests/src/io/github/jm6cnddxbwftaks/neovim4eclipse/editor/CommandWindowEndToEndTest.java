@@ -92,6 +92,35 @@ class CommandWindowEndToEndTest extends EndToEndTestBase {
         return SessionProbe.lua(session, "return vim.g." + name);
     }
 
+    /**
+     * A click on a history line in the panel puts Neovim's cursor there, and Enter runs that line:
+     * the panel's mouse reaches Neovim's own, on the window's grid.
+     */
+    @Test
+    void aClickOnAHistoryLineThenEnterRunsThatLine() {
+        SessionProbe.lua(session, "vim.fn.histadd(':', 'let g:n4e_cmdwin = 2')");
+        SessionProbe.lua(session, "vim.fn.histadd(':', 'let g:n4e_cmdwin = 3')");
+        type(widget, "q:");
+        GridCanvas canvas = panelShowing("let g:n4e_cmdwin = 2");
+        UiTestSupport.requireKeyboardFocus(canvas, TIMEOUT_MS);
+        String[] rows = rowsOf(canvas.grid()).split("\n");
+        int row = 0; // the row that shows the line, after the window's ":" column
+        while (row < rows.length - 1 && !rows[row].endsWith("let g:n4e_cmdwin = 2")) {
+            row++;
+        }
+        Event press = new Event();
+        press.button = 1;
+        press.x = canvas.cellWidth() + 1;
+        press.y = row * canvas.cellHeight() + 1;
+        canvas.notifyListeners(SWT.MouseDown, press);
+        canvas.notifyListeners(SWT.MouseUp, press);
+        waitUntil("Neovim's cursor on the clicked line", TIMEOUT_MS,
+                () -> "let g:n4e_cmdwin = 2".equals(String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_get_current_line()"))));
+        key(canvas, SWT.CR, SWT.CR, 0);
+        waitUntil("the clicked line ran", TIMEOUT_MS, () -> Long.valueOf(2).equals(g("n4e_cmdwin")),
+                () -> "; g:n4e_cmdwin is " + g("n4e_cmdwin"));
+    }
+
     @Test
     void qColonShowsTheHistoryAndEnterRunsTheLineUnderTheCursor() {
         SessionProbe.lua(session, "vim.fn.histadd(':', 'let g:n4e_cmdwin = 1')");

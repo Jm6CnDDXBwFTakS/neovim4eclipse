@@ -91,6 +91,20 @@ final class GridCanvas extends Canvas {
         return width;
     }
 
+    /**
+     * The grid cell under point ({@code x}, {@code y}) of the canvas, as {row, column}, kept inside the
+     * grid (a drag past its edge stays on the last row or column, as in a terminal), or {@code null}
+     * before the grid is drawn.
+     */
+    int[] cellAt(int x, int y) {
+        if (grid == null || grid.width() < 1 || grid.height() < 1) {
+            return null;
+        }
+        int row = Math.clamp(Math.floorDiv(y, cellHeight()), 0, grid.height() - 1);
+        int col = Math.clamp(Math.floorDiv(x, cellWidth()), 0, grid.width() - 1);
+        return new int[] { row, col };
+    }
+
     /** One cell's height: the editor's line height. */
     int cellHeight() {
         return Math.max(1, host.getLineHeight());

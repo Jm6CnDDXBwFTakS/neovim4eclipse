@@ -1325,11 +1325,6 @@ public final class NeovimEditorController implements AutoCloseable {
         LOG.fine("Detached Neovim from editor: " + editor.getTitle());
     }
 
-    /**
-     * {@link CommandLineBox.Commands} on the session: keys and pastes go to Neovim's command line, in
-     * order with the editor's own keys (one input thread). File and tab commands still reach this
-     * editor, through the session's host handler on Enter.
-     */
     /** What the command-line window panel asks of Neovim. */
     private record PanelCommands(NeovimSession session) implements NeovimWindowPanel.Commands {
         @Override
@@ -1338,10 +1333,21 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         @Override
+        public void mouse(String button, String action, String modifier, int row, int col) {
+            session.commandWindowMouseAsync(button, action, modifier, row, col);
+        }
+
+        @Override
         public void close() {
             session.closeCommandWindowAsync();
         }
     }
+
+    /**
+     * {@link CommandLineBox.Commands} on the session: keys and pastes go to Neovim's command line, in
+     * order with the editor's own keys (one input thread). File and tab commands still reach this
+     * editor, through the session's host handler on Enter.
+     */
 
     private record SessionCommands(NeovimSession session) implements CommandLineBox.Commands {
         @Override

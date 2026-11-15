@@ -53,6 +53,13 @@ final class NeovimWindowPanel {
         /** Types keys into Neovim (Neovim notation, e.g. {@code "k"}, {@code "<CR>"}). */
         void type(String keys);
 
+        /**
+         * A mouse event on a cell of the window ({@code nvim_input_mouse}): {@code "left"} with
+         * {@code "press"}, {@code "drag"} or {@code "release"}, or {@code "wheel"} with {@code "up"}
+         * or {@code "down"}; row and column are the cell's, 0-based.
+         */
+        void mouse(String button, String action, String modifier, int row, int col);
+
         /** Closes the command-line window without running its line. */
         void close();
     }
@@ -145,6 +152,10 @@ final class NeovimWindowPanel {
         canvas.setInsertCursor(insert);
         canvas.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));
         canvas.addTraverseListener(this::onTraverse);
+        canvas.addListener(SWT.MouseDown, this::onMouseDown);
+        canvas.addListener(SWT.MouseMove, this::onMouseMove);
+        canvas.addListener(SWT.MouseUp, this::onMouseUp);
+        canvas.addListener(SWT.MouseVerticalWheel, this::onWheel);
         canvas.addListener(SWT.FocusIn, e -> stateListener.run());
         canvas.addListener(SWT.FocusOut, e -> stateListener.run());
         host.addControlListener(repositionOnResize);
@@ -152,6 +163,58 @@ final class NeovimWindowPanel {
         canvas.setFocus();
         display.addFilter(SWT.FocusIn, abandonOnFocusElsewhere);
         stateListener.run();
+    }
+
+    // ---- the mouse: the left button and the wheel are Neovim's, in every mode (no Eclipse text here) ----
+
+    /** The cell the left button last pressed or dragged to, {row, col}; {@code null} while it is up. */
+    private int[] pressedAt;
+
+    private void onMouseDown(Event e) {
+        int[] cell = canvas.cellAt(e.x, e.y);
+        if (e.button != 1 || cell == null) {
+            return; // the right and middle buttons do nothing here
+        }
+        pressedAt = cell;
+        commands.mouse("left", "press", modifiers(e.stateMask), cell[0], cell[1]);
+    }
+
+    /** A drag sends only a change of cell: moving inside one cell would make Neovim redraw for nothing. */
+    private void onMouseMove(Event e) {
+        int[] cell = pressedAt == null ? null : canvas.cellAt(e.x, e.y);
+        if (cell == null || (cell[0] == pressedAt[0] && cell[1] == pressedAt[1])) {
+            return;
+        }
+        pressedAt = cell;
+        commands.mouse("left", "drag", modifiers(e.stateMask), cell[0], cell[1]);
+    }
+
+    private void onMouseUp(Event e) {
+        int[] cell = canvas.cellAt(e.x, e.y);
+        if (e.button != 1 || pressedAt == null || cell == null) {
+            return;
+        }
+        pressedAt = null;
+        commands.mouse("left", "release", modifiers(e.stateMask), cell[0], cell[1]);
+    }
+
+    /** One wheel notch is one {@code <ScrollWheelUp>} or {@code <ScrollWheelDown>}: Neovim scrolls by its {@code 'mousescroll'}. */
+    private void onWheel(Event e) {
+        int[] cell = canvas.cellAt(e.x, e.y);
+        if (cell == null || e.count == 0) {
+            return;
+        }
+        String direction = e.count > 0 ? "up" : "down";
+        for (int i = 0; i < Math.max(1, Math.abs(e.count) / 3); i++) { // SWT counts 3 per notch
+            commands.mouse("wheel", direction, modifiers(e.stateMask), cell[0], cell[1]);
+        }
+        e.doit = false; // the editor under the panel does not scroll too
+    }
+
+    /** Neovim's modifier letters for a mouse event's keys: {@code "S"} Shift, {@code "C"} Ctrl, {@code "A"} Alt. */
+    static String modifiers(int stateMask) {
+        return ((stateMask & SWT.SHIFT) != 0 ? "S" : "") + ((stateMask & SWT.CTRL) != 0 ? "C" : "")
+                + ((stateMask & SWT.ALT) != 0 ? "A" : "");
     }
 
     private void onKey(KeyEvent e) {

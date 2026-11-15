@@ -1416,6 +1416,42 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * A click on a history line in the panel moves the window's cursor there, through Neovim's own
+     * mouse on the window's grid; the wheel scrolls it. Example: three lines in the history, a
+     * click on row 0 puts the cursor on the first.
+     */
+    @Test
+    void aClickInTheCommandLineWindowMovesItsCursorAndTheWheelScrolls() throws Exception {
+        try (NeovimSession s = start()) {
+            List<CommandWindowView> views = new CopyOnWriteArrayList<>();
+            s.addCommandWindowListener(views::add);
+            for (int i = 1; i <= 40; i++) {
+                s.lua("vim.fn.histadd(':', 'echo " + i + "')");
+            }
+            keys(s, "q", ":");
+            waitFor(() -> views.stream().anyMatch(v -> v.open() && v.grid() != null && v.grid().cursorRow() > 0),
+                    "the window drawn, the cursor on its last line: " + views);
+            long before = number(s, "return vim.fn.line('.')");
+            s.commandWindowMouseAsync("left", "press", "", 0, 2);
+            s.commandWindowMouseAsync("left", "release", "", 0, 2);
+            waitFor(() -> number(s, "return vim.fn.winline()") == 1, "the cursor on the window's first row");
+            assertTrue(number(s, "return vim.fn.line('.')") < before, "moved up to the clicked line");
+            long top = number(s, "return vim.fn.line('w0')");
+            s.commandWindowMouseAsync("wheel", "up", "", 0, 0);
+            waitFor(() -> number(s, "return vim.fn.line('w0')") < top, "scrolled up by the wheel");
+        }
+    }
+
+    /** A number Neovim answers ({@code return vim.fn.line('.')}), for a wait's condition; -1 if the call fails. */
+    private static long number(NeovimSession s, String lua) {
+        try {
+            return ((Number) s.lua(lua)).longValue();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
     /** Closed in Normal mode: no :quit reaches the editor's window, which would close its editor. */
     @Test
     void closingTheCommandLineWindowInNormalModeQuitsNothingElse() throws Exception {

@@ -240,6 +240,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * Written on the RPC reader thread; read by {@link #resizeGrid} on the input thread.
      */
     private volatile CommandWindowView commandWindow = CommandWindowView.CLOSED;
+    /**
+     * The grid the command-line window is drawn from, for its mouse events ({@link #commandWindowMouseAsync});
+     * -1 while it is closed or not drawn yet. Written on the reader thread, with each drawn view.
+     */
+    private volatile int commandWindowGrid = -1;
 
     private NeovimSession(NeovimConnection connection, Handle homeBuffer, int homeWin, ClipboardPort clipboard) {
         this.connection = connection;
@@ -752,6 +757,27 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * nothing when it is not open. Example: the user clicks into another view while {@code q:} is
      * shown, maybe in Insert mode, maybe after a {@code d} still waiting for its motion.
      */
+    /**
+     * A mouse event on cell ({@code row}, {@code col}) of the command-line window, as drawn in its
+     * panel: {@code nvim_input_mouse} on the window's grid, in order with the keys, so Neovim counts
+     * double clicks and drags itself, and its {@code 'mouse'} and mappings apply. Nothing while the
+     * window is not drawn. Any thread. Example: a click on the third history line is
+     * {@code ("left", "press", "", 2, 0)}, then the release.
+     *
+     * @param button   {@code "left"} or {@code "wheel"}
+     * @param action   {@code "press"}, {@code "drag"} or {@code "release"}; {@code "up"} or
+     *                 {@code "down"} for the wheel
+     * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}), or {@code ""}
+     */
+    public void commandWindowMouseAsync(String button, String action, String modifier, int row, int col) {
+        submit("command-line window mouse " + button + " " + action, Level.FINE, () -> {
+            int grid = commandWindowGrid;
+            if (grid != -1) {
+                await(api.inputMouse(button, action, modifier, grid, row, col));
+            }
+        });
+    }
+
     public void closeCommandWindowAsync() {
         submit("close the command-line window", Level.FINE, () -> await(api.input(CLOSE_COMMAND_WINDOW_KEYS)));
     }
@@ -2110,6 +2136,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void onCommandWindowClosed() {
             grids.stopDrawing();
+            commandWindowGrid = -1;
             commandWindow = CommandWindowView.CLOSED;
             events.commandWindow(commandWindow);
             submit("resize after the command-line window", Level.FINE, () -> {
@@ -2120,6 +2147,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         private void commandWindowDrawn(GridSnapshot grid) {
             CommandWindowView view = commandWindow;
             if (view.open()) {
+                commandWindowGrid = grids.drawnGrid();
                 commandWindow = new CommandWindowView(true, view.type(), grid);
                 events.commandWindow(commandWindow);
             }

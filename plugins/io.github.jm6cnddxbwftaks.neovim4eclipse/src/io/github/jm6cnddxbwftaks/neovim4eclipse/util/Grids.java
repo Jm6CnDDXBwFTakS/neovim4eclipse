@@ -242,6 +242,12 @@ public final class Grids {
         return Optional.of(snapshot);
     }
 
+    /** The drawn window's grid number, or -1 while it is not known (nothing drawn, no win_pos yet). */
+    public int drawnGrid() {
+        Integer grid = drawnWindow == -1 ? null : gridOf(drawnWindow);
+        return grid == null ? -1 : grid;
+    }
+
     private Integer gridOf(int win) {
         for (Map.Entry<Integer, Integer> e : windowOfGrid.entrySet()) {
             if (e.getValue() == win) {

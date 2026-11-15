@@ -56,6 +56,11 @@ class NeovimWindowPanelTest {
             }
 
             @Override
+            public void mouse(String button, String action, String modifier, int row, int col) {
+                calls.add("mouse " + button + " " + action + " " + modifier + " " + row + " " + col);
+            }
+
+            @Override
             public void close() {
                 calls.add("close");
             }
@@ -115,6 +120,38 @@ class NeovimWindowPanelTest {
         panel.canvas().notifyListeners(SWT.KeyDown, enter);
         panel.ctrlKey("<C-u>");
         assertEquals(List.of("type k", "type <CR>", "type <C-u>"), calls);
+    }
+
+    /**
+     * The left button and the wheel reach Neovim as cells of the window: a click on row 2, column 3,
+     * a drag that sends only a change of cell, and the release; the right button does nothing.
+     */
+    @Test
+    void theLeftButtonAndTheWheelGoToNeovimAsCells() {
+        panel.show(window());
+        GridCanvas canvas = panel.canvas();
+        int w = canvas.cellWidth();
+        int h = canvas.cellHeight();
+        canvas.notifyListeners(SWT.MouseDown, mouse(1, 3 * w + 1, 2 * h + 1, SWT.SHIFT));
+        canvas.notifyListeners(SWT.MouseMove, mouse(0, 3 * w + 2, 2 * h + 2, 0)); // the same cell
+        canvas.notifyListeners(SWT.MouseMove, mouse(0, 5 * w + 1, 2 * h + 1, 0));
+        canvas.notifyListeners(SWT.MouseMove, mouse(0, 100 * w, 100 * h, 0)); // past the edge: the last cell
+        canvas.notifyListeners(SWT.MouseUp, mouse(1, 100 * w, 100 * h, 0));
+        canvas.notifyListeners(SWT.MouseDown, mouse(3, w, h, 0)); // the right button
+        Event wheel = mouse(0, w, h, 0);
+        wheel.count = -3; // one notch down, as SWT counts it
+        canvas.notifyListeners(SWT.MouseVerticalWheel, wheel);
+        assertEquals(List.of("mouse left press S 2 3", "mouse left drag  2 5", "mouse left drag  6 19",
+                "mouse left release  6 19", "mouse wheel down  1 1"), calls);
+    }
+
+    private static Event mouse(int button, int x, int y, int stateMask) {
+        Event e = new Event();
+        e.button = button;
+        e.x = x;
+        e.y = y;
+        e.stateMask = stateMask;
+        return e;
     }
 
     @Test
