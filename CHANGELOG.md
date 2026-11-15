@@ -24,6 +24,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - For contributors: the Build workflow's Windows and macOS tests are two jobs, *All tests on
   Windows* and *All tests on macOS*, so a run without them names the skipped jobs plainly.
+- For contributors: the Release tool counts a Build run on the release branch as passed only if
+  its Linux build and integration jobs passed, as the Release workflow already did; a run with
+  *platforms-only* no longer counts.
 
 ## [0.2.20] - 2026-11-14
 

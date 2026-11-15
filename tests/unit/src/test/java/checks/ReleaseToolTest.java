@@ -226,6 +226,27 @@ class ReleaseToolTest {
         assertEquals("fallback", Settings.of("").get("missing", "fallback"));
     }
 
+    /** A platforms-only run passes with its Linux jobs skipped: it must not count as tested. */
+    @Test
+    void aPlatformsOnlyRunDoesNotCountAsTested() {
+        List<String> linux = Settings.of("tested.jobs = Build, unit and UI tests ; Integration tests (real Neovim);\n")
+                .list("tested.jobs");
+        assertEquals(List.of("Build, unit and UI tests", "Integration tests (real Neovim)"), linux, "split at ;, not at the comma");
+        assertThrows(ToolFailure.class, () -> Settings.of("tested.jobs= ; \n").list("tested.jobs"),
+                "an empty list would make every passed run count");
+        Set<String> platformsOnly = GitHub.passedJobs("""
+                Check the Run workflow inputs\tskipped
+                Build, unit and UI tests\tskipped
+                Integration tests (real Neovim)\tskipped
+                All tests on Windows\tsuccess
+                All tests on macOS\tskipped
+                """);
+        assertEquals(Set.of("All tests on Windows"), platformsOnly);
+        assertFalse(platformsOnly.containsAll(linux));
+        assertTrue(GitHub.passedJobs("Build, unit and UI tests\tsuccess\nIntegration tests (real Neovim)\tsuccess\n")
+                .containsAll(linux), "a full Linux run counts");
+    }
+
     @Test
     void theSettingsNameWhatTheWorkflowsContain() throws IOException {
         Path repo = repo();
@@ -236,6 +257,14 @@ class ReleaseToolTest {
         }
         String build = Files.readString(repo.resolve(".github/workflows").resolve(s.get("build.workflow")));
         assertTrue(build.contains("'" + s.get("tested.job") + "'"), "build.yml no longer names the reused job \"" + s.get("tested.job") + "\"");
+        String release = Files.readString(repo.resolve(".github/workflows").resolve(s.get("release.workflow")));
+        List<String> linux = s.list("tested.jobs");
+        assertEquals(2, linux.size(), "the build and the integration job: " + linux);
+        for (String job : linux) {
+            // A job's name: is indented by four spaces exactly; a step's or a with: block's is deeper.
+            assertTrue(build.contains("'" + job + "'") || build.contains("\n    name: " + job + "\n"), "build.yml has no job \"" + job + "\"");
+            assertTrue(release.contains(".name == \"" + job + "\""), "release.yml no longer checks the job \"" + job + "\"");
+        }
         String rehearsal = Files.readString(repo.resolve(".github/workflows").resolve(s.get("rehearsal.workflow")));
         assertTrue(rehearsal.contains("branches: ['" + s.get("rehearse.prefix") + "**']"), "the rehearsal no longer starts on pushes to "
                 + s.get("rehearse.prefix"));

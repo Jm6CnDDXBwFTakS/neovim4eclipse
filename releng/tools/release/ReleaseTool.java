@@ -565,7 +565,9 @@ public final class ReleaseTool {
         if (options.ciOnBranch()) {
             List<String> dispatch = List.of("gh", "workflow", "run", settings.get("build.workflow"), "--ref", v.branch());
             List<GitHub.Run> done = gh.runs(settings.get("build.workflow"), head, "workflow_dispatch", v.branch());
-            if (done.stream().anyMatch(GitHub.Run::passed)) {
+            // A passed run counts only if it ran the Linux tests: one with platforms-only skipped them.
+            List<String> linux = settings.list("tested.jobs");
+            if (done.stream().filter(GitHub.Run::passed).anyMatch(r -> gh.passedJobs(r).containsAll(linux))) {
                 ok("Build passed on " + v.branch() + " already");
             } else if (ask.confirm("Run the Build workflow on " + v.branch(), List.of(Shell.display(dispatch)))) {
                 Set<Long> older = gh.runIds(settings.get("build.workflow"), head, "workflow_dispatch", v.branch());

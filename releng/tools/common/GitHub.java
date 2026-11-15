@@ -82,6 +82,33 @@ public final class GitHub {
         return Optional.of(new Run(Long.parseLong(f[0]), f[1], f[2], f[3], f[4], f[5]));
     }
 
+    /**
+     * The names of {@code run}'s jobs that passed. Example: a Build run with platforms-only and
+     * Windows ticked gives {@code [All tests on Windows]}; its Linux jobs were skipped.
+     */
+    public Set<String> passedJobs(Run run) {
+        // @tsv and the filter in Java, not select(.conclusion == "success"): Windows drops the
+        // double quotes of a jq filter on the command line (GhCommandsTest).
+        return passedJobs(shell.out(List.of("gh", "run", "view", Long.toString(run.id()), "--json", "jobs",
+                "--jq", ".jobs[] | [.name, .conclusion] | @tsv")));
+    }
+
+    /**
+     * The jobs that passed, from {@link #passedJobs(Run)}' lines of name, tab, conclusion.
+     * Example: {@code "Build, unit and UI tests\tsuccess"} and {@code "All tests on macOS\tskipped"}
+     * give {@code [Build, unit and UI tests]}.
+     */
+    public static Set<String> passedJobs(String tsv) {
+        Set<String> passed = new HashSet<>();
+        for (String line : tsv.lines().toList()) {
+            int tab = line.lastIndexOf('\t');
+            if (tab > 0 && line.substring(tab + 1).strip().equals("success")) {
+                passed.add(line.substring(0, tab));
+            }
+        }
+        return passed;
+    }
+
     /** The ids of the runs {@link #runs} lists now: taken before a push, so that {@link #awaitRun} can tell the new run from older ones. */
     public Set<Long> runIds(String workflow, String commit, String event, String branch) {
         Set<Long> ids = new HashSet<>();

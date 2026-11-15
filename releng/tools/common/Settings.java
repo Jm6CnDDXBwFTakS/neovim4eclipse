@@ -8,6 +8,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -75,6 +76,20 @@ public final class Settings {
             throw new ToolFailure("no setting " + key + " in settings.properties or local.properties");
         }
         return v.strip();
+    }
+
+    /**
+     * The value of {@code key} as a list, split at {@code ;} (an entry may hold a comma), each
+     * entry stripped, empty ones left out; fails if no layer sets it, or if it lists nothing (a
+     * check that needs every entry would otherwise pass on none). Example: {@code tested.jobs=
+     * Build, unit and UI tests;Integration tests (real Neovim)} gives those two names.
+     */
+    public List<String> list(String key) {
+        List<String> entries = Arrays.stream(get(key).split(";")).map(String::strip).filter(e -> !e.isEmpty()).toList();
+        if (entries.isEmpty()) {
+            throw new ToolFailure("the setting " + key + " lists nothing; it takes entries separated by ;");
+        }
+        return entries;
     }
 
     /** The value of {@code key}, or {@code fallback} when no layer sets it. */
