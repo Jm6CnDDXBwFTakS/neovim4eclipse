@@ -515,10 +515,18 @@ final class LuaScripts {
               if not open_command or canonical(file) ~= open_command.file then
                 return false
               end
-              local command = open_command.command
+              local command, after = open_command.command, open_command.after
               open_command = nil
               run_open_command(command)
+              if after then
+                after()
+              end
               return true
+            end
+            -- For another script (WINDOW_COMMANDS' :help): a +cmd for the file Eclipse is about to
+            -- show, as :e +cmd name gives one, and after(), run once it ran, in that buffer.
+            package.loaded['neovim4eclipse.host_commands'].set_open_command = function(file, command, after)
+              open_command = { file = canonical(file), command = command, after = after }
             end
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
@@ -1506,6 +1514,13 @@ final class LuaScripts {
      * floating window the user entered), {@code :q}, {@code :close}, {@code Ctrl-W q} and
      * {@code Ctrl-W c} are Neovim's again: they close that window, as in Neovim, not the editor.
      *
+     * <p><b>{@code :help}</b> opens no help window either: {@code help.words} looks the subject up
+     * as Vim does and sends {@code window help <side> <line> <page>}, and Eclipse shows the page in
+     * its help editor ({@code EditorSplits.help}); the waiting {@code +cmd} of
+     * {@code set_open_command} ({@link #HOST_COMMANDS}) puts the cursor on the tag once the page's
+     * editor attaches, and {@code help.ready} makes its buffer read-only, with help's
+     * {@code 'iskeyword'} and a {@code Ctrl-]} that opens a tag's help.
+     *
      * <p>A window opened some other way (a plug-in's {@code vim.cmd.split()}) is closed by the
      * {@code WinNew} safety net of {@link #WINDOWS}. The module is
      * {@code require('neovim4eclipse.window_commands')}; {@link #SPLIT_WINDOW} calls it.
@@ -1822,6 +1837,94 @@ final class LuaScripts {
                 vim.keymap.set('n', lhs, quit(lhs), { expr = true, desc = 'Eclipse: close the editor' })
               end
             end
+            -- :help {subject}: Eclipse shows the help page in an editor of its own, beside this one
+            -- as Vim's help window opens (docs/USER_GUIDE.md, "Help"). The subject is looked up as
+            -- Vim's :help does: getcompletion(subject, 'help') gives the tags in Vim's order of best
+            -- match first (:help w finds 'w', not 'wa'), then the tag's file and line come from the
+            -- runtime path's doc/tags files. Example: :help gf gives the words
+            -- window help above 1234 /usr/share/nvim/runtime/doc/editing.txt.
+            local help = {}
+            M.help = help
+
+            --- The help file and line of `subject` (help.txt's top for ''), or nil and Vim's error.
+            function help.find(subject)
+              subject = vim.trim(subject or '')
+              local tag = subject == '' and 'help.txt' or nil
+              if not tag then
+                local ok, found = pcall(vim.fn.getcompletion, subject, 'help')
+                tag = ok and found[1] or nil
+              end
+              if not tag then
+                return nil, 'E149: Sorry, no help for ' .. subject
+              end
+              for _, tags in ipairs(vim.api.nvim_get_runtime_file('doc/tags', true)) do
+                for _, entry in ipairs(vim.fn.readfile(tags)) do
+                  local name, file = entry:match('^([^\t]+)\t([^\t]+)\t')
+                  if name == tag then
+                    local path = vim.fs.joinpath(vim.fn.fnamemodify(tags, ':h'), file)
+                    local line = 1
+                    for i, text in ipairs(vim.fn.readfile(path)) do
+                      if text:find('*' .. tag .. '*', 1, true) then
+                        line = i
+                        break
+                      end
+                    end
+                    return full(path), line
+                  end
+                end
+              end
+              return nil, 'E149: Sorry, no help for ' .. subject
+            end
+
+            --- What a help page's buffer gets, as Vim's help buffer has it: read-only (Neovim's side
+            --- of the decision that help pages are not edited), help's 'iskeyword' (|tag| and
+            --- *tag* read as a word), and Ctrl-] on a tag opening its help, where Ctrl-] elsewhere
+            --- is Eclipse's Open Declaration (IDE_KEYS).
+            function help.ready(buf)
+              vim.bo[buf].modifiable = false
+              vim.bo[buf].readonly = true
+              vim.bo[buf].iskeyword = '!-~,^*,^|,^",192-255'
+              vim.b[buf].neovim4eclipse_help = true
+              vim.keymap.set('n', '<C-]>', function()
+                help.open(vim.fn.expand('<cword>'), nil)
+              end, { buffer = buf, desc = 'Eclipse: the help for the tag under the cursor' })
+            end
+
+            --- The words for a help page, or nil and why. In the page's own editor the cursor goes
+            --- to the line at once (Vim jumps inside its help window too); otherwise Eclipse opens
+            --- the page and Neovim's cursor goes to the line once it shows it.
+            function help.words(subject, mods)
+              local file, line = help.find(subject)
+              if not file then
+                return nil, line
+              end
+              local here = vim.api.nvim_buf_get_name(0)
+              if here ~= '' and canonical(here) == canonical(file) then
+                vim.schedule(function()
+                  vim.cmd("noautocmd normal! m'")
+                  pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
+                end)
+              else
+                host.set_open_command(file, tostring(line), function()
+                  help.ready(vim.api.nvim_get_current_buf())
+                end)
+              end
+              return { 'window', 'help', side(mods and mods.vertical, mods), tostring(line), file }
+            end
+
+            --- :help as Ctrl-] runs it, where no : line is typed.
+            function help.open(subject, mods)
+              local words, why = help.words(subject, mods)
+              if words then
+                send(words)
+              else
+                vim.api.nvim_echo({ { why } }, true, { err = true })
+              end
+            end
+
+            host.translate('help', function(p)
+              return help.words(table.concat(p.args, ' '), p.mods)
+            end)
             package.loaded['neovim4eclipse.window_commands'] = M
             """;
 

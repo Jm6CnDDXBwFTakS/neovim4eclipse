@@ -7,10 +7,14 @@ import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -163,6 +167,7 @@ final class EditorSplits {
                 case TO_TAB -> toTab(editor, part);
                 case TAB_CLOSE -> tabClose(editor, part, command);
                 case TAB_ONLY -> tabOnly(editor, part, command);
+                case HELP -> help(editor, part, command);
             }
         } catch (IllegalStateException e) {
             HostCommands.showError(editor, e.getMessage()); // Vim's own error (E443)
@@ -277,6 +282,53 @@ final class EditorSplits {
             }
         }
         return page.getActiveEditor();
+    }
+
+    // ---- :help, Ctrl-] on a tag in a help page ----
+
+    /**
+     * The editors {@link #help} opened, for the next {@code :help} to use again, as Vim keeps one
+     * help window. Weak: a closed editor is no longer one. UI thread.
+     */
+    private static final Set<IEditorPart> HELP_EDITORS = Collections.newSetFromMap(new WeakHashMap<>());
+
+    /**
+     * Shows a help page as Vim's {@code :help} does in its help window: in the help editor when one
+     * is open (the page replaces the one it shows, in the same stack), else in a split on the side
+     * Neovim chose ({@code 'splitbelow'}, {@code :vertical}). Neovim then puts the cursor on the
+     * tag's line, and readies the page's buffer: read-only, Ctrl-] on a tag opening its help
+     * ({@code LuaScripts.WINDOW_COMMANDS}). Example: {@code :help gf} in {@code A.java} opens
+     * {@code editing.txt} above it; Ctrl-] on {@code |'path'|} there shows {@code options.txt} in that
+     * same editor's place.
+     */
+    private static void help(ITextEditor editor, IEditorPart from, WindowCommand command) {
+        IWorkbenchPage page = from.getSite().getPage();
+        IEditorPart shown = HELP_EDITORS.stream().filter(e -> isOpen(page, e)).findFirst().orElse(null);
+        if (shown == null) {
+            split(editor, from, new WindowCommand(WindowCommand.Action.SPLIT, command.where(),
+                    WindowCommand.Target.FILE, command.file(), (char) 0, 0, false));
+            IEditorPart opened = page.getActiveEditor();
+            if (opened != null && opened != from) {
+                HELP_EDITORS.add(opened);
+            }
+            return;
+        }
+        page.activate(shown); // the page opens in the help editor's stack
+        IEditorPart opened = EclipseFileCommands.open(page, Path.of(command.file()), IWorkbenchPage.MATCH_INPUT);
+        if (opened == null) {
+            return; // logged
+        }
+        HELP_EDITORS.add(opened);
+        if (opened != shown && !shown.isDirty()) {
+            HELP_EDITORS.remove(shown);
+            page.closeEditor(shown, false); // the page it showed, read-only: nothing to save
+        }
+        activate(page, opened);
+    }
+
+    /** Whether {@code editor} is still one of {@code page}'s open editors. */
+    private static boolean isOpen(IWorkbenchPage page, IEditorPart editor) {
+        return Arrays.stream(page.getEditorReferences()).anyMatch(r -> r.getEditor(false) == editor);
     }
 
     // ---- :tabedit, :tabnew, :tab split, Ctrl-W T, :tabclose 2 ----

@@ -855,3 +855,63 @@ t.test("the plug-in's own closes forget the window, though they fire no WinClose
   t.eq(home, vim.api.nvim_get_current_win())
   t.eq({}, t.sent('eclipse_window_closed'))
 end)
+
+-- :help {subject}: Eclipse shows the page in a help editor (EditorSplits.help); Neovim sends the
+-- page and the tag's line, found as Vim's :help finds them, and opens no help window of its own.
+local function help_line(file, tag)
+  for i, text in ipairs(vim.fn.readfile(file)) do
+    if text:find('*' .. tag .. '*', 1, true) then
+      return i
+    end
+  end
+end
+
+t.test(':help gf sends the page and the tag\'s line, and opens no window', function()
+  commands()
+  local editing = vim.api.nvim_get_runtime_file('doc/editing.txt', false)[1]
+  t.type(':help gf<CR>')
+  expect_windows({ { 'window', 'help', 'above', tostring(help_line(editing, 'gf')), file_at(editing) } })
+  t.eq(1, windows_in_tab(), 'no help window in Neovim')
+  t.forget()
+  t.type(':vertical help<CR>')
+  local help = vim.api.nvim_get_runtime_file('doc/help.txt', false)[1]
+  expect_windows({ { 'window', 'help', 'left', '1', file_at(help) } })
+end)
+
+t.test(':help of nothing known is Vim\'s E149, and sends nothing', function()
+  commands()
+  t.type(':help nosuchtagatall<CR>')
+  t.eq({}, sent_windows())
+  t.ok(vim.v.errmsg:find('E149', 1, true) ~= nil, vim.v.errmsg)
+end)
+
+t.test('a help page\'s buffer is read-only, and Ctrl-] there opens the tag\'s help', function()
+  commands()
+  local editing = vim.api.nvim_get_runtime_file('doc/editing.txt', false)[1]
+  t.type(':help gf<CR>')
+  -- What Eclipse does next, as the attach would: its editor's buffer shows the page, and the
+  -- attach push runs the waiting +cmd (GO_TO_LAST_POSITION).
+  local page = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(page, editing)
+  vim.api.nvim_buf_set_lines(page, 0, -1, false, vim.fn.readfile(editing))
+  vim.api.nvim_win_set_buf(0, page)
+  t.eq(true, require('neovim4eclipse.host_commands').take_open_command(editing))
+  t.eq(help_line(editing, 'gf'), vim.api.nvim_win_get_cursor(0)[1], 'on the tag')
+  t.eq(false, vim.bo[page].modifiable)
+  t.eq(true, vim.bo[page].readonly)
+  -- Ctrl-] on a tag in the same page moves there; on one in another page sends that page.
+  local here = help_line(editing, ':edit')
+  vim.api.nvim_win_set_cursor(0, { here, 0 })
+  t.forget()
+  require('neovim4eclipse.window_commands').help.open('gF', nil)
+  vim.wait(50)
+  t.eq(help_line(editing, 'gF'), vim.api.nvim_win_get_cursor(0)[1], 'moved inside the page')
+  t.eq(1, #sent_windows())
+  t.forget()
+  t.ok(vim.fn.search("'fileformat'") > 0, 'an option named in editing.txt')
+  local tag = vim.fn.expand('<cword>') -- help's 'iskeyword' takes the quotes too, as a tag has them
+  t.eq("'fileformat'", tag)
+  t.type('<C-]>')
+  local options = vim.api.nvim_get_runtime_file('doc/options.txt', false)[1]
+  expect_windows({ { 'window', 'help', 'above', tostring(help_line(options, tag)), file_at(options) } })
+end)

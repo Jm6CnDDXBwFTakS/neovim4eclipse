@@ -6,12 +6,14 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,6 +45,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowLayout;
@@ -129,6 +132,47 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         ParameterizedCommand withSide = ParameterizedCommand.generateCommand(command,
                 Map.of(SplitEditorHandler.HORIZONTAL_PARAMETER, String.valueOf(oneAboveTheOther)));
         page().getActivePart().getSite().getService(IHandlerService.class).executeCommand(withSide, null);
+    }
+
+    /**
+     * {@code :help gf}: the page in a help editor of its own, above this one (Vim's default side),
+     * with Neovim's cursor on the tag and the page read-only. A second {@code :help} shows its page
+     * in that same editor's place, as Vim's help window is used again: still two stacks, not three.
+     */
+    @Test
+    void helpOpensItsPageInAHelpEditorAboveAndUsesItAgain() throws Exception {
+        try {
+            ex("help gf");
+            ITextEditor help = waitForNewEditor(editor, "the help editor of :help gf");
+            assertEquals("editing.txt", help.getTitle());
+            assertEquals(2, stacks(editor).size(), "a stack of its own");
+            assertTrue(onScreen(help).y < onScreen(editor).y, "above: " + onScreen(help) + " " + onScreen(editor));
+            waitUntil("Neovim on gf's tag", TIMEOUT_MS, () -> currentLine().contains("*gf*"),
+                    () -> "; the line: " + currentLine());
+            assertEquals(Boolean.FALSE, SessionProbe.lua(session, "return vim.bo.modifiable"), "read-only");
+
+            ex("help 'fileformat'");
+            ITextEditor second = waitForNewEditor(help, "options.txt in the help editor");
+            assertEquals("options.txt", second.getTitle());
+            assertEquals(2, stacks(editor).size(), "the help editor's place, no third stack");
+            assertFalse(Arrays.stream(page().getEditorReferences()).anyMatch(r -> r.getEditor(false) == help),
+                    "editing.txt's editor gave its place");
+            waitUntil("Neovim on 'fileformat''s tag", TIMEOUT_MS, () -> currentLine().contains("*'fileformat'*"),
+                    () -> "; the line: " + currentLine());
+        } finally {
+            // The pages' buffers stay in Neovim, read-only: a later test's :bufdo would stop in them.
+            SessionProbe.lua(session, """
+                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                      if vim.b[buf].neovim4eclipse_help then
+                        pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                      end
+                    end
+                    return 0""");
+        }
+    }
+
+    private String currentLine() {
+        return String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_get_current_line()"));
     }
 
     /**
