@@ -19,9 +19,6 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   instead of being undone. As for a project's file, the plug-in reads it for Neovim, so no filetype
   plug-in or language server starts for it in the embedded Neovim. A file Eclipse would open in
   another program (a `.zip`) is still not opened.
-- `:help` opens Neovim's help page in a help editor, a split above this editor as Vim's help window
-  opens, with the cursor on the tag; the next `:help` uses that editor again. The page is
-  read-only, and `Ctrl-]` on a tag in it opens that tag's help (User Guide, "Help").
 
 ## [0.2.21] - 2026-11-15
 

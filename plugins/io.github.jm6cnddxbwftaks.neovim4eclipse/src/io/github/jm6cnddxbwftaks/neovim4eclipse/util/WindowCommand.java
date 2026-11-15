@@ -36,18 +36,13 @@ import java.util.Locale;
  *       is the {@code !}</td></tr>
  *   <tr><td>{@code tabonly .}, {@code tabonly 2}</td><td>{@code :tabonly}, {@code :tabonly 2}: the other
  *       editor tabs of this stack close ({@code .} keeps this one)</td></tr>
- *   <tr><td>{@code help above 1234 /usr/share/nvim/runtime/doc/editing.txt}</td><td>{@code :help gf},
- *       Ctrl-] on a tag in a help page: the page in the help editor, at the tag's line (the count);
- *       a split on that side when no help editor is open ({@code help tab ...}: {@code :tab help}, a new
- *       editor tab of this stack)</td></tr>
  * </table>
  *
  * <p>A count of 0 means none was given, as Vim's {@code v:count}: {@code Ctrl-W w} goes to the next
  * window, {@code 3 Ctrl-W w} to window 3.
  *
  * @param action what to do
- * @param where  for {@link Action#SPLIT} and {@link Action#HELP}: the side of the current editor the new
- *               one goes to; {@code null} for a {@code :tab help}
+ * @param where  for {@link Action#SPLIT}: the side of the current editor the new one goes to
  * @param target for {@link Action#SPLIT} and {@link Action#TAB}: what the new editor shows
  * @param file   for {@link Target#FILE}: the file's full path (Neovim made it absolute); "" otherwise
  * @param key    for {@link Action#FOCUS} and {@link Action#SIZE}: Vim's key after {@code Ctrl-W}
@@ -56,7 +51,7 @@ import java.util.Locale;
  *               {@code '+'} or {@code '-'} (that many tabs on or back) or 0 (tab number
  *               {@code count}); for {@link Action#TAB_ONLY} the same, or {@code '.'} for this
  *               tab; 0 otherwise
- * @param count  Vim's count, 0 when none was given; for {@link Action#HELP} the line to show
+ * @param count  Vim's count, 0 when none was given
  * @param force  for {@link Action#TAB_CLOSE}: the {@code !}, which discards the tab's changes
  */
 public record WindowCommand(Action action, Where where, Target target, String file, char key, int count,
@@ -83,9 +78,7 @@ public record WindowCommand(Action action, Where where, Target target, String fi
         /** Close another editor tab of this stack ({@code :tabclose 2}). */
         TAB_CLOSE,
         /** Close the other editor tabs of this stack ({@code :tabonly}), asking about their changes. */
-        TAB_ONLY,
-        /** A help page ({@code :help gf}) in the help editor, or in a split when there is none. */
-        HELP
+        TAB_ONLY
     }
 
     /** The side of the current editor a split goes to. */
@@ -145,7 +138,6 @@ public record WindowCommand(Action action, Where where, Target target, String fi
                 case "totab" -> words.size() == 1 ? of(Action.TO_TAB, (char) 0, 0) : null;
                 case "tabclose" -> tabClose(words);
                 case "tabonly" -> tabOnly(words);
-                case "help" -> help(words);
                 default -> null;
             };
         } catch (IllegalArgumentException e) {
@@ -174,18 +166,6 @@ public record WindowCommand(Action action, Where where, Target target, String fi
                     ? new WindowCommand(action, where, Target.FILE, words.get(at + 1), (char) 0, 0, false) : null;
             default -> null;
         };
-    }
-
-    /**
-     * {@code help above 1234 /path/doc/editing.txt}: the side ({@code tab} for {@code :tab help}: a
-     * new editor tab, no side), the line, the page's full path (one word).
-     */
-    private static WindowCommand help(List<String> words) {
-        if (words.size() != 4 || words.get(3).isEmpty()) {
-            return null;
-        }
-        Where where = words.get(1).equals("tab") ? null : Where.valueOf(words.get(1).toUpperCase(Locale.ROOT));
-        return new WindowCommand(Action.HELP, where, Target.FILE, words.get(3), (char) 0, count(words.get(2)), false);
     }
 
     /** {@code tabclose 2 0}: the tab ({@code N}, {@code $}, {@code +N}, {@code -N}, {@code +}, {@code -}) and the {@code !}. */

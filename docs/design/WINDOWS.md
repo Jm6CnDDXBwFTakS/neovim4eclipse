@@ -55,10 +55,8 @@ The Neovim side:
   Not caught: a float opened with `noautocmd` (no `WinNew`), or entered a moment after it opened. The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps
   the set of windows it opened, and the net closes the others. That set forgets a window on the
-  plug-in's quiet closes too, which fire no `WinClosed`. A `:help` line opens no window: it becomes
-  `:Eclipse window help ...` (`WINDOW_COMMANDS`), and Eclipse shows the page in a help editor
-  (`EditorSplits.help`). A help window opened some other way (`<Cmd>help`) is closed by the net,
-  with the refusal message of the window commands.
+  plug-in's quiet closes too, which fire no `WinClosed`. `:help` is closed by the net, with the
+  refusal message of the window commands.
 - **Window ids in the events.** `eclipse_cursor`, `eclipse_buf_enter`, `eclipse_topline`,
   `eclipse_wrap` and the state snapshot (field 14) carry the window id; the session takes cursor
   reports, top lines, wrap changes and the snapshot only from the attached window

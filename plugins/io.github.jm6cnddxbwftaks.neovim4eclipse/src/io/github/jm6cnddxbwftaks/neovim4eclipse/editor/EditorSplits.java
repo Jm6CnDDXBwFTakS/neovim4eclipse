@@ -7,14 +7,10 @@ import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,9 +25,6 @@ import org.eclipse.e4.ui.model.application.ui.basic.MStackElement;
 import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
-import org.eclipse.jface.text.IDocument;
-import org.eclipse.jface.text.ITextOperationTarget;
-import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
@@ -45,10 +38,7 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TabNavigation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowLayout;
@@ -173,7 +163,6 @@ final class EditorSplits {
                 case TO_TAB -> toTab(editor, part);
                 case TAB_CLOSE -> tabClose(editor, part, command);
                 case TAB_ONLY -> tabOnly(editor, part, command);
-                case HELP -> help(editor, part, command);
             }
         } catch (IllegalStateException e) {
             HostCommands.showError(editor, e.getMessage()); // Vim's own error (E443)
@@ -288,122 +277,6 @@ final class EditorSplits {
             }
         }
         return page.getActiveEditor();
-    }
-
-    // ---- :help, Ctrl-] on a tag in a help page ----
-
-    /**
-     * The editors {@link #help} opened, for the next {@code :help} to use again, as Vim keeps one
-     * help window. Weak: a closed editor is no longer one. UI thread.
-     */
-    private static final Set<IEditorPart> HELP_EDITORS = Collections.newSetFromMap(new WeakHashMap<>());
-
-    /**
-     * Shows a help page as Vim's {@code :help} does in its help window: in the help editor when one
-     * is open (the page replaces the one it shows, in the same stack), else in a split on the side
-     * Neovim chose ({@code 'splitbelow'}, {@code :vertical}). Neovim then puts the cursor on the
-     * tag's line, and readies the page's buffer: read-only, Ctrl-] on a tag opening its help
-     * ({@code LuaScripts.WINDOW_COMMANDS}). Example: {@code :help gf} in {@code A.java} opens
-     * {@code editing.txt} above it; Ctrl-] on {@code |'path'|} there shows {@code options.txt} in that
-     * same editor's place.
-     */
-    private static void help(ITextEditor editor, IEditorPart from, WindowCommand command) {
-        IWorkbenchPage page = from.getSite().getPage();
-        Path file = Path.of(command.file());
-        if (shows(from, file)) {
-            return; // a tag in the page this editor shows: Neovim moved its cursor there itself
-        }
-        IEditorPart shown = HELP_EDITORS.stream().filter(e -> isOpen(page, e)).findFirst().orElse(null);
-        IEditorPart opened;
-        if (shown == null) {
-            // :tab help (no side): a new editor tab of this stack, as Vim's :tab help opens a tab page.
-            if (command.where() == null) {
-                tab(editor, from, new WindowCommand(WindowCommand.Action.TAB, null, WindowCommand.Target.FILE,
-                        command.file(), (char) 0, 0, false));
-            } else {
-                split(editor, from, new WindowCommand(WindowCommand.Action.SPLIT, command.where(),
-                        WindowCommand.Target.FILE, command.file(), (char) 0, 0, false));
-            }
-            opened = page.getActiveEditor();
-            if (opened == null || opened == from) {
-                dropOpenCommand(); // not opened: the reason is shown already
-                return;
-            }
-        } else if (shows(shown, file)) {
-            opened = shown; // its page already: Neovim's cursor goes to the tag once it attaches
-        } else {
-            page.activate(shown); // the page opens in the help editor's stack
-            // A new editor even when another one shows the file (MATCH_NONE): an editor of yours on
-            // a plug-in's doc/x.txt stays yours, not read-only.
-            opened = EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE);
-            if (opened == null) {
-                dropOpenCommand(); // logged
-                return;
-            }
-            if (!shown.isDirty()) {
-                HELP_EDITORS.remove(shown);
-                page.closeEditor(shown, false); // the page it showed, read-only: nothing to save
-            }
-        }
-        HELP_EDITORS.add(opened);
-        activate(page, opened); // its attach makes it read-only (followHelpPage)
-    }
-
-    /** Whether {@code part} is a text editor of {@code file} (compared by the one rule, FilePaths). */
-    private static boolean shows(IEditorPart part, Path file) {
-        Path its = part == null ? null : EditorAttachManager.fileOf(part.getEditorInput());
-        return its != null && FilePaths.same(its, file);
-    }
-
-    /** The waiting cursor move of a page Eclipse did not show goes, so no later editor of it jumps. */
-    private static void dropOpenCommand() {
-        NeovimSession session = Activator.getDefault() == null ? null : Activator.getDefault().currentSession();
-        if (session != null) {
-            session.dropOpenCommandAsync();
-        }
-    }
-
-    /**
-     * Whether {@code editor}'s document is a help page's: one an open help editor shows. Decided
-     * from the document, not the editor, since every editor of a file shares its document and its
-     * one Neovim buffer: a clone of the help editor ({@code :split}), or an editor of yours on that
-     * file, is read-only while the page is open, else Eclipse's text and Neovim's would drift.
-     * Makes the editor's viewer read-only accordingly, and editable again when it was made so here
-     * and the page has closed ({@code wasHelpPage}): it no longer types, pastes, cuts or formats.
-     * Called at each attach push. UI thread.
-     *
-     * @return whether it is a help page's now
-     */
-    static boolean followHelpPage(ITextEditor editor, boolean wasHelpPage) {
-        IDocument document = documentOf(editor);
-        // The attaching editor's page: a closed help editor stays in the weak set until it is
-        // collected, and its own site may be gone by then.
-        IWorkbenchPage workbenchPage = editor.getSite() == null ? null : editor.getSite().getPage();
-        boolean page = false;
-        for (IEditorPart help : new ArrayList<>(HELP_EDITORS)) {
-            if (document == null || workbenchPage == null || !isOpen(workbenchPage, help)) {
-                continue;
-            }
-            ITextEditor text = EditorAttachManager.textEditorOf(help);
-            if (text != null && documentOf(text) == document) {
-                page = true;
-                break;
-            }
-        }
-        if (page != wasHelpPage && editor.getAdapter(ITextOperationTarget.class) instanceof ITextViewer viewer) {
-            viewer.setEditable(!page);
-        }
-        return page;
-    }
-
-    private static IDocument documentOf(ITextEditor editor) {
-        return editor.getDocumentProvider() == null ? null
-                : editor.getDocumentProvider().getDocument(editor.getEditorInput());
-    }
-
-    /** Whether {@code editor} is still one of {@code page}'s open editors. */
-    private static boolean isOpen(IWorkbenchPage page, IEditorPart editor) {
-        return Arrays.stream(page.getEditorReferences()).anyMatch(r -> r.getEditor(false) == editor);
     }
 
     // ---- :tabedit, :tabnew, :tab split, Ctrl-W T, :tabclose 2 ----

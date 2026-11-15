@@ -6,7 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -91,12 +90,6 @@ public final class NeovimEditorController implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(NeovimEditorController.class.getName());
 
     private final ITextEditor editor;
-    /**
-     * Whether this editor's document is a help page's, as the last push found
-     * ({@link EditorSplits#followHelpPage}): then the editor and its buffer are read-only. Written on
-     * the UI thread, read by the push on the input thread.
-     */
-    private volatile boolean helpPage;
     private final NeovimSession session;
     private final StyledText styledText;
     private final KeyInterceptor keyInterceptor;
@@ -236,7 +229,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
-        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer, window, windowFolder(editor), () -> helpPage),
+        this.documentPush = new DocumentPush(new SessionPushTarget(session, buffer, window, windowFolder(editor)),
                 synchronizer, caretSync);
         // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are
         // echoes; and while Esc is handled they are of a cursor about to move (KeyInput.leavingInsert).
@@ -418,13 +411,6 @@ public final class NeovimEditorController implements AutoCloseable {
      * thread.
      */
     private void pushDocumentAndCursorAsync(int line1, int col0, boolean takeNeovimCursor) {
-        // Read-only when its document is a help editor's, decided now for every editor of it (a
-        // clone, your own editor of that file), and its buffer made so after the push.
-        try {
-            helpPage = EditorSplits.followHelpPage(editor, helpPage);
-        } catch (RuntimeException e) {
-            LOG.log(Level.WARNING, "Could not tell whether the editor shows a help page", e); // the push goes on
-        }
         int tabWidth = styledText.isDisposed() ? 0 : styledText.getTabs();
         documentPush.start(tabWidth, indentationOf(tabWidth), line1, col0, takeNeovimCursor);
         sendFolds();
@@ -1377,11 +1363,10 @@ public final class NeovimEditorController implements AutoCloseable {
     /**
      * {@link DocumentPush.Neovim} on the session, for this editor's buffer in its own window.
      *
-     * @param folder   the window's folder, or {@code null} (see {@link #windowFolder})
-     * @param helpPage whether the document is a help page's, as the push found ({@link #helpPage})
+     * @param folder the window's folder, or {@code null} (see {@link #windowFolder})
      */
     private record SessionPushTarget(NeovimSession session, DocumentBuffer buffer, EditorWindow window,
-            String folder, BooleanSupplier helpPage) implements DocumentPush.Neovim {
+            String folder) implements DocumentPush.Neovim {
         @Override
         public void queue(Runnable work) {
             session.runAttachSetup(work);
@@ -1400,16 +1385,6 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void setCursor(int line1, int col0) throws Exception {
             session.setCursor(line1, col0);
-        }
-
-        @Override
-        public void beforePush() throws Exception {
-            session.setPageReadOnly(buffer, false);
-        }
-
-        @Override
-        public void afterPush() throws Exception {
-            session.setPageReadOnly(buffer, helpPage.getAsBoolean());
         }
 
         @Override

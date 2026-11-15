@@ -196,8 +196,7 @@ buffer Neovim has left again is skipped, so Eclipse activates only the editor Vi
 flicking through all of them. A switch to a file that has no editor (`gf`, `'A`, `:b 3`
 of a closed file, a quickfix entry) opens that file's editor (`editor/ProjectFileEditors`: a
 project's file as a workspace file, any other by its location, as *File › Open File...* does) and is
-followed the same way; a switch to any other buffer (a scratch buffer, a help window a plug-in
-opened) is undone
+followed the same way; a switch to any other buffer (`:help`, a scratch buffer) is undone
 (`returnToAttachedBufferAsync`). When
 a document's last editor closes, its buffer is unloaded and unlisted, as by Vim's `:bd`, not wiped
 (`closeBufferAsync`, `LuaScripts.CLOSE_DOCUMENT_BUFFER`), and the file's next editor gets the same

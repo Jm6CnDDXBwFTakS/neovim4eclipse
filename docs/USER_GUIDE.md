@@ -288,26 +288,6 @@ keeps their buffers hidden; `:tabonly` asks about them), and the splits that jum
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
 
-## Help (`:help`, `Ctrl-]`)
-
-`:help gf` opens Neovim's help page for `gf` in a help editor, a split above this editor (below
-with `'splitbelow'`, beside it with `:vertical help`, a new editor tab with `:tab help`), with the
-cursor on the tag, as Vim's help window opens. `:help` alone shows `help.txt`. The next `:help` shows its page in that same help
-editor, as Vim uses its help window again; a tag in the page you are on just moves the cursor. The
-subject is looked up as in Vim (`:help w` finds `w`, not `wa`), and one with no help gives Vim's
-`E149`.
-
-A help page is read-only, in Eclipse and in Neovim, and so is every other editor of that file while
-the help editor is open (a `:split` of it, or your own editor of a plug-in's `doc/x.txt`): they share
-one text. In a help page, `Ctrl-]` on a tag (`|gF|`, `'fileformat'`) opens that tag's help, where
-`Ctrl-]` elsewhere is Eclipse's *Open Declaration*. After Eclipse restarts, a help editor it brings
-back is an ordinary editor of the file: `:help` opens a new one. Eclipse shows the page as plain text,
-without Vim's help highlighting.
-
-Only a `:help` line goes to the help editor: typed, from a mapping or a macro. A help window a
-plug-in or a `<Cmd>help` mapping opens in Neovim is closed again, with a message, as any window
-Eclipse would not show. `:helpgrep` and the jumps of its list are not supported.
-
 ## Command line (`:`, `/`, `?`)
 
 `:`, `/` and `?` open Neovim's own command line, shown in a single text box near the bottom edge of
@@ -413,8 +393,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabnew`, `:tabe[dit]`, `:tabf[ind]` | a new editor tab: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabo[nly]` | close the other editor tabs: see [Splits](#splits-split-vsplit-ctrl-w) |
-| `:h[elp]` | the help page in a help editor: see [Help](#help-help-ctrl-) |
-| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`, `<Cmd>help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
@@ -508,9 +487,8 @@ These options replace any your `init.lua` sets for the buffer. Filetype detectio
 your filetype plugins (and language servers they may start) do not run in the embedded Neovim. That
 holds for any file Neovim reaches by itself too (`gf`, `'A`, a quickfix entry), in a project or
 not: the plug-in reads it for Neovim, without filetype detection, and Eclipse opens its editor (a
-file outside the open projects by its location, as *File › Open File...* does). A help window a
-plug-in opens is Neovim's own; a page in a help editor is a document like any other
-([docs/design/BUFFER_NUMBERS.md](design/BUFFER_NUMBERS.md)). One exception: to search files,
+file outside the open projects by its location, as *File › Open File...* does). Help pages are
+Neovim's own ([docs/design/BUFFER_NUMBERS.md](design/BUFFER_NUMBERS.md)). One exception: to search files,
 `:vimgrep` reads them itself, filetype detection included, so the files it matched get their
 filetype (and a language server started from `FileType` may attach to its first match) before
 Eclipse opens their editors.

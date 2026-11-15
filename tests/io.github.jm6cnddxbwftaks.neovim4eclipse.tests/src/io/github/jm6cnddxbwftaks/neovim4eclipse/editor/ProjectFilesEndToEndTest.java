@@ -397,7 +397,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
 
     /**
      * Files Eclipse would open outside the IDE (a zip: the system's program) or not as text are not
-     * opened, and Neovim goes back, as before. Neovim's {@code zip.vim} lists the archive in the
+     * opened, and Neovim goes back, as before; {@code :help} is still undone too. Neovim's {@code zip.vim} lists the archive in the
      * buffer ({@code 'buftype'} set), so Neovim does not name it to Eclipse at all; were it named,
      * {@link ProjectFileEditors}' check would still keep the system's program from starting.
      *
@@ -408,7 +408,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
      * that {@code IDE.getEditorDescriptor} reads first).
      */
     @Test
-    void aFileEclipseWouldOpenOutsideTheIdeIsNotOpened() throws Exception {
+    void aFileEclipseWouldOpenOutsideTheIdeIsNotOpenedAndHelpIsStillUndone() throws Exception {
         IDE.setDefaultEditor(createFile("x.zip", "PK\u0003\u0004"), IEditorRegistry.SYSTEM_EXTERNAL_EDITOR_ID);
         ITextEditor a = open(createFile("a.txt", "see x.zip\n"));
         try {
@@ -421,6 +421,12 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             assertEquals(a, page().getActiveEditor());
             assertEquals(null, editorTitled("x.zip"), "no editor opened");
             assertEquals("a.txt", String.valueOf(SessionProbe.lua(session, "return vim.fn.expand('%:t')")));
+
+            session.inputAsync(":help<CR>"); // Neovim reads help itself (is_help), in a window the net closes
+            settle();
+            waitUntil("Neovim back in a.txt after :help", TIMEOUT_MS,
+                    () -> "a.txt".equals(String.valueOf(SessionProbe.lua(session, "return vim.fn.expand('%:t')"))));
+            assertEquals(a, page().getActiveEditor());
         } finally {
             closeAllBut(null);
         }

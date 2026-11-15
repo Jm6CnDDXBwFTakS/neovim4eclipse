@@ -82,18 +82,6 @@ public final class DocumentPush {
         }
 
         /**
-         * Before the text is pushed: makes a buffer that was a help page's writable again
-         * ({@code NeovimSession.setPageReadOnly}), or Neovim would refuse the push. Nothing for any
-         * other buffer.
-         */
-        default void beforePush() throws Exception {
-        }
-
-        /** After the push: makes the buffer a help page's when the document is one. */
-        default void afterPush() throws Exception {
-        }
-
-        /**
          * Whether the document's buffer is known to equal the document at modification stamp
          * {@code stamp} ({@code DocumentBuffer.isInSyncAt}): then the push is skipped.
          */
@@ -198,11 +186,6 @@ public final class DocumentPush {
             LOG.log(Level.WARNING, "Could not set Neovim's tab and indent options", e);
         }
         try {
-            nvim.beforePush();
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Could not make the help page's buffer writable for the push", e);
-        }
-        try {
             // The stamp now, where the push would read the document: one read when start() was
             // called would miss an Eclipse change made while this waited in the queue.
             if (nvim.bufferInSyncAt(mirror.documentStamp())) {
@@ -216,11 +199,6 @@ public final class DocumentPush {
             }
         } finally {
             mirror.startRemoteListening();
-        }
-        try {
-            nvim.afterPush();
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Could not make the help page's buffer read-only", e);
         }
         if (takeNeovimCursor) {
             nvim.takeCursorFromNeovim();

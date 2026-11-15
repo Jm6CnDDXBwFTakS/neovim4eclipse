@@ -43,18 +43,6 @@ class WindowCommandTest {
         assertEquals(Action.ONLY, parse("only").action());
     }
 
-    /** {@code :help gf}: the side a first help editor goes to, the tag's line, the page. */
-    @Test
-    void aHelpPageSaysItsSideLineAndFile() {
-        assertEquals(new WindowCommand(Action.HELP, Where.ABOVE, Target.FILE, "/rt/doc/my editing.txt", (char) 0, 1234, false),
-                parse("help", "above", "1234", "/rt/doc/my editing.txt"));
-        assertEquals(new WindowCommand(Action.HELP, null, Target.FILE, "/rt/doc/editing.txt", (char) 0, 7, false),
-                parse("help", "tab", "7", "/rt/doc/editing.txt"), ":tab help: no side");
-        assertNull(parse("help", "above", "x", "/rt/doc/editing.txt"), "the line is a number");
-        assertNull(parse("help", "above", "12"), "no page");
-        assertNull(parse("help", "sideways", "12", "/rt/doc/editing.txt"));
-    }
-
     /** Vim's tab pages are Eclipse's editor tabs: {@code :tabedit}, {@code Ctrl-W T}, {@code :tabclose 2}. */
     @Test
     void tabsSayWhatTheNewTabShowsOrWhichTabCloses() {

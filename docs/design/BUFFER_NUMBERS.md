@@ -123,9 +123,7 @@ for an open file: the window that jumped travels into the new editor (docs/desig
 so `Ctrl-O` there goes back. The attach finds the buffer by name (2.2) and pushes Eclipse's text.
 A file outside the workspace opens the same way, by its location (`ProjectFileEditors.openOutside`,
 an editor input as *File › Open File...* makes), and is read by the hook too. Anything else Neovim
-enters (a scratch buffer, a help window `<Cmd>help` opened) is undone: Neovim goes back to the
-editor's buffer. A `:help` line enters no buffer: Eclipse shows the page in a help editor
-(docs/design/WINDOWS.md).
+enters (`:help`, a scratch buffer) is undone: Neovim goes back to the editor's buffer.
 
 This applies to any workspace file, not only closed documents: the mechanism and its risk are the
 same, so it is built once, and quickfix (DIAGNOSTICS.md, section 5) only adds the lists,
