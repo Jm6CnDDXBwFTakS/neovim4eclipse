@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.24] - 2026-11-16
+
 ### Added
 
 - Neovim's own completion in insert mode, with its list of matches drawn under the word:
