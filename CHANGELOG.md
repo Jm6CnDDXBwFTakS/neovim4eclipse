@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.22] - 2026-11-16
+
 ### Added
 
 - A jump into a file outside the open projects (`gf` on `/usr/include/stdio.h`, `'A`, `:b`,
