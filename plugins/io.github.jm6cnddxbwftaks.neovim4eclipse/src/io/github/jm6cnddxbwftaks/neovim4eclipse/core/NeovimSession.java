@@ -386,6 +386,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                     : "off (g:neovim4eclipse_completion_menu)"));
             // Always: the Ctrl-X completions that could run a file's text are refused in Neovim itself.
             await(api.execLua(LuaScripts.CTRL_X_GUARD, List.of()));
+            // And no file's modeline sets options (LuaScripts.NO_MODELINES).
+            await(api.execLua(LuaScripts.NO_MODELINES, List.of()));
+            // And a buffer named term://... starts no program (LuaScripts.NO_TERMINAL_URLS).
+            await(api.execLua(LuaScripts.NO_TERMINAL_URLS, List.of()));
             Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
             session.nvimManagesClipboard = managesSystemClipboard(
                     clipboardOption == null ? "" : String.valueOf(clipboardOption));

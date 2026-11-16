@@ -47,6 +47,16 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   in the shell: with the keys pressed at the end of such a line, a file you had only opened could
   run a program. Neovim's `Ctrl-X Ctrl-O` (omni completion) is refused with it: the key is Eclipse's
   content assist, also while Neovim's completion list is open.
+- No file's modeline applies any more: `'modeline'` is turned off at start. A modeline can set
+  global options; one of them made `Ctrl-X Ctrl-F`, in any file afterwards, run a line's text in
+  backticks in the shell. Files Eclipse opened never had their modelines applied; files Neovim
+  read itself (the first match of `:vimgrep`, an archive's listing, a help page) did.
+- `gf` on a URL or an archive written in a file no longer fetches or unpacks it: Neovim's netrw,
+  its `http://` reader and its zip and tar browsers are not loaded. Before, the key made a network
+  request to the host the file named. Their buffers had no Eclipse editor to show them; the
+  [user guide](docs/USER_GUIDE.md) says how to have a reader back.
+- `gf` on a `term://...` name written in a file no longer runs the program it names: Neovim's
+  reader of such names is removed at start. `:terminal` is not affected.
 
 ## [0.2.23] - 2026-11-16
 

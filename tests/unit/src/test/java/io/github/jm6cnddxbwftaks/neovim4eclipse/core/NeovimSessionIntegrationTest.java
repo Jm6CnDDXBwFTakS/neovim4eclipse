@@ -681,6 +681,44 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
+     * Neovim's bundled readers of URLs and archives are not loaded
+     * ({@code NvimExecutable.READERS_OFF}): no autocommand reads {@code file://}, {@code http://},
+     * {@code scp://} names or zip and tar files, so {@code gf} on a URL in a file's text fetches
+     * nothing. The file named here exists and holds a line; with netrw it would be read.
+     */
+    @Test
+    void neovimsUrlAndArchiveReadersAreNotLoaded() throws Exception {
+        TestNeovim.require();
+        Path dir = Files.createTempDirectory("readers");
+        try (NeovimSession s = start(List.of("--clean"))) {
+            Files.writeString(dir.resolve("target.c"), "int fetched;\n");
+            // The readers' autocommand groups (readers_spec.lua checks that a Neovim started
+            // without READERS_OFF has each of them, so a renamed group is noticed there).
+            assertEquals(0L, ((Number) s.lua("""
+                    local n = 0
+                    for _, group in ipairs({ 'Network', 'nvim.net.remotefile', 'zip', 'tar' }) do
+                      n = n + vim.fn.exists('#' .. group)
+                    end
+                    return n + vim.fn.exists('#nvim.terminal#BufReadCmd')""")).longValue(),
+                    "no reader of a URL or an archive is defined, and term:// names start nothing");
+            assertEquals(0L, ((Number) s.lua("return vim.fn.exists(':Explore')")).longValue(), "netrw's commands are not defined");
+            s.lua("vim.fn.chdir('" + dir.toString().replace("\\", "/") + "')");
+            s.setBufferLines(List.of("see file://target.c"));
+            s.lua("vim.bo.modified = false; vim.api.nvim_win_set_cursor(0, { 1, 6 }); pcall(vim.cmd, 'normal! gf')");
+            assertEquals(false, s.lua("""
+                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                      for _, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+                        if line:find('fetched', 1, true) then return true end
+                      end
+                    end
+                    return false"""), "gf on the URL read nothing");
+        } finally {
+            Files.deleteIfExists(dir.resolve("target.c"));
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    /**
      * The user's config sees {@code vim.g.neovim4eclipse} while it runs, before the plug-in's own
      * setup, and the variable is still set afterwards. The config here only records what it saw.
      */

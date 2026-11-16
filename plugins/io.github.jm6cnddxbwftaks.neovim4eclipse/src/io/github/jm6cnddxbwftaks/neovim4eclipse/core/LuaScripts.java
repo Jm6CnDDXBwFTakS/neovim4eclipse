@@ -2278,6 +2278,9 @@ final class LuaScripts {
                   .. vim.inspect(name), 'ErrorMsg' } }, true, {})
                 return
               end
+              -- No modeline of the file applies (NO_MODELINES says why). Said for this buffer
+              -- too, should the user have turned 'modeline' on again: this read is the plug-in's.
+              vim.bo[buf].modeline = false
               local saved = vim.bo[buf].undolevels
               vim.bo[buf].undolevels = -1
               local ok, err = pcall(vim.cmd, 'lockmarks keepalt noautocmd silent read ++edit ' .. vim.fn.fnameescape(name))
@@ -4556,6 +4559,56 @@ final class LuaScripts {
             })
             -- For the Lua spec and for a look from the command line.
             package.loaded['neovim4eclipse.completion_menu'] = { colors = all_colors, resolve = resolve }
+            return true
+            """;
+
+    /**
+     * Turns {@code 'modeline'} off, for the buffers there are and those to come: run once at
+     * start, after the user's config.
+     *
+     * <p><b>Why.</b> A modeline is a line of a file that sets options when Neovim reads the file
+     * ({@code // vim: set ts=4 :}), and the files are a cloned repository's. Most options a
+     * modeline may set are harmless, but some are global and change what a later key does.
+     * Example: {@code vim: set isfname+=`,32 :} adds the backtick and the space to the
+     * characters of a file name; from then on {@code Ctrl-X Ctrl-F}, in any buffer, takes a
+     * line's {@code `...`} for a file name, and completing a file name runs that in the shell.
+     *
+     * <p><b>Why for all buffers.</b> Neovim reads file text on many routes: the plug-in's own
+     * reads ({@link #PROJECT_FILES}, {@link #CREATE_DOCUMENT_BUFFER}), but also the first match of
+     * {@code :vimgrep}, an archive's listing and its members ({@code zip.vim}, {@code tar.vim}),
+     * a help page, {@code gf} on a URL. Turned off per route, each new route would be a hole;
+     * the option itself is the one place all of them end in.
+     *
+     * <p>What it costs: no file's modeline applies, a help page's among them (its tab width and
+     * text width are then Neovim's defaults). A user who wants modelines can {@code :set
+     * modeline} later; the plug-in's own reads stay without.
+     */
+    static final String NO_MODELINES = """
+            vim.go.modeline = false
+            for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+              pcall(function()
+                vim.bo[buf].modeline = false
+              end)
+            end
+            return true
+            """;
+
+    /**
+     * Stops Neovim from starting a program for a buffer named {@code term://...}: run once at
+     * start, always.
+     *
+     * <p><b>Why.</b> Neovim's defaults read a buffer of that name by running what follows the
+     * scheme in a terminal (the {@code BufReadCmd} of the group {@code nvim.terminal}). The
+     * name can come from a file's text. Example: a cloned file holds {@code term://./build.sh};
+     * {@code gf} on it would run the repository's script. It is no bundled plug-in with an
+     * "already loaded" variable ({@code NvimExecutable.READERS_OFF}), so the autocommand itself
+     * is removed.
+     *
+     * <p>What it costs: {@code :edit term://cmd} opens an empty buffer. {@code :terminal cmd},
+     * which the user types, does not use this autocommand.
+     */
+    static final String NO_TERMINAL_URLS = """
+            pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
             return true
             """;
 

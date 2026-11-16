@@ -54,6 +54,23 @@ t.test('gf into a project file: read without filetype, undo step or swap file; i
   t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4], 'the file, for Eclipse to open its editor')
 end)
 
+-- A modeline may set global options, 'isfname' among them: with ` and the space in it, Ctrl-X
+-- Ctrl-F in any buffer takes a line's `...` for a file name and runs it in the shell. So no
+-- modeline of a file the hook reads applies, as none of a document Eclipse opens does.
+t.test('a modeline in a file the hook reads does not apply', function()
+  local root = project()
+  vim.o.modeline = true
+  local isfname = vim.o.isfname
+  vim.fn.writefile({ '// vim: set isfname+=`,32 tabstop=3 :', 'class B {}' }, file(root, 'src', 'B.java'))
+  vim.cmd.edit(vim.fn.fnameescape(file(root, 'src', 'A.java')))
+  vim.api.nvim_win_set_cursor(0, { 1, 5 })
+  t.type('gf')
+  t.eq('// vim: set isfname+=`,32 tabstop=3 :', vim.api.nvim_buf_get_lines(0, 0, 1, false)[1], 'the file was read')
+  t.eq(isfname, vim.o.isfname, "'isfname' is as it was")
+  t.ok(vim.bo.tabstop ~= 3, "nor did 'tabstop' change")
+  t.eq(false, vim.bo.modeline)
+end)
+
 -- A cloned repository may hold a file whose name has a line break (legal on Linux and macOS). Built
 -- into the hook's :read, the rest of the name ran as a command of its own: the attack needed only
 -- a second file named like the first line plus a backslash, so the :read before it succeeded

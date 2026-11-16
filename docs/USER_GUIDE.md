@@ -578,6 +578,27 @@ options to match the file:
   `'cindent'`: `o` on a line ending in `{` and `O` on a line starting with `}` start one level in.
   Other files keep `'autoindent'` (the new line copies the current line's indent).
 
+No file's modeline (`// vim: set ts=4 :`) applies: the plug-in turns `'modeline'` off at start,
+since a modeline of a file you only opened may set options that change what a later key does.
+
+Neovim's bundled readers of things that are no files are not loaded: netrw (`scp://`, `ftp://`,
+`file://` and other URLs, and its directory listings), the `http://` reader, and the zip and tar
+browsers. Their buffers would have no Eclipse editor to show them, and with them `gf` on a URL
+written in a file made Neovim fetch it. `gf` on a URL or an archive fetches and unpacks nothing.
+To have one back, unset its variable in `init.lua`
+(`vim.g.loaded_netrwPlugin = nil` and `vim.g.loaded_netrw = nil`, `vim.g.loaded_nvim_net_plugin`,
+`vim.g.loaded_zipPlugin`, `vim.g.loaded_tarPlugin`).
+
+A buffer named `term://...` starts no program either (`gf` on such a name in a file would
+otherwise run it); `:terminal` works as usual.
+
+`Ctrl-R` is Neovim's own, in insert mode and on the `:` line. As in Vim, some registers are
+inserted as if typed (the file's name `%`, the last search `/`, the unnamed register `"`), so a
+control character in the text acts as a key: an Esc ends the insert, and what follows runs as
+commands. `Ctrl-R Ctrl-R` and the register inserts the same text as text
+(`:help i_CTRL-R_CTRL-R`); use it for text you have not looked at, such as the name of a file from
+a repository you only cloned.
+
 These options replace any your `init.lua` sets for the buffer. Filetype detection is not used, so
 your filetype plugins (and language servers they may start) do not run in the embedded Neovim. That
 holds for any file Neovim reaches by itself too (`gf`, `'A`, a quickfix entry), in a project or

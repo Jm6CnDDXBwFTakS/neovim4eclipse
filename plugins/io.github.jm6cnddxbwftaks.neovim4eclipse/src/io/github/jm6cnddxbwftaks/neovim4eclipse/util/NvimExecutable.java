@@ -191,8 +191,39 @@ public final class NvimExecutable {
     public static final String GUARD_VARIABLE = "neovim4eclipse";
 
     /**
-     * Builds {@code <nvim> --embed --cmd let g:neovim4eclipse=1 [extraArgs...]}. Null/blank extra
-     * args are skipped.
+     * The "already loaded" variables of the plug-ins bundled with Neovim that read something
+     * other than a file on disk, set before Neovim starts so that they never load: netrw
+     * ({@code scp://}, {@code ftp://}, {@code file://} and other URLs, and directory listings),
+     * the {@code http://} reader (it fetches with curl), {@code zip.vim} and {@code tar.vim}.
+     *
+     * <p>Why: with them, {@code gf} on a URL written in a file's text made Neovim fetch it, a
+     * network request to a host the file names, and the text that came back got filetype
+     * plug-ins; {@code gf} on an archive unpacked it with {@code unzip} or {@code tar}. Their
+     * buffers are no files, so Eclipse has no editor to show them in: what they would offer
+     * cannot be used here. Without them such a {@code gf} fetches and unpacks nothing.
+     *
+     * <p>Each plug-in checks its variable in its first lines ({@code runtime/plugin/}); set here,
+     * the readers are off whatever route would reach them, and none needs a rule of its own. A
+     * user who wants one back can unset its variable in {@code init.lua}, which runs after.
+     */
+    public static final List<String> READERS_OFF = List.of("loaded_netrw", "loaded_netrwPlugin",
+            "loaded_nvim_net_plugin", "loaded_zipPlugin", "loaded_tarPlugin");
+
+    /**
+     * What {@code --cmd} runs before any config: {@link #GUARD_VARIABLE} set, and
+     * {@link #READERS_OFF}. Example: {@code let g:neovim4eclipse=1 | let g:loaded_netrw=1 | ...}.
+     */
+    public static String startCommand() {
+        StringBuilder command = new StringBuilder("let g:" + GUARD_VARIABLE + "=1");
+        for (String variable : READERS_OFF) {
+            command.append(" | let g:").append(variable).append("=1");
+        }
+        return command.toString();
+    }
+
+    /**
+     * Builds {@code <nvim> --embed --cmd <startCommand> [extraArgs...]} ({@link #startCommand()}:
+     * {@code let g:neovim4eclipse=1} and the readers turned off). Null/blank extra args are skipped.
      *
      * <h2>Why {@code --cmd}</h2>
      * The user's {@code init.lua} needs a way to skip what does not belong in Eclipse (UI plug-ins,
@@ -218,7 +249,7 @@ public final class NvimExecutable {
         cmd.add(resolved.command());
         cmd.add("--embed");
         cmd.add("--cmd");
-        cmd.add("let g:" + GUARD_VARIABLE + "=1");
+        cmd.add(startCommand());
         if (extraArgs != null) {
             for (String arg : extraArgs) {
                 if (arg != null && !arg.isBlank()) {

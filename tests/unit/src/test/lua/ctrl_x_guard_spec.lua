@@ -118,3 +118,20 @@ t.test('the other Ctrl-X completions still work, and Ctrl-V, Ctrl-Q, Ctrl-O outs
   keys('A<C-o>0X<Esc>')
   t.eq('Xalpha beta-', vim.api.nvim_buf_get_lines(0, 2, 3, false)[1], 'Ctrl-O runs one normal-mode command')
 end)
+
+-- LuaScripts.NO_MODELINES: no file's modeline sets options, on any route Neovim reads a file by.
+t.test("NO_MODELINES turns 'modeline' off for the buffers there are and for new ones", function()
+  vim.o.modeline = true
+  local old = vim.api.nvim_get_current_buf()
+  t.run('NO_MODELINES')
+  t.eq(false, vim.go.modeline)
+  t.eq(false, vim.bo[old].modeline)
+  local isfname = vim.o.isfname
+  local path = vim.fn.tempname() .. '.txt'
+  vim.fn.writefile({ '// vim: set isfname+=`,32 tabstop=3 :', 'text' }, path)
+  vim.cmd.edit(vim.fn.fnameescape(path)) -- Neovim's own read, no hook of the plug-in's
+  t.eq('text', vim.api.nvim_buf_get_lines(0, 1, 2, false)[1], 'the file was read')
+  t.eq(isfname, vim.o.isfname)
+  t.ok(vim.bo.tabstop ~= 3, "'tabstop' is not the modeline's")
+  vim.fn.delete(path)
+end)

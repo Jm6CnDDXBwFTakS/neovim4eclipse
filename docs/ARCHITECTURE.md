@@ -941,6 +941,24 @@ commands and where Neovim maps `Tab` to `Ctrl-X Ctrl-V`. It is the one place eve
 typed, sent by the plug-in, mapped or run from a register, so no route to Neovim needs a check of
 its own (`KeyRouter` keeps the key from starting a completion only to spare the round trip).
 
+**No file's modeline applies** (`LuaScripts.NO_MODELINES` turns `'modeline'` off at start, for
+every buffer). A modeline may set global options, and some change what a completion does: with
+`` ` `` and the space added to `'isfname'`, `Ctrl-X Ctrl-F` takes a line's `` `...` `` for a file
+name, and completing a file name runs that in the shell. Off as an option, not per read: Neovim
+reads file text on many routes (the plug-in's own reads, the first match of `:vimgrep`, an
+archive's listing, a help page), and the option is where all of them end.
+
+**Neovim's readers of URLs and archives never load** (`util/NvimExecutable.READERS_OFF`, set by
+the `--cmd` Neovim is started with, before any config): netrw, the `http://` reader, `zip.vim`
+and `tar.vim` each check an "already loaded" variable in their first lines. With them, `gf` on a
+URL in a file's text made a network request to the host the file names, and the fetched text got
+filetype plug-ins; their buffers are no files, so no Eclipse editor could show them anyway.
+
+**A buffer named `term://...` starts no program** (`LuaScripts.NO_TERMINAL_URLS`): Neovim's
+defaults read such a name by running it in a terminal, so `gf` on `term://./build.sh` in a file's
+text would run the repository's script. It is no plug-in with an "already loaded" variable; the
+autocommand itself is removed at start. `:terminal` does not use it.
+
 **`Ctrl-X Ctrl-O` is Eclipse's content assist wherever Eclipse gets the insert back.** In an
 insert Eclipse types, `KeyRouter` keeps the `Ctrl-X` until the next key and runs content assist for
 `Ctrl-O`. While Neovim completes it does the same (`KeyRouter.whileCompleting`): the completion is
@@ -1138,7 +1156,7 @@ reason is gone.
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
 | The command-line window (`q:`) drawn from its grid | `util/GridEvent`, `util/Grids`, `util/GridSnapshot`, `util/CommandWindowView`, `editor/GridCanvas`, `editor/NeovimWindowPanel` | `GridEventTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimSessionIntegrationTest` (real Neovim: drawn, Enter runs the line, closed in insert mode runs nothing), `tests/swt` `GridCanvasTest` (pixels: colors, cursor, text wider than its cell), `NeovimWindowPanelTest` (keys, focus), UI `CommandWindowEndToEndTest` |
 | Floating windows without the focus, drawn over the text | `util/GridEvent` (`WinPos`), `util/Grids` (`floatsIfChanged`, `host`), `util/FloatWindow`, `util/FloatPlacement`, `core/NeovimConnection` (`Forwarder`: the first window's place), `editor/FloatingWindows`, `editor/GridCanvas` | `GridEventTest`, `GridsTest`, `FloatPlacementTest`, `NeovimSessionIntegrationTest` (real Neovim: reported, moves with its text, gone when closed, off by either setting), `tests/swt` `FloatingWindowsTest` (place, order, no focus, dispose), UI `FloatingWindowsEndToEndTest`, gallery picture `float` |
-| Neovim's completion (`Ctrl-N`, `Ctrl-P`, `Ctrl-X` modes): the keys, the hand-back, the list | `core/KeyRouter` (`completeInNeovim`, `afterCtrlX`, `whileCompleting`), `LuaScripts.CTRL_X_GUARD` (`ctrl_x_guard_spec.lua`), `core/KeyInput` (`isCompleting`, `syncInsertThenComplete`, `endCompletion`), `util/VimModes.isCompleting`, `util/KeyContextRule.toNeovim`, `LuaScripts.COMPLETION_MENU`, `util/CompletionMenu`, `util/CellWidth`, `editor/CompletionMenuPopup` | `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `VimModesTest`, `CompletionMenuTest`, `CellWidthTest`, `CmdlineEventTest`, `NotificationBridgeTest`, `completion_menu_spec.lua`, `NeovimCompletionIntegrationTest`, `tests/swt` `CompletionMenuPopupTest`, UI `CompletionMenuEndToEndTest` |
+| Neovim's completion (`Ctrl-N`, `Ctrl-P`, `Ctrl-X` modes): the keys, the hand-back, the list | `core/KeyRouter` (`completeInNeovim`, `afterCtrlX`, `whileCompleting`), `LuaScripts.CTRL_X_GUARD` and `NO_MODELINES` (`ctrl_x_guard_spec.lua`), `core/KeyInput` (`isCompleting`, `syncInsertThenComplete`, `endCompletion`), `util/VimModes.isCompleting`, `util/KeyContextRule.toNeovim`, `LuaScripts.COMPLETION_MENU`, `util/CompletionMenu`, `util/CellWidth`, `editor/CompletionMenuPopup` | `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `VimModesTest`, `CompletionMenuTest`, `CellWidthTest`, `CmdlineEventTest`, `NotificationBridgeTest`, `completion_menu_spec.lua`, `NeovimCompletionIntegrationTest`, `tests/swt` `CompletionMenuPopupTest`, UI `CompletionMenuEndToEndTest` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
 | File paths compared by one rule | `LuaScripts.PATHS` (module `neovim4eclipse.paths`), `util/FilePaths`, `NewFiles.workspaceFileAt` (the one workspace lookup) | `paths_spec.lua` and `FilePathsTest` (both run `tests/unit/src/test/resources/path-cases.tsv` on the Linux, macOS and Windows rules), `EditPathTest`, `t.same_file` in every spec, UI `FilePathsEndToEndTest` (`:e` and `:wq!` through a link; `:e` by the real path into a folder linked through a link), `ProjectFilesEndToEndTest` (a linked folder made and removed while running) |
 | `gd`/`K`/`gr*`/`gO`/`gt`/`gT` handed to Eclipse | `core/IdeKeys` (the one table: keys, actions, how each command is found), `core/IdeAction`, `LuaScripts.IDE_KEYS` (the mappings, from the table), `IdeKeys.pick` (the one loop, over the port `IdeKeys.Editor`; `dryRun` for tests), `editor/IdeActions` (`EclipseEditor`, the port's Eclipse side), `editor/HyperlinkProbe` (links for `gd` and `grt`) | `IdeKeysTest`, `setup_spec.lua`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest`, `IdeKeysEndToEndTest`, `JavaEditorEndToEndTest` (heavyJava: Java's commands, `gri`, `grt`) |

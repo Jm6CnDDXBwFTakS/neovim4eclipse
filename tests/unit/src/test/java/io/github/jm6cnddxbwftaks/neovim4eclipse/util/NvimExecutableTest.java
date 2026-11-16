@@ -215,16 +215,24 @@ class NvimExecutableTest {
     @Test
     void embedCommandAddsEmbedFlagAndGuardThenExtraArgs() throws IOException {
         String program = file("bin/nvim").toString();
-        assertEquals(List.of(program, "--embed", "--cmd", "let g:neovim4eclipse=1", "--clean"),
+        assertEquals(List.of(program, "--embed", "--cmd", NvimExecutable.startCommand(), "--clean"),
                 NvimExecutable.embedCommand(program, List.of("--clean")));
+    }
+
+    /** The guard variable first, as init.lua reads it, then each reader's "already loaded" variable. */
+    @Test
+    void theStartCommandSetsTheGuardAndTurnsTheReadersOff() {
+        assertEquals("let g:neovim4eclipse=1 | let g:loaded_netrw=1 | let g:loaded_netrwPlugin=1"
+                + " | let g:loaded_nvim_net_plugin=1 | let g:loaded_zipPlugin=1 | let g:loaded_tarPlugin=1",
+                NvimExecutable.startCommand());
     }
 
     @Test
     void embedCommandSkipsNullAndBlankExtraArgs() throws IOException {
         String program = file("bin/nvim").toString();
-        assertEquals(List.of(program, "--embed", "--cmd", "let g:neovim4eclipse=1"),
+        assertEquals(List.of(program, "--embed", "--cmd", NvimExecutable.startCommand()),
                 NvimExecutable.embedCommand(program, null));
-        assertEquals(List.of(program, "--embed", "--cmd", "let g:neovim4eclipse=1", "-u"),
+        assertEquals(List.of(program, "--embed", "--cmd", NvimExecutable.startCommand(), "-u"),
                 NvimExecutable.embedCommand(program, java.util.Arrays.asList(null, " ", "-u")));
     }
 
