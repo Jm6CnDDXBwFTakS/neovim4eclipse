@@ -34,6 +34,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - `zE` and `zF` in visual mode deleted or made folds in an editor whose folds are Eclipse's; they
   are refused now, like `zf`, `zd` and `zD`.
+- In the command-line window (`q:`), a double-width character with a background color (selected,
+  or a search match) was drawn cut in half; it is whole now.
 
 ## [0.2.22] - 2026-11-16
 

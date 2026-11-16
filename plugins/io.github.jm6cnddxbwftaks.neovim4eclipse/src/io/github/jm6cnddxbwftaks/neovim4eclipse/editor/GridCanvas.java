@@ -147,25 +147,28 @@ final class GridCanvas extends Canvas {
         // Only the cells that show: a floating window can be far larger than the editor that cuts it off.
         int rows = Math.min(grid.height(), size.y / h + 1);
         int columns = Math.min(grid.width(), size.x / w + 1);
+        // Each row in two passes, the backgrounds and then the text: a character can be wider than
+        // its cell (a double-width one, whose second cell holds "", or an icon from a fallback font,
+        // which Neovim counts as one cell and which-key follows with a blank), and painted cell by
+        // cell, the next cell's background would cover the part that reaches into it.
         for (int row = 0; row < rows; row++) {
+            int y = row * h;
             for (int col = 0; col < columns; col++) {
-                int[] colors = grid.colors(grid.hlAt(row, col), editorFg, editorBg);
-                boolean cursorHere = row == grid.cursorRow() && col == grid.cursorCol() && !insertCursor;
-                int fg = cursorHere ? colors[1] : colors[0];
-                int bg = cursorHere ? colors[0] : colors[1];
-                int x = col * w;
-                int y = row * h;
-                if (bg != editorBg || cursorHere) {
+                int bg = cellColors(row, col, editorFg, editorBg)[1];
+                if (bg != editorBg || isBlockCursor(row, col)) {
                     gc.setBackground(color(bg));
-                    gc.fillRectangle(x, y, w, h);
+                    gc.fillRectangle(col * w, y, w, h);
                 }
+            }
+            for (int col = 0; col < columns; col++) {
                 String text = grid.textAt(row, col);
                 if (text.isEmpty() || text.isBlank()) {
                     continue; // blank, or the right half of a double-width character drawn before
                 }
+                int x = col * w;
                 GridEvent.HlAttr attr = grid.attr(grid.hlAt(row, col));
                 gc.setFont(fontFor(attr.bold(), attr.italic()));
-                gc.setForeground(color(fg));
+                gc.setForeground(color(cellColors(row, col, editorFg, editorBg)[0]));
                 gc.drawString(text, x, y + ascentShift, true);
                 if (attr.underline()) {
                     gc.drawLine(x, y + h - 1, x + w - 1, y + h - 1);
@@ -180,6 +183,17 @@ final class GridCanvas extends Canvas {
             gc.setBackground(color(colors[0]));
             gc.fillRectangle(grid.cursorCol() * w, grid.cursorRow() * h, BAR_WIDTH, h);
         }
+    }
+
+    /** Whether cell ({@code row}, {@code col}) is under the block cursor (not Insert mode's bar). */
+    private boolean isBlockCursor(int row, int col) {
+        return row == grid.cursorRow() && col == grid.cursorCol() && !insertCursor;
+    }
+
+    /** A cell's {text color, background}: its highlight's, swapped under the block cursor. */
+    private int[] cellColors(int row, int col, int editorFg, int editorBg) {
+        int[] colors = grid.colors(grid.hlAt(row, col), editorFg, editorBg);
+        return isBlockCursor(row, col) ? new int[] { colors[1], colors[0] } : colors;
     }
 
     private Font fontFor(boolean isBold, boolean isItalic) {

@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -103,6 +104,33 @@ class GridCanvasTest {
         ImageData insert = paint();
         assertEquals(BLACK, rgbAt(insert, 0, h + h / 2), "the bar at the cell's left edge");
         assertNotEquals(BLACK, rgbAt(insert, GridCanvas.BAR_WIDTH + 1, h + h / 2), "the rest of the cell is not covered");
+    }
+
+    /**
+     * A character wider than its cell reaches into the next one, and that cell's background must not
+     * cover it: an icon from a fallback font is one cell to Neovim and more than one on screen. Here
+     * a cell holds two letters, which surely do not fit, and the cell after it, itself blank, has a
+     * red background: some of it is no longer red, where the second letter lies. Any pixel that is
+     * not the red will do, so the check does not depend on how a platform smooths the letter's edge.
+     */
+    @Test
+    void textWiderThanItsCellIsNotCoveredByTheNextCellsBackground() {
+        List<String> text = new ArrayList<>(List.of("MM", " ", " ", " "));
+        int[] hl = { 0, 1, 1, 0 };
+        GridEvent.HlAttr red = new GridEvent.HlAttr(1, 0xFFFFFF, 0xCC0000, false, false, false, false, false);
+        canvas.show(new GridSnapshot(1004, 4, 1, text, hl, Map.of(1, red),
+                new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR), -1, -1));
+        ImageData image = paint();
+        int w = canvas.cellWidth();
+        int h = canvas.cellHeight();
+        boolean inkOnRed = false;
+        for (int x = w; x < 2 * w && !inkOnRed; x++) {
+            for (int y = 0; y < h && !inkOnRed; y++) {
+                inkOnRed = !RED.equals(rgbAt(image, x, y));
+            }
+        }
+        assertTrue(inkOnRed, "the second M shows in the next cell, over its background");
+        assertEquals(RED, rgbAt(image, 2 * w + w / 2, 1), "the cell after it is still red");
     }
 
     @Test

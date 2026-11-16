@@ -489,8 +489,11 @@ the cursor into it.
   Eclipse's rows differ (a code mining above a line, a long line Eclipse wraps at another
   character), it can sit one row from where Neovim meant it.
 - **Icons:** a plug-in that draws icons from a Nerd Font shows boxes unless Eclipse's text font
-  (*Preferences › General › Appearance › Colors and Fonts › Text Font*) has them. which-key's
-  `icons` options turn its icons off or replace them with plain text (see its documentation).
+  (*Preferences › General › Appearance › Colors and Fonts › Text Font*) has them, or a font the
+  system falls back to does (on Linux, an installed *Symbols Nerd Font*). An icon wider than a
+  cell reaches into the cell after it, as in a terminal; a text font patched with the icons
+  (a "Nerd Font Mono") keeps each in its cell. which-key's `icons` options turn its icons off or
+  replace them with plain text (see its documentation).
 
 `vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing off; the windows then
 exist unseen, as before 0.2.23. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
