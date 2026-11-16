@@ -97,8 +97,8 @@ program's), so the profile keeps the plug-in's data and the test's own files und
 picture then shows no account name and can be sent on. `gallery/PicturesFolder` refuses that folder
 if it is a link, or another account's when it is outside your home folder (inside it, no other
 account can have made it, and on Windows an elevated run's files belong to Administrators). `SearchGalleryTest`, in the same profile, pictures the search highlights in a
-text file and the Java editor into `search.html` (and, with `-Dgallery.whichkey=...`, a real plug-in's
-floating windows: [docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md), card `sh-colors`); the profile then starts a second test Eclipse
+text file and the Java editor into `search.html` (and, from the pinned plug-ins, a real plug-in's
+floating windows and jump labels: [docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md), card `sh-colors`); the profile then starts a second test Eclipse
 with Eclipse's dark theme (`-cssTheme org.eclipse.e4.ui.css.theme.e4_dark`, as a user's Eclipse
 starts after choosing Dark), which takes those pictures again, so the page shows each in both
 themes. The profile adds the Java development tools and the theme plug-in to the test Eclipse. Whether any text is cut off, overlaps or hangs over a window's edge is not left

@@ -35,6 +35,12 @@ import java.util.stream.Stream;
  *       plug-in would treat differently; CI's Neovim is a program outside the plug-in's folder.
  *       Kept between runs while its files have the pinned tree hash, so only the first run (and the
  *       first after a Neovim upgrade) downloads it.</li>
+ *   <li><b>Fetches the pinned plug-ins the tests run</b> ({@link #PLUGINS}) into
+ *       {@code target/test-plugins/}: flash, leap, hop and mini.jump2d, each at the commit and
+ *       archive hash {@code releng/test-plugins.properties} pins. A wrong hash fails the run.
+ *       Without a network, or with a Java older than that tool needs, they are left out with a
+ *       note and the tests that need them are skipped; the list of skips below names them. CI
+ *       does not fetch them, so there those tests are skipped.</li>
  *   <li><b>Runs CI's Maven commands</b> ({@link #UI}, then {@link #INTEGRATION}) with
  *       {@code -Dnvim.path} set to it, from the repository's root, so everything is compiled first,
  *       as in CI (a change that does not compile fails here, not on GitHub). On Linux under
@@ -54,6 +60,8 @@ public final class LikeCi {
 
     /** The Neovim install, as each CI job runs it (the folder follows). */
     public static final String INSTALL = "java releng/UpdateNeovimDownloads.java install auto";
+    /** The fetch of the plug-ins the tests run (docs/UPGRADING.md, "The plug-ins the tests run"). */
+    public static final String PLUGINS = "java releng/tools/plugins/TestPlugins.java fetch";
 
     /** The build job's Maven arguments (the platforms job runs the same). */
     public static final String UI = "-B -ntp verify -Pui";
@@ -90,6 +98,9 @@ public final class LikeCi {
             failed.add(SHELLCHECK);
         }
         String nvim = installNeovim(root.resolve("target/like-ci"));
+        if (fetchPlugins(root) != 0) {
+            failed.add(PLUGINS);
+        }
         long started = System.currentTimeMillis();
         for (String maven : all ? List.of(ALL) : List.of(UI, INTEGRATION)) {
             if (run(root, maven, nvim) != 0) {
@@ -119,6 +130,20 @@ public final class LikeCi {
         command.add("mvnw");
         System.out.println("LikeCi: " + String.join(" ", command));
         return new ProcessBuilder(command).directory(root.toFile()).inheritIO().start().waitFor();
+    }
+
+    /**
+     * Runs {@link #PLUGINS}; its exit status, except that the status of a Java too old for that
+     * tool (2, with the tool's own message) counts as done: the plug-ins are then not there, and
+     * their tests are skipped, as without a network.
+     */
+    private static int fetchPlugins(Path root) throws Exception {
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.addAll(List.of(PLUGINS.substring("java ".length()).split(" ")));
+        System.out.println("LikeCi: " + PLUGINS);
+        int status = new ProcessBuilder(command).directory(root.toFile()).inheritIO().start().waitFor();
+        return status == 2 ? 0 : status;
     }
 
     /** Runs {@link #INSTALL}; the program's path it prints. */

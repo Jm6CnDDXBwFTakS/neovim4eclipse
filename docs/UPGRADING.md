@@ -300,6 +300,48 @@ and actions* above); the bullets say what each needs besides, and how to move it
   ("Unsupported class file major version"), so upgrade JaCoCo together with the JDK.
 - **JUnit**: change `<junit.version>`. The UI tests use the JUnit from the Eclipse target instead.
 
+## The plug-ins the tests run
+
+The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mini.jump2d), and
+the gallery's pictures a fifth, which-key. They are third-party
+code that runs in the test Neovim, on your machine and wherever `LikeCi`
+or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
+the SHA-256 of that commit's archive and its license. That file is the only place a commit or a
+hash is written. Nothing of a plug-in is in the repository; `TestPlugins.java fetch` unpacks them
+into `target/test-plugins/`, and stops if an archive's hash is not the pinned one.
+
+Move a pin when a plug-in changed something the tests should see (new highlight groups, a new way
+of drawing labels), not routinely.
+
+```bash
+java releng/tools/plugins/TestPlugins.java                         # each pin, the repository's newest commit, what is fetched
+java releng/tools/plugins/TestPlugins.java update flash            # step 1: download the newest commit for vetting
+java releng/tools/plugins/TestPlugins.java update flash <commit>   # ... or a commit you name
+java releng/tools/plugins/TestPlugins.java accept flash <commit>   # step 2, after vetting: look inside, then write the pin
+```
+
+A pin moves in two steps, with your own check between them, so that nothing opens the archive
+before it has been scanned:
+
+1. `update` downloads the commit's archive into `target/test-plugins/vetting/` and prints its
+   path, its SHA-256 and the VirusTotal address of that hash (a report if the file is known
+   there; otherwise upload the archive). It only hashes the bytes: the ZIP is not opened.
+2. Vet the archive.
+3. `accept` unpacks that archive, prints its hash again (compare it with the one you vetted), the
+   first lines of the license file and the files that differ from the pinned commit, and after
+   your yes writes the entry's two lines. If the license changed, correct `<name>.license` by
+   hand.
+4. `java releng/tools/plugins/TestPlugins.java fetch`, then `java releng/tools/ci/LikeCi.java`
+   (the specs in `jump_plugins_spec.lua` and `JumpLabelsEndToEndTest` run the plug-in), then
+   commit the file.
+
+By hand it is the same change of two lines: `update` gives the path and the hash; set
+`<name>.commit` and `<name>.sha256` yourself once you have vetted the archive.
+
+To pin another plug-in, add its four lines to the file and a test to `jump_plugins_spec.lua`; if
+the editor should know it without a setting, add its prefix to `util/JumpLabels.BUILT_IN_PREFIXES`
+and to the README's Settings row and the user guide's "Jump labels".
+
 ## Neovim
 
 One version is what *Get Neovim* installs, the **oldest supported** Neovim, and the one CI tests:
