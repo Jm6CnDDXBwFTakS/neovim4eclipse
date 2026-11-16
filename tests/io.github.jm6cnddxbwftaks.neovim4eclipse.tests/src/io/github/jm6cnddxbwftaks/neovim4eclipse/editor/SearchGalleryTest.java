@@ -65,6 +65,9 @@ class SearchGalleryTest extends EndToEndTestBase {
     /** The start of the names of the pictures that need the which-key plug-in ({@link #whichKey}). */
     private static final String WHICH_KEY = "whichkey-";
 
+    /** The picture that needs flash, one of the pinned plug-ins ({@link PinnedPlugins}). */
+    private static final String LABELS = "labels";
+
     /** The pictures, in the page's order; each run takes all of them in its theme. */
     static final List<Picture> PICTURES = List.of(
             new Picture("text", "After /fox in a text file",
@@ -97,6 +100,12 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "completed, its entries lined up with it, in Neovim's colors for the list (Pmenu), "
                             + "which follow the theme. The second entry is selected (PmenuSel) and stands out from "
                             + "the others in both themes; all entries read. The caret is after the completed word."),
+            new Picture(LABELS, "A jump plug-in's labels (flash)",
+                    "The real flash plug-in in the Java editor, after its jump key and f: each f that can be "
+                            + "jumped to has its match highlighted and a label, one letter in its own cell right "
+                            + "after the match, in flash's colors (FlashLabel, FlashMatch); the labels read in both "
+                            + "themes and stand out from the search matches. The rest of the text is dimmed "
+                            + "(FlashBackdrop) and still readable. The text itself is unchanged."),
             new Picture(WHICH_KEY + "z", "which-key's panel after z",
                     "The real which-key plug-in, in the Java editor, after z: its panel of the keys that can "
                             + "follow lies on the editor's bottom edge, from the left edge on, and reads in both "
@@ -142,30 +151,16 @@ class SearchGalleryTest extends EndToEndTestBase {
 
     private final Path out = Path.of(System.getProperty("gallery.dir", "target/gallery"));
     /**
-     * A clone of which-key (folke/which-key.nvim) to load for the two pictures of a real plug-in's
-     * floating windows, from {@code -Dgallery.whichkey=/path/to/which-key.nvim}; empty leaves those
-     * pictures out. The repository holds no third-party plug-in and the build fetches none: the
-     * folder is the choice of whoever runs the gallery, and its Lua then runs in this test
-     * Eclipse's Neovim (docs/MANUAL_CHECKS.md, card sh-colors).
+     * which-key (folke/which-key.nvim), loaded for the two pictures of a real plug-in's floating
+     * windows: the pinned copy ({@link PinnedPlugins}), or empty when it is not fetched, which
+     * leaves those pictures out. Its Lua runs in this test Eclipse's Neovim, which is why only
+     * the pinned commit is taken (docs/MANUAL_CHECKS.md, card sh-colors).
      */
-    private final String whichKey = given(System.getProperty("gallery.whichkey", ""));
+    private final java.util.Optional<Path> whichKey = PinnedPlugins.find("which-key");
     private final String theme = System.getProperty("gallery.theme", "light");
-
-    /**
-     * A property's value, or {@code ""} when it was not given: the POM passes an empty property on
-     * as the text {@code null}, and one it does not know as {@code ${name}}.
-     */
-    private static String given(String value) {
-        String v = value.strip();
-        return v.equals("null") || v.startsWith("${") ? "" : v;
-    }
 
     @Test
     void takeTheSearchPictures() throws Exception {
-        // A wrong path fails here, in seconds, not after every other picture is taken.
-        assertTrue(whichKey.isEmpty() || Files.isRegularFile(Path.of(whichKey).resolve("lua/which-key/init.lua")),
-                "-Dgallery.whichkey must name a clone of which-key.nvim, as an absolute path: no lua/which-key/init.lua in "
-                        + (whichKey.isEmpty() ? "" : Path.of(whichKey).toAbsolutePath()));
         // No earlier run's pictures pass for this one's. The light run (the first) clears both themes,
         // the dark run only its own, as the light ones are this run's.
         GalleryCamera.clear(out, theme.equals("light") ? "search-.*" : "search-" + theme + "-.*",
@@ -328,6 +323,8 @@ class SearchGalleryTest extends EndToEndTestBase {
                 });
             }
 
+            takeLabels(java, javaWidget);
+
             // As a user sets it in Colors and Fonts: the theme's color registry takes the new value.
             ColorRegistry colors = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme().getColorRegistry();
             RGB own = colors.getRGB(SearchColors.COLOR_ID);
@@ -373,7 +370,7 @@ class SearchGalleryTest extends EndToEndTestBase {
             }
 
             // Last, since which-key stays loaded in this Neovim from here on: the real plug-in's panel.
-            if (!whichKey.isEmpty()) {
+            if (whichKey.isPresent()) {
                 takeWhichKey(java, javaWidget);
             }
         } finally {
@@ -477,12 +474,44 @@ class SearchGalleryTest extends EndToEndTestBase {
     }
 
     /**
+     * Loads flash, if it is fetched ({@link PinnedPlugins}), starts its jump in the Java editor and
+     * takes the labels it shows for {@code f}. Without flash the picture is left out and the page
+     * says how to get it.
+     */
+    private void takeLabels(ITextEditor java, StyledText javaWidget) {
+        java.util.Optional<Path> flash = PinnedPlugins.find("flash");
+        if (flash.isEmpty()) {
+            return;
+        }
+        page().activate(java);
+        settle();
+        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
+        SessionProbe.lua(session, PinnedPlugins.loadFlash(flash.get()));
+        session.inputAsync("gg0:lua vim.schedule(function() require('flash').jump() end)<CR>");
+        session.inputAsync("f");
+        try {
+            waitUntil("flash's labels", TIMEOUT_MS, () -> {
+                settle();
+                return controller != null && controller.jumpLabelsForTests().size() > 2;
+            });
+            settle();
+            take(javaWidget, LABELS, 16);
+        } finally {
+            session.inputAsync("<Esc>");
+            waitUntil("flash's labels gone", TIMEOUT_MS, () -> {
+                settle();
+                return controller == null || controller.jumpLabelsForTests().isEmpty();
+            });
+        }
+    }
+
+    /**
      * Loads which-key from {@link #whichKey} and takes its panel after {@code z} and after
      * {@code g} in the Java editor. Its two floating windows (the panel and a one-row line) are
      * drawn by {@link FloatingWindows}; {@code Esc} closes them.
      */
     private void takeWhichKey(ITextEditor java, StyledText javaWidget) {
-        Path plugin = Path.of(whichKey); // checked at the start of the test
+        Path plugin = whichKey.orElseThrow();
         page().activate(java);
         settle();
         // The path as a Lua long string, in which no escape means anything; only its closing mark must not occur.
@@ -524,9 +553,11 @@ class SearchGalleryTest extends EndToEndTestBase {
                 body.append("<figure><figcaption>").append(t).append("</figcaption>");
                 body.append(Files.exists(out.resolve(file))
                         ? GalleryCamera.img(out.resolve(file), escape(p.title()) + ", " + t + " theme")
+                        : p.name().equals(LABELS) && PinnedPlugins.find("flash").isEmpty()
+                                ? "<p class=\"missing\">not taken: flash is not fetched (" + PinnedPlugins.HOW + ")</p>"
                         : p.name().startsWith(WHICH_KEY) && whichKey.isEmpty()
-                                ? "<p class=\"missing\">not taken: needs -Dgallery.whichkey=/path/to/which-key.nvim "
-                                        + "(docs/MANUAL_CHECKS.md, card sh-colors)</p>"
+                                ? "<p class=\"missing\">not taken: which-key is not fetched (" + PinnedPlugins.HOW + "; "
+                                        + "docs/MANUAL_CHECKS.md, card sh-colors)</p>"
                                 : "<p class=\"missing\">not taken (the " + t + " run did not run or failed)</p>");
                 body.append("</figure>");
             }

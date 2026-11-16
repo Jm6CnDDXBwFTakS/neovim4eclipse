@@ -209,7 +209,7 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 - **On:** any
 - **Launch:** none
-- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, editor/CompletionMenuPopup.java, util/CompletionMenu.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
+- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/JumpLabelPainter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, editor/CompletionMenuPopup.java, util/CompletionMenu.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
 (`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two
@@ -228,30 +228,29 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 .\mvnw.cmd verify -Pgallery "-Dnvim.path=C:\path\to\nvim.exe"
 ```
 
-Two of the pictures show a real Neovim plug-in's floating windows, which-key's panel of key hints.
-The repository holds no plug-in and the build fetches none, so they are taken only when you name a
-clone of [which-key](https://github.com/folke/which-key.nvim) of your own; its Lua then runs in the
-test Eclipse's Neovim. Add this to the command above, with the folder's absolute path:
+Three of the pictures show real Neovim plug-ins: which-key's panel of key hints after `z` and
+after `g`, and flash's jump labels. The repository holds no plug-in; they are taken from the
+pinned copies ([UPGRADING.md](UPGRADING.md), "The plug-ins the tests run"), so fetch those first,
+from the repository's root:
 
-```sh linux macos
--Dgallery.whichkey=/path/to/which-key.nvim
+```sh linux macos windows
+java releng/tools/plugins/TestPlugins.java fetch
 ```
 
-```powershell windows
-"-Dgallery.whichkey=C:\path\to\which-key.nvim"
-```
+A plug-in that is not fetched leaves its pictures out, and the page says so.
 
 which-key draws icons from a Nerd Font. The gallery's Eclipse keeps its data in a folder of its
 own (`/tmp/neovim4eclipse-pictures`; on Windows `neovim4eclipse-pictures` in the Public folder) and does
 not see the fonts of your account, so on Linux copy an icon font, such as
 `SymbolsNerdFontMono-Regular.ttf`, into `/tmp/neovim4eclipse-pictures/neovim-home/data/fonts/`
-before the run; on macOS and Windows install it for the system. Without it the icons are boxes,
-which is what a user without the font sees, and the rest of the picture is still to be judged.
+before the run, or install it for the system; on macOS and Windows install it for the system.
+Without it the icons are boxes, which is what a user without the font sees, and the rest of the
+picture is still to be judged.
 
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
    browser.
-   ⇒ Each of the eleven pictures is there in the light and the dark theme, side by side; without
-   `-Dgallery.whichkey`, nine, and the two of which-key say what they need.
+   ⇒ Each of the twelve pictures is there in the light and the dark theme, side by side; one whose
+   plug-in is not fetched says what it needs.
 2. Look at each pair against the text above it.
    ⇒ In both themes every match stands out from the editor's background, its text (syntax colors
    included, in the Java editor) stays readable, and the match under the caret is told apart from

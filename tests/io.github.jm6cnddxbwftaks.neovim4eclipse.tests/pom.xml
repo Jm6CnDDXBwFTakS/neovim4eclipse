@@ -200,8 +200,6 @@
             <!-- Where a wait that runs out writes what the screen and the threads looked like
                  (editor/FailureEvidence); the CI workflow keeps the folder when a job fails. -->
             <failure.evidence.dir>${project.build.directory}/failure-evidence</failure.evidence.dir>
-            <!-- The which-key clone for the gallery's pictures, or empty (see the property). -->
-            <gallery.whichkey>${gallery.whichkey}</gallery.whichkey>
           </systemProperties>
           <!-- The test Eclipse runs in folders of its own, so a run on a developer's machine sees what
                a CI runner sees, and changes nothing outside target/ (CONTRIBUTING.md, "Your Neovim
@@ -263,11 +261,6 @@
          pictures-home-windows profile below picks C:\Users\Public, since the temp folder there is
          under the account's own folder. -Dpictures.home=... sets another. -->
     <pictures.home>/tmp/neovim4eclipse-pictures</pictures.home>
-    <!-- A clone of the Neovim plug-in which-key (folke/which-key.nvim) for the gallery's two pictures
-         of a real plug-in's floating windows: -Dgallery.whichkey=/path/to/which-key.nvim. Empty: those
-         pictures are left out (SearchGalleryTest). The build fetches nothing: the folder is one the
-         person running the gallery chose, and its Lua runs in the test Eclipse's Neovim. -->
-    <gallery.whichkey></gallery.whichkey>
   </properties>
 
   <profiles>
