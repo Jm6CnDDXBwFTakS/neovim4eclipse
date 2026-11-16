@@ -1410,6 +1410,11 @@ class EditorEndToEndTest extends EndToEndTestBase {
      * Ctrl+X pressed and nothing after it (for Cut, out of habit), then a click into the text: the
      * Ctrl-X is forgotten, so the next Ctrl letter is not its second key. Ctrl+S, which Neovim
      * would take as Ctrl-X Ctrl-S (spelling suggestions), is Eclipse's Save again.
+     *
+     * <p>On macOS Save is Cmd+S, and Ctrl+S runs nothing. There the test checks the other side:
+     * while a Ctrl-X waits, the editor gives Neovim every Ctrl letter ({@code util/KeyContextRule}),
+     * so Ctrl+S would run the plug-in's own key command for it ({@link VimCtrlKeys#commandId}).
+     * After the click it must not.
      */
     @Test
     void aClickForgetsACtrlXThatWaitsForItsSecondKey() {
@@ -1432,7 +1437,15 @@ class EditorEndToEndTest extends EndToEndTestBase {
             widget.notifyListeners(SWT.MouseUp, click);
             settle();
             ctrlKey(widget, 's');
-            waitUntil("Save", TIMEOUT_MS, () -> run.contains(org.eclipse.ui.IWorkbenchCommandConstants.FILE_SAVE), run::toString);
+            if (org.eclipse.jface.util.Util.isMac()) {
+                UiTestSupport.runUntilIdle(TIMEOUT_MS);
+                settle();
+                assertFalse(run.contains(VimCtrlKeys.commandId('s')),
+                        () -> "Ctrl+S went to Neovim as Ctrl-X's second key: " + run);
+                assertEquals("i", session.getMode(), "Neovim is not in a Ctrl-X mode");
+            } else {
+                waitUntil("Save", TIMEOUT_MS, () -> run.contains(org.eclipse.ui.IWorkbenchCommandConstants.FILE_SAVE), run::toString);
+            }
             assertFalse(session.isCompleting(), "Ctrl+S was not Ctrl-X's second key");
             escape(widget);
             waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
