@@ -488,9 +488,6 @@ the cursor into it.
 - **A row off, sometimes.** A window anchored to a text position is placed by Neovim's rows. Where
   Eclipse's rows differ (a code mining above a line, a long line Eclipse wraps at another
   character), it can sit one row from where Neovim meant it.
-- **which-key's `z` menu** does not open in an editor with folding: there the plug-in handles `z`
-  itself ([Folding](#folding-zo-zc-zm)), and every `z` command still works. The other menus do
-  (`<Space>`, `g`, `"`, `d` and the like).
 - **Icons:** a plug-in that draws icons from a Nerd Font shows boxes unless Eclipse's text font
   (*Preferences › General › Appearance › Colors and Fonts › Text Font*) has them. which-key's
   `icons` options turn its icons off or replace them with plain text (see its documentation).
@@ -791,9 +788,12 @@ narrowly as it can, and it is listed here.
 - **`'foldmethod'`, `'foldenable'` and `'foldminlines'`, window-local, in editors' buffers.** In an
   editor that folds, `'foldmethod'` is `manual` and `'foldminlines'` 0, so Neovim's folds are
   exactly Eclipse's ([Folding](#folding-zo-zc-zm)); in one that cannot fold, `'nofoldenable'`.
-  Your global values stay as they are. In those buffers `z` also gets a buffer-local mapping, which
-  refuses `zf`, `zF`, `zd`, `zD` and `zE` and passes every other `z` command on (see
-  [Known limitations](../README.md#known-limitations), item 6). With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
+  Your global values stay as they are. In those buffers `zf`, `zF`, `zd`, `zD` and `zE` also get
+  buffer-local mappings that refuse them; every other `z` command is Neovim's (see
+  [Known limitations](../README.md#known-limitations), item 6). `'showcmd'` is kept on, globally:
+  the plug-in reads Neovim's pending command through it, for the status bar and to refuse those
+  keys when they are typed slowly; turned off, it is turned on again, with a message the first time.
+  (The plug-in turns `'showcmd'` on at start in any case, for the status bar.) With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
 
 - **`'linebreak'`, `'breakindent'` and `'showbreak'`, window-local, while word wrap is on.** On,
   off and `NONE`, so that lines wrap where Eclipse wraps them ([The editor's size, scrolling and

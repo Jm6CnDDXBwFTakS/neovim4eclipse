@@ -228,7 +228,7 @@ plug-in does. Lines are 1-based.
      ids start at 1), so Neovim can name a fold to Eclipse, and both stay valid while edits move
      lines (X1). The end is needed because two folds can start on one line (X3).
   5. Keeps the cursor and view (`winsaveview`/`winrestview`).
-  6. Sets `b:neovim4eclipse_folds` (the buffer is mirrored) and the buffer-local `z` mapping of
+  6. Sets `b:neovim4eclipse_folds` (the buffer is mirrored) and the buffer-local mappings of
      section 3.5.
 
   An empty list means the editor cannot fold. `set` then sets window-local `nofoldenable`, clears
@@ -346,15 +346,31 @@ plug-in does. Lines are 1-based.
 
 - **The user's `'foldmethod'` is replaced** by `manual`, window-local, only while a mirrored buffer
   is shown. An editor that cannot fold gets `nofoldenable`. With the opt-out, nothing is touched.
-- **`z` alone is mapped**, buffer-local, in mirrored buffers, not `zf`, `zd`, `zE` (section 6 says
-  why). The mapping reads the next key with `getcharstr()`, which has no time limit. `zf`, `zF`,
-  `zd`, `zD` and `zE` (and `zf`, `zd`, `zD` in visual mode) show the error with
-  `nvim_echo(..., { err = true })`, which reaches the message line through `MessageRoute`. Any other
-  key goes on to the user's mapping of `z` and that key (`maparg`), if there is one, or else `z`
-  and the key are fed to Neovim, with the count. A user mapping of `z` plus more than one key is
-  lost (README, Known limitations). Neovim shows no pending `z` while a mapping reads a key (no
-  `msg_showcmd`), so the mapping sends `eclipse_showcmd` itself (`NotificationBridge.onShowcmd`),
-  and the status bar shows `z` (or `3z`) until the next key.
+- **`zf`, `zF`, `zd`, `zD` and `zE`**, in normal and visual mode, are refused in mirrored
+  buffers, in two places (section 6 says why two). They show the error with
+  `nvim_echo(..., { err = true })`, which reaches the message line through `MessageRoute`.
+  - *Typed together*: buffer-local mappings of the two keys.
+  - *Typed apart*: after `'timeoutlen'` the mapping is given up and `z` is Neovim's own pending
+    command. A key watcher (`vim.on_key`) looks at each typed key: one of those keys, in normal or
+    visual mode (also the one command `Ctrl-O` gives insert mode, mode `niI`), in a mirrored buffer,
+    while Neovim's pending command is `z`, is dropped (the watcher returns `''`), and an `<Esc>` is
+    fed to the head of the typeahead, not remapped, to end the `z` (twice in visual mode, to leave
+    it as a refused `zf` does). At the head, so that a key typed right behind the dropped one is not
+    taken as the argument of `z`. What is pending is read as `'showcmd'` shows it
+    (`nvim_eval_statusline('%S')`), without a count and a register before it: `z`, `3z` and
+    `"a2z` are a pending `z`; `"z` is a register waiting for its command.
+
+  `z` alone is not mapped (it was through 0.2.22, reading the next key with `getcharstr()`): the
+  user's mappings that start with `z` run, whatever their length, a plug-in that lists what can
+  follow `z` (which-key) shows its menu, and Neovim reports the pending `z` itself
+  (`msg_showcmd`), so the status bar shows `z` (or `3z`) until the next key. `'showcmd'` is kept
+  on (an `OptionSet` autocommand turns it on again, and the watcher itself does at a typed `z`,
+  for the ways of turning it off that fire no `OptionSet`): without it the watcher would see nothing.
+  While `z` is Neovim's own pending command, Neovim answers no request, as after `g` or `"`; what
+  Eclipse sends meanwhile (folds, problems, the dirty flag) waits for the next key
+  (`NeovimSession.whenAnswering`).
+  Neovim keeps that text only while a UI is attached, so the watcher is tested through a session
+  (`NeovimFoldsIntegrationTest`), not in `folds_spec.lua`.
 - **`:fold`** (with its abbreviations and ranges): a built-in command cannot be mapped, but every
   `:` line already passes through `HOST_COMMANDS`' `CmdlineLeavePre`, which parses it with
   `nvim_parse_cmd`. The refusal is a hook, not a rule in the Java table of host commands: that table
@@ -490,11 +506,19 @@ All waits use `TestWait`; "nothing more arrived" uses `NeovimBarrier.pass`. Noth
 Each of these was found by trying the feature; docs/ARCHITECTURE.md, "Folding: the workarounds,
 and why", lists them all with the code and the test that holds each.
 
-- **`z` alone is mapped, not `zf`, `zd`, `zE`.** Neovim waits only `'timeoutlen'` (1000 ms by
+- **Mappings of `zf`, `zd`, `zE` are not enough.** Neovim waits only `'timeoutlen'` (1000 ms by
   default, or the user's) for a mapping's second key; typed more slowly, `zE` was Neovim's own and
-  deleted every fold, after which `zc` said `E490: No fold found`. The mapping of `z` (3.5) has no
-  time limit. Test: `NeovimFoldsIntegrationTest.aSlowZEIsRefusedToo`, which failed with the two-key
-  mappings.
+  deleted every fold, after which `zc` said `E490: No fold found`. Test:
+  `NeovimFoldsIntegrationTest.aSlowZEIsRefusedToo`, which failed with the two-key mappings alone.
+  The first cure was a mapping of `z` alone that read the next key itself, without a time limit.
+  It held, but it took `z` away from everything else: a user's mapping of `z` and two more keys
+  never ran, and which-key, which leaves a key alone that is mapped already, showed no menu for
+  `z`. Two simpler cures do not work: a mapping of `z` that hands a lone `z` on to a listener
+  (which-key takes the buffer's `z` for a finished mapping, feeds it again and stops itself with
+  "Recursion detected"), and the two-key mappings alone with which-key doing the waiting (its
+  trigger is not always installed, and then `z` is Neovim's again). The key watcher of 3.5 asks
+  Neovim what is pending at the moment the key arrives, so it depends on no timing and on no
+  other plug-in.
 - **Old folds are deleted with `:noautocmd normal! zE`.** Folds can be sent while Neovim is in
   insert mode, and a plain `:normal! zE` passes through normal mode and fires `ModeChanged`: the
   plug-in took insert mode as ended and a typed method went missing. Switching to

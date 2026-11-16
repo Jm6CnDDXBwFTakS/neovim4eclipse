@@ -3014,13 +3014,17 @@ final class LuaScripts {
      * {@code 'nofoldenable'} is set again at the end, and {@code zi} restores the user's folds.
      *
      * <p><b>Folds by hand are refused</b> in a mirrored buffer: Eclipse decides where folds are,
-     * and its next reconcile would replace them. {@code z} alone gets a buffer-local mapping that
-     * reads the next key without a time limit: {@code zf}, {@code zF}, {@code zd}, {@code zD} and
-     * {@code zE} (and {@code zf}, {@code zd}, {@code zD} in visual mode) show
-     * {@code zf: Eclipse defines the folds in this editor}; any other key goes on to the user's
-     * mapping of {@code z} and that key, if there is one, or to Neovim's {@code z} command, with the
-     * count. (Mappings of the two keys would time out after {@code 'timeoutlen'}, and a slow
-     * {@code zE} was Neovim's.) {@code :fold}, which cannot be mapped, is refused through
+     * and its next reconcile would replace them. {@code zf}, {@code zF}, {@code zd}, {@code zD} and
+     * {@code zE}, in normal and visual mode, show
+     * {@code zf: Eclipse defines the folds in this editor}, in two places. Typed together, a
+     * buffer-local mapping of the two keys refuses them. Typed apart, the mapping has timed out
+     * ({@code 'timeoutlen'}) and {@code z} is Neovim's own pending command, so a key watcher
+     * ({@code vim.on_key}) drops the second key when it is typed while Neovim's pending command,
+     * as {@code 'showcmd'} shows it, is {@code z}, and ends that {@code z}. Example: {@code z}, two
+     * seconds, {@code E}: the {@code E} never reaches Neovim, and every fold stays. {@code z} alone
+     * is not mapped, so the user's own mappings that start with {@code z} work, and a plug-in that
+     * lists what can follow {@code z} (which-key) shows its menu. {@code 'showcmd'} is kept on: the
+     * watcher sees nothing without it. {@code :fold}, which cannot be mapped, is refused through
      * {@link #HOST_COMMANDS}' hook,
      * so this script must run after it. Elsewhere (an editor that cannot fold) they are Neovim's.
      * Only typed command lines are caught, as for the other host commands: {@code vim.cmd.fold()}
@@ -3052,86 +3056,136 @@ final class LuaScripts {
 
             -- Making or deleting folds by hand: Eclipse decides where folds are, and its next
             -- reconcile would replace them. The commands get a refusal in HOST_COMMANDS (built-in
-            -- commands cannot be mapped); the keys a buffer-local mapping of z alone, which reads the
-            -- key after it with getcharstr(), without a time limit.
-            -- Why not mappings of zf, zd, zE ...: Neovim waits only 'timeoutlen' (1000 ms by default)
-            -- for a mapping's second key. A slower zE then ran Neovim's own zE and deleted every fold.
-            -- The key after z: refused (f F d D E; f d D in visual mode), else passed on. A mapping
-            -- of the user's for z and that key ({ 'zR' }, say) runs as Vim would run it; anything
-            -- else is Neovim's z command, with the count: 3zj, zz, z=, z{height}<CR>.
+            -- commands cannot be mapped). The keys zf zF zd zD zE, in normal and visual mode, are
+            -- refused in two places, since they can reach Neovim in two ways:
+            --  1. Together (typed quickly, fed by a mapping or by a plug-in that lists what can
+            --     follow z): a buffer-local mapping of the two keys.
+            --  2. Apart: Neovim waits only 'timeoutlen' (1000 ms by default) for a mapping's second
+            --     key. After that z is Neovim's own pending command, and a slow zE would delete
+            --     every fold. So vim.on_key watches the typed keys: one of those keys typed while
+            --     Neovim's pending command is z is dropped, and the z ended.
+            -- z alone is not mapped (it was, through 0.2.22, reading the next key itself): so the
+            -- user's mappings that start with z work, whatever their length, and a plug-in that
+            -- shows what can follow z (which-key) gets its turn.
             local REFUSED = 'Eclipse defines the folds in this editor'
             local REFUSED_AFTER_Z = { n = { f = true, F = true, d = true, D = true, E = true },
-                                      x = { f = true, d = true, D = true } }
+                                      x = { f = true, F = true, d = true, D = true, E = true } }
             local ESC = string.char(27)
 
-            -- The pending command for Eclipse's status bar. Neovim reports a half-typed command
-            -- (msg_showcmd) by itself, but not a z that this mapping is reading the next key for:
-            -- to Neovim, no command is pending then. So the mapping reports it itself, through the
-            -- same status-bar slot (NotificationBridge, eclipse_showcmd), and clears it after the key.
-            local function showcmd(text)
-              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_showcmd', text)
+            -- What each key would do, for its mapping's description: a plug-in that lists what can
+            -- follow z (which-key) shows it, so it names the command and says that it is off here,
+            -- e.g. for E: "Delete all folds: not here, Eclipse defines the folds".
+            local WOULD = { f = 'Create fold', F = 'Create fold for lines', d = 'Delete fold',
+                            D = 'Delete folds, nested too', E = 'Delete all folds' }
+
+            local function say_refused(key)
+              vim.api.nvim_echo({ { 'z' .. key .. ': ' .. REFUSED } }, true, { err = true })
             end
 
-            -- Runs the user's mapping m (a maparg() dictionary) for z and the next key.
-            local function run_users_mapping(m, count)
-              local keys
-              if m.callback then
-                local result = m.callback()
-                if m.expr ~= 1 then
-                  return
-                end
-                keys = result or ''
-              elseif m.expr == 1 then
-                keys = vim.fn.eval(m.rhs)
-              else
-                keys = vim.api.nvim_replace_termcodes(m.rhs, true, true, true)
-              end
-              if m.expr == 1 and m.replace_keycodes == 1 then
-                keys = vim.api.nvim_replace_termcodes(keys, true, true, true)
-              end
-              -- As Vim does: a right-hand side starting with z does not use this z mapping again.
-              local remap = m.noremap ~= 1 and keys:sub(1, 1) ~= 'z'
-              vim.api.nvim_feedkeys(count .. keys, remap and 'mi' or 'ni', false)
-            end
-
-            local function z_key(mode)
-              return function()
-                local count = vim.v.count > 0 and tostring(vim.v.count) or ''
-                showcmd(count .. 'z') -- e.g. "3z", as Neovim would show it
-                local ok, key = pcall(vim.fn.getcharstr)
-                showcmd('')
-                if not ok or key == ESC then
-                  if mode == 'x' then
-                    vim.api.nvim_feedkeys(ESC, 'n', false)
-                  end
-                  return -- Esc or Ctrl-C after z: nothing, as for Neovim's z
-                end
-                if REFUSED_AFTER_Z[mode][key] then
-                  vim.api.nvim_echo({ { 'z' .. key .. ': ' .. REFUSED } }, true, { err = true })
-                  if mode == 'x' then
-                    vim.api.nvim_feedkeys(ESC, 'n', false) -- leave visual mode, as zf does
-                  end
-                  return
-                end
-                local m = vim.fn.maparg('z' .. key, mode, false, true) -- {} when there is none
-                if next(m) ~= nil then
-                  run_users_mapping(m, count)
-                  return
-                end
-                vim.api.nvim_feedkeys(count .. 'z' .. key, 'ni', false)
-              end
-            end
-
+            -- 1. The two keys together.
             local function refuse_keys(buf, on)
-              for _, mode in ipairs({ 'n', 'x' }) do
-                if on then
-                  vim.keymap.set(mode, 'z', z_key(mode), { buffer = buf, nowait = true,
-                    desc = 'z commands; Eclipse defines the folds here (neovim4eclipse)' })
-                else
-                  pcall(vim.keymap.del, mode, 'z', { buffer = buf })
+              for mode, keys in pairs(REFUSED_AFTER_Z) do
+                for key in pairs(keys) do
+                  if on then
+                    vim.keymap.set(mode, 'z' .. key, function()
+                      say_refused(key)
+                      if mode == 'x' then
+                        vim.api.nvim_feedkeys(ESC, 'n', false) -- leave visual mode, as zf does
+                      end
+                    end, { buffer = buf, desc = WOULD[key] .. ': not here, Eclipse defines the folds' })
+                  else
+                    pcall(vim.keymap.del, mode, 'z' .. key, { buffer = buf })
+                  end
                 end
               end
             end
+
+            -- 2. The keys apart. Whether Neovim's own pending command is z: what 'showcmd' would
+            -- show, without the count and the register that may come before it. Examples: "z",
+            -- "3z" and '"a2z' are a pending z; '"z' is a register waiting for its command ("zdd
+            -- deletes a line into register z), and "d" an operator.
+            local function z_pending()
+              local shown = vim.api.nvim_eval_statusline('%S', {}).str
+              shown = shown:gsub('^%d+', '')
+              if shown:sub(1, 1) == '"' then
+                shown = shown:sub(3):gsub('^%d+', '')
+              end
+              return shown == 'z'
+            end
+
+            -- 'n' in normal mode, 'x' in a visual mode, nil elsewhere (insert mode types its z and E,
+            -- and after an operator, mode "no", z is no fold command). Normal mode is also "niI"
+            -- and "niR": one command from insert or replace mode (Ctrl-O), where zE works as ever.
+            local function z_mode()
+              local mode = vim.api.nvim_get_mode().mode
+              if mode:sub(1, 1) == 'n' and mode:sub(2, 2) ~= 'o' then
+                return 'n'
+              end
+              local first = mode:sub(1, 1)
+              if first == 'v' or first == 'V' or first == string.char(22) then
+                return 'x'
+              end
+              return nil
+            end
+
+            -- Returning '' drops the key (:help vim.on_key()); there is no way to put another in
+            -- its place. So the pending z is ended with an Esc fed to the head of the typeahead
+            -- ('i'), where it is the very next key z reads, before anything typed after the
+            -- dropped key (z, a pause, then "Eihello": the i must not become zi); not remapped
+            -- ('n'), so a user's mapping of Esc does not run. In visual mode a second Esc leaves
+            -- it, as a refused zf does. Only typed keys: Neovim's own zE from this script
+            -- (delete_all_folds) and a :normal are not typed.
+            -- In pcall: Neovim removes an on_key function that fails, and the folds would be
+            -- unguarded from then on. A failure lets the key through: typing is never blocked.
+            -- At a typed z, 'showcmd' is turned on if it is off: z_pending() reads through it, and
+            -- the OptionSet below does not hear every way of turning it off (:noautocmd, or
+            -- 'eventignore'); set here, before Neovim takes the z, it shows that z.
+            vim.on_key(function(_, typed)
+              local ok, drop = pcall(function()
+                if not typed or typed == '' or not vim.b.neovim4eclipse_folds then
+                  return false
+                end
+                if typed == 'z' and not vim.o.showcmd then
+                  vim.o.showcmd = true
+                  return false
+                end
+                local mode = z_mode()
+                if not (mode and REFUSED_AFTER_Z[mode][typed] and z_pending()) then
+                  return false
+                end
+                vim.api.nvim_feedkeys(mode == 'x' and ESC .. ESC or ESC, 'ni', false)
+                vim.schedule(function()
+                  say_refused(typed)
+                end)
+                return true
+              end)
+              if ok and drop then
+                return ''
+              end
+            end, vim.api.nvim_create_namespace('neovim4eclipse_fold_keys'))
+
+            -- The guard reads Neovim's pending command through 'showcmd' (SETUP turns it on; the
+            -- status bar needs it too). Off, it would see nothing, and a slow zE would delete the
+            -- folds: so it is turned on again, with a word why, once.
+            local showcmd_said = false
+            vim.api.nvim_create_autocmd('OptionSet', {
+              group = vim.api.nvim_create_augroup('neovim4eclipse_fold_keys', { clear = true }),
+              pattern = 'showcmd',
+              callback = function()
+                if vim.o.showcmd then
+                  return
+                end
+                vim.schedule(function()
+                  vim.o.showcmd = true
+                  if not showcmd_said then
+                    showcmd_said = true
+                    vim.api.nvim_echo({ { "'showcmd' stays on in Eclipse: the plug-in reads Neovim's pending"
+                      .. ' command through it (the status bar, and the fold keys after z)' } }, true, {})
+                  end
+                end)
+              end,
+            })
+
             local host = package.loaded['neovim4eclipse.host_commands']
             if host then
               host.refuse('fold', function()

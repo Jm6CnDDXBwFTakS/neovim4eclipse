@@ -346,14 +346,81 @@ t.test('in a buffer whose editor cannot fold, zf and :fold are Neovim\'s', funct
   t.eq(1, vim.fn.foldlevel(6), ':fold made one')
 end)
 
-t.test('the z mapping goes when the editor stops folding', function()
+t.test('the refusing mappings go when the editor stops folding, and z alone is never mapped', function()
   enabled_with_host_commands()
   local buf = lines(20)
   set_folds({ { 3, 8, false } })
-  t.ok(vim.fn.maparg('z', 'n', false, true).buffer == 1, 'mapped while mirrored')
-  t.ok(vim.fn.maparg('z', 'x', false, true).buffer == 1, 'in visual mode too')
+  for _, key in ipairs({ 'f', 'F', 'd', 'D', 'E' }) do
+    t.ok(vim.fn.maparg('z' .. key, 'n', false, true).buffer == 1, 'z' .. key .. ' mapped while mirrored')
+  end
+  for _, key in ipairs({ 'f', 'F', 'd', 'D', 'E' }) do
+    t.ok(vim.fn.maparg('z' .. key, 'x', false, true).buffer == 1, 'z' .. key .. ' in visual mode too')
+  end
+  t.eq({}, vim.fn.maparg('z', 'n', false, true), 'z alone is free: for the user\'s mappings, and a menu of z keys')
+  -- What such a menu shows for each key: the command, and that it is off here.
+  t.eq('Create fold: not here, Eclipse defines the folds', vim.fn.maparg('zf', 'n', false, true).desc)
+  t.eq('Create fold for lines: not here, Eclipse defines the folds', vim.fn.maparg('zF', 'n', false, true).desc)
+  t.eq('Delete fold: not here, Eclipse defines the folds', vim.fn.maparg('zd', 'n', false, true).desc)
+  t.eq('Delete folds, nested too: not here, Eclipse defines the folds', vim.fn.maparg('zD', 'x', false, true).desc)
+  t.eq('Delete all folds: not here, Eclipse defines the folds', vim.fn.maparg('zE', 'n', false, true).desc)
   set_folds({})
-  t.eq({}, vim.fn.maparg('z', 'n', false, true), 'unmapped in buffer ' .. buf)
+  t.eq({}, vim.fn.maparg('zE', 'n', false, true), 'unmapped in buffer ' .. buf)
+  t.eq({}, vim.fn.maparg('zf', 'x', false, true))
+end)
+
+-- The keys apart (the mapping of the two keys timed out, z is Neovim's own pending command) are
+-- the key watcher's, which reads Neovim's pending command as 'showcmd' shows it. Neovim keeps that
+-- text only while a UI is attached, and these specs run without one: NeovimFoldsIntegrationTest
+-- covers the watcher, through a session.
+
+t.test('in a buffer that is not mirrored zE is Neovim\'s again', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({})
+  vim.wo.foldenable = true
+  vim.cmd('3,8fold')
+  t.type('zE')
+  t.eq(0, vim.fn.foldlevel(3), 'zE deleted the user\'s own fold')
+end)
+
+t.test('a user mapping of z and several keys runs', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, false } })
+  vim.keymap.set('n', 'zxy', function() vim.g.user_zxy = 1 end)
+  t.type('zxy')
+  t.eq(1, vim.g.user_zxy)
+  vim.keymap.del('n', 'zxy')
+end)
+
+t.test('showcmd is turned on again when it is turned off: the key watcher reads through it', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, true } })
+  vim.o.showcmd = true
+  vim.cmd('set noshowcmd')
+  t.wait_for('showcmd on again', function() return vim.o.showcmd end)
+  vim.cmd('set noshowcmd')
+  t.wait_for('showcmd on again, the second time', function() return vim.o.showcmd end)
+  local said = 0
+  for _ in vim.fn.execute('messages'):gmatch("'showcmd' stays on in Eclipse") do
+    said = said + 1
+  end
+  t.eq(1, said, 'the reason is given once')
+end)
+
+t.test('zE and zF in visual mode show the error, leave visual mode and change no fold', function()
+  enabled_with_host_commands()
+  lines(20)
+  set_folds({ { 3, 8, true } })
+  for _, keys in ipairs({ '10GVjzF', '10GVzE' }) do
+    vim.v.errmsg = ''
+    t.type(keys)
+    t.eq('z' .. keys:sub(-1) .. ': ' .. REFUSED, vim.v.errmsg, keys)
+    t.eq('n', vim.api.nvim_get_mode().mode, keys)
+    t.eq({ '3-8' }, shown_closed(), keys .. ' left the folds alone')
+    t.eq(0, vim.fn.foldlevel(10), keys .. ' made no fold')
+  end
 end)
 
 t.test('other z commands pass through, with their count', function()
@@ -430,17 +497,3 @@ t.test('SET_FOLDS in insert mode fires no ModeChanged and replaces the folds', f
   t.eq(0, during.level, 'the old fold is gone')
 end)
 
-t.test('the z mapping reports the pending z, with its count, and clears it after the key', function()
-  enabled_with_host_commands()
-  lines(30)
-  set_folds({ { 3, 5, false }, { 8, 10, false } })
-  t.forget()
-  t.type('zc')
-  t.eq({ { 'z' }, { '' } }, t.sent('eclipse_showcmd'))
-  t.forget()
-  t.type('1G2zj')
-  t.eq({ { '2z' }, { '' } }, t.sent('eclipse_showcmd'))
-  t.forget()
-  t.type('zE')
-  t.eq({ { 'z' }, { '' } }, t.sent('eclipse_showcmd'), 'a refused key clears it too')
-end)

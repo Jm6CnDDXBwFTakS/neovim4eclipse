@@ -1239,7 +1239,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void setModifiedAsync(DocumentBuffer buffer, boolean dirty) {
         buffer.eclipseDirty = dirty;
-        submit("modified " + dirty + " for " + buffer.name(), Level.FINE, () -> applyModified(buffer));
+        // Held while Neovim waits for the rest of a command (whenAnswering): it would not answer, and
+        // the key that ends the wait would queue behind this for the RPC limit.
+        String what = "modified " + dirty + " for " + buffer.name();
+        submit(what, Level.FINE, () -> whenAnswering(what, () -> applyModified(buffer)));
     }
 
     /** Sets the buffer's {@code 'modified'} to its document's dirty flag, if the buffer exists. */
@@ -1253,14 +1256,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     @Override
     public void setDiagnosticsAsync(DocumentBuffer buffer, List<Diagnostic> diagnostics) {
         List<Diagnostic> copy = List.copyOf(diagnostics);
-        submit(copy.size() + " problems for " + buffer.name(), Level.FINE, () -> {
+        String what = copy.size() + " problems for " + buffer.name();
+        // Held while Neovim waits for the rest of a command, as the folds are (setFoldsAsync).
+        submit(what, Level.FINE, () -> whenAnswering(what, () -> {
             // Not created yet, wiped, or from a Neovim that was restarted: the number could be another
             // buffer's. Not loaded: the problems would land in an empty buffer, before its text.
             if (buffers.handleOf(buffer) == null || !buffer.loaded) {
                 return;
             }
             await(api.execLua(LuaScripts.SET_DIAGNOSTICS, List.of(Diagnostic.toLuaArgs(buffer.bufnr, copy))));
-        });
+        }));
     }
 
     @Override
@@ -1315,7 +1320,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             return;
         }
         List<FoldRegions.Fold> copy = List.copyOf(folds);
-        submit(copy.size() + " folds for " + buffer.name(), Level.FINE, () -> {
+        String what = copy.size() + " folds for " + buffer.name();
+        // Held while Neovim waits for the rest of a command (whenAnswering). Example: the user has
+        // typed z and thinks about the next key, and Eclipse's reconcile sends new folds: Neovim
+        // answers nothing until that key, so asking now would hold the input thread, and the key
+        // queued behind it, for the RPC limit. Held sends run in order, so the newest folds win.
+        submit(what, Level.FINE, () -> whenAnswering(what, () -> {
             // As for the diagnostics: the number could be another buffer's, or the text not there yet.
             // SET_FOLDS itself skips a buffer that is not the current one. The number is read here, on
             // the input thread: at attach the buffer is created by the push queued just before.
@@ -1323,7 +1333,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 return;
             }
             await(api.execLua(LuaScripts.SET_FOLDS, List.of(FoldRegions.toLuaArgs(buffer.bufnr, copy))));
-        });
+        }));
     }
 
     @Override

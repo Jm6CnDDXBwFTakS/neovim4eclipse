@@ -22,6 +22,19 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   off; with `vim.g.neovim4eclipse_viewport = 0` nothing is drawn either, since Neovim's screen is
   then not the editor's size ([Floating windows](docs/USER_GUIDE.md#floating-windows)).
 
+### Changed
+
+- In editors that fold, `z` alone is no longer mapped by the plug-in. Your own mappings that start
+  with `z` run, whatever their length, and a plug-in that lists what can follow `z` (which-key)
+  shows its menu. `zf`, `zF`, `zd`, `zD` and `zE` are refused as before, typed quickly or slowly.
+  For this, Neovim's `'showcmd'` is now kept on: when it is turned off, the plug-in turns it on
+  again and says so once.
+
+### Fixed
+
+- `zE` and `zF` in visual mode deleted or made folds in an editor whose folds are Eclipse's; they
+  are refused now, like `zf`, `zd` and `zD`.
+
 ## [0.2.22] - 2026-11-16
 
 ### Added

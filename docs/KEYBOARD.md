@@ -160,9 +160,10 @@ inserts its first match without showing the list.
 - The `z` fold commands (`zo`, `zc`, `zM`, ...) are Neovim's like any normal-mode key. In an editor
   that folds they act on Eclipse's folds, which are mirrored into Neovim. There `zf`, `zF`, `zd`,
   `zD` and `zE` and `:fold` show `zf: Eclipse defines the folds in this editor` instead, since
-  Eclipse decides where folds are (docs/USER_GUIDE.md, "Folding"). The keys are caught by a buffer-local
-  mapping of `z` alone that reads the next key without a time limit (two-key mappings timed out,
-  and a slowly typed `zE` was Neovim's); `:fold` is refused when its line runs, like the host
+  Eclipse decides where folds are (docs/USER_GUIDE.md, "Folding"). The keys are caught by buffer-local
+  mappings of the two keys, and, when they are typed too slowly for a mapping, by a key watcher
+  that drops the second key while Neovim's pending command is `z` (docs/design/FOLDING.md, 3.5);
+  `:fold` is refused when its line runs, like the host
   commands. In an editor that cannot fold they are Neovim's own.
 - Keys Eclipse has no binding for reach Neovim in normal and visual mode: `Alt+letter` as `<A-x>`
   (`Alt+Shift+A` as `<A-A>`, `Alt+1` as `<A-1>`, `Alt+<` as `<A-lt>`), `Ctrl` with a character that

@@ -10,11 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
 import java.util.function.BooleanSupplier;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions.Region;
@@ -159,9 +161,9 @@ class NeovimFoldsIntegrationTest {
     /**
      * A person pausing between {@code z} and {@code E} longer than {@code 'timeoutlen'} (the
      * Neovim's default, 1000 ms): with mappings of the two keys, Neovim gave up waiting, ran its own
-     * {@code zE} and deleted every fold. The mapping of {@code z} alone waits for the next key
-     * without a time limit. The pause is the point of this test, so it sleeps: it is not a wait for
-     * an outcome (AGENTS.md, "Rules the code depends on").
+     * {@code zE} and deleted every fold. After the pause {@code z} is Neovim's own pending command,
+     * and the key watcher drops the {@code E} typed then. The pause is the point of this test, so it
+     * sleeps: it is not a wait for an outcome (AGENTS.md, "Rules the code depends on").
      */
     @Test
     void aSlowZEIsRefusedToo() throws Exception {
@@ -174,11 +176,165 @@ class NeovimFoldsIntegrationTest {
             keys(s, "E");
             assertEquals(levels, s.lua("local r = {} for l = 1, 16 do r[#r+1] = vim.fn.foldlevel(l) end return table.concat(r)"),
                     "every fold is still there");
-            assertEquals("zE: Eclipse defines the folds in this editor", s.lua("return vim.v.errmsg"));
+            waitFor(() -> "zE: Eclipse defines the folds in this editor".equals(errmsg(s)), "the refusal said");
         }
     }
 
-    /** While the z mapping waits for the next key, the status bar shows the pending z; then not. */
+    // ---- the key watcher: a fold key typed while z is Neovim's own pending command ----
+    // Tested here and not in folds_spec.lua: the watcher reads Neovim's pending command as 'showcmd'
+    // shows it, which Neovim keeps only while a UI is attached, and the Lua specs have none.
+
+    /**
+     * Takes away the mappings of the two keys, so that {@code z} is Neovim's own pending command at
+     * once, as it is after {@code 'timeoutlen'} when the keys are typed apart; no pause needed.
+     */
+    private static void withoutTheMappings(NeovimSession s) throws Exception {
+        s.lua("""
+                for _, key in ipairs({ 'f', 'F', 'd', 'D', 'E' }) do
+                  vim.keymap.del('n', 'z' .. key, { buffer = 0 })
+                  vim.keymap.del('x', 'z' .. key, { buffer = 0 })
+                end
+                """);
+    }
+
+    private static String foldLevels(NeovimSession s) throws Exception {
+        return String.valueOf(s.lua("local r = {} for l = 1, 30 do r[#r+1] = vim.fn.foldlevel(l) end return table.concat(r)"));
+    }
+
+    @Test
+    void aFoldKeyAfterNeovimsOwnPendingZIsDroppedWithACountAndARegisterToo() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            withoutTheMappings(s);
+            String levels = foldLevels(s);
+            for (String typed : List.of("zE", "3Gzd", "3GzD", "25Gzfj", "25G2zF", "\"azE", "\"a3zE")) {
+                s.lua("vim.v.errmsg = ''");
+                keys(s, typed.split(""));
+                String key = typed.replaceAll(".*z(.).*", "$1");
+                waitFor(() -> ("z" + key + ": Eclipse defines the folds in this editor").equals(errmsg(s)),
+                        typed + " refused; v:errmsg is " + errmsg(s));
+                assertEquals(levels, foldLevels(s), typed + " left every fold as it was");
+                assertEquals("n", s.lua("return vim.api.nvim_get_mode().mode"), typed);
+            }
+        }
+    }
+
+    @Test
+    void inVisualModeTheKeyIsDroppedAndVisualModeLeftAndOtherKeysAfterZAreNeovims() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            withoutTheMappings(s);
+            String levels = foldLevels(s);
+            keys(s, "2", "5", "G", "V", "j", "z", "f");
+            waitFor(() -> "zf: Eclipse defines the folds in this editor".equals(errmsg(s)), "zf refused in visual mode");
+            assertEquals(levels, foldLevels(s), "no fold made");
+            assertEquals("n", s.lua("return vim.api.nvim_get_mode().mode"), "visual mode left, as a refused zf does");
+            for (String key : List.of("E", "F", "d", "D")) {
+                s.lua("vim.v.errmsg = ''");
+                keys(s, "3", "G", "V", "j", "z", key);
+                waitFor(() -> ("z" + key + ": Eclipse defines the folds in this editor").equals(errmsg(s)),
+                        "z" + key + " refused in visual mode");
+                assertEquals(levels, foldLevels(s), "z" + key + " changed no fold");
+                assertEquals("n", s.lua("return vim.api.nvim_get_mode().mode"), "z" + key);
+            }
+            keys(s, "3", "G", "z", "c");
+            assertEquals(3, ((Number) s.lua("return vim.fn.foldclosed(3)")).intValue(), "zc is Neovim's");
+            keys(s, "z", "o");
+            assertEquals(-1, ((Number) s.lua("return vim.fn.foldclosed(3)")).intValue());
+        }
+    }
+
+    /** The same keys where {@code z} is not the pending command: a search, a replace, a register, typed text. */
+    @Test
+    void theSameKeysAreNotDroppedWhereZIsNotThePendingCommand() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            withoutTheMappings(s);
+            s.lua("vim.api.nvim_buf_set_lines(0, 24, 26, false, { 'abc zE xyz', 'second' })");
+            keys(s, "2", "5", "G", "0", "f", "E");
+            assertEquals(6, ((Number) s.lua("return vim.fn.col('.')")).intValue(), "fE found the E");
+            keys(s, "r", "d");
+            assertEquals("abc zd xyz", s.lua("return vim.fn.getline(25)"), "rd replaced it with d");
+            keys(s, "\"", "z", "d", "d");
+            assertEquals("second", s.lua("return vim.fn.getline(25)"), "dd after the register z deleted the line");
+            assertEquals("abc zd xyz\n", s.lua("return vim.fn.getreg('z')"));
+            keys(s, "0", "i", "f", "E", "<Esc>");
+            assertEquals("fEsecond", s.lua("return vim.fn.getline(25)"), "typed text in insert mode");
+            assertEquals("", errmsg(s));
+        }
+    }
+
+    /**
+     * One command from insert mode ({@code Ctrl-O}) is normal mode to Neovim (mode {@code niI}):
+     * a fold key after its pending {@code z} is dropped there too, and insert mode goes on.
+     */
+    @Test
+    void afterCtrlOInInsertModeTheKeyIsDroppedTooAndInsertModeGoesOn() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            withoutTheMappings(s);
+            String levels = foldLevels(s);
+            keys(s, "2", "5", "G", "i", "<C-o>", "z", "E");
+            waitFor(() -> "zE: Eclipse defines the folds in this editor".equals(errmsg(s)), "zE refused after Ctrl-O");
+            assertEquals(levels, foldLevels(s), "every fold is still there");
+            assertEquals("i", s.lua("return vim.api.nvim_get_mode().mode"));
+            keys(s, "<Esc>");
+        }
+    }
+
+    /**
+     * A key typed right behind the dropped one is Neovim's own, not the argument of the {@code z}
+     * that was pending: the {@code Esc} that ends the {@code z} goes in front of it. Example:
+     * {@code z}, then {@code E} and {@code j} sent together; the cursor goes down a line, where
+     * {@code zj} would have gone to the next fold.
+     */
+    @Test
+    void aKeySentTogetherWithTheDroppedOneIsNotTakenAsTheArgumentOfZ() throws Exception {
+        try (NeovimSession s = start()) {
+            documentWithFolds(s);
+            withoutTheMappings(s);
+            keys(s, "2", "0", "G", "z");
+            keys(s, "Ek"); // one nvim_input with both keys
+            assertEquals(19, ((Number) s.lua("return vim.fn.line('.')")).intValue(), "k moved up a line; zk would go to line 15");
+        }
+    }
+
+    /**
+     * Folds that Eclipse sends while {@code z} is pending wait for the next key: Neovim answers no
+     * request until then, and asking would hold the input thread, and that key behind it, for the
+     * RPC limit, after which the send fails. Held, it fails nothing and arrives after the key.
+     */
+    @Test
+    void foldsSentWhileZIsPendingWaitForTheNextKeyAndArrive() throws Exception {
+        try (ExpectedLog log = ExpectedLog.of(InputThread.class, Level.FINE); NeovimSession s = start()) {
+            DocumentBuffer doc = documentWithFolds(s);
+            // All three through the session's one input thread, as the editor sends them, so the
+            // order is fixed: z, the folds, j. (A key sent from this thread would race the folds.)
+            s.inputAsync("z");
+            s.setFoldsAsync(doc, FoldRegions.forNeovim(List.of(new Region(1, 20, false)))); // the two methods are gone
+            s.inputAsync("j");
+            waitFor(() -> "0".equals(String.valueOf(luaOrNull(s, "return vim.fn.foldlevel(5) - 1"))), "the new folds applied");
+            log.assertNotLoggedAtOrAbove(Level.FINE, "folds for");
+        }
+    }
+
+    private static Object luaOrNull(NeovimSession s, String code) {
+        try {
+            return s.lua(code);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String errmsg(NeovimSession s) {
+        try {
+            return String.valueOf(s.lua("return vim.v.errmsg"));
+        } catch (Exception e) {
+            return e.toString();
+        }
+    }
+
+    /** While z is pending, Neovim's own or a mapping's first key, the status bar shows it; then not. */
     @Test
     void aPendingZIsShownInTheStatusBar() throws Exception {
         try (NeovimSession s = start()) {

@@ -141,7 +141,7 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   copies its text into every class that uses it, so those classes keep the old text until they are
   recompiled. Delete `plugins/.../target/classes` after changing one.
 - Synthetic SWT key events in UI tests need `event.doit = true`.
-- Folding has several deliberate workarounds (a `z` mapping that reads the next key, `:noautocmd
+- Folding has several deliberate workarounds (a key watcher that drops `zE` and its like while `z` is pending, `:noautocmd
   normal! zE`, fold sends held and cursor reports dropped while Eclipse types). Read the table
   "Folding: the workarounds, and why" in docs/ARCHITECTURE.md before changing `LuaScripts.FOLDS`,
   `FoldMirror` or `CaretSync`. A script the plug-in sends may run while Neovim is in insert mode:
