@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -68,10 +67,11 @@ import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
@@ -1323,8 +1323,8 @@ class EditorEndToEndTest extends EndToEndTestBase {
      * as an echo, which deleted the next line too.
      */
     @Test
+    @DisabledOnOs(value = OS.MAC, disabledReason = "Delete Line is Cmd+D on macOS: Ctrl+D runs nothing there")
     void aNormalModeBindingStillOnInInsertModeRunsEclipsesCommand() {
-        assumeFalse(PlatformUtil.isMac(), "Delete Line is Cmd+D on macOS: Ctrl+D runs nothing there");
         IPreferenceStore store = Activator.getDefault().getPreferenceStore();
         store.setValue(PreferenceConstants.ctrlKeyInsert('d'), false);
         try {

@@ -40,6 +40,8 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
@@ -149,8 +151,8 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * {@code :e build.bat} opens it in an editor inside Eclipse instead. Windows only.
      */
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void eOfABatchFileOpensItInsideEclipseNotWithCmd() throws Exception {
-        assumeTrue(FilePaths.Platform.current().windows(), "Windows' association for .bat");
         IFile script = createFile("build.bat", "@echo hi\r\n");
         assertEquals(IEditorRegistry.SYSTEM_EXTERNAL_EDITOR_ID, IDE.getEditorDescriptor(script, true, false).getId(),
                 "Eclipse itself would run the system's program on it");
@@ -511,17 +513,16 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * The other ways Windows spells one file, each reaching the same editor and the same Neovim
      * buffer: the path as given, its drive letter in lower case, {@code /} for {@code \}, and its 8.3
      * short name ({@code dir /x} shows them). Before each, the base class's editor is made active, so
-     * every spelling must find the file's editor again rather than leave it active. Windows only
-     * (skipped elsewhere, by assumption: the fragment imports no {@code junit.jupiter.api.condition}
-     * for {@code @EnabledOnOs}). Where the volume makes no 8.3 names, that spelling is left out with a
+     * every spelling must find the file's editor again rather than leave it active. Windows only.
+     * Where the volume makes no 8.3 names, that spelling is left out with a
      * note on standard output. The rule these follow has its cases in {@code path-cases.tsv}; this
      * test runs them on a real disk and through Eclipse's lookup ({@code NewFiles.workspaceFileAt}).
      * Example spellings: {@code C:\Users\me\...\n4e path ü123\c.txt}, {@code c:\Users\...},
      * {@code C:/Users/me/...}, {@code C:\Users\me\AppData\Local\Temp\N4EPAT~1\c.txt}.
      */
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void eachWindowsSpellingOfAFileFindsItsOneEditorAndBuffer() throws Exception {
-        assumeTrue(FilePaths.Platform.current().windows(), "Windows spellings");
         Path dir = Files.createTempDirectory("n4e path \u00fc");
         Path c = dir.resolve("c.txt");
         Files.writeString(c, "sea\n", StandardCharsets.UTF_8);
@@ -653,8 +654,8 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * folders_spec.lua). The manual test "Deleting a project reached through a junction".
      */
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aProjectReachedThroughAJunctionIsDeletedWithItsFileOpen() throws Exception {
-        assumeTrue(FilePaths.Platform.current().windows(), "a Windows junction");
         Path real = Files.createTempDirectory("n4e-real");
         Path via = Files.createTempDirectory("n4e-via").resolve("p");
         Path d = real.resolve("d.txt");

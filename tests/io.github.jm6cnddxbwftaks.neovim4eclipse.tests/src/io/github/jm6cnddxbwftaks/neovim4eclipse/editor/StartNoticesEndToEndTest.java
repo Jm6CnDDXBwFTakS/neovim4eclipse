@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
@@ -28,6 +27,8 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.EarlyStartup;
@@ -36,7 +37,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OldNeovimProgram;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
 /**
  * What Eclipse's start shows about Neovim, run the way {@code EarlyStartup} runs it: first the
@@ -151,8 +151,8 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
      * next start shows the value in the once-only note.
      */
     @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a shell script stands in for the planted program")
     void anImportedPreferencesFileCannotNameAProgramToRun() throws Exception {
-        assumeFalse(PlatformUtil.isWindows(), "a shell script stands in for the planted program");
         tmp = Files.createTempDirectory("n4e-epf");
         Path marker = tmp.resolve("ran");
         Path fake = Files.writeString(tmp.resolve("fake-nvim"), "#!/bin/sh\necho ran >> '" + marker + "'\n");
