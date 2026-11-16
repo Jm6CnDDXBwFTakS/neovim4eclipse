@@ -62,6 +62,9 @@ class SearchGalleryTest extends EndToEndTestBase {
     record Picture(String name, String title, String lookFor) {
     }
 
+    /** The start of the names of the pictures that need the which-key plug-in ({@link #whichKey}). */
+    private static final String WHICH_KEY = "whichkey-";
+
     /** The pictures, in the page's order; each run takes all of them in its theme. */
     static final List<Picture> PICTURES = List.of(
             new Picture("text", "After /fox in a text file",
@@ -89,6 +92,15 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "Both are in Neovim's colors for floating windows (NormalFloat, FloatBorder, FloatTitle), "
                             + "which follow the theme, and their text reads in both; the editor's text shows around "
                             + "them, and the caret stays in the editor."),
+            new Picture(WHICH_KEY + "z", "which-key's panel after z",
+                    "The real which-key plug-in, in the Java editor, after z: its panel of the keys that can "
+                            + "follow lies on the editor's bottom edge, from the left edge on, and reads in both "
+                            + "themes. The five fold keys Eclipse does not allow say so (\"Delete all folds: not "
+                            + "here, Eclipse defines the folds\"). Icons are whole, not cut at the next cell, "
+                            + "where the icon font is installed; boxes where it is not."),
+            new Picture(WHICH_KEY + "g", "which-key's panel after g",
+                    "The same after g: the plug-in's own keys are listed by name (\"Eclipse: Open "
+                            + "Declaration\", \"Eclipse: Quick Outline\") among Neovim's."),
             new Picture("color", "With another search match color",
                     "The matches take the color set in Preferences > General > Appearance > Colors and Fonts > "
                             + "Neovim for Eclipse > Search match (a green here); the box follows it."),
@@ -124,10 +136,31 @@ class SearchGalleryTest extends EndToEndTestBase {
             """;
 
     private final Path out = Path.of(System.getProperty("gallery.dir", "target/gallery"));
+    /**
+     * A clone of which-key (folke/which-key.nvim) to load for the two pictures of a real plug-in's
+     * floating windows, from {@code -Dgallery.whichkey=/path/to/which-key.nvim}; empty leaves those
+     * pictures out. The repository holds no third-party plug-in and the build fetches none: the
+     * folder is the choice of whoever runs the gallery, and its Lua then runs in this test
+     * Eclipse's Neovim (docs/MANUAL_CHECKS.md, card sh-colors).
+     */
+    private final String whichKey = given(System.getProperty("gallery.whichkey", ""));
     private final String theme = System.getProperty("gallery.theme", "light");
+
+    /**
+     * A property's value, or {@code ""} when it was not given: the POM passes an empty property on
+     * as the text {@code null}, and one it does not know as {@code ${name}}.
+     */
+    private static String given(String value) {
+        String v = value.strip();
+        return v.equals("null") || v.startsWith("${") ? "" : v;
+    }
 
     @Test
     void takeTheSearchPictures() throws Exception {
+        // A wrong path fails here, in seconds, not after every other picture is taken.
+        assertTrue(whichKey.isEmpty() || Files.isRegularFile(Path.of(whichKey).resolve("lua/which-key/init.lua")),
+                "-Dgallery.whichkey must name a clone of which-key.nvim, as an absolute path: no lua/which-key/init.lua in "
+                        + (whichKey.isEmpty() ? "" : Path.of(whichKey).toAbsolutePath()));
         // No earlier run's pictures pass for this one's. The light run (the first) clears both themes,
         // the dark run only its own, as the light ones are this run's.
         GalleryCamera.clear(out, theme.equals("light") ? "search-.*" : "search-" + theme + "-.*",
@@ -296,6 +329,11 @@ class SearchGalleryTest extends EndToEndTestBase {
                 textWidget.setForeground(oldForeground);
                 editors.setValue(currentLine, currentLineWas);
             }
+
+            // Last, since which-key stays loaded in this Neovim from here on: the real plug-in's panel.
+            if (!whichKey.isEmpty()) {
+                takeWhichKey(java, javaWidget);
+            }
         } finally {
             session.inputAsync("<Esc>:nohlsearch<CR>");
             settle();
@@ -396,6 +434,44 @@ class SearchGalleryTest extends EndToEndTestBase {
         return "search-" + theme + "-" + name + ".png";
     }
 
+    /**
+     * Loads which-key from {@link #whichKey} and takes its panel after {@code z} and after
+     * {@code g} in the Java editor. Its two floating windows (the panel and a one-row line) are
+     * drawn by {@link FloatingWindows}; {@code Esc} closes them.
+     */
+    private void takeWhichKey(ITextEditor java, StyledText javaWidget) {
+        Path plugin = Path.of(whichKey); // checked at the start of the test
+        page().activate(java);
+        settle();
+        // The path as a Lua long string, in which no escape means anything; only its closing mark must not occur.
+        assertTrue(!plugin.toAbsolutePath().toString().contains("]==]"), "a path with ]==] in it cannot be passed on");
+        SessionProbe.lua(session, "vim.opt.rtp:append([==[" + plugin.toAbsolutePath() + "]==]) require('which-key').setup({})");
+        settle();
+        for (String key : List.of("z", "g")) {
+            session.inputAsync(key);
+            try {
+                waitUntil("which-key's two windows after " + key, TIMEOUT_MS, () -> floatsDrawn(javaWidget) == 2);
+                settle(); // which-key may fill its panel in a later redraw than the one that opens it
+                takeWhole(javaWidget, WHICH_KEY + key);
+            } finally {
+                session.inputAsync("<Esc>");
+                waitUntil("which-key's windows gone", TIMEOUT_MS, () -> floatsDrawn(javaWidget) == 0);
+                settle();
+            }
+        }
+    }
+
+    /** How many floating windows are drawn over {@code widget} with their cells there. */
+    private static int floatsDrawn(StyledText widget) {
+        int drawn = 0;
+        for (org.eclipse.swt.widgets.Control child : widget.getChildren()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && canvas.grid() != null) {
+                drawn++;
+            }
+        }
+        return drawn;
+    }
+
     /** Writes {@code search.html}: each picture in the themes taken so far, side by side. */
     private void writePage() throws IOException {
         StringBuilder body = new StringBuilder();
@@ -406,7 +482,10 @@ class SearchGalleryTest extends EndToEndTestBase {
                 body.append("<figure><figcaption>").append(t).append("</figcaption>");
                 body.append(Files.exists(out.resolve(file))
                         ? GalleryCamera.img(out.resolve(file), escape(p.title()) + ", " + t + " theme")
-                        : "<p class=\"missing\">not taken (the " + t + " run did not run or failed)</p>");
+                        : p.name().startsWith(WHICH_KEY) && whichKey.isEmpty()
+                                ? "<p class=\"missing\">not taken: needs -Dgallery.whichkey=/path/to/which-key.nvim "
+                                        + "(docs/MANUAL_CHECKS.md, card sh-colors)</p>"
+                                : "<p class=\"missing\">not taken (the " + t + " run did not run or failed)</p>");
                 body.append("</figure>");
             }
             body.append("</div>\n");

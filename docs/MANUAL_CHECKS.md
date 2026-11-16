@@ -228,9 +228,30 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 .\mvnw.cmd verify -Pgallery "-Dnvim.path=C:\path\to\nvim.exe"
 ```
 
+Two of the pictures show a real Neovim plug-in's floating windows, which-key's panel of key hints.
+The repository holds no plug-in and the build fetches none, so they are taken only when you name a
+clone of [which-key](https://github.com/folke/which-key.nvim) of your own; its Lua then runs in the
+test Eclipse's Neovim. Add this to the command above, with the folder's absolute path:
+
+```sh linux macos
+-Dgallery.whichkey=/path/to/which-key.nvim
+```
+
+```powershell windows
+"-Dgallery.whichkey=C:\path\to\which-key.nvim"
+```
+
+which-key draws icons from a Nerd Font. The gallery's Eclipse keeps its data in a folder of its
+own (`/tmp/neovim4eclipse-pictures`; on Windows `neovim4eclipse-pictures` in the Public folder) and does
+not see the fonts of your account, so on Linux copy an icon font, such as
+`SymbolsNerdFontMono-Regular.ttf`, into `/tmp/neovim4eclipse-pictures/neovim-home/data/fonts/`
+before the run; on macOS and Windows install it for the system. Without it the icons are boxes,
+which is what a user without the font sees, and the rest of the picture is still to be judged.
+
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
    browser.
-   ⇒ Each of the eight pictures is there in the light and the dark theme, side by side.
+   ⇒ Each of the ten pictures is there in the light and the dark theme, side by side; without
+   `-Dgallery.whichkey`, eight, and the two of which-key say what they need.
 2. Look at each pair against the text above it.
    ⇒ In both themes every match stands out from the editor's background, its text (syntax colors
    included, in the Java editor) stays readable, and the match under the caret is told apart from
@@ -238,7 +259,9 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
    `:match` read in both themes, in Neovim's colors. In the picture of the command-line window,
    its history reads in both themes, on the editor's own background. In the picture of the floating
    windows, the panel lies on the editor's bottom edge and the note above it, both readable in both
-   themes, with the editor's text showing around them.
+   themes, with the editor's text showing around them. In the two pictures of which-key, its panel
+   lies on the editor's bottom edge from the left edge on, its lines read in both themes, and no
+   icon is cut off at the cell after it.
 
    On macOS the block caret inverts the cell under it: SWT's Cocoa `Canvas` draws a `Caret` as a
    white rectangle in the Difference blend mode, the same in Eclipse's own editors. On the dark
