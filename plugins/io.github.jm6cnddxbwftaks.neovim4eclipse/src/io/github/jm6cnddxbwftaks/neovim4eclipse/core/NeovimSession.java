@@ -29,6 +29,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
@@ -175,6 +176,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile boolean floatingWindowsEnabled;
     /** The floating windows last reported to the listeners, lowest in the stack first. */
     private volatile List<FloatWindow> floatingWindows = List.of();
+    /**
+     * Whether Neovim's completion list is drawn ({@link #completesInNeovim()}): the answer of
+     * {@link LuaScripts#COMPLETION_MENU}, run once at start after the user's config. Written once,
+     * before the session is handed out.
+     */
+    private volatile boolean completionMenuEnabled;
+    /** The completion list last passed to the listeners; {@link CompletionMenu.View#HIDDEN} for none. */
+    private volatile CompletionMenu.View completionMenu = CompletionMenu.View.HIDDEN;
+    /**
+     * The two halves of a completion list, which Neovim sends apart: the entries with the redraw
+     * ({@code popupmenu_show}), the cursor and colors as a notification
+     * ({@link LuaScripts#COMPLETION_MENU}). The list is shown once both are here, whichever comes
+     * first; both are forgotten when the list closes, so that a later list never takes the cursor
+     * of an earlier one. RPC reader thread only.
+     */
+    private CmdlineEvent.MenuShow completionEntries;
+    private CompletionMenu.Anchor completionAnchor;
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -362,6 +380,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.info(() -> "Neovim's floating windows " + (session.floatingWindowsDrawn() ? "drawn in the editor"
                     : session.floatingWindowsEnabled ? "not drawn: the viewport is off (g:neovim4eclipse_viewport)"
                             : "off (g:neovim4eclipse_floating_windows)"));
+            // And for the completion list (docs/ARCHITECTURE.md, "The completion list").
+            session.completionMenuEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.COMPLETION_MENU, List.of())));
+            LOG.info(() -> "Neovim's completion list " + (session.completesInNeovim() ? "drawn in the editor"
+                    : "off (g:neovim4eclipse_completion_menu)"));
+            // Always: the Ctrl-X completions that could run a file's text are refused in Neovim itself.
+            await(api.execLua(LuaScripts.CTRL_X_GUARD, List.of()));
             Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
             session.nvimManagesClipboard = managesSystemClipboard(
                     clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -506,6 +530,48 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public boolean isNeovimDrivenInsert() {
         return keyInput.isNeovimDrivenInsert() && isTypingMode();
+    }
+
+    /**
+     * Whether insert-mode {@code Ctrl-N}, {@code Ctrl-P} and the {@code Ctrl-X} modes are Neovim's
+     * own completion, with its list drawn in the editor ({@code util/CompletionMenu}), and not
+     * Eclipse's Word Completion: unless the user's config says
+     * {@code vim.g.neovim4eclipse_completion_menu = 0}. Fixed for the session.
+     *
+     * <p>Unlike the floating windows it does not need Neovim's window to follow the editor
+     * ({@link #viewportEnabled()}): the list hangs on the cursor's line, which Neovim always keeps
+     * on its own screen, and its place in the editor is taken from Eclipse's text, with one number
+     * from Neovim that no scrolling changes (how many cells before the cursor the word starts).
+     */
+    public boolean completesInNeovim() {
+        return completionMenuEnabled;
+    }
+
+    /**
+     * Whether Neovim is completing in an insert it will hand back to Eclipse, or is about to
+     * ({@code KeyInput#isCompleting}): every {@code Ctrl} letter is then Neovim's, whatever the
+     * Ctrl Keys preference page says ({@code util/KeyContextRule}).
+     */
+    public boolean isCompleting() {
+        return keyInput.isCompleting();
+    }
+
+    /** The completion list to draw now, {@link CompletionMenu.View#HIDDEN} for none. */
+    public CompletionMenu.View completionMenu() {
+        return completionMenu;
+    }
+
+    /**
+     * Hears the completion list each time it shows, changes or closes
+     * ({@link CompletionMenu.View#HIDDEN}); on the RPC reader thread. Nothing is ever reported
+     * unless {@link #completesInNeovim()}.
+     */
+    public void addCompletionMenuListener(Consumer<CompletionMenu.View> listener) {
+        events.addCompletionMenuListener(listener);
+    }
+
+    public void removeCompletionMenuListener(Consumer<CompletionMenu.View> listener) {
+        events.removeCompletionMenuListener(listener);
     }
 
     /**
@@ -1841,6 +1907,39 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * A sync point whose key starts or steers Neovim's completion ({@code <C-n>}, {@code <C-p>},
+     * {@code <C-x><C-l>}): as {@link #syncInsertThenInputAsync}, and Neovim types on until the
+     * completion has ended ({@code KeyInput#isCompleting}). Counted from now, on the UI thread, so
+     * the key contexts give Neovim every {@code Ctrl} letter before the next key is pressed.
+     */
+    @Override
+    public void completeInNeovimAsync(InsertReplay.SyncPoint sync, String keys) {
+        keyInput.handOverCompletion(task -> submit(keys + " (completion) after the typed text", Level.WARNING, task),
+                () -> keyInput.syncInsertThenComplete(sync, keys));
+    }
+
+    /**
+     * Ends a completion Neovim is in, the text kept as it stands, so that Eclipse types again
+     * ({@code KeyInput#endCompletion}): for a click into the text or a loss of the focus while
+     * the list is open. Queued behind the keys typed before; nothing if no completion is going on.
+     */
+    public void endCompletionAsync() {
+        submit("end the completion", Level.WARNING, keyInput::endCompletion);
+    }
+
+    /**
+     * As {@link #endCompletionAsync()}, then {@code after}, on the input thread: for
+     * {@code Ctrl-X Ctrl-O} while Neovim completes, which opens Eclipse's content assist once
+     * Eclipse types again. {@code after} runs whether or not a completion was still going on.
+     */
+    public void endCompletionThenAsync(Runnable after) {
+        submit("end the completion, then go on", Level.WARNING, () -> {
+            keyInput.endCompletion();
+            after.run();
+        });
+    }
+
+    /**
      * Eclipse stops typing and {@code work} is queued, with Neovim's cursors and top lines ignored
      * from this moment ({@code KeyInput#handOver}). UI thread.
      */
@@ -2152,6 +2251,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 if (event instanceof CmdlineEvent.Show show && show.level() == 1) {
                     status.commandLine(show.firstc() + show.content()); // the title of its output
                 }
+                // Before the filter below: a list's end must be heard whatever else goes on, or the
+                // list would stay drawn. (An insert's list names a window's grid; a line's, none.)
+                completionEvent(event);
                 if (cmdlineWatcher.isOwn(event, now)) {
                     continue;
                 }
@@ -2167,6 +2269,69 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (changed && !view.equals(lastCmdline)) {
                 lastCmdline = view;
                 events.cmdline(view);
+            }
+        }
+
+        /**
+         * The completion list's half of a redraw event: an insert's entries (a
+         * {@code popupmenu_show} whose grid is a window's), a move of the selection, the end.
+         * The command line's own menu ({@code :e <Tab>}, grid -1) is none of its business, but
+         * {@code popupmenu_select} and {@code popupmenu_hide} name no grid: they are applied to
+         * the list only while there is one.
+         */
+        private void completionEvent(CmdlineEvent event) {
+            switch (event) {
+                case CmdlineEvent.MenuShow menu when !menu.forCmdline() -> {
+                    completionEntries = menu;
+                    showCompletionMenu();
+                }
+                case CmdlineEvent.MenuSelect select -> {
+                    CompletionMenu.View shown = completionMenu;
+                    if (completionEntries != null) {
+                        completionEntries = new CmdlineEvent.MenuShow(completionEntries.items(), select.selected(),
+                                completionEntries.grid(), completionEntries.row(), completionEntries.col(),
+                                completionEntries.kinds(), completionEntries.menus());
+                    }
+                    if (shown.isShowing()) {
+                        publishCompletionMenu(shown.select(select.selected()));
+                    }
+                }
+                case CmdlineEvent.MenuHide hide -> {
+                    completionEntries = null;
+                    completionAnchor = null;
+                    publishCompletionMenu(CompletionMenu.View.HIDDEN);
+                }
+                default -> { }
+            }
+        }
+
+        @Override
+        public void onCompletionAnchor(CompletionMenu.Anchor anchor) {
+            completionAnchor = anchor;
+            showCompletionMenu();
+        }
+
+        /**
+         * Shows the list once its entries and its cursor are both here, and only a list the user
+         * asked for: Neovim types the insert ({@link #isNeovimDrivenInsert()}: after
+         * {@code Ctrl-N}, while recording, after a block-visual {@code I}), the plug-in is not
+         * handing typed text over ({@link #isLeavingInsertMode()}; a config that completes as text
+         * arrives would pop a list up for the re-typing), and the command-line window is closed
+         * (its insert is drawn in a panel of its own). Otherwise the halves wait; the list's end
+         * forgets them.
+         */
+        private void showCompletionMenu() {
+            if (completionEntries == null || completionAnchor == null || !completesInNeovim()
+                    || !isNeovimDrivenInsert() || isLeavingInsertMode() || commandWindow.open()) {
+                return;
+            }
+            publishCompletionMenu(CompletionMenu.View.of(completionEntries, completionAnchor));
+        }
+
+        private void publishCompletionMenu(CompletionMenu.View view) {
+            if (!view.equals(completionMenu)) {
+                completionMenu = view;
+                events.completionMenu(view);
             }
         }
 

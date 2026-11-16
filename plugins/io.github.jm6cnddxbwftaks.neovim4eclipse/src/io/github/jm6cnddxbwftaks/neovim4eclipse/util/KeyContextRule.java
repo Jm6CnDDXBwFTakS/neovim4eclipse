@@ -18,6 +18,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * mode either way, so the key means what it means there. In any other mode the <i>Normal</i>
  * choice. A letter left to Eclipse has no active binding, so Eclipse's own shortcut works.
  *
+ * <p><b>Every letter while Neovim completes</b> ({@link #toNeovim}): from {@code Ctrl-N},
+ * {@code Ctrl-P} or {@code Ctrl-X} until the completion ends, the keys steer Neovim's completion,
+ * and the page's choice does not apply. Example: {@code Ctrl-Y} is not ticked for insert mode, so
+ * it is Eclipse's Redo; with Neovim's list open it accepts the selected entry, as in Vim, and
+ * {@code Ctrl-E} takes the completion back instead of opening Quick Switch Editor.
+ *
  * <p>Example: in the Java editor, {@code Ctrl+O} is Quick Outline. In normal mode it is Vim's
  * <i>jump back</i> if its Normal box is ticked; in insert mode Vim's <i>one normal-mode command</i>
  * if its Insert box is (the default on Windows and Linux): with the context on, the plug-in's
@@ -60,16 +66,31 @@ public final class KeyContextRule {
     }
 
     /**
-     * The context that switches on a chosen letter's binding. Normally the letter's own
-     * ({@link VimCtrlKeys#contextId}), whose binding sends the key to the plug-in. In an insert
-     * Eclipse types, {@code Ctrl-N} and {@code Ctrl-P} use the Word Completion context instead
-     * ({@link VimCtrlKeys#completionContextId}): Eclipse completes there, not Neovim. In an insert
-     * Neovim drives they stay Neovim's, since Eclipse does not type there.
+     * Whether {@code Ctrl+letter} goes to Neovim.
      *
-     * @param eclipseTypes whether Eclipse types the current insert (not Neovim)
+     * @param chosen     the Ctrl Keys page's choice for the letter in the column that applies
+     * @param column     which choice that is
+     * @param completing whether Neovim completes, or waits after {@code Ctrl-X} for the key that
+     *                   says what to complete: then every letter is its own, in insert mode
      */
-    public static String contextId(char letter, Column column, boolean eclipseTypes) {
-        boolean completes = column == Column.INSERT && eclipseTypes
+    public static boolean toNeovim(boolean chosen, Column column, boolean completing) {
+        return chosen || (completing && column == Column.INSERT);
+    }
+
+    /**
+     * The context that switches on a chosen letter's binding. Normally the letter's own
+     * ({@link VimCtrlKeys#contextId}), whose binding sends the key to the plug-in. With Neovim's
+     * completion list turned off, {@code Ctrl-N} and {@code Ctrl-P} in an insert Eclipse types use
+     * the Word Completion context instead ({@link VimCtrlKeys#completionContextId}): Eclipse
+     * completes there, not Neovim. In an insert Neovim drives they stay Neovim's, since Eclipse
+     * does not type there.
+     *
+     * @param eclipseTypes    whether Eclipse types the current insert (not Neovim)
+     * @param neovimCompletes whether {@code Ctrl-N} and {@code Ctrl-P} are Neovim's completion
+     *                        ({@code NeovimSession.completesInNeovim})
+     */
+    public static String contextId(char letter, Column column, boolean eclipseTypes, boolean neovimCompletes) {
+        boolean completes = column == Column.INSERT && eclipseTypes && !neovimCompletes
                 && VimCtrlKeys.COMPLETION_LETTERS.indexOf(Character.toLowerCase(letter)) >= 0;
         return completes ? VimCtrlKeys.completionContextId(letter) : VimCtrlKeys.contextId(letter);
     }

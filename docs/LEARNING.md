@@ -471,6 +471,14 @@ the plug-in asks for these (`NeovimConnection.TERMINAL_UI`):
   command line); Esc sends `cmdline_hide`. The editor's `:` box draws exactly that
   (`util/CmdlineState`) and sends every key back with `nvim_input`: the command line, its history and
   its completion are Neovim's own, the box only shows them.
+  The same `popupmenu_show` comes for a completion in the text (`Ctrl-N` in insert mode), then
+  with the window's grid and the cell where the word starts: `[items, 0, 4, 0, 2]` is "first entry
+  selected, row 4, column 0 of grid 2", each item `[word, kind, menu, info]`. With this option
+  Neovim leaves the list's drawing to the UI, so the plug-in lays the entries out in cells itself
+  (`util/CompletionMenu`) and draws them at the word (`editor/CompletionMenuPopup`). Whether
+  Neovim *completes* is not in these events at all: with a single match it shows no list. That is
+  in its mode, `ic` (`:help mode()`), which is why the plug-in reads the mode after each key
+  (docs/ARCHITECTURE.md, "The completion list").
 - `ext_messages`: each message, as `msg_show` with a *kind* that says what it is. Example, `/nope`
   then Enter sends two:
 

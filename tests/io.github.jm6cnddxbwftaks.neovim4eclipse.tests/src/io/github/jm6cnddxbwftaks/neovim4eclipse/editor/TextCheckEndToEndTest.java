@@ -189,7 +189,7 @@ class TextCheckEndToEndTest extends EndToEndTestBase {
         assertEquals(Level.WARNING, repairs.get(0).getLevel());
         String message = repairs.get(0).getMessage();
         assertTrue(message.contains("a .txt file in the") && message.contains("Eclipse's lines were written into Neovim's")
-                && message.contains("Found after an Eclipse edit in normal mode."), message);
+                && message.contains("Found after an Eclipse edit that was not typing."), message);
         assertTrue(!message.contains("amma") && !message.contains("test.txt"), "no text, no name: " + message);
     }
 

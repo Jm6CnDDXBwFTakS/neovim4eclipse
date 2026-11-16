@@ -852,11 +852,105 @@ through `KeyInterceptor` (`KeyRouter.route` and the insert filter).
    (`KeyInput.handBackToEclipse`), unless a key was still on its way to Neovim: it would arrive
    while Eclipse types. So the hand-back waits for the last queued key.
 
-Four letters are not sync points, since Neovim's work for them is a popup the plug-in does not draw,
-or `Esc`'s: `Ctrl-N` and `Ctrl-P` switch on contexts of their own whose bindings run Eclipse's Word
+Two keys are not sync points: `Ctrl-X` `Ctrl-O` runs Eclipse's Content Assist
+(`KeyRouter.Completion`, run by the controller), and `Ctrl-C` is `Esc`. `Ctrl-N`, `Ctrl-P` and
+`Ctrl-X` with another letter are sync points that start Neovim's completion (the next section).
+
+### The completion list: Neovim completes, the editor draws
+
+In insert mode `Ctrl-N`, `Ctrl-P` and the `Ctrl-X` modes are Neovim's own completion
+(`:help ins-completion`), with its list drawn at the word.
+
+**The keys.** `KeyRouter` sends the key as a sync point (`NeovimSession.completeInNeovimAsync`), so
+Neovim has the text Eclipse typed, and from that key on Neovim types the insert
+(`KeyInput.completionQueued`). Why Neovim must type: the next key steers the completion (`Ctrl-N`
+for the next match, `Ctrl-Y` to accept, `Ctrl-E` to cancel) or ends it, and only Neovim can tell
+which. It is the hand-back of step 4 above with another condition: `KeyInput.mayHandBack` waits
+until Neovim's mode is no longer a completing one (`ic`, `ix`; `VimModes.isCompleting`), instead of
+until Neovim stops waiting. Example: `al`, `Ctrl-N` (`alpha`, mode `ic`), `Ctrl-N` (`alphabet`),
+`(`: Neovim inserts the bracket, its mode is `i`, and the usual handshake lets Eclipse type the
+next key. The cost: Eclipse's typing helpers do not see that one character.
+
+- **The mode, not the list, says that Neovim completes.** With one match or none, and with a
+  `'completeopt'` without `menu`, Neovim shows no list but still completes until the next key. So
+  the hand-back reads the mode after each key (`nvim_get_mode`), on the input thread.
+- **Every `Ctrl` letter is Neovim's meanwhile** (`KeyContextRule.toNeovim`): a user may have
+  cleared `Ctrl-Y` and `Ctrl-E` for insert mode, and Eclipse would then run Redo and Quick Switch
+  Editor. The state is
+  counted from the moment the key is routed on the UI thread (`KeyInput.isCompleting`), since the
+  key contexts must be right before the next key is pressed, which can be before Neovim has the first.
+- **`Ctrl-X` stays in Java** until its second key (`KeyRouter.ctrlXPending`): `Ctrl-O` is Content
+  Assist; another letter is sent together with it, as `<C-x><C-l>`. Sent at once, Neovim would be
+  in its `Ctrl-X` mode, and Content Assist would have to wait for a hand-back.
+- **An insert Neovim owns** (recording a macro, a block-visual `I`) is left alone: the list is
+  drawn, but the plug-in sends no key of its own, which would land in the macro.
+- **A change Eclipse makes by itself meanwhile** (a paste with the mouse, an accepted content-assist
+  proposal) is pushed to Neovim as outside insert mode (`BufferSynchronizer.pushLocalChanges`, whose
+  gate includes `isCompleting`). It is not typing, so no `Esc` would hand it over, and the text
+  Neovim sends at the completion's end would take it away again. The push also ends the
+  completion: Neovim's completion remembers the line as it was, and the next `Ctrl-N` or `Ctrl-E`
+  would put that line back without the change.
+- **A click into the text, or the editor losing the focus,** ends the completion with the text kept
+  (`KeyInput.endCompletion`: `CTRL-X CTRL-Z`, sent only after the mode was read on the input
+  thread, since in Normal mode `Ctrl-X` subtracts from a number).
+
+**The list.** The plug-in attaches with `ext_popupmenu` (the `:` box needs it), so Neovim does not
+draw the list into a grid: it sends the entries (`popupmenu_show`, `popupmenu_select`,
+`popupmenu_hide`). What the redraw does not carry, `LuaScripts.COMPLETION_MENU` sends at each
+`CompleteChanged`: the cursor's line, byte column and cell, `'pumheight'`, the width of a row of
+text while the window wraps (below), and the colors of the
+`Pmenu` groups, links followed and open colors filled in from the group underneath. The session
+shows a list once both halves are there (`NeovimSession.showCompletionMenu`), and only in an insert
+Neovim types: a list opened behind an insert Eclipse types (a config that completes as text
+arrives, at the plug-in's own re-typing) would hang where the user is not typing.
+
+`util/CompletionMenu` lays the entries out in cells as Vim does (word, kind, extra text, a
+scrollbar when rows are cut) into a `GridSnapshot` with highlight ids of its own, and
+`editor/CompletionMenuPopup` shows it in a `GridCanvas`, the class that draws the command-line
+window and the floating windows. So the list is in the editor's font and the colorscheme's colors.
+The canvas sits in an `OverlayFrame`, the border of the `:` box, here 3 pixels wide (the list lies
+in the middle of the code, not at the editor's edge), whose color is made from the editor's colors: a colorscheme's `Pmenu` background can be nearly the editor's (Neovim's
+default colors over Eclipse's dark theme), and the unselected entries would then run into the code.
+
+**Its place comes from Eclipse's text.** Neovim's row and column are cells of its screen, and
+folding, word wrap and fonts make Eclipse's layout differ. Only one number is taken from them:
+how many cells before the cursor the word starts (the cursor's cell minus the list's column, both
+with the same number and sign columns). When Neovim's window wraps the line and the word starts on
+the screen row before the cursor's, the difference is negative, and one row's width of text, sent
+along while `'wrap'` is on, is added (`CompletionMenu.Anchor.cellsBack`). The editor walks that many cells back from the cursor in
+its own line (`util/CellWidth.charsBack`: a wide character is two cells) and asks the widget for
+that offset's pixels. Below the line, or above it when there is more room (`CompletionMenu.rows`).
+
+Not shown: the window Neovim opens beside the list for a match's documentation (`'completeopt'`
+`popup`, `preview`). With `ext_popupmenu` Neovim opens none, also when told where the list is
+(`nvim_ui_pum_set_bounds`); the entries carry the text, so the plug-in could draw it.
+
+`vim.g.neovim4eclipse_completion_menu = 0` turns all of it off (`NeovimSession.completesInNeovim`).
+`Ctrl-N` and `Ctrl-P` then switch on contexts of their own whose bindings run Eclipse's Word
 Completion directly (`util/KeyContextRule.contextId`; through the plug-in's own command, Word
-Completion would not offer the next word when pressed again); `Ctrl-X` `Ctrl-O` runs Content Assist
-(`KeyRouter.Completion`, run by the controller); `Ctrl-C` is `Esc`.
+Completion would not offer the next word when pressed again).
+
+**Three `Ctrl-X` completions are refused in Neovim itself** (`LuaScripts.CTRL_X_GUARD`):
+`Ctrl-X Ctrl-V` and its other name `Ctrl-X Ctrl-Q` complete the text before the cursor as a Vim
+command line, and that expands `` `...` `` by running it in the shell; the text is the file's.
+`Ctrl-X Ctrl-O` calls `'omnifunc'`, which for some file types evaluates the buffer. A `vim.on_key`
+function drops the key (also when it comes with Shift or another modifier) when `complete_info()`
+says `Ctrl-X` was just pressed, and feeds `Ctrl-Z` in its place, which ends the `Ctrl-X` and
+changes no text. Not in the command-line window of `:` commands, whose lines are the user's own
+commands and where Neovim maps `Tab` to `Ctrl-X Ctrl-V`. It is the one place every key passes,
+typed, sent by the plug-in, mapped or run from a register, so no route to Neovim needs a check of
+its own (`KeyRouter` keeps the key from starting a completion only to spare the round trip).
+
+**`Ctrl-X Ctrl-O` is Eclipse's content assist wherever Eclipse gets the insert back.** In an
+insert Eclipse types, `KeyRouter` keeps the `Ctrl-X` until the next key and runs content assist for
+`Ctrl-O`. While Neovim completes it does the same (`KeyRouter.whileCompleting`): the completion is
+ended with its text kept (`NeovimSession.endCompletionThenAsync`), Eclipse types again, and only
+then content assist opens, since a proposal accepted while Neovim still typed would be an edit its
+completion does not know of. In an insert Neovim types to its end (a recorded one) the keys go to
+Neovim, where the guard drops the `Ctrl-O`: a proposal would be missing from the recording.
+
+The viewport being off (`vim.g.neovim4eclipse_viewport = 0`) turns nothing of it off: the list
+hangs on the cursor's line, which Neovim keeps on its own screen whatever the editor shows.
 
 ## Blockwise visual
 
@@ -1044,6 +1138,7 @@ reason is gone.
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
 | The command-line window (`q:`) drawn from its grid | `util/GridEvent`, `util/Grids`, `util/GridSnapshot`, `util/CommandWindowView`, `editor/GridCanvas`, `editor/NeovimWindowPanel` | `GridEventTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimSessionIntegrationTest` (real Neovim: drawn, Enter runs the line, closed in insert mode runs nothing), `tests/swt` `GridCanvasTest` (pixels: colors, cursor, text wider than its cell), `NeovimWindowPanelTest` (keys, focus), UI `CommandWindowEndToEndTest` |
 | Floating windows without the focus, drawn over the text | `util/GridEvent` (`WinPos`), `util/Grids` (`floatsIfChanged`, `host`), `util/FloatWindow`, `util/FloatPlacement`, `core/NeovimConnection` (`Forwarder`: the first window's place), `editor/FloatingWindows`, `editor/GridCanvas` | `GridEventTest`, `GridsTest`, `FloatPlacementTest`, `NeovimSessionIntegrationTest` (real Neovim: reported, moves with its text, gone when closed, off by either setting), `tests/swt` `FloatingWindowsTest` (place, order, no focus, dispose), UI `FloatingWindowsEndToEndTest`, gallery picture `float` |
+| Neovim's completion (`Ctrl-N`, `Ctrl-P`, `Ctrl-X` modes): the keys, the hand-back, the list | `core/KeyRouter` (`completeInNeovim`, `afterCtrlX`, `whileCompleting`), `LuaScripts.CTRL_X_GUARD` (`ctrl_x_guard_spec.lua`), `core/KeyInput` (`isCompleting`, `syncInsertThenComplete`, `endCompletion`), `util/VimModes.isCompleting`, `util/KeyContextRule.toNeovim`, `LuaScripts.COMPLETION_MENU`, `util/CompletionMenu`, `util/CellWidth`, `editor/CompletionMenuPopup` | `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `VimModesTest`, `CompletionMenuTest`, `CellWidthTest`, `CmdlineEventTest`, `NotificationBridgeTest`, `completion_menu_spec.lua`, `NeovimCompletionIntegrationTest`, `tests/swt` `CompletionMenuPopupTest`, UI `CompletionMenuEndToEndTest` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
 | File paths compared by one rule | `LuaScripts.PATHS` (module `neovim4eclipse.paths`), `util/FilePaths`, `NewFiles.workspaceFileAt` (the one workspace lookup) | `paths_spec.lua` and `FilePathsTest` (both run `tests/unit/src/test/resources/path-cases.tsv` on the Linux, macOS and Windows rules), `EditPathTest`, `t.same_file` in every spec, UI `FilePathsEndToEndTest` (`:e` and `:wq!` through a link; `:e` by the real path into a folder linked through a link), `ProjectFilesEndToEndTest` (a linked folder made and removed while running) |
 | `gd`/`K`/`gr*`/`gO`/`gt`/`gT` handed to Eclipse | `core/IdeKeys` (the one table: keys, actions, how each command is found), `core/IdeAction`, `LuaScripts.IDE_KEYS` (the mappings, from the table), `IdeKeys.pick` (the one loop, over the port `IdeKeys.Editor`; `dryRun` for tests), `editor/IdeActions` (`EclipseEditor`, the port's Eclipse side), `editor/HyperlinkProbe` (links for `gd` and `grt`) | `IdeKeysTest`, `setup_spec.lua`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest`, `IdeKeysEndToEndTest`, `JavaEditorEndToEndTest` (heavyJava: Java's commands, `gri`, `grt`) |

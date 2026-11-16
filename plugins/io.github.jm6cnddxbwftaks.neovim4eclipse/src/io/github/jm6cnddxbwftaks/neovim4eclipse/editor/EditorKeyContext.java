@@ -35,11 +35,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * {@link CommandLineBox}). In insert and replace mode they switch on the letters the user gave to
  * Neovim for insert mode, in other modes those for normal mode (the Ctrl Keys preference page has
  * both choices per letter); the mode listener calls {@link #update(String)} at each mode change.
- * In an insert Eclipse types, {@code Ctrl-N} and {@code Ctrl-P} switch on Eclipse's Word Completion
- * instead ({@link KeyContextRule#contextId}); an insert can become Neovim-driven without a mode
+ * With Neovim's completion list turned off, {@code Ctrl-N} and {@code Ctrl-P} in an insert Eclipse
+ * types switch on Eclipse's Word Completion instead ({@link KeyContextRule#contextId}); an insert can become Neovim-driven without a mode
  * change (a key typed before Eclipse could take over, {@code Ctrl-R}), so the editor calls
  * {@link #update()} after each key too; after most keys neither the mode's column nor who types
- * changed, and then nothing is switched or read again ({@link #applied}). In
+ * changed, and then nothing is switched or read again ({@link #applied}). While Neovim completes,
+ * every letter is switched on ({@link KeyContextRule#toNeovim}). In
  * Eclipse mode, on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own
  * shortcuts (paste, content assist, other views) are untouched there. Activation is workbench-wide
  * (the standard, well-trodden path); the focus check keeps it from leaking into other parts.
@@ -66,6 +67,10 @@ final class EditorKeyContext {
     private final BooleanSupplier commandLineFocused;
     /** Whether Neovim, not Eclipse, types the current insert (then Ctrl-N, Ctrl-P are Neovim's). */
     private final BooleanSupplier neovimDrivenInsert;
+    /** Whether Ctrl-N and Ctrl-P are Neovim's completion, not Eclipse's Word Completion. */
+    private final BooleanSupplier neovimCompletes;
+    /** Whether Neovim completes now, or Ctrl-X waits for its key: every letter is Neovim's then. */
+    private final BooleanSupplier completing;
     private final VimKeyContexts contexts = new VimKeyContexts();
     /**
      * What the active contexts were applied for, or {@code null} while none is active. {@link #update}
@@ -80,7 +85,7 @@ final class EditorKeyContext {
     private int activations;
 
     /** The inputs of the letter choice besides the preferences: see {@link #applied}. */
-    private record Applied(Column column, boolean eclipseTypes) {
+    private record Applied(Column column, boolean eclipseTypes, boolean completing) {
     }
 
     private final FocusListener focusListener = new FocusListener() {
@@ -96,12 +101,15 @@ final class EditorKeyContext {
     };
 
     EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys,
-            BooleanSupplier commandLineFocused, BooleanSupplier neovimDrivenInsert) {
+            BooleanSupplier commandLineFocused, BooleanSupplier neovimDrivenInsert, BooleanSupplier neovimCompletes,
+            BooleanSupplier completing) {
         this.widget = widget;
         this.mode = mode;
         this.neovimOwnsKeys = neovimOwnsKeys;
         this.commandLineFocused = commandLineFocused;
         this.neovimDrivenInsert = neovimDrivenInsert;
+        this.neovimCompletes = neovimCompletes;
+        this.completing = completing;
         widget.addFocusListener(focusListener);
     }
 
@@ -125,14 +133,17 @@ final class EditorKeyContext {
                 boolean wasActive = contexts.isActive();
                 Column column = KeyContextRule.column(nvimMode, onCommandLine);
                 boolean eclipseTypes = !neovimDrivenInsert.getAsBoolean();
-                Applied now = new Applied(column, eclipseTypes);
+                boolean allLetters = completing.getAsBoolean();
+                boolean neovimsCompletion = neovimCompletes.getAsBoolean(); // fixed for the session
+                Applied now = new Applied(column, eclipseTypes, allLetters);
                 if (wasActive && now.equals(applied)) {
                     return; // the usual case after a key: nothing to switch
                 }
                 applied = null; // until applied: a failure below must not look applied
                 contexts.apply(service,
-                        column == Column.INSERT ? EditorKeyContext::isCtrlKeyInsert : EditorKeyContext::isCtrlKeyNormal,
-                        letter -> KeyContextRule.contextId(letter, column, eclipseTypes));
+                        letter -> KeyContextRule.toNeovim(
+                                column == Column.INSERT ? isCtrlKeyInsert(letter) : isCtrlKeyNormal(letter), column, allLetters),
+                        letter -> KeyContextRule.contextId(letter, column, eclipseTypes, neovimsCompletion));
                 applied = now;
                 if (!wasActive) {
                     LOG.fine("Neovim key context activated (Vim Ctrl keys now go to Neovim)");

@@ -61,6 +61,8 @@ final class KeyInput {
 
     /** A key that takes longer than this end to end is logged as a warning (diagnostics). */
     private static final long SLOW_KEY_WARNING_MS = 250;
+    /** {@code CTRL-X CTRL-Z} as raw characters: stops a completion without changing the text. */
+    private static final String END_COMPLETION = "\u0018\u001a";
     /** Default upper bound for waiting on a macro to finish ({@code 1000@a} can run for a while). */
     static final Duration MACRO_TIMEOUT = Duration.ofSeconds(60);
 
@@ -132,6 +134,13 @@ final class KeyInput {
      * Never for an insert Neovim owns ({@link #neovimOwnsInsert}). Cleared when the insert ends.
      */
     private volatile boolean handBackPending;
+    /**
+     * Completion keys routed on the UI thread whose sync point has not run yet
+     * ({@link #completionQueued}, {@link #syncInsertThenComplete}). Until it has, Neovim's mode
+     * does not say that it completes, but the user has pressed the key: {@link #isCompleting} counts
+     * both, so the key contexts are right for the very next key.
+     */
+    private final AtomicInteger completionsQueued = new AtomicInteger();
     /**
      * Keys queued for Neovim ({@link #keyQueued}, UI thread) and keys taken from that queue
      * ({@link #inputQueued}, input thread). Equal when no key waits: a hand-back starts only then,
@@ -208,6 +217,46 @@ final class KeyInput {
         handBackPending = true;
     }
 
+    /**
+     * A completion key was routed and its sync point is about to be queued. Neovim types the
+     * insert from this moment ({@link #driveFromNeovim}), not only once the key has been sent:
+     * Neovim's list arrives while the key is being handled, and the session shows a list only in
+     * an insert Neovim types ({@code NeovimSession.showCompletionMenu}). UI thread.
+     */
+    void completionQueued() {
+        completionsQueued.incrementAndGet();
+        driveFromNeovim();
+    }
+
+    /**
+     * {@link #handOver} for a completion key: counted first ({@link #completionQueued}), and not
+     * left counted when the work will never run (the session is closed). UI thread.
+     */
+    void handOverCompletion(Predicate<InputThread.Task> queue, InputThread.Task work) {
+        completionQueued();
+        handOver(task -> {
+            boolean queued = queue.test(task);
+            if (!queued) {
+                completionsQueued.updateAndGet(n -> Math.max(0, n - 1));
+            }
+            return queued;
+        }, work);
+    }
+
+    /**
+     * Whether Neovim completes, or is about to, in an insert that goes back to Eclipse afterwards:
+     * a completion key waits in the queue, or Neovim's mode is a completing one
+     * ({@link VimModes#isCompleting}) in an insert it drives for a while. While it holds, every key
+     * is Neovim's ({@link #mayHandBack}), the {@code Ctrl} letters too ({@code util/KeyContextRule}):
+     * {@code Ctrl-Y} accepts and {@code Ctrl-E} cancels, where Eclipse would redo and switch editors.
+     * Not for an insert Neovim owns to its end (recording a macro, a block-visual {@code I}): there
+     * the keys are Neovim's anyway, and the Ctrl Keys page's choice stands as before. Any thread.
+     */
+    boolean isCompleting() {
+        return completionsQueued.get() > 0
+                || (neovimDrivenInsert && !neovimOwnsInsert && VimModes.isCompleting(state.mode()));
+    }
+
     /** Called with every mode change: leaving insert mode ends a Neovim-driven insert. */
     void onModeChanged(String mode) {
         if (!VimModes.isTyping(mode)) {
@@ -279,6 +328,34 @@ final class KeyInput {
                 // prompt (0.2.1 security review).
                 LOG.warning("A key took " + ms + " ms (mode=" + state.mode() + ")");
                 LOG.fine(() -> "the slow key: input('" + keys + "')");
+            }
+        }
+    }
+
+    /**
+     * Ends a completion Neovim is in, keeping the text as it stands ({@code CTRL-X CTRL-Z},
+     * {@code :help i_CTRL-X_CTRL-Z}), and with it gives the insert back to Eclipse. For what is
+     * not a key: the user clicked into the text or the editor lost the focus while the list was
+     * open. Nothing when Neovim does not complete (any more): the mode is read here, on the input
+     * thread, behind every key queued before, so the two keys can never arrive in Normal mode,
+     * where {@code Ctrl-X} would subtract from a number; and {@link Neovim#typeText} types them
+     * only into an open insert, with no mapping applied. Not in an insert Neovim owns: while
+     * recording, the keys would become part of the macro.
+     */
+    void endCompletion() throws Exception {
+        Mode mode = state.readMode();
+        if (mode == null || mode.blocking() || !VimModes.isCompleting(mode.mode()) || !neovimDrivenInsert
+                || neovimOwnsInsert) {
+            return;
+        }
+        // Typed without mappings, as the re-typed text is: the user's own insert-mode mapping of
+        // Ctrl-X must not run because of a click. And only into an open insert (typeText).
+        if (nvim.typeText(END_COMPLETION)) {
+            nvim.awaitKeysConsumed();
+            state.readMode();
+            state.publishState();
+            if (mayHandBack()) {
+                handBackToEclipse();
             }
         }
     }
@@ -402,9 +479,18 @@ final class KeyInput {
         };
     }
 
-    /** Whether the insert Neovim drives now may go back to Eclipse ({@link #handBackPending}). */
+    /**
+     * Whether the insert Neovim drives now may go back to Eclipse ({@link #handBackPending}). Not
+     * while Neovim completes ({@link VimModes#isCompleting}): the next key steers the completion
+     * ({@code Ctrl-N} for the next match, {@code Ctrl-Y}, {@code Ctrl-E}) or ends it, which Neovim
+     * alone can tell, so it must reach Neovim. The key that ends it brings plain insert mode back,
+     * and with it the hand-back. Example: {@code al}, {@code Ctrl-N} ({@code alpha}, mode
+     * {@code ic}), {@code Ctrl-N} ({@code alphabet}), {@code (}: Neovim inserts the bracket, its
+     * mode is {@code i}, Eclipse types the next key.
+     */
     private boolean mayHandBack() {
         return handBackPending && neovimDrivenInsert && !neovimOwnsInsert && state.isTypingMode()
+                && !VimModes.isCompleting(state.mode()) && completionsQueued.get() == 0
                 && status.recordingRegister().isEmpty();
     }
 
@@ -635,6 +721,29 @@ final class KeyInput {
      * @param key  the key, in Neovim notation ({@code <C-w>})
      */
     void syncInsertThenInput(InsertReplay.SyncPoint sync, String key) throws Exception {
+        syncInsertThenInput(sync, key, false);
+    }
+
+    /**
+     * A sync point whose key starts Neovim's completion ({@code <C-n>}, {@code <C-p>},
+     * {@code <C-x><C-l>}), counted by {@link #completionQueued} when it was routed. As
+     * {@link #syncInsertThenInput}, except at its end: while Neovim completes, typing does not go
+     * back to Eclipse ({@link #mayHandBack}). A completion that is over at once (the keys were
+     * {@code <C-x>} and one that names no kind, or Neovim left the insert meanwhile) hands back as
+     * a key typed in a Neovim-driven insert does ({@link #handBackToEclipse}).
+     */
+    void syncInsertThenComplete(InsertReplay.SyncPoint sync, String keys) throws Exception {
+        try {
+            syncInsertThenInput(sync, keys, true);
+        } finally {
+            completionsQueued.updateAndGet(n -> Math.max(0, n - 1));
+        }
+        if (mayHandBack()) {
+            handBackToEclipse();
+        }
+    }
+
+    private void syncInsertThenInput(InsertReplay.SyncPoint sync, String key, boolean completion) throws Exception {
         boolean inInsert;
         leavingInsert = true;
         handOverStarted();
@@ -661,7 +770,19 @@ final class KeyInput {
         // The key's buffer events have been dispatched once Neovim has consumed it; the cursor is
         // published after them, so the caret lands on the changed text.
         nvim.awaitKeysConsumed();
+        state.readMode(); // again: only now has Neovim surely taken the key, and a completion shows in the mode
         state.publishState();
+        if (completion) {
+            // Neovim types this insert since the key was routed (completionQueued). While it
+            // completes it types on; its text for the match came as a buffer event, and a short
+            // document is compared whole as well, without letting Eclipse type. The key that ends
+            // the completion hands the insert back (inputKey); if it is over already, the caller does.
+            if (state.isTypingMode() && VimModes.isCompleting(state.mode())
+                    && (sync == null || ChangedLines.comparesWhole(sync.documentLines()))) {
+                state.syncBuffer(() -> false);
+            }
+            return;
+        }
         if (state.isTypingMode()) {
             // The handshake: Eclipse types again once the document has Neovim's text. The key's line
             // events bring that text; a short document is also compared whole, which repairs any

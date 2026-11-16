@@ -191,6 +191,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/GridCanvas.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWindowPanel.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/FloatingWindows.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CompletionMenuPopup.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ClipboardBridge.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/sync/FinalNewlines.java</include>

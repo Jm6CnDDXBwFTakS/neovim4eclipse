@@ -37,6 +37,23 @@ public final class VimModes {
         return c == 'i' || c == 'R';
     }
 
+    /**
+     * Insert or replace mode while Neovim completes: {@code ic}, {@code Rc} and {@code Rvc} once a
+     * completion is under way ({@code Ctrl-N}, {@code Ctrl-P}, a {@code Ctrl-X} mode), {@code ix},
+     * {@code Rx} and {@code Rvx} after {@code Ctrl-X} alone, while Neovim waits for the key that
+     * names the kind.
+     * Neovim is in it with or without a list on the screen: after {@code Ctrl-N} found a single
+     * match, or none, there is no list, and the next key still belongs to the completion
+     * ({@code Ctrl-N} again, {@code Ctrl-E} to take the match back).
+     */
+    public static boolean isCompleting(String mode) {
+        if (!isTyping(mode) || mode.length() < 2) {
+            return false;
+        }
+        char last = mode.charAt(mode.length() - 1); // after i, R or Rv
+        return last == 'c' || last == 'x';
+    }
+
     /** Command-line mode ({@code :}, {@code /}, {@code ?}). */
     public static boolean isCmdline(String mode) {
         return first(mode) == 'c';

@@ -57,11 +57,22 @@ class VimCtrlKeysTest {
         }
     }
 
-    /** Windows and Linux: W U R O T D, K Q (digraph, literal), N P (completion); the rest keep Eclipse's shortcut. */
+    /**
+     * Windows and Linux: every letter with a Vim insert meaning but A, C and V (select all, copy,
+     * paste stay Eclipse's); the letters Vim does not use in insert mode stay Eclipse's too, S
+     * (save), Z (undo) and F (find) among them.
+     */
     @Test
     void insertDefaultsOnWindowsAndLinux() {
         for (char letter : VimCtrlKeys.LETTERS.toCharArray()) {
-            assertEquals("wurotdkqnp".indexOf(letter) >= 0, VimCtrlKeys.inInsertByDefault(letter, false), "letter " + letter);
+            boolean unused = VimCtrlKeys.insertMeaning(letter).startsWith("unused");
+            assertEquals(!unused && "acv".indexOf(letter) < 0, VimCtrlKeys.inInsertByDefault(letter, false), "letter " + letter);
+        }
+        for (char eclipses : "acvszfbl".toCharArray()) {
+            assertFalse(VimCtrlKeys.inInsertByDefault(eclipses, false), "letter " + eclipses);
+        }
+        for (char neovims : "wurotdkqnpxyeghijm".toCharArray()) {
+            assertTrue(VimCtrlKeys.inInsertByDefault(neovims, false), "letter " + neovims);
         }
     }
 

@@ -108,16 +108,42 @@ By default these ten go to Neovim in insert mode on Windows and Linux:
 | `Ctrl+D` | unindent the line | Delete Line |
 | `Ctrl+K` | enter a digraph (`Ctrl+K e :` types `ë`) | Find Next |
 | `Ctrl+Q` | insert the next key literally (`Ctrl+V` stays Paste) | Last Edit Location |
-| `Ctrl+N`, `Ctrl+P` | word completion: Eclipse's *Word Completion* (below) | New, Print |
+| `Ctrl+N`, `Ctrl+P` | complete the word, with Neovim's list of matches (below) | New, Print |
 
-`Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+X`, `Ctrl+Y`, `Ctrl+Z`, `Ctrl+S` and `Ctrl+F` stay Eclipse's
-(select all, copy, paste, cut, redo, undo, save, find): people use them while typing. So do `Ctrl+B`
-and `Ctrl+L`, which mean nothing in Vim's insert mode; `Ctrl+H`, `Ctrl+I`, `Ctrl+J` and `Ctrl+M`,
-whose Vim meanings are Backspace, Tab and Enter, keys the keyboard has anyway (Eclipse's Search,
-Correct Indentation, Incremental Find and Maximize stay); `Ctrl+E` (Quick Switch Editor) and
-`Ctrl+G`. Each can be ticked on the *Ctrl Keys* page. On macOS, where Eclipse's
-shortcuts use Command, every letter with a Vim insert-mode meaning goes to Neovim, `Ctrl+A`,
-`Ctrl+E` and `Ctrl+K` included.
+| `Ctrl+X` | Vim's other completions (`Ctrl+X Ctrl+L` whole lines, `Ctrl+X Ctrl+F` file names; below) | Cut |
+| `Ctrl+Y`, `Ctrl+E` | insert the character above, below the cursor; with the list open: keep the match, take it back | Redo, Quick Switch Editor |
+| `Ctrl+G` | `Ctrl+G u` starts a new undo step; `Ctrl+G j`, `Ctrl+G k` move a line | Java: Find Declarations in Workspace |
+| `Ctrl+H` | Backspace | Search |
+| `Ctrl+I` | Tab | Correct Indentation |
+| `Ctrl+J`, `Ctrl+M` | Enter | Incremental Find, Maximize |
+
+`Ctrl+A`, `Ctrl+C` and `Ctrl+V` stay Eclipse's (select all, copy, paste): every program has them
+there, and Vim's meanings for two of them have other keys (`Esc` for `Ctrl+C`, `Ctrl+Q` for
+`Ctrl+V`). So do the letters that mean nothing in Vim's insert mode: `Ctrl+S`, `Ctrl+Z`, `Ctrl+F`
+(save, undo, find), `Ctrl+B` and `Ctrl+L`. Each box can be ticked or cleared on the *Ctrl Keys*
+page. On macOS, where Eclipse's shortcuts use Command, every letter with a Vim insert-mode meaning
+goes to Neovim, `Ctrl+A`, `Ctrl+C` and `Ctrl+V` included.
+
+**The Eclipse commands these keys had, while you type.** They are all still there in normal mode
+when the letter's Normal box is cleared. In insert mode each has another key or a place in the
+menus; the menu keys (`Alt+E`, then `T`) are Windows' and Linux's, as Eclipse's English menus have
+them.
+
+| Instead of | Other key | In the menus |
+|---|---|---|
+| `Ctrl+X` Cut | `Shift+Delete` | *Edit → Cut*: `Alt+E`, `T` |
+| `Ctrl+Y` Redo (Windows; on Linux Eclipse's Redo was never `Ctrl+Y`) | `Ctrl+Shift+Z`: Eclipse's own key on Linux, and bound by the plug-in on Windows while Neovim owns the keys | *Edit → Redo*: `Alt+E`, `R` |
+| `Ctrl+E` Quick Switch Editor | `Ctrl+F6` Next Editor, `Ctrl+Shift+E` Switch to Editor | *Window → Navigation* |
+| `Ctrl+H` Search | — | *Search → Search...*: `Alt+A`, `A` |
+| `Ctrl+J` Incremental Find | `Esc`, then `/`, which searches as you type | *Edit → Incremental Find Next* |
+| `Ctrl+M` Maximize | double-click the editor's tab | *Window → Appearance* |
+| `Ctrl+D` Delete Line | `Esc`, then `dd` | — |
+| `Ctrl+I` Correct Indentation (Java) | `Esc`, then `==` | *Source → Correct Indentation*: `Alt+S`, `I` |
+| `Ctrl+G` Declarations in Workspace (Java) | `Esc`, then `gd` for the declaration | *Search → Declarations → Workspace*: `Alt+A`, `L`, `W` |
+
+Copy and Paste keep `Ctrl+C` and `Ctrl+V` (`Alt+E`, `C` and `Alt+E`, `P` in the menus).
+
+To have one of them back while typing, clear that letter's Insert box.
 
 **How it works: the sync point.** Neovim has not seen what Eclipse typed, so such a key first hands
 it over: the typed text is re-typed into Neovim's open insert, the document is pushed, Neovim's
@@ -132,18 +158,24 @@ Once Neovim has it, Eclipse types again, with content assist and the like: `Ctrl
 register `a`, and the next letter is Eclipse's. `.` still repeats the whole insert.
 After `Ctrl+O`, Neovim runs one normal-mode command, and Eclipse types again when the insert goes on.
 
-**Completion is Eclipse's.** Neovim's completion popup is not drawn in the editor, so these keys,
-when ticked for insert mode, run Eclipse's instead (`Ctrl+N` and `Ctrl+P` are ticked by default;
-`Ctrl+X`, for its `Ctrl+X Ctrl+O`, on macOS only):
+**Completion.** `Ctrl+N` and `Ctrl+P` (ticked by default) are Vim's own completion, done by
+Neovim, with its list drawn under the word
+([Completion](USER_GUIDE.md#completion-ctrl-n-ctrl-p)). The key is a sync point, and Neovim then
+types until the completion has ended:
 
-| Key | Runs |
+| Key | Does |
 |-----|------|
-| `Ctrl+N`, `Ctrl+P` | *Word Completion* (`Alt+/`): the nearest matching word before the caret first, then, pressed again, the next one, from all open editors. It cannot go back, so both keys do the same. |
-| `Ctrl+X` `Ctrl+O` | *Content Assist* (`Ctrl+Space`), as Vim's omni completion. `Ctrl+X` `Ctrl+N` or `Ctrl+P`: Word Completion. `Ctrl+X` then any other key: that key, as usual. |
+| `Ctrl+N`, `Ctrl+P` | Completes the word before the cursor from the open files; pressed again, the next or previous match. |
+| `Ctrl+Y`, `Ctrl+E`, while Neovim completes | Keep the match; take the completion back. Every `Ctrl` letter is Neovim's then, ticked or not. |
+| any other character, while Neovim completes | Ends the completion and is typed by Neovim; the next key is Eclipse's again. |
+| `Ctrl+X` and another `Ctrl` letter | Vim's other completions (`Ctrl+L` whole lines, `Ctrl+F` file names, `Ctrl+N` this file's words). `Ctrl+X` is ticked by default. `Ctrl+X Ctrl+O` is Eclipse's Content Assist, also while the list is open. `Ctrl+X Ctrl+V` (a Vim command; it could run programs named in the text) is refused. |
+| `Ctrl+X` `Ctrl+O` | Eclipse's *Content Assist* (`Ctrl+Space`), in place of Vim's omni completion. `Ctrl+X` then a plain key while Eclipse types: that key, as usual. While the list is open the two go to Neovim together, where `Ctrl+X` `s` is spelling and `Ctrl+X` `Tab` is `Ctrl+X Ctrl+I`. |
 | `Ctrl+C` | Ends the insert, exactly as `Esc` (`.` repeats it). |
 
-In an insert Neovim types (after a block-visual `I`, while recording), these go to Neovim, which
-inserts its first match without showing the list.
+With `vim.g.neovim4eclipse_completion_menu = 0` in `init.lua`, `Ctrl+N`, `Ctrl+P` and `Ctrl+X`
+`Ctrl+N` run Eclipse's *Word Completion* (`Alt+/`) instead: the nearest matching word before the
+caret first, then, pressed again, the next one, from all open editors. It shows no list and cannot
+go back, so both keys do the same.
 
 ## Other keys
 

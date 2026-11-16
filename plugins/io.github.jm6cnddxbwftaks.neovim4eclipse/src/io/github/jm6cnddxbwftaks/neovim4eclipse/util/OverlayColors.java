@@ -26,7 +26,7 @@ public final class OverlayColors {
     /** Share of mid-gray mixed into the editor background for the overlay background. */
     public static final double BACKGROUND_TINT = 0.06;
 
-    /** Share of the editor foreground mixed into the editor background for the 1-pixel border. */
+    /** Share of the editor foreground mixed into the editor background for an overlay's border. */
     public static final double BORDER_STRENGTH = 0.35;
 
     private static final int MID_GRAY = 0x808080;

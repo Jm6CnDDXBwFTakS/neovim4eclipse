@@ -25,10 +25,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  *       assist keeps working). {@code Esc} pushes the document to Neovim and leaves insert mode.
  *       A {@code Ctrl+letter} the user gave to Neovim for insert mode ({@code Ctrl-W},
  *       {@code Ctrl-U}, ...) is a <em>sync point</em>: the text Eclipse typed so far goes to Neovim
- *       first, then the key ({@link Neovim#syncInsertThenInputAsync}). Four letters are Eclipse's
- *       work instead ({@link #insertCtrlKey}): {@code Ctrl-N} and {@code Ctrl-P} run Eclipse's Word
- *       Completion, {@code Ctrl-X Ctrl-O} its content assist, {@code Ctrl-C} ends the insert as
- *       {@code Esc} does.
+ *       first, then the key ({@link Neovim#syncInsertThenInputAsync}). {@code Ctrl-N},
+ *       {@code Ctrl-P} and {@code Ctrl-X} with the key after it start Neovim's completion that
+ *       way ({@link Neovim#completeInNeovimAsync}); Neovim then types until the completion ends.
+ *       Three are Eclipse's work instead ({@link #insertCtrlKey}): {@code Ctrl-X Ctrl-O} runs
+ *       its content assist, {@code Ctrl-C} ends the insert as {@code Esc} does, and with
+ *       Neovim's completion list turned off {@code Ctrl-N} and {@code Ctrl-P} run its Word
+ *       Completion.
  *       Exception: an insert driven by Neovim (from blockwise visual, while recording a macro, or
  *       started before Eclipse could take over) forwards every key.</li>
  *   <li>A {@code Ctrl+letter} the user gave to Eclipse (the Ctrl Keys preference page) is left to
@@ -76,14 +79,44 @@ public final class KeyRouter {
          * @param sync what to hand over, or {@code null} for nothing but the document
          */
         void syncInsertThenInputAsync(InsertReplay.SyncPoint sync, String key);
+
+        /**
+         * Whether {@code Ctrl-N}, {@code Ctrl-P} and the {@code Ctrl-X} modes are Neovim's own
+         * completion, whose list the editor draws; {@code false} when the user turned that off
+         * ({@code vim.g.neovim4eclipse_completion_menu = 0}): then Eclipse's Word Completion.
+         */
+        boolean completesInNeovim();
+
+        /**
+         * A sync point whose keys start Neovim's completion ({@code <C-n>}, {@code <C-x><C-l>}).
+         * As {@link #syncInsertThenInputAsync}; Neovim then types until the completion has ended.
+         */
+        void completeInNeovimAsync(InsertReplay.SyncPoint sync, String keys);
+
+        /**
+         * Whether Neovim is completing in an insert it will give back to Eclipse (not one it
+         * types to the end, such as a recorded one), or is about to.
+         */
+        boolean isCompleting();
+
+        /**
+         * Ends Neovim's completion, the text kept, behind the keys queued before; Eclipse types
+         * again, and then {@code after} runs (on Neovim's input thread). It runs also when there
+         * was no completion to end any more.
+         */
+        void endCompletionThenAsync(Runnable after);
     }
 
     /**
-     * Eclipse's completions, which some of Vim's insert-mode keys run instead of Neovim's popup (the
-     * plug-in does not draw that popup, docs/design/INSERT_CTRL_KEYS.md, section 6).
+     * Eclipse's completions, which some of Vim's insert-mode keys run instead of Neovim's
+     * (docs/design/INSERT_CTRL_KEYS.md, section 6): content assist always, Word Completion only
+     * with Neovim's completion list turned off.
      */
     public enum Completion {
-        /** <i>Word Completion</i> (Alt+/): the words of the open documents. For {@code Ctrl-N}, {@code Ctrl-P}. */
+        /**
+         * <i>Word Completion</i> (Alt+/): the words of the open documents. For {@code Ctrl-N},
+         * {@code Ctrl-P} when Neovim's completion list is off ({@link Neovim#completesInNeovim}).
+         */
         WORD,
         /** <i>Content Assist</i> (Ctrl+Space). For {@code Ctrl-X Ctrl-O}, Vim's omni completion. */
         CONTENT_ASSIST
@@ -93,11 +126,14 @@ public final class KeyRouter {
     /** Runs one of Eclipse's completions; {@code null} until the editor sets it. */
     private volatile Consumer<Completion> completion;
     /**
-     * Set by {@code Ctrl-X} in an insert Eclipse types: the next key chooses the completion
-     * ({@code Ctrl-O} content assist, {@code Ctrl-N} or {@code Ctrl-P} Word Completion), as in Vim's
-     * {@code Ctrl-X} mode. Any other key is handled as usual. UI thread.
+     * Set by {@code Ctrl-X} in an insert Eclipse types: the next key chooses the completion, as in
+     * Vim's {@code Ctrl-X} mode ({@link #afterCtrlX}). {@code Ctrl-O} is Eclipse's content assist;
+     * another {@code Ctrl} letter goes to Neovim together with the {@code Ctrl-X} it follows. Any
+     * other key is handled as usual. Why Neovim does not get the {@code Ctrl-X} at once: it would
+     * then be in its {@code Ctrl-X} mode, and content assist would have to wait for it to leave
+     * that mode and give the insert back. UI thread, but read from any ({@link #isCtrlXPending}).
      */
-    private boolean ctrlXPending;
+    private volatile boolean ctrlXPending;
     /** Produces, at Esc, what to re-type into Neovim so that {@code .} can repeat the typed text. */
     private volatile Supplier<InsertReplay.Plan> insertReplaySupplier;
     /** Whether a {@code Ctrl+letter} goes to Neovim; letters it rejects are left to Eclipse. */
@@ -164,6 +200,15 @@ public final class KeyRouter {
     }
 
     /**
+     * Whether {@code Ctrl-X} was pressed and the key that chooses the completion is still to come.
+     * The editor then gives Neovim every {@code Ctrl} letter ({@code util/KeyContextRule}), so that
+     * {@code Ctrl-L} after it is Vim's line completion, not the command Eclipse binds to it.
+     */
+    public boolean isCtrlXPending() {
+        return ctrlXPending;
+    }
+
+    /**
      * Routes one key.
      *
      * @param nvimKey the key in Neovim notation, not {@code null}
@@ -200,6 +245,12 @@ public final class KeyRouter {
         }
 
         if (neovim.isNeovimDrivenInsert()) {
+            if (neovim.isCompleting()) {
+                Boolean handled = whileCompleting(afterCtrlX, nvimKey);
+                if (handled != null) {
+                    return handled;
+                }
+            }
             return send(nvimKey); // text, and the Esc that ends it
         }
 
@@ -208,8 +259,11 @@ public final class KeyRouter {
                 return leaveInsert();
             }
             char letter = VimCtrlKeys.letterOf(nvimKey);
-            if (afterCtrlX && (letter == 'o' || letter == 'n' || letter == 'p')) {
-                return complete(letter == 'o' ? Completion.CONTENT_ASSIST : Completion.WORD);
+            if (afterCtrlX && letter != 0) {
+                Boolean handled = afterCtrlX(letter, nvimKey);
+                if (handled != null) {
+                    return handled;
+                }
             }
             if (letter != 0 && insertCtrlKeyFilter.test(letter)) {
                 return insertCtrlKey(letter, nvimKey);
@@ -232,15 +286,102 @@ public final class KeyRouter {
     }
 
     /**
+     * The {@code Ctrl} letter after {@code Ctrl-X} in an insert Eclipse types.
+     * <ul>
+     *   <li>{@code Ctrl-O}: Eclipse's content assist, in place of Vim's omni completion.</li>
+     *   <li>{@code Ctrl-C}: a key on its own, which ends the insert as {@code Esc} does
+     *       ({@link #insertCtrlKey}). Sent to Neovim after {@code <C-x>} it would be Vim's raw
+     *       {@code Ctrl-C}, which skips {@code InsertLeave} and abbreviations.</li>
+     *   <li>With Neovim's completion ({@link Neovim#completesInNeovim}), any other letter: Neovim
+     *       gets {@code <C-x>} and the key in one sync point, and does what Vim does: {@code Ctrl-L}
+     *       completes whole lines, {@code Ctrl-F} file names, {@code Ctrl-N} words of this file.</li>
+     *   <li>Without it, {@code Ctrl-N} and {@code Ctrl-P}: Eclipse's Word Completion.</li>
+     * </ul>
+     *
+     * @return whether the key was consumed, or {@code null} to route it as a key on its own
+     */
+    private Boolean afterCtrlX(char letter, String nvimKey) {
+        if (letter == 'o') {
+            return complete(Completion.CONTENT_ASSIST);
+        }
+        if (letter == 'c') {
+            return null; // Ctrl-C ends the insert as Esc does, also after a Ctrl-X pressed by mistake
+        }
+        if (letter == 'v' || letter == 'q') {
+            // Vim's command-line completion, which runs what a file's line says in backticks.
+            // Neovim refuses it by itself for every sender (LuaScripts.CTRL_X_GUARD); here the key
+            // is only kept from starting a completion that would be refused at once.
+            return true;
+        }
+        if (neovim.completesInNeovim()) {
+            return completeInNeovim("<C-x>" + nvimKey);
+        }
+        return letter == 'n' || letter == 'p' ? complete(Completion.WORD) : null;
+    }
+
+    /**
+     * A key while Neovim completes in an insert it will give back: {@code Ctrl-X} and the key
+     * after it are decided here, as in an insert Eclipse types ({@link #afterCtrlX}), so that
+     * {@code Ctrl-X Ctrl-O} is Eclipse's content assist in both.
+     * <ul>
+     *   <li>{@code Ctrl-X}: kept back until the next key ({@link #ctrlXPending}). Sent at once,
+     *       Neovim would be in its {@code Ctrl-X} mode before the router knows whether the
+     *       second key is one for Eclipse.</li>
+     *   <li>then {@code Ctrl-O}: the completion is ended with its text kept, Eclipse types again,
+     *       and content assist opens. In that order, unless a key typed right behind keeps
+     *       Neovim typing a moment longer; a proposal accepted then is an edit of Eclipse's own
+     *       during a Neovim-driven insert, which the editor pushes to Neovim
+     *       ({@code NeovimEditorController}, the push gate).</li>
+     *   <li>then {@code Ctrl-V} or {@code Ctrl-Q}: swallowed, as in {@link #afterCtrlX}.</li>
+     *   <li>then any other key but {@code Ctrl-C}: sent with its {@code Ctrl-X}, so
+     *       {@code Ctrl-N}, then {@code Ctrl-X Ctrl-L} goes on with whole lines. {@code Ctrl-C}
+     *       goes alone and ends the insert.</li>
+     * </ul>
+     * Not in an insert Neovim types to its end (while recording): the keys go to Neovim as they
+     * are, a proposal Eclipse inserted would be missing from the recording, and Neovim itself
+     * refuses the three completions that must not run ({@code LuaScripts.CTRL_X_GUARD}).
+     *
+     * @return whether the key was consumed, or {@code null} to send it to Neovim as it is
+     */
+    private Boolean whileCompleting(boolean afterCtrlX, String nvimKey) {
+        if ("<C-x>".equals(nvimKey)) {
+            ctrlXPending = true;
+            return true;
+        }
+        char letter = afterCtrlX ? VimCtrlKeys.letterOf(nvimKey) : 0;
+        if (letter == 'o') {
+            neovim.endCompletionThenAsync(() -> complete(Completion.CONTENT_ASSIST));
+            return true;
+        }
+        if (letter == 'v' || letter == 'q') {
+            return true;
+        }
+        if (afterCtrlX && letter != 'c') {
+            // Also a key that is no Ctrl letter: Ctrl-X Ctrl-] (tags) and Ctrl-X s (spelling) are
+            // completions too, and after any other key Neovim leaves its Ctrl-X mode by itself.
+            return send("<C-x>" + nvimKey);
+        }
+        return null;
+    }
+
+    /** Starts Neovim's completion with {@code keys}, the typed text handed over first. */
+    private boolean completeInNeovim(String keys) {
+        Supplier<InsertReplay.SyncPoint> supplier = syncPointSupplier;
+        neovim.completeInNeovimAsync(supplier == null ? null : supplier.get(), keys);
+        return true;
+    }
+
+    /**
      * A {@code Ctrl} key given to Neovim for insert mode, in an insert Eclipse types. Most are a sync
      * point: Neovim gets the typed text, then the key. Example: {@code Ctrl-W} after {@code foo bar};
      * Neovim's own {@code Ctrl-W} deletes {@code bar} as Vim does, and {@code .} later repeats the
-     * whole insert. Four are not, because their Vim work is a popup the plug-in does not draw, or is
-     * {@code Esc}'s:
+     * whole insert. Four differ:
      * <ul>
-     *   <li>{@code Ctrl-N}, {@code Ctrl-P}: Eclipse's Word Completion, which offers the words of the
-     *       open documents, the nearest before the caret first; pressed again, the next one. It has
-     *       no way back, so both keys do the same.</li>
+     *   <li>{@code Ctrl-N}, {@code Ctrl-P}: Neovim's completion, a sync point after which Neovim
+     *       types until the completion ends ({@link #completeInNeovim}). With its list turned off
+     *       ({@link Neovim#completesInNeovim}), Eclipse's Word Completion instead, which offers the
+     *       words of the open documents, the nearest before the caret first; pressed again, the
+     *       next one. That one has no way back, so both keys do the same.</li>
      *   <li>{@code Ctrl-X}: waits for the next key ({@link #ctrlXPending}).</li>
      *   <li>{@code Ctrl-C}: ends the insert as {@code Esc} does, typed text handed over for {@code .}.
      *       (Vim's own {@code Ctrl-C} skips the {@code InsertLeave} autocommands and abbreviations;
@@ -250,7 +391,7 @@ public final class KeyRouter {
     private boolean insertCtrlKey(char letter, String nvimKey) {
         switch (letter) {
             case 'n', 'p' -> {
-                return complete(Completion.WORD);
+                return neovim.completesInNeovim() ? completeInNeovim(nvimKey) : complete(Completion.WORD);
             }
             case 'x' -> {
                 ctrlXPending = true;

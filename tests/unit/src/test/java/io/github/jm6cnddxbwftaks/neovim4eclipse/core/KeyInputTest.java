@@ -652,6 +652,136 @@ class KeyInputTest {
         assertFalse(keys.isNeovimDrivenInsert());
     }
 
+    // ---- Neovim's completion: Ctrl-N, Ctrl-P, the Ctrl-X modes ----
+
+    /** Ctrl-N as the session queues it: counted on the UI thread, then its sync point on the input thread. */
+    private void ctrlNCompleting() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.after.put("<C-n>", new Mode("ic", false));
+        keys.completionQueued();
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+    }
+
+    /**
+     * {@code al}, Ctrl-N: Neovim inserts the first match and completes on (mode {@code ic}). It
+     * types the insert from here; the document is compared with Neovim's text, but applying that
+     * does not let Eclipse type.
+     */
+    @Test
+    void afterCtrlNNeovimTypesWhileItCompletes() throws Exception {
+        ctrlNCompleting();
+
+        assertEquals(List.of("push document", "setCursor 1:2", "type <C-n>", "keysConsumed", "snapshot", "bufferLines"),
+                nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertTrue(keys.isCompleting());
+        lastChange().afterApply().run(); // the editor applied the sync
+        assertFalse(state.isEclipseTypingReady(), "the next key steers the completion: it is Neovim's");
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /** From the moment Ctrl-N is routed, before its task has run, the completion counts as going on. */
+    @Test
+    void aQueuedCompletionCountsBeforeItsTaskRuns() throws Exception {
+        nvim.mode = new Mode("i", false);
+        assertFalse(keys.isCompleting());
+        keys.completionQueued();
+        assertTrue(keys.isCompleting(), "the key contexts give Neovim every Ctrl letter for the very next key");
+    }
+
+    /** The session is closed and the key's task will never run: the completion is not left counted. */
+    @Test
+    void aCompletionWhoseTaskIsRefusedDoesNotStayCounted() throws Exception {
+        nvim.mode = new Mode("i", false);
+        keys.handOverCompletion(task -> false, () -> { });
+        assertFalse(keys.isCompleting());
+        assertFalse(keys.isLeavingInsertMode());
+    }
+
+    /** Ctrl-N again moves to the next match: still completing, so no hand-back. */
+    @Test
+    void aKeyThatSteersTheCompletionDoesNotHandBack() throws Exception {
+        ctrlNCompleting();
+        nvim.calls.clear();
+
+        queue("<C-n>");
+
+        assertFalse(nvim.calls.contains("bufferLines"), "no hand-back handshake: " + nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertTrue(keys.isCompleting());
+    }
+
+    /** The key that ends the completion ({@code (}, Ctrl-Y, Ctrl-E) brings plain insert mode back, and Eclipse types again. */
+    @Test
+    void theKeyThatEndsTheCompletionHandsTheInsertBack() throws Exception {
+        ctrlNCompleting();
+        nvim.after.put("(", new Mode("i", false));
+
+        queue("(");
+
+        assertFalse(keys.isCompleting());
+        assertTrue(nvim.calls.contains("type ("), "Neovim inserted the bracket");
+        lastChange().afterApply().run(); // the editor applied the hand-back's sync
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertTrue(state.isEclipseTypingReady(), "Eclipse types the next key");
+    }
+
+    /** Ctrl-X and a key that names no kind of completion: over at once, so typing goes back with the usual handshake. */
+    @Test
+    void aCompletionThatIsOverAtOnceHandsBackAtOnce() throws Exception {
+        nvim.mode = new Mode("i", false);
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-x><C-a>");
+
+        assertFalse(keys.isCompleting());
+        assertTrue(keys.isNeovimDrivenInsert(), "Neovim's since the key was routed, until the editor has its text");
+        lastChange().afterApply().run(); // the editor applied the hand-back's sync
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertTrue(state.isEclipseTypingReady());
+    }
+
+    /** A click into the text while the list is open: the completion ends with the text kept, and Eclipse types. */
+    @Test
+    void endingTheCompletionSendsCtrlXCtrlZAndHandsBack() throws Exception {
+        ctrlNCompleting();
+        nvim.after.put("\u0018\u001a", new Mode("i", false));
+        nvim.calls.clear();
+
+        keys.endCompletion();
+
+        assertTrue(nvim.calls.contains("feed \u0018\u001a"), "Ctrl-X Ctrl-Z, typed with no mapping applied: " + nvim.calls);
+        lastChange().afterApply().run();
+        assertTrue(state.isEclipseTypingReady());
+    }
+
+    /** No completion going on: nothing is typed. In Normal mode Ctrl-X would subtract from a number. */
+    @Test
+    void endingACompletionThatIsNotGoingOnTypesNothing() throws Exception {
+        keys.endCompletion();
+        nvim.mode = new Mode("i", false);
+        keys.endCompletion();
+        assertEquals(List.of(), nvim.calls);
+    }
+
+    /** While recording, Neovim owns the insert: the plug-in's keys would land in the macro, so none is sent. */
+    @Test
+    void anInsertNeovimOwnsIsNeverEndedByThePlugIn() throws Exception {
+        recording = "q";
+        type("j"); // the snapshot reports the recording
+        nvim.after.put("i", new Mode("i", false));
+        type("i");
+        assertTrue(keys.isNeovimDrivenInsert());
+        nvim.after.put("<C-n>", new Mode("ic", false));
+        type("<C-n>");
+        nvim.calls.clear();
+
+        assertFalse(keys.isCompleting(), "the Ctrl Keys page's choice stands, as in any recorded insert");
+        keys.endCompletion();
+
+        assertEquals(List.of(), nvim.calls);
+    }
+
     private void ctrlRWaitingForARegister() throws Exception {
         nvim.mode = new Mode("i", false);
         nvim.after.put("<C-r>", new Mode("i", true));

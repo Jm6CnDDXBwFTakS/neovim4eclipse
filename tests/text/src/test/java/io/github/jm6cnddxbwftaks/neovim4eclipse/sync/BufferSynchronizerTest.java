@@ -283,7 +283,7 @@ class BufferSynchronizerTest {
         try (ExpectedLog log = ExpectedLog.of(TextRepairs.class, Level.FINE)) {
             neovim.runQueued();
             log.assertLogged(Level.WARNING, "Neovim's line 1 (of 3) differed");
-            log.assertLogged(Level.WARNING, "Found after an Eclipse edit in normal mode.");
+            log.assertLogged(Level.WARNING, "Found after an Eclipse edit that was not typing.");
         }
     }
 

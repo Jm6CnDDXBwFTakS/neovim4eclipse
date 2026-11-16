@@ -106,6 +106,10 @@ class NotificationBridgeTest {
             @Override public void onGridEvents(List<GridEvent> grid) { events.add("grid:" + grid); }
             @Override public void onCommandWindow(int winid, String type) { events.add("cmdwin:" + winid + ":" + type); }
             @Override public void onCommandWindowClosed() { events.add("cmdwin closed"); }
+            @Override public void onCompletionAnchor(io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu.Anchor anchor) {
+                events.add("complete:" + anchor.line1() + ":" + anchor.col0() + ":" + anchor.winCol() + ":"
+                        + anchor.pumHeight() + ":" + Integer.toHexString(anchor.colors().groups().get(0).background()));
+            }
         });
     }
 
@@ -419,6 +423,26 @@ class NotificationBridgeTest {
         notify("redraw", List.of("mode_change", List.of("normal", 0)));
         notify("nvim_buf_changedtick_event", 1, 5);
         assertTrue(events.isEmpty(), events.toString());
+    }
+
+    /**
+     * The completion list's cursor and colors, told by the plug-in's Lua at each change of the list:
+     * line, byte column, the cursor's cell in its window, 'pumheight', the Pmenu groups' colors.
+     */
+    @Test
+    void theCompletionListsCursorAndColors() {
+        notify("eclipse_complete", 5, 8, 9, 10, List.of(List.of(0xC0C0C0, 0x202020, false, false, false, false)));
+        assertEquals(List.of("complete:5:8:9:10:202020"), events);
+    }
+
+    /** Without colors the list is still placed; a report that names no line is dropped. */
+    @Test
+    void aCompletionReportWithoutColorsCountsAndAMalformedOneIsDropped() {
+        notify("eclipse_complete", 5, 8, 9, 0);
+        notify("eclipse_complete", "x", 8, 9, 0);
+        notify("eclipse_complete", 5, 8);
+        notify("eclipse_complete", 0, 8, 9, 0);
+        assertEquals(List.of("complete:5:8:9:0:" + Integer.toHexString(GridEvent.NO_COLOR)), events);
     }
 
     /** The command-line window: told by the plug-in's Lua; its grid comes with the redraws. */

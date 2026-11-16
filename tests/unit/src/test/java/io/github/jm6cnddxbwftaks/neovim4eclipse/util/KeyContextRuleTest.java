@@ -44,18 +44,39 @@ class KeyContextRuleTest {
         assertEquals(Column.NORMAL, KeyContextRule.column(null, false), "mode not known yet");
     }
 
-    /** Neovim's completion popup is not drawn: while Eclipse types, Ctrl-N and Ctrl-P are Eclipse's Word Completion. */
+    /** With Neovim's completion list turned off: while Eclipse types, Ctrl-N and Ctrl-P are Eclipse's Word Completion. */
     @Test
-    void ctrlNAndCtrlPRunWordCompletionWhileEclipseTypes() {
-        assertEquals(VimCtrlKeys.completionContextId('n'), KeyContextRule.contextId('n', Column.INSERT, true));
-        assertEquals(VimCtrlKeys.completionContextId('p'), KeyContextRule.contextId('p', Column.INSERT, true));
-        assertEquals(VimCtrlKeys.contextId('w'), KeyContextRule.contextId('w', Column.INSERT, true));
+    void ctrlNAndCtrlPRunWordCompletionWhileEclipseTypesWithNeovimsListOff() {
+        assertEquals(VimCtrlKeys.completionContextId('n'), KeyContextRule.contextId('n', Column.INSERT, true, false));
+        assertEquals(VimCtrlKeys.completionContextId('p'), KeyContextRule.contextId('p', Column.INSERT, true, false));
+        assertEquals(VimCtrlKeys.contextId('w'), KeyContextRule.contextId('w', Column.INSERT, true, false));
+    }
+
+    /** With Neovim's completion, the letters' own bindings send them to the plug-in, which starts it. */
+    @Test
+    void ctrlNAndCtrlPAreNeovimsWithItsCompletion() {
+        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.INSERT, true, true));
+        assertEquals(VimCtrlKeys.contextId('p'), KeyContextRule.contextId('p', Column.INSERT, true, true));
     }
 
     @Test
     void ctrlNAndCtrlPAreNeovimsWhereNeovimTypesOrInNormalMode() {
-        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.INSERT, false), "Neovim drives");
-        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.NORMAL, true), "normal mode");
+        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.INSERT, false, false), "Neovim drives");
+        assertEquals(VimCtrlKeys.contextId('n'), KeyContextRule.contextId('n', Column.NORMAL, true, false), "normal mode");
+    }
+
+    /**
+     * While Neovim completes, every letter is its own in insert mode: Ctrl-Y accepts and Ctrl-E
+     * cancels, though neither is ticked on the Ctrl Keys page. Not in normal mode, and a ticked
+     * letter stays ticked.
+     */
+    @Test
+    void everyLetterGoesToNeovimWhileItCompletes() {
+        assertTrue(KeyContextRule.toNeovim(false, Column.INSERT, true), "Ctrl-Y, not ticked, while completing");
+        assertFalse(KeyContextRule.toNeovim(false, Column.INSERT, false), "Ctrl-Y otherwise: Eclipse's Redo");
+        assertFalse(KeyContextRule.toNeovim(false, Column.NORMAL, true), "the choice for normal mode stands");
+        assertTrue(KeyContextRule.toNeovim(true, Column.INSERT, false));
+        assertTrue(KeyContextRule.toNeovim(true, Column.NORMAL, false));
     }
 
     @Test

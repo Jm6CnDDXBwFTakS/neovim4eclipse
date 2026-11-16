@@ -27,13 +27,14 @@ dialog's page area.
 
 - **Normal** is the preference `ctrlKeyNormal.<letter>`, the letter's Normal column (`util/VimCtrlKeys`
   has the defaults).
-- **Insert** is `ctrlKeyInsert.<letter>`. Defaults on Windows and Linux: **W U R O T D K Q N P**
-  (delete word, delete to the insert's start, insert a register, one normal command, indent,
-  unindent, digraph, insert literally, word completion). A, C, V, X, Y, Z, S, F stay Eclipse's
-  (select all, copy, paste, cut, redo, undo, save, find), and so do the letters with no Vim insert
-  meaning or one the keyboard has a key for (`util/VimCtrlKeys.INSERT_BY_DEFAULT` says why for each).
-  Find Next, Last Edit Location, New and Print, which K, Q, N and P replace, are rarely wanted in
-  the middle of typing.
+- **Insert** is `ctrlKeyInsert.<letter>`. Defaults on Windows and Linux: every letter with a Vim
+  insert meaning except A, C and V, that is **W U R O T D K Q N P X Y E G H I J M** (delete word,
+  delete to the insert's start, insert a register, one normal command, indent, unindent, digraph,
+  insert literally, completion and its `Ctrl-X` modes, the character above and below, the undo
+  break, Backspace, Tab, Enter). A, C and V stay Eclipse's (select all, copy, paste: known from
+  every program, and Vim's meanings for C and V have `Esc` and `Ctrl-Q`), and so do the letters
+  with no Vim insert meaning: S, Z, F, B, L (`util/VimCtrlKeys.INSERT_BY_DEFAULT` says what each
+  choice costs).
 - **macOS**: every letter with a Vim insert meaning, since Eclipse's own shortcuts use Cmd there.
   That includes `Ctrl+A`, `Ctrl+E` and `Ctrl+K`, although macOS text fields use them for line
   start, line end and delete to line end: in the editor they are Vim's.
@@ -187,9 +188,26 @@ back, `anInsertFromBlockwiseVisual…`, `anInsertWhileRecording…`).
   insert-start sync hands typing back to Eclipse.
 - **`Ctrl-C`**: offered, off by default (copy). When ticked, `KeyRouter` takes it for `Esc`: the
   typed text is replayed, so `.` repeats it.
-- **`Ctrl-N` / `Ctrl-P`**: Eclipse's *Word Completion* (Alt+/), and `Ctrl-X Ctrl-O` Eclipse's
-  content assist, rather than Neovim's popup, which the plug-in does not draw. Off by default on
-  Windows and Linux.
+- **`Ctrl-N` / `Ctrl-P`**: Neovim's own completion, with its list drawn at the word
+  (docs/ARCHITECTURE.md, "The completion list"). On by default on every system.
+  - The key is a sync point (`KeyRouter.completeInNeovim`), after which Neovim types the insert
+    until its mode is no longer a completing one (`ic`, `ix`); the section 5 hand-back then
+    returns typing to Eclipse (`KeyInput.mayHandBack`). The character that ends a completion is
+    therefore typed by Neovim, and Eclipse's typing helpers skip it.
+  - Why Eclipse does not type that character: the key is decided on the UI thread at once
+    (`KeyInterceptor.verifyKey` sets `event.doit`), and cannot wait for Neovim to end the
+    completion first. Letting Eclipse type it immediately, with Neovim told to stop behind it,
+    needs the completed word to be in the document already; a key typed before that would land
+    in the wrong place. It is the rule of section 5: a key typed before Eclipse has Neovim's text
+    goes to Neovim.
+  - While Neovim completes, every `Ctrl` letter's context is on (`KeyContextRule.toNeovim`), so
+    `Ctrl-Y` and `Ctrl-E` reach Neovim though the Ctrl Keys page gives them to Eclipse.
+  - `Ctrl-X` is a one-key prefix in `KeyRouter`: `Ctrl-O` then runs Eclipse's Content Assist,
+    another `Ctrl` letter is sent to Neovim with it (`<C-x><C-l>`), any other key is handled as
+    usual. A pending `Ctrl-X` ends at any command other than the plug-in's own key commands
+    (`editor/OtherCommandWatch`).
+- **With Neovim's list turned off** (`vim.g.neovim4eclipse_completion_menu = 0`), `Ctrl-N` /
+  `Ctrl-P` run Eclipse's *Word Completion* (Alt+/) instead, as before 0.2.24.
   - Word Completion cannot go backward (`HippieCompleteAction` keeps only a forward iterator), so
     `Ctrl-P` does what `Ctrl-N` does; its first offer is the nearest word before the caret, as
     Vim's `Ctrl-P`.
@@ -199,14 +217,12 @@ back, `anInsertFromBlockwiseVisual…`, `anInsertWhileRecording…`).
     own (`...context.complete.n`, `.p`) whose bindings run Eclipse's
     `org.eclipse.ui.edit.text.hippieCompletion` directly (`KeyContextRule.contextId`). In an insert
     Neovim drives they stay Neovim's letter contexts: Eclipse does not type there.
-  - `Ctrl-X` is a one-key prefix in `KeyRouter`: `Ctrl-O` then runs Content Assist, `Ctrl-N` /
-    `Ctrl-P` Word Completion, any other key is handled as usual. A pending `Ctrl-X` ends at any
-    command other than the plug-in's own key commands (`editor/OtherCommandWatch`): a key Eclipse's
-    binding took never reaches the router, and `Ctrl-X Ctrl-N` goes straight to Word Completion.
-  - Tests: `KeyRouterTest`, `KeyContextRuleTest`, `PluginXmlConsistencyTest`, UI
-    `ctrlNWhileEclipseTypesRunsWordCompletion` (the order and the cycling),
-    `ctrlCEndsAnInsertAsEscDoes`, and `ctrlXCtrlOWhileEclipseTypesRunsContentAssist` (the text
-    editor has no proposals, so it checks that the command runs).
+  - `Ctrl-X Ctrl-N` and `Ctrl-X Ctrl-P` run Word Completion too; a key Eclipse's binding took
+    never reaches the router, and then `Ctrl-X Ctrl-N` goes straight to Word Completion.
+- Tests: `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `PluginXmlConsistencyTest`,
+  `NeovimCompletionIntegrationTest`, UI `CompletionMenuEndToEndTest` (the list, the keys, the
+  hand-back), `ctrlCEndsAnInsertAsEscDoes`, and `ctrlXCtrlOWhileEclipseTypesRunsContentAssist`
+  (the text editor has no proposals, so it checks that the command runs).
 
 ## 7. Measurements
 

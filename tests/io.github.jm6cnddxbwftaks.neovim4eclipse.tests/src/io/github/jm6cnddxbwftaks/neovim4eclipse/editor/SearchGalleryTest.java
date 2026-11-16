@@ -92,6 +92,11 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "Both are in Neovim's colors for floating windows (NormalFloat, FloatBorder, FloatTitle), "
                             + "which follow the theme, and their text reads in both; the editor's text shows around "
                             + "them, and the caret stays in the editor."),
+            new Picture("completion", "Neovim's completion list (Ctrl-N)",
+                    "After f and Ctrl-N twice in the Java editor: the list of words hangs under the word being "
+                            + "completed, its entries lined up with it, in Neovim's colors for the list (Pmenu), "
+                            + "which follow the theme. The second entry is selected (PmenuSel) and stands out from "
+                            + "the others in both themes; all entries read. The caret is after the completed word."),
             new Picture(WHICH_KEY + "z", "which-key's panel after z",
                     "The real which-key plug-in, in the Java editor, after z: its panel of the keys that can "
                             + "follow lies on the editor's bottom edge, from the left edge on, and reads in both "
@@ -283,6 +288,43 @@ class SearchGalleryTest extends EndToEndTestBase {
                         }
                     }
                     return true;
+                });
+            }
+
+            // Neovim's completion list in the same editor: f typed on a new line, then Ctrl-N twice.
+            // Words of this file only: a match from another file comes with that file's full path,
+            // which names the folder the gallery runs in.
+            SessionProbe.lua(session, "vim.bo.complete = '.'");
+            session.inputAsync("8Go");
+            settle();
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            UiTestSupport.type(javaWidget, "f");
+            UiTestSupport.ctrlKey(javaWidget, 'n');
+            UiTestSupport.ctrlKey(javaWidget, 'n');
+            try {
+                waitUntil("the completion list with its second entry selected", TIMEOUT_MS, () -> {
+                    settle();
+                    for (org.eclipse.swt.widgets.Control frame : javaWidget.getChildren()) { // the list's canvas is in a frame
+                        if (frame instanceof org.eclipse.swt.widgets.Composite composite && frame.getVisible()
+                                && composite.getChildren().length == 1
+                                && composite.getChildren()[0] instanceof GridCanvas canvas && canvas.grid() != null && canvas.grid().window() == -1 && canvas.grid().height() > 1
+                                && canvas.grid().hlAt(1, 1) == io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu.PMENU_SEL) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+                take(javaWidget, "completion", 16);
+            } finally {
+                UiTestSupport.ctrlKey(javaWidget, 'e'); // takes the completion back
+                UiTestSupport.escape(javaWidget);
+                waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+                settle();
+                SessionProbe.lua(session, "vim.cmd('setlocal complete<')");
+                session.inputAsync("u"); // the new line with its f: the later pictures show the file as it was
+                waitUntil("the Java file as before", TIMEOUT_MS, () -> {
+                    settle();
+                    return JAVA.equals(java.getDocumentProvider().getDocument(java.getEditorInput()).get());
                 });
             }
 

@@ -95,6 +95,11 @@ public final class KeyInterceptor implements VerifyKeyListener {
         router.setEclipseBinding(eclipseBinding);
     }
 
+    /** See {@link KeyRouter#isCtrlXPending}. Any thread. */
+    public boolean isCtrlXPending() {
+        return router.isCtrlXPending();
+    }
+
     /** See {@link KeyRouter#cancelCtrlX}. UI thread. */
     public void cancelCtrlX() {
         router.cancelCtrlX();

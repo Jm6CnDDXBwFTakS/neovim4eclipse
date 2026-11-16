@@ -13,6 +13,7 @@ import java.util.logging.Logger;
 import org.eclipse.core.commands.ParameterizedCommand;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextViewerExtension;
@@ -51,6 +52,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CellWidth;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
@@ -111,6 +114,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final NeovimWindowPanel commandWindowPanel;
     /** Neovim's floating windows without the focus, drawn over the text. */
     private final FloatingWindows floatingWindows;
+    /** Neovim's insert-mode completion list, drawn at the word being completed. */
+    private final CompletionMenuPopup completionMenu;
     /**
      * Whether the command-line window is open, set on the RPC thread as the session reports it:
      * its mode, which is Neovim's in that window, then does not reach the editor
@@ -196,6 +201,13 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
     private final Consumer<CommandWindowView> commandWindowListener = this::onCommandWindow;
     private final Consumer<List<FloatWindow>> floatingWindowListener = this::onFloatingWindows;
+    private final Consumer<CompletionMenu.View> completionMenuListener = this::onCompletionMenu;
+    /**
+     * A click into the text or a loss of the focus while Neovim completes, or while a
+     * {@code Ctrl-X} waits for its second key, ends that ({@link #endCompletion}): the list belongs to the word at the caret, and Neovim would go on
+     * taking every key for it.
+     */
+    private final Listener endCompletionListener = e -> endCompletion();
     private final Consumer<FoldState> foldListener = this::onFolds;
     private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
@@ -238,8 +250,17 @@ public final class NeovimEditorController implements AutoCloseable {
         // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are
         // echoes; and while Esc is handled they are of a cursor about to move (KeyInput.leavingInsert).
         this.caretSync.dropNeovimCursorWhile(() -> eclipseTyping() || session.isLeavingInsertMode());
-        this.synchronizer.pushLocalChanges(() -> isNeovimModeActive() && !session.isTypingMode(),
-                caretSync::sendEclipseCaretNow);
+        // Outside insert mode, and while Neovim completes: Neovim types then, so a change Eclipse makes
+        // by itself (a paste with the mouse, an accepted proposal) is not typing that Esc hands over,
+        // and the text Neovim sends when the completion ends would take it away again.
+        // Such a change ends the completion: Neovim's completion remembers the line as it was, and its
+        // next Ctrl-N or Ctrl-E would put that line back, without the change (endCompletion does
+        // nothing when no completion is going on).
+        this.synchronizer.pushLocalChanges(
+                () -> isNeovimModeActive() && (!session.isTypingMode() || session.isCompleting()), () -> {
+                    caretSync.sendEclipseCaretNow();
+                    session.endCompletionAsync();
+                });
         this.synchronizer.setRepairReporting(new RepairNotice(editor, session));
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution(this::onStatuslineColumns);
@@ -268,9 +289,11 @@ public final class NeovimEditorController implements AutoCloseable {
         this.selectionView = new VisualSelectionView(caret, new BlockOverlay(styledText, offsets),
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
-                this::commandLineHasFocus, session::isNeovimDrivenInsert);
-        // A key can make the insert Neovim-driven without a mode change (KeyRouter), which turns
-        // insert-mode Ctrl-N and Ctrl-P from Eclipse's Word Completion into Neovim's: look after each.
+                this::commandLineHasFocus, session::isNeovimDrivenInsert, session::completesInNeovim,
+                () -> session.completesInNeovim() && (session.isCompleting() || keyInterceptor.isCtrlXPending()));
+        // A key can change which letters are Neovim's without a mode change (KeyRouter): Ctrl-N starts
+        // a completion and Ctrl-X waits for its second key, and then every Ctrl letter is Neovim's;
+        // an insert becomes Neovim-driven. Look after each key.
         keyInterceptor.setAfterKey(keyContext::update);
         this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
         this.commandLine = new CommandLineBox(styledText, new SessionCommands(session), messageLine,
@@ -280,6 +303,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
         this.floatingWindows = new FloatingWindows(styledText);
+        this.completionMenu = new CompletionMenuPopup(styledText, this::completionWordStart);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
         this.wheel = viewport == null ? null
@@ -357,6 +381,9 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addCmdlineListener(cmdlineListener);
         session.addCommandWindowListener(commandWindowListener);
         session.addFloatingWindowListener(floatingWindowListener);
+        session.addCompletionMenuListener(completionMenuListener);
+        styledText.addListener(SWT.MouseDown, endCompletionListener);
+        styledText.addListener(SWT.FocusOut, endCompletionListener);
         // A float reported before this editor listened (it lives in this editor's tab page, and
         // Neovim showed it again when the tab page came back) would stay unseen until it changes.
         onFloatingWindows(session.floatingWindows());
@@ -820,6 +847,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 session.resendSearchAsync(buffer); // cleared in Eclipse mode
             }
             floatingWindows.show(session.floatingWindows()); // cleared in Eclipse mode too
+            completionMenu.show(session.completionMenu()); // likewise: a list of an insert Neovim owns is still open
             LOG.info("Mode → NEOVIM (keys to nvim)");
         } else {
             modeStatus.setHostEclipseMode();
@@ -833,6 +861,8 @@ public final class NeovimEditorController implements AutoCloseable {
                 commandWindowPanel.show(CommandWindowView.CLOSED);
             }
             floatingWindows.clear(); // Neovim's windows are not shown in Eclipse mode; they come back with Neovim mode
+            completionMenu.hide();
+            session.endCompletionAsync(); // Neovim would wait for the list's next key, which it no longer gets
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
             if (searchHighlighter != null) {
@@ -934,6 +964,62 @@ public final class NeovimEditorController implements AutoCloseable {
         });
         if (!view.open()) {
             onModeChanged(session.getMode());
+        }
+    }
+
+    /**
+     * Neovim's completion list shows, changed or closed: it is drawn at the word being completed
+     * in this editor, whose insert Neovim is typing. Not in Eclipse mode. RPC thread.
+     */
+    private void onCompletionMenu(CompletionMenu.View view) {
+        if (closed || !neovimModeActive) {
+            return;
+        }
+        HostCommands.runOnUi(() -> {
+            if (!closed && neovimModeActive && !styledText.isDisposed()) {
+                // The newest view, not this one: a list that closed meanwhile must not come back.
+                completionMenu.show(session.completionMenu());
+            }
+        });
+    }
+
+    /**
+     * Where the word being completed starts, as a widget offset, for the list's place
+     * ({@link CompletionMenuPopup}): Neovim's cursor in the document, and from there back as many
+     * cells as Neovim says the word is long ({@link CompletionMenu.View#cellsBack}). -1 when the
+     * line is not in the document (any more) or is folded away.
+     */
+    private int completionWordStart(CompletionMenu.View view) {
+        try {
+            IDocument document = documentOf(editor);
+            int cursor = DocumentPositions.byteColToOffset(document, view.line1(), view.col0());
+            IRegion line = document.getLineInformation(view.line1() - 1);
+            // Only the stretch the word can be in, not the whole line: this runs at each paint, and
+            // a line can be megabytes long. A cell is at least one char, a few with marks on it.
+            int from = Math.max(line.getOffset(), cursor - (view.cellsBack() * 8 + 16));
+            int to = Math.min(cursor, line.getOffset() + line.getLength());
+            String text = to > from ? document.get(from, to - from) : "";
+            return offsets.toWidget(from + CellWidth.charsBack(text, text.length(), view.cellsBack()));
+        } catch (BadLocationException | RuntimeException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * Ends Neovim's completion, if one is going on, so that Eclipse types again; and forgets a
+     * {@code Ctrl-X} still waiting for its second key. Why the second: while it waits, every
+     * {@code Ctrl} letter is Neovim's. Example: {@code Ctrl+X} pressed for Cut out of habit, a
+     * click elsewhere, then {@code Ctrl+S}: without this, Neovim would get {@code Ctrl-X Ctrl-S}
+     * (spelling suggestions) and nothing would be saved. UI thread.
+     */
+    private void endCompletion() {
+        if (!closed && keyInterceptor.isCtrlXPending()) {
+            keyInterceptor.cancelCtrlX();
+            keyContext.update(); // the letters are Eclipse's again where they are not ticked
+        }
+        if (!closed && session.isCompleting()) {
+            completionMenu.hide(); // at once; Neovim's own report of the list's end follows
+            session.endCompletionAsync();
         }
     }
 
@@ -1294,6 +1380,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeCmdlineListener(cmdlineListener);
             session.removeCommandWindowListener(commandWindowListener);
             session.removeFloatingWindowListener(floatingWindowListener);
+            session.removeCompletionMenuListener(completionMenuListener);
             session.removeFoldStateListener(foldListener);
             session.removeWrapListener(wrapListener);
             session.removeTopLineListener(topLineListener);
@@ -1321,6 +1408,11 @@ public final class NeovimEditorController implements AutoCloseable {
             commandLine.dispose();
             commandWindowPanel.dispose();
             floatingWindows.dispose();
+            completionMenu.dispose();
+            if (!styledText.isDisposed()) {
+                styledText.removeListener(SWT.MouseDown, endCompletionListener);
+                styledText.removeListener(SWT.FocusOut, endCompletionListener);
+            }
             messageLine.dispose();
             selectionView.dispose();
             if (searchHighlighter != null) {

@@ -209,7 +209,7 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 - **On:** any
 - **Launch:** none
-- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
+- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, editor/CompletionMenuPopup.java, util/CompletionMenu.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
 (`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two
@@ -250,8 +250,8 @@ which is what a user without the font sees, and the rest of the picture is still
 
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
    browser.
-   ⇒ Each of the ten pictures is there in the light and the dark theme, side by side; without
-   `-Dgallery.whichkey`, eight, and the two of which-key say what they need.
+   ⇒ Each of the eleven pictures is there in the light and the dark theme, side by side; without
+   `-Dgallery.whichkey`, nine, and the two of which-key say what they need.
 2. Look at each pair against the text above it.
    ⇒ In both themes every match stands out from the editor's background, its text (syntax colors
    included, in the Java editor) stays readable, and the match under the caret is told apart from
@@ -259,7 +259,9 @@ which is what a user without the font sees, and the rest of the picture is still
    `:match` read in both themes, in Neovim's colors. In the picture of the command-line window,
    its history reads in both themes, on the editor's own background. In the picture of the floating
    windows, the panel lies on the editor's bottom edge and the note above it, both readable in both
-   themes, with the editor's text showing around them. In the two pictures of which-key, its panel
+   themes, with the editor's text showing around them. In the picture of the completion list, the
+   list hangs under the word being completed, every entry reads, and the selected one stands out
+   in both themes. In the two pictures of which-key, its panel
    lies on the editor's bottom edge from the left edge on, its lines read in both themes, and no
    icon is cut off at the cell after it.
 
@@ -363,6 +365,38 @@ Sources* first.
 5. With the *ABC – AZERTY* input source, if you have it: step 1 with <kbd>Shift</kbd> and the
    <kbd>é</kbd> key (2) as the digit.
    ⇒ The picked accent, once, as in step 1.
+
+**Expect:** each step's result, after its ⇒.
+
+## Ctrl keys in insert mode
+
+### `ck-windows-insert` Windows: Redo on Ctrl+Shift+Z, and Ctrl+Enter is not Ctrl+J
+
+- **On:** windows
+- **Launch:** checks
+- **Areas:** /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml, util/VimCtrlKeys.java, core/KeyRouter.java, editor/EditorKeyContext.java
+
+Why by hand: the binding exists on Windows only, and which key event <kbd>Ctrl+Enter</kbd> makes
+there (its character is the one <kbd>Ctrl+J</kbd> has) only a real keyboard shows.
+
+1. In a text file, `o`, type `one two`, press <kbd>Ctrl+Z</kbd>, then <kbd>Ctrl+Shift+Z</kbd>.
+   ⇒ <kbd>Ctrl+Z</kbd> takes typed text away, <kbd>Ctrl+Shift+Z</kbd> brings it back; the status
+   bar still shows `INSERT`.
+2. <kbd>Esc</kbd>, `u`, then <kbd>Ctrl+Shift+Z</kbd> in normal mode.
+   ⇒ The line comes back (Eclipse's Redo; Vim's own is <kbd>Ctrl+R</kbd>). `:echo getline('.')`
+   shows the same text as the editor.
+3. `o`, type `ab`, press <kbd>Ctrl+J</kbd>, type `cd`.
+   ⇒ A new line after `ab`, as <kbd>Enter</kbd> makes; no Incremental Find in the status bar.
+4. *Window → Preferences → General → Keys*, under *Show key binding when command is invoked*
+   tick the keyboard box, *Apply and Close*. In the editor, still in the insert, press
+   <kbd>Ctrl+J</kbd>.
+   ⇒ A small pop-up names the command: *Neovim: Ctrl-J (Cursor down)*.
+5. Press <kbd>Ctrl+Enter</kbd>.
+   ⇒ No pop-up naming *Neovim: Ctrl-J*: the key is not taken for <kbd>Ctrl+J</kbd>. Whatever it
+   does to the text, `:echo line('$')` after <kbd>Esc</kbd> equals the editor's last line number.
+6. *Window → Preferences → General → Keys*, filter `Redo`; then clear the box ticked in step 4.
+   ⇒ *Redo* has `Ctrl+Y` and `Ctrl+Shift+Z` (*When*: Neovim Normal/Visual Mode), with no
+   conflict mark.
 
 **Expect:** each step's result, after its ⇒.
 

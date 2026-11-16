@@ -1315,34 +1315,6 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Ctrl-N runs Eclipse's Word Completion, which offers the nearest matching word before the caret
-     * first, and the next one when pressed again (Neovim's popup is not drawn). Ticked for the test:
-     * on Windows and Linux Ctrl+N is Eclipse's in insert mode by default.
-     */
-    @Test
-    void ctrlNWhileEclipseTypesRunsWordCompletion() {
-        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        store.setValue(PreferenceConstants.ctrlKeyInsert('n'), true);
-        try {
-            document.set("apple\napricot\n");
-            settle();
-            typeSlowly("Go");
-            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
-            type(widget, "ap");
-            ctrlKey(widget, 'n');
-            expectText("apple\napricot\napricot\n");
-            ctrlKey(widget, 'n');
-            expectText("apple\napricot\napple\n");
-            escape(widget);
-            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
-            settle();
-            expectText("apple\napricot\napple\n");
-        } finally {
-            store.setToDefault(PreferenceConstants.ctrlKeyInsert('n'));
-        }
-    }
-
-    /**
      * A normal-mode binding that had not been switched off yet when a key came in insert mode (the
      * key contexts follow the mode a moment late): the letter is Eclipse's in insert mode, so
      * Eclipse's command runs. Ctrl+D, given to Eclipse for insert mode, is Delete Line, not Vim's
@@ -1391,6 +1363,82 @@ class EditorEndToEndTest extends EndToEndTestBase {
             waitUntil("Content Assist", TIMEOUT_MS,
                     () -> run.contains(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS), run::toString);
             assertTrue(session.isTypingMode(), "not Ctrl-O's one normal-mode command");
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+        } finally {
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('x'));
+        }
+    }
+
+    /**
+     * Ctrl-X Ctrl-O while Neovim completes (after Ctrl-N, its list open): the completion ends with
+     * its match kept, Eclipse types again, and Eclipse's Content Assist is run. Neovim's omni
+     * completion is not: Neovim stays out of its Ctrl-X mode.
+     */
+    @Test
+    void ctrlXCtrlOWhileNeovimCompletesEndsItAndRunsContentAssist() {
+        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+        store.setValue(PreferenceConstants.ctrlKeyInsert('x'), true);
+        store.setValue(PreferenceConstants.ctrlKeyInsert('n'), true);
+        try (CommandLog log = new CommandLog()) {
+            List<String> run = log.run;
+            document.set("apple\napricot\n");
+            settle();
+            typeSlowly("Go");
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            type(widget, "ap");
+            ctrlKey(widget, 'n');
+            waitUntil("Neovim's list", TIMEOUT_MS, () -> session.completionMenu().isShowing());
+            expectText("apple\napricot\napple\n");
+            ctrlKey(widget, 'x');
+            ctrlKey(widget, 'o');
+            waitUntil("Content Assist", TIMEOUT_MS,
+                    () -> run.contains(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS), run::toString);
+            waitUntil("the completion over", TIMEOUT_MS, () -> !session.isCompleting());
+            waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
+            assertFalse(session.completionMenu().isShowing(), "Neovim's list is gone");
+            assertEquals("i", session.getMode(), "Neovim is not in a Ctrl-X mode");
+            expectText("apple\napricot\napple\n");
+            type(widget, "s");
+            expectText("apple\napricot\napples\n");
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            settle();
+            expectText("apple\napricot\napples\n");
+        } finally {
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('x'));
+            store.setToDefault(PreferenceConstants.ctrlKeyInsert('n'));
+        }
+    }
+
+    /**
+     * Ctrl+X pressed and nothing after it (for Cut, out of habit), then a click into the text: the
+     * Ctrl-X is forgotten, so the next Ctrl letter is not its second key. Ctrl+S, which Neovim
+     * would take as Ctrl-X Ctrl-S (spelling suggestions), is Eclipse's Save again.
+     */
+    @Test
+    void aClickForgetsACtrlXThatWaitsForItsSecondKey() {
+        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
+        store.setValue(PreferenceConstants.ctrlKeyInsert('x'), true);
+        try (CommandLog log = new CommandLog()) {
+            List<String> run = log.run;
+            type(widget, 'A');
+            waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
+            type(widget, "ab");
+            ctrlKey(widget, 'x');
+            settle();
+            Event click = new Event();
+            click.button = 1;
+            click.count = 1;
+            Point at = widget.getLocationAtOffset(0);
+            click.x = at.x + 1;
+            click.y = at.y + 1;
+            widget.notifyListeners(SWT.MouseDown, click);
+            widget.notifyListeners(SWT.MouseUp, click);
+            settle();
+            ctrlKey(widget, 's');
+            waitUntil("Save", TIMEOUT_MS, () -> run.contains(org.eclipse.ui.IWorkbenchCommandConstants.FILE_SAVE), run::toString);
+            assertFalse(session.isCompleting(), "Ctrl+S was not Ctrl-X's second key");
             escape(widget);
             waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
         } finally {

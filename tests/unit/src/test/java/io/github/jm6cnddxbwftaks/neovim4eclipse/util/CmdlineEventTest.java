@@ -61,8 +61,8 @@ class CmdlineEventTest {
                 List.of("popupmenu_select", List.of(1L)),
                 List.of("popupmenu_hide"));
         List<CmdlineEvent> events = CmdlineEvent.fromRedraw(redraw);
-        assertEquals(List.of(new CmdlineEvent.MenuShow(List.of("Find.java", "cls/"), 0, -1), new CmdlineEvent.MenuSelect(1),
-                new CmdlineEvent.MenuHide()), events);
+        assertEquals(List.of(new CmdlineEvent.MenuShow(List.of("Find.java", "cls/"), 0, -1, 0, 2, List.of("", ""), List.of("", "")),
+                new CmdlineEvent.MenuSelect(1), new CmdlineEvent.MenuHide()), events);
         assertTrue(((CmdlineEvent.MenuShow) events.get(0)).forCmdline());
     }
 
@@ -86,5 +86,26 @@ class CmdlineEventTest {
                 List.of("cmdline_show", "not a list either"), List.of("cmdline_pos", List.of(1L)),
                 List.of("popupmenu_show", List.of("x")), List.of("win_viewport", List.of(2L)));
         assertEquals(List.of(), CmdlineEvent.fromRedraw(redraw));
+    }
+
+    /**
+     * An insert's completion list ({@code al} then Ctrl-N): each entry's word, kind and extra text,
+     * and the cell of the window's grid where the completed word starts.
+     */
+    @Test
+    void anInsertsMenuKeepsKindMenuTextAndItsCell() {
+        List<Object> items = List.of(List.of("alpha", "f", "[m]", "info"), List.of("alps", "", "", ""), List.of("al"));
+        List<CmdlineEvent> events = CmdlineEvent.fromRedraw(List.of(List.of("popupmenu_show", List.of(items, 0L, 4L, 7L, 2L))));
+        CmdlineEvent.MenuShow menu = (CmdlineEvent.MenuShow) events.get(0);
+        assertEquals(List.of("alpha", "alps", "al"), menu.items());
+        assertEquals(0, menu.selected());
+        assertEquals(2, menu.grid());
+        assertEquals(4, menu.row());
+        assertEquals(7, menu.col());
+        assertEquals("f", menu.kind(0));
+        assertEquals("[m]", menu.menu(0));
+        assertEquals("", menu.kind(2), "an entry of the word alone");
+        assertEquals("", menu.menu(9), "no such entry");
+        assertEquals(false, menu.forCmdline());
     }
 }

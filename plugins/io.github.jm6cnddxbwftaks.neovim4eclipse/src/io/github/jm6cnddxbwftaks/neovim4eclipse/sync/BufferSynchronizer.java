@@ -38,8 +38,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TextDiff;
  * <ul>
  *   <li><b>Eclipse to Neovim</b>: only whole-document pushes ({@link #pushDocumentToNeovim()}),
  *       on attach, when Neovim mode is re-enabled, when leaving insert mode, and after a change
- *       Eclipse makes by itself outside insert mode ({@link #pushLocalChanges}: a format, a
- *       refactoring, Eclipse's undo, a revert). While in insert mode Eclipse owns typing and Neovim
+ *       Eclipse makes by itself outside insert mode, or while Neovim completes in it
+ *       ({@link #pushLocalChanges}: a format, a refactoring, Eclipse's undo, a revert). While in insert mode Eclipse owns typing and Neovim
  *       learns about it at the push. A push changes only the lines that differ, so the buffer's
  *       undo history and marks survive it.</li>
  *   <li><b>Neovim to Eclipse</b>: line-range events from {@code nvim_buf_lines_event}, applied as
@@ -193,7 +193,9 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
      * but inserting that line above Neovim's cursor moves the cursor one line down.
      *
      * @param when      evaluated on the UI thread at each change; the editor passes "Neovim mode is on
-     *                  and Neovim is not in insert mode" (typing in insert mode is pushed when it ends)
+     *                  and Neovim is not in insert mode, or completes in it": typing in insert mode
+     *                  is pushed when it ends, but while Neovim completes it types, and a change
+     *                  Eclipse makes then is no typing
      * @param afterPush run on the session's input thread after each push; may block on RPC
      */
     public void pushLocalChanges(BooleanSupplier when, Runnable afterPush) {
@@ -220,7 +222,7 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             stopRemoteListening();
             try {
                 // Eclipse's own change: a difference elsewhere is a repair
-                pushWhole("after an Eclipse edit in normal mode", Integer.MAX_VALUE, null);
+                pushWhole("after an Eclipse edit that was not typing", Integer.MAX_VALUE, null);
             } finally {
                 if (wasListening) {
                     startRemoteListening();

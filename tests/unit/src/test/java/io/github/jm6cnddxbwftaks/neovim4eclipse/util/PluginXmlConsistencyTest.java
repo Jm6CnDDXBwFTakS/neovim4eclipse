@@ -87,6 +87,30 @@ class PluginXmlConsistencyTest {
                 "attach has no default key (ToggleNeovimModeHandler passes no default sequence)");
     }
 
+    /**
+     * Redo has Ctrl+Shift+Z on Windows while Neovim owns the keys, as Eclipse itself has it on
+     * Linux: Eclipse's Windows key for Redo, Ctrl+Y, is Vim's in insert mode by default. Only on
+     * Windows (the other systems have the key from Eclipse) and only in the plug-in's context
+     * (Eclipse's keys elsewhere stay as they are).
+     */
+    @Test
+    void redoIsBoundToCtrlShiftZOnWindowsOnlyInTheNeovimContext() throws Exception {
+        NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
+        int found = 0;
+        for (int i = 0; i < list.getLength(); i++) {
+            Element e = (Element) list.item(i);
+            if ("org.eclipse.ui.edit.redo".equals(e.getAttribute("commandId"))) {
+                found++;
+                assertEquals("M1+M2+Z", e.getAttribute("sequence"));
+                assertEquals("win32", e.getAttribute("platform"));
+                assertEquals(VimCtrlKeys.NORMAL_CONTEXT_ID, e.getAttribute("contextId"));
+            }
+        }
+        assertEquals(1, found);
+        assertFalse(VimCtrlKeys.inInsertByDefault('z', false), "Ctrl+Z itself stays Eclipse's Undo");
+        assertTrue(VimCtrlKeys.inInsertByDefault('y', false), "the reason for the binding");
+    }
+
     private static Set<String> keySequencesOf(String commandId) throws Exception {
         NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
         Set<String> sequences = new HashSet<>();
@@ -204,7 +228,7 @@ class PluginXmlConsistencyTest {
      * toolbar button passes (a menu item, not a key binding) so that the handler can tell the
      * button from the menu entry.
      */
-    /** Insert-mode Ctrl-N and Ctrl-P: Eclipse's Word Completion, bound directly, each in its own context. */
+    /** Insert-mode Ctrl-N and Ctrl-P with Neovim's list turned off: Eclipse's Word Completion, bound directly, each in its own context. */
     @Test
     void everyCompletionLetterIsBoundToWordCompletionInItsOwnContext() throws Exception {
         Set<String> contexts = attributes(extension(load(), "org.eclipse.ui.contexts"), "context", "id");

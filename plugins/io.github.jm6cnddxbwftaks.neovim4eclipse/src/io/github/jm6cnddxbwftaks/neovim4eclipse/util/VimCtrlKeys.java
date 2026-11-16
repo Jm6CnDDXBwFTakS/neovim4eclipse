@@ -49,9 +49,10 @@ public final class VimCtrlKeys {
     public static final String NORMAL_CONTEXT_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal";
 
     /**
-     * Letters that, in an insert Eclipse types, run Eclipse's Word Completion
-     * ({@link #WORD_COMPLETION_COMMAND_ID}) instead of reaching Neovim, whose completion popup the
-     * plug-in does not draw: {@code Ctrl-N} and {@code Ctrl-P}. Each has a second context
+     * Letters that, with Neovim's completion list turned off
+     * ({@code vim.g.neovim4eclipse_completion_menu = 0}), run Eclipse's Word Completion
+     * ({@link #WORD_COMPLETION_COMMAND_ID}) in an insert Eclipse types, instead of starting
+     * Neovim's completion: {@code Ctrl-N} and {@code Ctrl-P}. Each has a second context
      * ({@link #completionContextId}) whose binding runs Eclipse's command itself. Why not the
      * plug-in's own command, which could run it too: Word Completion offers the next word when
      * pressed again only while no other command runs in between, and the plug-in's command would be
@@ -109,8 +110,9 @@ public final class VimCtrlKeys {
 
     /**
      * What each key does in Vim's insert mode, indexed like {@link #LETTERS}; shown in the
-     * preferences. {@code Ctrl-N}, {@code Ctrl-P} and {@code Ctrl-X} run Eclipse's completion
-     * instead of Neovim's popup, which the plug-in does not draw (docs/design/INSERT_CTRL_KEYS.md).
+     * preferences. For {@code Ctrl-N} and {@code Ctrl-P} the text says what the key does, not who
+     * does it: Neovim's completion, or Eclipse's Word Completion when the user's {@code init.lua}
+     * turns Neovim's list off, which this page cannot know (docs/design/INSERT_CTRL_KEYS.md, section 6).
      */
     private static final String[] INSERT_MEANINGS = {
         "insert the last inserted text",  // a
@@ -126,9 +128,9 @@ public final class VimCtrlKeys {
         "enter a digraph",                // k
         "unused in insert mode",          // l
         "new line",                       // m
-        "Word Completion (Eclipse)",      // n
+        "complete: next match",           // n
         "one normal-mode command",        // o
-        "Word Completion (Eclipse)",      // p
+        "complete: previous match",       // p
         "insert the next key literally",  // q
         "insert a register",              // r
         "unused in insert mode",          // s
@@ -136,27 +138,37 @@ public final class VimCtrlKeys {
         "delete back to where insert began", // u
         "insert the next key literally",  // v
         "delete the word before",         // w
-        "Ctrl-X Ctrl-O: content assist (Eclipse)", // x
+        "Ctrl-X modes; Ctrl-O: content assist", // x
         "insert the character above",     // y
         "unused in insert mode",          // z
     };
 
     /**
-     * Letters that go to Neovim in insert mode by default on Windows and Linux: delete word, delete
-     * to the insert's start, insert a register, one normal command, indent, unindent; Ctrl+K for a
-     * digraph and Ctrl+Q to insert the next key literally (Ctrl+V stays Paste, so Ctrl+Q is Vim's
-     * only way left, as Vim on Windows has it); Ctrl+N and Ctrl+P for word completion (Eclipse's
-     * Word Completion). Eclipse's shortcuts they replace (Find Next, Last Edit Location, New, Print)
-     * are rarely wanted in the middle of typing.
+     * Letters that go to Neovim in insert mode by default on Windows and Linux: every letter with
+     * a Vim insert meaning, except the four below. So insert mode's keys are Vim's, as a Vim user
+     * expects: delete word (W), delete to the insert's start (U), insert a register (R), one
+     * normal command (O), indent and unindent (T, D), a digraph (K), the next key literally (Q;
+     * Ctrl+V stays Paste, so Ctrl+Q is Vim's only way left, as Vim on Windows has it), completion
+     * (N, P, and X for the Ctrl-X modes; Neovim's, with its list drawn), the character above and
+     * below (Y, E: the same two keys keep and cancel a match while the list is open, so they mean
+     * Vim's with and without the list), the undo break and cursor keys (G), and Backspace, Tab
+     * and Enter by their Ctrl names (H, I, J, M), which Vim users type without leaving the home
+     * row.
      *
-     * <p>The others keep Eclipse's shortcuts there: those people use while typing (Ctrl+A select
-     * all, Ctrl+C copy, Ctrl+V paste, Ctrl+X cut, Ctrl+Y redo, Ctrl+Z undo, Ctrl+S save, Ctrl+F
-     * find); those Vim has no insert meaning for (Ctrl+B, Ctrl+L); those whose Vim meaning is a key
-     * the keyboard has anyway (Ctrl+H Backspace, Ctrl+I Tab, Ctrl+J and Ctrl+M Enter), where
-     * Eclipse's Search, Correct Indentation, Incremental Find and Maximize are real tools; Ctrl+E
-     * (Quick Switch Editor; Vim copies the character below) and Ctrl+G (niche either way).
+     * <p>What that costs in insert mode: Eclipse's Cut (X; Shift+Delete still cuts), Redo (Y, on
+     * Windows; {@code plugin.xml} binds Ctrl+Shift+Z to it there, the key Eclipse itself has for
+     * Redo on Linux), Quick Switch Editor (E; Ctrl+F6 switches editors), Find Declarations (G), Search (H), Correct Indentation (I), Incremental Find (J) and Maximize
+     * (M), besides Find Next, Last Edit Location, New and Print. All of them work in normal mode
+     * where the letter's Normal box is cleared, from the menus, and here once the letter's Insert
+     * box is cleared.
+     *
+     * <p>The exceptions keep Eclipse's shortcuts, which people use in the middle of typing and
+     * know from every other program: Ctrl+A select all (Vim: insert the last inserted text),
+     * Ctrl+C copy (Vim: leave insert mode, which Esc does), Ctrl+V paste (Vim: the next key
+     * literally, which Ctrl+Q does), and the letters Vim has no insert meaning for: Ctrl+S save,
+     * Ctrl+Z undo, Ctrl+F find, Ctrl+B and Ctrl+L.
      */
-    public static final String INSERT_BY_DEFAULT = "wurotdkqnp";
+    public static final String INSERT_BY_DEFAULT = "wurotdkqnpxyeghijm";
 
     /**
      * On macOS, Eclipse's own shortcuts use Cmd, so every letter with a Vim insert meaning goes to

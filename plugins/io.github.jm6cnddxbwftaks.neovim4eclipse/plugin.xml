@@ -325,8 +325,9 @@
             name="Neovim Ctrl-Z"
             parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
       </context>
-      <!-- Insert mode while Eclipse types: Ctrl+N and Ctrl+P run Eclipse's Word Completion itself
-           (VimCtrlKeys.COMPLETION_LETTERS). Bound to Eclipse's command directly, not through the
+      <!-- Insert mode while Eclipse types, with Neovim's completion list turned off
+           (vim.g.neovim4eclipse_completion_menu = 0): Ctrl+N and Ctrl+P run Eclipse's Word
+           Completion itself (VimCtrlKeys.COMPLETION_LETTERS). Bound to Eclipse's command directly, not through the
            plug-in's: Word Completion offers the next word when pressed again only while no other
            command runs in between. -->
       <context
@@ -617,6 +618,19 @@
             contextId="org.eclipse.ui.contexts.window"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             sequence="M1+M2+M">
+      </key>
+      <!-- Redo on Ctrl+Shift+Z on Windows, while Neovim owns the editor's keys. Why: Eclipse binds
+           Redo to Ctrl+Y on Windows only (on Linux it is Ctrl+Shift+Z, on macOS Cmd+Shift+Z), and
+           in insert mode Ctrl+Y is Vim's by default (insert the character above; keep a
+           completion's match). Without this, Redo would have no key on Windows while typing. In
+           the plug-in's own context, so Eclipse's keys are as they were everywhere else, and a
+           user changes it under General > Keys like any other binding. -->
+      <key
+            commandId="org.eclipse.ui.edit.redo"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="win32"
+            sequence="M1+M2+Z">
       </key>
       <!-- Vim Ctrl keys: one binding per letter, each in its own context, so that the editor can
            switch letters on and off by activating contexts (see VimCtrlKeys and the Ctrl Keys

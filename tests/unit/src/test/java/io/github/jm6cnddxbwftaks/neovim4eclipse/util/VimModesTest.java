@@ -67,4 +67,22 @@ class VimModesTest {
         assertFalse(VimModes.isBlockVisual("v"));
         assertFalse(VimModes.isBlockVisual(null));
     }
+
+    /** {@code ic}, {@code ix}: Neovim completes, or waits after Ctrl-X; with or without a list on the screen. */
+    @Test
+    void completingIsInsertOrReplaceWithACompletionUnderWay() {
+        assertTrue(VimModes.isCompleting("ic"));
+        assertTrue(VimModes.isCompleting("ix"));
+        assertTrue(VimModes.isCompleting("Rc"));
+        assertTrue(VimModes.isCompleting("Rx"));
+        assertTrue(VimModes.isCompleting("Rvc"), "virtual replace, completing");
+        assertTrue(VimModes.isCompleting("Rvx"));
+        assertFalse(VimModes.isCompleting("i"));
+        assertFalse(VimModes.isCompleting("R"));
+        assertFalse(VimModes.isCompleting("Rv"), "virtual replace, not a completion");
+        assertFalse(VimModes.isCompleting("c"), "the command line");
+        assertFalse(VimModes.isCompleting("niI"));
+        assertFalse(VimModes.isCompleting(null));
+        assertFalse(VimModes.isCompleting(""));
+    }
 }

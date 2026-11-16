@@ -127,7 +127,10 @@ it, see [CONTRIBUTING.md, "Run it from Eclipse"](CONTRIBUTING.md#run-it-from-ecl
    `hjkl`, `w`, `ciw`, `dd`, `u`, `.`, counts, registers, macros.
 3. **Type.** `i`, `a`, `o` enter insert mode, where Eclipse types the text, so content assist,
    templates and your input method work as usual. `Esc` hands the insert to Neovim, so `.` repeats
-   it and `u` undoes it.
+   it and `u` undoes it. Most `Ctrl` letters are Vim's there too (`Ctrl+W` deletes a word,
+   `Ctrl+N` completes); `Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+S`, `Ctrl+Z` and `Ctrl+F` stay
+   Eclipse's. [docs/KEYBOARD.md](docs/KEYBOARD.md#insert-mode) lists the keys and where the
+   Eclipse commands they replace went (Cut is `Shift+Delete`).
 4. **Run a command.** `:`, `/` and `?` open a command line inside the editor, at its bottom.
    `:%s/old/new/g` runs in Neovim; `:w`, `:q`, `:e file` and the other file commands are Eclipse's
    own Save, Close and Open.
@@ -161,7 +164,8 @@ require('lazy').setup('plugins')
 ```
 
 With lazy.nvim, one plug-in can also be left out with `cond = not vim.g.neovim4eclipse`, for
-example a completion plug-in, whose popup the plug-in does not draw:
+example a completion plug-in, which completes as you type and so has nothing to work with in
+Eclipse, where Neovim gets the typed text only at `Esc`:
 
 ```lua
 { 'hrsh7th/nvim-cmp', cond = not vim.g.neovim4eclipse },
@@ -218,6 +222,7 @@ where the table says otherwise. `0` or `false` turns a part off:
 | `vim.g.neovim4eclipse_search_highlight = 0` | The editor does not highlight search matches; search itself works as before ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank or your `:match` highlights ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw Neovim's floating windows, such as a plug-in's panel of key hints ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
+| `vim.g.neovim4eclipse_completion_menu = 0` | In insert mode `Ctrl-N` and `Ctrl-P` (also after `Ctrl-X`) run Eclipse's Word Completion instead of Neovim's own completion, and Neovim's list of matches is not drawn ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)) |
 | `vim.g.neovim4eclipse_task_tags = 'TODO,FIXME'` | The comment tags `:Etasks` collects; read each time `:Etasks` runs ([The quickfix list](docs/USER_GUIDE.md#the-quickfix-list-eproblems-q)) |
 
 **Set by the plug-in**, for your config to read:
@@ -376,8 +381,10 @@ gets in your way:
    floating windows it draws those that do not take the keyboard (a panel of key hints such as
    which-key's, a note or progress window opened in the background; see
    [Floating windows](docs/USER_GUIDE.md#floating-windows)). Not drawn: windows that take the
-   keyboard (pickers such as Telescope and fzf-lua, file trees, dashboards, `:Lazy`), completion
-   menus (nvim-cmp, blink.cmp), and windows that follow typing in insert mode. Plug-ins that work on
+   keyboard (pickers such as Telescope and fzf-lua, file trees, dashboards, `:Lazy`), the menus
+   of completion plug-ins (nvim-cmp, blink.cmp; Neovim's built-in list for `Ctrl-N` is drawn, see
+   [Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and windows that follow typing in
+   insert mode. Plug-ins that work on
    text (surround, commentary, text objects, mappings of your own) work as in a terminal. A floating
    window that opens with the focus (a picker's prompt, `:Lazy`) is closed again at once, with a
    message, since it would take the keys typed in the editor. A plug-in

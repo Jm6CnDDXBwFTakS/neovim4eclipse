@@ -57,11 +57,43 @@ public sealed interface CmdlineEvent {
     record Hide(int level, boolean abort) implements CmdlineEvent {
     }
 
-    /** {@code popupmenu_show}: completion candidates; {@code selected} is -1 for none. */
-    record MenuShow(List<String> items, int selected, int grid) implements CmdlineEvent {
+    /**
+     * {@code popupmenu_show}: completion candidates; {@code selected} is -1 for none.
+     *
+     * @param items the entries' words (the {@code abbr} of an entry that has one)
+     * @param grid  -1 for the command line's menu; else the grid of the window an insert completes in
+     * @param row   the cell where the completed text starts in that grid (0 for the command line)
+     * @param col   its column; for the command line, the byte in the line where the text starts
+     * @param kinds each entry's kind ({@code f}, {@code v}), as many as {@code items} or none at all
+     * @param menus each entry's extra text ({@code [buffer]}), likewise
+     */
+    record MenuShow(List<String> items, int selected, int grid, int row, int col, List<String> kinds,
+            List<String> menus) implements CmdlineEvent {
+
+        public MenuShow {
+            items = List.copyOf(items);
+            kinds = List.copyOf(kinds);
+            menus = List.copyOf(menus);
+        }
+
+        /** A menu of words alone, as the command line's box needs it. */
+        public MenuShow(List<String> items, int selected, int grid) {
+            this(items, selected, grid, 0, 0, List.of(), List.of());
+        }
+
         /** Grid -1 means the menu belongs to the command line, not to an insert in the text. */
         public boolean forCmdline() {
             return grid == -1;
+        }
+
+        /** The kind of entry {@code index}, empty if it has none. */
+        public String kind(int index) {
+            return index < kinds.size() ? kinds.get(index) : "";
+        }
+
+        /** The extra text of entry {@code index}, empty if it has none. */
+        public String menu(int index) {
+            return index < menus.size() ? menus.get(index) : "";
         }
     }
 
@@ -135,12 +167,17 @@ public sealed interface CmdlineEvent {
             return null;
         }
         List<String> words = new ArrayList<>();
+        List<String> kinds = new ArrayList<>();
+        List<String> menus = new ArrayList<>();
         for (Object item : items) {
             if (item instanceof List<?> fields && !fields.isEmpty()) {
                 words.add(string(fields.get(0)));
+                kinds.add(fields.size() > 1 ? string(fields.get(1)) : "");
+                menus.add(fields.size() > 2 ? string(fields.get(2)) : "");
             }
         }
-        return new MenuShow(List.copyOf(words), number(args.get(1), -1), number(args.get(4), 0));
+        return new MenuShow(words, number(args.get(1), -1), number(args.get(4), 0), number(args.get(2), 0),
+                number(args.get(3), 0), kinds, menus);
     }
 
     private static int number(Object value, int fallback) {

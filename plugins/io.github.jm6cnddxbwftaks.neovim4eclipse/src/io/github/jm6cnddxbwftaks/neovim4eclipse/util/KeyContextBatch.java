@@ -59,8 +59,8 @@ public final class KeyContextBatch<T> {
     /**
      * The contexts that should be active: the normal-mode parent ({@link VimCtrlKeys#NORMAL_CONTEXT_ID})
      * and, for each letter {@code toNeovim} accepts, the context {@code contextOf} names (its letter
-     * context, {@link VimCtrlKeys#contextId}; in an insert Eclipse types, the Word Completion
-     * context for {@code Ctrl-N} and {@code Ctrl-P}).
+     * context, {@link VimCtrlKeys#contextId}; with Neovim's completion list turned off, in an
+     * insert Eclipse types, the Word Completion context for {@code Ctrl-N} and {@code Ctrl-P}).
      */
     public static Set<String> wanted(Predicate<Character> toNeovim, Function<Character, String> contextOf) {
         Set<String> wanted = new HashSet<>();

@@ -20,8 +20,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * Tells when any Eclipse command other than the plug-in's own {@code Ctrl} key commands is about to
  * run. A key Eclipse binds to a command never reaches the editor's key listener: the workbench takes
  * it first. So this is how the editor learns that such a key came. Example: after {@code Ctrl-X},
- * {@code Ctrl-N} runs Word Completion through its binding; the pending {@code Ctrl-X} must end
- * there ({@code KeyRouter#cancelCtrlX}).
+ * {@code Ctrl-S} is typed before the key contexts gave it to Neovim, and Eclipse saves; or, with
+ * Neovim's completion list turned off, {@code Ctrl-N} runs Word Completion through its binding.
+ * The pending {@code Ctrl-X} must end there ({@code KeyRouter#cancelCtrlX}).
  *
  * <p>The command service is the workbench's, so commands run in other editors count too; for a
  * one-key prefix that is harmless. UI thread (commands run there).

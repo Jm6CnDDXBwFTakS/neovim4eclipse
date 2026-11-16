@@ -459,6 +459,58 @@ it then closes with your next key or click in the editor, and the key works as u
 box to scroll it. `:messages` keeps Neovim's message history either way. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
 the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
 
+## Completion (`Ctrl-N`, `Ctrl-P`)
+
+In insert mode `Ctrl-N` and `Ctrl-P` are Vim's own completion, done by Neovim: the word before the
+cursor is completed from the words of the open files (`'complete'`), and Neovim's list of matches
+is drawn under the word. Example: after `al`, `Ctrl-N` gives `alpha` and a list of `alpha`,
+`alphabet`, `alpine`.
+
+| Key | With the list open |
+|-----|--------------------|
+| `Ctrl-N`, `Ctrl-P` | the next, the previous match |
+| `Ctrl-Y` | keep the selected match and close the list |
+| `Ctrl-E` | take the completion back: the text as you typed it |
+| `Esc` | leave insert mode, with the match that is in the text |
+| `Backspace`, or a letter while no match is selected | narrow or widen the list |
+| any other character | keeps the match, closes the list and is typed |
+
+- **Where the keys go.** Eclipse types in insert mode. `Ctrl-N` first hands Neovim what you typed,
+  and from there Neovim types until the completion has ended; then Eclipse types again. While
+  Neovim completes, *every* `Ctrl` letter is Neovim's, whatever the *Ctrl Keys* preference page
+  says: `Ctrl-Y` accepts also where you gave the key back to Eclipse's Redo.
+- **The character that ends it is typed by Neovim**, so Eclipse's typing helpers skip that one
+  character: a `(` right after a completed name gets no closing `)`, a `.` does not open content
+  assist. The next character is Eclipse's again.
+- **The `Ctrl-X` modes** work where `Ctrl+X` is ticked for insert mode (*Ctrl Keys*; the
+  default): `Ctrl-X Ctrl-N` words of this file, `Ctrl-X Ctrl-L` whole lines, `Ctrl-X Ctrl-F` file
+  names, and Vim's others. `Ctrl-X Ctrl-O` stays Eclipse's Content Assist, which knows the
+  language; Neovim's omni completion does not. While Neovim's list is open it does the same:
+  the completion ends with its match kept, and Content Assist opens.
+- **One is refused:** `Ctrl-X Ctrl-V` (also typed `Ctrl-X Ctrl-Q`), which completes the line as a
+  Vim command. That runs what the line holds in backticks in the shell, so a line of a file you
+  only opened could run a program. Neovim's own omni completion is never reached either: in an
+  insert Neovim types to its end (while recording a macro), `Ctrl-X Ctrl-O` is dropped with a
+  message. In the command-line window of `:` commands (`q:`) the lines are your own commands,
+  and `Tab` completes them as before.
+- **How it looks:** Neovim's colors for the list (`Pmenu`, `PmenuSel` and the others, your
+  colorscheme's), in the editor's font, inside a frame made from the editor's own colors, so
+  that it stands out where the colorscheme's list background is close to the editor's. `'pumheight'` limits its rows; otherwise it takes the room
+  there is, below the line or above it. `'completeopt'` works as in Vim (`noinsert`, `noselect`,
+  `fuzzy`), with one exception: the extra window `popup` and `preview` open for a match's
+  documentation is not shown.
+- **One match, or none:** Neovim shows no list, as in Vim. It still completes until the next key:
+  `Ctrl-N` again takes a single match back, any character goes on.
+- **`.` and undo** take the insert as one: what you typed and what was completed.
+- **A click into the text**, or leaving the editor, ends the completion and keeps the match.
+- **Not completed as you type.** Neovim sees what Eclipse typed only at such a key or at `Esc`, so
+  a setting or plug-in that opens the list by itself while you type (`'autocomplete'`, nvim-cmp)
+  has nothing to work with. Eclipse's own content assist does that job.
+
+`vim.g.neovim4eclipse_completion_menu = 0` in `init.lua` turns this off: the keys then run
+Eclipse's *Word Completion* (`Alt+/`), which inserts the nearest matching word and shows no list,
+as before 0.2.24.
+
 ## Floating windows
 
 A Neovim plug-in can open a *floating window*: a small window over the text, such as the panel of
@@ -573,9 +625,10 @@ work wherever Neovim reads the keys itself, as in a block-visual `I` or for the 
 insert mode. While Eclipse types, they do not apply: Eclipse inserts what you type.
 
 A completion plug-in (nvim-cmp, blink.cmp, ...) maps `Enter` and `Tab` in insert mode to accept its
-popup. The plug-in does not draw that popup, so in an insert Neovim types (a block-visual `I`, or
+popup. That popup is the plug-in's own, not Neovim's list, and is not drawn, so in an insert Neovim types (a block-visual `I`, or
 while recording a macro) `Enter` could accept an entry you never saw. Leave completion plug-ins out
-inside Eclipse, which has its own (`Ctrl+Space`, and `Ctrl+N` as Word Completion): see
+inside Eclipse, which has its own (`Ctrl+Space`), beside Neovim's built-in one on `Ctrl+N`
+([Completion](#completion-ctrl-n-ctrl-p)): see
 [Your `init.lua` in Eclipse](../README.md#your-initlua-in-eclipse).
 
 ## Clipboard
@@ -606,8 +659,9 @@ Neovim's `tabstop` is set to the editor's tab width so both agree.
 Windows/Linux), so `plugin.xml` binds every `Ctrl+letter` to a command that sends the key to Neovim.
 Each letter's binding lives in its own key-binding context, and the editor activates only the contexts
 of the letters you send to Neovim in the current mode (*Window → Preferences → Neovim → Ctrl Keys*;
-in normal mode by default every letter except `Ctrl+S` and `Ctrl+Z`, in insert mode
-`Ctrl+W`, `U`, `R`, `O`, `T`, `D`, `K`, `Q`, `N` and `P`; see [docs/KEYBOARD.md](KEYBOARD.md)). The bindings work
+in normal mode by default every letter except `Ctrl+S` and `Ctrl+Z`, in insert mode every letter
+Vim uses there except `Ctrl+A`, `Ctrl+C` and `Ctrl+V`; see [docs/KEYBOARD.md](KEYBOARD.md), which
+also says how to reach the Eclipse commands those keys had, such as `Shift+Delete` for Cut). The bindings work
 only while Neovim owns the editor's keys and the editor has focus; for the other letters, and in
 Eclipse mode (toggle with the toolbar button: color logo in Neovim mode, grey in Eclipse mode),
 Eclipse's own shortcuts apply. On **macOS use the physical Control key**, as in MacVim or IdeaVim; Command-V remains
@@ -664,8 +718,8 @@ beside it. Ticked `Ctrl+letter` keys go to Neovim, in normal and visual mode (**
 insert mode (**Insert**); cleared ones keep their Eclipse shortcut. In an insert Eclipse types, an
 Insert key first hands Neovim the typed text, so `Ctrl+W` deletes the word just typed, and `.`
 repeats the whole insert. *Select All* and *Deselect All* set a column; *Restore Defaults* ticks
-every Normal box but `Ctrl+S` and `Ctrl+Z`, and the Insert boxes of `Ctrl+W`, `U`, `R`,
-`O`, `T`, `D`, `K`, `Q`, `N` and `P` (on macOS every letter with an insert meaning). Changes apply immediately.
+every Normal box but `Ctrl+S` and `Ctrl+Z`, and the Insert box of every letter Vim uses in insert
+mode but `Ctrl+A`, `Ctrl+C` and `Ctrl+V` (on macOS those three too). Changes apply immediately.
 [docs/KEYBOARD.md](KEYBOARD.md) explains the defaults and which keys go where.
 
 ### Get Neovim

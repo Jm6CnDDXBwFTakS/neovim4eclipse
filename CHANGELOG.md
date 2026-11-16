@@ -12,6 +12,42 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Neovim's own completion in insert mode, with its list of matches drawn under the word:
+  `Ctrl-N` and `Ctrl-P` complete the word from the open files, forward and back, `Ctrl-Y` keeps
+  the selected match, `Ctrl-E` takes the completion back. Where `Ctrl+X` is ticked for insert mode
+  (the default), Vim's other completions work too: `Ctrl-X Ctrl-L` whole lines,
+  `Ctrl-X Ctrl-F` file names, `Ctrl-X Ctrl-N` this file's words. The list is in Neovim's colors
+  (`Pmenu`, `PmenuSel`) inside a frame, and follows `'pumheight'` and `'completeopt'`. The character that ends a
+  completion is typed by Neovim, so Eclipse's helpers skip that one: a `(` right after a completed
+  name gets no closing `)` ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)).
+
+### Changed
+
+- **More `Ctrl` keys are Vim's in insert mode by default on Windows and Linux**, as they already
+  are on macOS: `Ctrl+X` (Vim's completions), `Ctrl+Y` and `Ctrl+E` (the character above and
+  below; keep and cancel a completion), `Ctrl+G`, and `Ctrl+H`, `Ctrl+I`, `Ctrl+J`, `Ctrl+M`
+  (Backspace, Tab, Enter). Only `Ctrl+A`, `Ctrl+C`, `Ctrl+V` and the letters Vim does not use in
+  insert mode (`Ctrl+S`, `Ctrl+Z`, `Ctrl+F`, `Ctrl+B`, `Ctrl+L`) keep Eclipse's shortcut there.
+  While typing, Cut is `Shift+Delete` or `Alt+E`, `T`, and Redo is `Ctrl+Shift+Z`: Eclipse's own
+  key on Linux, and on Windows, where Eclipse has only `Ctrl+Y` for it, now bound by the plug-in
+  in its editors; [docs/KEYBOARD.md](docs/KEYBOARD.md) lists the others. To have Eclipse's shortcut back for a
+  letter, clear its Insert box under *Preferences → Neovim → Ctrl Keys*. A box that was left as
+  it came follows the new default; one you had ticked or cleared against the old default stays.
+- `Ctrl-N` and `Ctrl-P` in insert mode no longer run Eclipse's Word Completion; they run Neovim's
+  completion, above. Word Completion is still on `Alt+/`.
+  `vim.g.neovim4eclipse_completion_menu = 0` in `init.lua` gives the two keys back to it.
+  `Ctrl-X Ctrl-O` is Eclipse's Content Assist, as before.
+
+### Security
+
+- `Ctrl-X Ctrl-V` (and `Ctrl-X Ctrl-Q`) in insert mode is refused, by Neovim itself and for every
+  way the keys can arrive. It completes the line as a Vim command, and that runs text in backticks
+  in the shell: with the keys pressed at the end of such a line, a file you had only opened could
+  run a program. Neovim's `Ctrl-X Ctrl-O` (omni completion) is refused with it: the key is Eclipse's
+  content assist, also while Neovim's completion list is open.
+
 ## [0.2.23] - 2026-11-16
 
 ### Added

@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
@@ -209,6 +210,13 @@ final class NotificationBridge implements Incoming {
          */
         void onCommandWindow(int winid, String type);
 
+        /**
+         * Neovim's completion list shows or its selection moved: where the cursor is and how the
+         * list is to look ({@link LuaScripts#COMPLETION_MENU}). The list's entries come with the
+         * redraw ({@link #onCmdline}, a {@code MenuShow} whose grid is a window's).
+         */
+        void onCompletionAnchor(CompletionMenu.Anchor anchor);
+
         /** The command-line window closed. */
         void onCommandWindowClosed();
 
@@ -254,6 +262,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
             case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
+            case "eclipse_complete" -> onCompletion(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
                 List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
@@ -324,6 +333,24 @@ final class NotificationBridge implements Incoming {
         if (win != EditorWindow.UNKNOWN) {
             sink.onCommandWindow(win, args.size() > 1 ? String.valueOf(args.get(1)) : ":");
         }
+    }
+
+    /**
+     * {@code eclipse_complete}: line, byte column, window cell, {@code 'pumheight'}, the groups'
+     * colors, and the cells of text in a row of a window that wraps (0 or left out: it does not).
+     */
+    private void onCompletion(List<?> args) {
+        Integer line = args.size() > 3 ? toInt(args.get(0)) : null;
+        Integer col = line == null ? null : toInt(args.get(1));
+        Integer winCol = col == null ? null : toInt(args.get(2));
+        Integer height = winCol == null ? null : toInt(args.get(3));
+        if (height == null || line < 1 || col < 0) {
+            return; // not ours to guess: the list then waits for the next report
+        }
+        List<?> colors = args.size() > 4 && args.get(4) instanceof List<?> sent ? sent : List.of();
+        Integer textWidth = args.size() > 5 ? toInt(args.get(5)) : null;
+        sink.onCompletionAnchor(new CompletionMenu.Anchor(line, col, winCol, height, CompletionMenu.Colors.from(colors),
+                textWidth == null ? 0 : Math.max(0, textWidth)));
     }
 
     /**
