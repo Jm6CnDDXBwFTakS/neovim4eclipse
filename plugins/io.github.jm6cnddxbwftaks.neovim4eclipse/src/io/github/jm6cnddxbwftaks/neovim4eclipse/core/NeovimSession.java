@@ -774,6 +774,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * The grid the command-line window is drawn from, -1 while it is closed or not drawn yet; for
+     * the integration test that sends a click to the grid of a window that has just closed (a click
+     * right after an Enter that closed it reaches Neovim after the Enter).
+     */
+    int commandWindowGrid() {
+        return commandWindowGrid;
+    }
+
+    /**
      * Closes the command-line window without running its line ({@link #CLOSE_COMMAND_WINDOW_KEYS});
      * nothing when it is not open. Example: the user clicks into another view while {@code q:} is
      * shown, maybe in Insert mode, maybe after a {@code d} still waiting for its motion.

@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1441,6 +1442,52 @@ class NeovimSessionIntegrationTest {
             s.commandWindowMouseAsync("wheel", "up", "", 0, 0);
             waitFor(() -> number(s, "return vim.fn.line('w0')") < top, "scrolled up by the wheel");
         }
+    }
+
+    /**
+     * A click that reaches Neovim after its command-line window closed does nothing. The panel's
+     * click and an Enter typed just before it queue in Neovim's input in order, so the Enter can
+     * close the window before the plug-in hears of it, and the click then names the closed
+     * window's grid. Neovim finds no window for that grid and drops the click, and it gives a new
+     * window a new grid number, never the closed one's: the click cannot land in the editor's
+     * window, or in a command-line window opened again since. Example: {@code q:}, Ctrl-C, a click
+     * on row 0 of the old grid; the file's cursor stays on line 20.
+     */
+    @Test
+    void aClickOnTheGridOfAClosedCommandLineWindowDoesNothing() throws Exception {
+        try (NeovimSession s = start()) {
+            s.lua("vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.fn.map(vim.fn.range(1, 40), 'string(v:val)'))"
+                    + " vim.api.nvim_win_set_cursor(0, {20, 0})");
+            for (int i = 1; i <= 40; i++) {
+                s.lua("vim.fn.histadd(':', 'echo " + i + "')");
+            }
+            keys(s, "q", ":");
+            waitFor(() -> s.commandWindowGrid() != -1, "the window drawn");
+            int gone = s.commandWindowGrid();
+            keys(s, "<C-c>", "<C-c>"); // out of the window, nothing run
+            waitFor(() -> !s.isCommandWindowOpen() && s.commandWindowGrid() == -1, "closed");
+            String cursors = "return vim.inspect(vim.tbl_map(vim.api.nvim_win_get_cursor, vim.api.nvim_list_wins()))"
+                    + " .. vim.fn.mode() .. vim.fn.getcmdwintype()";
+
+            clickRows(s, gone); // with only the editor's window open
+            assertEquals("{ { 20, 0 } }n", s.lua(cursors), "the file's cursor, the mode: unchanged");
+
+            keys(s, "q", ":");
+            waitFor(() -> s.commandWindowGrid() != -1, "the window drawn again");
+            assertNotEquals(gone, s.commandWindowGrid(), "a new grid for the new window");
+            Object open = s.lua(cursors);
+            clickRows(s, gone); // with the new command-line window open
+            assertEquals(open, s.lua(cursors), "neither window's cursor moved");
+        }
+    }
+
+    /** Left clicks on rows 0 to 2 of {@code grid}, sent as the panel sends them, then waits until Neovim handled them. */
+    private static void clickRows(NeovimSession s, int grid) throws Exception {
+        for (int row = 0; row < 3; row++) {
+            s.lua("vim.api.nvim_input_mouse('left', 'press', '', " + grid + ", " + row + ", 2)"
+                    + " vim.api.nvim_input_mouse('left', 'release', '', " + grid + ", " + row + ", 2)");
+        }
+        NeovimBarrier.pass(s);
     }
 
     /** A number Neovim answers ({@code return vim.fn.line('.')}), for a wait's condition; -1 if the call fails. */
