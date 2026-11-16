@@ -13,7 +13,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * is on ({@code LuaScripts.VIEWPORT}; without it no float is drawn), so a cell of Neovim's is a
  * cell of the editor's.
  *
- * <p>Two corrections, because the editor is measured in pixels and its last row and column are
+ * <p>Three corrections, because the editor is measured in pixels and its last row and column are
  * seldom whole:
  * <ul>
  *   <li>A float that reaches the window's last row sits on the editor's bottom edge; one that
@@ -23,6 +23,11 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *   <li>Any other float that would stick out is moved back in, as far as it fits. One larger than
  *       the editor keeps its top left corner in view; the rest is cut off by the editor's
  *       edges.</li>
+ *   <li>Before both: a float that begins at the window's first row or column stays there,
+ *       whatever its other end does. Example: the same panel is as wide as Neovim's screen, 80 cells of 10 pixels in
+ *       an editor 805 pixels wide. Put on the right edge it would begin at pixel 5, and the
+ *       editor's text would show in the strip left of it; it begins at 0, and the 5 pixels that
+ *       belong to no whole cell stay at the right, where the lines seldom reach.</li>
  * </ul>
  *
  * <p>Not corrected: a row of Eclipse's that is higher than a line (a code mining above it) or a
@@ -58,9 +63,13 @@ public final class FloatPlacement {
 
     /**
      * One axis: {@code start} cells in, unless the float reaches the window's last cell (then at
-     * the far edge) or sticks out (then moved back in); never before the near edge.
+     * the far edge) or sticks out (then moved back in); never before the near edge, and one that
+     * begins at the near edge stays on it.
      */
     private static int along(int start, int cells, int hostCells, int cell, int size, int area) {
+        if (start <= 0) {
+            return 0;
+        }
         int at = start * cell;
         boolean reachesEnd = hostCells > 0 && start + cells >= hostCells;
         if (reachesEnd || at + size > area) {

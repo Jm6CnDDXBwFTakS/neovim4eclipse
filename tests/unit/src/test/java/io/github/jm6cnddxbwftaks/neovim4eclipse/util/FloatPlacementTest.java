@@ -34,10 +34,20 @@ class FloatPlacementTest {
         assertEquals(new Box(40, 120, 140, 40), place(14, 2, 6, 4));
     }
 
-    /** which-key's panel: the screen's full width, the window's last 5 rows. */
+    /**
+     * which-key's panel: the screen's full width, the window's last 5 rows. On the bottom edge, and
+     * from the left edge on: put on the right edge it would leave a strip of the editor's text
+     * showing at its left.
+     */
     @Test
-    void aFloatThatReachesTheLastRowSitsOnTheBottomEdge() {
-        assertEquals(new Box(5, 370, 800, 100), place(80, 5, 18, 0));
+    void aFloatThatReachesTheLastRowSitsOnTheBottomEdgeAndOneFromTheFirstColumnStaysLeft() {
+        assertEquals(new Box(0, 370, 800, 100), place(80, 5, 18, 0));
+    }
+
+    /** A float as high as the window, from its first row: at the top, although it reaches the last row too. */
+    @Test
+    void aFloatFromTheFirstRowStaysAtTheTop() {
+        assertEquals(new Box(645, 0, 160, 460), place(16, 23, 0, 64));
     }
 
     @Test

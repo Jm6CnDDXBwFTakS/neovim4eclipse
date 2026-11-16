@@ -718,8 +718,10 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   float's top left (`screen_row`, `screen_col`: the anchor's corner, the window or float it hangs
   on and the cursor are settled in them); it is counted from the first cell of the editor's
   window and multiplied by Eclipse's cell. A float that reaches the window's last row or column
-  sits on the editor's edge, since the editor's height is seldom a whole number of rows; one that
-  would stick out is moved back in; one larger than the editor is cut off by the text widget.
+  sits on the editor's edge, since the editor's height is seldom a whole number of rows (unless
+  it begins at the first row or column: it stays there, or the editor's text would show in the
+  strip before it); one that would stick out is moved back in; one larger than the editor is
+  cut off by the text widget.
   Not mapped through the text: where Eclipse's rows differ from Neovim's (a code mining, another
   wrap point), a float anchored to a text position can sit a row off.
 - **The editor's window** (`Grids.host`) is the one layout window on screen: each editor's is
