@@ -368,38 +368,6 @@ Sources* first.
 
 **Expect:** each step's result, after its ⇒.
 
-## Ctrl keys in insert mode
-
-### `ck-windows-insert` Windows: Redo on Ctrl+Shift+Z, and Ctrl+Enter is not Ctrl+J
-
-- **On:** windows
-- **Launch:** checks
-- **Areas:** /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml, util/VimCtrlKeys.java, core/KeyRouter.java, editor/EditorKeyContext.java
-
-Why by hand: the binding exists on Windows only, and which key event <kbd>Ctrl+Enter</kbd> makes
-there (its character is the one <kbd>Ctrl+J</kbd> has) only a real keyboard shows.
-
-1. In a text file, `o`, type `one two`, press <kbd>Ctrl+Z</kbd>, then <kbd>Ctrl+Shift+Z</kbd>.
-   ⇒ <kbd>Ctrl+Z</kbd> takes typed text away, <kbd>Ctrl+Shift+Z</kbd> brings it back; the status
-   bar still shows `INSERT`.
-2. <kbd>Esc</kbd>, `u`, then <kbd>Ctrl+Shift+Z</kbd> in normal mode.
-   ⇒ The line comes back (Eclipse's Redo; Vim's own is <kbd>Ctrl+R</kbd>). `:echo getline('.')`
-   shows the same text as the editor.
-3. `o`, type `ab`, press <kbd>Ctrl+J</kbd>, type `cd`.
-   ⇒ A new line after `ab`, as <kbd>Enter</kbd> makes; no Incremental Find in the status bar.
-4. *Window → Preferences → General → Keys*, under *Show key binding when command is invoked*
-   tick the keyboard box, *Apply and Close*. In the editor, still in the insert, press
-   <kbd>Ctrl+J</kbd>.
-   ⇒ A small pop-up names the command: *Neovim: Ctrl-J (Cursor down)*.
-5. Press <kbd>Ctrl+Enter</kbd>.
-   ⇒ No pop-up naming *Neovim: Ctrl-J*: the key is not taken for <kbd>Ctrl+J</kbd>. Whatever it
-   does to the text, `:echo line('$')` after <kbd>Esc</kbd> equals the editor's last line number.
-6. *Window → Preferences → General → Keys*, filter `Redo`; then clear the box ticked in step 4.
-   ⇒ *Redo* has `Ctrl+Y` and `Ctrl+Shift+Z` (*When*: Neovim Normal/Visual Mode), with no
-   conflict mark.
-
-**Expect:** each step's result, after its ⇒.
-
 ## Marketplace
 
 ### `mp-setup` First-time setup from the Marketplace, direct and behind a proxy

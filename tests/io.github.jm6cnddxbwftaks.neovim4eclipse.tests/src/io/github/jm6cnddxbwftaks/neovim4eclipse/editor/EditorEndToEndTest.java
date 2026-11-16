@@ -21,10 +21,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
-import org.eclipse.core.commands.ExecutionEvent;
-import org.eclipse.core.commands.ExecutionException;
-import org.eclipse.core.commands.IExecutionListener;
-import org.eclipse.core.commands.NotHandledException;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -60,7 +56,6 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.part.FileEditorInput;
-import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.handlers.IHandlerService;
@@ -2076,43 +2071,5 @@ class EditorEndToEndTest extends EndToEndTestBase {
         event.y = at.y;
         event.stateMask = stateMask;
         return event;
-    }
-
-    /**
-     * The workbench commands run while it is open, by id, in order: for a test that checks a key ran
-     * Eclipse's command (Content Assist, for example). Use it in try-with-resources, which removes the
-     * listener again. A command asked for that no handler took counts too.
-     */
-    private static final class CommandLog implements AutoCloseable {
-        final List<String> run = new CopyOnWriteArrayList<>();
-        private final ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
-        private final IExecutionListener listener = new IExecutionListener() {
-            @Override
-            public void preExecute(String commandId, ExecutionEvent event) {
-                run.add(commandId);
-            }
-
-            @Override
-            public void notHandled(String commandId, NotHandledException exception) {
-                run.add(commandId);
-            }
-
-            @Override
-            public void postExecuteFailure(String commandId, ExecutionException exception) {
-            }
-
-            @Override
-            public void postExecuteSuccess(String commandId, Object returnValue) {
-            }
-        };
-
-        CommandLog() {
-            commands.addExecutionListener(listener);
-        }
-
-        @Override
-        public void close() {
-            commands.removeExecutionListener(listener);
-        }
     }
 }
