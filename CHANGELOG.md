@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.23] - 2026-11-16
+
 ### Added
 
 - Neovim's floating windows that do not take the keyboard are drawn over the editor's text, where
