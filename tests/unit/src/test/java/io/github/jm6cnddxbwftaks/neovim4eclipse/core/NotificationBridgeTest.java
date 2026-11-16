@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
@@ -57,7 +58,9 @@ class NotificationBridgeTest {
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onViewportOverheadChanged() { events.add("overhead"); }
             @Override public void onSearchMatches(int bufnr, List<SearchMatch> matches, int winid) { events.add("search@" + bufnr + ":" + matches + "#" + winid); }
-            @Override public void onHighlights(int bufnr, List<NeovimHighlight> highlights, int winid) { events.add("hl@" + bufnr + ":" + highlights + "#" + winid); }
+            @Override public void onHighlights(int bufnr, List<NeovimHighlight> highlights, List<JumpLabels.Label> labels, int winid) {
+                events.add("hl@" + bufnr + ":" + highlights + (labels.isEmpty() ? "" : "+" + labels) + "#" + winid);
+            }
             @Override public void onTopLine(int bufnr, int line1, int winid) { events.add("top@" + bufnr + ":" + line1 + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
             @Override public void onYank(List<String> lines, String regtype) {
                 events.add("yank:" + lines + ":" + regtype);
@@ -228,6 +231,18 @@ class NotificationBridgeTest {
         assertEquals(List.of("hl@3:" + List.of(new NeovimHighlight(new SearchMatch(1, 4, 1, 7), 0xFCE094, 0x07080D),
                 new NeovimHighlight(new SearchMatch(2, 0, 2, 3), 0x112233, NeovimHighlight.NO_COLOR)) + "#1001",
                 "hl@3:[]#1001", "hl@3:[]#1001"), events);
+    }
+
+    /**
+     * A jump plug-in's report: a backdrop with a text color only, and its labels as the fourth
+     * argument. A range with neither color has nothing to paint and is left out.
+     */
+    @Test
+    void highlightsMayComeWithATextColorOnlyAndWithLabels() {
+        notify("eclipse_highlights", 3, List.of(1, 0, 1, 10, -1, 0x777777, 2, 0, 2, 3, -1, -1), 1001,
+                List.of(List.of(1, 7, 0, "a", 0x101010, 0xF0F0F0, true)));
+        assertEquals(List.of("hl@3:" + List.of(new NeovimHighlight(new SearchMatch(1, 0, 1, 10), NeovimHighlight.NO_COLOR, 0x777777))
+                + "+" + List.of(new JumpLabels.Label(1, 7, 0, "a", 0x101010, 0xF0F0F0, true)) + "#1001"), events);
     }
 
     @Test

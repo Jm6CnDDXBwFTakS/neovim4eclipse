@@ -18,12 +18,15 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
@@ -86,6 +89,61 @@ class NeovimHighlighterTest {
         highlighter.show(List.of(new NeovimHighlight(new SearchMatch(1, 2, 1, 5), RED, NeovimHighlight.NO_COLOR)));
         assertEquals(rgb(RED), at(2).background);
         assertNull(at(2).foreground, "the syntax color stays");
+    }
+
+    /** A jump plug-in's backdrop: a text color and no background; the search match under it keeps its background. */
+    @Test
+    void aGroupWithATextColorAloneKeepsTheBackground() {
+        search.show(List.of(new SearchMatch(1, 2, 1, 5)));
+        highlighter.show(List.of(new NeovimHighlight(new SearchMatch(1, 0, 1, 7), NeovimHighlight.NO_COLOR, RED)));
+        assertEquals(rgb(RED), at(0).foreground);
+        assertNull(at(0).background, "the editor's background stays");
+        assertEquals(rgb(RED), at(2).foreground);
+        assertEquals(SEARCH, at(2).background, "and so does a search match's");
+        highlighter.show(List.of());
+        assertNull(at(0), "the text has its own colors again");
+    }
+
+    /**
+     * A label is painted over the character it names, one cell wide per character of its text,
+     * and the document keeps its text. A later piece of the same label starts its cells further.
+     */
+    @Test
+    void labelsArePaintedOverTheirCharacters() {
+        JumpLabels.Label first = new JumpLabels.Label(1, 2, 0, "x", YELLOW, DARK, true);
+        JumpLabels.Label second = new JumpLabels.Label(1, 2, 1, "yz", RED, JumpLabels.NO_COLOR, false);
+        JumpLabels.Label accented = new JumpLabels.Label(2, 3, 0, "q", YELLOW, DARK, false); // after the two-byte e-acute and a space
+        highlighter.show(List.of(), List.of(first, second, accented));
+        List<JumpLabelPainter.Painted> painted = highlighter.paintedLabels();
+        assertEquals(List.of(first, second, accented), painted.stream().map(JumpLabelPainter.Painted::label).toList());
+        Point f = widget.getLocationAtOffset(2);
+        Rectangle cell = painted.get(0).cell();
+        assertEquals(new Point(f.x, f.y), new Point(cell.x, cell.y), "over the f of foo");
+        assertEquals(widget.getLineHeight(2), cell.height);
+        assertEquals(cell.x + cell.width, painted.get(1).cell().x, "the second piece begins one cell on");
+        assertEquals(2 * cell.width, painted.get(1).cell().width, "and is two cells wide");
+        Point second2 = widget.getLocationAtOffset(widget.getOffsetAtLine(1) + 2);
+        assertEquals(new Point(second2.x, second2.y), new Point(painted.get(2).cell().x, painted.get(2).cell().y),
+                "byte column 3 of the second line is its third character");
+        assertEquals("a foo b\n\u00E9 foo\nnone", viewer.getDocument().get(), "the text is untouched");
+        widget.redraw();
+        widget.update(); // a real paint: the listener must not fail
+    }
+
+    /**
+     * A label for a line the document does not have is not painted; the others are. A column past
+     * the line's end is the line's end, where flash labels a match that ends a line.
+     */
+    @Test
+    void aLabelWithoutAPlaceIsLeftOut() {
+        JumpLabels.Label here = new JumpLabels.Label(3, 0, 0, "x", YELLOW, DARK, false);
+        JumpLabels.Label atEnd = new JumpLabels.Label(3, 99, 0, "e", YELLOW, DARK, false);
+        highlighter.show(List.of(), List.of(new JumpLabels.Label(9, 0, 0, "x", YELLOW, DARK, false), here, atEnd));
+        List<JumpLabelPainter.Painted> painted = highlighter.paintedLabels();
+        assertEquals(List.of(here, atEnd), painted.stream().map(JumpLabelPainter.Painted::label).toList());
+        assertEquals(widget.getLocationAtOffset(widget.getCharCount()).x, painted.get(1).cell().x, "at the end of the last line");
+        highlighter.clear();
+        assertEquals(List.of(), highlighter.paintedLabels());
     }
 
     /** Lowest priority first: the last lies on top, and both lie over a search match. */

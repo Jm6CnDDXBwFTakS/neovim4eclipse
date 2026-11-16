@@ -340,7 +340,7 @@ Neovim group (its background, and its text color when the group has one): the fl
 you yank, which `vim.hl.on_yank` makes, and your window matches (`:match`, `:2match`, `matchadd()`,
 `matchaddpos()`). They lie over search matches, as in Neovim. Neovim's matching-bracket highlight
 (matchparen) is left out: the code editors mark the matching bracket themselves.
-`vim.g.neovim4eclipse_highlights = 0` turns these off. For example:
+`vim.g.neovim4eclipse_highlights = 0` turns these off, and the [jump labels](#jump-labels) with them. For example:
 
 ```lua
 -- Flash the yanked text, as kickstart.nvim does
@@ -510,6 +510,40 @@ is drawn under the word. Example: after `al`, `Ctrl-N` gives `alpha` and a list 
 `vim.g.neovim4eclipse_completion_menu = 0` in `init.lua` turns this off: the keys then run
 Eclipse's *Word Completion* (`Alt+/`), which inserts the nearest matching word and shows no list,
 as before 0.2.24.
+
+## Jump labels
+
+A jump plug-in takes the cursor anywhere on the screen in two or three keys: after its key it
+draws a letter over each place you could go to, and the letter you type next takes you there. The
+editor paints those letters over the text, in the plug-in's own colors, together with its match
+highlights and the dimmed backdrop that makes the letters stand out. Your text does not change;
+the letters are only drawn.
+
+[flash](https://github.com/folke/flash.nvim), [leap](https://codeberg.org/andyg/leap.nvim),
+[hop](https://github.com/smoka7/hop.nvim) and
+[mini.jump2d](https://github.com/echasnovski/mini.jump2d) work without any setting. The editor
+knows a jump plug-in's marks by the names of their highlight groups, which start with `Flash`,
+`Leap`, `Hop` or `MiniJump2d`. For another plug-in, name the start of its groups in `init.lua`:
+
+```lua
+-- also draw the labels of a plug-in whose groups are SneakLabel, SneakScope, ...
+vim.g.neovim4eclipse_jump_label_group_prefixes = { 'Sneak' }
+```
+
+Your list is added to the four; it cannot remove one. It is read once, when Neovim starts.
+`vim.g.neovim4eclipse_highlights = 0` turns the labels off, together with the yank flash and
+`:match` highlights.
+
+What to know:
+
+- The plug-in must be set up for Eclipse like any other: load it from your `init.lua`, and map
+  its key there. `if vim.g.neovim4eclipse then ... end` keeps a mapping to Eclipse only.
+- The keys of a jump (the search character, the label) go to Neovim, so they must not be among
+  the `Ctrl` keys you gave to Eclipse; plain letters always are Neovim's in normal mode.
+- A label is one character cell wide. In a proportional font it can be a little wider or narrower
+  than the character under it.
+- flash's small prompt at the bottom is one of Neovim's [floating windows](#floating-windows) and
+  is drawn as those are.
 
 ## Floating windows
 

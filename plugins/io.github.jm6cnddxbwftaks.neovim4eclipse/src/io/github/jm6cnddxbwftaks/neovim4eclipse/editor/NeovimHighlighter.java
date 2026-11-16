@@ -21,6 +21,7 @@ import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 
 /**
@@ -49,7 +50,7 @@ final class NeovimHighlighter implements ITextPresentationListener {
 
     private static final Logger LOG = Logger.getLogger(NeovimHighlighter.class.getName());
 
-    /** One highlight as painted: where in the document, and its colors ({@code foreground} may be {@code null}). */
+    /** One highlight as painted: where in the document, and its colors (either may be {@code null}: Eclipse's own then stays). */
     record Shown(IRegion region, Color background, Color foreground) {
     }
 
@@ -75,16 +76,34 @@ final class NeovimHighlighter implements ITextPresentationListener {
     private final Object lock = new Object();
     /** The highlights painted, lowest priority first; empty when none. */
     private volatile List<Shown> shown = List.of();
+    /** A jump plug-in's labels, drawn over the text. */
+    private final JumpLabelPainter labelPainter;
 
     /** @param viewer the editor's viewer; it must support what {@link SearchHighlighter#supports} asks */
     NeovimHighlighter(ITextViewer viewer) {
         this.viewer = viewer;
         this.widget = viewer.getTextWidget();
         this.document = viewer.getDocument();
+        this.labelPainter = new JumpLabelPainter(viewer);
         ((ITextViewerExtension4) viewer).addTextPresentationListener(this);
         if (document != null) {
             document.addPrenotifiedDocumentListener(follower);
         }
+    }
+
+    /**
+     * Shows {@code highlights} and a jump plug-in's {@code labels} in place of the ones shown
+     * before. The two come in one report, since they belong together: the labels' letters over
+     * the matches' highlights, in the dimmed text.
+     */
+    void show(List<NeovimHighlight> highlights, List<JumpLabels.Label> labels) {
+        show(highlights);
+        labelPainter.show(labels);
+    }
+
+    /** The labels as they would be painted now; for tests. */
+    List<JumpLabelPainter.Painted> paintedLabels() {
+        return labelPainter.painted();
     }
 
     /** Shows {@code highlights} (Neovim's units, lowest priority first) in place of the ones shown before; empty clears. */
@@ -94,7 +113,8 @@ final class NeovimHighlighter implements ITextPresentationListener {
             for (NeovimHighlight h : highlights) {
                 // One at a time: toRegions leaves out a range the document no longer has.
                 for (IRegion r : SearchRegions.toRegions(document, List.of(h.range()))) {
-                    next.add(new Shown(r, color(h.background()), h.foreground() == NeovimHighlight.NO_COLOR ? null : color(h.foreground())));
+                    next.add(new Shown(r, h.background() == NeovimHighlight.NO_COLOR ? null : color(h.background()),
+                            h.foreground() == NeovimHighlight.NO_COLOR ? null : color(h.foreground())));
                 }
             }
         }
@@ -111,7 +131,7 @@ final class NeovimHighlighter implements ITextPresentationListener {
 
     /** Clears the highlights (Neovim mode off, or the editor detaches). */
     void clear() {
-        show(List.of());
+        show(List.of(), List.of());
     }
 
     /** The highlights painted; for tests. */
@@ -130,6 +150,7 @@ final class NeovimHighlighter implements ITextPresentationListener {
         if (document != null) {
             document.removePrenotifiedDocumentListener(follower);
         }
+        labelPainter.dispose();
         repaint(old, List.of());
     }
 
@@ -146,7 +167,7 @@ final class NeovimHighlighter implements ITextPresentationListener {
             int start = Math.max(h.region().getOffset(), from);
             int end = Math.min(h.region().getOffset() + h.region().getLength(), to);
             if (start < end) {
-                // A null foreground keeps the syntax color; the font stays in any case.
+                // A null color keeps Eclipse's own (the syntax color, the editor's background); the font stays in any case.
                 presentation.mergeStyleRange(new StyleRange(start, end - start, h.foreground(), h.background()));
             }
         }

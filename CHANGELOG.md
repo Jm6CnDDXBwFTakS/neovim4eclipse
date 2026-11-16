@@ -12,6 +12,15 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- The labels of a jump plug-in show in the editor: flash, leap, hop and mini.jump2d draw a letter
+  over each place the cursor can go to, and the editor now paints those letters over the text,
+  with the plug-in's match highlights and its dimmed backdrop, in the plug-in's own colors. For
+  another jump plug-in, name the start of its highlight groups in
+  `vim.g.neovim4eclipse_jump_label_group_prefixes` ([Jump labels](docs/USER_GUIDE.md#jump-labels)).
+  `vim.g.neovim4eclipse_highlights = 0` turns them off with the yank flash.
+
 ## [0.2.24] - 2026-11-16
 
 ### Added

@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import java.util.List;
 import java.util.function.Consumer;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
@@ -90,10 +91,12 @@ public interface SearchPort {
      *
      * @param bufnr      Neovim's buffer number
      * @param highlights lowest priority first: the last one lies on top
+     * @param labels     a jump plug-in's labels, drawn over the text; empty when none shows
      */
-    record Highlights(int bufnr, List<NeovimHighlight> highlights) {
+    record Highlights(int bufnr, List<NeovimHighlight> highlights, List<JumpLabels.Label> labels) {
         public Highlights {
             highlights = List.copyOf(highlights);
+            labels = List.copyOf(labels);
         }
     }
 

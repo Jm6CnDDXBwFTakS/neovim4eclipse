@@ -4204,7 +4204,25 @@ final class LuaScripts {
      *       {@code 'ignorecase'} and {@code 'magic'}, which {@code matchbufline()} follows.</li>
      *   <li>Not the matches of matchparen (group {@code MatchParen}), on by default: Eclipse's code
      *       editors mark the matching bracket themselves, and two marks would clash.</li>
+     *   <li>The marks of a jump plug-in (flash, leap, hop, mini.jump2d): see "Jump labels" below.</li>
      * </ul>
+     *
+     * <p><b>Jump labels.</b> A jump plug-in shows where a key would take the cursor with extmarks:
+     * a highlight over each match, a text color over everything else (the backdrop), and at each
+     * target a mark with <i>overlay</i> virtual text, a letter drawn over the character there
+     * ({@code :help nvim_buf_set_extmark()}, {@code virt_text_pos}). They are told from other
+     * plug-ins' marks by the name of their highlight group: it starts with one of the prefixes
+     * this script is given as its argument ({@code util/JumpLabels.BUILT_IN_PREFIXES}, the one
+     * place that names them) or with one the user lists in
+     * {@code vim.g.neovim4eclipse_jump_label_group_prefixes}. Example: flash's label is
+     * {@code { 'a', 'FlashLabel' }}, which starts with {@code Flash}. By group and not by
+     * namespace, because a namespace need not have a name (leap's has none). The user's list is
+     * read once, here; it adds to the built-in prefixes and cannot take one away. An entry that
+     * is not a non-empty string is left out, with a warning.
+     *
+     * <p>For these groups a text color alone is enough (the backdrop sets no background), and
+     * the range is then sent with background -1: the editor's text takes the color while the
+     * marks are there. The yank flash and window matches keep needing a background.
      *
      * <p><b>Colors.</b> The group's own, its links followed ({@code nvim_get_hl} with
      * {@code link = false}): the background, and the text color when the group sets one, since
@@ -4222,16 +4240,23 @@ final class LuaScripts {
      * the editor drop one it touched. {@code M.resend()} ({@link #SEARCH_RESEND}) sends them in any
      * case.
      *
-     * <p>Sent: {@code eclipse_highlights(buf, ranges, win)}, where {@code ranges} is a flat list of
+     * <p>Sent: {@code eclipse_highlights(buf, ranges, win, labels)}, where {@code ranges} is a flat list of
      * six numbers per highlight, lowest priority first: start line (1-based), start byte column
      * (0-based), end line, end byte column (0-based, exclusive), background and text color
-     * ({@code 0xRRGGBB}; the text color -1 when the group sets none). Example: the flash of
+     * ({@code 0xRRGGBB}; -1 for one the group does not set, and never both). Example: the flash of
      * {@code yy} on line 2, {@code "abc"}, with the default {@code IncSearch}:
      * {@code {2, 0, 2, 3, 0xFCE094, 0x07080D}}. A flash over whole lines ends at the end of its last
      * line, not at the start of the next one: a line-wise yank of the last line would name a line
      * the document does not have.
+     *
+     * <p>{@code labels} is a list with one entry per piece of overlay text:
+     * {@code { line, byte column, cells, text, background, text color, bold }}. {@code cells} is
+     * how many screen cells after the mark's column the piece starts (0 for the first; a label
+     * of two pieces in two groups has its second at 1). Example: flash's {@code a} over the
+     * {@code l} of {@code alpha} on line 1: {@code { 1, 1, 0, 'a', 0x6B5300, 0xEEF1F8, false }}.
      */
     static final String HIGHLIGHTS = """
+            local builtin_prefixes = ...
             local enabled = vim.g.neovim4eclipse_highlights
             if enabled == 0 or enabled == false then
               return false
@@ -4282,14 +4307,74 @@ final class LuaScripts {
               return colors[name]
             end
 
+            -- The prefixes a jump plug-in's highlight groups start with: the built-in ones first,
+            -- then the user's own. Made once; neither list is changed.
+            local prefixes = {}
+            do
+              local known = {}
+              local function take(list, whose)
+                for _, p in ipairs(type(list) == 'table' and list or {}) do
+                  if type(p) == 'string' and p ~= '' then
+                    if not known[p] then
+                      known[p] = true
+                      prefixes[#prefixes + 1] = p
+                    end
+                  elseif whose then
+                    vim.schedule(function()
+                      vim.notify('neovim4eclipse: ' .. whose .. ': left out ' .. vim.inspect(p)
+                        .. ' (an entry is a non-empty string, such as "Sneak")', vim.log.levels.WARN)
+                    end)
+                  end
+                end
+              end
+              take(builtin_prefixes)
+              local own = vim.g.neovim4eclipse_jump_label_group_prefixes
+              if own ~= nil and type(own) ~= 'table' then
+                vim.schedule(function()
+                  vim.notify('neovim4eclipse: vim.g.neovim4eclipse_jump_label_group_prefixes is not a list: '
+                    .. vim.inspect(own), vim.log.levels.WARN)
+                end)
+              end
+              take(own, 'vim.g.neovim4eclipse_jump_label_group_prefixes')
+            end
+
+            -- Whether a highlight group is a jump plug-in's: its name starts with one of the prefixes.
+            local function is_jump_group(name)
+              if type(name) ~= 'string' then
+                return false
+              end
+              for _, p in ipairs(prefixes) do
+                if name:sub(1, #p) == p then
+                  return true
+                end
+              end
+              return false
+            end
+
+            -- A jump group's colors, { bg, fg, bold }, each -1 when the group does not set it, or
+            -- false when it sets neither color. Kept in colors under a key of its own, since the
+            -- same group asked through color() must have a background.
+            local function jump_color(colors, name)
+              local key = '\\0' .. name
+              if colors[key] == nil then
+                local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+                if ok and (hl.bg or hl.fg) then
+                  colors[key] = { hl.bg or -1, hl.fg or -1, hl.bold == true }
+                else
+                  colors[key] = false
+                end
+              end
+              return colors[key]
+            end
+
             -- The highlights of win between lines top and bottom (1-based), added to out as
             -- { priority, line, col, endline, endcol, bg, fg }, seen keeping each one once.
-            local function collect(win, buf, top, bottom, out, seen, colors)
-              local function add(priority, l1, c1, l2, c2, name)
+            local function collect(win, buf, top, bottom, out, seen, colors, labels)
+              local function add(priority, l1, c1, l2, c2, name, jump)
                 if l2 < l1 or (l2 == l1 and c2 <= c1) then
                   return -- no width: nothing to paint
                 end
-                local rgb = color(colors, name)
+                local rgb = jump and jump_color(colors, name) or (not jump and color(colors, name))
                 if not rgb then
                   return
                 end
@@ -4311,6 +4396,42 @@ final class LuaScripts {
                     c2 = #(vim.api.nvim_buf_get_lines(buf, l2 - 1, l2, false)[1] or '')
                   end
                   add(d.priority or 4096, m[2] + 1, m[3], l2, c2, d.hl_group)
+                end
+              end
+              if #prefixes > 0 then
+                -- Every namespace's marks on these lines; a jump plug-in's are known by their group.
+                local all = vim.api.nvim_buf_get_extmarks(buf, -1, { top - 1, 0 }, { bottom - 1, -1 },
+                  { details = true, overlap = true })
+                for _, m in ipairs(all) do
+                  local d = m[4]
+                  if d.end_row and is_jump_group(d.hl_group) then
+                    local l2, c2 = d.end_row + 1, d.end_col
+                    if c2 == 0 and d.end_row > m[2] then
+                      l2 = d.end_row -- as for the flash: the end of the line before
+                      c2 = #(vim.api.nvim_buf_get_lines(buf, l2 - 1, l2, false)[1] or '')
+                    end
+                    add(d.priority or 4096, m[2] + 1, m[3], l2, c2, d.hl_group, true)
+                  end
+                  -- Not text put at a window column (virt_text_win_col): that is over no character.
+                  if d.virt_text and d.virt_text_pos == 'overlay' and not d.virt_text_win_col
+                      and m[2] + 1 >= top and m[2] + 1 <= bottom then
+                    local cells = 0
+                    for _, chunk in ipairs(d.virt_text) do
+                      local text, name = chunk[1], chunk[2]
+                      if type(name) == 'table' then
+                        name = name[#name] -- several groups combined: the last one wins
+                      end
+                      if type(text) == 'string' and text ~= '' then
+                        local rgb = is_jump_group(name) and jump_color(colors, name)
+                        local key = table.concat({ 'label', m[2], m[3], cells, text, tostring(name) }, ':')
+                        if rgb and not seen[key] then
+                          seen[key] = true
+                          labels[#labels + 1] = { m[2] + 1, m[3], cells, text, rgb[1], rgb[2], rgb[3] }
+                        end
+                        cells = cells + vim.fn.strdisplaywidth(text)
+                      end
+                    end
+                  end
                 end
               end
               local ok, list = pcall(vim.fn.getmatches, win)
@@ -4369,13 +4490,13 @@ final class LuaScripts {
               end
               local buf = vim.api.nvim_win_get_buf(win)
               local last = vim.api.nvim_buf_line_count(buf)
-              local found, seen, colors = {}, {}, {}
-              collect(win, buf, vim.fn.line('w0', win), vim.fn.line('w$', win), found, seen, colors)
+              local found, seen, colors, labels = {}, {}, {}, {}
+              collect(win, buf, vim.fn.line('w0', win), vim.fn.line('w$', win), found, seen, colors, labels)
               local view = views[win]
               if view then
                 local top, bottom = math.max(1, view[1]), math.min(last, view[2])
                 if top <= bottom then
-                  collect(win, buf, top, bottom, found, seen, colors)
+                  collect(win, buf, top, bottom, found, seen, colors, labels)
                 end
               end
               -- Lowest priority first: Eclipse paints them in order, so the highest lies on top.
@@ -4389,15 +4510,24 @@ final class LuaScripts {
               for _, h in ipairs(found) do
                 vim.list_extend(ranges, { h[2], h[3], h[4], h[5], h[6], h[7] })
               end
+              table.sort(labels, function(a, b)
+                if a[1] ~= b[1] then
+                  return a[1] < b[1]
+                end
+                return a[2] < b[2] or (a[2] == b[2] and a[3] < b[3])
+              end)
               local key = table.concat(ranges, ',')
-              if #ranges > 0 then
+              for _, l in ipairs(labels) do
+                key = key .. '|' .. table.concat({ l[1], l[2], l[3], l[4], l[5], l[6], tostring(l[7]) }, ',')
+              end
+              if #ranges > 0 or #labels > 0 then
                 key = key .. '@' .. vim.api.nvim_buf_get_changedtick(buf)
               end
               if sent[win] ~= key then
                 sent[win] = key
-                notify('eclipse_highlights', buf, ranges, win)
+                notify('eclipse_highlights', buf, ranges, win, labels)
               end
-              return ranges
+              return ranges, labels
             end
 
             local scheduled = false

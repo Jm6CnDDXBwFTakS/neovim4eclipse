@@ -45,6 +45,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
@@ -373,7 +374,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
             LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search_highlight)"));
             // And for the yank flash and window matches (the same doc, "The yank flash and window matches").
-            session.highlightsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.HIGHLIGHTS, List.of())));
+            // Its argument: the group prefixes of the jump plug-ins known without a setting.
+            session.highlightsEnabled = Boolean.TRUE.equals(
+                    await(api.execLua(LuaScripts.HIGHLIGHTS, List.of(JumpLabels.BUILT_IN_PREFIXES))));
             LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
             // And for the floating windows (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids").
             session.floatingWindowsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FLOATING_WINDOWS, List.of())));
@@ -2193,10 +2196,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onHighlights(int bufnr, List<NeovimHighlight> highlights, int winid) {
+        public void onHighlights(int bufnr, List<NeovimHighlight> highlights, List<JumpLabels.Label> labels, int winid) {
             if (highlightsEnabled && buffers.isAttached(winid, bufnr)) {
-                LOG.finest(() -> highlights.size() + " highlights in view, buffer " + bufnr);
-                events.highlights(new Highlights(bufnr, highlights));
+                LOG.finest(() -> highlights.size() + " highlights and " + labels.size() + " labels in view, buffer " + bufnr);
+                events.highlights(new Highlights(bufnr, highlights, labels));
             }
         }
 

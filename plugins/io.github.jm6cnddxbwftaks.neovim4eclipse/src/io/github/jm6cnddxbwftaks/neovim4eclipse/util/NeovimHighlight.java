@@ -12,12 +12,14 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * {@code NeovimHighlight(new SearchMatch(1, 4, 1, 7), 0xFCE094, 0x07080D)}.
  *
  * @param range      where, as a search match
- * @param background the group's background, {@code 0xRRGGBB}
+ * @param background the group's background, {@code 0xRRGGBB}, or {@link #NO_COLOR} for a jump
+ *                   plug-in's group that sets only a text color (its backdrop): the editor's
+ *                   background then stays
  * @param foreground the group's text color, or {@link #NO_COLOR} when the group sets none: the
  *                   editor's own syntax colors then stay
  */
 public record NeovimHighlight(SearchMatch range, int background, int foreground) {
 
-    /** A text color the group does not set. */
+    /** A color the group does not set. */
     public static final int NO_COLOR = -1;
 }

@@ -235,7 +235,7 @@ shown. The colors are read at each update, not kept: `:highlight Mine guibg=#445
 decoration provider's `on_win` schedules the work (a flash's extmark comes and goes with a redraw,
 `:match` redraws); the window's visible lines and the editor's are looked at (`SEARCH_VIEW` and
 `SEARCH_RESEND` reach both modules); a change is sent, with the buffer's change count when there
-are highlights. Sent: `eclipse_highlights(buf, ranges, win)`, six numbers per highlight, lowest
+are highlights. Sent: `eclipse_highlights(buf, ranges, win, labels)` (the labels: "Jump labels" below), six numbers per highlight, lowest
 priority first: the range as a search match's, the background and the text color (`-1` for none).
 A flash over whole lines ends at the end of its last line, not at the start of the next one, which
 for the file's last line would be a line the document does not have.
@@ -250,6 +250,61 @@ arithmetic (`SearchRegions.follow`), are ignored while Eclipse types and asked f
 cleared in Eclipse mode and asked for again in Neovim mode, all as for search matches.
 
 `vim.g.neovim4eclipse_highlights = 0` in `init.lua` turns them off, read once at start.
+
+## Jump labels
+
+A jump plug-in (flash, leap, hop, mini.jump2d) lets the user reach any place on the screen in two
+or three keys: after its key it draws a letter over each place the cursor could go to, and the
+letter typed next takes it there. In Neovim those letters are extmarks with *overlay virtual
+text* (`:help nvim_buf_set_extmark()`, `virt_text_pos = 'overlay'`): text drawn over the character
+at the mark, the buffer unchanged. Beside them the plug-in sets ordinary highlight marks: one over
+each match, and a *backdrop* that gives all other text a dim color. The editor is Eclipse's, so
+without help none of this shows, and the plug-in waits for a key the user cannot choose.
+
+**Which marks.** `HIGHLIGHTS` reads the extmarks of every namespace on the visible lines and keeps
+those whose highlight group's name starts with a known prefix. By group and not by namespace,
+because a namespace need not have a name (leap's has none). The built-in prefixes are
+`util/JumpLabels.BUILT_IN_PREFIXES`, an unmodifiable list and the one place that names the
+plug-ins; the session passes it to the script as its argument, so the Lua code holds no copy. The
+user's own prefixes come from `vim.g.neovim4eclipse_jump_label_group_prefixes`, read once at
+start; the script puts them after the built-in ones and changes neither list, so a setting can add
+a plug-in and cannot take one away. An entry that is no non-empty string is left out with a
+warning.
+
+**What is sent.** A highlight of such a group goes into `ranges` with the others; for these groups
+a text color alone is enough, and the background is then `-1` (the backdrop). The labels are a
+fourth argument: `eclipse_highlights(buf, ranges, win, labels)`, one entry per piece of overlay
+text, `{ line, byte column, cells, text, background, text color, bold }`. `cells` is how far after
+the mark's column the piece starts, for a label made of several pieces in different groups.
+Virtual text at the end of a line or inline is no label and is not sent. The plug-in waits for
+its key in `getcharstr()`, where Neovim still redraws and runs scheduled work, so the marks are
+reported while it waits, and their going is reported when it is done.
+
+**In Eclipse.** `util/JumpLabels.parse` reads the labels and trusts nothing in them: the number of
+labels and a label's length are limited, colors are checked, control characters are removed.
+`NeovimHighlighter` merges a text-color-only range as a `StyleRange` that sets only the
+foreground, over Eclipse's syntax colors; when the next report has none, the presentation is
+built again and the syntax colors are back. `editor/JumpLabelPainter` is a paint listener on the
+`StyledText`: for each label it fills the cell of the character at that line and byte column with
+the label's background and draws the letter there. The place is worked out at each paint from
+the document, so a label whose line is gone, or that lies in a closed fold, is simply not drawn
+(a column past the line's end is the line's end, where flash labels a match that ends a line);
+nothing is kept that an edit could make stale.
+
+**Limits.** A cell is as wide as the font's average character: exact in a monospaced font, a
+little off in a proportional one. Only the label's colors and bold are taken from its group. Only
+the window Neovim's cursor is in is looked at, as for the other highlights: a plug-in that labels
+several windows at once (flash's `multi_window`) shows its labels in the editor that has the
+focus. Overlay text placed at a window column instead of at its mark (`virt_text_win_col`) is not
+a label over a character and is left out.
+
+**The real plug-ins in the tests.** `jump_plugins_spec.lua` and `JumpLabelsEndToEndTest` run the
+plug-ins themselves, since what breaks this is a plug-in renaming a group or drawing its labels
+another way. The repository holds none of them: `releng/test-plugins.properties` pins each to a
+commit and to the SHA-256 of that commit's archive, and `java releng/tools/plugins/TestPlugins.java
+fetch` (run by `LikeCi`) downloads, checks and unpacks them into `target/test-plugins/`. A test
+whose plug-in is not there is skipped with the reason ([UPGRADING.md](../UPGRADING.md), "The
+plug-ins the tests run").
 
 ## Not done
 

@@ -164,3 +164,114 @@ t.test('SEARCH_RESEND and SEARCH_VIEW reach the highlights too', function()
   t.run('SEARCH_VIEW', tostring(vim.api.nvim_get_current_buf()), '1', '1')
   flush()
 end)
+
+-- Jump labels (docs/design/SEARCH_HIGHLIGHTING.md, "Jump labels"): the marks of a jump plug-in,
+-- known by the prefix of their highlight group. Set here as flash sets them; the real plug-ins
+-- are run in jump_plugins_spec.lua.
+
+--- The module started with the built-in prefixes, as the session passes them, and a buffer of
+--- two lines; groups of the tests' own under a built-in prefix and under none.
+local function start_jump(user_prefixes)
+  t.setup()
+  vim.g.neovim4eclipse_jump_label_group_prefixes = user_prefixes
+  t.eq(true, t.run('HIGHLIGHTS', t.jump_label_prefixes))
+  vim.cmd('enew!')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'alpha beta', 'gamma' })
+  vim.api.nvim_set_hl(0, 'FlashTestMatch', { bg = BG, fg = FG })
+  vim.api.nvim_set_hl(0, 'FlashTestBackdrop', { fg = 0x777777 })
+  vim.api.nvim_set_hl(0, 'FlashTestLabel', { bg = 0x101010, fg = 0xF0F0F0, bold = true })
+  vim.api.nvim_set_hl(0, 'OtherLabel', { bg = 0x202020, fg = 0xE0E0E0 })
+  vim.api.nvim_set_hl(0, 'SneakLabel', { bg = 0x303030 })
+  t.forget()
+  return package.loaded['neovim4eclipse.highlights'], vim.api.nvim_create_namespace('') -- unnamed, as leap's
+end
+
+local function label(ns, line0, col, chunks)
+  vim.api.nvim_buf_set_extmark(0, ns, line0, col, { virt_text = chunks, virt_text_pos = 'overlay' })
+end
+
+t.test('a jump plug-in: match, backdrop (text color only) and label are sent; other marks are not', function()
+  local m, ns = start_jump(nil)
+  vim.api.nvim_buf_set_extmark(0, ns, 0, 0, { end_row = 1, end_col = 0, hl_group = 'FlashTestBackdrop', priority = 5000 })
+  vim.api.nvim_buf_set_extmark(0, ns, 0, 6, { end_col = 7, hl_group = 'FlashTestMatch', priority = 5001 })
+  vim.api.nvim_buf_set_extmark(0, ns, 1, 0, { end_col = 3, hl_group = 'OtherLabel' })
+  label(ns, 0, 7, { { 'a', 'FlashTestLabel' } })
+  label(ns, 1, 2, { { 'x', 'OtherLabel' } })
+  local ranges, labels = m.update()
+  t.eq({ 1, 0, 1, 10, -1, 0x777777, 1, 6, 1, 7, BG, FG }, ranges, 'the backdrop ends at the end of its line and has no background')
+  t.eq({ { 1, 7, 0, 'a', 0x101010, 0xF0F0F0, true } }, labels)
+  local sent = t.sent('eclipse_highlights')
+  t.eq(labels, sent[#sent][4], 'the labels are the fourth argument')
+end)
+
+t.test('a label of two pieces in two groups, and one in several combined groups', function()
+  local m, ns = start_jump(nil)
+  label(ns, 0, 0, { { 'ab', 'FlashTestLabel' }, { 'c', 'FlashTestMatch' } })
+  label(ns, 1, 1, { { 'z', { 'OtherLabel', 'FlashTestLabel' } } })
+  local _, labels = m.update()
+  t.eq({ { 1, 0, 0, 'ab', 0x101010, 0xF0F0F0, true }, { 1, 0, 2, 'c', BG, FG, false },
+    { 2, 1, 0, 'z', 0x101010, 0xF0F0F0, true } }, labels, 'the second piece starts two cells on; the last group of a list decides')
+end)
+
+t.test('only overlay text is a label: text at the end of the line or inline is not', function()
+  local m, ns = start_jump(nil)
+  vim.api.nvim_buf_set_extmark(0, ns, 0, 0, { virt_text = { { 'eol', 'FlashTestLabel' } }, virt_text_pos = 'eol' })
+  vim.api.nvim_buf_set_extmark(0, ns, 0, 2, { virt_text = { { 'in', 'FlashTestLabel' } }, virt_text_pos = 'inline' })
+  local _, labels = m.update()
+  t.eq({}, labels)
+end)
+
+t.test('the labels going is sent too, as an empty list', function()
+  local m, ns = start_jump(nil)
+  label(ns, 0, 7, { { 'a', 'FlashTestLabel' } })
+  m.update()
+  vim.api.nvim_buf_clear_namespace(0, ns, 0, -1)
+  t.forget()
+  local ranges, labels = m.update()
+  t.eq({ {}, {} }, { ranges, labels })
+  t.eq(1, #t.sent('eclipse_highlights'), 'a change, so it is sent')
+end)
+
+t.test("the user's prefixes add to the built-in ones and cannot take one away", function()
+  local m, ns = start_jump({ 'Sneak' })
+  label(ns, 0, 0, { { 's', 'SneakLabel' } })
+  label(ns, 0, 7, { { 'a', 'FlashTestLabel' } })
+  label(ns, 1, 0, { { 'o', 'OtherLabel' } })
+  local _, labels = m.update()
+  t.eq({ { 1, 0, 0, 's', 0x303030, -1, false }, { 1, 7, 0, 'a', 0x101010, 0xF0F0F0, true } }, labels)
+end)
+
+t.test("an entry of the user's list that is no non-empty string is left out with a warning; the rest counts", function()
+  local warned = {}
+  local notify = vim.notify
+  vim.notify = function(text) warned[#warned + 1] = text end
+  local m, ns = start_jump({ 'Sneak', 7, '' })
+  flush()
+  vim.notify = notify
+  t.eq(2, #warned)
+  t.ok(warned[1]:find('neovim4eclipse_jump_label_group_prefixes', 1, true) ~= nil)
+  label(ns, 0, 0, { { 's', 'SneakLabel' } })
+  local _, labels = m.update()
+  t.eq(1, #labels)
+end)
+
+t.test('a setting that is no list is reported and the built-in prefixes still work', function()
+  local warned = {}
+  local notify = vim.notify
+  vim.notify = function(text) warned[#warned + 1] = text end
+  local m, ns = start_jump('Sneak')
+  flush()
+  vim.notify = notify
+  t.eq(1, #warned)
+  label(ns, 0, 7, { { 'a', 'FlashTestLabel' } })
+  local _, labels = m.update()
+  t.eq(1, #labels)
+end)
+
+t.test('without the prefixes (no argument) no plug-in mark is read: the yank flash and matches only', function()
+  local m = start({ 'alpha beta' })
+  vim.api.nvim_set_hl(0, 'FlashTestLabel', { bg = 0x101010 })
+  label(vim.api.nvim_create_namespace('x'), 0, 0, { { 'a', 'FlashTestLabel' } })
+  local ranges, labels = m.update()
+  t.eq({ {}, {} }, { ranges, labels })
+end)

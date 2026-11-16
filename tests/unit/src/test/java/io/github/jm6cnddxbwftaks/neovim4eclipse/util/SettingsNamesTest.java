@@ -62,6 +62,7 @@ class SettingsNamesTest {
             Map.entry("vim.g.neovim4eclipse_problems", List.of(LUA, "vim.g.neovim4eclipse_problems")),
             Map.entry("vim.g.neovim4eclipse_search_highlight", List.of(LUA, "vim.g.neovim4eclipse_search_highlight")),
             Map.entry("vim.g.neovim4eclipse_highlights", List.of(LUA, "vim.g.neovim4eclipse_highlights")),
+            Map.entry("vim.g.neovim4eclipse_jump_label_group_prefixes", List.of(LUA, "vim.g.neovim4eclipse_jump_label_group_prefixes")),
             Map.entry("vim.g.neovim4eclipse_floating_windows", List.of(LUA, "vim.g.neovim4eclipse_floating_windows")),
             Map.entry("vim.g.neovim4eclipse_completion_menu", List.of(LUA, "vim.g.neovim4eclipse_completion_menu")),
             Map.entry("vim.g.neovim4eclipse_task_tags", List.of(LUA, "vim.g.neovim4eclipse_task_tags")),
@@ -211,5 +212,27 @@ class SettingsNamesTest {
             }
         }
         throw new IllegalStateException("repository root not found above " + dir);
+    }
+
+    /**
+     * The README's row of {@code vim.g.neovim4eclipse_jump_label_group_prefixes} names the
+     * built-in prefixes, exactly those of {@link JumpLabels#BUILT_IN_PREFIXES} and in its order:
+     * that list is the one place that decides them, and the row must not promise another set.
+     */
+    @Test
+    void theReadmeNamesExactlyTheBuiltInJumpLabelPrefixes() throws Exception {
+        Path root = Path.of("").toAbsolutePath();
+        while (root != null && !Files.isRegularFile(root.resolve("README.md"))) {
+            root = root.getParent();
+        }
+        String row = Files.readAllLines(root.resolve("README.md")).stream()
+                .filter(line -> line.startsWith("| `vim.g.neovim4eclipse_jump_label_group_prefixes")).findFirst().orElseThrow();
+        String builtIn = row.substring(row.indexOf("built-in") + "built-in".length(), row.indexOf('('));
+        List<String> named = new ArrayList<>();
+        Matcher m = Pattern.compile("`([A-Za-z0-9]+)`").matcher(builtIn);
+        while (m.find()) {
+            named.add(m.group(1));
+        }
+        assertEquals(JumpLabels.BUILT_IN_PREFIXES, named, row);
     }
 }

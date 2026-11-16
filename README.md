@@ -220,7 +220,8 @@ where the table says otherwise. `0` or `false` turns a part off:
 | `vim.g.neovim4eclipse_viewport = 0` | Neovim keeps a fixed screen of its own instead of the editor's size, scrolling and word wrap ([The editor's size](docs/USER_GUIDE.md#the-editors-size-scrolling-and-word-wrap-h-l-ctrl-d-zz)) |
 | `vim.g.neovim4eclipse_problems = 0` | Eclipse's errors and warnings are not sent to Neovim, so `]d` and `[d` are Neovim's own ([Problems](docs/USER_GUIDE.md#problems-d-d)) |
 | `vim.g.neovim4eclipse_search_highlight = 0` | The editor does not highlight search matches; search itself works as before ([Command line](docs/USER_GUIDE.md#command-line---)) |
-| `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank or your `:match` highlights ([Command line](docs/USER_GUIDE.md#command-line---)) |
+| `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank, your `:match` highlights or a jump plug-in's labels ([Command line](docs/USER_GUIDE.md#command-line---)) |
+| `vim.g.neovim4eclipse_jump_label_group_prefixes = { 'Sneak' }` | More jump plug-ins whose labels the editor draws, by the start of their highlight groups' names; added to the built-in `Flash`, `Leap`, `Hop`, `MiniJump2d` ([Jump labels](docs/USER_GUIDE.md#jump-labels)) |
 | `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw Neovim's floating windows, such as a plug-in's panel of key hints ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
 | `vim.g.neovim4eclipse_completion_menu = 0` | In insert mode `Ctrl-N` and `Ctrl-P` (also after `Ctrl-X`) run Eclipse's Word Completion instead of Neovim's own completion, and Neovim's list of matches is not drawn ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)) |
 | `vim.g.neovim4eclipse_task_tags = 'TODO,FIXME'` | The comment tags `:Etasks` collects; read each time `:Etasks` runs ([The quickfix list](docs/USER_GUIDE.md#the-quickfix-list-eproblems-q)) |

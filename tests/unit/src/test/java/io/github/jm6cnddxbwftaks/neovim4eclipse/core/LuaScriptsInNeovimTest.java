@@ -33,6 +33,7 @@ import org.junit.jupiter.api.TestFactory;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
@@ -184,6 +185,10 @@ class LuaScriptsInNeovimTest {
                 .append(",\n  ide_keys = {");
         for (String arg : IdeKeys.toLuaArgs()) {
             lua.append(' ').append(longString(arg)).append(',');
+        }
+        lua.append(" },\n  jump_label_prefixes = {");
+        for (String prefix : JumpLabels.BUILT_IN_PREFIXES) {
+            lua.append(' ').append(longString(prefix)).append(',');
         }
         lua.append(" },\n  scripts = {\n");
         for (Field field : LuaScripts.class.getDeclaredFields()) {

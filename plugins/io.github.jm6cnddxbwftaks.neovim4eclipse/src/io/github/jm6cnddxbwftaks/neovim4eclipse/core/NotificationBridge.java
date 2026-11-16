@@ -16,6 +16,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 
@@ -155,7 +156,7 @@ final class NotificationBridge implements Incoming {
          * lines changed ({@link LuaScripts#HIGHLIGHTS}), lowest priority first; empty when there are
          * none.
          */
-        void onHighlights(int bufnr, List<NeovimHighlight> highlights, int winid);
+        void onHighlights(int bufnr, List<NeovimHighlight> highlights, List<JumpLabels.Label> labels, int winid);
 
         /**
          * Neovim's window {@code winid}, which shows buffer {@code bufnr}, has {@code line1} (1-based) as its top
@@ -402,9 +403,11 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Payload: {@code [bufnr, ranges, winid]}, from {@link LuaScripts#HIGHLIGHTS}: {@code ranges}
-     * holds six numbers per highlight (start line, start byte, end line, end byte, background, text
-     * color or -1). An incomplete last group is left out.
+     * Payload: {@code [bufnr, ranges, winid, labels]}, from {@link LuaScripts#HIGHLIGHTS}:
+     * {@code ranges} holds six numbers per highlight (start line, start byte, end line, end byte,
+     * background, text color; -1 for a color the group does not set). An incomplete last group is
+     * left out, and so is one with neither color. {@code labels} are a jump plug-in's
+     * ({@link JumpLabels#parse}); absent, there are none.
      */
     private void onHighlights(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
@@ -419,11 +422,12 @@ final class NotificationBridge implements Incoming {
             Integer c2 = toInt(flat.get(i + 3));
             Integer bg = toInt(flat.get(i + 4));
             Integer fg = toInt(flat.get(i + 5));
-            if (l1 != null && c1 != null && l2 != null && c2 != null && bg != null && fg != null) {
+            if (l1 != null && c1 != null && l2 != null && c2 != null && bg != null && fg != null
+                    && (bg != NeovimHighlight.NO_COLOR || fg != NeovimHighlight.NO_COLOR)) {
                 highlights.add(new NeovimHighlight(new SearchMatch(l1, c1, l2, c2), bg, fg));
             }
         }
-        sink.onHighlights(buf, highlights, window(args, 2));
+        sink.onHighlights(buf, highlights, JumpLabels.parse(args.size() > 3 ? args.get(3) : null), window(args, 2));
     }
 
     /** Payload: {@code [bufnr, line1, winid]}, from {@link LuaScripts#VIEWPORT}'s {@code WinScrolled}. */

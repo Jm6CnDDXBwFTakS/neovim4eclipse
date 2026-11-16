@@ -522,7 +522,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         SwtUiExecutor.INSTANCE.asyncExec(() -> {
             if (!closed && neovimModeActive && !styledText.isDisposed() && !skipWhileEclipseTypes()) {
-                neovimHighlighter.show(highlights.highlights());
+                neovimHighlighter.show(highlights.highlights(), highlights.labels());
             }
         });
     }
@@ -1116,6 +1116,11 @@ public final class NeovimEditorController implements AutoCloseable {
         if (!closed && !styledText.isDisposed()) {
             messageLine.show(message, error);
         }
+    }
+
+    /** A jump plug-in's labels as they would be painted now, for tests; empty without the highlighter. UI thread. */
+    List<JumpLabelPainter.Painted> jumpLabelsForTests() {
+        return neovimHighlighter == null ? List.of() : neovimHighlighter.paintedLabels();
     }
 
     /** The message line, for tests. */

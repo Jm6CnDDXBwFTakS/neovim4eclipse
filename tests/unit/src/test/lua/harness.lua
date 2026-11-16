@@ -83,6 +83,8 @@ assert(load(generated.scripts.PATHS, '=LuaScripts.PATHS'))()
 local t = {
   --- HostCommand.rulesForNeovim(): HOST_COMMANDS's argument, as the session passes it.
   host_rules = generated.host_rules,
+  --- JumpLabels.BUILT_IN_PREFIXES: HIGHLIGHTS's argument, as the session passes it.
+  jump_label_prefixes = generated.jump_label_prefixes,
   --- The folder of the spec being run, for files beside it (../resources/path-cases.tsv).
   spec_dir = vim.fs.dirname(vim.fs.normalize(vim.fn.fnamemodify(spec_path, ':p'))),
   --- The channel number the scripts send to (any number: nothing is sent).
