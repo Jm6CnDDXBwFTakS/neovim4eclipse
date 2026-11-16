@@ -4384,6 +4384,20 @@ final class LuaScripts {
 
 
     /**
+     * Whether Neovim's floating windows without the focus are drawn in the editor
+     * (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids"): {@code false} when the
+     * user's config sets {@code vim.g.neovim4eclipse_floating_windows = 0} (or {@code false}). Run
+     * once at start, after the user's config. Nothing to install in Neovim: the windows' cells
+     * come with the redraw events anyway, and the session only stops reading them
+     * ({@code util/Grids.drawFloats}). Example: a user who finds a plug-in's panel of key hints in
+     * the way of the editor's text turns it off and has the floats unseen, as before 0.2.23.
+     */
+    static final String FLOATING_WINDOWS = """
+            local enabled = vim.g.neovim4eclipse_floating_windows
+            return not (enabled == 0 or enabled == false)
+            """;
+
+    /**
      * Sends the current window's visible search matches and highlights again ({@link #SEARCH}'s and
      * {@link #HIGHLIGHTS}'s {@code resend}), for the editor just attached or back in Neovim mode,
      * which has none painted (argument: the buffer number). Nothing when that buffer is not the

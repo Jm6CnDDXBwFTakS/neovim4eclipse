@@ -51,6 +51,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
@@ -108,6 +109,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final CommandLineEditHandlers commandLineEdits;
     /** Neovim's command-line window ({@code q:}), drawn over the bottom of the editor while it is open. */
     private final NeovimWindowPanel commandWindowPanel;
+    /** Neovim's floating windows without the focus, drawn over the text. */
+    private final FloatingWindows floatingWindows;
     /**
      * Whether the command-line window is open, set on the RPC thread as the session reports it:
      * its mode, which is Neovim's in that window, then does not reach the editor
@@ -192,6 +195,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<HostCommand> hostCommandListener = this::onHostCommand;
     private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
     private final Consumer<CommandWindowView> commandWindowListener = this::onCommandWindow;
+    private final Consumer<List<FloatWindow>> floatingWindowListener = this::onFloatingWindows;
     private final Consumer<FoldState> foldListener = this::onFolds;
     private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
@@ -275,6 +279,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 editor.getSite().getService(IHandlerService.class), commandLine);
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
+        this.floatingWindows = new FloatingWindows(styledText);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
         this.wheel = viewport == null ? null
@@ -351,6 +356,10 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addHostCommandListener(hostCommandListener);
         session.addCmdlineListener(cmdlineListener);
         session.addCommandWindowListener(commandWindowListener);
+        session.addFloatingWindowListener(floatingWindowListener);
+        // A float reported before this editor listened (it lives in this editor's tab page, and
+        // Neovim showed it again when the tab page came back) would stay unseen until it changes.
+        onFloatingWindows(session.floatingWindows());
         if (foldMirror != null) {
             session.addFoldStateListener(foldListener);
         }
@@ -810,6 +819,7 @@ public final class NeovimEditorController implements AutoCloseable {
             if (searchHighlighter != null || neovimHighlighter != null) {
                 session.resendSearchAsync(buffer); // cleared in Eclipse mode
             }
+            floatingWindows.show(session.floatingWindows()); // cleared in Eclipse mode too
             LOG.info("Mode → NEOVIM (keys to nvim)");
         } else {
             modeStatus.setHostEclipseMode();
@@ -822,6 +832,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 commandWindowShown = false;
                 commandWindowPanel.show(CommandWindowView.CLOSED);
             }
+            floatingWindows.clear(); // Neovim's windows are not shown in Eclipse mode; they come back with Neovim mode
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
             if (searchHighlighter != null) {
@@ -924,6 +935,22 @@ public final class NeovimEditorController implements AutoCloseable {
         if (!view.open()) {
             onModeChanged(session.getMode());
         }
+    }
+
+    /**
+     * Neovim's floating windows without the focus changed (one opened, was redrawn, moved or
+     * closed): they are drawn over this editor's text, which is the one Neovim's window shows. Not
+     * in Eclipse mode, where nothing of Neovim's is shown. RPC thread.
+     */
+    private void onFloatingWindows(List<FloatWindow> windows) {
+        if (closed || !neovimModeActive) {
+            return;
+        }
+        HostCommands.runOnUi(() -> {
+            if (!closed && neovimModeActive && !styledText.isDisposed()) {
+                floatingWindows.show(windows);
+            }
+        });
     }
 
     /**
@@ -1266,6 +1293,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeHostCommandListener(hostCommandListener);
             session.removeCmdlineListener(cmdlineListener);
             session.removeCommandWindowListener(commandWindowListener);
+            session.removeFloatingWindowListener(floatingWindowListener);
             session.removeFoldStateListener(foldListener);
             session.removeWrapListener(wrapListener);
             session.removeTopLineListener(topLineListener);
@@ -1292,6 +1320,7 @@ public final class NeovimEditorController implements AutoCloseable {
             commandLineEdits.dispose();
             commandLine.dispose();
             commandWindowPanel.dispose();
+            floatingWindows.dispose();
             messageLine.dispose();
             selectionView.dispose();
             if (searchHighlighter != null) {

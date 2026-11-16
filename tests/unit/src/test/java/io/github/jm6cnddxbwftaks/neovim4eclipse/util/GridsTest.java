@@ -137,4 +137,188 @@ class GridsTest {
         grids.apply(new GridEvent.Resize(4, 6, 3));
         assertTrue(grids.snapshotIfChanged().isEmpty());
     }
+
+    // ---- floating windows ----
+
+    /** The editor's window 1000 on grid 2, 80x23 from the screen's top left, with the cursor in it. */
+    private void editorWindow() {
+        grids.apply(new GridEvent.Resize(2, 80, 23));
+        grids.apply(new GridEvent.WinPos(2, 1000, false, 0, 0, 80, 23, 0));
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
+    }
+
+    /** A float on {@code grid} showing {@code win}, 6x2, rows "hi" and blank, at a screen cell. */
+    private void floatAt(int grid, int win, int row, int col, int zindex) {
+        grids.apply(new GridEvent.Resize(grid, 6, 2));
+        grids.apply(new GridEvent.Line(grid, 0, 0, text("hi", 0))); // the lines come before the window is known
+        grids.apply(new GridEvent.WinPos(grid, win, true, row, col, 0, 0, zindex));
+    }
+
+    @Test
+    void aFloatWithoutTheFocusIsDrawnWhereNeovimPutItCountedFromTheEditorsWindow() {
+        grids.drawFloats(true);
+        grids.apply(new GridEvent.Resize(2, 80, 23));
+        grids.apply(new GridEvent.WinPos(2, 1000, false, 1, 0, 80, 23, 0)); // under a tab line, say
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
+        floatAt(5, 1002, 19, 10, 50);
+        List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
+        assertEquals(1, floats.size());
+        FloatWindow f = floats.get(0);
+        assertEquals("hi    ", f.grid().row(0));
+        assertEquals(1002, f.grid().window());
+        assertEquals(-1, f.grid().cursorRow(), "no cursor: it has no focus");
+        assertEquals(18, f.row(), "screen row 19, the window starts at row 1");
+        assertEquals(10, f.col());
+        assertEquals(23, f.hostRows());
+        assertEquals(80, f.hostCols());
+        assertTrue(grids.floatsIfChanged().isEmpty(), "nothing changed since");
+    }
+
+    @Test
+    void floatsComeLowestInTheStackFirst() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(6, 1003, 5, 0, 1001);
+        floatAt(5, 1002, 18, 0, 1000);
+        List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
+        assertEquals(List.of(1002, 1003), floats.stream().map(f -> f.grid().window()).toList());
+    }
+
+    @Test
+    void aFloatWithTheFocusIsNotDrawnAndComesBackWhenTheFocusLeavesIt() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(5, 1002, 3, 3, 50);
+        assertEquals(1, grids.floatsIfChanged().orElseThrow().size());
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0)); // the user went into it
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow());
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
+        FloatWindow back = grids.floatsIfChanged().orElseThrow().get(0);
+        assertEquals(3, back.row());
+    }
+
+    /**
+     * Neovim says where the cursor is only when that changes: a session that began to listen later
+     * never heard it. The editor's window is still the one layout window on screen.
+     */
+    @Test
+    void theEditorsWindowIsKnownWithoutTheCursorAndAHiddenTabsWindowDoesNotCount() {
+        grids.drawFloats(true);
+        grids.apply(new GridEvent.Resize(3, 80, 23));
+        grids.apply(new GridEvent.WinPos(3, 1001, false, 0, 0, 80, 23, 0)); // another editor's, then hidden
+        grids.apply(new GridEvent.WinGone(3));
+        grids.apply(new GridEvent.Resize(2, 60, 20));
+        grids.apply(new GridEvent.WinPos(2, 1000, false, 2, 1, 60, 20, 0));
+        floatAt(5, 1002, 9, 4, 50);
+        FloatWindow f = grids.floatsIfChanged().orElseThrow().get(0);
+        assertEquals(7, f.row());
+        assertEquals(3, f.col());
+        assertEquals(20, f.hostRows());
+        assertEquals(60, f.hostCols());
+    }
+
+    @Test
+    void beforeAnyWindowsPlaceIsKnownAFloatIsCountedFromTheScreenAndThenFromTheWindow() {
+        grids.drawFloats(true);
+        floatAt(5, 1002, 9, 4, 50);
+        FloatWindow early = grids.floatsIfChanged().orElseThrow().get(0);
+        assertEquals(9, early.row());
+        assertEquals(0, early.hostRows(), "not known: no edge to sit on");
+        grids.apply(new GridEvent.WinPos(2, 1000, false, 1, 0, 80, 23, 0));
+        assertEquals(8, grids.floatsIfChanged().orElseThrow().get(0).row());
+    }
+
+    @Test
+    void aClosedOrHiddenFloatIsGoneAndAMovedOneMoves() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(5, 1002, 9, 2, 50);
+        grids.floatsIfChanged();
+        grids.apply(new GridEvent.WinPos(5, 1002, true, 8, 2, 0, 0, 50)); // the text scrolled a line
+        assertEquals(8, grids.floatsIfChanged().orElseThrow().get(0).row());
+        grids.apply(new GridEvent.WinGone(5));
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow());
+        assertTrue(grids.floatsIfChanged().isEmpty());
+    }
+
+    @Test
+    void aFloatsNewLinesGiveANewAnswerAndTheEditorsDoNot() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(5, 1002, 9, 2, 50);
+        grids.floatsIfChanged();
+        assertTrue(grids.wantsLines(5));
+        assertTrue(!grids.wantsLines(2), "the editor's window is never drawn");
+        grids.apply(new GridEvent.Line(2, 0, 0, text("typed", 0)));
+        assertTrue(grids.floatsIfChanged().isEmpty());
+        grids.apply(new GridEvent.Line(5, 1, 0, text("more", 0)));
+        assertEquals("more  ", grids.floatsIfChanged().orElseThrow().get(0).grid().row(1));
+    }
+
+    @Test
+    void withFloatsOffNothingIsDrawnAndTheirLinesAreNotWanted() {
+        editorWindow();
+        floatAt(5, 1002, 9, 2, 50);
+        assertTrue(grids.floatsIfChanged().isEmpty());
+        assertTrue(!grids.wantsLines(5));
+        grids.drawFloats(true);
+        assertEquals(1, grids.floatsIfChanged().orElseThrow().size());
+        grids.drawFloats(false);
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow());
+    }
+
+    /** A float of {@code width} by {@code height} blank cells on {@code grid}, showing {@code win}. */
+    private void floatOfSize(int grid, int win, int width, int height, int zindex) {
+        grids.apply(new GridEvent.Resize(grid, width, height));
+        grids.apply(new GridEvent.WinPos(grid, win, true, 0, 0, 0, 0, zindex));
+    }
+
+    private List<Integer> drawnWindows() {
+        return grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList();
+    }
+
+    /** 150,000 + 125,000 is over the 250,000 cells; the lowest, 75,000, still fits beside the top one. */
+    @Test
+    void pastTheCellLimitTheWindowsOnTopStayAndASmallerLowerOneStillFits() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatOfSize(5, 1002, 750, 100, 10); // 75,000 cells, lowest
+        floatOfSize(6, 1003, 1250, 100, 20); // 125,000
+        floatOfSize(7, 1004, 1500, 100, 30); // 150,000, on top
+        assertEquals(List.of(1002, 1004), drawnWindows());
+        grids.apply(new GridEvent.WinGone(7)); // the top one closes: now the other two fit
+        assertEquals(List.of(1002, 1003), drawnWindows());
+    }
+
+    @Test
+    void aSingleWindowOverTheCellLimitIsNeverDrawnAndOneJustUnderItIs() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatOfSize(5, 1002, 1000, 251, 50); // 251,000 cells
+        assertTrue(grids.floatsIfChanged().isEmpty(), "nothing to draw, as before it opened");
+        grids.apply(new GridEvent.Resize(5, 1000, 250)); // exactly the limit
+        assertEquals(List.of(1002), drawnWindows());
+    }
+
+    @Test
+    void pastTheWindowLimitTheLowestAreLeftOut() {
+        grids.drawFloats(true);
+        editorWindow();
+        for (int i = 0; i < Grids.MAX_FLOATS + 2; i++) {
+            floatOfSize(10 + i, 2000 + i, 4, 1, i); // zindex 0 is the lowest
+        }
+        List<Integer> drawn = drawnWindows();
+        assertEquals(Grids.MAX_FLOATS, drawn.size());
+        assertEquals(2002, drawn.get(0), "the two lowest, 2000 and 2001, are the ones left out");
+        assertEquals(2000 + Grids.MAX_FLOATS + 1, drawn.get(drawn.size() - 1));
+    }
+
+    @Test
+    void theCommandLineWindowIsNotAFloatAndStaysItsOwn() {
+        grids.drawFloats(true);
+        editorWindow();
+        GridSnapshot window = commandWindow();
+        assertEquals("a     ", window.row(0));
+        assertTrue(grids.floatsIfChanged().isEmpty(), "no float anywhere: nothing to say");
+    }
 }

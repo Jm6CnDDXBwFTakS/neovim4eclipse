@@ -639,7 +639,8 @@ view to the controller, which shows it in the box. The box edits nothing:
 
 Neovim draws each window into a grid of its own (`ext_multigrid`, `core/NeovimConnection.TERMINAL_UI`,
 with `rgb` for 24-bit highlight colors). The editors show their documents themselves; the plug-in
-draws only the grid of the command-line window (`q:`), which has no document behind it.
+draws the grids of the windows that have no document behind them: the command-line window (`q:`),
+and the floating windows that do not have the focus (below, "Floating windows without the focus").
 
 ```
 Neovim  ── redraw: grid_line, grid_scroll, win_pos, hl_attr_define, flush ──▶  RPC reader thread
@@ -688,6 +689,58 @@ focus elsewhere ── closeCommandWindowAsync ── <C-\><C-N><C-\><C-N> ─�
 - **Colors:** a highlight's own colors where it sets them, the editor's text and background where it
   leaves them to the default (`util/GridSnapshot.colors`); `'background'` follows the editor's
   (`LuaScripts.SET_BACKGROUND`, sent at the start and at each theme switch).
+
+**Floating windows without the focus** (a plug-in's panel of key hints, a note opened in the
+background) take the same road, with a list of windows instead of one:
+
+```
+Neovim  ── redraw: grid_line ..., win_float_pos(grid, win, ..., zindex, screen_row, screen_col) ──▶
+  NotificationBridge ── util/GridEvent.WinPos ──▶ NeovimSession.EventSink
+      util/Grids.floatsIfChanged   at flush: every float not under the cursor, lowest zindex first
+      ── List<util/FloatWindow> (immutable: cells, row and column over the editor's window) ──▶ listeners
+NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
+                                          ├─ util/FloatPlacement   cells to pixels, edges
+                                          └─ one editor/GridCanvas per window (SWT.NO_FOCUS), a child of the text
+```
+
+- **Which floats** (`util/Grids.floatsIfChanged`): those whose grid the cursor is not on. A float
+  with the focus is not drawn; one that *opens* with the focus is closed by the `WinNew` net of
+  `LuaScripts.WINDOWS`, as before. Keys are never sent to a float: they go to the editor's window,
+  where the plug-in that opened the float reads them.
+- **How many** (`Grids.MAX_FLOATS`, `MAX_FLOAT_CELLS`): at most 16 floats and 250,000 cells in
+  all, taken highest `zindex` first, each one if it still fits; the rest are left out, and that
+  is logged once. Neovim does not shrink a float a plug-in asks for (200 by 60 on a screen of 80 by
+  24 comes as 200 by 60), and each changed redraw copies a drawn float's cells for the UI thread.
+  One budget for all of them bounds that work, its memory and the number of canvases with one
+  check; the cells are counted before they are copied. `GridCanvas.paint` also draws only the
+  cells its size shows.
+- **Where** (`util/FloatPlacement`): one rule. Neovim sends the screen cell it worked out for the
+  float's top left (`screen_row`, `screen_col`: the anchor's corner, the window or float it hangs
+  on and the cursor are settled in them); it is counted from the first cell of the editor's
+  window and multiplied by Eclipse's cell. A float that reaches the window's last row or column
+  sits on the editor's edge, since the editor's height is seldom a whole number of rows; one that
+  would stick out is moved back in; one larger than the editor is cut off by the text widget.
+  Not mapped through the text: where Eclipse's rows differ from Neovim's (a code mining, another
+  wrap point), a float anchored to a text position can sit a row off.
+- **The editor's window** (`Grids.host`) is the one layout window on screen: each editor's is
+  alone in its tab page, and Neovim hides the others (`win_hide`). Not found through the cursor:
+  Neovim reports the cursor's grid only when it changes. Its place comes once, in the redraws
+  right after `nvim_ui_attach`, before the session listens; `NeovimConnection.Forwarder` keeps
+  those `win_pos` entries, as it keeps the highlight definitions, and hands them on first.
+- **Only with the viewport** (`NeovimSession.floatingWindowsDrawn`): a float's place is a cell of
+  Neovim's screen, which is the editor's size only while the viewport is on. Off (or with
+  `vim.g.neovim4eclipse_floating_windows = 0`), `Grids.drawFloats(false)` leaves the floats' lines
+  unread.
+- **They only show** (`editor/FloatingWindows`): no focus, no mouse; under the plug-in's own
+  overlays (the `:` box, the message line), among themselves in `zindex` order; cleared in Eclipse
+  mode and shown again in Neovim mode.
+- **Placed again at each paint of the editor**, not only at a resize: `StyledText` moves its
+  children along when the text scrolls, and a float that does not hang on text must stay put; a
+  scroll repaints, as a font change does (`MessageLine` does the same). Only a canvas that is
+  somewhere else is moved, and the order is set only when the windows change, so a paint causes
+  no further paint.
+- **A newly attached editor** asks the session for the floats as last reported
+  (`NeovimSession.floatingWindows`): the report for its tab page may have come before it listened.
 
 ## Macros
 
@@ -988,6 +1041,7 @@ reason is gone.
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
 | The command-line window (`q:`) drawn from its grid | `util/GridEvent`, `util/Grids`, `util/GridSnapshot`, `util/CommandWindowView`, `editor/GridCanvas`, `editor/NeovimWindowPanel` | `GridEventTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimSessionIntegrationTest` (real Neovim: drawn, Enter runs the line, closed in insert mode runs nothing), `tests/swt` `GridCanvasTest` (pixels: colors, cursor), `NeovimWindowPanelTest` (keys, focus), UI `CommandWindowEndToEndTest` |
+| Floating windows without the focus, drawn over the text | `util/GridEvent` (`WinPos`), `util/Grids` (`floatsIfChanged`, `host`), `util/FloatWindow`, `util/FloatPlacement`, `core/NeovimConnection` (`Forwarder`: the first window's place), `editor/FloatingWindows`, `editor/GridCanvas` | `GridEventTest`, `GridsTest`, `FloatPlacementTest`, `NeovimSessionIntegrationTest` (real Neovim: reported, moves with its text, gone when closed, off by either setting), `tests/swt` `FloatingWindowsTest` (place, order, no focus, dispose), UI `FloatingWindowsEndToEndTest`, gallery picture `float` |
 | The `:` box as a view of Neovim's command line: events, state, candidates, own lines | `util/CmdlineEvent`, `util/CmdlineState`, `util/CandidateLine`, `util/CmdlineWatcher`, `editor/CommandLineBox`, `editor/CommandLineEditHandlers` | `CmdlineEventTest`, `CmdlineStateTest`, `CandidateLineTest`, `CmdlineWatcherTest`, `NeovimSessionIntegrationTest` (real Neovim: typing, history, Tab, mappings, prompts, paste, search preview, `q:`, `:lcd`), `tests/swt` `CommandLineBoxTest` (fake: keys and pastes sent, views shown, focus, message line above), UI `CommandBoxEndToEndTest` (Paste and Ctrl keys through the workbench) |
 | File paths compared by one rule | `LuaScripts.PATHS` (module `neovim4eclipse.paths`), `util/FilePaths`, `NewFiles.workspaceFileAt` (the one workspace lookup) | `paths_spec.lua` and `FilePathsTest` (both run `tests/unit/src/test/resources/path-cases.tsv` on the Linux, macOS and Windows rules), `EditPathTest`, `t.same_file` in every spec, UI `FilePathsEndToEndTest` (`:e` and `:wq!` through a link; `:e` by the real path into a folder linked through a link), `ProjectFilesEndToEndTest` (a linked folder made and removed while running) |
 | `gd`/`K`/`gr*`/`gO`/`gt`/`gT` handed to Eclipse | `core/IdeKeys` (the one table: keys, actions, how each command is found), `core/IdeAction`, `LuaScripts.IDE_KEYS` (the mappings, from the table), `IdeKeys.pick` (the one loop, over the port `IdeKeys.Editor`; `dryRun` for tests), `editor/IdeActions` (`EclipseEditor`, the port's Eclipse side), `editor/HyperlinkProbe` (links for `gd` and `grt`) | `IdeKeysTest`, `setup_spec.lua`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest`, `IdeKeysEndToEndTest`, `JavaEditorEndToEndTest` (heavyJava: Java's commands, `gri`, `grt`) |

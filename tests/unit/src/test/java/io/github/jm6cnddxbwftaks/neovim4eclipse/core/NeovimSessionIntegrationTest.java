@@ -28,6 +28,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
@@ -1441,6 +1442,85 @@ class NeovimSessionIntegrationTest {
             long top = number(s, "return vim.fn.line('w0')");
             s.commandWindowMouseAsync("wheel", "up", "", 0, 0);
             waitFor(() -> number(s, "return vim.fn.line('w0')") < top, "scrolled up by the wheel");
+        }
+    }
+
+    // ---- floating windows without the focus ----
+
+    /** Opens a float over the current window without entering it; its ID is {@code vim.g.float}. */
+    private static final String OPEN_FLOAT = """
+            local buf = vim.api.nvim_create_buf(false, true)
+            vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'float text', 'second row' })
+            vim.g.float = vim.api.nvim_open_win(buf, false,
+              { relative = 'win', bufpos = { 9, 2 }, width = 14, height = 2, style = 'minimal' })
+            """;
+
+    private static List<String> sixtyLines() {
+        List<String> lines = new ArrayList<>();
+        for (int i = 1; i <= 60; i++) {
+            lines.add("line " + i);
+        }
+        return lines;
+    }
+
+    /**
+     * A floating window a plug-in opens without entering it (key hints, hover text) reaches the
+     * listeners with its cells and its place, moves when the text it hangs on scrolls, and is gone
+     * when it closes. Example: a float at line 10 of a window showing lines 1 to 23 is on row 10
+     * (one below its line); after the text scrolled a line, on row 9.
+     */
+    @Test
+    void aFloatingWindowWithoutTheFocusIsReportedMovesWithItsTextAndGoesWhenClosed() throws Exception {
+        try (NeovimSession s = start()) {
+            assertTrue(s.floatingWindowsDrawn());
+            s.setBufferLines(sixtyLines());
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
+            s.lua(OPEN_FLOAT);
+            waitFor(() -> !reports.isEmpty() && reports.get(reports.size() - 1).size() == 1
+                    && rows(reports.get(reports.size() - 1).get(0).grid()).get(0).startsWith("float text"),
+                    "the float drawn: " + reports);
+            FloatWindow drawn = reports.get(reports.size() - 1).get(0);
+            assertEquals(number(s, "return vim.g.float"), drawn.grid().window());
+            assertEquals(14, drawn.grid().width());
+            assertEquals(2, drawn.grid().height());
+            assertEquals(-1, drawn.grid().cursorRow(), "no cursor: Neovim's is in the editor's window");
+            assertEquals(2, drawn.col());
+            assertEquals(1L, number(s, "return vim.fn.line('.')"), "the editor's window kept the focus");
+            assertEquals(reports.get(reports.size() - 1), s.floatingWindows());
+            int row = drawn.row();
+            assertEquals(number(s, "return vim.api.nvim_win_get_height(0)"), drawn.hostRows(),
+                    "the editor's window, whose place Neovim said once, right after the UI attached");
+            keys(s, "<C-e>");
+            waitFor(() -> reports.get(reports.size() - 1).size() == 1 && reports.get(reports.size() - 1).get(0).row() == row - 1,
+                    "the float one row up after the text scrolled a line: " + reports);
+            s.lua("vim.api.nvim_win_close(vim.g.float, true)");
+            waitFor(() -> reports.get(reports.size() - 1).isEmpty(), "gone when closed: " + reports);
+            assertEquals(List.of(), s.floatingWindows());
+        }
+    }
+
+    /**
+     * {@code vim.g.neovim4eclipse_floating_windows = 0} turns the drawing off, and so does the
+     * viewport being off: a float's place is a cell of Neovim's screen, which is then not the
+     * editor's size. The float still opens in Neovim; no listener hears of it.
+     */
+    @Test
+    void floatingWindowsAreNotReportedWhenTurnedOffOrWithoutTheViewport() throws Exception {
+        for (String off : List.of("let g:neovim4eclipse_floating_windows = 0", "let g:neovim4eclipse_viewport = 0")) {
+            try (NeovimSession s = start(List.of("--clean", "--cmd", off))) {
+                assertFalse(s.floatingWindowsDrawn(), off);
+                s.setBufferLines(sixtyLines());
+                List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+                s.addFloatingWindowListener(reports::add);
+                s.lua(OPEN_FLOAT);
+                keys(s, "j"); // a key after it: Neovim has redrawn, float and all, before it answers
+                waitFor(() -> number(s, "return vim.fn.line('.')") == 2, "the key handled");
+                NeovimBarrier.pass(s);
+                assertEquals(1L, number(s, "return vim.api.nvim_win_is_valid(vim.g.float) and 1 or 0"), "the float is there");
+                assertEquals(List.of(), reports, off);
+                assertEquals(List.of(), s.floatingWindows(), off);
+            }
         }
     }
 

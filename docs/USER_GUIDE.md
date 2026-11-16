@@ -459,6 +459,46 @@ it then closes with your next key or click in the editor, and the key works as u
 box to scroll it. `:messages` keeps Neovim's message history either way. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
 the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
 
+## Floating windows
+
+A Neovim plug-in can open a *floating window*: a small window over the text, such as the panel of
+key hints which-key shows after `<Space>`. Eclipse draws the editor, so it has to draw these too.
+It draws the ones that do **not take the keyboard**: the plug-in opened the window without moving
+the cursor into it.
+
+- **What you see:** the window's text in Neovim's colors for floating windows (`NormalFloat`,
+  `FloatBorder`, your colorscheme's), over the editor's text, where Neovim put it. A window across
+  the bottom of Neovim's screen lies on the editor's bottom edge. One larger than the editor is cut
+  off at the editor's edges.
+- **They only show.** Your keys go to the editor and on to Neovim, as if the window were not
+  there: with which-key, the next key runs the mapping and the panel closes. A click or the wheel
+  on a floating window does nothing.
+- **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
+  insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
+  typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's
+  own content assist and parameter hints do that job.
+- **Not drawn:** a floating window that opens *with* the keyboard focus (a picker's prompt, `:Lazy`,
+  a file tree). It is closed at once, with a message, since it would take the keys you type in the
+  editor ([README](../README.md#known-limitations), "Neovim plug-ins that draw").
+- **Limits:** at most 16 floating windows are drawn at once, and at most 250,000 cells in all of
+  them together (a window covering an editor on a 4K screen is about 46,000). Past that, the windows on top
+  in Neovim's order stay and the others are not drawn; the plug-in's log says so once
+  ([The plug-in's log](#the-plug-ins-log)). The limits keep a plug-in gone wrong, with a window of
+  5000 by 5000 cells or thousands of windows, from slowing Eclipse down.
+- **A row off, sometimes.** A window anchored to a text position is placed by Neovim's rows. Where
+  Eclipse's rows differ (a code mining above a line, a long line Eclipse wraps at another
+  character), it can sit one row from where Neovim meant it.
+- **which-key's `z` menu** does not open in an editor with folding: there the plug-in handles `z`
+  itself ([Folding](#folding-zo-zc-zm)), and every `z` command still works. The other menus do
+  (`<Space>`, `g`, `"`, `d` and the like).
+- **Icons:** a plug-in that draws icons from a Nerd Font shows boxes unless Eclipse's text font
+  (*Preferences › General › Appearance › Colors and Fonts › Text Font*) has them. which-key's
+  `icons` options turn its icons off or replace them with plain text (see its documentation).
+
+`vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing off; the windows then
+exist unseen, as before 0.2.23. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
+Neovim's screen is then not the editor's size, and a window "at the bottom" would land anywhere.
+
 ## Mouse
 
 In normal and visual mode the left mouse button is Neovim's, as in Neovim with `'mouse'` on (its

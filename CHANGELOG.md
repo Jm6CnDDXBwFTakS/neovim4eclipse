@@ -12,6 +12,16 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- Neovim's floating windows that do not take the keyboard are drawn over the editor's text, where
+  Neovim puts them: a plug-in's panel of key hints (which-key), a note or progress window a plug-in
+  opens in the background. They only show: the keys keep going to the editor, and clicks on them do
+  nothing. A floating window that opens with the focus (a picker's prompt, `:Lazy`) is still closed
+  at once, as before. `vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing
+  off; with `vim.g.neovim4eclipse_viewport = 0` nothing is drawn either, since Neovim's screen is
+  then not the editor's size ([Floating windows](docs/USER_GUIDE.md#floating-windows)).
+
 ## [0.2.22] - 2026-11-16
 
 ### Added

@@ -502,6 +502,20 @@ the plug-in asks for these (`NeovimConnection.TERMINAL_UI`):
   drawn: each editor shows its document itself. With `rgb`, `hl_attr_define` gives each highlight
   id its colors as `0xRRGGBB`.
 
+  A floating window (`nvim_open_win` with `relative`) gets a grid too, and `win_float_pos` instead
+  of `win_pos`. Example, which-key's panel of key hints after `<Space>` on a screen of 24 rows:
+
+  ```
+  ["grid_resize", 5, 80, 5]
+  ["win_float_pos", 5, <window 1002>, "NW", 1, 18.0, 0.0, false, 1000, 1, 18, 0]
+  ```
+
+  It hangs by its top left corner (`"NW"`) on grid 1, the screen, at row 18; it cannot take the
+  focus (`false`); its `zindex` is 1000; and the last two numbers are the screen cell Neovim worked
+  out, which is all a UI needs to place it (`util/FloatPlacement`). The plug-in draws such a window
+  over the editor's text while the cursor is not in it (`util/Grids.floatsIfChanged`,
+  `editor/FloatingWindows`).
+
 A UI that takes over parts of the screen draws them itself, with Neovim's data. Example, the
 search preview: while `/foo` is typed with `'incsearch'`, Neovim moves its view to the match but no
 `CursorMoved` fires; the only report is `win_viewport` (part of `ext_linegrid`), whose cursor the

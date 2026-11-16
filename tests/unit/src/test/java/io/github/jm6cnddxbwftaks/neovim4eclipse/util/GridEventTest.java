@@ -56,8 +56,23 @@ class GridEventTest {
                 List.of("flush"));
         assertEquals(List.of(new GridEvent.Resize(4, 120, 7), new GridEvent.Resize(2, 120, 30), new GridEvent.Clear(4),
                 new GridEvent.CursorGoto(4, 6, 0), new GridEvent.Scroll(4, 0, 7, 0, 120, 1),
-                new GridEvent.WinPos(4, 1004, false), new GridEvent.WinPos(5, 1005, true), new GridEvent.WinGone(5),
+                new GridEvent.WinPos(4, 1004, false, 31, 0, 120, 7, 0),
+                new GridEvent.WinPos(5, 1005, true, 1, 2, 0, 0, 50), new GridEvent.WinGone(5),
                 new GridEvent.Destroy(5), new GridEvent.Flush()), read(redraw));
+    }
+
+    /**
+     * A floating window's place is the screen cell Neovim worked out (the last two numbers), not
+     * its anchor: which-key's panel as 0.12.6 sends it, and a bordered float hung by its bottom
+     * left corner one row above the cursor.
+     */
+    @Test
+    void aFloatingWindowsPlaceFocusAndStackingAreRead() {
+        List<?> redraw = List.of(List.of("win_float_pos",
+                List.of(5L, "win1002", "NW", 1L, 18.0, 0.0, false, 1000L, 1L, 18L, 0L),
+                List.of(6L, "win1003", "SW", 2L, 4.0, 4.0, true, 50L, 1L, 0L, 4L)));
+        assertEquals(List.of(new GridEvent.WinPos(5, 1002, true, 18, 0, 0, 0, 1000),
+                new GridEvent.WinPos(6, 1003, true, 0, 4, 0, 0, 50)), read(redraw));
     }
 
     @Test

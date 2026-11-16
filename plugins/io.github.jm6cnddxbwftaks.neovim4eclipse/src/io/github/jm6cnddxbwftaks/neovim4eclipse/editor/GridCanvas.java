@@ -19,7 +19,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 /**
  * Paints one of Neovim's window grids ({@link GridSnapshot}) the way a terminal would: a cell per
  * character, in the editor's font, each cell as wide as the font's average character and as high as
- * the editor's line. Used for the command-line window ({@link NeovimWindowPanel}).
+ * the editor's line. Used for the command-line window ({@link NeovimWindowPanel}) and for floating
+ * windows ({@link FloatingWindows}).
  *
  * <h2>Colors</h2>
  * A cell's colors come from its highlight ({@link GridSnapshot#colors}): Neovim's colors where its
@@ -51,7 +52,16 @@ final class GridCanvas extends Canvas {
     private int width;
 
     GridCanvas(Composite parent, StyledText host) {
-        super(parent, SWT.NO_BACKGROUND | SWT.DOUBLE_BUFFERED);
+        this(parent, host, SWT.NONE);
+    }
+
+    /**
+     * @param style more SWT style bits for the canvas. Example: {@code SWT.NO_FOCUS} for a window
+     *              that only shows ({@link FloatingWindows}), so a click on it leaves the keyboard
+     *              focus in the editor.
+     */
+    GridCanvas(Composite parent, StyledText host, int style) {
+        super(parent, SWT.NO_BACKGROUND | SWT.DOUBLE_BUFFERED | style);
         this.host = host;
         addPaintListener(e -> paint(e.gc));
         addDisposeListener(e -> disposeFonts());
@@ -134,8 +144,11 @@ final class GridCanvas extends Canvas {
         int h = cellHeight();
         gc.setFont(host.getFont());
         int ascentShift = Math.max(0, (h - gc.getFontMetrics().getHeight()) / 2); // text centered in the line
-        for (int row = 0; row < grid.height(); row++) {
-            for (int col = 0; col < grid.width(); col++) {
+        // Only the cells that show: a floating window can be far larger than the editor that cuts it off.
+        int rows = Math.min(grid.height(), size.y / h + 1);
+        int columns = Math.min(grid.width(), size.x / w + 1);
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < columns; col++) {
                 int[] colors = grid.colors(grid.hlAt(row, col), editorFg, editorBg);
                 boolean cursorHere = row == grid.cursorRow() && col == grid.cursorCol() && !insertCursor;
                 int fg = cursorHere ? colors[1] : colors[0];

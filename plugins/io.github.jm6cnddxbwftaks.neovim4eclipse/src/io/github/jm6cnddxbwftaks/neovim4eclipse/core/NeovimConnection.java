@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -333,8 +334,8 @@ final class NeovimConnection implements AutoCloseable {
      * <p>{@link RpcChannel} calls it on its reader thread, in arrival order; while it runs, no
      * other message from Neovim is read. Until it is set, notifications are dropped (Neovim sends
      * {@code redraw}s right after {@code nvim_ui_attach}) and requests are answered with an error,
-     * except the highlight definitions in those redraws, which are kept and handed on first (see
-     * {@link Forwarder}).
+     * except the highlight definitions and the windows' places in those redraws, which are kept
+     * and handed on first (see {@link Forwarder}).
      */
     void setIncoming(Incoming incoming) {
         this.incoming = incoming;
@@ -347,25 +348,36 @@ final class NeovimConnection implements AutoCloseable {
      * hl_attr_define}, {@code default_colors_set}). Neovim defines each highlight id once for a UI,
      * when it first uses it, and the ones its start-up uses come right after {@code nvim_ui_attach};
      * dropped, the command-line window's cells would point at ids nobody defined, and draw in the
-     * default colors (seen with Neovim's default dark colorscheme: no bold, no colors). They are
-     * handed on as one {@code redraw} before the first notification once {@code incoming} is set,
-     * on this same reader thread, so the order holds. Fields used on the reader thread only.
+     * default colors (seen with Neovim's default dark colorscheme: no bold, no colors).
+     *
+     * <p>And a second part: where the windows are ({@code win_pos}, {@code win_hide},
+     * {@code win_close}). Neovim says a window's place when it changes, and the first window's
+     * only here; dropped, nobody would know where the editor's window begins and how many rows it
+     * has until it is resized, and a floating window is placed by both ({@code util/Grids}).
+     *
+     * <p>Both are handed on as one {@code redraw}, in the order they came, before the first
+     * notification once {@code incoming} is set, on this same reader thread, so the order holds.
+     * Fields used on the reader thread only.
      */
     private final class Forwarder implements Incoming {
-        private List<Object> earlyHighlights = new ArrayList<>();
+        /** The redraw entries kept before {@link #incoming} is set: highlight definitions and windows' places. */
+        private static final Set<String> KEPT_EARLY = Set.of("hl_attr_define", "default_colors_set", "win_pos",
+                "win_hide", "win_close");
+        /** The kept entries of the early redraws, in the order they came; {@code null} once handed on. */
+        private List<Object> earlyEntries = new ArrayList<>();
 
         @Override
         public void notification(String method, List<?> params) {
             Incoming target = incoming;
             if (target == null) {
-                if ("redraw".equals(method) && earlyHighlights != null) {
-                    keepHighlights(params);
+                if ("redraw".equals(method) && earlyEntries != null) {
+                    keepEarly(params);
                 }
                 return;
             }
-            if (earlyHighlights != null) {
-                List<Object> early = earlyHighlights;
-                earlyHighlights = null;
+            if (earlyEntries != null) {
+                List<Object> early = earlyEntries;
+                earlyEntries = null;
                 if (!early.isEmpty()) {
                     target.notification("redraw", early);
                 }
@@ -373,11 +385,11 @@ final class NeovimConnection implements AutoCloseable {
             target.notification(method, params);
         }
 
-        private void keepHighlights(List<?> batches) {
+        private void keepEarly(List<?> batches) {
             for (Object batch : batches) {
-                if (batch instanceof List<?> entry && !entry.isEmpty()
-                        && ("hl_attr_define".equals(entry.get(0)) || "default_colors_set".equals(entry.get(0)))) {
-                    earlyHighlights.add(entry);
+                if (batch instanceof List<?> entry && !entry.isEmpty() && entry.get(0) instanceof String name
+                        && KEPT_EARLY.contains(name)) {
+                    earlyEntries.add(entry);
                 }
             }
         }

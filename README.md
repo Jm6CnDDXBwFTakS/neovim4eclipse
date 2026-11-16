@@ -217,6 +217,7 @@ where the table says otherwise. `0` or `false` turns a part off:
 | `vim.g.neovim4eclipse_problems = 0` | Eclipse's errors and warnings are not sent to Neovim, so `]d` and `[d` are Neovim's own ([Problems](docs/USER_GUIDE.md#problems-d-d)) |
 | `vim.g.neovim4eclipse_search_highlight = 0` | The editor does not highlight search matches; search itself works as before ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank or your `:match` highlights ([Command line](docs/USER_GUIDE.md#command-line---)) |
+| `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw Neovim's floating windows, such as a plug-in's panel of key hints ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
 | `vim.g.neovim4eclipse_task_tags = 'TODO,FIXME'` | The comment tags `:Etasks` collects; read each time `:Etasks` runs ([The quickfix list](docs/USER_GUIDE.md#the-quickfix-list-eproblems-q)) |
 
 **Set by the plug-in**, for your config to read:
@@ -371,12 +372,15 @@ gets in your way:
    that list what can follow `z` (which-key) show nothing there; and `:normal! zE` or a
    `nnoremap` to `zE` still reach Neovim's own `zE`. Other buffers are not affected, and
    `vim.g.neovim4eclipse_folds = 0` leaves `z` alone everywhere.
-7. **Neovim plug-ins that draw are not shown.** Eclipse draws the editor; Neovim's floating windows
-   are not drawn: completion menus (nvim-cmp, blink.cmp), pickers (Telescope, fzf-lua), file trees,
-   dashboards, notifications, an installer's progress window. Plug-ins that work on text
-   (surround, commentary, text objects, mappings of your own) work as in a terminal. A floating window
-   that opens with the focus (a picker's prompt, `:Lazy`) is closed again at once, with a message,
-   since it would take the keys typed in the editor; one without the focus stays, unseen. A plug-in
+7. **Neovim plug-ins that draw are shown only in part.** Eclipse draws the editor. Of Neovim's
+   floating windows it draws those that do not take the keyboard (a panel of key hints such as
+   which-key's, a note or progress window opened in the background; see
+   [Floating windows](docs/USER_GUIDE.md#floating-windows)). Not drawn: windows that take the
+   keyboard (pickers such as Telescope and fzf-lua, file trees, dashboards, `:Lazy`), completion
+   menus (nvim-cmp, blink.cmp), and windows that follow typing in insert mode. Plug-ins that work on
+   text (surround, commentary, text objects, mappings of your own) work as in a terminal. A floating
+   window that opens with the focus (a picker's prompt, `:Lazy`) is closed again at once, with a
+   message, since it would take the keys typed in the editor. A plug-in
    can still slip one past (a window opened without autocommands, or focused a moment later); if
    keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins
    out in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in

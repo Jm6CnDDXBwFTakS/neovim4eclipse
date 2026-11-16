@@ -31,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
 
 /**
@@ -82,6 +83,12 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "line, in the editor's own background and text colors, with Neovim's syntax colors for "
                             + "Vim script on top, readable in both themes (Neovim's 'background' follows the theme). "
                             + "The cursor is a block on the last, empty line."),
+            new Picture("float", "Neovim's floating windows without the focus",
+                    "Two windows a plug-in could open without entering them, drawn over the text: a panel of key "
+                            + "hints across the editor's bottom edge, and a note with a border and a title higher up. "
+                            + "Both are in Neovim's colors for floating windows (NormalFloat, FloatBorder, FloatTitle), "
+                            + "which follow the theme, and their text reads in both; the editor's text shows around "
+                            + "them, and the caret stays in the editor."),
             new Picture("color", "With another search match color",
                     "The matches take the color set in Preferences > General > Appearance > Colors and Fonts > "
                             + "Neovim for Eclipse > Search match (a green here); the box follows it."),
@@ -201,6 +208,49 @@ class SearchGalleryTest extends EndToEndTestBase {
                 session.closeCommandWindowAsync();
                 waitUntil("the command-line window closed", TIMEOUT_MS, () -> !session.isCommandWindowOpen());
                 settle();
+            }
+
+            // Neovim's floating windows without the focus over the same editor: a panel and a bordered note.
+            SessionProbe.lua(session, """
+                    local function open(lines, opts)
+                      local buf = vim.api.nvim_create_buf(false, true)
+                      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+                      return vim.api.nvim_open_win(buf, false, opts)
+                    end
+                    local win = vim.api.nvim_get_current_win()
+                    vim.g.n4e_gallery_floats = {
+                      open({ '', '   w  write          f  find file      b  buffers', '   q  quit           g  grep           h  help', '' },
+                        { relative = 'win', win = win, row = vim.api.nvim_win_get_height(win) - 4, col = 0,
+                          width = vim.api.nvim_win_get_width(win), height = 4, style = 'minimal', focusable = false }),
+                      open({ 'A float with a border', 'and a title.' },
+                        { relative = 'win', win = win, row = 1, col = 34, width = 24, height = 2, style = 'minimal',
+                          border = 'rounded', title = ' Note ', focusable = false }),
+                    }
+                    """);
+            try {
+                waitUntil("both floats drawn", TIMEOUT_MS, () -> {
+                    settle();
+                    int drawn = 0;
+                    for (org.eclipse.swt.widgets.Control child : javaWidget.getChildren()) {
+                        if (child instanceof GridCanvas canvas && !canvas.isDisposed() && canvas.grid() != null) {
+                            drawn++;
+                        }
+                    }
+                    return drawn == 2;
+                });
+                takeWhole(javaWidget, "float");
+            } finally {
+                SessionProbe.lua(session, "for _, w in ipairs(vim.g.n4e_gallery_floats or {}) do pcall(vim.api.nvim_win_close, w, true) end"
+                        + " vim.g.n4e_gallery_floats = nil");
+                waitUntil("the floats gone", TIMEOUT_MS, () -> {
+                    settle();
+                    for (org.eclipse.swt.widgets.Control child : javaWidget.getChildren()) {
+                        if (child instanceof GridCanvas) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
             }
 
             // As a user sets it in Colors and Fonts: the theme's color registry takes the new value.

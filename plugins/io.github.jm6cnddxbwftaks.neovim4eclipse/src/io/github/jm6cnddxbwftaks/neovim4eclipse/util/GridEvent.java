@@ -29,8 +29,12 @@ import java.util.function.ToIntFunction;
  * ["grid_destroy", grid]                        the grid is gone
  * ["win_pos", grid, win, start_row, start_col, width, height]
  *                                               the grid shows window win, at that place
- * ["win_float_pos", grid, win, anchor, anchor_grid, anchor_row, anchor_col, ...]
- *                                               the grid shows window win, a floating window
+ * ["win_float_pos", grid, win, anchor, anchor_grid, anchor_row, anchor_col, mouse_enabled, zindex,
+ *                   compindex, screen_row, screen_col]
+ *                                               the grid shows window win, a floating window: the
+ *                                               corner it hangs by and what it hangs on, whether the
+ *                                               mouse can enter it, its place in the stack, and the
+ *                                               screen cell Neovim worked out for its top left
  * ["win_hide", grid] / ["win_close", grid]      the window is hidden (another tab) or closed
  * ["hl_attr_define", id, rgb_attr, cterm_attr, info]
  *                                               what highlight id means: colors and styles
@@ -91,10 +95,36 @@ public sealed interface GridEvent {
 
     /**
      * {@code win_pos} and {@code win_float_pos}: {@code grid} shows window {@code win} (its window
-     * ID, as {@code win_getid()} gives it). The place is not used yet: the command-line window is
-     * shown where Eclipse puts it.
+     * ID, as {@code win_getid()} gives it), and where on Neovim's screen its top left cell is.
+     *
+     * <p>A window of the layout ({@code win_pos}) also says its size. A floating window
+     * ({@code win_float_pos}) does not (its grid's size is its own, border included), but says
+     * where it lies in the stack of floats. Whether the mouse can enter it ({@code mouse_enabled})
+     * is not read: a float is drawn while the cursor is not in it, whatever it could do
+     * ({@link Grids#floatsIfChanged}). Its place is the one
+     * Neovim worked out ({@code screen_row}, {@code screen_col}), not the anchor it was opened
+     * with: the anchor's corner, the window or float it hangs on and the cursor are all settled in
+     * those two numbers. Examples, from a screen of 80 columns:
+     * <pre>
+     *   ["win_pos", [2, win 1000, 0, 0, 80, 23]]
+     *       -> WinPos(2, 1000, false, 0, 0, 80, 23, 0)
+     *   ["win_float_pos", [5, win 1002, "NW", 1, 18.0, 0.0, false, 1000, 1, 18, 0]]   which-key's panel
+     *       -> WinPos(5, 1002, true, 18, 0, 0, 0, 1000)
+     * </pre>
+     *
+     * @param row       the screen row of the top left cell, 0-based
+     * @param col       its screen column
+     * @param width     a layout window's columns; 0 for a floating window
+     * @param height    a layout window's rows; 0 for a floating window
+     * @param zindex    a floating window's place in the stack, the higher on top; 0 for a layout window
      */
-    record WinPos(int grid, int win, boolean floating) implements GridEvent {
+    record WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex)
+            implements GridEvent {
+
+        /** A window whose place does not matter to the caller (tests of what is drawn, not where). */
+        public WinPos(int grid, int win, boolean floating) {
+            this(grid, win, floating, 0, 0, 0, 0, 0);
+        }
     }
 
     /** {@code win_hide} or {@code win_close}: {@code grid} shows no window now. */
@@ -174,8 +204,14 @@ public sealed interface GridEvent {
             case "grid_scroll" -> a.size() < 6 ? null
                     : new Scroll(number(a, 0), number(a, 1), number(a, 2), number(a, 3), number(a, 4), number(a, 5));
             case "grid_destroy" -> a.isEmpty() ? null : new Destroy(number(a, 0));
-            case "win_pos", "win_float_pos" -> a.size() < 2 ? null
-                    : new WinPos(number(a, 0), windowId.applyAsInt(a.get(1)), name.equals("win_float_pos"));
+            case "win_pos" -> a.size() < 2 ? null
+                    : new WinPos(number(a, 0), windowId.applyAsInt(a.get(1)), false, numberOr(a, 2, 0), numberOr(a, 3, 0),
+                            numberOr(a, 4, 0), numberOr(a, 5, 0), 0);
+            // The screen cell (9, 10) is what Neovim worked out; without it (an older Neovim), the
+            // anchor's row and column, right for a float hung by its top left on the screen itself.
+            case "win_float_pos" -> a.size() < 2 ? null
+                    : new WinPos(number(a, 0), windowId.applyAsInt(a.get(1)), true, numberOr(a, 9, numberOr(a, 4, 0)),
+                            numberOr(a, 10, numberOr(a, 5, 0)), 0, 0, numberOr(a, 7, 0));
             case "win_hide", "win_close" -> a.isEmpty() ? null : new WinGone(number(a, 0));
             case "hl_attr_define" -> a.size() < 2 ? null : hlAttr(number(a, 0), a.get(1));
             case "default_colors_set" -> a.size() < 2 ? null : new DefaultColors(color(a.get(0)), color(a.get(1)));
@@ -218,6 +254,14 @@ public sealed interface GridEvent {
     /** A color as Neovim sends it: a number {@code 0xRRGGBB}, or -1 (or nothing) for none. */
     private static int color(Object value) {
         return value instanceof Number n && n.longValue() >= 0 ? (int) (n.longValue() & 0xFFFFFF) : NO_COLOR;
+    }
+
+    /**
+     * The number at {@code index}, rounded down (an anchor's row may come as 18.0); {@code fallback}
+     * when there is none.
+     */
+    private static int numberOr(List<?> args, int index, int fallback) {
+        return index < args.size() && args.get(index) instanceof Number n ? (int) Math.floor(n.doubleValue()) : fallback;
     }
 
     private static int number(List<?> args, int index) {

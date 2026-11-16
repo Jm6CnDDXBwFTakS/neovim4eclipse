@@ -32,6 +32,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids;
@@ -166,6 +167,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * once, as {@link #searchEnabled}.
      */
     private volatile boolean highlightsEnabled;
+    /**
+     * Whether Neovim's floating windows are drawn ({@link #floatingWindowsDrawn()}): the answer of
+     * {@link LuaScripts#FLOATING_WINDOWS}, run once at start after the user's config. Written once,
+     * as {@link #searchEnabled}.
+     */
+    private volatile boolean floatingWindowsEnabled;
+    /** The floating windows last reported to the listeners, lowest in the stack first. */
+    private volatile List<FloatWindow> floatingWindows = List.of();
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -348,6 +357,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             // And for the yank flash and window matches (the same doc, "The yank flash and window matches").
             session.highlightsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.HIGHLIGHTS, List.of())));
             LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
+            // And for the floating windows (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids").
+            session.floatingWindowsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FLOATING_WINDOWS, List.of())));
+            LOG.info(() -> "Neovim's floating windows " + (session.floatingWindowsDrawn() ? "drawn in the editor"
+                    : session.floatingWindowsEnabled ? "not drawn: the viewport is off (g:neovim4eclipse_viewport)"
+                            : "off (g:neovim4eclipse_floating_windows)"));
             Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
             session.nvimManagesClipboard = managesSystemClipboard(
                     clipboardOption == null ? "" : String.valueOf(clipboardOption));
@@ -722,6 +736,37 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     public void removeCommandWindowListener(Consumer<CommandWindowView> listener) {
         events.removeCommandWindowListener(listener);
+    }
+
+    /**
+     * Hears which of Neovim's floating windows to draw, lowest in the stack first, each time they
+     * change (one opened, was redrawn, moved or closed), on the RPC reader thread: the listener
+     * hops to the UI thread itself. An empty list says the last one closed. Only windows without
+     * the focus are in it; nothing is ever reported unless {@link #floatingWindowsDrawn()}.
+     * Example: a plug-in's panel of key hints after {@code <Space>}, gone again with the next key.
+     */
+    public void addFloatingWindowListener(Consumer<List<FloatWindow>> listener) {
+        events.addFloatingWindowListener(listener);
+    }
+
+    public void removeFloatingWindowListener(Consumer<List<FloatWindow>> listener) {
+        events.removeFloatingWindowListener(listener);
+    }
+
+    /** The floating windows to draw as last reported; for an editor that starts listening now. */
+    public List<FloatWindow> floatingWindows() {
+        return floatingWindows;
+    }
+
+    /**
+     * Whether floating windows are drawn at all: unless the user's config sets
+     * {@code vim.g.neovim4eclipse_floating_windows = 0}, and only while Neovim's window follows the
+     * editor ({@link #viewportEnabled()}). Why the viewport: a float's place is a row and column
+     * of Neovim's screen ({@code util/FloatPlacement}); with a screen of another size than the
+     * editor, a panel "at the bottom" would land in the middle of the text or outside it.
+     */
+    public boolean floatingWindowsDrawn() {
+        return floatingWindowsEnabled && viewportEnabled;
     }
 
     /** Whether Neovim's command-line window is open. */
@@ -2117,14 +2162,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         /**
          * Builds the grids; at each {@code flush} the command-line window's grid, if it is open and
-         * changed, goes to the listeners.
+         * changed, goes to the listeners, and so do the floating windows, if they changed.
          */
         @Override
         public void onGridEvents(List<GridEvent> gridEvents) {
+            grids.drawFloats(floatingWindowsDrawn()); // here, on the grids' own thread; false until the start has read it
             for (GridEvent event : gridEvents) {
                 grids.apply(event);
                 if (event instanceof GridEvent.Flush) {
                     grids.snapshotIfChanged().ifPresent(this::commandWindowDrawn);
+                    grids.floatsIfChanged().ifPresent(floats -> {
+                        floatingWindows = floats;
+                        events.floatingWindows(floats);
+                    });
                 }
             }
         }

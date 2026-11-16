@@ -441,7 +441,7 @@ class NotificationBridgeTest {
         notify("eclipse_cmdwin_closed");
         assertEquals(List.of("cmdwin:1004::", "message:" + new MessageEvent.Flush(),
                 "grid:[" + new GridEvent.Line(4, 0, 0, List.of(new GridEvent.Cell("x", 0))) + ", "
-                        + new GridEvent.WinPos(4, 1004, false) + ", " + new GridEvent.Flush() + "]",
+                        + new GridEvent.WinPos(4, 1004, false, 31, 0, 120, 7, 0) + ", " + new GridEvent.Flush() + "]",
                 "cmdwin closed"), events, "the window's handle read as its ID");
     }
 

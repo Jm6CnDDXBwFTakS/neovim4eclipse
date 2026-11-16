@@ -3,11 +3,13 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
@@ -36,6 +38,8 @@ final class SessionEvents implements StateSync.Listeners {
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
     private final ListenerList<CommandWindowView> commandWindowListeners = new ListenerList<>("command-line window",
+            Level.WARNING);
+    private final ListenerList<List<FloatWindow>> floatingWindowListeners = new ListenerList<>("floating windows",
             Level.WARNING);
     private final ListenerList<ViewportPort.WrapChange> wrapListeners = new ListenerList<>("wrap", Level.WARNING);
     private final ListenerList<ViewportPort.TopLine> topLineListeners = new ListenerList<>("top line", Level.WARNING);
@@ -107,6 +111,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** Neovim's command line changed: opened, edited, completed or closed (see {@code CmdlineState}). */
     void cmdline(CmdlineState.View view) {
         cmdlineListeners.fire(view);
+    }
+
+    /** The floating windows to draw changed (see {@code Grids.floatsIfChanged}); an empty list: none is left. */
+    void floatingWindows(List<FloatWindow> windows) {
+        floatingWindowListeners.fire(windows);
     }
 
     /** The command-line window opened, was redrawn or closed (see {@code CommandWindowView}). */
@@ -212,6 +221,14 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeCommandWindowListener(Consumer<CommandWindowView> listener) {
         commandWindowListeners.remove(listener);
+    }
+
+    void addFloatingWindowListener(Consumer<List<FloatWindow>> listener) {
+        floatingWindowListeners.add(listener);
+    }
+
+    void removeFloatingWindowListener(Consumer<List<FloatWindow>> listener) {
+        floatingWindowListeners.remove(listener);
     }
 
     void addWrapListener(Consumer<ViewportPort.WrapChange> listener) {
