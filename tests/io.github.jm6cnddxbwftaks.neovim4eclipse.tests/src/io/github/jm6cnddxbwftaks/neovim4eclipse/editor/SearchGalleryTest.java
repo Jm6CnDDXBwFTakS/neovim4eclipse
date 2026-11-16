@@ -519,6 +519,10 @@ class SearchGalleryTest extends EndToEndTestBase {
         SessionProbe.lua(session, "vim.opt.rtp:append([==[" + plugin.toAbsolutePath() + "]==]) require('which-key').setup({})");
         settle();
         for (String key : List.of("z", "g")) {
+            // which-key maps its trigger keys from a timer some time after setup() (its triggers.lua).
+            // A key sent before that is Neovim's own pending z or g, and no panel opens.
+            waitUntil("which-key's trigger for " + key, TIMEOUT_MS, () -> Boolean.TRUE.equals(SessionProbe.lua(session,
+                    "return (vim.fn.maparg('" + key + "', 'n', false, true).desc or ''):find('which-key-trigger', 1, true) ~= nil")));
             session.inputAsync(key);
             try {
                 waitUntil("which-key's two windows after " + key, TIMEOUT_MS, () -> floatsDrawn(javaWidget) == 2);
