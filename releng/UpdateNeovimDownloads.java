@@ -45,12 +45,12 @@ import java.util.zip.ZipInputStream;
  * <pre>
  *   java releng/UpdateNeovimDownloads.java 0.13.0     rewrite the file for Neovim 0.13.0
  *   java releng/UpdateNeovimDownloads.java 0.13.0 --allow-young   the same for a release under 7 days old
- *   java releng/UpdateNeovimDownloads.java 0.13.0 --keep target/archives
+ *   java releng/UpdateNeovimDownloads.java 0.13.0 --keep .tool-cache/neovim-upgrade/0.13.0/archives
  *                                                    the same, keeping the six archives there (the Neovim
  *                                                    tool checks them next, without downloading them again)
  *   java releng/UpdateNeovimDownloads.java --check    verify the file as it is; writes nothing
  *   java releng/UpdateNeovimDownloads.java --virustotal   ask VirusTotal about each hash (needs VT_API_KEY)
- *   java releng/UpdateNeovimDownloads.java install auto target/ci-neovim
+ *   java releng/UpdateNeovimDownloads.java install auto .tool-cache/like-ci
  *                                                    install the pinned Neovim there (CI, LikeCi)
  * </pre>
  *
@@ -441,7 +441,7 @@ public final class UpdateNeovimDownloads {
         Path home = folder.resolve(top);
         Path program = home.resolve("bin").resolve(code.startsWith("w") ? "nvim.exe" : "nvim");
         System.err.println("Neovim " + version + " for " + code + ": " + url);
-        // Already there from an earlier run (LikeCi installs into the same target/like-ci each time):
+        // Already there from an earlier run (LikeCi installs into the same .tool-cache/like-ci each time):
         // kept when its files have the pinned tree hash, so a local run needs no download. A CI runner
         // starts empty, so CI always downloads, and checks what GitHub serves now against the pin.
         if (treeHashOrNull(home) instanceof String there && there.equals(tree)) {

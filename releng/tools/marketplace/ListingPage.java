@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The local page {@code target/marketplace/listing.html}: every field of the Marketplace form in
+ * The local page {@code .tool-cache/marketplace/listing.html}: every field of the Marketplace form in
  * form order with a Copy button, the description as it will look and as HTML for the form's source
  * view, the logo and the pictures, and a checklist for the web form. One opens it beside the form
  * and copies field by field. Pure, so {@code tests/unit} tests it; every value is escaped

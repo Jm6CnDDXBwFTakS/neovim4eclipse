@@ -18,6 +18,7 @@ import common.Folders;
 import common.Git;
 import common.Settings;
 import common.Shell;
+import common.ToolCache;
 import common.ToolFailure;
 import common.Version;
 import common.VersionCopies;
@@ -45,7 +46,7 @@ import common.VersionCopies;
  *   <li><b>The changelog</b>: an entry under <i>Unreleased</i>, <i>Changed</i> ({@link NeovimFiles}).</li>
  *   <li><b>The archives, as Get Neovim installs them</b>: the plug-in is compiled, and
  *       {@link ArchiveCheck}, from the six archives the updater kept in
- *       {@code target/neovim-upgrade/<version>/archives} (one download serves both),
+ *       {@code .tool-cache/neovim-upgrade/<version>/archives} (one download serves both),
  *       installs each with the plug-in's own {@code util/NeovimInstaller} into a scratch folder,
  *       as Get Neovim does; this machine's Neovim must run.</li>
  *   <li><b>Every test</b> with the new Neovim: {@code java releng/tools/ci/LikeCi.java --all},
@@ -192,14 +193,14 @@ public final class NeovimUpgradeTool {
         }
     }
 
-    /** Where the updater keeps this move's archives: {@code target/neovim-upgrade/<version>/archives}. */
+    /** Where the updater keeps this move's archives: {@code .tool-cache/neovim-upgrade/<version>/archives}. */
     private Path archives() {
-        return root.resolve("target/neovim-upgrade/" + target + "/archives");
+        return root.resolve(ToolCache.NEOVIM_UPGRADE).resolve(target + "/archives");
     }
 
     /** Lets {@link ArchiveCheck} install the kept archives with the plug-in's classes. */
     private void checkArchives() {
-        Path work = root.resolve("target/neovim-upgrade/" + target + "/unpacked");
+        Path work = root.resolve(ToolCache.NEOVIM_UPGRADE).resolve(target + "/unpacked");
         Folders.deleteTree(work);
         System.out.println(Shell.display(Shell.maven("-q", "-B", "-ntp", "-pl", PLUGIN, "compile")));
         if (shell.show(Shell.maven("-q", "-B", "-ntp", "-pl", PLUGIN, "compile")) != 0) {

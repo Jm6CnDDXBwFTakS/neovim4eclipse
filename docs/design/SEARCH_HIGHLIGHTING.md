@@ -302,7 +302,7 @@ a label over a character and is left out.
 plug-ins themselves, since what breaks this is a plug-in renaming a group or drawing its labels
 another way. The repository holds none of them: `releng/test-plugins.properties` pins each to a
 commit and to the SHA-256 of that commit's archive, and `java releng/tools/plugins/TestPlugins.java
-fetch` (run by `LikeCi`) downloads, checks and unpacks them into `target/test-plugins/`. A test
+fetch` (run by `LikeCi`) downloads, checks and unpacks them into `.tool-cache/test-plugins/`. A test
 whose plug-in is not there is skipped with the reason ([UPGRADING.md](../UPGRADING.md), "The
 plug-ins the tests run").
 

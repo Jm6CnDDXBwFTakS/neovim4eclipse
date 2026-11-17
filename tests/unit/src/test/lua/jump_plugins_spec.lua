@@ -7,7 +7,7 @@
 -- plug-in that renames its highlight groups, or draws its labels another way, fails here.
 --
 -- The plug-ins are not in the repository. `java releng/tools/plugins/TestPlugins.java fetch`
--- unpacks the commits pinned in releng/test-plugins.properties into target/test-plugins/; a
+-- unpacks the commits pinned in releng/test-plugins.properties into .tool-cache/test-plugins/; a
 -- plug-in that is not there, or of another commit, skips its test with the reason.
 --
 -- How a test looks at the labels: each plug-in reads its keys with vim.fn.getcharstr(). The test
@@ -18,6 +18,10 @@
 local t = ...
 
 local root = vim.fs.normalize(t.spec_dir .. '/../../../../..')
+
+-- Where the tool unpacks the plug-ins, from the root: a copy of common.ToolCache.TEST_PLUGINS
+-- (ToolCacheTest checks it). Not under target/, so ./mvnw clean leaves them in place.
+local folder = '.tool-cache/test-plugins'
 
 --- The marker the tool writes for the pinned plug-in, "<commit> <sha256>", read from the one
 --- file that holds the pins (lines are name.field=value with no spaces; Pins.java refuses others).
@@ -35,7 +39,7 @@ end
 
 --- The plug-in's folder, or a skip: not fetched (no network when the tool ran), or another commit or archive.
 local function plugin(name)
-  local dir = root .. '/target/test-plugins/' .. name
+  local dir = root .. '/' .. folder .. '/' .. name
   local marker = io.open(dir .. '.pin')
   if not marker or vim.fn.isdirectory(dir) == 0 then
     if marker then

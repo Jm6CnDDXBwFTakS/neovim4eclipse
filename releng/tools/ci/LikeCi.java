@@ -29,14 +29,14 @@ import java.util.stream.Stream;
  * <ol>
  *   <li><b>Lints the shell scripts</b> with {@link #SHELLCHECK}, as the build job does, if shellcheck
  *       is installed (it runs on Linux CI; the scripts run only there).</li>
- *   <li><b>Installs the pinned Neovim into {@code target/like-ci/}</b> with
+ *   <li><b>Installs the pinned Neovim into {@code .tool-cache/like-ci/}</b> with
  *       {@code java releng/UpdateNeovimDownloads.java install auto}, the command CI uses: the release
  *       Get Neovim installs, checked. Not the developer's own dedicated Neovim, whose path the
  *       plug-in would treat differently; CI's Neovim is a program outside the plug-in's folder.
  *       Kept between runs while its files have the pinned tree hash, so only the first run (and the
  *       first after a Neovim upgrade) downloads it.</li>
  *   <li><b>Fetches the pinned plug-ins the tests run</b> ({@link #PLUGINS}) into
- *       {@code target/test-plugins/}: flash, leap, hop, mini.jump2d and which-key, each at the commit and
+ *       {@code .tool-cache/test-plugins/}: flash, leap, hop, mini.jump2d and which-key, each at the commit and
  *       archive hash {@code releng/test-plugins.properties} pins. A wrong hash fails the run.
  *       Without a network, or with a Java older than that tool needs, they are left out with a
  *       note and the tests that need them are skipped; the list of skips below names them. CI
@@ -80,6 +80,13 @@ public final class LikeCi {
 
     private static final boolean WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows");
 
+    /**
+     * Where the pinned Neovim is installed: {@code common.ToolCache.LIKE_CI}, copied here because
+     * this file runs alone on JDK 21 and cannot import it ({@code ToolCacheTest} checks the copy).
+     * Not under {@code target/}, so {@code ./mvnw clean} does not make the next run download again.
+     */
+    public static final String LIKE_CI = ".tool-cache/like-ci";
+
     private LikeCi() {
     }
 
@@ -97,7 +104,7 @@ public final class LikeCi {
         if (lint(root) != 0) {
             failed.add(SHELLCHECK);
         }
-        String nvim = installNeovim(root.resolve("target/like-ci"));
+        String nvim = installNeovim(root.resolve(LIKE_CI));
         if (fetchPlugins(root) != 0) {
             failed.add(PLUGINS);
         }

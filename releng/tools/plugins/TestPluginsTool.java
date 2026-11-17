@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import common.Ask;
 import common.Folders;
 import common.Http;
+import common.ToolCache;
 import common.ToolFailure;
 import plugins.Pins.Pin;
 
@@ -43,8 +44,8 @@ import plugins.Pins.Pin;
  * SHA-256 of that commit's archive ({@link Pins}), and this tool is the only thing that downloads.
  *
  * <h2>fetch</h2>
- * For each pin: the archive into {@code target/test-plugins/archives/}, its hash compared with
- * the pin's, then unpacked into {@code target/test-plugins/<name>/} with a marker file
+ * For each pin: the archive into {@code .tool-cache/test-plugins/archives/}, its hash compared with
+ * the pin's, then unpacked into {@code .tool-cache/test-plugins/<name>/} with a marker file
  * {@code <name>.pin} beside it that says which commit and archive hash is there. The tests look
  * for that folder and marker and skip, with the reason, when they are missing or of another pin.
  * <ul>
@@ -67,7 +68,7 @@ import plugins.Pins.Pin;
  * <p>Moving a pin takes two steps, with the maintainer's own check of the archive between them, so
  * that nothing opens the archive before it has been scanned:
  * <ol>
- *   <li>{@code update} downloads the commit's archive into {@code target/test-plugins/vetting/}
+ *   <li>{@code update} downloads the commit's archive into {@code .tool-cache/test-plugins/vetting/}
  *       and prints its path, its SHA-256 and the VirusTotal address of that hash. It only hashes
  *       the bytes: the ZIP is not opened, nothing is unpacked, and it stops there.</li>
  *   <li>The maintainer scans the file (or looks the hash up).</li>
@@ -88,7 +89,7 @@ public final class TestPluginsTool {
     /** The pins, relative to the repository's root. */
     public static final String PINS_FILE = "releng/test-plugins.properties";
     /** Where the plug-ins are unpacked, relative to the repository's root; the tests look here. */
-    public static final String FOLDER = "target/test-plugins";
+    public static final String FOLDER = ToolCache.TEST_PLUGINS;
     private static final String USAGE = "Usage: java " + TOOL
             + " [status | fetch | update <name> <commit> | accept <name> <commit> <sha256>] [--dry-run]";
 

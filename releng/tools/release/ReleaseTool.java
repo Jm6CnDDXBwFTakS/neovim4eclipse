@@ -32,6 +32,7 @@ import common.GitHub;
 import common.Http;
 import common.Settings;
 import common.Shell;
+import common.ToolCache;
 import common.ToolFailure;
 import common.UpdateSite;
 import common.Version;
@@ -60,7 +61,7 @@ import maven.MavenFiles;
  *       Maven plug-in or an action has ({@code Dependencies.java}), and one when the Marketplace
  *       listing's facts differ from the one last submitted ({@code Marketplace.java}); the manual checks due
  *       ({@code ManualChecks.java due}). Then every test on this machine ({@code LikeCi.java --all}):
- *       the commit that passes is written to {@code target/release-tool/tested}, and {@code promote} wants it. It prints the same test
+ *       the commit that passes is written to {@code .tool-cache/release-tool/tested}, and {@code promote} wants it. It prints the same test
  *       command for macOS and Windows, a reminder only: CI's macOS and Windows jobs are the gate.</li>
  *   <li><b>prepare</b>: dates the changelog section, names the version in the README's status line
  *       ({@link ReleaseFiles}), and commits that.</li>
@@ -316,7 +317,7 @@ public final class ReleaseTool {
                 throw new ToolFailure("the local tests failed (see above); fix them on " + v.branch() + " and run check again");
             }
             writeTested(head);
-            ok("the local tests passed at " + head.substring(0, 7) + " (recorded in target/release-tool/tested)");
+            ok("the local tests passed at " + head.substring(0, 7) + " (recorded in " + ToolCache.RELEASE_TOOL + "/tested)");
         }
         System.out.println();
         System.out.println("On macOS and Windows, test the same commit once it is pushed (CI's macOS and Windows jobs are the gate):");
@@ -332,11 +333,11 @@ public final class ReleaseTool {
      * ({@code UpdateNeovimDownloads.java --check}, which downloads each one in full), unless that
      * check passed for the same pins in the last day: {@code check} is often run several times
      * for one release, after each fix, and the archives of one pin do not change. The record is
-     * {@code target/release-tool/neovim-checked} (the pins file's SHA-256 and the time); delete it
+     * {@code .tool-cache/release-tool/neovim-checked} (the pins file's SHA-256 and the time); delete it
      * to check again. The Release workflow's first job checks the archives anew at the tag anyway.
      */
     private void checkNeovimPins() {
-        Path record = root.resolve("target/release-tool/neovim-checked");
+        Path record = root.resolve(ToolCache.RELEASE_TOOL).resolve("neovim-checked");
         String pins;
         try {
             pins = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(NEOVIM_PINS))));
@@ -712,7 +713,7 @@ public final class ReleaseTool {
         }
         ok("the GitHub Release has " + zip + " and " + zip + ".asc");
 
-        Path folder = root.resolve("target/release-tool/" + v.tag());
+        Path folder = root.resolve(ToolCache.RELEASE_TOOL).resolve(v.tag());
         Folders.deleteTree(folder);
         shell.out(List.of("gh", "release", "download", v.tag(), "--pattern", zip, "--pattern", zip + ".asc", "--dir", folder.toString()));
         String key = settings.get("signing.key");
@@ -1028,7 +1029,7 @@ public final class ReleaseTool {
     }
 
     private Path testedFile() {
-        return root.resolve("target/release-tool/tested");
+        return root.resolve(ToolCache.RELEASE_TOOL).resolve("tested");
     }
 
     /** The commit {@code check} recorded, or the empty string when there is none or the file holds anything but a commit id. */

@@ -21,6 +21,7 @@ import common.Http;
 import common.ReleaseAge;
 import common.Settings;
 import common.Shell;
+import common.ToolCache;
 import common.ToolFailure;
 import common.Version;
 
@@ -177,7 +178,7 @@ public final class MavenUpgradeTool {
             }
         }
 
-        Path work = root.resolve("target/maven-upgrade");
+        Path work = root.resolve(ToolCache.MAVEN_UPGRADE);
         Optional<Signatures> pgp = Signatures.prepare(settings.get("maven.keys"));
         if (pgp.isEmpty()) {
             System.out.println("  skipped: the PGP check (no gpg on PATH); the downloads are checked against Central's hashes only");
@@ -312,7 +313,7 @@ public final class MavenUpgradeTool {
                     + " (a mirror in ~/.m2/settings.xml? The file must name Maven Central, for every machine and CI)");
         }
         List<String> added = git.out("status", "--porcelain", "--untracked-files=all").lines()
-                .filter(l -> l.startsWith("?? ")).map(l -> l.substring(3)).toList(); // target/ is ignored
+                .filter(l -> l.startsWith("?? ")).map(l -> l.substring(3)).toList(); // target/ and .tool-cache/ are ignored
         if (!added.isEmpty()) {
             throw new ToolFailure("maven-wrapper-plugin added files the wrapper does not use: " + added);
         }

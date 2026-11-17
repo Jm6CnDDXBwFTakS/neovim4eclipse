@@ -165,7 +165,7 @@ one line per field of marketplace.eclipse.org's *Create Solution* form, top to b
 change, and it is the final word. Facts such as the Neovim and Java versions are never typed there:
 `{neovim}`, `{java}` and the others are filled in from each version's source of truth, so the
 listing cannot fall behind the build. `java releng/tools/marketplace/Marketplace.java` writes
-`target/marketplace/listing.html`: each field with a Copy button, the description, the pictures and
+`.tool-cache/marketplace/listing.html`: each field with a Copy button, the description, the pictures and
 a checklist, to fill in the form from. Why the values are what they are:
 
 - **Solution Name:** the product name only; the form asks for no tagline.
@@ -218,7 +218,7 @@ a checklist, to fill in the form from. Why the values are what they are:
 - **Screenshots and the demo**, taken by the UI tests of the `screenshots` group rather than by
   hand, so they show the current UI each time: `java releng/tools/marketplace/Marketplace.java
   pictures` (Linux) runs them with the pinned Neovim under `xvfb-run`, at a screen of a known size,
-  and copies the results to `target/marketplace/`. `ScreenshotCaptureTest` tells one story in a
+  and copies the results to `.tool-cache/marketplace/`. `ScreenshotCaptureTest` tells one story in a
   small Java project, `shop`, with only the Project Explorer and the Outline beside the editor:
   visual line mode in `Invoice.java` (the mode in the status bar), the `:` box with
   `:%s/total/sum/g` typed, and, once it has run and `:w` saved it, `:clist` in the output popup: the
@@ -236,7 +236,7 @@ a checklist, to fill in the form from. Why the values are what they are:
   pixels, too few for the file's longer lines.
 
   The four screenshots are not committed: nothing shows them from the repository, so they are
-  taken when the listing is submitted or refreshed and uploaded from `target/marketplace/`. A
+  taken when the listing is submitted or refreshed and uploaded from `.tool-cache/marketplace/`. A
   picture in the repository stays in its history for good, along with anything it shows by
   mistake. The demo is committed (the README shows it), after y/N, once you have looked at it.
   They show Eclipse's default light theme on Linux/GTK, without a window title bar.

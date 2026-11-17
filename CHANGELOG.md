@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- For contributors: the developer tools keep their downloads and records in `.tool-cache/` at the
+  repository's root, not under `target/`, so `./mvnw clean` no longer deletes LikeCi's pinned
+  Neovim, the fetched test plug-ins or the Release tool's record of passed tests
+  (CONTRIBUTING.md, "Where the tools keep their files"). Old copies under `target/` go with the
+  next `clean`; the first run after the change downloads again.
+
 ## [0.2.25] - 2026-11-17
 
 ### Added

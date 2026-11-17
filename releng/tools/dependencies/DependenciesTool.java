@@ -21,9 +21,10 @@ import common.Git;
 import common.GitHub;
 import common.Settings;
 import common.Shell;
+import common.ToolCache;
 import common.ToolFailure;
-import common.VersionCopies;
 import common.Version;
+import common.VersionCopies;
 
 /**
  * The Dependency tool: moves the build's libraries, Maven plug-ins and GitHub Actions to their
@@ -189,7 +190,7 @@ public final class DependenciesTool {
         System.out.println("To move: " + found.summary());
 
         List<Commit> commits = commits(found, exceptions.majors());
-        Path work = root.resolve("target/dependency-update");
+        Path work = root.resolve(ToolCache.DEPENDENCY_UPDATE);
         List<String> made = new ArrayList<>();
         boolean testable = false;
         for (Commit c : commits) {

@@ -21,7 +21,7 @@ import common.ToolFailure;
  *
  * <p>The download itself is {@link common.Http#download}: checked against the SHA-512 the drop's
  * checksums file gives, both fetched over HTTPS from download.eclipse.org, and kept in
- * {@code target/eclipse-upgrade/downloads/} for the next run. Each operating system packs it
+ * {@code .tool-cache/eclipse-upgrade/downloads/} for the next run. Each operating system packs it
  * differently:
  * <ul>
  *   <li>Linux: a {@code .tar.gz} with an {@code eclipse/} folder, unpacked with {@code tar};</li>
@@ -47,8 +47,8 @@ public final class Platform {
 
     /**
      * Unpacks a checked download into {@code target}, emptied first, and finds the program.
-     * Example on Linux: {@code target/eclipse/eclipse}; on macOS
-     * {@code target/Eclipse.app/Contents/MacOS/eclipse}; on Windows {@code target/eclipse/eclipse.exe}.
+     * Example on Linux: {@code <target>/eclipse/eclipse}; on macOS
+     * {@code <target>/Eclipse.app/Contents/MacOS/eclipse}; on Windows {@code <target>/eclipse/eclipse.exe}.
      */
     static Installation unpack(Path archive, Path target, Shell shell) {
         Folders.deleteTree(target);

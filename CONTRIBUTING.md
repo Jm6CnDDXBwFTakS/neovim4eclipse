@@ -24,7 +24,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 ## Build and test
 
 **Before a push, run `java releng/tools/ci/LikeCi.java`** (from the repository's root). It runs the
-tests as the *Build* workflow on GitHub does: it installs the pinned Neovim under `target/like-ci/`
+tests as the *Build* workflow on GitHub does: it installs the pinned Neovim under `.tool-cache/like-ci/`
 with CI's own command (downloaded once, kept while its files match the pin), fetches the pinned
 Neovim plug-ins the jump-label tests run (`releng/test-plugins.properties`; without a network they
 are left out and those tests skipped), runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
@@ -530,6 +530,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version (CI's smoke job; `EclipseUpgrade.java smoke` does the same in Java, on every platform) |
 | `docs/` | learning guide, architecture, keys, packaging, platform notes, upgrading versions |
 | `docs/design/` | design notes: how each larger part works and why ([index](docs/design/README.md)) |
+| `.tool-cache/` | not in Git: what the developer tools write, one folder per tool (see below) |
 
 The project has two names. People see **Neovim for Eclipse** (feature, bundle name, preference
 page, release titles); everything a machine reads uses **neovim4eclipse**: the repository, the
@@ -545,6 +546,26 @@ Maven artifactIds, the ZIP (`neovim4eclipse-0.1.0.zip`), the bundle IDs and Java
 A bundle ID is part of what users install: p2 sees a renamed bundle as a different plug-in (no
 update, only uninstall and reinstall), and saved preferences live under it. Do not rename it after a
 release.
+
+### Where the tools keep their files
+
+`target/` belongs to Maven: only a build writes there, and `./mvnw clean` removes exactly what a
+build makes again. Everything a tool under `releng/tools` writes goes to `.tool-cache/<tool>/` at
+the root instead, whatever it is: a download, a record that a step passed, a page to look at. For
+example LikeCi's pinned Neovim is in `.tool-cache/like-ci/`, the fetched test plug-ins in
+`.tool-cache/test-plugins/`, the Release tool's record of passed local tests in
+`.tool-cache/release-tool/tested`, the Marketplace page in `.tool-cache/marketplace/listing.html`.
+So a `clean` keeps them, and the gallery after `./mvnw clean verify -Pgallery` still has its
+plug-ins. A tool still reads Maven's outputs from `target/` (the built update site, test reports,
+screenshots).
+
+The folder is git-ignored and safe to delete: to start from nothing, delete `.tool-cache/` (as
+`git clean -x` does); each tool downloads again (hash-checked, as always) or asks for its step to be
+run again. The names are in `releng/tools/common/ToolCache.java`; `ToolCacheTest` fails when a
+tool names a folder under `target/` other than a Maven output, and checks the three literal copies
+(`LikeCi`, `PinnedPlugins`, `jump_plugins_spec.lua`). If the repository is a project in an Eclipse
+workspace, mark `.tool-cache/` as derived (*Properties › Resource*), so that searches and the Open
+Resource dialog leave its Neovim runtime and plug-ins out.
 
 ## Rules the code relies on
 

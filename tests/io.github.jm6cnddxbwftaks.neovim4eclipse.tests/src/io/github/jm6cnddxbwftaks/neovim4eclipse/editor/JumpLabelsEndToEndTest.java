@@ -26,7 +26,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
  *
  * <p>The first test sets the marks itself, as a jump plug-in sets them, so it runs everywhere. The
  * second runs flash, one of the pinned plug-ins ({@code releng/test-plugins.properties}), from
- * {@code target/test-plugins/} and is skipped when that is not fetched. What Neovim reports is
+ * {@code .tool-cache/test-plugins/} and is skipped when that is not fetched. What Neovim reports is
  * {@code highlights_spec.lua} and {@code jump_plugins_spec.lua}; the painting is
  * {@code NeovimHighlighterTest}.
  */

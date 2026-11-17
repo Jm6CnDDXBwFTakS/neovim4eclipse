@@ -91,6 +91,6 @@ class RepositoryFilesTest {
         assertTrue(files.contains("pom.xml") && files.contains("AGENTS.md"), "the root's files");
         assertTrue(files.contains("tests/unit/src/test/java/io/github/jm6cnddxbwftaks/neovim4eclipse/testing/RepositoryFilesTest.java"));
         assertTrue(files.stream().noneMatch(f -> f.startsWith("target/") || f.contains("/target/") || f.startsWith(".git/")
-                || f.startsWith(".claude/")), "no build output, no Git or tool folders");
+                || f.startsWith(".claude/") || f.startsWith(".tool-cache/")), "no build output, no Git or tool folders");
     }
 }

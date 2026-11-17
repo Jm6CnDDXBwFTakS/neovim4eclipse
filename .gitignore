@@ -56,6 +56,9 @@ local.properties
 .worksheet
 
 target/
+# The developer tools' downloads and records (releng/tools/common/ToolCache.java): kept out of
+# target/ so that ./mvnw clean leaves them; safe to delete, everything comes back by a run.
+.tool-cache/
 # Tycho writes it beside a module's pom.xml during a build and deletes it at the end; a stopped
 # build leaves it, and the developer tools would take it for a change (they need a clean tree).
 .tycho-consumer-pom.xml

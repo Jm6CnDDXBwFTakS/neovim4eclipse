@@ -19,6 +19,7 @@ import common.Folders;
 import common.Git;
 import common.Settings;
 import common.Shell;
+import common.ToolCache;
 import common.ToolFailure;
 import common.Version;
 
@@ -36,7 +37,7 @@ import common.Version;
  * <h2>The listing page</h2>
  * {@code releng/marketplace/listing.txt} (the form's fields, in form order) and
  * {@code description.md}, with every fact ({@code {neovim}}, {@code {java}}, ...) filled in from
- * its source of truth ({@link Facts}), become {@code target/marketplace/listing.html}: each field
+ * its source of truth ({@link Facts}), become {@code .tool-cache/marketplace/listing.html}: each field
  * with a Copy button, the description rendered and as HTML, the pictures, and a checklist
  * ({@link ListingPage}). The page also lists what changed since the copy in
  * {@code releng/marketplace/submitted/}, the fields to change on the website.
@@ -45,7 +46,7 @@ import common.Version;
  * Runs the {@code screenshots} test group ({@code ScreenshotCaptureTest} and
  * {@code DemoRecordingTest}) with the pinned Neovim under {@code xvfb-run}, so every run draws the
  * same Linux/GTK window at the same size, then joins the demo's pictures into
- * {@code target/marketplace/demo-new.gif} ({@link Gif}). The listing page shows it beside the
+ * {@code .tool-cache/marketplace/demo-new.gif} ({@link Gif}). The listing page shows it beside the
  * committed {@code demo.gif} until the two are the same. The four screenshots are not committed: the
  * listing takes them as uploads, and a picture in the repository stays in its history for good.
  * The demo is (the README shows it), after y/N, once you have looked at it: it is public. The
@@ -58,7 +59,7 @@ import common.Version;
  * {@code magick} shrinks it with the Lanczos filter, into the toolbar icons (16 and 32 pixels; the
  * Eclipse-mode ones in grey) and the Marketplace logo (the logo on white at 110 by 80, the size
  * the form scales every logo to). Only {@code rsvg-convert}: ImageMagick's own SVG reader drops
- * strokes. The PNGs are written to {@code target/marketplace/logo/} first and committed after y/N
+ * strokes. The PNGs are written to {@code .tool-cache/marketplace/logo/} first and committed after y/N
  * only when they differ.
  *
  * <h2>submitted</h2>
@@ -71,7 +72,7 @@ public final class MarketplaceTool {
     public static final String TOOL = "releng/tools/marketplace/Marketplace.java";
     private static final String USAGE = "Usage: java " + TOOL + " [pictures | logo | submitted] [--yes] [--dry-run]";
     /** Where the page and its pictures go. */
-    static final String OUT = "target/marketplace";
+    static final String OUT = ToolCache.MARKETPLACE;
     static final String LOGO_SVG = "docs/images/logo.svg";
     static final String MARKETPLACE_LOGO = "docs/images/marketplace-logo.png";
     static final String DEMO = "docs/images/demo.gif";
@@ -168,7 +169,7 @@ public final class MarketplaceTool {
                 .orElse(List.of("nothing submitted yet: every field is new (after saving the listing: java " + TOOL + " submitted)"));
     }
 
-    /** Writes {@code target/marketplace/listing.html} with the logo and the pictures there are. */
+    /** Writes {@code .tool-cache/marketplace/listing.html} with the logo and the pictures there are. */
     private void page() {
         Listing listing = current(root);
         List<String> changes = changes(root);
@@ -214,7 +215,7 @@ public final class MarketplaceTool {
         git.checkWorkBranch("record the demo", Version.inPom(Facts.text(root, "pom.xml")));
         Path shots = root.resolve(TEST_FRAGMENT).resolve("target/screenshots");
         if (ask.mode() == Ask.Mode.DRY_RUN) {
-            System.out.println("[dry run] would install the pinned Neovim into target/like-ci/ (as LikeCi does), then run: "
+            System.out.println("[dry run] would install the pinned Neovim into " + ToolCache.LIKE_CI + "/ (as LikeCi does), then run: "
                     + Shell.display(mavenUnderXvfb("<pinned nvim>")));
             System.out.println("[dry run] then join " + shots.resolve("demo") + " into " + OUT + "/" + NEW_DEMO + " and offer to commit it as " + DEMO);
             return;
@@ -260,9 +261,9 @@ public final class MarketplaceTool {
         return maven;
     }
 
-    /** The pinned Neovim, installed as {@code LikeCi} installs it (into {@code target/like-ci/}); its program's path. */
+    /** The pinned Neovim, installed as {@code LikeCi} installs it (into {@code .tool-cache/like-ci/}); its program's path. */
     private String pinnedNeovim() {
-        List<String> install = Shell.java("releng/UpdateNeovimDownloads.java", "install", "auto", root.resolve("target/like-ci").toString());
+        List<String> install = Shell.java("releng/UpdateNeovimDownloads.java", "install", "auto", root.resolve(ToolCache.LIKE_CI).toString());
         String out = shell.out(install).strip();
         return out.lines().reduce((a, b) -> b).orElseThrow(() -> new ToolFailure("the Neovim install printed no path"));
     }

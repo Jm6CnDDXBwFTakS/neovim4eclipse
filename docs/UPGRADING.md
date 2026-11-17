@@ -160,7 +160,7 @@ java releng/tools/eclipse/EclipseUpgrade.java smoke           # install this che
 
 Each one asks before it commits (`--yes` skips the question, `--dry-run` only prints the plan),
 and puts the working tree back if a step fails. Downloads are kept in
-`target/eclipse-upgrade/downloads/` and checked against the drop's SHA-512 every time.
+`.tool-cache/eclipse-upgrade/downloads/` and checked against the drop's SHA-512 every time.
 
 - **`newest`** reads the newest Platform release from
   <https://download.eclipse.org/eclipse/downloads/data.json> (the first entry of `"releases"`, for
@@ -308,7 +308,7 @@ code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
 the SHA-256 of that commit's archive and its license. That file is the only place a commit or a
 hash is written. Nothing of a plug-in is in the repository; `TestPlugins.java fetch` unpacks them
-into `target/test-plugins/`, and stops if an archive's hash is not the pinned one. Without a
+into `.tool-cache/test-plugins/`, and stops if an archive's hash is not the pinned one. Without a
 network it leaves the plug-ins out and their tests are skipped; a connection that is not secure
 (a certificate that does not fit, a proxy that opens TLS) stops it instead.
 
@@ -334,7 +334,7 @@ java releng/tools/plugins/TestPlugins.java accept flash <commit> <sha256>   # st
 A pin moves in two steps, with your own check between them, so that nothing opens the archive
 before it has been scanned:
 
-1. `update` downloads the commit's archive into `target/test-plugins/vetting/` and prints its
+1. `update` downloads the commit's archive into `.tool-cache/test-plugins/vetting/` and prints its
    path, its SHA-256 and the VirusTotal address of that hash (a report if the file is known
    there; otherwise upload the archive). It only hashes the bytes: the ZIP is not opened.
 2. Vet the archive.

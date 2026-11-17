@@ -12,7 +12,7 @@ import java.util.Optional;
 /**
  * Finds a pinned Neovim plug-in for a UI test (docs/UPGRADING.md, "The plug-ins the tests run"):
  * the folder {@code java releng/tools/plugins/TestPlugins.java fetch} unpacked it into, under the
- * repository's {@code target/test-plugins/}.
+ * repository's {@code .tool-cache/test-plugins/}.
  *
  * <p>The repository holds no plug-in, so a test must cope with one that is not there (the tool
  * did not run, or had no network) or that is of another commit than the pin (the pin moved since
@@ -25,6 +25,14 @@ final class PinnedPlugins {
     static final String HOW = "java releng/tools/plugins/TestPlugins.java fetch";
 
     private static final String PINS = "releng/test-plugins.properties";
+
+    /**
+     * Where the tool unpacks the plug-ins, from the repository's root: a copy of
+     * {@code common.ToolCache.TEST_PLUGINS} (this module cannot see the tools' sources;
+     * {@code ToolCacheTest} checks the copy). Not under {@code target/}, so {@code ./mvnw clean}
+     * leaves the plug-ins in place.
+     */
+    static final String FOLDER = ".tool-cache/test-plugins";
 
     private PinnedPlugins() {
     }
@@ -47,8 +55,8 @@ final class PinnedPlugins {
             List<String> lines = Files.readAllLines(root.resolve(PINS));
             Optional<String> commit = value(lines, name + ".commit=");
             Optional<String> sha = value(lines, name + ".sha256=");
-            Path folder = root.resolve("target/test-plugins").resolve(name);
-            Path marker = root.resolve("target/test-plugins").resolve(name + ".pin");
+            Path folder = root.resolve(FOLDER).resolve(name);
+            Path marker = root.resolve(FOLDER).resolve(name + ".pin");
             boolean there = commit.isPresent() && sha.isPresent() && Files.isDirectory(folder) && Files.isRegularFile(marker)
                     && Files.readString(marker).strip().equals(commit.get() + " " + sha.get());
             return there ? Optional.of(folder) : Optional.empty();

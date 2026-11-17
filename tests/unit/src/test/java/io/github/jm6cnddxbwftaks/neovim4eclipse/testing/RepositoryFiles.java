@@ -41,8 +41,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
  */
 public final class RepositoryFiles {
 
-    /** The folders the walk without git leaves out: Git's own, build output, and tools' copies. */
-    static final Set<String> SKIPPED_FOLDERS = Set.of(".git", "target", "bin", "node_modules", ".claude");
+    /**
+     * The folders the walk without git leaves out: Git's own, build output, the developer tools'
+     * files ({@code .tool-cache}: third-party downloads), and tools' copies.
+     */
+    static final Set<String> SKIPPED_FOLDERS = Set.of(".git", "target", ".tool-cache", "bin", "node_modules", ".claude");
 
     private RepositoryFiles() {
     }

@@ -86,7 +86,7 @@ public final class Pins {
      * ({@code PinnedPlugins}, {@code jump_plugins_spec.lua}), and a line this method took but
      * they did not find would skip or fail them with a wrong reason. One form, checked here.
      *
-     * <p>A name the tool uses itself under {@code target/test-plugins} is refused
+     * <p>A name the tool uses itself under {@code .tool-cache/test-plugins} is refused
      * ({@link #RESERVED}, and one ending in {@code .pin} or {@code .unpacking}): unpacking such a
      * plug-in would replace the tool's own folder.
      */
@@ -111,13 +111,13 @@ public final class Pins {
             String field = line.substring(dot + 1, eq); // as written: "flash. commit" is no field
             String lower = name.toLowerCase(Locale.ROOT); // Windows and macOS take Vetting and vetting for one folder
             if (RESERVED.contains(lower) || lower.endsWith(".pin") || lower.endsWith(".unpacking")) {
-                throw new ToolFailure("line " + number + ": " + name + " is a name the tool uses itself under target/test-plugins");
+                throw new ToolFailure("line " + number + ": " + name + " is a name the tool uses itself under .tool-cache/test-plugins");
             }
             if (!NAME.matcher(name).matches() || !FIELDS.contains(field)) {
                 throw new ToolFailure("line " + number + ": a key is <name>.<field>, the field one of " + FIELDS + ": " + line);
             }
             if (!byName.containsKey(name) && byName.keySet().stream().anyMatch(name::equalsIgnoreCase)) {
-                // Flash and flash would share one folder under target/test-plugins on Windows and macOS.
+                // Flash and flash would share one folder under .tool-cache/test-plugins on Windows and macOS.
                 throw new ToolFailure("line " + number + ": " + name + " differs from another pin's name only in case");
             }
             if (byName.computeIfAbsent(name, n -> new LinkedHashMap<>()).put(field, line.substring(eq + 1)) != null) {

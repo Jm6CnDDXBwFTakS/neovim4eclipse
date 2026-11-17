@@ -19,6 +19,7 @@ import common.EclipseCopy;
 import common.Folders;
 import common.PgpKey;
 import common.Settings;
+import common.ToolCache;
 import common.ToolFailure;
 import common.UpdateSite;
 import common.Version;
@@ -92,7 +93,7 @@ import common.Version;
  * not make: one that holds files but not its mark ({@link #MARK}). Example: {@code --root
  * ~/var/n4e-checks}, the manual checks' folder, stops before anything is deleted.
  *
- * <p>When the install passed, it records the version in {@code target/release-tool/install-checked}
+ * <p>When the install passed, it records the version in {@code .tool-cache/release-tool/install-checked}
  * ({@link #RECORD}), which the Release tool's status reads.
  */
 public final class InstallCheckTool {
@@ -100,7 +101,7 @@ public final class InstallCheckTool {
     static final String TOOL = "releng/tools/checks/InstallCheck.java";
 
     /** Where a passed install is recorded, from the repository's root: the version and the time. */
-    public static final String RECORD = "target/release-tool/install-checked";
+    public static final String RECORD = ToolCache.RELEASE_TOOL + "/install-checked";
 
     /** Where the copy goes unless {@code --root} says otherwise. */
     static final Path DEFAULT_ROOT = Path.of(System.getProperty("user.home"), "var", "n4e-checks", "install-check");

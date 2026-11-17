@@ -23,6 +23,7 @@ import common.Git;
 import common.Http;
 import common.Settings;
 import common.Shell;
+import common.ToolCache;
 import common.ToolFailure;
 import common.Version;
 import common.VersionCopies;
@@ -71,7 +72,7 @@ import common.VersionCopies;
  * copies and the changelog; run every test ({@code LikeCi --all}) and install into the new oldest
  * and the newest Eclipse; commit.
  *
- * <p>Every step before the commit only reads, downloads into {@code target/eclipse-upgrade/} or
+ * <p>Every step before the commit only reads, downloads into {@code .tool-cache/eclipse-upgrade/} or
  * edits the working tree; if one fails, the tree is put back as it was ({@link Git#editAndCommit}).
  */
 public final class EclipseUpgradeTool {
@@ -390,14 +391,14 @@ public final class EclipseUpgradeTool {
             throw new ToolFailure("Eclipse " + release + " has no Platform for this machine (" + EclipseFiles.platformFile(release, os, arch)
                     + "), so nothing can be installed into it here: run this on another machine, or newest/oldest with --no-tests");
         }
-        Path archive = Http.download(url, new Http.Digest("SHA-512", sha), root.resolve("target/eclipse-upgrade/downloads"));
+        Path archive = Http.download(url, new Http.Digest("SHA-512", sha), root.resolve(ToolCache.ECLIPSE_UPGRADE).resolve("downloads"));
         Platform.Installation eclipse = Platform.unpack(archive, work(release).resolve(runs ? "platform" : "ci-platform"), shell); // CI's is Linux x86_64 whatever this machine is
         ok("Eclipse " + release + " unpacked: " + eclipse.program());
         return eclipse;
     }
 
     private Path work(EclipseRelease release) {
-        return root.resolve("target/eclipse-upgrade/" + release.number() + "-" + os + "-" + arch);
+        return root.resolve(ToolCache.ECLIPSE_UPGRADE).resolve(release.number() + "-" + os + "-" + arch);
     }
 
     /** The Java release {@code eclipse.ini} asks for ({@code -Dosgi.requiredJavaVersion}), if it does. */
