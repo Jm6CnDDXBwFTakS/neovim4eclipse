@@ -41,7 +41,51 @@ final class GridCanvas extends Canvas {
     /** Width of the Insert-mode cursor bar, in pixels. */
     static final int BAR_WIDTH = 2;
 
-    private final StyledText host;
+    /**
+     * Where the canvas takes its font, colors and line height from. Example: the editor's
+     * {@code StyledText} for the command-line window ({@link #of(StyledText)}); the Neovim view,
+     * which has no editor of its own, gives the text font and the editor colors it took last.
+     */
+    interface Look {
+        /** The font cells are drawn in, plain; bold and italic are made from it. */
+        Font font();
+
+        /** The default text color, {@code 0xRRGGBB}: a highlight that sets none takes it. */
+        int foreground();
+
+        /** The default background, {@code 0xRRGGBB}. */
+        int background();
+
+        /** One cell's height in pixels. */
+        int lineHeight();
+    }
+
+    /** The look of an editor: its font, colors and line height, read at each paint. */
+    static Look of(StyledText host) {
+        return new Look() {
+            @Override
+            public Font font() {
+                return host.getFont();
+            }
+
+            @Override
+            public int foreground() {
+                return rgbOf(host.getForeground());
+            }
+
+            @Override
+            public int background() {
+                return rgbOf(OverlayFrame.intendedBackground(host));
+            }
+
+            @Override
+            public int lineHeight() {
+                return host.getLineHeight();
+            }
+        };
+    }
+
+    private final Look look;
     private GridSnapshot grid;
     private boolean insertCursor;
     private Font bold;
@@ -61,8 +105,13 @@ final class GridCanvas extends Canvas {
      *              focus in the editor.
      */
     GridCanvas(Composite parent, StyledText host, int style) {
+        this(parent, of(host), style);
+    }
+
+    /** A canvas with a look of its own, not an editor's ({@link Look}). */
+    GridCanvas(Composite parent, Look look, int style) {
         super(parent, SWT.NO_BACKGROUND | SWT.DOUBLE_BUFFERED | style);
-        this.host = host;
+        this.look = look;
         addPaintListener(e -> paint(e.gc));
         addDisposeListener(e -> disposeFonts());
     }
@@ -87,7 +136,7 @@ final class GridCanvas extends Canvas {
 
     /** One cell's width: the editor font's average character width, measured once per font. */
     int cellWidth() {
-        Font font = host.getFont();
+        Font font = look.font();
         if (font != fontOfWidth) {
             GC gc = new GC(this);
             try {
@@ -117,7 +166,7 @@ final class GridCanvas extends Canvas {
 
     /** One cell's height: the editor's line height. */
     int cellHeight() {
-        return Math.max(1, host.getLineHeight());
+        return Math.max(1, look.lineHeight());
     }
 
     /** The size that shows every cell of the grid; one cell when there is none yet. */
@@ -133,8 +182,8 @@ final class GridCanvas extends Canvas {
      */
     void paint(GC gc) {
         Point size = getSize();
-        int editorFg = rgbOf(host.getForeground());
-        int editorBg = rgbOf(OverlayFrame.intendedBackground(host));
+        int editorFg = look.foreground();
+        int editorBg = look.background();
         gc.setBackground(color(editorBg));
         gc.fillRectangle(0, 0, Math.max(size.x, 1), Math.max(size.y, 1));
         if (grid == null) {
@@ -142,7 +191,7 @@ final class GridCanvas extends Canvas {
         }
         int w = cellWidth();
         int h = cellHeight();
-        gc.setFont(host.getFont());
+        gc.setFont(look.font());
         int ascentShift = Math.max(0, (h - gc.getFontMetrics().getHeight()) / 2); // text centered in the line
         // Only the cells that show: a floating window can be far larger than the editor that cuts it off.
         int rows = Math.min(grid.height(), size.y / h + 1);
@@ -197,7 +246,7 @@ final class GridCanvas extends Canvas {
     }
 
     private Font fontFor(boolean isBold, boolean isItalic) {
-        Font base = host.getFont();
+        Font base = look.font();
         if (!isBold && !isItalic) {
             return base;
         }
