@@ -445,8 +445,9 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   it into two entries, the second relative.
 - **The report is matched** by all three marks Neovim gives it: filetype `checkhealth`, a `nofile`
   buffer, the name `health://`; so a file the user set to that filetype is never taken. The net
-  goes back to the window that was current when the report opened (read in `WinNew`, before the
-  schedule) before it closes the report's window: closed while current, its tab would hand Neovim
+  goes back to the window the report was opened from before it closes the report's window: the
+  window last left (a `WinLeave` autocmd keeps it; by `WinNew` Neovim is already in the new one),
+  kept per new window, since a check scheduled for an earlier window may be the one that finds it: closed while current, its tab would hand Neovim
   to the next tab, another editor's.
 - **The end**: `:q` in the view ends the process (its last window). `SCREEN_SETUP`'s
   `VimLeavePre` asks Eclipse first (`eclipse_screen_leaving`, a request, so it arrives before the

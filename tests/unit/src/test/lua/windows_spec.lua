@@ -731,15 +731,21 @@ t.test(':checkhealth from an editor whose tab is not the last comes back to it, 
   t.run('WINDOW_COMMANDS')
   local a, b = buffer(3), buffer(3)
   local wa = open(a)
-  local wb = open(b) -- its tab comes after a's
-  show(wa, a)
-  t.eq(wa, vim.api.nvim_get_current_win())
+  local wb = open(b) -- OPEN_WINDOW puts each new tab before the current one: wb's tab is not last
+  show(wb, b)
+  t.eq(wb, vim.api.nvim_get_current_win())
+  t.ok(vim.api.nvim_win_get_tabpage(wb) ~= vim.api.nvim_list_tabpages()[#vim.api.nvim_list_tabpages()],
+    "wb's tab is not the last, or closing the report's tab would come back to it anyway")
+  -- The nets' checks for the windows just opened run first, so none of them is pending below.
+  local settled = false
+  vim.schedule(function() settled = true end)
+  t.wait_for('the earlier checks', function() return settled end)
   t.forget()
   vim.cmd('checkhealth vim.health')
   t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
-  t.eq(wa, vim.api.nvim_get_current_win(), "back in the editor the command ran in")
+  t.eq(wb, vim.api.nvim_get_current_win(), "back in the editor the command ran in")
   for _, enter in ipairs(t.sent('eclipse_buf_enter')) do
-    t.ok(enter[2] ~= wb, 'never in the other editor: ' .. vim.inspect(t.sent('eclipse_buf_enter')))
+    t.ok(enter[2] ~= wa, 'never in the other editor: ' .. vim.inspect(t.sent('eclipse_buf_enter')))
   end
 end)
 

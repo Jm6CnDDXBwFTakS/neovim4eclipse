@@ -1171,6 +1171,9 @@ final class LuaScripts {
             for _, win in ipairs(vim.api.nvim_list_wins()) do
               seen[win] = true
             end
+            -- The window each new window was opened from (the WinNew net below): kept per window,
+            -- since a check scheduled for an earlier window may be the one that finds a report.
+            local opened_from = {}
             vim.o.showtabline = 0
 
             --- Runs fn(...) without Neovim's file info message ('shortmess' F: putting a buffer in a
@@ -1387,14 +1390,15 @@ final class LuaScripts {
               callback = function(ev)
                 own[tonumber(ev.match)] = nil
                 seen[tonumber(ev.match)] = nil
+                opened_from[tonumber(ev.match)] = nil
                 vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_window_closed', tonumber(ev.match))
               end,
             })
             -- The second safety net: a window opened next to an editor's, in its tab, by something the
             -- refusals do not see (a plug-in's :split, <Cmd>split, vim.cmd.split()). Eclipse would not
             -- show it, but it would take the keys and half the editor's rows. Closed once the
-            -- command that opened it is over (it cannot close inside its own WinNew, where the
-            -- current window is still the old one). The quickfix, location list and preview windows
+            -- command that opened it is over, not inside its own WinNew, while that command still
+            -- runs (and still fills the window, as :checkhealth does). The quickfix, location list and preview windows
             -- (:copen, :lopen, :pedit) are closed too: Eclipse cannot show them either, and in the
             -- editor's tab they would take its rows, so H, L and scrolling would no longer match
             -- the editor; the lists themselves stay, for :cnext and the like. Left alone: the
@@ -1415,17 +1419,18 @@ final class LuaScripts {
             -- :ls and :bnext never meet health://. Only text leaves, never a file name.
             -- Matched by all three marks Neovim's report has (filetype, scratch buffer, its name), so a
             -- file the user gave the filetype by hand is never taken and wiped.
-            -- `before` is the window that was current when the report's window opened (read in WinNew
-            -- itself, before the schedule): Neovim goes back there first, then the report closes. Closed
-            -- while current, its tab would hand Neovim to the next tab, another editor's.
-            local function take_health_report(win, before)
+            -- Neovim goes back to the window the report's was opened from first, then the report
+            -- closes. Closed while current, its tab would hand Neovim to the next tab, another
+            -- editor's.
+            local function take_health_report(win)
+              local before = opened_from[win]
               local buf = vim.api.nvim_win_get_buf(win)
               if vim.bo[buf].filetype ~= 'checkhealth' or vim.bo[buf].buftype ~= 'nofile'
                   or vim.api.nvim_buf_get_name(buf) ~= 'health://' then
                 return false
               end
               local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-              if before ~= win and own[before] and vim.api.nvim_win_is_valid(before) then
+              if before and own[before] and vim.api.nvim_win_is_valid(before) then
                 pcall(vim.api.nvim_set_current_win, before)
               end
               pcall(vim.api.nvim_win_close, win, true)
@@ -1435,10 +1440,24 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_text', 'checkhealth', lines)
               return true
             end
+            -- The window last left: when a command opens a window and enters it (:checkhealth's
+            -- `tab sbuffer`, a split), WinLeave fires in the old window first, then WinNew in the new.
+            local left_from = home
+            vim.api.nvim_create_autocmd('WinLeave', {
+              group = group,
+              callback = function()
+                left_from = vim.api.nvim_get_current_win()
+              end,
+            })
             vim.api.nvim_create_autocmd('WinNew', {
               group = group,
               callback = function()
-                local before = vim.api.nvim_get_current_win() -- still the window the command ran in
+                -- By WinNew Neovim is already in a window it opened and entered; it came from the one
+                -- last left. (A window opened without entering it leaves the current one current.)
+                local current = vim.api.nvim_get_current_win()
+                if current ~= left_from then
+                  opened_from[current] = left_from
+                end
                 vim.schedule(function()
                   local why, list, float
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
@@ -1448,7 +1467,7 @@ final class LuaScripts {
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
                     -- A report taken leaves its window closed: the checks below then pass it by.
-                    local taken = new and not own[win] and take_health_report(win, before)
+                    local taken = new and not own[win] and take_health_report(win)
                     if not taken and new and win == current and wintype == 'popup' and not own[win] then
                       local name = float_name(win)
                       local prompt = vim.bo[vim.api.nvim_win_get_buf(win)].buftype == 'prompt'
