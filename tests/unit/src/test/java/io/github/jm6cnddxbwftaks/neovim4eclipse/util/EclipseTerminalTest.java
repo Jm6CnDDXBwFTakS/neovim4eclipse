@@ -21,16 +21,30 @@ import org.junit.jupiter.api.Test;
  */
 class EclipseTerminalTest {
 
+    /** {@code commandId} with every defined id also handled: a normal install. */
+    private static Optional<String> chosen(Set<String> defined) {
+        return EclipseTerminal.commandId(defined::contains, defined::contains);
+    }
+
     @Test
     void theNewCommandIsTakenWhereBothAreDefined() {
         // Eclipse 2025-09 has both generations of the Terminal.
-        assertEquals(Optional.of(EclipseTerminal.COMMAND),
-                EclipseTerminal.commandId(Set.of(EclipseTerminal.COMMAND, EclipseTerminal.OLD_COMMAND)::contains));
-        assertEquals(Optional.of(EclipseTerminal.COMMAND), EclipseTerminal.commandId(Set.of(EclipseTerminal.COMMAND)::contains),
-                "2025-12 and later");
-        assertEquals(Optional.of(EclipseTerminal.OLD_COMMAND), EclipseTerminal.commandId(Set.of(EclipseTerminal.OLD_COMMAND)::contains),
-                "2024-12 to 2025-06 (2025-09 has both)");
-        assertEquals(Optional.empty(), EclipseTerminal.commandId(id -> false), "no Terminal installed");
+        assertEquals(Optional.of(EclipseTerminal.COMMAND), chosen(Set.of(EclipseTerminal.COMMAND, EclipseTerminal.OLD_COMMAND)));
+        assertEquals(Optional.of(EclipseTerminal.COMMAND), chosen(Set.of(EclipseTerminal.COMMAND)), "2025-12 and later");
+        assertEquals(Optional.of(EclipseTerminal.OLD_COMMAND), chosen(Set.of(EclipseTerminal.OLD_COMMAND)), "2024-12 to 2025-06 (2025-09 has both)");
+        assertEquals(Optional.empty(), chosen(Set.of()), "no Terminal installed");
+    }
+
+    /**
+     * Eclipse 2025-06 on a workspace that 2026-09 used: the workspace keeps the new command defined,
+     * but nothing handles it there, so the old one, which works, is taken.
+     */
+    @Test
+    void aCommandWithoutAHandlerIsPassedOver() {
+        Set<String> defined = Set.of(EclipseTerminal.COMMAND, EclipseTerminal.OLD_COMMAND);
+        assertEquals(Optional.of(EclipseTerminal.OLD_COMMAND),
+                EclipseTerminal.commandId(defined::contains, EclipseTerminal.OLD_COMMAND::equals));
+        assertEquals(Optional.empty(), EclipseTerminal.commandId(defined::contains, id -> false), "defined, but nothing handles either");
     }
 
     @Test

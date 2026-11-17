@@ -54,13 +54,16 @@ public final class EclipseTerminal {
     }
 
     /**
-     * The command to run: the first of {@link #COMMANDS} that this Eclipse defines, or empty when it
-     * defines none (no Terminal installed).
+     * The command to run: the first of {@link #COMMANDS} this Eclipse both defines and has a handler
+     * for, or empty when there is none (no Terminal installed). Defined alone is not enough: a
+     * workspace that a newer Eclipse used keeps the new command defined in an older one, where
+     * nothing handles it (Eclipse 2025-06 on a workspace from 2026-09), and the old one works.
      *
-     * @param defined whether Eclipse defines a command id ({@code ICommandService.getCommand(id).isDefined()})
+     * @param defined whether Eclipse defines a command id ({@code Command.isDefined()})
+     * @param handled whether a handler is there for it ({@code Command.isHandled()})
      */
-    public static Optional<String> commandId(Predicate<String> defined) {
-        return COMMANDS.stream().filter(defined).findFirst();
+    public static Optional<String> commandId(Predicate<String> defined, Predicate<String> handled) {
+        return COMMANDS.stream().filter(id -> defined.test(id) && handled.test(id)).findFirst();
     }
 
     /**

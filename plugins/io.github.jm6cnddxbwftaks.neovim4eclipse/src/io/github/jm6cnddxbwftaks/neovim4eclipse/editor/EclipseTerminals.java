@@ -49,7 +49,8 @@ final class EclipseTerminals {
         ICommandService commands = editor.getSite().getService(ICommandService.class);
         IHandlerService handlers = editor.getSite().getService(IHandlerService.class);
         Optional<String> id = commands == null || handlers == null ? Optional.empty()
-                : EclipseTerminal.commandId(candidate -> defined(commands, candidate));
+                : EclipseTerminal.commandId(candidate -> command(commands, candidate).isDefined(),
+                        candidate -> command(commands, candidate).isHandled());
         if (id.isEmpty()) {
             HostCommands.showError(editor, EclipseTerminal.NO_TERMINAL);
             return;
@@ -82,9 +83,9 @@ final class EclipseTerminals {
         }
     }
 
-    private static boolean defined(ICommandService commands, String id) {
-        Command command = commands.getCommand(id);
-        return command != null && command.isDefined();
+    /** The command of {@code id}; Eclipse makes an undefined one on request, so never {@code null}. */
+    private static Command command(ICommandService commands, String id) {
+        return commands.getCommand(id);
     }
 
     /**

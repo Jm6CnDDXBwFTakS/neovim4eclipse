@@ -1180,7 +1180,9 @@ Eclipse or Neovim, give it a port (section 3.4) and test it with a fake.
 
 **Run another plug-in's command without depending on it.** Every Eclipse command has an id, and
 `IHandlerService.executeCommand(id, null)` runs it with the active part's context, whatever bundle
-defines it; `ICommandService.getCommand(id).isDefined()` says first whether this Eclipse has it.
+defines it; `ICommandService.getCommand(id)`'s `isDefined()` and `isHandled()` say first whether this
+Eclipse can run it (defined alone is not enough: a workspace that a newer Eclipse used keeps that
+Eclipse's commands defined in an older one, which has no handler for them).
 So an optional feature of another plug-in needs no `Require-Bundle`, no compile against its API,
 and no code path per version of it. Example: `:terminal` (`editor/EclipseTerminals`) runs the
 Terminal's *Open local terminal* command, trying the id of the Terminal in newer Eclipse releases
