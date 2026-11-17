@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.resource.JFaceResources;
+import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.ControlAdapter;
 import org.eclipse.swt.events.ControlEvent;
@@ -110,6 +111,18 @@ public final class NeovimView extends ViewPart {
     private boolean disposed;
     /** The view's key context while the canvas has the keyboard ({@link #KEY_CONTEXT_ID}); {@code null} otherwise. */
     private IContextActivation keyContext;
+    /**
+     * Eclipse's text font changed (Preferences, Colors and Fonts, Text Font): the cells change size,
+     * so the view is drawn again and Neovim's screen is asked for the number of cells that now fits.
+     * Without it the screen kept its old size until the view was resized: text cut off at the
+     * right, or a strip left empty. Fired on the UI thread; removed in {@link #dispose}.
+     */
+    private final IPropertyChangeListener fontListener = event -> {
+        if (JFaceResources.TEXT_FONT.equals(event.getProperty()) && canvas != null && !canvas.isDisposed()) {
+            canvas.redraw();
+            resizeScreen();
+        }
+    };
 
     @Override
     public void createPartControl(Composite parent) {
@@ -174,6 +187,7 @@ public final class NeovimView extends ViewPart {
                 resizeScreen();
             }
         });
+        JFaceResources.getFontRegistry().addListener(fontListener);
         setPartName(ScreenInput.title(""));
     }
 
@@ -374,6 +388,7 @@ public final class NeovimView extends ViewPart {
     @Override
     public void dispose() {
         disposed = true;
+        JFaceResources.getFontRegistry().removeListener(fontListener);
         ScreenSession running = screen;
         screen = null;
         if (running != null) {

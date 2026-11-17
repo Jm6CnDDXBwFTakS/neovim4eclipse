@@ -15,7 +15,10 @@ import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.jface.bindings.Binding;
 import org.eclipse.jface.bindings.keys.KeySequence;
 import org.eclipse.jface.bindings.keys.ParseException;
+import org.eclipse.jface.resource.FontRegistry;
+import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
@@ -37,6 +40,7 @@ import org.junit.jupiter.api.condition.OS;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
 
 /**
  * The Neovim view in a real workbench: {@code :messages} typed in an editor opens it, titled with
@@ -225,6 +229,36 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
                 () -> "; the document is " + document.get());
         type(widget, "u");
         waitUntil("the paste undone", TIMEOUT_MS, () -> !document.get().contains("paste me here"));
+    }
+
+    /**
+     * A change of Eclipse's text font (Colors and Fonts) gives Neovim's screen the number of cells
+     * that fits the view in the new font, without the view being resized.
+     */
+    @Test
+    void aTextFontChangeResizesTheScreen() {
+        SessionProbe.lua(session, "vim.cmd.echomsg(\"'before the font change'\") return 0");
+        colon("messages");
+        NeovimView view = viewShowing("before the font change");
+        GridCanvas canvas = view.canvasForTests();
+        int before = canvas.grid().width();
+        FontRegistry fonts = JFaceResources.getFontRegistry();
+        FontData[] original = fonts.getFontData(JFaceResources.TEXT_FONT);
+        FontData[] twice = new FontData[original.length];
+        for (int i = 0; i < original.length; i++) {
+            twice[i] = new FontData(original[i].getName(), original[i].getHeight() * 2, original[i].getStyle());
+        }
+        try {
+            fonts.put(JFaceResources.TEXT_FONT, twice);
+            waitUntil("the screen in the new font's cells", TIMEOUT_MS, () -> {
+                settle();
+                return canvas.grid().width() == ScreenInput.cells(canvas.getSize().x, canvas.cellWidth())
+                        && canvas.grid().width() < before;
+            }, () -> "; " + canvas.grid().width() + " columns, " + before + " before");
+        } finally {
+            fonts.put(JFaceResources.TEXT_FONT, original);
+            settle();
+        }
     }
 
     /** The wheel scrolls the view's text, and a click puts the view's cursor on the clicked line. */
